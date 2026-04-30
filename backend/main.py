@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.database import check_database_connection
-from backend.routes import users_router
+from backend.routes import user_settings_router, users_router
 
 app = FastAPI()
 
@@ -29,3 +29,4 @@ def db_health():
 # Include feature-specific routers here so the main app stays small as the API
 # surface grows.
 app.include_router(users_router)
+app.include_router(user_settings_router)
