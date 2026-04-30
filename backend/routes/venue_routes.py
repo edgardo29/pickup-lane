@@ -2,8 +2,8 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -11,6 +11,8 @@ from backend.models import User, Venue
 from backend.schemas import VenueCreate, VenueRead, VenueUpdate
 
 router = APIRouter(prefix="/venues", tags=["venues"])
+
+APPROVED_VENUE_STATUS = "approved"
 
 
 def build_venue_conflict_detail(exc: IntegrityError) -> str:
@@ -20,27 +22,59 @@ def build_venue_conflict_detail(exc: IntegrityError) -> str:
     return str(exc.orig)
 
 
+def get_active_user_or_404(db: Session, user_id: uuid.UUID, detail: str) -> User:
+    db_user = db.get(User, user_id)
+
+    if db_user is None or db_user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+
+    return db_user
+
+
+def normalize_venue_approval_fields(
+    venue_status: str,
+    approved_by_user_id: uuid.UUID | None,
+    approved_at: datetime | None,
+) -> tuple[uuid.UUID | None, datetime | None]:
+    # Approved venues should always carry an approver and approval timestamp.
+    # For every other status, approval metadata is cleared so the row cannot
+    # drift into a half-approved state.
+    if venue_status == APPROVED_VENUE_STATUS:
+        if approved_by_user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Approved venues require approved_by_user_id.",
+            )
+
+        if approved_at is None:
+            approved_at = datetime.now(timezone.utc)
+    else:
+        approved_by_user_id = None
+        approved_at = None
+
+    return approved_by_user_id, approved_at
+
+
 # This route creates a venue record that can later be reviewed or approved by
 # the app's moderation flow.
 @router.post("", response_model=VenueRead, status_code=status.HTTP_201_CREATED)
 def create_venue(venue: VenueCreate, db: Session = Depends(get_db)) -> Venue:
     if venue.created_by_user_id is not None:
-        db_created_by_user = db.get(User, venue.created_by_user_id)
-
-        if db_created_by_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Created-by user not found.",
-            )
+        get_active_user_or_404(db, venue.created_by_user_id, "Created-by user not found.")
 
     if venue.approved_by_user_id is not None:
-        db_approved_by_user = db.get(User, venue.approved_by_user_id)
+        get_active_user_or_404(
+            db, venue.approved_by_user_id, "Approved-by user not found."
+        )
 
-        if db_approved_by_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Approved-by user not found.",
-            )
+    approved_by_user_id, approved_at = normalize_venue_approval_fields(
+        venue.venue_status,
+        venue.approved_by_user_id,
+        venue.approved_at,
+    )
 
     new_venue = Venue(
         id=uuid.uuid4(),
@@ -56,8 +90,8 @@ def create_venue(venue: VenueCreate, db: Session = Depends(get_db)) -> Venue:
         external_place_id=venue.external_place_id,
         venue_status=venue.venue_status,
         created_by_user_id=venue.created_by_user_id,
-        approved_by_user_id=venue.approved_by_user_id,
-        approved_at=venue.approved_at,
+        approved_by_user_id=approved_by_user_id,
+        approved_at=approved_at,
         is_active=venue.is_active,
     )
 
@@ -121,24 +155,30 @@ def update_venue(
         )
 
     if venue_update.created_by_user_id is not None:
-        db_created_by_user = db.get(User, venue_update.created_by_user_id)
-
-        if db_created_by_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Created-by user not found.",
-            )
+        get_active_user_or_404(
+            db, venue_update.created_by_user_id, "Created-by user not found."
+        )
 
     if venue_update.approved_by_user_id is not None:
-        db_approved_by_user = db.get(User, venue_update.approved_by_user_id)
-
-        if db_approved_by_user is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Approved-by user not found.",
-            )
+        get_active_user_or_404(
+            db, venue_update.approved_by_user_id, "Approved-by user not found."
+        )
 
     update_data = venue_update.model_dump(exclude_unset=True)
+
+    effective_venue_status = update_data.get("venue_status", db_venue.venue_status)
+    effective_approved_by_user_id = update_data.get(
+        "approved_by_user_id", db_venue.approved_by_user_id
+    )
+    effective_approved_at = update_data.get("approved_at", db_venue.approved_at)
+
+    approved_by_user_id, approved_at = normalize_venue_approval_fields(
+        effective_venue_status,
+        effective_approved_by_user_id,
+        effective_approved_at,
+    )
+    update_data["approved_by_user_id"] = approved_by_user_id
+    update_data["approved_at"] = approved_at
 
     for field_name, field_value in update_data.items():
         setattr(db_venue, field_name, field_value)

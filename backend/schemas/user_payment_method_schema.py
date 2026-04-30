@@ -3,11 +3,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+
 
 # UserPaymentMethodCreate defines the fields the client is allowed to send when
 # creating a saved payment-method reference for a user. Server-managed
 # timestamps stay out of the request body.
 class UserPaymentMethodCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
     user_id: UUID
     provider: str = "stripe"
     provider_payment_method_id: str
@@ -44,5 +48,7 @@ class UserPaymentMethodRead(BaseModel):
 # provider payment method ID should come from Stripe when the payment method is
 # created, not be edited freely through this API.
 class UserPaymentMethodUpdate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
     is_default: bool | None = None
     is_active: bool | None = None
