@@ -100,7 +100,7 @@ def update_user(
 ) -> User:
     db_user = db.get(User, user_id)
 
-    if db_user is None:
+    if db_user is None or db_user.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found.",
@@ -135,7 +135,7 @@ def update_user(
 def delete_user(user_id: uuid.UUID, db: Session = Depends(get_db)) -> User:
     db_user = db.get(User, user_id)
 
-    if db_user is None:
+    if db_user is None or db_user.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found.",
