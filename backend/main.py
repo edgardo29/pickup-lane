@@ -6,6 +6,7 @@ from backend.routes import (
     user_payment_method_router,
     user_settings_router,
     users_router,
+    venues_router,
 )
 
 app = FastAPI()
@@ -35,3 +36,4 @@ def db_health():
 app.include_router(users_router)
 app.include_router(user_settings_router)
 app.include_router(user_payment_method_router)
+app.include_router(venues_router)
