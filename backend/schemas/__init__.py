@@ -6,6 +6,11 @@ from backend.schemas.user_settings_schema import (
     UserSettingsRead,
     UserSettingsUpdate,
 )
+from backend.schemas.user_payment_method_schema import (
+    UserPaymentMethodCreate,
+    UserPaymentMethodRead,
+    UserPaymentMethodUpdate,
+)
 
 __all__ = [
     "UserCreate",
@@ -14,4 +19,7 @@ __all__ = [
     "UserSettingsCreate",
     "UserSettingsRead",
     "UserSettingsUpdate",
+    "UserPaymentMethodCreate",
+    "UserPaymentMethodRead",
+    "UserPaymentMethodUpdate",
 ]
