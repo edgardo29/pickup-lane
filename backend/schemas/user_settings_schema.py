@@ -3,11 +3,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+
 
 # UserSettingsCreate defines the fields the client is allowed to send when
 # creating a settings record for a user. Server-managed timestamps stay out of
 # the request body.
 class UserSettingsCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
     user_id: UUID
     push_notifications_enabled: bool = True
     email_notifications_enabled: bool = True
@@ -39,6 +43,8 @@ class UserSettingsRead(BaseModel):
 # UserSettingsUpdate supports partial preference updates, so every field is
 # optional and only provided values should be applied by the route.
 class UserSettingsUpdate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
     push_notifications_enabled: bool | None = None
     email_notifications_enabled: bool | None = None
     sms_notifications_enabled: bool | None = None

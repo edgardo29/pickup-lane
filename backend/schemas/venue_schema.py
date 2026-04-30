@@ -4,11 +4,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+
 
 # VenueCreate defines the fields the client is allowed to send when creating a
 # venue record. Server-managed timestamps and moderation fields remain outside
 # the request body unless explicitly supplied here.
 class VenueCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
     name: str
     address_line_1: str
     city: str
@@ -55,6 +59,8 @@ class VenueRead(BaseModel):
 # VenueUpdate supports partial venue updates, so every field is optional and
 # only provided values should be applied by the route.
 class VenueUpdate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
     name: str | None = None
     address_line_1: str | None = None
     city: str | None = None

@@ -11,6 +11,7 @@ from backend.schemas.user_payment_method_schema import (
     UserPaymentMethodRead,
     UserPaymentMethodUpdate,
 )
+from backend.schemas.game_schema import GameCreate, GameRead, GameUpdate
 from backend.schemas.venue_schema import VenueCreate, VenueRead, VenueUpdate
 
 __all__ = [
@@ -23,6 +24,9 @@ __all__ = [
     "UserPaymentMethodCreate",
     "UserPaymentMethodRead",
     "UserPaymentMethodUpdate",
+    "GameCreate",
+    "GameRead",
+    "GameUpdate",
     "VenueCreate",
     "VenueRead",
     "VenueUpdate",
