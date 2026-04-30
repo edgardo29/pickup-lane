@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.database import check_database_connection
+from backend.routes import users_router
 
 app = FastAPI()
 
@@ -23,3 +24,8 @@ def read_root():
 def db_health():
     check_database_connection()
     return {"message": "Database connection is working"}
+
+
+# Include feature-specific routers here so the main app stays small as the API
+# surface grows.
+app.include_router(users_router)
