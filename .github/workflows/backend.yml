@@ -31,6 +31,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_test_db
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       # Download the repository code into the runner.
