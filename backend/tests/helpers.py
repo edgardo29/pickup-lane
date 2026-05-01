@@ -193,3 +193,36 @@ def create_waitlist_entry(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_payment(
+    client: TestClient,
+    payer_user_id: str,
+    booking_id: str | None = None,
+    game_id: str | None = None,
+    **overrides: object,
+) -> dict:
+    # Payment helper keeps Stripe-like identifiers unique so repeated tests
+    # do not trip database uniqueness constraints.
+    suffix = unique_suffix()
+    payload = {
+        "payer_user_id": payer_user_id,
+        "booking_id": booking_id,
+        "game_id": game_id,
+        "payment_type": "booking",
+        "provider": "stripe",
+        "provider_payment_intent_id": f"pi_{suffix}",
+        "provider_charge_id": None,
+        "idempotency_key": f"payment-{suffix}",
+        "amount_cents": 1300,
+        "currency": "USD",
+        "payment_status": "processing",
+        "failure_reason": None,
+        "metadata": {"source": "ci"},
+    }
+    payload.update(overrides)
+
+    response = client.post("/payments", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
