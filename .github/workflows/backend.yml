@@ -14,6 +14,24 @@ jobs:
     # Use GitHub's hosted Ubuntu runner for this job.
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pickup_lane_test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_test_db
+
     steps:
       # Download the repository code into the runner.
       - name: Checkout repository
@@ -29,6 +47,22 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
 
-      # Verify the backend Python files compile without syntax/import issues.
+      # Verify every backend Python file can be parsed by Python.
       - name: Compile backend Python files
-        run: python -m py_compile backend/main.py backend/database.py
+        run: >
+          python -m compileall
+          backend/alembic
+          backend/models
+          backend/routes
+          backend/schemas
+          backend/tests
+          backend/database.py
+          backend/main.py
+
+      # Apply all migrations to the temporary PostgreSQL database.
+      - name: Apply database migrations
+        run: python -m alembic upgrade head
+
+      # Run backend integration tests against the migrated temporary database.
+      - name: Run backend tests
+        run: pytest backend/tests
