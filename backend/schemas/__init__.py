@@ -7,6 +7,7 @@ from backend.schemas.game_participant_schema import (
     GameParticipantRead,
     GameParticipantUpdate,
 )
+from backend.schemas.payment_schema import PaymentCreate, PaymentRead, PaymentUpdate
 from backend.schemas.user_schema import UserCreate, UserRead, UserUpdate
 from backend.schemas.user_settings_schema import (
     UserSettingsCreate,
@@ -44,6 +45,9 @@ __all__ = [
     "GameParticipantCreate",
     "GameParticipantRead",
     "GameParticipantUpdate",
+    "PaymentCreate",
+    "PaymentRead",
+    "PaymentUpdate",
     "VenueCreate",
     "VenueRead",
     "VenueUpdate",

@@ -45,6 +45,10 @@ def test_core_routes_are_registered(client: TestClient):
         ("GET", "/waitlist-entries"),
         ("GET", "/waitlist-entries/{waitlist_entry_id}"),
         ("PATCH", "/waitlist-entries/{waitlist_entry_id}"),
+        ("POST", "/payments"),
+        ("GET", "/payments"),
+        ("GET", "/payments/{payment_id}"),
+        ("PATCH", "/payments/{payment_id}"),
     }
 
     assert expected_routes <= registered_routes
