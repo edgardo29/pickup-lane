@@ -10,6 +10,7 @@ from backend.routes import (
     user_settings_router,
     users_router,
     venues_router,
+    waitlist_entries_router,
 )
 
 app = FastAPI()
@@ -43,3 +44,4 @@ app.include_router(venues_router)
 app.include_router(games_router)
 app.include_router(bookings_router)
 app.include_router(game_participants_router)
+app.include_router(waitlist_entries_router)

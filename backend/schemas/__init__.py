@@ -19,6 +19,11 @@ from backend.schemas.user_payment_method_schema import (
     UserPaymentMethodUpdate,
 )
 from backend.schemas.venue_schema import VenueCreate, VenueRead, VenueUpdate
+from backend.schemas.waitlist_entry_schema import (
+    WaitlistEntryCreate,
+    WaitlistEntryRead,
+    WaitlistEntryUpdate,
+)
 
 __all__ = [
     "BookingCreate",
@@ -42,4 +47,7 @@ __all__ = [
     "VenueCreate",
     "VenueRead",
     "VenueUpdate",
+    "WaitlistEntryCreate",
+    "WaitlistEntryRead",
+    "WaitlistEntryUpdate",
 ]
