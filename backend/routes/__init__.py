@@ -2,6 +2,7 @@
 # from one place as the API grows.
 from backend.routes.booking_routes import router as bookings_router
 from backend.routes.game_routes import router as games_router
+from backend.routes.game_participant_routes import router as game_participants_router
 from backend.routes.user_payment_method_routes import (
     router as user_payment_method_router,
 )
@@ -16,4 +17,5 @@ __all__ = [
     "user_payment_method_router",
     "venues_router",
     "games_router",
+    "game_participants_router",
 ]

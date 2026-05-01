@@ -5,6 +5,7 @@ from backend.database import check_database_connection
 from backend.routes import (
     bookings_router,
     games_router,
+    game_participants_router,
     user_payment_method_router,
     user_settings_router,
     users_router,
@@ -41,3 +42,4 @@ app.include_router(user_payment_method_router)
 app.include_router(venues_router)
 app.include_router(games_router)
 app.include_router(bookings_router)
+app.include_router(game_participants_router)
