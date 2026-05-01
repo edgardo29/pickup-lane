@@ -2,6 +2,11 @@
 # surface grows.
 from backend.schemas.booking_schema import BookingCreate, BookingRead, BookingUpdate
 from backend.schemas.game_schema import GameCreate, GameRead, GameUpdate
+from backend.schemas.game_participant_schema import (
+    GameParticipantCreate,
+    GameParticipantRead,
+    GameParticipantUpdate,
+)
 from backend.schemas.user_schema import UserCreate, UserRead, UserUpdate
 from backend.schemas.user_settings_schema import (
     UserSettingsCreate,
@@ -31,6 +36,9 @@ __all__ = [
     "GameCreate",
     "GameRead",
     "GameUpdate",
+    "GameParticipantCreate",
+    "GameParticipantRead",
+    "GameParticipantUpdate",
     "VenueCreate",
     "VenueRead",
     "VenueUpdate",
