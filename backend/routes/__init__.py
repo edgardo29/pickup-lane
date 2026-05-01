@@ -9,6 +9,7 @@ from backend.routes.user_payment_method_routes import (
 from backend.routes.user_settings_routes import router as user_settings_router
 from backend.routes.user_routes import router as users_router
 from backend.routes.venue_routes import router as venues_router
+from backend.routes.waitlist_entry_routes import router as waitlist_entries_router
 
 __all__ = [
     "bookings_router",
@@ -18,4 +19,5 @@ __all__ = [
     "venues_router",
     "games_router",
     "game_participants_router",
+    "waitlist_entries_router",
 ]
