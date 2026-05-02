@@ -1,6 +1,7 @@
 # Re-export routers here so the main FastAPI app can include feature routes
 # from one place as the API grows.
 from backend.routes.booking_routes import router as bookings_router
+from backend.routes.game_chat_routes import router as game_chats_router
 from backend.routes.game_routes import router as games_router
 from backend.routes.game_participant_routes import router as game_participants_router
 from backend.routes.host_deposit_routes import router as host_deposits_router
@@ -20,6 +21,7 @@ __all__ = [
     "user_settings_router",
     "user_payment_method_router",
     "venues_router",
+    "game_chats_router",
     "games_router",
     "game_participants_router",
     "host_deposits_router",

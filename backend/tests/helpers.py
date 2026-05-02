@@ -272,3 +272,16 @@ def create_host_deposit(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_game_chat(client: TestClient, game_id: str, **overrides: object) -> dict:
+    payload = {
+        "game_id": game_id,
+        "chat_status": "active",
+    }
+    payload.update(overrides)
+
+    response = client.post("/game-chats", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()

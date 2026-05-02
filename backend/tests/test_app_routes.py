@@ -57,6 +57,10 @@ def test_core_routes_are_registered(client: TestClient):
         ("GET", "/host-deposits"),
         ("GET", "/host-deposits/{host_deposit_id}"),
         ("PATCH", "/host-deposits/{host_deposit_id}"),
+        ("POST", "/game-chats"),
+        ("GET", "/game-chats"),
+        ("GET", "/game-chats/{game_chat_id}"),
+        ("PATCH", "/game-chats/{game_chat_id}"),
     }
 
     assert expected_routes <= registered_routes
