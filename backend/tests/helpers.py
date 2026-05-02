@@ -251,3 +251,24 @@ def create_refund(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_host_deposit(
+    client: TestClient,
+    game_id: str,
+    host_user_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "game_id": game_id,
+        "host_user_id": host_user_id,
+        "required_amount_cents": 2500,
+        "currency": "USD",
+        "deposit_status": "required",
+    }
+    payload.update(overrides)
+
+    response = client.post("/host-deposits", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
