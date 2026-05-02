@@ -7,6 +7,7 @@ from backend.routes import (
     games_router,
     game_participants_router,
     payments_router,
+    refunds_router,
     user_payment_method_router,
     user_settings_router,
     users_router,
@@ -47,3 +48,4 @@ app.include_router(bookings_router)
 app.include_router(game_participants_router)
 app.include_router(waitlist_entries_router)
 app.include_router(payments_router)
+app.include_router(refunds_router)

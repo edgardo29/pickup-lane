@@ -4,6 +4,7 @@ from backend.models.booking_model import Booking
 from backend.models.game_model import Game
 from backend.models.game_participant_model import GameParticipant
 from backend.models.payment_model import Payment
+from backend.models.refund_model import Refund
 from backend.models.waitlist_entry_model import WaitlistEntry
 from backend.models.venue_model import Venue
 from backend.models.user_payment_method_model import UserPaymentMethod
@@ -20,4 +21,5 @@ __all__ = [
     "GameParticipant",
     "WaitlistEntry",
     "Payment",
+    "Refund",
 ]

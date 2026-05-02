@@ -226,3 +226,28 @@ def create_payment(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_refund(
+    client: TestClient,
+    payment_id: str,
+    booking_id: str | None = None,
+    participant_id: str | None = None,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "payment_id": payment_id,
+        "booking_id": booking_id,
+        "participant_id": participant_id,
+        "provider_refund_id": f"re_{unique_suffix()}",
+        "amount_cents": 500,
+        "currency": "USD",
+        "refund_reason": "player_cancelled",
+        "refund_status": "pending",
+    }
+    payload.update(overrides)
+
+    response = client.post("/refunds", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
