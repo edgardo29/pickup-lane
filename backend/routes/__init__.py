@@ -3,6 +3,7 @@
 from backend.routes.booking_routes import router as bookings_router
 from backend.routes.game_routes import router as games_router
 from backend.routes.game_participant_routes import router as game_participants_router
+from backend.routes.host_deposit_routes import router as host_deposits_router
 from backend.routes.payment_routes import router as payments_router
 from backend.routes.refund_routes import router as refunds_router
 from backend.routes.user_payment_method_routes import (
@@ -21,6 +22,7 @@ __all__ = [
     "venues_router",
     "games_router",
     "game_participants_router",
+    "host_deposits_router",
     "waitlist_entries_router",
     "payments_router",
     "refunds_router",

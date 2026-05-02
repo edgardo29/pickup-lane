@@ -7,6 +7,11 @@ from backend.schemas.game_participant_schema import (
     GameParticipantRead,
     GameParticipantUpdate,
 )
+from backend.schemas.host_deposit_schema import (
+    HostDepositCreate,
+    HostDepositRead,
+    HostDepositUpdate,
+)
 from backend.schemas.payment_schema import PaymentCreate, PaymentRead, PaymentUpdate
 from backend.schemas.refund_schema import RefundCreate, RefundRead, RefundUpdate
 from backend.schemas.user_schema import UserCreate, UserRead, UserUpdate
@@ -46,6 +51,9 @@ __all__ = [
     "GameParticipantCreate",
     "GameParticipantRead",
     "GameParticipantUpdate",
+    "HostDepositCreate",
+    "HostDepositRead",
+    "HostDepositUpdate",
     "PaymentCreate",
     "PaymentRead",
     "PaymentUpdate",
