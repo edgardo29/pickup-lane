@@ -1,6 +1,7 @@
 # Re-export models here so Alembic and the rest of the backend can import from
 # one place as the models package grows.
 from backend.models.booking_model import Booking
+from backend.models.game_chat_model import GameChat
 from backend.models.game_model import Game
 from backend.models.game_participant_model import GameParticipant
 from backend.models.host_deposit_model import HostDeposit
@@ -18,6 +19,7 @@ __all__ = [
     "UserPaymentMethod",
     "Venue",
     "Game",
+    "GameChat",
     "Booking",
     "GameParticipant",
     "HostDeposit",

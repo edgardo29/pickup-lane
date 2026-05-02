@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.database import check_database_connection
 from backend.routes import (
     bookings_router,
+    game_chats_router,
     games_router,
     game_participants_router,
     host_deposits_router,
@@ -44,6 +45,7 @@ app.include_router(users_router)
 app.include_router(user_settings_router)
 app.include_router(user_payment_method_router)
 app.include_router(venues_router)
+app.include_router(game_chats_router)
 app.include_router(games_router)
 app.include_router(bookings_router)
 app.include_router(game_participants_router)

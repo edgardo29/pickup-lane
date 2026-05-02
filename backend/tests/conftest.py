@@ -12,6 +12,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 # parent tables they reference.
 TEST_TABLES = (
     "host_deposits",
+    "game_chats",
     "refunds",
     "payments",
     "waitlist_entries",
