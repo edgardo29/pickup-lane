@@ -20,6 +20,7 @@ TEST_TABLES = (
     "booking_status_history",
     "participant_status_history",
     "refunds",
+    "payment_events",
     "payments",
     "waitlist_entries",
     "game_participants",

@@ -11,6 +11,7 @@ from backend.models.game_status_history_model import GameStatusHistory
 from backend.models.host_deposit_model import HostDeposit
 from backend.models.notification_model import Notification
 from backend.models.participant_status_history_model import ParticipantStatusHistory
+from backend.models.payment_event_model import PaymentEvent
 from backend.models.payment_model import Payment
 from backend.models.refund_model import Refund
 from backend.models.user_model import User
@@ -39,5 +40,6 @@ __all__ = [
     "AdminAction",
     "WaitlistEntry",
     "Payment",
+    "PaymentEvent",
     "Refund",
 ]
