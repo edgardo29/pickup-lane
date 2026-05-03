@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -30,6 +31,20 @@ def create_user(client: TestClient, **overrides: object) -> dict:
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def set_user_role(user_id: str, role: str) -> None:
+    # Some internal roles are server-managed and cannot be set through the
+    # public user API, so tests adjust them directly only when validating
+    # admin-only behavior.
+    from backend.database import SessionLocal
+    from backend.models import User
+
+    with SessionLocal() as db:
+        db_user = db.get(User, UUID(user_id))
+        assert db_user is not None
+        db_user.role = role
+        db.commit()
 
 
 def create_user_settings(client: TestClient, user_id: str, **overrides: object) -> dict:
@@ -282,6 +297,48 @@ def create_game_chat(client: TestClient, game_id: str, **overrides: object) -> d
     payload.update(overrides)
 
     response = client.post("/game-chats", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def create_chat_message(
+    client: TestClient,
+    chat_id: str,
+    sender_user_id: str | None = None,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "chat_id": chat_id,
+        "sender_user_id": sender_user_id,
+        "message_type": "text",
+        "message_body": "CI chat message",
+        "is_pinned": False,
+        "moderation_status": "visible",
+    }
+    payload.update(overrides)
+
+    response = client.post("/chat-messages", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def create_notification(
+    client: TestClient,
+    user_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "user_id": user_id,
+        "notification_type": "admin_notice",
+        "title": "CI notification",
+        "body": "CI notification body",
+        "is_read": False,
+    }
+    payload.update(overrides)
+
+    response = client.post("/notifications", json=payload)
 
     assert response.status_code == 201, response.text
     return response.json()
