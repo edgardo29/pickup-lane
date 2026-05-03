@@ -18,6 +18,11 @@ from backend.schemas.host_deposit_schema import (
     HostDepositRead,
     HostDepositUpdate,
 )
+from backend.schemas.notification_schema import (
+    NotificationCreate,
+    NotificationRead,
+    NotificationUpdate,
+)
 from backend.schemas.payment_schema import PaymentCreate, PaymentRead, PaymentUpdate
 from backend.schemas.refund_schema import RefundCreate, RefundRead, RefundUpdate
 from backend.schemas.user_schema import UserCreate, UserRead, UserUpdate
@@ -66,6 +71,9 @@ __all__ = [
     "HostDepositCreate",
     "HostDepositRead",
     "HostDepositUpdate",
+    "NotificationCreate",
+    "NotificationRead",
+    "NotificationUpdate",
     "PaymentCreate",
     "PaymentRead",
     "PaymentUpdate",
