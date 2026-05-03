@@ -33,6 +33,11 @@ from backend.schemas.host_deposit_schema import (
     HostDepositRead,
     HostDepositUpdate,
 )
+from backend.schemas.host_deposit_event_schema import (
+    HostDepositEventCreate,
+    HostDepositEventRead,
+    HostDepositEventUpdate,
+)
 from backend.schemas.notification_schema import (
     NotificationCreate,
     NotificationRead,
@@ -116,6 +121,9 @@ __all__ = [
     "HostDepositCreate",
     "HostDepositRead",
     "HostDepositUpdate",
+    "HostDepositEventCreate",
+    "HostDepositEventRead",
+    "HostDepositEventUpdate",
     "NotificationCreate",
     "NotificationRead",
     "NotificationUpdate",

@@ -11,6 +11,7 @@ from backend.routes import (
     games_router,
     game_participants_router,
     game_status_history_router,
+    host_deposit_events_router,
     host_deposits_router,
     notifications_router,
     participant_status_history_router,
@@ -63,6 +64,7 @@ app.include_router(game_participants_router)
 app.include_router(game_status_history_router)
 app.include_router(participant_status_history_router)
 app.include_router(host_deposits_router)
+app.include_router(host_deposit_events_router)
 app.include_router(notifications_router)
 app.include_router(admin_actions_router)
 app.include_router(waitlist_entries_router)

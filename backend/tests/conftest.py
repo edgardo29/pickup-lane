@@ -13,6 +13,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 TEST_TABLES = (
     "admin_actions",
     "notifications",
+    "host_deposit_events",
     "host_deposits",
     "chat_messages",
     "game_chats",
