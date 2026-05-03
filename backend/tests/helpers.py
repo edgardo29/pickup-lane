@@ -448,3 +448,26 @@ def create_admin_action(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_payment_event(
+    client: TestClient,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "payment_id": None,
+        "provider": "stripe",
+        "provider_event_id": f"evt_{unique_suffix()}",
+        "event_type": "payment_intent.succeeded",
+        "raw_payload": {
+            "type": "payment_intent.succeeded",
+            "source": "ci",
+        },
+        "processing_status": "pending",
+    }
+    payload.update(overrides)
+
+    response = client.post("/payment-events", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()

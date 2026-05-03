@@ -43,6 +43,11 @@ from backend.schemas.participant_status_history_schema import (
     ParticipantStatusHistoryRead,
     ParticipantStatusHistoryUpdate,
 )
+from backend.schemas.payment_event_schema import (
+    PaymentEventCreate,
+    PaymentEventRead,
+    PaymentEventUpdate,
+)
 from backend.schemas.payment_schema import PaymentCreate, PaymentRead, PaymentUpdate
 from backend.schemas.refund_schema import RefundCreate, RefundRead, RefundUpdate
 from backend.schemas.user_schema import UserCreate, UserRead, UserUpdate
@@ -117,6 +122,9 @@ __all__ = [
     "PaymentCreate",
     "PaymentRead",
     "PaymentUpdate",
+    "PaymentEventCreate",
+    "PaymentEventRead",
+    "PaymentEventUpdate",
     "RefundCreate",
     "RefundRead",
     "RefundUpdate",
