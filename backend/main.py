@@ -17,6 +17,7 @@ from backend.routes import (
     refunds_router,
     user_payment_method_router,
     user_settings_router,
+    user_stats_router,
     users_router,
     venues_router,
     waitlist_entries_router,
@@ -48,6 +49,7 @@ def db_health():
 # surface grows.
 app.include_router(users_router)
 app.include_router(user_settings_router)
+app.include_router(user_stats_router)
 app.include_router(user_payment_method_router)
 app.include_router(venues_router)
 app.include_router(game_chats_router)

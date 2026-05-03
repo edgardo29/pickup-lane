@@ -51,6 +51,11 @@ from backend.schemas.user_payment_method_schema import (
     UserPaymentMethodRead,
     UserPaymentMethodUpdate,
 )
+from backend.schemas.user_stats_schema import (
+    UserStatsCreate,
+    UserStatsRead,
+    UserStatsUpdate,
+)
 from backend.schemas.venue_schema import VenueCreate, VenueRead, VenueUpdate
 from backend.schemas.waitlist_entry_schema import (
     WaitlistEntryCreate,
@@ -77,6 +82,9 @@ __all__ = [
     "UserPaymentMethodCreate",
     "UserPaymentMethodRead",
     "UserPaymentMethodUpdate",
+    "UserStatsCreate",
+    "UserStatsRead",
+    "UserStatsUpdate",
     "GameChatCreate",
     "GameChatRead",
     "GameChatUpdate",

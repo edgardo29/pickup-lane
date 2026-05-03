@@ -23,6 +23,7 @@ TEST_TABLES = (
     "waitlist_entries",
     "game_participants",
     "bookings",
+    "user_stats",
     "user_payment_methods",
     "user_settings",
     "games",
