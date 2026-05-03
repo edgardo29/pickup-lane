@@ -429,3 +429,22 @@ def create_user_stats(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_admin_action(
+    client: TestClient,
+    admin_user_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "admin_user_id": admin_user_id,
+        "action_type": "suspend_user",
+        "reason": "CI admin action row",
+        "metadata": {"source": "ci"},
+    }
+    payload.update(overrides)
+
+    response = client.post("/admin-actions", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()

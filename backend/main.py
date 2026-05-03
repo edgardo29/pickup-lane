@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.database import check_database_connection
 from backend.routes import (
+    admin_actions_router,
     booking_status_history_router,
     bookings_router,
     chat_messages_router,
@@ -62,6 +63,7 @@ app.include_router(game_status_history_router)
 app.include_router(participant_status_history_router)
 app.include_router(host_deposits_router)
 app.include_router(notifications_router)
+app.include_router(admin_actions_router)
 app.include_router(waitlist_entries_router)
 app.include_router(payments_router)
 app.include_router(refunds_router)

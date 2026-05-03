@@ -1,5 +1,10 @@
 # Re-export schemas here so route modules can import from one place as the API
 # surface grows.
+from backend.schemas.admin_action_schema import (
+    AdminActionCreate,
+    AdminActionRead,
+    AdminActionUpdate,
+)
 from backend.schemas.booking_schema import BookingCreate, BookingRead, BookingUpdate
 from backend.schemas.booking_status_history_schema import (
     BookingStatusHistoryCreate,
@@ -64,6 +69,9 @@ from backend.schemas.waitlist_entry_schema import (
 )
 
 __all__ = [
+    "AdminActionCreate",
+    "AdminActionRead",
+    "AdminActionUpdate",
     "BookingCreate",
     "BookingRead",
     "BookingUpdate",
