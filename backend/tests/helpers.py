@@ -342,3 +342,25 @@ def create_notification(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_game_status_history(
+    client: TestClient,
+    game_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "game_id": game_id,
+        "old_publish_status": "draft",
+        "new_publish_status": "published",
+        "old_game_status": "scheduled",
+        "new_game_status": "scheduled",
+        "change_source": "admin",
+        "change_reason": "CI status history row",
+    }
+    payload.update(overrides)
+
+    response = client.post("/game-status-history", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()

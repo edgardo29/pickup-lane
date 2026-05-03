@@ -5,6 +5,7 @@ from backend.models.chat_message_model import ChatMessage
 from backend.models.game_chat_model import GameChat
 from backend.models.game_model import Game
 from backend.models.game_participant_model import GameParticipant
+from backend.models.game_status_history_model import GameStatusHistory
 from backend.models.host_deposit_model import HostDeposit
 from backend.models.notification_model import Notification
 from backend.models.payment_model import Payment
@@ -23,6 +24,7 @@ __all__ = [
     "Game",
     "GameChat",
     "ChatMessage",
+    "GameStatusHistory",
     "Booking",
     "GameParticipant",
     "HostDeposit",
