@@ -1,6 +1,11 @@
 # Re-export schemas here so route modules can import from one place as the API
 # surface grows.
 from backend.schemas.booking_schema import BookingCreate, BookingRead, BookingUpdate
+from backend.schemas.chat_message_schema import (
+    ChatMessageCreate,
+    ChatMessageRead,
+    ChatMessageUpdate,
+)
 from backend.schemas.game_chat_schema import GameChatCreate, GameChatRead, GameChatUpdate
 from backend.schemas.game_schema import GameCreate, GameRead, GameUpdate
 from backend.schemas.game_participant_schema import (
@@ -37,6 +42,9 @@ __all__ = [
     "BookingCreate",
     "BookingRead",
     "BookingUpdate",
+    "ChatMessageCreate",
+    "ChatMessageRead",
+    "ChatMessageUpdate",
     "UserCreate",
     "UserRead",
     "UserUpdate",
