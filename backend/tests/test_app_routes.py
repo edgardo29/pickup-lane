@@ -73,6 +73,10 @@ def test_core_routes_are_registered(client: TestClient):
         ("GET", "/game-status-history"),
         ("GET", "/game-status-history/{history_id}"),
         ("PATCH", "/game-status-history/{history_id}"),
+        ("POST", "/booking-status-history"),
+        ("GET", "/booking-status-history"),
+        ("GET", "/booking-status-history/{history_id}"),
+        ("PATCH", "/booking-status-history/{history_id}"),
     }
 
     assert expected_routes <= registered_routes
