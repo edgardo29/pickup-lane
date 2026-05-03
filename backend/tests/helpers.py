@@ -364,3 +364,25 @@ def create_game_status_history(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_booking_status_history(
+    client: TestClient,
+    booking_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "booking_id": booking_id,
+        "old_booking_status": "pending_payment",
+        "new_booking_status": "confirmed",
+        "old_payment_status": "processing",
+        "new_payment_status": "paid",
+        "change_source": "payment_webhook",
+        "change_reason": "CI booking status history row",
+    }
+    payload.update(overrides)
+
+    response = client.post("/booking-status-history", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
