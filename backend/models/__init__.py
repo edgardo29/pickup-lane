@@ -9,6 +9,7 @@ from backend.models.game_model import Game
 from backend.models.game_participant_model import GameParticipant
 from backend.models.game_status_history_model import GameStatusHistory
 from backend.models.host_deposit_model import HostDeposit
+from backend.models.host_deposit_event_model import HostDepositEvent
 from backend.models.notification_model import Notification
 from backend.models.participant_status_history_model import ParticipantStatusHistory
 from backend.models.payment_event_model import PaymentEvent
@@ -36,6 +37,7 @@ __all__ = [
     "GameParticipant",
     "ParticipantStatusHistory",
     "HostDeposit",
+    "HostDepositEvent",
     "Notification",
     "AdminAction",
     "WaitlistEntry",

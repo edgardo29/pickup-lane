@@ -289,6 +289,26 @@ def create_host_deposit(
     return response.json()
 
 
+def create_host_deposit_event(
+    client: TestClient,
+    host_deposit_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "host_deposit_id": host_deposit_id,
+        "old_status": "payment_pending",
+        "new_status": "paid",
+        "change_source": "system",
+        "reason": "CI host deposit event row",
+    }
+    payload.update(overrides)
+
+    response = client.post("/host-deposit-events", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 def create_game_chat(client: TestClient, game_id: str, **overrides: object) -> dict:
     payload = {
         "game_id": game_id,
