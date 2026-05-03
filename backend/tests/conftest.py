@@ -17,6 +17,7 @@ TEST_TABLES = (
     "game_chats",
     "game_status_history",
     "booking_status_history",
+    "participant_status_history",
     "refunds",
     "payments",
     "waitlist_entries",
