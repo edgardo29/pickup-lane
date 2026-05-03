@@ -23,6 +23,7 @@ from backend.routes.user_payment_method_routes import (
 )
 from backend.routes.user_settings_routes import router as user_settings_router
 from backend.routes.user_routes import router as users_router
+from backend.routes.user_stats_routes import router as user_stats_router
 from backend.routes.venue_routes import router as venues_router
 from backend.routes.waitlist_entry_routes import router as waitlist_entries_router
 
@@ -32,6 +33,7 @@ __all__ = [
     "chat_messages_router",
     "users_router",
     "user_settings_router",
+    "user_stats_router",
     "user_payment_method_router",
     "venues_router",
     "game_chats_router",

@@ -12,15 +12,17 @@ from backend.models.notification_model import Notification
 from backend.models.participant_status_history_model import ParticipantStatusHistory
 from backend.models.payment_model import Payment
 from backend.models.refund_model import Refund
-from backend.models.waitlist_entry_model import WaitlistEntry
-from backend.models.venue_model import Venue
+from backend.models.user_model import User
 from backend.models.user_payment_method_model import UserPaymentMethod
 from backend.models.user_settings_model import UserSettings
-from backend.models.user_model import User
+from backend.models.user_stats_model import UserStats
+from backend.models.venue_model import Venue
+from backend.models.waitlist_entry_model import WaitlistEntry
 
 __all__ = [
     "User",
     "UserSettings",
+    "UserStats",
     "UserPaymentMethod",
     "Venue",
     "Game",

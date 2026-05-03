@@ -408,3 +408,24 @@ def create_participant_status_history(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_user_stats(
+    client: TestClient,
+    user_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "user_id": user_id,
+        "games_played_count": 3,
+        "games_hosted_completed_count": 1,
+        "no_show_count": 0,
+        "late_cancel_count": 1,
+        "host_cancel_count": 0,
+    }
+    payload.update(overrides)
+
+    response = client.post("/user-stats", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
