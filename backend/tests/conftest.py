@@ -11,6 +11,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 # Keep this list in dependency order for cleanup: child tables first, then the
 # parent tables they reference.
 TEST_TABLES = (
+    "admin_actions",
     "notifications",
     "host_deposits",
     "chat_messages",
