@@ -5,6 +5,9 @@ from backend.routes.chat_message_routes import router as chat_messages_router
 from backend.routes.game_chat_routes import router as game_chats_router
 from backend.routes.game_routes import router as games_router
 from backend.routes.game_participant_routes import router as game_participants_router
+from backend.routes.game_status_history_routes import (
+    router as game_status_history_router,
+)
 from backend.routes.host_deposit_routes import router as host_deposits_router
 from backend.routes.notification_routes import router as notifications_router
 from backend.routes.payment_routes import router as payments_router
@@ -27,6 +30,7 @@ __all__ = [
     "game_chats_router",
     "games_router",
     "game_participants_router",
+    "game_status_history_router",
     "host_deposits_router",
     "notifications_router",
     "waitlist_entries_router",

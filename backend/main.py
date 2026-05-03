@@ -8,6 +8,7 @@ from backend.routes import (
     game_chats_router,
     games_router,
     game_participants_router,
+    game_status_history_router,
     host_deposits_router,
     notifications_router,
     payments_router,
@@ -52,6 +53,7 @@ app.include_router(chat_messages_router)
 app.include_router(games_router)
 app.include_router(bookings_router)
 app.include_router(game_participants_router)
+app.include_router(game_status_history_router)
 app.include_router(host_deposits_router)
 app.include_router(notifications_router)
 app.include_router(waitlist_entries_router)

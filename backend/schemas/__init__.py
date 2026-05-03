@@ -13,6 +13,11 @@ from backend.schemas.game_participant_schema import (
     GameParticipantRead,
     GameParticipantUpdate,
 )
+from backend.schemas.game_status_history_schema import (
+    GameStatusHistoryCreate,
+    GameStatusHistoryRead,
+    GameStatusHistoryUpdate,
+)
 from backend.schemas.host_deposit_schema import (
     HostDepositCreate,
     HostDepositRead,
@@ -68,6 +73,9 @@ __all__ = [
     "GameParticipantCreate",
     "GameParticipantRead",
     "GameParticipantUpdate",
+    "GameStatusHistoryCreate",
+    "GameStatusHistoryRead",
+    "GameStatusHistoryUpdate",
     "HostDepositCreate",
     "HostDepositRead",
     "HostDepositUpdate",
