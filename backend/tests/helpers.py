@@ -386,3 +386,25 @@ def create_booking_status_history(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_participant_status_history(
+    client: TestClient,
+    participant_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "participant_id": participant_id,
+        "old_participant_status": "pending_payment",
+        "new_participant_status": "confirmed",
+        "old_attendance_status": "unknown",
+        "new_attendance_status": "attended",
+        "change_source": "admin",
+        "change_reason": "CI participant status history row",
+    }
+    payload.update(overrides)
+
+    response = client.post("/participant-status-history", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()

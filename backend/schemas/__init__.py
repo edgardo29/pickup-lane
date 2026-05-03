@@ -33,6 +33,11 @@ from backend.schemas.notification_schema import (
     NotificationRead,
     NotificationUpdate,
 )
+from backend.schemas.participant_status_history_schema import (
+    ParticipantStatusHistoryCreate,
+    ParticipantStatusHistoryRead,
+    ParticipantStatusHistoryUpdate,
+)
 from backend.schemas.payment_schema import PaymentCreate, PaymentRead, PaymentUpdate
 from backend.schemas.refund_schema import RefundCreate, RefundRead, RefundUpdate
 from backend.schemas.user_schema import UserCreate, UserRead, UserUpdate
@@ -84,6 +89,9 @@ __all__ = [
     "GameStatusHistoryCreate",
     "GameStatusHistoryRead",
     "GameStatusHistoryUpdate",
+    "ParticipantStatusHistoryCreate",
+    "ParticipantStatusHistoryRead",
+    "ParticipantStatusHistoryUpdate",
     "HostDepositCreate",
     "HostDepositRead",
     "HostDepositUpdate",
