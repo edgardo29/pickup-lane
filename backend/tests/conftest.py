@@ -25,6 +25,7 @@ TEST_TABLES = (
     "payments",
     "waitlist_entries",
     "game_participants",
+    "booking_policy_acceptances",
     "bookings",
     "user_stats",
     "user_payment_methods",

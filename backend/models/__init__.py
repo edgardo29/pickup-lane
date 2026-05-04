@@ -2,6 +2,7 @@
 # one place as the models package grows.
 from backend.models.admin_action_model import AdminAction
 from backend.models.booking_model import Booking
+from backend.models.booking_policy_acceptance_model import BookingPolicyAcceptance
 from backend.models.booking_status_history_model import BookingStatusHistory
 from backend.models.chat_message_model import ChatMessage
 from backend.models.game_chat_model import GameChat
@@ -36,6 +37,7 @@ __all__ = [
     "GameStatusHistory",
     "Booking",
     "BookingStatusHistory",
+    "BookingPolicyAcceptance",
     "GameParticipant",
     "ParticipantStatusHistory",
     "HostDeposit",

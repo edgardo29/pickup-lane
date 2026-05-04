@@ -532,3 +532,21 @@ def create_policy_acceptance(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_booking_policy_acceptance(
+    client: TestClient,
+    booking_id: str,
+    policy_document_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "booking_id": booking_id,
+        "policy_document_id": policy_document_id,
+    }
+    payload.update(overrides)
+
+    response = client.post("/booking-policy-acceptances", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
