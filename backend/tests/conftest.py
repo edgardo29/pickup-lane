@@ -31,6 +31,7 @@ TEST_TABLES = (
     "user_payment_methods",
     "user_settings",
     "games",
+    "venue_approval_requests",
     "venues",
     "policy_acceptances",
     "policy_documents",

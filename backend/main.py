@@ -25,6 +25,7 @@ from backend.routes import (
     user_settings_router,
     user_stats_router,
     users_router,
+    venue_approval_requests_router,
     venues_router,
     waitlist_entries_router,
 )
@@ -58,6 +59,7 @@ app.include_router(user_settings_router)
 app.include_router(user_stats_router)
 app.include_router(user_payment_method_router)
 app.include_router(venues_router)
+app.include_router(venue_approval_requests_router)
 app.include_router(game_chats_router)
 app.include_router(chat_messages_router)
 app.include_router(games_router)
