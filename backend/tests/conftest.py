@@ -31,6 +31,7 @@ TEST_TABLES = (
     "user_settings",
     "games",
     "venues",
+    "policy_acceptances",
     "policy_documents",
     "users",
 )

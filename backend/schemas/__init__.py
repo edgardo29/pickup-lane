@@ -54,6 +54,11 @@ from backend.schemas.payment_event_schema import (
     PaymentEventUpdate,
 )
 from backend.schemas.payment_schema import PaymentCreate, PaymentRead, PaymentUpdate
+from backend.schemas.policy_acceptance_schema import (
+    PolicyAcceptanceCreate,
+    PolicyAcceptanceRead,
+    PolicyAcceptanceUpdate,
+)
 from backend.schemas.policy_document_schema import (
     PolicyDocumentCreate,
     PolicyDocumentRead,
@@ -141,6 +146,9 @@ __all__ = [
     "PolicyDocumentCreate",
     "PolicyDocumentRead",
     "PolicyDocumentUpdate",
+    "PolicyAcceptanceCreate",
+    "PolicyAcceptanceRead",
+    "PolicyAcceptanceUpdate",
     "RefundCreate",
     "RefundRead",
     "RefundUpdate",
