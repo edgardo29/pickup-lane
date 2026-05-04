@@ -6,6 +6,7 @@ from backend.models.booking_policy_acceptance_model import BookingPolicyAcceptan
 from backend.models.booking_status_history_model import BookingStatusHistory
 from backend.models.chat_message_model import ChatMessage
 from backend.models.game_chat_model import GameChat
+from backend.models.game_image_model import GameImage
 from backend.models.game_model import Game
 from backend.models.game_participant_model import GameParticipant
 from backend.models.game_status_history_model import GameStatusHistory
@@ -34,6 +35,7 @@ __all__ = [
     "Venue",
     "VenueApprovalRequest",
     "Game",
+    "GameImage",
     "GameChat",
     "ChatMessage",
     "GameStatusHistory",
