@@ -22,6 +22,11 @@ from backend.schemas.chat_message_schema import (
     ChatMessageUpdate,
 )
 from backend.schemas.game_chat_schema import GameChatCreate, GameChatRead, GameChatUpdate
+from backend.schemas.game_image_schema import (
+    GameImageCreate,
+    GameImageRead,
+    GameImageUpdate,
+)
 from backend.schemas.game_schema import GameCreate, GameRead, GameUpdate
 from backend.schemas.game_participant_schema import (
     GameParticipantCreate,
@@ -129,6 +134,9 @@ __all__ = [
     "GameChatCreate",
     "GameChatRead",
     "GameChatUpdate",
+    "GameImageCreate",
+    "GameImageRead",
+    "GameImageUpdate",
     "GameCreate",
     "GameRead",
     "GameUpdate",

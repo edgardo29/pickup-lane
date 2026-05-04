@@ -30,6 +30,7 @@ TEST_TABLES = (
     "user_stats",
     "user_payment_methods",
     "user_settings",
+    "game_images",
     "games",
     "venue_approval_requests",
     "venues",

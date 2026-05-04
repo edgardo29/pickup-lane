@@ -572,3 +572,26 @@ def create_venue_approval_request(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_game_image(
+    client: TestClient,
+    game_id: str,
+    uploaded_by_user_id: str | None = None,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "game_id": game_id,
+        "uploaded_by_user_id": uploaded_by_user_id,
+        "image_url": f"https://example.com/images/ci-game-image-{unique_suffix()}.jpg",
+        "image_role": "gallery",
+        "image_status": "active",
+        "is_primary": False,
+        "sort_order": 0,
+    }
+    payload.update(overrides)
+
+    response = client.post("/game-images", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
