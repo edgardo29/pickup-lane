@@ -12,16 +12,15 @@ from backend.routes.game_participant_routes import router as game_participants_r
 from backend.routes.game_status_history_routes import (
     router as game_status_history_router,
 )
+from backend.routes.host_deposit_event_routes import router as host_deposit_events_router
 from backend.routes.host_deposit_routes import router as host_deposits_router
-from backend.routes.host_deposit_event_routes import (
-    router as host_deposit_events_router,
-)
 from backend.routes.notification_routes import router as notifications_router
 from backend.routes.participant_status_history_routes import (
     router as participant_status_history_router,
 )
 from backend.routes.payment_event_routes import router as payment_events_router
 from backend.routes.payment_routes import router as payments_router
+from backend.routes.policy_document_routes import router as policy_documents_router
 from backend.routes.refund_routes import router as refunds_router
 from backend.routes.user_payment_method_routes import (
     router as user_payment_method_router,
@@ -53,5 +52,6 @@ __all__ = [
     "waitlist_entries_router",
     "payments_router",
     "payment_events_router",
+    "policy_documents_router",
     "refunds_router",
 ]

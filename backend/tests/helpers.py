@@ -491,3 +491,24 @@ def create_payment_event(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_policy_document(
+    client: TestClient,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "policy_type": "privacy_policy",
+        "version": f"v-{unique_suffix()[:8]}",
+        "title": "CI Privacy Policy",
+        "content_url": None,
+        "content_text": "CI policy document content.",
+        "effective_at": datetime.now(UTC).isoformat(),
+        "is_active": True,
+    }
+    payload.update(overrides)
+
+    response = client.post("/policy-documents", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()

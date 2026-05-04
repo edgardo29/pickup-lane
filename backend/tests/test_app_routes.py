@@ -97,6 +97,10 @@ def test_core_routes_are_registered(client: TestClient):
         ("GET", "/payment-events"),
         ("GET", "/payment-events/{payment_event_id}"),
         ("PATCH", "/payment-events/{payment_event_id}"),
+        ("POST", "/policy-documents"),
+        ("GET", "/policy-documents"),
+        ("GET", "/policy-documents/{policy_document_id}"),
+        ("PATCH", "/policy-documents/{policy_document_id}"),
     }
 
     assert expected_routes <= registered_routes
