@@ -86,6 +86,11 @@ from backend.schemas.user_stats_schema import (
     UserStatsRead,
     UserStatsUpdate,
 )
+from backend.schemas.venue_approval_request_schema import (
+    VenueApprovalRequestCreate,
+    VenueApprovalRequestRead,
+    VenueApprovalRequestUpdate,
+)
 from backend.schemas.venue_schema import VenueCreate, VenueRead, VenueUpdate
 from backend.schemas.waitlist_entry_schema import (
     WaitlistEntryCreate,
@@ -160,6 +165,9 @@ __all__ = [
     "RefundCreate",
     "RefundRead",
     "RefundUpdate",
+    "VenueApprovalRequestCreate",
+    "VenueApprovalRequestRead",
+    "VenueApprovalRequestUpdate",
     "VenueCreate",
     "VenueRead",
     "VenueUpdate",

@@ -550,3 +550,25 @@ def create_booking_policy_acceptance(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_venue_approval_request(
+    client: TestClient,
+    submitted_by_user_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "submitted_by_user_id": submitted_by_user_id,
+        "requested_name": "CI Requested Soccer Field",
+        "requested_address_line_1": "999 CI Requested Field Ave",
+        "requested_city": "Chicago",
+        "requested_state": "IL",
+        "requested_postal_code": "60601",
+        "requested_country_code": "US",
+    }
+    payload.update(overrides)
+
+    response = client.post("/venue-approval-requests", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()

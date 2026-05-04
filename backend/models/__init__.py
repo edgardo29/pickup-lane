@@ -22,6 +22,7 @@ from backend.models.user_model import User
 from backend.models.user_payment_method_model import UserPaymentMethod
 from backend.models.user_settings_model import UserSettings
 from backend.models.user_stats_model import UserStats
+from backend.models.venue_approval_request_model import VenueApprovalRequest
 from backend.models.venue_model import Venue
 from backend.models.waitlist_entry_model import WaitlistEntry
 
@@ -31,6 +32,7 @@ __all__ = [
     "UserStats",
     "UserPaymentMethod",
     "Venue",
+    "VenueApprovalRequest",
     "Game",
     "GameChat",
     "ChatMessage",
