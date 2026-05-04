@@ -1,0 +1,438 @@
+.landing-page {
+  --lime: #b8ff24;
+  --lime-bright: #d7ff35;
+  --panel: rgba(13, 18, 28, 0.94);
+  --panel-deep: rgba(7, 11, 18, 0.96);
+  --white: #f8fafc;
+
+  min-height: 100svh;
+  color: var(--white);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(3, 7, 14, 0.82) 0%,
+      rgba(3, 7, 14, 0.28) 45%,
+      rgba(3, 7, 14, 0.72) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(3, 7, 14, 0.04) 0%,
+      rgba(3, 7, 14, 0.72) 100%
+    ),
+    url('../assets/landing-page-background.png') center / cover no-repeat;
+  overflow-x: hidden;
+}
+
+.site-nav {
+  width: min(1320px, calc(100% - 80px));
+  margin: 0 auto;
+  padding: 34px 0 18px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 48px;
+  position: relative;
+  z-index: 5;
+}
+
+.site-nav__brand,
+.site-nav__links a,
+.site-nav__signin {
+  color: rgba(248, 250, 252, 0.82);
+  text-decoration: none;
+}
+
+.site-nav__links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 78px;
+}
+
+.site-nav__links a,
+.site-nav__signin {
+  font-size: 1rem;
+  font-weight: 500;
+  transition: color 160ms ease;
+}
+
+.site-nav__brand:hover,
+.site-nav__links a:hover,
+.site-nav__signin:hover {
+  color: var(--lime);
+}
+
+.site-nav__brand:focus-visible,
+.site-nav__links a:focus-visible,
+.site-nav__signin:focus-visible,
+.landing-hero__cta:focus-visible,
+.auth-card a:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 4px;
+}
+
+.brand-mark {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  color: var(--white);
+}
+
+.brand-mark--compact {
+  flex-direction: row;
+  gap: 13px;
+}
+
+.brand-mark__logo {
+  width: 150px;
+  height: auto;
+  object-fit: contain;
+  filter: brightness(0) saturate(100%) invert(88%) sepia(97%) saturate(1138%)
+    hue-rotate(18deg) brightness(107%) contrast(104%) drop-shadow(0 0 16px rgba(184, 255, 36, 0.32));
+}
+
+.brand-mark--compact .brand-mark__logo {
+  width: 42px;
+}
+
+.brand-mark__wordmark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 1.85rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.brand-mark--compact .brand-mark__wordmark {
+  font-size: 1.35rem;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.brand-mark__wordmark strong {
+  color: var(--lime);
+}
+
+.landing-hero {
+  width: min(1280px, calc(100% - 96px));
+  min-height: 650px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 760px) minmax(360px, 410px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 56px;
+  position: relative;
+  z-index: 2;
+}
+
+.landing-hero__copy {
+  max-width: 760px;
+  padding-top: 34px;
+  text-align: left;
+}
+
+.landing-hero__copy h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 5.35rem;
+  line-height: 1.06;
+  font-weight: 950;
+}
+
+.landing-hero__copy h1 span {
+  color: var(--lime);
+  text-shadow: 0 0 28px rgba(184, 255, 36, 0.26);
+}
+
+.landing-hero__copy p {
+  max-width: 560px;
+  margin: 26px 0 36px;
+  color: rgba(248, 250, 252, 0.76);
+  font-size: 1.28rem;
+  line-height: 1.55;
+}
+
+.landing-hero__cta {
+  width: 320px;
+  min-height: 82px;
+  padding: 0 32px 0 48px;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  color: #071007;
+  background: linear-gradient(135deg, var(--lime) 0%, #aaff1f 48%, var(--lime-bright) 100%);
+  text-decoration: none;
+  font-size: 1.28rem;
+  font-weight: 950;
+  box-shadow:
+    0 20px 50px rgba(184, 255, 36, 0.17),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.landing-hero__cta svg {
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.auth-card {
+  width: min(410px, 100%);
+  justify-self: center;
+  padding: 44px 28px 34px;
+  border-radius: 25px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(184, 255, 36, 0.08), transparent 35%),
+    linear-gradient(180deg, var(--panel), var(--panel-deep));
+  border: 1px solid rgba(184, 255, 36, 0.48);
+  box-shadow:
+    0 0 38px rgba(184, 255, 36, 0.25),
+    0 30px 90px rgba(0, 0, 0, 0.62);
+}
+
+.auth-card__brand {
+  width: 100%;
+}
+
+.auth-card__subtitle {
+  margin: 28px 0;
+  color: rgba(248, 250, 252, 0.7);
+  font-size: 1.13rem;
+  text-align: center;
+}
+
+.auth-card__create,
+.auth-card__signin {
+  min-height: 70px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-decoration: none;
+  font-size: 1.08rem;
+  font-weight: 900;
+}
+
+.auth-card__create svg,
+.auth-card__signin svg,
+.auth-card__secure-note svg {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.auth-card__create {
+  color: #061006;
+  background: linear-gradient(135deg, var(--lime), var(--lime-bright));
+  box-shadow: 0 14px 40px rgba(184, 255, 36, 0.15);
+}
+
+.auth-card__signin {
+  margin-top: 18px;
+  color: #f8fafc;
+  background: rgba(7, 11, 18, 0.72);
+  border: 1px solid rgba(248, 250, 252, 0.19);
+}
+
+.auth-card__secure-note {
+  max-width: 285px;
+  margin: 28px auto 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 13px;
+  color: rgba(248, 250, 252, 0.6);
+  font-size: 0.96rem;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.auth-card__secure-note svg {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+
+.feature-bar {
+  width: min(1240px, calc(100% - 96px));
+  margin: 0 auto 64px;
+  padding: 32px 42px;
+  border-radius: 20px;
+  background: rgba(8, 13, 22, 0.9);
+  border: 1px solid rgba(248, 250, 252, 0.18);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 34px;
+  position: relative;
+  z-index: 3;
+}
+
+.feature-item {
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  gap: 22px;
+  align-items: center;
+  text-align: left;
+}
+
+.feature-item + .feature-item {
+  border-left: 1px solid rgba(248, 250, 252, 0.28);
+  padding-left: 36px;
+}
+
+.feature-item__icon {
+  color: var(--lime);
+  filter: drop-shadow(0 0 16px rgba(184, 255, 36, 0.3));
+}
+
+.feature-item__icon svg {
+  width: 56px;
+  height: 56px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.85;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.feature-item h2 {
+  margin: 0 0 8px;
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.feature-item p {
+  margin: 0;
+  color: rgba(248, 250, 252, 0.65);
+  font-size: 1rem;
+  line-height: 1.48;
+}
+
+@media (max-width: 1180px) {
+  .landing-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(350px, 410px);
+    gap: 48px;
+  }
+
+  .landing-hero__copy h1 {
+    font-size: 4.7rem;
+  }
+}
+
+@media (max-width: 980px) {
+  .site-nav {
+    width: min(100% - 36px, 720px);
+    grid-template-columns: 1fr auto;
+    gap: 18px;
+  }
+
+  .site-nav__links {
+    display: none;
+  }
+
+  .landing-hero {
+    width: min(100% - 36px, 720px);
+    min-height: auto;
+    padding: 54px 0 38px;
+    grid-template-columns: 1fr;
+    gap: 44px;
+  }
+
+  .landing-hero__copy {
+    padding-top: 0;
+  }
+
+  .landing-hero__copy h1 {
+    font-size: 4.1rem;
+  }
+
+  .landing-hero__copy p {
+    font-size: 1.08rem;
+  }
+
+  .landing-hero__cta {
+    width: 100%;
+    min-width: 0;
+    padding: 0 34px;
+    justify-content: center;
+  }
+
+  .auth-card {
+    width: auto;
+    justify-self: stretch;
+  }
+
+  .feature-bar {
+    width: min(100% - 36px, 720px);
+    margin-bottom: 36px;
+    padding: 26px;
+    grid-template-columns: 1fr;
+  }
+
+  .feature-item + .feature-item {
+    border-left: 0;
+    border-top: 1px solid rgba(248, 250, 252, 0.18);
+    padding-left: 0;
+    padding-top: 24px;
+  }
+}
+
+@media (max-width: 520px) {
+  .site-nav {
+    padding-top: 24px;
+  }
+
+  .brand-mark--compact .brand-mark__wordmark {
+    font-size: 1rem;
+  }
+
+  .brand-mark--compact .brand-mark__logo {
+    width: 36px;
+  }
+
+  .site-nav__signin {
+    font-size: 0.95rem;
+  }
+
+  .landing-hero__copy h1 {
+    font-size: 3.2rem;
+  }
+
+  .auth-card .brand-mark__logo {
+    width: 120px;
+  }
+
+  .auth-card .brand-mark__wordmark {
+    font-size: 1.35rem;
+  }
+
+  .feature-item {
+    grid-template-columns: 50px 1fr;
+    gap: 16px;
+  }
+
+  .feature-item__icon svg {
+    width: 44px;
+    height: 44px;
+  }
+}
