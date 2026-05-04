@@ -17,6 +17,7 @@ from backend.routes import (
     participant_status_history_router,
     payment_events_router,
     payments_router,
+    policy_acceptances_router,
     policy_documents_router,
     refunds_router,
     user_payment_method_router,
@@ -72,4 +73,5 @@ app.include_router(waitlist_entries_router)
 app.include_router(payments_router)
 app.include_router(payment_events_router)
 app.include_router(policy_documents_router)
+app.include_router(policy_acceptances_router)
 app.include_router(refunds_router)

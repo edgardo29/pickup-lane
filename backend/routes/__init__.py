@@ -20,6 +20,7 @@ from backend.routes.participant_status_history_routes import (
 )
 from backend.routes.payment_event_routes import router as payment_events_router
 from backend.routes.payment_routes import router as payments_router
+from backend.routes.policy_acceptance_routes import router as policy_acceptances_router
 from backend.routes.policy_document_routes import router as policy_documents_router
 from backend.routes.refund_routes import router as refunds_router
 from backend.routes.user_payment_method_routes import (
@@ -53,5 +54,6 @@ __all__ = [
     "payments_router",
     "payment_events_router",
     "policy_documents_router",
+    "policy_acceptances_router",
     "refunds_router",
 ]

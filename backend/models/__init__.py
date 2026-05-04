@@ -14,6 +14,7 @@ from backend.models.notification_model import Notification
 from backend.models.participant_status_history_model import ParticipantStatusHistory
 from backend.models.payment_event_model import PaymentEvent
 from backend.models.payment_model import Payment
+from backend.models.policy_acceptance_model import PolicyAcceptance
 from backend.models.policy_document_model import PolicyDocument
 from backend.models.refund_model import Refund
 from backend.models.user_model import User
@@ -45,5 +46,6 @@ __all__ = [
     "Payment",
     "PaymentEvent",
     "PolicyDocument",
+    "PolicyAcceptance",
     "Refund",
 ]

@@ -512,3 +512,23 @@ def create_policy_document(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_policy_acceptance(
+    client: TestClient,
+    user_id: str,
+    policy_document_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "user_id": user_id,
+        "policy_document_id": policy_document_id,
+        "ip_address": "127.0.0.1",
+        "user_agent": "CI policy acceptance test",
+    }
+    payload.update(overrides)
+
+    response = client.post("/policy-acceptances", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
