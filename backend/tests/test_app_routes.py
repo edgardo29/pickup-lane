@@ -5,7 +5,7 @@ def test_core_routes_are_registered(client: TestClient):
     registered_routes = {
         (method, route.path)
         for route in client.app.routes
-        for method in route.methods
+        for method in getattr(route, "methods", set())
         if method not in {"HEAD", "OPTIONS"}
     }
     expected_routes = {

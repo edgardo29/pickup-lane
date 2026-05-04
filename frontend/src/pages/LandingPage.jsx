@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import LandingAuthCard from '../components/LandingAuthCard.jsx'
 import LandingFeatureBar from '../components/LandingFeatureBar.jsx'
 import { ArrowRightIcon } from '../components/LandingIcons.jsx'
@@ -17,10 +18,10 @@ function LandingPage() {
 
           <p>Book real games, meet real players, and play at approved venues near you.</p>
 
-          <a className="landing-hero__cta" href="#browse">
+          <Link className="landing-hero__cta" to="/games">
             Browse Games
             <ArrowRightIcon />
-          </a>
+          </Link>
         </section>
 
         <LandingAuthCard />

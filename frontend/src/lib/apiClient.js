@@ -28,3 +28,15 @@ export function buildApiUrl(path) {
 
   return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
 }
+
+export function buildMediaUrl(path) {
+  if (!path) {
+    return ''
+  }
+
+  if (/^(https?:)?\/\//i.test(path) || /^data:/i.test(path)) {
+    return path
+  }
+
+  return buildApiUrl(path)
+}
