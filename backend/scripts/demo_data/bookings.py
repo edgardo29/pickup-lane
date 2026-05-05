@@ -14,8 +14,9 @@ def seed_bookings(db: Session, users: dict[str, User], games: dict[str, Game]) -
 
     for game_data in DEMO_GAMES:
         game = games[game_data["key"]]
+        player_count = max(game_data["target_participants"] - 1, 0)
 
-        for roster_index in range(game_data["target_participants"]):
+        for roster_index in range(player_count):
             player_key = PLAYER_KEYS[roster_index % len(PLAYER_KEYS)]
             buyer = users[player_key]
             booking_key = f"{game_data['key']}:{player_key}"

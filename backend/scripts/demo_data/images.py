@@ -20,6 +20,8 @@ STATIC_IMAGE_BY_VENUE_KEY = {
     ),
 }
 
+GALLERY_IMAGE_URLS = list(STATIC_IMAGE_BY_VENUE_KEY.values())
+
 
 def seed_game_images(db: Session, games: dict[str, Game]) -> dict[str, GameImage]:
     seeded_images: dict[str, GameImage] = {}
@@ -41,24 +43,52 @@ def seed_game_images(db: Session, games: dict[str, Game]) -> dict[str, GameImage
         if existing_primary is not None and existing_primary.id != image_id:
             existing_primary.image_url = image_url
             existing_primary.image_role = "card"
+            existing_primary.image_status = "active"
+            existing_primary.is_primary = True
             existing_primary.sort_order = 0
+            existing_primary.deleted_at = None
             seeded_images[game_data["key"]] = existing_primary
-            continue
+        else:
+            seeded_images[game_data["key"]] = upsert_by_id(
+                db,
+                GameImage,
+                image_id,
+                {
+                    "game_id": game.id,
+                    "uploaded_by_user_id": None,
+                    "image_url": image_url,
+                    "image_role": "card",
+                    "image_status": "active",
+                    "is_primary": True,
+                    "sort_order": 0,
+                    "deleted_at": None,
+                },
+            )
 
-        seeded_images[game_data["key"]] = upsert_by_id(
-            db,
-            GameImage,
-            image_id,
-            {
-                "game_id": game.id,
-                "uploaded_by_user_id": None,
-                "image_url": image_url,
-                "image_role": "card",
-                "image_status": "active",
-                "is_primary": True,
-                "sort_order": 0,
-                "deleted_at": None,
-            },
-        )
+        gallery_urls = build_gallery_urls(game_data["venue_key"])
+
+        for index, gallery_url in enumerate(gallery_urls, start=1):
+            seeded_images[f"{game_data['key']}:gallery:{index}"] = upsert_by_id(
+                db,
+                GameImage,
+                demo_uuid(f"game-image:{game_data['key']}:gallery:{index}"),
+                {
+                    "game_id": game.id,
+                    "uploaded_by_user_id": None,
+                    "image_url": gallery_url,
+                    "image_role": "gallery",
+                    "image_status": "active",
+                    "is_primary": False,
+                    "sort_order": index,
+                    "deleted_at": None,
+                },
+            )
 
     return seeded_images
+
+
+def build_gallery_urls(venue_key: str) -> list[str]:
+    primary_url = STATIC_IMAGE_BY_VENUE_KEY[venue_key]
+    alternate_urls = [url for url in GALLERY_IMAGE_URLS if url != primary_url]
+
+    return alternate_urls[:3]
