@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import logo from '../assets/logo.png'
 
 const navItems = [
@@ -31,12 +31,12 @@ function BrowseAppNav() {
       </nav>
 
       <div className="browse-nav__actions">
-        <a className="browse-nav__signin" href="#signin">
+        <Link className="browse-nav__signin" to="/sign-in">
           Sign In
-        </a>
-        <a className="browse-nav__create" href="#create-account">
+        </Link>
+        <Link className="browse-nav__create" to="/create-account">
           Create Account
-        </a>
+        </Link>
       </div>
     </header>
   )

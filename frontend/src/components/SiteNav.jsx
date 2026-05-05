@@ -29,9 +29,9 @@ function SiteNav() {
         )}
       </nav>
 
-      <a className="site-nav__signin" href="#signin">
+      <Link className="site-nav__signin" to="/sign-in">
         Sign In
-      </a>
+      </Link>
     </header>
   )
 }
