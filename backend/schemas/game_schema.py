@@ -146,3 +146,26 @@ class GameUpdate(BaseModel):
     cancel_reason: str | None = None
     completed_at: datetime | None = None
     completed_by_user_id: UUID | None = None
+
+
+# GameHostEdit is the safer host-facing edit contract. It intentionally exposes
+# only fields a community host should be able to change from the app flow.
+class GameHostEdit(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    acting_user_id: UUID
+    venue_name: str | None = None
+    address_line_1: str | None = None
+    city: str | None = None
+    state: str | None = None
+    postal_code: str | None = None
+    neighborhood: str | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    format_label: str | None = None
+    environment_type: str | None = None
+    total_spots: int | None = None
+    price_per_player_cents: int | None = None
+    game_notes: str | None = None
+    arrival_notes: str | None = None
+    parking_notes: str | None = None

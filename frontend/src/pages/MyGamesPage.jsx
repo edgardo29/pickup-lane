@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
+import defaultCommunityVenueImage from '../assets/community-default/default-venue.png'
 import BrowseAppNav from '../components/BrowseAppNav.jsx'
 import {
   CalendarIcon,
@@ -197,6 +198,7 @@ function MyGamesPage() {
 function MyGameCard({ imageUrl, item, participantCount }) {
   const { game, isHost, statusLabel, statusTone } = item
   const tone = statusTone === 'cancelled' ? 'cancelled' : game.game_type
+  const cardImageUrl = imageUrl || (game.game_type === 'community' ? defaultCommunityVenueImage : '')
 
   return (
     <Link
@@ -208,7 +210,7 @@ function MyGameCard({ imageUrl, item, participantCount }) {
           <SoccerBallIcon />
         </div>
 
-        {imageUrl && <img src={imageUrl} alt="" loading="lazy" />}
+        {cardImageUrl && <img src={cardImageUrl} alt="" loading="lazy" />}
 
         <span className="game-card__time">{formatStartTime(game.starts_at)}</span>
         <GameTypeBadge gameType={game.game_type} isCancelled={statusTone === 'cancelled'} />

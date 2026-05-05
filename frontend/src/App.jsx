@@ -7,6 +7,7 @@ import {
   SignInPage,
 } from './pages/AuthPages.jsx'
 import BrowseGamesPage from './pages/BrowseGamesPage.jsx'
+import CreateGamePage from './pages/CreateGamePage.jsx'
 import GameDetailsPage from './pages/GameDetailsPage.jsx'
 import LandingPage from './pages/LandingPage.jsx'
 import MyGamesPage from './pages/MyGamesPage.jsx'
@@ -22,7 +23,9 @@ function App() {
       <Route path="/check-email" element={<CheckEmailPage />} />
       <Route path="/games" element={<BrowseGamesPage />} />
       <Route path="/games/:gameId" element={<GameDetailsPage />} />
+      <Route path="/games/:gameId/edit" element={<CreateGamePage />} />
       <Route path="/my-games" element={<MyGamesPage />} />
+      <Route path="/create-game" element={<CreateGamePage />} />
     </Routes>
   )
 }

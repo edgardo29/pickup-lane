@@ -11,7 +11,9 @@ export async function apiRequest(path, options = {}) {
   })
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`)
+    const errorBody = await response.json().catch(() => null)
+    const detail = errorBody?.detail
+    throw new Error(typeof detail === 'string' ? detail : `Request failed with status ${response.status}`)
   }
 
   if (response.status === 204) {

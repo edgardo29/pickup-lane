@@ -1,5 +1,6 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
+import defaultCommunityVenueImage from '../assets/community-default/default-venue.png'
 import BrowseAppNav from '../components/BrowseAppNav.jsx'
 import {
   BuildingIcon,
@@ -28,6 +29,7 @@ import '../styles/game-details.css'
 
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
 const GUEST_JOIN_MESSAGE = 'Sign in or create an account to join this game.'
+const DEMO_CURRENT_USER_AUTH_ID = 'demo-current-user'
 
 function GameDetailsPage() {
   const { gameId } = useParams()
@@ -37,6 +39,7 @@ function GameDetailsPage() {
   const [venue, setVenue] = useState(null)
   const [gameImages, setGameImages] = useState([])
   const [participants, setParticipants] = useState([])
+  const [currentUser, setCurrentUser] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [joinNotice, setJoinNotice] = useState(false)
@@ -63,7 +66,7 @@ function GameDetailsPage() {
       try {
         const gameResponse = await apiRequest(`/games/${gameId}`)
 
-        const [imagesResponse, participantsResponse, venueResponse, chatsResponse] =
+        const [imagesResponse, participantsResponse, venueResponse, chatsResponse, usersResponse] =
           await Promise.all([
             apiRequest(`/game-images?game_id=${gameId}&image_status=active`),
             apiRequest(`/game-participants?game_id=${gameId}`),
@@ -71,6 +74,7 @@ function GameDetailsPage() {
             gameResponse.is_chat_enabled
               ? apiRequest(`/game-chats?game_id=${gameId}&chat_status=active`).catch(() => [])
               : Promise.resolve([]),
+            apiRequest('/users').catch(() => []),
           ])
 
         const activeChat = chatsResponse[0]
@@ -85,6 +89,9 @@ function GameDetailsPage() {
           setVenue(venueResponse)
           setGameImages(imagesResponse)
           setParticipants(participantsResponse)
+          setCurrentUser(
+            usersResponse.find((user) => user.auth_user_id === DEMO_CURRENT_USER_AUTH_ID) || null,
+          )
           setChatMessages(messagesResponse)
           setHasUnreadChat(messagesResponse.length > 0)
           setStatus('success')
@@ -105,8 +112,8 @@ function GameDetailsPage() {
   }, [gameId])
 
   const images = useMemo(
-    () =>
-      gameImages
+    () => {
+      const galleryImages = gameImages
         .slice()
         .sort(
           (first, second) =>
@@ -114,8 +121,15 @@ function GameDetailsPage() {
             first.sort_order - second.sort_order ||
             new Date(first.created_at) - new Date(second.created_at),
         )
-        .map((image) => buildMediaUrl(image.image_url)),
-    [gameImages],
+        .map((image) => buildMediaUrl(image.image_url))
+
+      if (galleryImages.length === 0 && game?.game_type === 'community') {
+        return [defaultCommunityVenueImage]
+      }
+
+      return galleryImages
+    },
+    [game?.game_type, gameImages],
   )
 
   const participantSummary = useMemo(
@@ -175,6 +189,11 @@ function GameDetailsPage() {
     game.parking_notes ||
     'Check your confirmation before kickoff for final entry details.'
   const ruleItems = buildRuleItems(game)
+  const canEditGame =
+    game.game_type === 'community' &&
+    currentUser?.id === game.host_user_id &&
+    game.publish_status === 'published' &&
+    ['scheduled', 'full'].includes(game.game_status)
 
   function handlePreviousImage() {
     setActiveImageIndex((currentIndex) =>
@@ -229,6 +248,12 @@ function GameDetailsPage() {
               </Link>
 
               <StatusPill label={gameToneLabel} />
+
+              {canEditGame && (
+                <Link className="details-host-edit-link" to={`/games/${game.id}/edit`}>
+                  Edit Game
+                </Link>
+              )}
             </div>
 
             <div className="details-heading">
@@ -250,7 +275,14 @@ function GameDetailsPage() {
             <QuickFacts facts={facts} price={price} variant="desktop" />
 
             <section className="details-mobile-summary">
-              <StatusPill label={gameToneLabel} />
+              <div className="details-mobile-summary__meta">
+                <StatusPill label={gameToneLabel} />
+                {canEditGame && (
+                  <Link className="details-host-edit-link" to={`/games/${game.id}/edit`}>
+                    Edit Game
+                  </Link>
+                )}
+              </div>
 
               <h1>{title}</h1>
 
@@ -372,6 +404,7 @@ function buildChatSenderNames(participants) {
 }
 
 function buildRuleItems(game) {
+  const isCommunityGame = game.game_type === 'community'
   const rules = [
     {
       title: 'Cancellation',
@@ -381,9 +414,11 @@ function buildRuleItems(game) {
         'Cancel 24+ hours before the game starts to receive game credit.',
     },
     {
-      title: 'If We Cancel',
+      title: isCommunityGame ? 'If Host Cancels' : 'If We Cancel',
       kind: 'shield',
-      text: 'If the game is canceled by Pickup Lane, you will receive full game credit.',
+      text: isCommunityGame
+        ? 'If the host cancels the game, players will receive full game credit.'
+        : 'If the game is canceled by Pickup Lane, you will receive full game credit.',
     },
     {
       title: 'Weather',
