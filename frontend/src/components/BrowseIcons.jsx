@@ -97,3 +97,43 @@ export function UsersIcon() {
     </svg>
   )
 }
+
+
+export function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3.2 2" />
+    </svg>
+  )
+}
+
+export function StopwatchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="13" r="7.5" />
+      <path d="M9.5 2.8h5" />
+      <path d="M12 2.8v2.7" />
+      <path d="M17.5 6.5l1.6-1.6" />
+      <path d="M12 9v4l2.4 1.6" />
+    </svg>
+  )
+}
+
+export function BuildingIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="3.5" width="14" height="17" rx="1.8" />
+      <path d="M9 7.5h.1" />
+      <path d="M12 7.5h.1" />
+      <path d="M15 7.5h.1" />
+      <path d="M9 11h.1" />
+      <path d="M12 11h.1" />
+      <path d="M15 11h.1" />
+      <path d="M9 14.5h.1" />
+      <path d="M12 14.5h.1" />
+      <path d="M15 14.5h.1" />
+      <path d="M10 20.5v-3h4v3" />
+    </svg>
+  )
+}

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { MapPinIcon, ShieldCheckIcon, SoccerBallIcon, UsersIcon } from './BrowseIcons.jsx'
 
 function BrowseGameCard({ game, imageUrl, signedUpCount }) {
@@ -5,13 +6,16 @@ function BrowseGameCard({ game, imageUrl, signedUpCount }) {
   const title = game.venue_name_snapshot || game.title
 
   return (
-    <article className="game-card">
+    <Link className="game-card" to={`/games/${game.id}`}>
       <div className="game-card__media">
         <div className="game-card__fallback">
           <SoccerBallIcon />
         </div>
+
         {imageUrl && <img src={imageUrl} alt="" loading="lazy" />}
+
         <span className="game-card__time">{formatStartTime(game.starts_at)}</span>
+
         <span className={`game-card__badge game-card__badge--${tone}`}>
           {tone === 'community' ? <SoccerBallIcon /> : <ShieldCheckIcon />}
           {tone === 'community' ? 'Community' : 'Official'}
@@ -41,9 +45,10 @@ function BrowseGameCard({ game, imageUrl, signedUpCount }) {
           </strong>{' '}
           spots
         </span>
+
         <span>{formatPrice(game.price_per_player_cents, game.currency)}</span>
       </div>
-    </article>
+    </Link>
   )
 }
 

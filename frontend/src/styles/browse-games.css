@@ -575,3 +575,19 @@
     height: 154px;
   }
 }
+
+
+.game-card {
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.game-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(184, 255, 36, 0.42);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.34);
+}

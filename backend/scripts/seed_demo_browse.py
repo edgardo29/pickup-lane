@@ -5,6 +5,7 @@ from sqlalchemy import select
 from backend.database import SessionLocal
 from backend.models import Game
 from backend.scripts.demo_data.bookings import seed_bookings
+from backend.scripts.demo_data.chats import MESSAGES_PER_CHAT, seed_game_chats
 from backend.scripts.demo_data.games import DEMO_GAMES, seed_games
 from backend.scripts.demo_data.images import seed_game_images
 from backend.scripts.demo_data.participants import seed_participants
@@ -22,6 +23,8 @@ def seed_demo_browse() -> None:
         db.flush()
         seed_game_images(db, games)
         db.flush()
+        chats = seed_game_chats(db, users, games)
+        db.flush()
         bookings = seed_bookings(db, users, games)
         db.flush()
         seed_participants(db, users, games, bookings)
@@ -30,6 +33,7 @@ def seed_demo_browse() -> None:
 
     print("Browse demo data ready.")
     print(f"Seeded {len(DEMO_GAMES)} games with images, bookings, and participants.")
+    print(f"Seeded {len(chats)} game chats and {len(chats) * MESSAGES_PER_CHAT} chat messages.")
 
 
 def archive_old_scenario_games(db, allowed_game_ids: set) -> None:
