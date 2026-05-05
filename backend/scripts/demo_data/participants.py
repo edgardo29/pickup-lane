@@ -3,9 +3,9 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, GameParticipant, User
-from backend.scripts.demo_data.games import DEMO_GAMES, get_demo_game_host_key
+from backend.scripts.demo_data.games import ALL_DEMO_GAMES, get_demo_game_host_key
 from backend.scripts.demo_data.helpers import demo_uuid, now_utc, upsert_by_id
-from backend.scripts.demo_data.users import PLAYER_KEYS
+from backend.scripts.demo_data.users import CURRENT_USER_KEY, PLAYER_KEYS
 
 DEMO_WAITLIST_COUNT = 2
 
@@ -19,7 +19,7 @@ def seed_participants(
     seeded_participants: dict[str, GameParticipant] = {}
     timestamp = now_utc()
 
-    for game_index, game_data in enumerate(DEMO_GAMES):
+    for game_index, game_data in enumerate(ALL_DEMO_GAMES):
         game = games[game_data["key"]]
         host_key = get_demo_game_host_key(game_data, game_index)
         host = users[host_key]
@@ -141,5 +141,62 @@ def seed_participants(
                     "updated_at": timestamp,
                 },
             )
+
+        current_user_status = game_data.get("current_user_participant_status")
+        is_current_user_host = host_key == CURRENT_USER_KEY
+
+        if current_user_status and not is_current_user_host:
+            current_user = users[CURRENT_USER_KEY]
+            participant_key = f"{game_data['key']}:{CURRENT_USER_KEY}"
+            attendance_status = game_data.get("current_user_attendance_status", "unknown")
+            checked_in_at = timestamp if attendance_status == "attended" else None
+
+            seeded_participants[participant_key] = upsert_by_id(
+                db,
+                GameParticipant,
+                demo_uuid(f"participant:{participant_key}"),
+                {
+                    "game_id": game.id,
+                    "booking_id": (
+                        bookings[f"{game_data['key']}:{CURRENT_USER_KEY}"].id
+                        if current_user_status in {"pending_payment", "confirmed"}
+                        else None
+                    ),
+                    "participant_type": "registered_user",
+                    "user_id": current_user.id,
+                    "guest_name": None,
+                    "guest_email": None,
+                    "guest_phone": None,
+                    "display_name_snapshot": f"{current_user.first_name} {current_user.last_name}",
+                    "participant_status": current_user_status,
+                    "attendance_status": attendance_status,
+                    "cancellation_type": "none",
+                    "price_cents": game.price_per_player_cents,
+                    "currency": "USD",
+                    "roster_order": (
+                        game_data["target_participants"] + 1
+                        if current_user_status in {"pending_payment", "confirmed"}
+                        else None
+                    ),
+                    "joined_at": timestamp,
+                    "confirmed_at": (
+                        timestamp if current_user_status in {"pending_payment", "confirmed"} else None
+                    ),
+                    "cancelled_at": None,
+                    "checked_in_at": checked_in_at,
+                    "marked_attendance_by_user_id": host.id if attendance_status == "attended" else None,
+                    "attendance_decided_at": timestamp if attendance_status == "attended" else None,
+                    "attendance_notes": None,
+                    "updated_at": timestamp,
+                },
+            )
+
+        if is_current_user_host and game_data.get("current_user_attendance_status") == "attended":
+            host_participant = seeded_participants[host_participant_key]
+            host_participant.attendance_status = "attended"
+            host_participant.checked_in_at = timestamp
+            host_participant.marked_attendance_by_user_id = host.id
+            host_participant.attendance_decided_at = timestamp
+            host_participant.updated_at = timestamp
 
     return seeded_participants

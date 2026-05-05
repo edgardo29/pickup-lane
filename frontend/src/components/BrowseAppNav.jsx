@@ -3,7 +3,10 @@ import logo from '../assets/logo.png'
 
 const navItems = [
   { label: 'Browse Games', to: '/games' },
-  { label: 'Player Hub', to: '#player-hub' },
+  { label: 'My Games', to: '/my-games' },
+  { label: 'Create Game', to: '#create-game' },
+  { label: 'Inbox', to: '#inbox' },
+  { label: 'Profile', to: '#profile' },
 ]
 
 function BrowseAppNav() {
@@ -31,11 +34,9 @@ function BrowseAppNav() {
       </nav>
 
       <div className="browse-nav__actions">
-        <Link className="browse-nav__signin" to="/sign-in">
-          Sign In
-        </Link>
-        <Link className="browse-nav__create" to="/create-account">
-          Create Account
+        <Link className="browse-nav__user" to="#profile" aria-label="Open profile">
+          <span>AR</span>
+          Alex Rivera
         </Link>
       </div>
     </header>

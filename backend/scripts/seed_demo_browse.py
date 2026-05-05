@@ -6,7 +6,7 @@ from backend.database import SessionLocal
 from backend.models import Game
 from backend.scripts.demo_data.bookings import seed_bookings
 from backend.scripts.demo_data.chats import MESSAGES_PER_CHAT, seed_game_chats
-from backend.scripts.demo_data.games import DEMO_GAMES, seed_games
+from backend.scripts.demo_data.games import ALL_DEMO_GAMES, seed_games
 from backend.scripts.demo_data.images import seed_game_images
 from backend.scripts.demo_data.participants import seed_participants
 from backend.scripts.demo_data.users import seed_users
@@ -32,7 +32,7 @@ def seed_demo_browse() -> None:
         db.commit()
 
     print("Browse demo data ready.")
-    print(f"Seeded {len(DEMO_GAMES)} games with images, bookings, and participants.")
+    print(f"Seeded {len(ALL_DEMO_GAMES)} games with images, bookings, and participants.")
     print(f"Seeded {len(chats)} game chats and {len(chats) * MESSAGES_PER_CHAT} chat messages.")
 
 
