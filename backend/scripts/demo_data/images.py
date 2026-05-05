@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.models import Game, GameImage
-from backend.scripts.demo_data.games import DEMO_GAMES
+from backend.scripts.demo_data.games import ALL_DEMO_GAMES
 from backend.scripts.demo_data.helpers import demo_uuid, upsert_by_id
 
 STATIC_IMAGE_BY_VENUE_KEY = {
@@ -26,7 +26,7 @@ GALLERY_IMAGE_URLS = list(STATIC_IMAGE_BY_VENUE_KEY.values())
 def seed_game_images(db: Session, games: dict[str, Game]) -> dict[str, GameImage]:
     seeded_images: dict[str, GameImage] = {}
 
-    for game_data in DEMO_GAMES:
+    for game_data in ALL_DEMO_GAMES:
         game = games[game_data["key"]]
         image_url = STATIC_IMAGE_BY_VENUE_KEY[game_data["venue_key"]]
         image_id = demo_uuid(f"game-image:{game_data['key']}:primary")

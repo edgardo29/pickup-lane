@@ -182,8 +182,14 @@ function getDateKey(value) {
 }
 
 function getVisibleGames(games) {
+  const now = Date.now()
   const upcomingGames = games
-    .filter((game) => !game.deleted_at && game.game_status !== 'cancelled')
+    .filter(
+      (game) =>
+        !game.deleted_at &&
+        game.game_status !== 'cancelled' &&
+        new Date(game.starts_at).getTime() >= now,
+    )
     .sort((first, second) => new Date(first.starts_at) - new Date(second.starts_at))
 
   const publishedGames = upcomingGames.filter((game) => game.publish_status === 'published')

@@ -8,6 +8,8 @@ from backend.models import User
 from backend.scripts.demo_data.helpers import demo_uuid, now_utc, upsert_by_id
 
 ADMIN_KEY = "admin"
+CURRENT_USER_KEY = "current-user"
+CURRENT_USER_AUTH_ID = "demo-current-user"
 HOST_KEYS = ["host-marcus", "host-sofia", "host-jordan"]
 PLAYER_KEYS = [f"player-{index:02d}" for index in range(1, 33)]
 
@@ -53,6 +55,17 @@ DEMO_USERS.extend(
     for index, player_key in enumerate(PLAYER_KEYS, start=1)
 )
 
+DEMO_USERS.append(
+    {
+        "key": CURRENT_USER_KEY,
+        "auth_user_id": CURRENT_USER_AUTH_ID,
+        "role": "player",
+        "first_name": "Alex",
+        "last_name": "Rivera",
+        "hosting_status": "eligible",
+    }
+)
+
 
 def seed_users(db: Session) -> dict[str, User]:
     seeded_users: dict[str, User] = {}
@@ -65,7 +78,7 @@ def seed_users(db: Session) -> dict[str, User]:
             User,
             user_id,
             {
-                "auth_user_id": f"demo-{user_data['key']}",
+                "auth_user_id": user_data.get("auth_user_id", f"demo-{user_data['key']}"),
                 "role": user_data["role"],
                 "email": f"{user_data['key']}@demo.pickuplane.local",
                 "phone": f"+1555100{index:04d}",

@@ -3,8 +3,15 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from backend.models import Game, User, Venue
-from backend.scripts.demo_data.helpers import demo_uuid, ends_at, now_utc, starts_at, upsert_by_id
-from backend.scripts.demo_data.users import ADMIN_KEY, HOST_KEYS
+from backend.scripts.demo_data.helpers import (
+    demo_uuid,
+    ends_at,
+    now_utc,
+    relative_starts_at,
+    starts_at,
+    upsert_by_id,
+)
+from backend.scripts.demo_data.users import ADMIN_KEY, CURRENT_USER_KEY, HOST_KEYS
 
 DEMO_GAMES = [
     {
@@ -165,6 +172,126 @@ DEMO_GAMES = [
     },
 ]
 
+MY_GAMES_DEMO_GAMES = [
+    {
+        "key": "my-upcoming-confirmed",
+        "venue_key": "intentional-sports",
+        "title": "Thursday Indoor 7v7",
+        "game_type": "official",
+        "relative_day_offset": 9,
+        "hour": 19,
+        "minute": 0,
+        "format_label": "7v7",
+        "environment_type": "indoor",
+        "total_spots": 16,
+        "price_per_player_cents": 1200,
+        "target_participants": 10,
+        "current_user_participant_status": "confirmed",
+    },
+    {
+        "key": "my-upcoming-waitlist",
+        "venue_key": "skyline-pitch",
+        "title": "Skyline Community 7s",
+        "game_type": "community",
+        "host_key": "host-jordan",
+        "relative_day_offset": 10,
+        "hour": 20,
+        "minute": 30,
+        "format_label": "7v7",
+        "environment_type": "outdoor",
+        "total_spots": 16,
+        "price_per_player_cents": 1000,
+        "target_participants": 16,
+        "current_user_participant_status": "waitlisted",
+    },
+    {
+        "key": "my-hosted-upcoming",
+        "venue_key": "rauner-ymca-outdoor",
+        "title": "Alex's Community Run",
+        "game_type": "community",
+        "host_key": CURRENT_USER_KEY,
+        "relative_day_offset": 11,
+        "hour": 18,
+        "minute": 45,
+        "format_label": "7v7",
+        "environment_type": "outdoor",
+        "total_spots": 12,
+        "price_per_player_cents": 900,
+        "target_participants": 7,
+    },
+    {
+        "key": "my-past-official-attended",
+        "venue_key": "intentional-sports",
+        "title": "Tuesday Night Pickup",
+        "game_type": "official",
+        "relative_day_offset": -7,
+        "hour": 19,
+        "minute": 0,
+        "format_label": "7v7",
+        "environment_type": "indoor",
+        "total_spots": 16,
+        "price_per_player_cents": 1200,
+        "target_participants": 14,
+        "game_status": "completed",
+        "current_user_participant_status": "confirmed",
+        "current_user_attendance_status": "attended",
+    },
+    {
+        "key": "my-past-community-attended",
+        "venue_key": "skyline-pitch",
+        "title": "Upper West Side Kicks",
+        "game_type": "community",
+        "host_key": "host-sofia",
+        "relative_day_offset": -11,
+        "hour": 20,
+        "minute": 30,
+        "format_label": "7v7",
+        "environment_type": "outdoor",
+        "total_spots": 16,
+        "price_per_player_cents": 1000,
+        "target_participants": 8,
+        "game_status": "completed",
+        "current_user_participant_status": "confirmed",
+        "current_user_attendance_status": "attended",
+    },
+    {
+        "key": "my-hosted-past",
+        "venue_key": "rauner-ymca-indoor",
+        "title": "Sunday Morning Ballers",
+        "game_type": "community",
+        "host_key": CURRENT_USER_KEY,
+        "relative_day_offset": -16,
+        "hour": 9,
+        "minute": 15,
+        "format_label": "5v5",
+        "environment_type": "indoor",
+        "total_spots": 10,
+        "price_per_player_cents": 1000,
+        "target_participants": 9,
+        "game_status": "completed",
+        "current_user_attendance_status": "attended",
+    },
+    {
+        "key": "my-past-cancelled",
+        "venue_key": "harrison-park",
+        "title": "Saturday Showdown",
+        "game_type": "community",
+        "host_key": CURRENT_USER_KEY,
+        "relative_day_offset": -10,
+        "hour": 10,
+        "minute": 0,
+        "format_label": "7v7",
+        "environment_type": "outdoor",
+        "total_spots": 14,
+        "price_per_player_cents": 900,
+        "target_participants": 6,
+        "game_status": "cancelled",
+        "cancel_reason": "Host cancelled due to unsafe field conditions.",
+    },
+]
+
+ALL_DEMO_GAMES = DEMO_GAMES + MY_GAMES_DEMO_GAMES
+
 DEFAULT_GAME_DETAILS = {
     "description": (
         "Fast-paced pickup soccer with balanced teams, clear communication, "
@@ -213,13 +340,21 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
     timestamp = now_utc()
     admin = users[ADMIN_KEY]
 
-    for game_index, game_data in enumerate(DEMO_GAMES):
+    for game_index, game_data in enumerate(ALL_DEMO_GAMES):
         venue = venues[game_data["venue_key"]]
-        game_start = starts_at(game_data["day_offset"], game_data["hour"], game_data["minute"])
+        if "relative_day_offset" in game_data:
+            game_start = relative_starts_at(
+                game_data["relative_day_offset"],
+                game_data["hour"],
+                game_data["minute"],
+            )
+        else:
+            game_start = starts_at(game_data["day_offset"], game_data["hour"], game_data["minute"])
         game_id = demo_uuid(f"game:{game_data['key']}")
         is_community = game_data["game_type"] == "community"
         host = users[get_demo_game_host_key(game_data, game_index)]
         details = DEFAULT_GAME_DETAILS | GAME_DETAILS_BY_KEY.get(game_data["key"], {})
+        game_status = game_data.get("game_status", "scheduled")
 
         seeded_games[game_data["key"]] = upsert_by_id(
             db,
@@ -228,7 +363,7 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
             {
                 "game_type": game_data["game_type"],
                 "publish_status": "published",
-                "game_status": "scheduled",
+                "game_status": game_status,
                 "title": game_data["title"],
                 "description": details["description"],
                 "venue_id": venue.id,
@@ -260,11 +395,11 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
                 "arrival_notes": details["arrival_notes"],
                 "parking_notes": details["parking_notes"],
                 "published_at": timestamp,
-                "cancelled_at": None,
-                "cancelled_by_user_id": None,
-                "cancel_reason": None,
-                "completed_at": None,
-                "completed_by_user_id": None,
+                "cancelled_at": timestamp if game_status == "cancelled" else None,
+                "cancelled_by_user_id": host.id if game_status == "cancelled" else None,
+                "cancel_reason": game_data.get("cancel_reason"),
+                "completed_at": timestamp if game_status == "completed" else None,
+                "completed_by_user_id": host.id if game_status == "completed" else None,
                 "deleted_at": None,
                 "updated_at": timestamp,
             },

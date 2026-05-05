@@ -34,6 +34,14 @@ def starts_at(day_offset: int, hour: int, minute: int = 0) -> datetime:
     return browse_start.replace(hour=hour, minute=minute)
 
 
+def relative_starts_at(day_offset: int, hour: int, minute: int = 0) -> datetime:
+    today = datetime.now(CHICAGO_TZ).date()
+    return datetime.combine(today + timedelta(days=day_offset), time.min, CHICAGO_TZ).replace(
+        hour=hour,
+        minute=minute,
+    )
+
+
 def ends_at(start: datetime, minutes: int = 90) -> datetime:
     return start + timedelta(minutes=minutes)
 
