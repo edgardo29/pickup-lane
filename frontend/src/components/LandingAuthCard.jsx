@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import BrandMark from './BrandMark.jsx'
 import { LockIcon, UserPlusIcon } from './LandingIcons.jsx'
 
@@ -8,15 +9,15 @@ function LandingAuthCard() {
 
       <p className="auth-card__subtitle">Get started in seconds</p>
 
-      <a className="auth-card__create" href="#create-account">
+      <Link className="auth-card__create" to="/create-account">
         <UserPlusIcon />
         Create Account
-      </a>
+      </Link>
 
-      <a className="auth-card__signin" href="#signin">
+      <Link className="auth-card__signin" to="/sign-in">
         <LockIcon />
         Sign In
-      </a>
+      </Link>
 
       <p className="auth-card__secure-note">
         <LockIcon />
