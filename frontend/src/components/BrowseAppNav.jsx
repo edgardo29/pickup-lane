@@ -4,7 +4,7 @@ import logo from '../assets/logo.png'
 const navItems = [
   { label: 'Browse Games', to: '/games' },
   { label: 'My Games', to: '/my-games' },
-  { label: 'Create Game', to: '#create-game' },
+  { label: 'Create Game', to: '/create-game' },
   { label: 'Inbox', to: '#inbox' },
   { label: 'Profile', to: '#profile' },
 ]

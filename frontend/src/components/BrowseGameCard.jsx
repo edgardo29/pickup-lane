@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom'
+import defaultCommunityVenueImage from '../assets/community-default/default-venue.png'
 import { MapPinIcon, ShieldCheckIcon, SoccerBallIcon, UsersIcon } from './BrowseIcons.jsx'
 
 function BrowseGameCard({ game, imageUrl, signedUpCount }) {
   const tone = game.game_type === 'community' ? 'community' : 'official'
   const title = game.venue_name_snapshot || game.title
+  const cardImageUrl = imageUrl || (tone === 'community' ? defaultCommunityVenueImage : '')
 
   return (
     <Link className="game-card" to={`/games/${game.id}`}>
@@ -12,7 +14,7 @@ function BrowseGameCard({ game, imageUrl, signedUpCount }) {
           <SoccerBallIcon />
         </div>
 
-        {imageUrl && <img src={imageUrl} alt="" loading="lazy" />}
+        {cardImageUrl && <img src={cardImageUrl} alt="" loading="lazy" />}
 
         <span className="game-card__time">{formatStartTime(game.starts_at)}</span>
 

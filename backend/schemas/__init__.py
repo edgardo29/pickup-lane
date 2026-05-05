@@ -27,7 +27,7 @@ from backend.schemas.game_image_schema import (
     GameImageRead,
     GameImageUpdate,
 )
-from backend.schemas.game_schema import GameCreate, GameRead, GameUpdate
+from backend.schemas.game_schema import GameCreate, GameHostEdit, GameRead, GameUpdate
 from backend.schemas.game_participant_schema import (
     GameParticipantCreate,
     GameParticipantRead,
@@ -138,6 +138,7 @@ __all__ = [
     "GameImageRead",
     "GameImageUpdate",
     "GameCreate",
+    "GameHostEdit",
     "GameRead",
     "GameUpdate",
     "GameParticipantCreate",
