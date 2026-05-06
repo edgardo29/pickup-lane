@@ -6,7 +6,7 @@ const navItems = [
   { label: 'My Games', to: '/my-games' },
   { label: 'Create Game', to: '/create-game' },
   { label: 'Inbox', to: '#inbox' },
-  { label: 'Profile', to: '#profile' },
+  { label: 'Profile', to: '/profile' },
 ]
 
 function BrowseAppNav() {
@@ -34,7 +34,7 @@ function BrowseAppNav() {
       </nav>
 
       <div className="browse-nav__actions">
-        <Link className="browse-nav__user" to="#profile" aria-label="Open profile">
+        <Link className="browse-nav__user" to="/profile" aria-label="Open profile">
           <span>AR</span>
           Alex Rivera
         </Link>
