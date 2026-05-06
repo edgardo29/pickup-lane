@@ -110,6 +110,20 @@
   left: 8px;
 }
 
+.browse-nav__badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: #061006;
+  background: var(--lime);
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
 .browse-nav__create {
   min-width: 140px;
   padding: 0 22px;
