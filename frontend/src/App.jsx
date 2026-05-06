@@ -11,6 +11,7 @@ import CreateGamePage from './pages/CreateGamePage.jsx'
 import GameDetailsPage from './pages/GameDetailsPage.jsx'
 import LandingPage from './pages/LandingPage.jsx'
 import MyGamesPage from './pages/MyGamesPage.jsx'
+import { EditProfilePage, ProfilePage, SettingsPage } from './pages/ProfilePages.jsx'
 
 function App() {
   return (
@@ -26,6 +27,9 @@ function App() {
       <Route path="/games/:gameId/edit" element={<CreateGamePage />} />
       <Route path="/my-games" element={<MyGamesPage />} />
       <Route path="/create-game" element={<CreateGamePage />} />
+      <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/profile/edit" element={<EditProfilePage />} />
+      <Route path="/settings" element={<SettingsPage />} />
     </Routes>
   )
 }

@@ -10,6 +10,7 @@ from backend.scripts.demo_data.games import ALL_DEMO_GAMES, seed_games
 from backend.scripts.demo_data.images import seed_game_images
 from backend.scripts.demo_data.payment_methods import seed_user_payment_methods
 from backend.scripts.demo_data.participants import seed_participants
+from backend.scripts.demo_data.profile import seed_user_profile_context
 from backend.scripts.demo_data.users import seed_users
 from backend.scripts.demo_data.venues import seed_venues
 
@@ -17,6 +18,8 @@ from backend.scripts.demo_data.venues import seed_venues
 def seed_demo_browse() -> None:
     with SessionLocal() as db:
         users = seed_users(db)
+        db.flush()
+        seed_user_profile_context(db, users)
         db.flush()
         seed_user_payment_methods(db, users)
         db.flush()
