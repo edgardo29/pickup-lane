@@ -8,6 +8,7 @@ from backend.scripts.demo_data.bookings import seed_bookings
 from backend.scripts.demo_data.chats import MESSAGES_PER_CHAT, seed_game_chats
 from backend.scripts.demo_data.games import ALL_DEMO_GAMES, seed_games
 from backend.scripts.demo_data.images import seed_game_images
+from backend.scripts.demo_data.notifications import seed_notifications
 from backend.scripts.demo_data.payment_methods import seed_user_payment_methods
 from backend.scripts.demo_data.participants import seed_participants
 from backend.scripts.demo_data.profile import seed_user_profile_context
@@ -33,13 +34,16 @@ def seed_demo_browse() -> None:
         db.flush()
         bookings = seed_bookings(db, users, games)
         db.flush()
-        seed_participants(db, users, games, bookings)
+        participants = seed_participants(db, users, games, bookings)
+        db.flush()
+        notifications = seed_notifications(db, users, games, bookings, participants)
         archive_old_scenario_games(db, allowed_game_ids={game.id for game in games.values()})
         db.commit()
 
     print("Browse demo data ready.")
     print(f"Seeded {len(ALL_DEMO_GAMES)} games with images, bookings, and participants.")
     print(f"Seeded {len(chats)} game chats and {len(chats) * MESSAGES_PER_CHAT} chat messages.")
+    print(f"Seeded {len(notifications)} inbox notifications.")
 
 
 def archive_old_scenario_games(db, allowed_game_ids: set) -> None:
