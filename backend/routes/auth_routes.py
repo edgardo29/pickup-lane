@@ -80,6 +80,13 @@ def get_authenticated_user_from_token(
     return user
 
 
+def get_current_app_user(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> User:
+    return get_authenticated_user_from_token(authorization, db)
+
+
 def get_auth_user_id_from_token(authorization: str | None) -> str:
     token = get_bearer_token(authorization)
 

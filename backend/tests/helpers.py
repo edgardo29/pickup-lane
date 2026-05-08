@@ -47,6 +47,21 @@ def set_user_role(user_id: str, role: str) -> None:
         db.commit()
 
 
+def authenticate_as(user_id: str) -> None:
+    from backend.database import SessionLocal
+    from backend.main import app
+    from backend.models import User
+    from backend.routes.auth_routes import get_current_app_user
+
+    def override_current_user() -> User:
+        with SessionLocal() as db:
+            db_user = db.get(User, UUID(user_id))
+            assert db_user is not None
+            return db_user
+
+    app.dependency_overrides[get_current_app_user] = override_current_user
+
+
 def create_user_settings(client: TestClient, user_id: str, **overrides: object) -> dict:
     payload = {
         "user_id": user_id,
@@ -137,6 +152,57 @@ def create_game(
     payload.update(overrides)
 
     response = client.post("/games", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def build_sub_post_payload(**overrides: object) -> dict:
+    starts_at = datetime.now(UTC) + timedelta(days=7)
+    ends_at = starts_at + timedelta(hours=2)
+    payload = {
+        "sport_type": "soccer",
+        "format_label": "7v7",
+        "skill_level": "intermediate",
+        "game_player_group": "coed",
+        "team_name": "CI FC",
+        "starts_at": starts_at.isoformat(),
+        "ends_at": ends_at.isoformat(),
+        "timezone": "America/Chicago",
+        "location_name": "CI Test Field",
+        "address_line_1": "123 Test Ave",
+        "city": "Chicago",
+        "state": "IL",
+        "postal_code": "60601",
+        "country_code": "US",
+        "neighborhood": "Loop",
+        "subs_needed": 2,
+        "price_due_at_venue_cents": 0,
+        "currency": "USD",
+        "payment_note": None,
+        "notes": "Bring a light and dark shirt.",
+        "positions": [
+            {
+                "position_label": "any",
+                "player_group": "men",
+                "spots_needed": 1,
+                "sort_order": 0,
+            },
+            {
+                "position_label": "any",
+                "player_group": "women",
+                "spots_needed": 1,
+                "sort_order": 1,
+            },
+        ],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def create_sub_post(client: TestClient, owner_user_id: str, **overrides: object) -> dict:
+    authenticate_as(owner_user_id)
+    response = client.post("/need-a-sub/posts", json=build_sub_post_payload(**overrides))
 
     assert response.status_code == 201, response.text
     return response.json()
