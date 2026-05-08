@@ -36,13 +36,13 @@ class UserSettings(Base):
         primary_key=True,
     )
     push_notifications_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("true")
+        Boolean, nullable=False, server_default=text("false")
     )
     email_notifications_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("true")
+        Boolean, nullable=False, server_default=text("false")
     )
     sms_notifications_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("true")
+        Boolean, nullable=False, server_default=text("false")
     )
     marketing_opt_in: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")

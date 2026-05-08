@@ -24,16 +24,17 @@ import {
   StatusPill,
   WhereToGoCard,
 } from '../components/GameDetailsSections.jsx'
+import { useAuth } from '../hooks/useAuth.js'
 import { apiRequest, buildMediaUrl } from '../lib/apiClient.js'
 import '../styles/game-details.css'
 
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
 const GUEST_JOIN_MESSAGE = 'Sign in or create an account to join this game.'
-const DEMO_CURRENT_USER_AUTH_ID = 'demo-current-user'
 
 function GameDetailsPage() {
   const { gameId } = useParams()
   const navigate = useNavigate()
+  const { appUser } = useAuth()
 
   const [game, setGame] = useState(null)
   const [venue, setVenue] = useState(null)
@@ -66,7 +67,7 @@ function GameDetailsPage() {
       try {
         const gameResponse = await apiRequest(`/games/${gameId}`)
 
-        const [imagesResponse, participantsResponse, venueResponse, chatsResponse, usersResponse] =
+        const [imagesResponse, participantsResponse, venueResponse, chatsResponse] =
           await Promise.all([
             apiRequest(`/game-images?game_id=${gameId}&image_status=active`),
             apiRequest(`/game-participants?game_id=${gameId}`),
@@ -74,7 +75,6 @@ function GameDetailsPage() {
             gameResponse.is_chat_enabled
               ? apiRequest(`/game-chats?game_id=${gameId}&chat_status=active`).catch(() => [])
               : Promise.resolve([]),
-            apiRequest('/users').catch(() => []),
           ])
 
         const activeChat = chatsResponse[0]
@@ -89,9 +89,7 @@ function GameDetailsPage() {
           setVenue(venueResponse)
           setGameImages(imagesResponse)
           setParticipants(participantsResponse)
-          setCurrentUser(
-            usersResponse.find((user) => user.auth_user_id === DEMO_CURRENT_USER_AUTH_ID) || null,
-          )
+          setCurrentUser(appUser || null)
           setChatMessages(messagesResponse)
           setHasUnreadChat(messagesResponse.length > 0)
           setStatus('success')
@@ -109,7 +107,7 @@ function GameDetailsPage() {
     return () => {
       ignore = true
     }
-  }, [gameId])
+  }, [appUser, gameId])
 
   const images = useMemo(
     () => {

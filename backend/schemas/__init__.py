@@ -5,6 +5,11 @@ from backend.schemas.admin_action_schema import (
     AdminActionRead,
     AdminActionUpdate,
 )
+from backend.schemas.auth_schema import (
+    AuthDeleteAccountRequest,
+    AuthEmailAvailabilityRead,
+    AuthSyncUserRequest,
+)
 from backend.schemas.booking_policy_acceptance_schema import (
     BookingPolicyAcceptanceCreate,
     BookingPolicyAcceptanceRead,
@@ -107,6 +112,9 @@ __all__ = [
     "AdminActionCreate",
     "AdminActionRead",
     "AdminActionUpdate",
+    "AuthSyncUserRequest",
+    "AuthDeleteAccountRequest",
+    "AuthEmailAvailabilityRead",
     "BookingPolicyAcceptanceCreate",
     "BookingPolicyAcceptanceRead",
     "BookingPolicyAcceptanceUpdate",

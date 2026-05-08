@@ -310,6 +310,7 @@
   gap: 16px;
   text-align: left;
   font: inherit;
+  text-decoration: none;
 }
 
 .settings-row:last-child {
@@ -427,6 +428,15 @@
   font-weight: 850;
 }
 
+.profile-edit-field .settings-delete-label {
+  font-weight: 650;
+}
+
+.settings-delete-label strong {
+  color: #ffffff;
+  font-weight: 900;
+}
+
 .profile-edit-field input {
   width: 100%;
   min-height: 52px;
@@ -483,6 +493,11 @@
   cursor: pointer;
 }
 
+.profile-primary-action--danger {
+  color: #ffffff;
+  background: var(--red);
+}
+
 .profile-primary-action:disabled {
   cursor: wait;
   opacity: 0.72;
@@ -501,6 +516,169 @@
 
 .settings-summary-card__items strong {
   color: var(--lime);
+}
+
+.settings-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  padding: 22px;
+  background: rgba(1, 5, 10, 0.72);
+  backdrop-filter: blur(12px);
+  display: grid;
+  place-items: center;
+}
+
+.settings-modal__card {
+  width: min(100%, 480px);
+  padding: 24px;
+  border: 1px solid rgba(248, 250, 252, 0.16);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(255, 107, 115, 0.12), transparent 34%),
+    var(--surface-strong);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.46);
+  display: grid;
+  gap: 18px;
+}
+
+.settings-modal__card--neutral {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(184, 255, 36, 0.08), transparent 32%),
+    var(--surface-strong);
+}
+
+.settings-modal__card h2,
+.settings-modal__card p {
+  margin: 0;
+}
+
+.settings-modal__card h2 {
+  color: #ffffff;
+  font-size: 1.8rem;
+}
+
+.settings-modal__card p {
+  margin-top: 8px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.settings-modal__success {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(184, 255, 36, 0.34);
+  border-radius: 12px;
+  color: #ffffff;
+  background: rgba(184, 255, 36, 0.1);
+  box-shadow: 0 0 28px rgba(184, 255, 36, 0.1);
+  font-weight: 900;
+}
+
+.settings-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.settings-toggle-row {
+  padding: 16px;
+  border: 1px solid rgba(248, 250, 252, 0.12);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.035);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.settings-toggle-row strong,
+.settings-toggle-row small {
+  display: block;
+}
+
+.settings-toggle-row strong {
+  color: #ffffff;
+}
+
+.settings-toggle-row small,
+.settings-modal__note {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.settings-toggle-row input {
+  width: 46px;
+  height: 26px;
+  border: 1px solid rgba(248, 250, 252, 0.18);
+  border-radius: 999px;
+  appearance: none;
+  background:
+    radial-gradient(circle at 13px 50%, rgba(248, 250, 252, 0.9) 0 8px, transparent 9px),
+    rgba(248, 250, 252, 0.12);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.settings-toggle-row input:checked {
+  border-color: rgba(184, 255, 36, 0.65);
+  background:
+    radial-gradient(circle at 32px 50%, #061006 0 8px, transparent 9px),
+    var(--lime);
+}
+
+.settings-password-field__input {
+  min-height: 52px;
+  padding: 0 10px 0 14px;
+  border: 1px solid rgba(248, 250, 252, 0.16);
+  border-radius: 11px;
+  background: rgba(2, 6, 11, 0.42);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-password-field__input:focus-within {
+  border-color: rgba(184, 255, 36, 0.66);
+  box-shadow: 0 0 0 3px rgba(184, 255, 36, 0.08);
+}
+
+.settings-password-field__input input {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-password-field__input input:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.settings-password-field__input button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(248, 250, 252, 0.62);
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.settings-password-field__input button:hover {
+  color: var(--lime);
+  background: rgba(248, 250, 252, 0.055);
+}
+
+.settings-password-field__input svg {
+  width: 22px;
+  height: 22px;
 }
 
 .profile-state {
@@ -572,6 +750,10 @@
   .profile-edit-cancel,
   .profile-primary-action {
     width: 100%;
+  }
+
+  .settings-modal__actions {
+    flex-direction: column-reverse;
   }
 
   .profile-stat-card {

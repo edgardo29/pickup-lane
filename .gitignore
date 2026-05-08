@@ -12,6 +12,10 @@ venv/
 .env.*
 !.env.example
 
+# Firebase service account keys
+*firebase-admin*.json
+*-adminsdk-*.json
+
 # Node
 node_modules/
 dist/

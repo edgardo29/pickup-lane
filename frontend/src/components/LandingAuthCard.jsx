@@ -1,8 +1,15 @@
 import { Link } from 'react-router-dom'
 import BrandMark from './BrandMark.jsx'
 import { LockIcon, UserPlusIcon } from './LandingIcons.jsx'
+import { useAuth } from '../hooks/useAuth.js'
 
 function LandingAuthCard() {
+  const { appUser, isLoading } = useAuth()
+
+  if (isLoading || appUser) {
+    return null
+  }
+
   return (
     <section className="auth-card" aria-label="Get started">
       <BrandMark className="auth-card__brand" />

@@ -21,7 +21,7 @@ class User(Base):
             name="ck_users_role",
         ),
         CheckConstraint(
-            "account_status IN ('active', 'suspended', 'deleted')",
+            "account_status IN ('active', 'suspended', 'pending_deletion', 'deleted')",
             name="ck_users_account_status",
         ),
         CheckConstraint(
@@ -49,15 +49,15 @@ class User(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    auth_user_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    auth_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     role: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'player'")
     )
-    email: Mapped[str] = mapped_column(String(255), nullable=False)
-    phone: Mapped[str] = mapped_column(String(30), nullable=False)
-    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    date_of_birth: Mapped[date] = mapped_column(Date, nullable=False)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     profile_photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     home_city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     home_state: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -73,8 +73,8 @@ class User(Base):
     stripe_customer_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
-    # These timestamps support account history, soft deletion, and future audit
-    # needs without introducing separate tracking tables yet.
+    # deleted_at keeps the internal user row available for historical records
+    # while marking the account as removed.
     member_since: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )

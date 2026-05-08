@@ -17,18 +17,18 @@ def upgrade() -> None:
     op.create_table(
         "users",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column("auth_user_id", sa.String(length=128), nullable=False),
+        sa.Column("auth_user_id", sa.String(length=128), nullable=True),
         sa.Column(
             "role",
             sa.String(length=20),
             nullable=False,
             server_default=sa.text("'player'"),
         ),
-        sa.Column("email", sa.String(length=255), nullable=False),
-        sa.Column("phone", sa.String(length=30), nullable=False),
-        sa.Column("first_name", sa.String(length=100), nullable=False),
-        sa.Column("last_name", sa.String(length=100), nullable=False),
-        sa.Column("date_of_birth", sa.Date(), nullable=False),
+        sa.Column("email", sa.String(length=255), nullable=True),
+        sa.Column("phone", sa.String(length=30), nullable=True),
+        sa.Column("first_name", sa.String(length=100), nullable=True),
+        sa.Column("last_name", sa.String(length=100), nullable=True),
+        sa.Column("date_of_birth", sa.Date(), nullable=True),
         sa.Column("profile_photo_url", sa.Text(), nullable=True),
         sa.Column("home_city", sa.String(length=120), nullable=True),
         sa.Column("home_state", sa.String(length=120), nullable=True),
@@ -70,7 +70,7 @@ def upgrade() -> None:
             name="ck_users_role",
         ),
         sa.CheckConstraint(
-            "account_status IN ('active', 'suspended', 'deleted')",
+            "account_status IN ('active', 'suspended', 'pending_deletion', 'deleted')",
             name="ck_users_account_status",
         ),
         sa.CheckConstraint(

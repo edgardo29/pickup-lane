@@ -13,9 +13,9 @@ class UserSettingsCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     user_id: UUID
-    push_notifications_enabled: bool = True
-    email_notifications_enabled: bool = True
-    sms_notifications_enabled: bool = True
+    push_notifications_enabled: bool = False
+    email_notifications_enabled: bool = False
+    sms_notifications_enabled: bool = False
     marketing_opt_in: bool = False
     location_permission_status: str = "unknown"
     selected_city: str | None = None

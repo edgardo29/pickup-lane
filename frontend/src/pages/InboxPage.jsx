@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BrowseAppNav from '../components/BrowseAppNav.jsx'
 import { ChatIcon } from '../components/BrowseIcons.jsx'
+import { useAuth } from '../hooks/useAuth.js'
 import { apiRequest } from '../lib/apiClient.js'
 import '../styles/inbox.css'
 
-const DEMO_CURRENT_USER_AUTH_ID = 'demo-current-user'
 const GAME_ACTIVITY_TYPES = new Set(['chat_message'])
 const FILTERS = [
   { key: 'app', label: 'App Notifications' },
@@ -14,6 +14,7 @@ const FILTERS = [
 
 function InboxPage() {
   const navigate = useNavigate()
+  const { appUser, isLoading } = useAuth()
   const [activeFilter, setActiveFilter] = useState('app')
   const [games, setGames] = useState([])
   const [notifications, setNotifications] = useState([])
@@ -29,15 +30,16 @@ function InboxPage() {
       setError('')
 
       try {
-        const usersResponse = await apiRequest('/users')
-        const demoUser = usersResponse.find((user) => user.auth_user_id === DEMO_CURRENT_USER_AUTH_ID)
+        if (isLoading) {
+          return
+        }
 
-        if (!demoUser) {
-          throw new Error('Demo signed-in user was not found. Rerun the demo seed.')
+        if (!appUser?.id) {
+          throw new Error('Sign in to view your inbox.')
         }
 
         const [notificationsResponse, gamesResponse] = await Promise.all([
-          apiRequest(`/notifications?user_id=${demoUser.id}`),
+          apiRequest(`/notifications?user_id=${appUser.id}`),
           apiRequest('/games'),
         ])
 
@@ -61,7 +63,7 @@ function InboxPage() {
     return () => {
       ignore = true
     }
-  }, [])
+  }, [appUser, isLoading])
 
   const gamesById = useMemo(() => new Map(games.map((game) => [game.id, game])), [games])
   const appNotifications = notifications.filter(

@@ -21,19 +21,19 @@ def upgrade() -> None:
             "push_notifications_enabled",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.text("true"),
+            server_default=sa.text("false"),
         ),
         sa.Column(
             "email_notifications_enabled",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.text("true"),
+            server_default=sa.text("false"),
         ),
         sa.Column(
             "sms_notifications_enabled",
             sa.Boolean(),
             nullable=False,
-            server_default=sa.text("true"),
+            server_default=sa.text("false"),
         ),
         sa.Column(
             "marketing_opt_in",

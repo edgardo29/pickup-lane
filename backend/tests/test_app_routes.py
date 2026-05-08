@@ -11,6 +11,11 @@ def test_core_routes_are_registered(client: TestClient):
     expected_routes = {
         ("GET", "/"),
         ("GET", "/db-health"),
+        ("GET", "/auth/email-availability"),
+        ("GET", "/auth/me"),
+        ("POST", "/auth/sync-user"),
+        ("DELETE", "/auth/unfinished-account"),
+        ("DELETE", "/auth/account"),
         ("POST", "/users"),
         ("GET", "/users"),
         ("GET", "/users/{user_id}"),

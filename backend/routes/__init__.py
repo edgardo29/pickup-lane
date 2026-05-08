@@ -1,6 +1,7 @@
 # Re-export routers here so the main FastAPI app can include feature routes
 # from one place as the API grows.
 from backend.routes.admin_action_routes import router as admin_actions_router
+from backend.routes.auth_routes import router as auth_router
 from backend.routes.booking_policy_acceptance_routes import (
     router as booking_policy_acceptances_router,
 )
@@ -41,6 +42,7 @@ from backend.routes.waitlist_entry_routes import router as waitlist_entries_rout
 
 __all__ = [
     "admin_actions_router",
+    "auth_router",
     "bookings_router",
     "booking_policy_acceptances_router",
     "booking_status_history_router",
