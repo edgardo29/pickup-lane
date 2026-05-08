@@ -8,10 +8,10 @@ import {
   SoccerBallIcon,
   UserIcon,
 } from '../components/BrowseIcons.jsx'
+import { useAuth } from '../hooks/useAuth.js'
 import { apiRequest } from '../lib/apiClient.js'
+import { getAuthErrorMessage } from '../lib/authErrors.js'
 import '../styles/profile-settings.css'
-
-const DEMO_CURRENT_USER_AUTH_ID = 'demo-current-user'
 
 const emptyStats = {
   games_played_count: 0,
@@ -22,8 +22,8 @@ const emptyStats = {
 }
 
 const emptySettings = {
-  push_notifications_enabled: true,
-  email_notifications_enabled: true,
+  push_notifications_enabled: false,
+  email_notifications_enabled: false,
   sms_notifications_enabled: false,
   marketing_opt_in: false,
   location_permission_status: 'unknown',
@@ -266,21 +266,64 @@ export function EditProfilePage() {
 }
 
 export function SettingsPage() {
+  const navigate = useNavigate()
+  const {
+    addPasswordToCurrentAccount,
+    currentUser: authUser,
+    deleteAccount,
+    logout,
+  } = useAuth()
   const { currentUser, settings, paymentMethods, status, error } = useProfileContext()
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false)
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false)
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [deleteStatus, setDeleteStatus] = useState('idle')
+  const [deleteError, setDeleteError] = useState('')
+  const [settingsOverride, setSettingsOverride] = useState(null)
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(false)
+  const [notificationStatus, setNotificationStatus] = useState('idle')
+  const [notificationError, setNotificationError] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [passwordStatus, setPasswordStatus] = useState('idle')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
+
+  const effectiveSettings = useMemo(
+    () => ({ ...settings, ...(settingsOverride || {}) }),
+    [settings, settingsOverride],
+  )
+
+  useEffect(() => {
+    setEmailNotificationsEnabled(Boolean(effectiveSettings.email_notifications_enabled))
+  }, [effectiveSettings.email_notifications_enabled])
 
   if (status !== 'success') {
     return <ProfileShell state={<ProfileState title={status === 'loading' ? 'Loading settings' : 'Could not load settings'} message={error} />} />
   }
 
-  const notificationSummary = getNotificationSummary(settings)
+  const notificationSummary = getNotificationSummary(effectiveSettings)
   const defaultPaymentMethod =
     paymentMethods.find((method) => method.is_default) || paymentMethods[0] || null
+  const providerIds = authUser?.providerData?.map((provider) => provider.providerId) ?? []
+  const canAddPassword =
+    Boolean(authUser?.email) &&
+    providerIds.includes('google.com') &&
+    !providerIds.includes('password')
 
   const preferenceRows = [
     {
       icon: <BellIcon />,
       title: 'Notifications',
       text: notificationSummary,
+      onClick: () => {
+        setNotificationError('')
+        setNotificationStatus('idle')
+        setEmailNotificationsEnabled(Boolean(effectiveSettings.email_notifications_enabled))
+        setIsNotificationOpen(true)
+      },
     },
     {
       icon: <PaymentCardIcon />,
@@ -298,27 +341,141 @@ export function SettingsPage() {
       icon: <DocumentIcon />,
       title: 'Terms & Conditions',
       text: 'Read our terms of service',
+      to: '/terms',
+      state: { from: '/settings', fromLabel: 'Back to Settings' },
     },
     {
       icon: <ShieldCheckIcon />,
       title: 'Privacy Policy',
       text: 'How we handle your data',
+      to: '/privacy',
+      state: { from: '/settings', fromLabel: 'Back to Settings' },
     },
   ]
+
+  const accountAccessRows = canAddPassword
+    ? [
+        {
+          icon: <KeyIcon />,
+          title: 'Add Password',
+          text: 'Sign in with email and password too',
+          onClick: () => {
+            setNewPassword('')
+            setConfirmPassword('')
+            setShowNewPassword(false)
+            setPasswordError('')
+            setPasswordSuccess('')
+            setPasswordStatus('idle')
+            setIsPasswordOpen(true)
+          },
+        },
+      ]
+    : []
 
   const accountRows = [
     {
       icon: <LogoutIcon />,
       title: 'Log Out',
-      text: 'Sign out after auth is connected',
+      text: 'Sign out of this device',
+      onClick: async () => {
+        await logout()
+        navigate('/')
+      },
     },
     {
       icon: <TrashIcon />,
       title: 'Delete Account',
       text: 'Permanently delete your account',
       tone: 'danger',
+      onClick: () => {
+        setDeleteConfirmation('')
+        setDeleteError('')
+        setIsDeleteOpen(true)
+      },
     },
   ]
+
+  const handleDeleteAccount = async (event) => {
+    event.preventDefault()
+
+    if (deleteConfirmation.trim().toLowerCase() !== 'delete') {
+      setDeleteError('Type delete to confirm.')
+      return
+    }
+
+    setDeleteStatus('deleting')
+    setDeleteError('')
+
+    try {
+      await deleteAccount(deleteConfirmation)
+      setDeleteStatus('success')
+      window.setTimeout(() => {
+        logout().finally(() => {
+          navigate('/', { replace: true })
+        })
+      }, 1100)
+    } catch (requestError) {
+      setDeleteError(
+        requestError instanceof Error ? requestError.message : 'Unable to delete account.',
+      )
+      setDeleteStatus('idle')
+    }
+  }
+
+  const handleSaveNotifications = async (event) => {
+    event.preventDefault()
+    setNotificationStatus('saving')
+    setNotificationError('')
+
+    try {
+      const savedSettings = await saveUserSettings(currentUser.id, effectiveSettings, {
+        email_notifications_enabled: emailNotificationsEnabled,
+      })
+
+      setSettingsOverride(
+        savedSettings || {
+          email_notifications_enabled: emailNotificationsEnabled,
+        },
+      )
+      setNotificationStatus('idle')
+      setIsNotificationOpen(false)
+    } catch (requestError) {
+      setNotificationError(
+        requestError instanceof Error ? requestError.message : 'Unable to save notifications.',
+      )
+      setNotificationStatus('idle')
+    }
+  }
+
+  const handleAddPassword = async (event) => {
+    event.preventDefault()
+    setPasswordStatus('saving')
+    setPasswordError('')
+    setPasswordSuccess('')
+
+    if (!isValidPassword(newPassword)) {
+      setPasswordError('Password must be at least 8 characters and include a number or symbol.')
+      setPasswordStatus('idle')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.')
+      setPasswordStatus('idle')
+      return
+    }
+
+    try {
+      await addPasswordToCurrentAccount(newPassword)
+      setNewPassword('')
+      setConfirmPassword('')
+      setPasswordSuccess('Password added.')
+      setPasswordStatus('idle')
+    } catch (requestError) {
+      setPasswordError(getAuthErrorMessage(requestError))
+      setPasswordStatus('idle')
+    }
+  }
 
   return (
     <ProfileShell>
@@ -342,6 +499,9 @@ export function SettingsPage() {
           </Link>
 
           <SettingsGroup title="Preferences & Account" rows={preferenceRows} />
+          {accountAccessRows.length > 0 && (
+            <SettingsGroup title="Account Access" rows={accountAccessRows} />
+          )}
           <SettingsGroup title="Account" rows={accountRows} />
         </div>
 
@@ -362,7 +522,186 @@ export function SettingsPage() {
           </div>
         </aside>
       </section>
+
+      {isDeleteOpen && (
+        <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+          <form className="settings-modal__card" onSubmit={handleDeleteAccount}>
+            {deleteStatus === 'success' && (
+              <p className="settings-modal__success" role="status">
+                Account deleted successfully!
+              </p>
+            )}
+
+            <div>
+              <h2 id="delete-account-title">Delete account</h2>
+              <p>This will sign you out and delete your Pickup Lane profile.</p>
+            </div>
+
+            <label className="profile-edit-field">
+              <span className="settings-delete-label">
+                Type <strong>"delete"</strong> to confirm
+              </span>
+              <input
+                autoComplete="off"
+                onChange={(event) => setDeleteConfirmation(event.target.value)}
+                placeholder="delete"
+                spellCheck="false"
+                value={deleteConfirmation}
+              />
+            </label>
+
+            {deleteError && <p className="profile-edit-error">{deleteError}</p>}
+
+            <div className="settings-modal__actions">
+              <button
+                className="profile-edit-cancel"
+                disabled={deleteStatus === 'deleting' || deleteStatus === 'success'}
+                onClick={() => setIsDeleteOpen(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="profile-primary-action profile-primary-action--danger"
+                disabled={
+                  deleteStatus === 'deleting' ||
+                  deleteStatus === 'success' ||
+                  deleteConfirmation.trim().toLowerCase() !== 'delete'
+                }
+                type="submit"
+              >
+                {deleteStatus === 'deleting' ? 'Deleting...' : 'Delete account'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isNotificationOpen && (
+        <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="notification-settings-title">
+          <form className="settings-modal__card settings-modal__card--neutral" onSubmit={handleSaveNotifications}>
+            <div>
+              <p className="profile-kicker">Preferences</p>
+              <h2 id="notification-settings-title">Notifications</h2>
+              <p>Choose how Pickup Lane keeps you updated.</p>
+            </div>
+
+            <label className="settings-toggle-row">
+              <span>
+                <strong>Email notifications</strong>
+                <small>Game updates, booking changes, and account messages.</small>
+              </span>
+              <input
+                checked={emailNotificationsEnabled}
+                onChange={(event) => setEmailNotificationsEnabled(event.target.checked)}
+                type="checkbox"
+              />
+            </label>
+
+            {notificationError && <p className="profile-edit-error">{notificationError}</p>}
+
+            <div className="settings-modal__actions">
+              <button
+                className="profile-edit-cancel"
+                disabled={notificationStatus === 'saving'}
+                onClick={() => setIsNotificationOpen(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="profile-primary-action"
+                disabled={notificationStatus === 'saving'}
+                type="submit"
+              >
+                {notificationStatus === 'saving' ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isPasswordOpen && (
+        <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="add-password-title">
+          <form className="settings-modal__card settings-modal__card--neutral" onSubmit={handleAddPassword}>
+            <div>
+              <p className="profile-kicker">Account Access</p>
+              <h2 id="add-password-title">Add password</h2>
+              <p>Keep Google sign-in and add email/password sign-in for this account.</p>
+            </div>
+
+            <PasswordField
+              label="New password"
+              onChange={setNewPassword}
+              onToggleVisibility={() => setShowNewPassword((current) => !current)}
+              showPassword={showNewPassword}
+              value={newPassword}
+            />
+            <PasswordField
+              label="Confirm password"
+              onChange={setConfirmPassword}
+              onToggleVisibility={() => setShowNewPassword((current) => !current)}
+              showPassword={showNewPassword}
+              value={confirmPassword}
+            />
+
+            <p className="settings-modal__note">
+              Password must be at least 8 characters and include a number or symbol.
+            </p>
+
+            {passwordSuccess && <p className="settings-modal__success">{passwordSuccess}</p>}
+            {passwordError && <p className="profile-edit-error">{passwordError}</p>}
+
+            <div className="settings-modal__actions">
+              <button
+                className="profile-edit-cancel"
+                disabled={passwordStatus === 'saving'}
+                onClick={() => setIsPasswordOpen(false)}
+                type="button"
+              >
+                Close
+              </button>
+              <button
+                className="profile-primary-action"
+                disabled={passwordStatus === 'saving' || Boolean(passwordSuccess)}
+                type="submit"
+              >
+                {passwordStatus === 'saving' ? 'Adding...' : 'Add password'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </ProfileShell>
+  )
+}
+
+function PasswordField({
+  label,
+  onChange,
+  onToggleVisibility,
+  showPassword,
+  value,
+}) {
+  return (
+    <label className="profile-edit-field settings-password-field">
+      <span>{label}</span>
+      <span className="settings-password-field__input">
+        <input
+          autoComplete="new-password"
+          onChange={(event) => onChange(event.target.value)}
+          type={showPassword ? 'text' : 'password'}
+          value={value}
+        />
+        <button
+          aria-label={showPassword ? 'Hide password' : 'Show password'}
+          onClick={onToggleVisibility}
+          type="button"
+        >
+          {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </span>
+    </label>
   )
 }
 
@@ -425,20 +764,38 @@ function SettingsGroup({ title, rows }) {
     <section className="settings-group">
       <h2>{title}</h2>
       <div className="settings-group__rows">
-        {rows.map((row) => (
-          <button
-            className={`settings-row ${row.tone === 'danger' ? 'settings-row--danger' : ''}`}
-            key={row.title}
-            type="button"
-          >
-            <span className="settings-row__icon">{row.icon}</span>
-            <span>
-              <strong>{row.title}</strong>
-              <small>{row.text}</small>
-            </span>
-            <ChevronRightIcon />
-          </button>
-        ))}
+        {rows.map((row) => {
+          const rowClassName = `settings-row ${row.tone === 'danger' ? 'settings-row--danger' : ''}`
+          const content = (
+            <>
+              <span className="settings-row__icon">{row.icon}</span>
+              <span>
+                <strong>{row.title}</strong>
+                <small>{row.text}</small>
+              </span>
+              <ChevronRightIcon />
+            </>
+          )
+
+          if (row.to) {
+            return (
+              <Link className={rowClassName} key={row.title} state={row.state} to={row.to}>
+                {content}
+              </Link>
+            )
+          }
+
+          return (
+            <button
+              className={rowClassName}
+              key={row.title}
+              onClick={row.onClick}
+              type="button"
+            >
+              {content}
+            </button>
+          )
+        })}
       </div>
     </section>
   )
@@ -463,6 +820,7 @@ function InitialsAvatar({ user, size = 'default' }) {
 }
 
 function useProfileContext() {
+  const { appUser, isLoading } = useAuth()
   const [currentUser, setCurrentUser] = useState(null)
   const [settings, setSettings] = useState(emptySettings)
   const [stats, setStats] = useState(emptyStats)
@@ -478,21 +836,22 @@ function useProfileContext() {
       setError('')
 
       try {
-        const users = await apiRequest('/users')
-        const demoUser = users.find((user) => user.auth_user_id === DEMO_CURRENT_USER_AUTH_ID)
+        if (isLoading) {
+          return
+        }
 
-        if (!demoUser) {
-          throw new Error('Demo signed-in user was not found. Rerun the demo seed.')
+        if (!appUser?.id) {
+          throw new Error('Sign in to view your profile.')
         }
 
         const [settingsResponse, statsResponse, paymentMethodsResponse] = await Promise.all([
-          apiRequest(`/user-settings/${demoUser.id}`).catch(() => emptySettings),
-          apiRequest(`/user-stats/${demoUser.id}`).catch(() => emptyStats),
-          apiRequest(`/user-payment-methods?user_id=${demoUser.id}`).catch(() => []),
+          apiRequest(`/user-settings/${appUser.id}`).catch(() => emptySettings),
+          apiRequest(`/user-stats/${appUser.id}`).catch(() => emptyStats),
+          apiRequest(`/user-payment-methods?user_id=${appUser.id}`).catch(() => []),
         ])
 
         if (!ignore) {
-          setCurrentUser(demoUser)
+          setCurrentUser(appUser)
           setSettings(settingsResponse)
           setStats(statsResponse)
           setPaymentMethods(paymentMethodsResponse)
@@ -511,7 +870,7 @@ function useProfileContext() {
     return () => {
       ignore = true
     }
-  }, [])
+  }, [appUser, isLoading])
 
   return useMemo(
     () => ({ currentUser, error, paymentMethods, settings, stats, status }),
@@ -547,13 +906,13 @@ function formatMemberSince(value) {
 }
 
 function getNotificationSummary(settings) {
-  const enabled = [
-    settings.push_notifications_enabled ? 'push' : '',
-    settings.email_notifications_enabled ? 'email' : '',
-    settings.sms_notifications_enabled ? 'SMS' : '',
-  ].filter(Boolean)
+  return settings.email_notifications_enabled
+    ? 'Email notifications on'
+    : 'Email notifications off'
+}
 
-  return enabled.length ? `${enabled.join(', ')} enabled` : 'Notifications are off'
+function isValidPassword(value) {
+  return value.length >= 8 && /[\d\W_]/.test(value)
 }
 
 function capitalize(value) {
@@ -636,6 +995,37 @@ function TrashIcon() {
       <path d="M7 8.8 8 20h8l1-11.2" />
       <path d="M10.2 11.5v5" />
       <path d="M13.8 11.5v5" />
+    </svg>
+  )
+}
+
+function KeyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="8.5" cy="14.5" r="3.5" />
+      <path d="M11 12 20 3" />
+      <path d="m16 7 2 2" />
+      <path d="m14 9 2 2" />
+    </svg>
+  )
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m3 3 18 18" />
+      <path d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2" />
+      <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6 0 9.5 7 9.5 7a14.2 14.2 0 0 1-2.7 3.4" />
+      <path d="M6.6 6.6C3.9 8.2 2.5 12 2.5 12s3.5 7 9.5 7c1.6 0 3-.4 4.2-1" />
     </svg>
   )
 }

@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.database import check_database_connection
 from backend.routes import (
     admin_actions_router,
+    auth_router,
     booking_policy_acceptances_router,
     booking_status_history_router,
     bookings_router,
@@ -63,6 +64,7 @@ def db_health():
 # Include feature-specific routers here so the main app stays small as the API
 # surface grows.
 app.include_router(users_router)
+app.include_router(auth_router)
 app.include_router(user_settings_router)
 app.include_router(user_stats_router)
 app.include_router(user_payment_method_router)

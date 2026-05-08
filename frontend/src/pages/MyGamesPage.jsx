@@ -9,14 +9,15 @@ import {
   SoccerBallIcon,
   UsersIcon,
 } from '../components/BrowseIcons.jsx'
+import { useAuth } from '../hooks/useAuth.js'
 import { apiRequest, buildMediaUrl } from '../lib/apiClient.js'
 import '../styles/browse-games.css'
 import '../styles/my-games.css'
 
-const DEMO_CURRENT_USER_AUTH_ID = 'demo-current-user'
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
 
 function MyGamesPage() {
+  const { appUser, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState('upcoming')
   const [currentUser, setCurrentUser] = useState(null)
   const [games, setGames] = useState([])
@@ -34,11 +35,12 @@ function MyGamesPage() {
       setError('')
 
       try {
-        const usersResponse = await apiRequest('/users')
-        const demoUser = usersResponse.find((user) => user.auth_user_id === DEMO_CURRENT_USER_AUTH_ID)
+        if (isLoading) {
+          return
+        }
 
-        if (!demoUser) {
-          throw new Error('Demo signed-in user was not found. Rerun the demo seed.')
+        if (!appUser?.id) {
+          throw new Error('Sign in to view your games.')
         }
 
         const [gamesResponse, imagesResponse, participantsResponse, myParticipantsResponse] =
@@ -46,11 +48,11 @@ function MyGamesPage() {
             apiRequest('/games'),
             apiRequest('/game-images?image_status=active&is_primary=true'),
             apiRequest('/game-participants'),
-            apiRequest(`/game-participants?user_id=${demoUser.id}`),
+            apiRequest(`/game-participants?user_id=${appUser.id}`),
           ])
 
         if (!ignore) {
-          setCurrentUser(demoUser)
+          setCurrentUser(appUser)
           setGames(gamesResponse)
           setImages(imagesResponse)
           setParticipants(participantsResponse)
@@ -72,7 +74,7 @@ function MyGamesPage() {
     return () => {
       ignore = true
     }
-  }, [])
+  }, [appUser, isLoading])
 
   const gamesById = useMemo(() => new Map(games.map((game) => [game.id, game])), [games])
 

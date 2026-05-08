@@ -11,10 +11,10 @@ import {
   SoccerBallIcon,
   UsersIcon,
 } from '../components/BrowseIcons.jsx'
+import { useAuth } from '../hooks/useAuth.js'
 import { apiRequest } from '../lib/apiClient.js'
 import '../styles/create-game.css'
 
-const DEMO_CURRENT_USER_AUTH_ID = 'demo-current-user'
 const HOST_DEPOSIT_CENTS = 1000
 const formatOptions = ['3v3', '4v4', '5v5', '6v6', '7v7', '8v8', '9v9', '10v10', '11v11']
 const environmentOptions = [
@@ -51,6 +51,7 @@ const steps = [
 function CreateGamePage() {
   const navigate = useNavigate()
   const { gameId } = useParams()
+  const { appUser, isLoading } = useAuth()
   const isEditMode = Boolean(gameId)
   const [activeStep, setActiveStep] = useState(1)
   const [form, setForm] = useState(initialForm)
@@ -69,20 +70,21 @@ function CreateGamePage() {
 
     async function loadCreateGameContext() {
       try {
-        const users = await apiRequest('/users')
-        const demoUser = users.find((user) => user.auth_user_id === DEMO_CURRENT_USER_AUTH_ID)
+        if (isLoading) {
+          return
+        }
 
-        if (!demoUser) {
-          throw new Error('Demo signed-in user was not found. Rerun the demo seed.')
+        if (!appUser?.id) {
+          throw new Error('Sign in to create a game.')
         }
 
         const [paymentMethods, gameContext] = await Promise.all([
-          apiRequest(`/user-payment-methods?user_id=${demoUser.id}`),
+          apiRequest(`/user-payment-methods?user_id=${appUser.id}`),
           isEditMode ? loadEditableGame(gameId) : Promise.resolve(null),
         ])
 
         if (!ignore) {
-          setCurrentUser(demoUser)
+          setCurrentUser(appUser)
           setPaymentMethod(paymentMethods.find((method) => method.is_default) || paymentMethods[0] || null)
 
           if (gameContext) {
@@ -103,7 +105,7 @@ function CreateGamePage() {
     return () => {
       ignore = true
     }
-  }, [gameId, isEditMode])
+  }, [appUser, gameId, isEditMode, isLoading])
 
   const review = useMemo(() => buildReview(form), [form])
   const hasUnsavedChanges = useMemo(

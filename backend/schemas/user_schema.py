@@ -12,8 +12,8 @@ REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 class UserCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    auth_user_id: str
-    email: str
+    auth_user_id: str | None
+    email: str | None
     phone: str
     first_name: str
     last_name: str
@@ -31,13 +31,13 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    auth_user_id: str
+    auth_user_id: str | None
     role: str
-    email: str
-    phone: str
-    first_name: str
-    last_name: str
-    date_of_birth: date
+    email: str | None
+    phone: str | None
+    first_name: str | None
+    last_name: str | None
+    date_of_birth: date | None
     profile_photo_url: str | None
     home_city: str | None
     home_state: str | None

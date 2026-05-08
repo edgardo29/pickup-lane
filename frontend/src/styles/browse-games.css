@@ -95,6 +95,12 @@
   padding: 0 10px;
 }
 
+.browse-nav__loading-text {
+  color: rgba(248, 250, 252, 0.42);
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
 .browse-nav__link.active {
   color: var(--lime);
 }
@@ -159,6 +165,40 @@
   place-items: center;
   font-size: 0.76rem;
   font-weight: 950;
+}
+
+.browse-nav__user--loading {
+  width: 178px;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+
+.browse-nav__user--loading span {
+  background: linear-gradient(135deg, rgba(184, 255, 36, 0.54), rgba(63, 159, 255, 0.5));
+}
+
+.browse-nav__user--loading i {
+  width: 100px;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(248, 250, 252, 0.08),
+    rgba(248, 250, 252, 0.16),
+    rgba(248, 250, 252, 0.08)
+  );
+  background-size: 220% 100%;
+  animation: nav-loading-sheen 1.15s ease-in-out infinite;
+}
+
+@keyframes nav-loading-sheen {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
 }
 
 .browse-shell {
