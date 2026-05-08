@@ -19,6 +19,13 @@ from backend.models.payment_model import Payment
 from backend.models.policy_acceptance_model import PolicyAcceptance
 from backend.models.policy_document_model import PolicyDocument
 from backend.models.refund_model import Refund
+from backend.models.sub_post_model import SubPost
+from backend.models.sub_post_position_model import SubPostPosition
+from backend.models.sub_post_request_model import SubPostRequest
+from backend.models.sub_post_request_status_history_model import (
+    SubPostRequestStatusHistory,
+)
+from backend.models.sub_post_status_history_model import SubPostStatusHistory
 from backend.models.user_model import User
 from backend.models.user_payment_method_model import UserPaymentMethod
 from backend.models.user_settings_model import UserSettings
@@ -54,4 +61,9 @@ __all__ = [
     "PolicyDocument",
     "PolicyAcceptance",
     "Refund",
+    "SubPost",
+    "SubPostPosition",
+    "SubPostRequest",
+    "SubPostRequestStatusHistory",
+    "SubPostStatusHistory",
 ]

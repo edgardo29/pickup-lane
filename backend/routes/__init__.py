@@ -28,6 +28,15 @@ from backend.routes.payment_routes import router as payments_router
 from backend.routes.policy_acceptance_routes import router as policy_acceptances_router
 from backend.routes.policy_document_routes import router as policy_documents_router
 from backend.routes.refund_routes import router as refunds_router
+from backend.routes.sub_post_position_routes import router as sub_post_positions_router
+from backend.routes.sub_post_request_routes import router as sub_post_requests_router
+from backend.routes.sub_post_request_status_history_routes import (
+    router as sub_post_request_status_history_router,
+)
+from backend.routes.sub_post_routes import router as sub_posts_router
+from backend.routes.sub_post_status_history_routes import (
+    router as sub_post_status_history_router,
+)
 from backend.routes.user_payment_method_routes import (
     router as user_payment_method_router,
 )
@@ -68,4 +77,9 @@ __all__ = [
     "policy_documents_router",
     "policy_acceptances_router",
     "refunds_router",
+    "sub_posts_router",
+    "sub_post_positions_router",
+    "sub_post_requests_router",
+    "sub_post_request_status_history_router",
+    "sub_post_status_history_router",
 ]

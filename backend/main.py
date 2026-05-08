@@ -26,6 +26,11 @@ from backend.routes import (
     policy_acceptances_router,
     policy_documents_router,
     refunds_router,
+    sub_post_positions_router,
+    sub_post_request_status_history_router,
+    sub_post_requests_router,
+    sub_post_status_history_router,
+    sub_posts_router,
     user_payment_method_router,
     user_settings_router,
     user_stats_router,
@@ -90,3 +95,8 @@ app.include_router(payment_events_router)
 app.include_router(policy_documents_router)
 app.include_router(policy_acceptances_router)
 app.include_router(refunds_router)
+app.include_router(sub_posts_router)
+app.include_router(sub_post_positions_router)
+app.include_router(sub_post_requests_router)
+app.include_router(sub_post_request_status_history_router)
+app.include_router(sub_post_status_history_router)

@@ -11,6 +11,11 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 # Keep this list in dependency order for cleanup: child tables first, then the
 # parent tables they reference.
 TEST_TABLES = (
+    "sub_post_status_history",
+    "sub_post_request_status_history",
+    "sub_post_requests",
+    "sub_post_positions",
+    "sub_posts",
     "admin_actions",
     "notifications",
     "host_deposit_events",
@@ -70,8 +75,10 @@ def client() -> TestClient:
 @pytest.fixture(autouse=True)
 def clean_database(client: TestClient):
     from backend.database import engine
+    from backend.main import app
 
     table_names = ", ".join(TEST_TABLES)
+    app.dependency_overrides.clear()
 
     # Each test gets a clean database so tests can create the same logical
     # records without leaking state into the next test.
@@ -81,6 +88,7 @@ def clean_database(client: TestClient):
         )
 
     yield
+    app.dependency_overrides.clear()
 
     # Clean again after the test so a failed test does not leave rows behind
     # for the next local run.
