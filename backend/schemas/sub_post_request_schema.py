@@ -25,14 +25,15 @@ class SubPostRequestRead(BaseModel):
     sub_post_id: UUID
     sub_post_position_id: UUID
     requester_user_id: UUID
+    requester_display_name: str | None = None
+    requester_initials: str | None = None
     request_status: str
-    accepted_at: datetime | None
     confirmed_at: datetime | None
     declined_at: datetime | None
     sub_waitlisted_at: datetime | None
     canceled_at: datetime | None
     expired_at: datetime | None
     no_show_reported_at: datetime | None
-    confirmation_due_at: datetime | None
+    waitlist_ahead_count: int | None = None
     created_at: datetime
     updated_at: datetime

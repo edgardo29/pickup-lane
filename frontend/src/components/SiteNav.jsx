@@ -5,14 +5,14 @@ import { useAuth } from '../hooks/useAuth.js'
 const guestNavLinks = [
   { label: 'How it Works', href: '#how-it-works' },
   { label: 'Browse Games', to: '/games' },
-  { label: 'Player Hub', href: '#player-hub' },
+  { label: 'Need a Sub', to: '/need-a-sub' },
 ]
 
 const signedInNavLinks = [
   { label: 'Browse Games', to: '/games' },
   { label: 'My Games', to: '/my-games' },
   { label: 'Create Game', to: '/create-game' },
-  { label: 'Player Hub', href: '#player-hub' },
+  { label: 'Need a Sub', to: '/need-a-sub' },
   { label: 'Inbox', to: '/inbox' },
   { label: 'Profile', to: '/profile' },
 ]

@@ -12,10 +12,7 @@ class SubPostPosition(Base):
     __tablename__ = "sub_post_positions"
     __table_args__ = (
         CheckConstraint(
-            (
-                "position_label IN ('any', 'goalkeeper', 'defender', "
-                "'midfielder', 'forward', 'winger')"
-            ),
+            "position_label IN ('field_player', 'goalkeeper')",
             name="ck_sub_post_positions_position_label",
         ),
         CheckConstraint(

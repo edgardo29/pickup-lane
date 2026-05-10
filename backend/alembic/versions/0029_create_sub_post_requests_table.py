@@ -26,14 +26,12 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("'pending'"),
         ),
-        sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("declined_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("sub_waitlisted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("canceled_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expired_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("no_show_reported_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("confirmation_due_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -48,19 +46,11 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             (
-                "request_status IN ('pending', 'accepted', 'confirmed', "
-                "'declined', 'sub_waitlist', 'canceled_by_player', "
+                "request_status IN ('pending', 'confirmed', 'declined', "
+                "'sub_waitlist', 'canceled_by_player', "
                 "'canceled_by_owner', 'no_show_reported', 'expired')"
             ),
             name="ck_sub_post_requests_request_status",
-        ),
-        sa.CheckConstraint(
-            "request_status != 'accepted' OR accepted_at IS NOT NULL",
-            name="ck_sub_post_requests_accepted_requires_accepted_at",
-        ),
-        sa.CheckConstraint(
-            "request_status != 'accepted' OR confirmation_due_at IS NOT NULL",
-            name="ck_sub_post_requests_accepted_requires_confirmation_due_at",
         ),
         sa.CheckConstraint(
             "request_status != 'confirmed' OR confirmed_at IS NOT NULL",
@@ -110,11 +100,6 @@ def upgrade() -> None:
             ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "sub_post_id",
-            "requester_user_id",
-            name="uq_sub_post_requests_post_requester",
-        ),
     )
     op.create_index("ix_sub_post_requests_sub_post_id", "sub_post_requests", ["sub_post_id"])
     op.create_index(
@@ -143,19 +128,18 @@ def upgrade() -> None:
         ["requester_user_id", "request_status"],
     )
     op.create_index(
-        "ix_sub_post_requests_accepted_confirmation_due_at",
+        "uq_sub_post_requests_active_post_requester",
         "sub_post_requests",
-        ["confirmation_due_at"],
-        postgresql_where=sa.text("request_status = 'accepted'"),
+        ["sub_post_id", "requester_user_id"],
+        unique=True,
+        postgresql_where=sa.text(
+            "request_status IN ('pending', 'confirmed', 'sub_waitlist')"
+        ),
     )
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_sub_post_requests_accepted_confirmation_due_at",
-        table_name="sub_post_requests",
-        postgresql_where=sa.text("request_status = 'accepted'"),
-    )
+    op.execute("DROP INDEX IF EXISTS uq_sub_post_requests_active_post_requester")
     op.drop_index("ix_sub_post_requests_requester_status", table_name="sub_post_requests")
     op.drop_index("ix_sub_post_requests_position_status", table_name="sub_post_requests")
     op.drop_index("ix_sub_post_requests_post_status", table_name="sub_post_requests")

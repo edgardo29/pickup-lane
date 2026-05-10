@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Index, String, UniqueConstraint, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Index, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,19 +13,11 @@ class SubPostRequest(Base):
     __table_args__ = (
         CheckConstraint(
             (
-                "request_status IN ('pending', 'accepted', 'confirmed', "
-                "'declined', 'sub_waitlist', 'canceled_by_player', "
-                "'canceled_by_owner', 'no_show_reported', 'expired')"
+                "request_status IN ('pending', 'confirmed', 'declined', "
+                "'sub_waitlist', 'canceled_by_player', 'canceled_by_owner', "
+                "'no_show_reported', 'expired')"
             ),
             name="ck_sub_post_requests_request_status",
-        ),
-        CheckConstraint(
-            "request_status != 'accepted' OR accepted_at IS NOT NULL",
-            name="ck_sub_post_requests_accepted_requires_accepted_at",
-        ),
-        CheckConstraint(
-            "request_status != 'accepted' OR confirmation_due_at IS NOT NULL",
-            name="ck_sub_post_requests_accepted_requires_confirmation_due_at",
         ),
         CheckConstraint(
             "request_status != 'confirmed' OR confirmed_at IS NOT NULL",
@@ -59,10 +51,14 @@ class SubPostRequest(Base):
             ["sub_post_positions.id", "sub_post_positions.sub_post_id"],
             ondelete="RESTRICT",
         ),
-        UniqueConstraint(
+        Index(
+            "uq_sub_post_requests_active_post_requester",
             "sub_post_id",
             "requester_user_id",
-            name="uq_sub_post_requests_post_requester",
+            unique=True,
+            postgresql_where=text(
+                "request_status IN ('pending', 'confirmed', 'sub_waitlist')"
+            ),
         ),
         Index("ix_sub_post_requests_sub_post_id", "sub_post_id"),
         Index("ix_sub_post_requests_sub_post_position_id", "sub_post_position_id"),
@@ -77,11 +73,6 @@ class SubPostRequest(Base):
             "ix_sub_post_requests_requester_status",
             "requester_user_id",
             "request_status",
-        ),
-        Index(
-            "ix_sub_post_requests_accepted_confirmation_due_at",
-            "confirmation_due_at",
-            postgresql_where=text("request_status = 'accepted'"),
         ),
     )
 
@@ -104,7 +95,6 @@ class SubPostRequest(Base):
     request_status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'pending'")
     )
-    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     declined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sub_waitlisted_at: Mapped[datetime | None] = mapped_column(
@@ -113,9 +103,6 @@ class SubPostRequest(Base):
     canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     no_show_reported_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    confirmation_due_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(

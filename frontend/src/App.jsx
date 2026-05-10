@@ -14,7 +14,9 @@ import InboxPage from './pages/InboxPage.jsx'
 import LandingPage from './pages/LandingPage.jsx'
 import { PrivacyPage, TermsPage } from './pages/LegalPages.jsx'
 import MyGamesPage from './pages/MyGamesPage.jsx'
-import PlayerHubPage from './pages/PlayerHubPage.jsx'
+import NeedASubManagePage from './pages/NeedASubManagePage.jsx'
+import NeedASubDetailPage from './pages/NeedASubDetailPage.jsx'
+import NeedASubPage from './pages/NeedASubPage.jsx'
 import { EditProfilePage, ProfilePage, SettingsPage } from './pages/ProfilePages.jsx'
 import { useAuth } from './hooks/useAuth.js'
 
@@ -57,13 +59,30 @@ function App() {
         }
       />
       <Route
-        path="/player-hub"
+        path="/need-a-sub"
         element={
           <RequireAppUser>
-            <PlayerHubPage />
+            <NeedASubPage />
           </RequireAppUser>
         }
       />
+      <Route
+        path="/need-a-sub/posts/:postId"
+        element={
+          <RequireAppUser>
+            <NeedASubDetailPage />
+          </RequireAppUser>
+        }
+      />
+      <Route
+        path="/need-a-sub/posts/:postId/manage"
+        element={
+          <RequireAppUser>
+            <NeedASubManagePage />
+          </RequireAppUser>
+        }
+      />
+      <Route path="/player-hub" element={<Navigate to="/need-a-sub" replace />} />
       <Route
         path="/create-game"
         element={

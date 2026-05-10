@@ -37,6 +37,32 @@ class SubPostCreate(BaseModel):
     positions: list[SubPostPositionCreate]
 
 
+class SubPostUpdate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    sport_type: str | None = None
+    format_label: str | None = None
+    skill_level: str | None = None
+    game_player_group: str | None = None
+    team_name: str | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    timezone: str | None = None
+    location_name: str | None = None
+    address_line_1: str | None = None
+    city: str | None = None
+    state: str | None = None
+    postal_code: str | None = None
+    country_code: str | None = None
+    neighborhood: str | None = None
+    subs_needed: int | None = None
+    price_due_at_venue_cents: int | None = None
+    currency: str | None = None
+    payment_note: str | None = None
+    notes: str | None = None
+    positions: list[SubPostPositionCreate] | None = None
+
+
 class SubPostCancel(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
@@ -87,6 +113,5 @@ class SubPostRead(BaseModel):
     updated_at: datetime
     positions: list[SubPostPositionRead] = Field(default_factory=list)
     pending_count: int = 0
-    accepted_count: int = 0
     confirmed_count: int = 0
     sub_waitlist_count: int = 0

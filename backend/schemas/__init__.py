@@ -97,6 +97,7 @@ from backend.schemas.sub_post_schema import (
     SubPostCreate,
     SubPostRead,
     SubPostRemove,
+    SubPostUpdate,
 )
 from backend.schemas.sub_post_status_history_schema import SubPostStatusHistoryRead
 from backend.schemas.user_schema import UserCreate, UserRead, UserUpdate
@@ -203,6 +204,7 @@ __all__ = [
     "RefundUpdate",
     "SubPostCreate",
     "SubPostRead",
+    "SubPostUpdate",
     "SubPostCancel",
     "SubPostRemove",
     "SubPostPositionCreate",

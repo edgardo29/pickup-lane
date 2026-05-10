@@ -50,10 +50,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
         sa.CheckConstraint(
-            (
-                "position_label IN ('any', 'goalkeeper', 'defender', "
-                "'midfielder', 'forward', 'winger')"
-            ),
+            "position_label IN ('field_player', 'goalkeeper')",
             name="ck_sub_post_positions_position_label",
         ),
         sa.CheckConstraint(
