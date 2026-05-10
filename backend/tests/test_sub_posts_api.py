@@ -75,7 +75,7 @@ def test_sub_posts_reject_invalid_group_position_combination(client: TestClient)
         subs_needed=1,
         positions=[
             {
-                "position_label": "any",
+                "position_label": "field_player",
                 "player_group": "women",
                 "spots_needed": 1,
             }
@@ -103,6 +103,97 @@ def test_sub_posts_reject_past_start_time(client: TestClient):
 
     assert response.status_code == 400, response.text
     assert "starts_at must be in the future" in response.text
+
+
+def test_sub_posts_owner_can_edit_post_without_requests(client: TestClient):
+    owner = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    authenticate_as(owner["id"])
+
+    payload = build_sub_post_payload(
+        format_label="11v11",
+        skill_level="advanced",
+        subs_needed=1,
+        positions=[
+            {
+                "position_label": "goalkeeper",
+                "player_group": "open",
+                "spots_needed": 1,
+            }
+        ],
+    )
+    response = client.patch(f"/need-a-sub/posts/{post['id']}", json=payload)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["format_label"] == "11v11"
+    assert response.json()["skill_level"] == "advanced"
+    assert response.json()["subs_needed"] == 1
+    assert response.json()["positions"][0]["position_label"] == "goalkeeper"
+
+
+def test_sub_posts_edit_blocks_removing_requirement_with_active_requests(client: TestClient):
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+
+    authenticate_as(requester["id"])
+    request_response = client.post(
+        f"/need-a-sub/posts/{post['id']}/requests",
+        json={"sub_post_position_id": post["positions"][0]["id"]},
+    )
+    assert request_response.status_code == 201, request_response.text
+
+    authenticate_as(owner["id"])
+    payload = build_sub_post_payload(
+        subs_needed=1,
+        positions=[
+            {
+                "position_label": "field_player",
+                "player_group": "women",
+                "spots_needed": 1,
+            }
+        ],
+    )
+    response = client.patch(f"/need-a-sub/posts/{post['id']}", json=payload)
+
+    assert response.status_code == 400, response.text
+    assert "cannot be removed or changed" in response.text
+
+
+def test_sub_posts_edit_allows_increasing_requested_requirement(client: TestClient):
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+
+    authenticate_as(requester["id"])
+    request_response = client.post(
+        f"/need-a-sub/posts/{post['id']}/requests",
+        json={"sub_post_position_id": post["positions"][0]["id"]},
+    )
+    assert request_response.status_code == 201, request_response.text
+
+    authenticate_as(owner["id"])
+    payload = build_sub_post_payload(
+        subs_needed=3,
+        positions=[
+            {
+                "position_label": "field_player",
+                "player_group": "men",
+                "spots_needed": 2,
+                "sort_order": 0,
+            },
+            {
+                "position_label": "field_player",
+                "player_group": "women",
+                "spots_needed": 1,
+                "sort_order": 1,
+            },
+        ],
+    )
+    response = client.patch(f"/need-a-sub/posts/{post['id']}", json=payload)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["subs_needed"] == 3
 
 
 def test_sub_posts_expiration_service_expires_posts_and_open_requests(client: TestClient):

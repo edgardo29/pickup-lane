@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.routes.auth_routes import get_current_app_user
-from backend.schemas import SubPostCancel, SubPostCreate, SubPostRead, SubPostRemove
+from backend.schemas import SubPostCancel, SubPostCreate, SubPostRead, SubPostRemove, SubPostUpdate
 from backend.services.need_a_sub_service import (
     cancel_sub_post,
     create_sub_post,
@@ -15,6 +15,7 @@ from backend.services.need_a_sub_service import (
     query_visible_posts,
     remove_sub_post,
     serialize_sub_post,
+    update_sub_post,
 )
 
 router = APIRouter(prefix="/need-a-sub/posts", tags=["need_a_sub_posts"])
@@ -62,6 +63,17 @@ def get_need_a_sub_post(
     db: Session = Depends(get_db),
 ) -> dict:
     sub_post = get_sub_post_or_404(db, sub_post_id)
+    return serialize_sub_post(db, sub_post)
+
+
+@router.patch("/{sub_post_id}", response_model=SubPostRead, status_code=status.HTTP_200_OK)
+def update_need_a_sub_post(
+    sub_post_id: uuid.UUID,
+    payload: SubPostUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_app_user),
+) -> dict:
+    sub_post = update_sub_post(db, current_user, sub_post_id, payload)
     return serialize_sub_post(db, sub_post)
 
 

@@ -16,6 +16,9 @@ venv/
 *firebase-admin*.json
 *-adminsdk-*.json
 
+# Local dev-only scripts
+backend/scripts/seed_dev_auth_users.py
+
 # Node
 node_modules/
 dist/

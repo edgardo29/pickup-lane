@@ -19,10 +19,9 @@ from backend.services.need_a_sub_service import (
     owner_cancel_request,
     owner_decline_request,
     owner_report_no_show,
-    owner_waitlist_request,
     requester_cancel_request,
-    requester_confirm_request,
     require_owner,
+    serialize_sub_post_request,
 )
 
 router = APIRouter(prefix="/need-a-sub", tags=["need_a_sub_requests"])
@@ -51,16 +50,20 @@ def list_need_a_sub_post_requests(
     sub_post_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
-) -> list[SubPostRequest]:
+) -> list[dict]:
     sub_post = get_sub_post_or_404(db, sub_post_id)
     require_owner(sub_post, current_user)
-    return list(
+    requests = list(
         db.scalars(
             select(SubPostRequest)
             .where(SubPostRequest.sub_post_id == sub_post_id)
             .order_by(SubPostRequest.created_at.asc())
         ).all()
     )
+    return [
+        serialize_sub_post_request(db, sub_request, include_waitlist_ahead=True)
+        for sub_request in requests
+    ]
 
 
 @router.get(
@@ -71,14 +74,18 @@ def list_need_a_sub_post_requests(
 def list_my_need_a_sub_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
-) -> list[SubPostRequest]:
-    return list(
+) -> list[dict]:
+    requests = list(
         db.scalars(
             select(SubPostRequest)
             .where(SubPostRequest.requester_user_id == current_user.id)
             .order_by(SubPostRequest.created_at.desc())
         ).all()
     )
+    return [
+        serialize_sub_post_request(db, sub_request, include_waitlist_ahead=True)
+        for sub_request in requests
+    ]
 
 
 @router.patch(
@@ -106,32 +113,6 @@ def decline_need_a_sub_request(
     current_user: User = Depends(get_current_app_user),
 ) -> SubPostRequest:
     return owner_decline_request(db, current_user, request_id, payload.reason)
-
-
-@router.patch(
-    "/requests/{request_id}/waitlist",
-    response_model=SubPostRequestRead,
-    status_code=status.HTTP_200_OK,
-)
-def waitlist_need_a_sub_request(
-    request_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
-) -> SubPostRequest:
-    return owner_waitlist_request(db, current_user, request_id)
-
-
-@router.patch(
-    "/requests/{request_id}/confirm",
-    response_model=SubPostRequestRead,
-    status_code=status.HTTP_200_OK,
-)
-def confirm_need_a_sub_request(
-    request_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
-) -> SubPostRequest:
-    return requester_confirm_request(db, current_user, request_id)
 
 
 @router.patch(

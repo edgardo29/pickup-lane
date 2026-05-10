@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -14,12 +14,11 @@ from backend.models import (
     SubPostStatusHistory,
     User,
 )
-from backend.schemas import SubPostCreate
+from backend.schemas import SubPostCreate, SubPostUpdate
 
 POST_STATUSES = {"draft", "active", "filled", "expired", "canceled", "removed"}
 REQUEST_STATUSES = {
     "pending",
-    "accepted",
     "confirmed",
     "declined",
     "sub_waitlist",
@@ -29,7 +28,16 @@ REQUEST_STATUSES = {
     "expired",
 }
 ACTIVE_VISIBLE_POST_STATUSES = {"active", "filled"}
-ACTIVE_REQUEST_STATUSES = {"pending", "accepted", "confirmed", "sub_waitlist"}
+ACTIVE_REQUEST_STATUSES = {"pending", "confirmed", "sub_waitlist"}
+QUEUE_HOLD_REQUEST_STATUSES = {"pending", "confirmed"}
+MAX_WAITLIST_REQUESTS_PER_POST = 25
+TERMINAL_REQUEST_STATUSES = {
+    "declined",
+    "canceled_by_player",
+    "canceled_by_owner",
+    "no_show_reported",
+    "expired",
+}
 ADMIN_ROLES = {"admin", "moderator"}
 POST_STATUS_CHANGE_SOURCES = {"owner", "admin", "system", "scheduled_job"}
 VALID_POSITION_GROUPS_BY_POST_GROUP = {
@@ -282,6 +290,218 @@ def create_sub_post(
     return new_post
 
 
+def count_position_requests(db: Session, position_id: uuid.UUID) -> dict[str, int]:
+    rows = db.execute(
+        select(SubPostRequest.request_status, func.count())
+        .where(SubPostRequest.sub_post_position_id == position_id)
+        .group_by(SubPostRequest.request_status)
+    ).all()
+    return {status_value: count for status_value, count in rows}
+
+
+def serialize_sub_post_position(db: Session, position: SubPostPosition) -> dict:
+    counts = count_position_requests(db, position.id)
+    return {
+        "id": position.id,
+        "sub_post_id": position.sub_post_id,
+        "position_label": position.position_label,
+        "player_group": position.player_group,
+        "spots_needed": position.spots_needed,
+        "sort_order": position.sort_order,
+        "pending_count": counts.get("pending", 0),
+        "confirmed_count": counts.get("confirmed", 0),
+        "sub_waitlist_count": counts.get("sub_waitlist", 0),
+        "created_at": position.created_at,
+        "updated_at": position.updated_at,
+    }
+
+
+def count_position_attached_requests(db: Session, position_id: uuid.UUID) -> int:
+    return db.scalar(
+        select(func.count())
+        .select_from(SubPostRequest)
+        .where(
+            SubPostRequest.sub_post_position_id == position_id,
+            SubPostRequest.request_status.notin_(TERMINAL_REQUEST_STATUSES),
+        )
+    ) or 0
+
+
+def build_effective_post_create(db: Session, sub_post: SubPost, post_update: SubPostUpdate) -> SubPostCreate:
+    update_data = post_update.model_dump(exclude_unset=True, exclude={"positions"})
+    positions = post_update.positions if "positions" in post_update.model_fields_set else None
+
+    current_data = {
+        field: getattr(sub_post, field)
+        for field in (
+            "sport_type",
+            "format_label",
+            "skill_level",
+            "game_player_group",
+            "team_name",
+            "starts_at",
+            "ends_at",
+            "timezone",
+            "location_name",
+            "address_line_1",
+            "city",
+            "state",
+            "postal_code",
+            "country_code",
+            "neighborhood",
+            "subs_needed",
+            "price_due_at_venue_cents",
+            "currency",
+            "payment_note",
+            "notes",
+        )
+    }
+    current_data.update(update_data)
+    current_data["positions"] = positions if positions is not None else [
+        {
+            "position_label": position.position_label,
+            "player_group": position.player_group,
+            "spots_needed": position.spots_needed,
+            "sort_order": position.sort_order,
+        }
+        for position in list_positions(db, sub_post.id)
+    ]
+
+    if positions is not None:
+        current_data["subs_needed"] = sum(position.spots_needed for position in positions)
+
+    return SubPostCreate(**current_data)
+
+
+def validate_position_update_safety(
+    db: Session,
+    existing_positions: list[SubPostPosition],
+    new_positions: list,
+) -> None:
+    new_position_by_key = {
+        (position.position_label, position.player_group): position
+        for position in new_positions
+    }
+
+    for existing_position in existing_positions:
+        attached_count = count_position_attached_requests(db, existing_position.id)
+        if attached_count == 0:
+            continue
+
+        key = (existing_position.position_label, existing_position.player_group)
+        new_position = new_position_by_key.get(key)
+        if new_position is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Sub requirements with active requests cannot be removed or changed.",
+            )
+
+        counts = count_position_requests(db, existing_position.id)
+        minimum_spots = counts.get("pending", 0) + counts.get("confirmed", 0)
+        if new_position.spots_needed < minimum_spots:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Sub requirement spots cannot be lower than pending and confirmed requests.",
+            )
+
+
+def apply_position_updates(
+    db: Session,
+    sub_post: SubPost,
+    new_positions: list,
+) -> None:
+    existing_positions = list_positions(db, sub_post.id)
+    validate_position_update_safety(db, existing_positions, new_positions)
+
+    existing_by_key = {
+        (position.position_label, position.player_group): position
+        for position in existing_positions
+    }
+    new_keys = {
+        (position.position_label, position.player_group)
+        for position in new_positions
+    }
+
+    for existing_position in existing_positions:
+        key = (existing_position.position_label, existing_position.player_group)
+        if key not in new_keys:
+            if count_position_attached_requests(db, existing_position.id) > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Sub requirements with active requests cannot be removed.",
+                )
+            db.delete(existing_position)
+
+    for sort_order, position_update in enumerate(new_positions):
+        key = (position_update.position_label, position_update.player_group)
+        existing_position = existing_by_key.get(key)
+        if existing_position is None:
+            db.add(
+                SubPostPosition(
+                    id=uuid.uuid4(),
+                    sub_post_id=sub_post.id,
+                    position_label=position_update.position_label,
+                    player_group=position_update.player_group,
+                    spots_needed=position_update.spots_needed,
+                    sort_order=sort_order,
+                )
+            )
+            continue
+
+        existing_position.spots_needed = position_update.spots_needed
+        existing_position.sort_order = sort_order
+        existing_position.updated_at = now_utc()
+        db.add(existing_position)
+
+
+def update_sub_post(
+    db: Session,
+    owner: User,
+    sub_post_id: uuid.UUID,
+    post_update: SubPostUpdate,
+) -> SubPost:
+    sub_post = get_sub_post_or_404(db, sub_post_id)
+    require_owner(sub_post, owner)
+
+    if sub_post.post_status not in {"active", "filled"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only active or filled posts can be edited.",
+        )
+
+    effective_post = build_effective_post_create(db, sub_post, post_update)
+    validate_post_creation(effective_post)
+    update_data = post_update.model_dump(exclude_unset=True, exclude={"positions"})
+    new_positions = post_update.positions if "positions" in post_update.model_fields_set else None
+
+    current_time = now_utc()
+    for field_name, field_value in update_data.items():
+        setattr(sub_post, field_name, field_value)
+
+    if new_positions is not None:
+        sub_post.subs_needed = sum(position.spots_needed for position in new_positions)
+        apply_position_updates(db, sub_post, new_positions)
+
+    sub_post.starts_at = ensure_aware(sub_post.starts_at)
+    sub_post.ends_at = ensure_aware(sub_post.ends_at)
+    sub_post.expires_at = sub_post.starts_at
+    sub_post.updated_at = current_time
+    db.add(sub_post)
+    recalculate_filled_status(db, sub_post, owner.id, "owner")
+
+    try:
+        db.commit()
+        db.refresh(sub_post)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc.orig),
+        ) from exc
+
+    return sub_post
+
+
 def list_positions(db: Session, sub_post_id: uuid.UUID) -> list[SubPostPosition]:
     return list(
         db.scalars(
@@ -342,11 +562,74 @@ def serialize_sub_post(db: Session, sub_post: SubPost) -> dict:
                 "updated_at",
             )
         },
-        "positions": list_positions(db, sub_post.id),
+        "positions": [
+            serialize_sub_post_position(db, position)
+            for position in list_positions(db, sub_post.id)
+        ],
         "pending_count": counts.get("pending", 0),
-        "accepted_count": counts.get("accepted", 0),
         "confirmed_count": counts.get("confirmed", 0),
         "sub_waitlist_count": counts.get("sub_waitlist", 0),
+    }
+
+
+def count_waitlist_ahead(db: Session, sub_request: SubPostRequest) -> int:
+    if sub_request.request_status != "sub_waitlist":
+        return 0
+
+    return db.scalar(
+        select(func.count())
+        .select_from(SubPostRequest)
+        .where(
+            SubPostRequest.sub_post_position_id == sub_request.sub_post_position_id,
+            SubPostRequest.request_status == "sub_waitlist",
+            SubPostRequest.created_at < sub_request.created_at,
+        )
+    ) or 0
+
+
+def build_requester_display(user: User | None) -> tuple[str | None, str | None]:
+    if user is None:
+        return None, None
+
+    name_parts = [
+        value.strip()
+        for value in [user.first_name or "", user.last_name or ""]
+        if value and value.strip()
+    ]
+    display_name = " ".join(name_parts) if name_parts else "Pickup Lane Player"
+    initials_source = name_parts if name_parts else ["Pickup", "Lane"]
+    initials = "".join(part[:1].upper() for part in initials_source if part)[:2]
+
+    return display_name, initials or None
+
+
+def serialize_sub_post_request(
+    db: Session,
+    sub_request: SubPostRequest,
+    include_waitlist_ahead: bool = False,
+) -> dict:
+    requester = db.get(User, sub_request.requester_user_id)
+    requester_display_name, requester_initials = build_requester_display(requester)
+
+    return {
+        "id": sub_request.id,
+        "sub_post_id": sub_request.sub_post_id,
+        "sub_post_position_id": sub_request.sub_post_position_id,
+        "requester_user_id": sub_request.requester_user_id,
+        "requester_display_name": requester_display_name,
+        "requester_initials": requester_initials,
+        "request_status": sub_request.request_status,
+        "confirmed_at": sub_request.confirmed_at,
+        "declined_at": sub_request.declined_at,
+        "sub_waitlisted_at": sub_request.sub_waitlisted_at,
+        "canceled_at": sub_request.canceled_at,
+        "expired_at": sub_request.expired_at,
+        "no_show_reported_at": sub_request.no_show_reported_at,
+        "waitlist_ahead_count": (
+            count_waitlist_ahead(db, sub_request) if include_waitlist_ahead else None
+        ),
+        "created_at": sub_request.created_at,
+        "updated_at": sub_request.updated_at,
     }
 
 
@@ -424,6 +707,7 @@ def create_request(
         select(SubPostRequest).where(
             SubPostRequest.sub_post_id == sub_post.id,
             SubPostRequest.requester_user_id == requester.id,
+            SubPostRequest.request_status.in_(ACTIVE_REQUEST_STATUSES),
         )
     )
     if existing_request is not None:
@@ -432,12 +716,24 @@ def create_request(
             detail="You have already requested a spot for this post.",
         )
 
+    initial_status = "pending" if count_queued_slots(db, position.id) < position.spots_needed else "sub_waitlist"
+    if (
+        initial_status == "sub_waitlist"
+        and count_post_waitlist_requests(db, sub_post.id) >= MAX_WAITLIST_REQUESTS_PER_POST
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This Need a Sub waitlist is full.",
+        )
+
+    current_time = now_utc()
     new_request = SubPostRequest(
         id=uuid.uuid4(),
         sub_post_id=sub_post.id,
         sub_post_position_id=position.id,
         requester_user_id=requester.id,
-        request_status="pending",
+        request_status=initial_status,
+        sub_waitlisted_at=current_time if initial_status == "sub_waitlist" else None,
     )
     db.add(new_request)
     db.flush()
@@ -445,7 +741,7 @@ def create_request(
         db,
         new_request,
         old_status=None,
-        new_status="pending",
+        new_status=initial_status,
         changed_by_user_id=requester.id,
         change_source="requester",
     )
@@ -463,28 +759,26 @@ def create_request(
     return new_request
 
 
-def count_held_slots(db: Session, sub_post_position_id: uuid.UUID) -> int:
+def count_queued_slots(db: Session, sub_post_position_id: uuid.UUID) -> int:
     return db.scalar(
         select(func.count())
         .select_from(SubPostRequest)
         .where(
             SubPostRequest.sub_post_position_id == sub_post_position_id,
-            SubPostRequest.request_status.in_({"accepted", "confirmed"}),
+            SubPostRequest.request_status.in_(QUEUE_HOLD_REQUEST_STATUSES),
         )
     ) or 0
 
 
-def calculate_confirmation_due_at(sub_post: SubPost, current_time: datetime) -> datetime:
-    starts_at = ensure_aware(sub_post.starts_at)
-    due_at = min(current_time + timedelta(hours=2), starts_at - timedelta(minutes=30))
-
-    if due_at <= current_time:
-        due_at = min(current_time + timedelta(minutes=15), starts_at)
-
-    if due_at > starts_at:
-        due_at = starts_at
-
-    return due_at
+def count_post_waitlist_requests(db: Session, sub_post_id: uuid.UUID) -> int:
+    return db.scalar(
+        select(func.count())
+        .select_from(SubPostRequest)
+        .where(
+            SubPostRequest.sub_post_id == sub_post_id,
+            SubPostRequest.request_status == "sub_waitlist",
+        )
+    ) or 0
 
 
 def change_request_status(
@@ -501,12 +795,7 @@ def change_request_status(
     sub_request.request_status = new_status
     sub_request.updated_at = current_time
 
-    if new_status == "accepted":
-        sub_request.accepted_at = current_time
-        sub_request.confirmation_due_at = calculate_confirmation_due_at(
-            get_sub_post_or_404(db, sub_request.sub_post_id), current_time
-        )
-    elif new_status == "confirmed":
+    if new_status == "confirmed":
         sub_request.confirmed_at = current_time
     elif new_status == "declined":
         sub_request.declined_at = current_time
@@ -585,6 +874,41 @@ def recalculate_filled_status(
         )
 
 
+def promote_next_waitlisted_request(
+    db: Session,
+    sub_post_position_id: uuid.UUID,
+    changed_by_user_id: uuid.UUID | None,
+    change_source: str,
+) -> SubPostRequest | None:
+    db.flush()
+    position = get_position_or_404(db, sub_post_position_id)
+
+    if count_queued_slots(db, sub_post_position_id) >= position.spots_needed:
+        return None
+
+    next_request = db.scalar(
+        select(SubPostRequest)
+        .where(
+            SubPostRequest.sub_post_position_id == sub_post_position_id,
+            SubPostRequest.request_status == "sub_waitlist",
+        )
+        .order_by(SubPostRequest.created_at.asc())
+    )
+
+    if next_request is None:
+        return None
+
+    change_request_status(
+        db,
+        next_request,
+        "pending",
+        changed_by_user_id,
+        change_source,
+        "Automatically moved from waitlist when a review slot opened.",
+    )
+    return next_request
+
+
 def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> SubPostRequest:
     sub_request = get_sub_post_request_or_404(db, request_id)
     sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
@@ -592,10 +916,10 @@ def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> Sub
     current_time = now_utc()
     require_owner(sub_post, owner)
 
-    if sub_request.request_status not in {"pending", "sub_waitlist"}:
+    if sub_request.request_status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only pending or waitlisted requests can be accepted.",
+            detail="Only pending requests can be accepted.",
         )
 
     if sub_post.post_status != "active" or current_time >= ensure_aware(sub_post.expires_at):
@@ -604,13 +928,14 @@ def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> Sub
             detail="This post is not accepting requests.",
         )
 
-    if count_held_slots(db, position.id) >= position.spots_needed:
+    if count_queued_slots(db, position.id) > position.spots_needed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This position is already full.",
         )
 
-    change_request_status(db, sub_request, "accepted", owner.id, "owner", current_time=current_time)
+    change_request_status(db, sub_request, "confirmed", owner.id, "owner", current_time=current_time)
+    recalculate_filled_status(db, sub_post, owner.id, "owner")
     db.commit()
     db.refresh(sub_request)
     return sub_request
@@ -629,67 +954,13 @@ def owner_decline_request(
             detail="Only pending or waitlisted requests can be declined.",
         )
 
+    was_pending = sub_request.request_status == "pending"
+    position_id = sub_request.sub_post_position_id
     change_request_status(db, sub_request, "declined", owner.id, "owner", reason)
-    db.commit()
-    db.refresh(sub_request)
-    return sub_request
 
+    if was_pending:
+        promote_next_waitlisted_request(db, position_id, owner.id, "owner")
 
-def owner_waitlist_request(db: Session, owner: User, request_id: uuid.UUID) -> SubPostRequest:
-    sub_request = get_sub_post_request_or_404(db, request_id)
-    sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
-    require_owner(sub_post, owner)
-
-    if sub_request.request_status not in {"pending", "accepted"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only pending or accepted requests can be waitlisted.",
-        )
-
-    was_accepted = sub_request.request_status == "accepted"
-    change_request_status(db, sub_request, "sub_waitlist", owner.id, "owner")
-
-    if was_accepted:
-        recalculate_filled_status(db, sub_post, owner.id, "owner")
-
-    db.commit()
-    db.refresh(sub_request)
-    return sub_request
-
-
-def requester_confirm_request(
-    db: Session, requester: User, request_id: uuid.UUID
-) -> SubPostRequest:
-    sub_request = get_sub_post_request_or_404(db, request_id)
-    sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
-    current_time = now_utc()
-
-    if sub_request.requester_user_id != requester.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the requester can confirm this request.",
-        )
-
-    if sub_request.request_status != "accepted":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only accepted requests can be confirmed.",
-        )
-
-    if sub_request.confirmation_due_at is None or current_time >= ensure_aware(sub_request.confirmation_due_at):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The confirmation deadline has passed.",
-        )
-
-    if current_time >= ensure_aware(sub_post.expires_at):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This Need a Sub post has expired.",
-        )
-
-    change_request_status(db, sub_request, "confirmed", requester.id, "requester", current_time=current_time)
-    recalculate_filled_status(db, sub_post, requester.id, "requester")
     db.commit()
     db.refresh(sub_request)
     return sub_request
@@ -713,11 +984,15 @@ def requester_cancel_request(
             detail="This request cannot be canceled.",
         )
 
-    was_confirmed_or_accepted = sub_request.request_status in {"accepted", "confirmed"}
+    should_promote = sub_request.request_status in {"pending", "confirmed"}
+    was_confirmed = sub_request.request_status == "confirmed"
+    position_id = sub_request.sub_post_position_id
     change_request_status(db, sub_request, "canceled_by_player", requester.id, "requester")
 
-    if was_confirmed_or_accepted:
+    if was_confirmed:
         recalculate_filled_status(db, sub_post, requester.id, "requester")
+    if should_promote:
+        promote_next_waitlisted_request(db, position_id, requester.id, "requester")
 
     db.commit()
     db.refresh(sub_request)
@@ -734,17 +1009,17 @@ def owner_cancel_request(
     sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
     require_owner(sub_post, owner)
 
-    if sub_request.request_status not in {"accepted", "confirmed"}:
+    if sub_request.request_status != "confirmed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only accepted or confirmed requests can be canceled by owner.",
+            detail="Only confirmed requests can be canceled by owner.",
         )
 
-    was_confirmed = sub_request.request_status == "confirmed"
+    position_id = sub_request.sub_post_position_id
     change_request_status(db, sub_request, "canceled_by_owner", owner.id, "owner", reason)
 
-    if was_confirmed:
-        recalculate_filled_status(db, sub_post, owner.id, "owner")
+    recalculate_filled_status(db, sub_post, owner.id, "owner")
+    promote_next_waitlisted_request(db, position_id, owner.id, "owner")
 
     db.commit()
     db.refresh(sub_request)
@@ -895,7 +1170,7 @@ def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
         .join(SubPost, SubPostRequest.sub_post_id == SubPost.id)
         .where(
             SubPost.expires_at <= current_time,
-            SubPostRequest.request_status.in_({"pending", "accepted", "sub_waitlist"}),
+            SubPostRequest.request_status.in_({"pending", "sub_waitlist"}),
         )
     ).all()
 

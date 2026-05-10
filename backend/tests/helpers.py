@@ -183,13 +183,13 @@ def build_sub_post_payload(**overrides: object) -> dict:
         "notes": "Bring a light and dark shirt.",
         "positions": [
             {
-                "position_label": "any",
+                "position_label": "field_player",
                 "player_group": "men",
                 "spots_needed": 1,
                 "sort_order": 0,
             },
             {
-                "position_label": "any",
+                "position_label": "field_player",
                 "player_group": "women",
                 "spots_needed": 1,
                 "sort_order": 1,

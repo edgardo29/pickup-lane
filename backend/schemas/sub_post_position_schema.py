@@ -24,5 +24,8 @@ class SubPostPositionRead(BaseModel):
     player_group: str
     spots_needed: int
     sort_order: int
+    pending_count: int = 0
+    confirmed_count: int = 0
+    sub_waitlist_count: int = 0
     created_at: datetime
     updated_at: datetime

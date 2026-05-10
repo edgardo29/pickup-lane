@@ -34,7 +34,7 @@ def test_sub_post_request_status_history_records_request_and_accept(client: Test
     )
     assert owner_history_response.status_code == 200, owner_history_response.text
     owner_history = owner_history_response.json()
-    assert [row["new_status"] for row in owner_history] == ["pending", "accepted"]
+    assert [row["new_status"] for row in owner_history] == ["pending", "confirmed"]
 
 
 def test_sub_post_request_status_history_blocks_unrelated_user(client: TestClient):

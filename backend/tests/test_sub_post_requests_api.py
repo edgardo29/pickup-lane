@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
+from backend.services.need_a_sub_service import MAX_WAITLIST_REQUESTS_PER_POST
 from backend.tests.helpers import authenticate_as, create_sub_post, create_user
 
 
@@ -14,7 +15,7 @@ def request_spot(client: TestClient, requester_id: str, post: dict, position_ind
     )
 
 
-def test_sub_post_request_full_confirm_flow_marks_post_filled(client: TestClient):
+def test_sub_post_request_owner_accept_marks_confirmed_and_filled(client: TestClient):
     owner = create_user(client)
     requester_one = create_user(client)
     requester_two = create_user(client)
@@ -32,24 +33,15 @@ def test_sub_post_request_full_confirm_flow_marks_post_filled(client: TestClient
     authenticate_as(owner["id"])
     first_accept = client.patch(f"/need-a-sub/requests/{first_request['id']}/accept")
     assert first_accept.status_code == 200, first_accept.text
-    assert first_accept.json()["request_status"] == "accepted"
-    assert first_accept.json()["confirmation_due_at"] is not None
-
-    second_accept = client.patch(f"/need-a-sub/requests/{second_request['id']}/accept")
-    assert second_accept.status_code == 200, second_accept.text
-
-    authenticate_as(requester_one["id"])
-    first_confirm = client.patch(f"/need-a-sub/requests/{first_request['id']}/confirm")
-    assert first_confirm.status_code == 200, first_confirm.text
-    assert first_confirm.json()["request_status"] == "confirmed"
+    assert first_accept.json()["request_status"] == "confirmed"
+    assert first_accept.json()["confirmed_at"] is not None
 
     get_post_before_full = client.get(f"/need-a-sub/posts/{post['id']}")
     assert get_post_before_full.status_code == 200
     assert get_post_before_full.json()["post_status"] == "active"
 
-    authenticate_as(requester_two["id"])
-    second_confirm = client.patch(f"/need-a-sub/requests/{second_request['id']}/confirm")
-    assert second_confirm.status_code == 200, second_confirm.text
+    second_accept = client.patch(f"/need-a-sub/requests/{second_request['id']}/accept")
+    assert second_accept.status_code == 200, second_accept.text
 
     get_post_after_full = client.get(f"/need-a-sub/posts/{post['id']}")
     assert get_post_after_full.status_code == 200
@@ -73,41 +65,93 @@ def test_sub_post_request_blocks_owner_and_duplicate_requests(client: TestClient
     assert duplicate_response.status_code == 409, duplicate_response.text
 
 
-def test_sub_post_request_accept_holds_position_capacity(client: TestClient):
+def test_sub_post_request_allows_new_request_after_player_cancel(client: TestClient):
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    first_request = request_spot(client, requester["id"], post).json()
+
+    cancel_response = client.patch(f"/need-a-sub/requests/{first_request['id']}/cancel")
+    assert cancel_response.status_code == 200, cancel_response.text
+    assert cancel_response.json()["request_status"] == "canceled_by_player"
+
+    new_response = request_spot(client, requester["id"], post, 1)
+    assert new_response.status_code == 201, new_response.text
+    assert new_response.json()["id"] != first_request["id"]
+
+
+def test_sub_post_request_allows_new_request_after_owner_cancel(client: TestClient):
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    first_request = request_spot(client, requester["id"], post).json()
+
+    authenticate_as(owner["id"])
+    assert client.patch(f"/need-a-sub/requests/{first_request['id']}/accept").status_code == 200
+    cancel_response = client.patch(f"/need-a-sub/requests/{first_request['id']}/cancel-by-owner", json={})
+    assert cancel_response.status_code == 200, cancel_response.text
+    assert cancel_response.json()["request_status"] == "canceled_by_owner"
+
+    new_response = request_spot(client, requester["id"], post, 1)
+    assert new_response.status_code == 201, new_response.text
+    assert new_response.json()["id"] != first_request["id"]
+
+
+def test_sub_post_request_auto_waitlists_when_position_queue_is_full(client: TestClient):
     owner = create_user(client)
     requester_one = create_user(client)
     requester_two = create_user(client)
     post = create_sub_post(client, owner["id"])
     first_request = request_spot(client, requester_one["id"], post, 0).json()
-    second_request = request_spot(client, requester_two["id"], post, 1).json()
+    second_response = request_spot(client, requester_two["id"], post, 0)
+    assert second_response.status_code == 201, second_response.text
+    second_request = second_response.json()
+
+    assert first_request["request_status"] == "pending"
+    assert second_request["request_status"] == "sub_waitlist"
+    authenticate_as(requester_two["id"])
+    my_requests = client.get("/need-a-sub/my-requests")
+    assert my_requests.status_code == 200, my_requests.text
+    assert my_requests.json()[0]["waitlist_ahead_count"] == 0
+
+    post_with_counts = client.get(f"/need-a-sub/posts/{post['id']}")
+    assert post_with_counts.status_code == 200
+    first_position = post_with_counts.json()["positions"][0]
+    assert first_position["pending_count"] == 1
+    assert first_position["sub_waitlist_count"] == 1
 
     authenticate_as(owner["id"])
-    first_accept = client.patch(f"/need-a-sub/requests/{first_request['id']}/accept")
-    assert first_accept.status_code == 200, first_accept.text
+    decline_response = client.patch(f"/need-a-sub/requests/{first_request['id']}/decline", json={})
+    assert decline_response.status_code == 200, decline_response.text
+    assert decline_response.json()["request_status"] == "declined"
 
-    second_same_position_response = client.patch(
-        f"/need-a-sub/requests/{second_request['id']}/accept"
+    waitlist_after_decline = client.get(f"/need-a-sub/posts/{post['id']}/requests")
+    promoted_request = next(
+        row for row in waitlist_after_decline.json() if row["id"] == second_request["id"]
     )
-    assert second_same_position_response.status_code == 200, second_same_position_response.text
+    assert promoted_request["request_status"] == "pending"
+    assert promoted_request["requester_display_name"] == "Test User"
+    assert promoted_request["requester_initials"] == "TU"
 
-    # Create a third request for the first position through direct DB mutation to
-    # validate capacity on the exact row while preserving the one-request-per-post rule.
-    third_user = create_user(client)
-    other_post = create_sub_post(client, owner["id"])
-    third_request = request_spot(client, third_user["id"], other_post, 0).json()
-    from backend.database import SessionLocal
-    from backend.models import SubPostRequest
 
-    with SessionLocal() as db:
-        db_request = db.get(SubPostRequest, UUID(third_request["id"]))
-        db_request.sub_post_id = UUID(post["id"])
-        db_request.sub_post_position_id = UUID(post["positions"][0]["id"])
-        db.commit()
+def test_sub_post_request_blocks_when_post_waitlist_is_full(client: TestClient):
+    owner = create_user(client)
+    first_requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    first_response = request_spot(client, first_requester["id"], post, 0)
+    assert first_response.status_code == 201, first_response.text
+    assert first_response.json()["request_status"] == "pending"
 
-    authenticate_as(owner["id"])
-    third_accept = client.patch(f"/need-a-sub/requests/{third_request['id']}/accept")
-    assert third_accept.status_code == 400, third_accept.text
-    assert "already full" in third_accept.text
+    for _ in range(MAX_WAITLIST_REQUESTS_PER_POST):
+        requester = create_user(client)
+        waitlist_response = request_spot(client, requester["id"], post, 0)
+        assert waitlist_response.status_code == 201, waitlist_response.text
+        assert waitlist_response.json()["request_status"] == "sub_waitlist"
+
+    blocked_requester = create_user(client)
+    blocked_response = request_spot(client, blocked_requester["id"], post, 0)
+    assert blocked_response.status_code == 400, blocked_response.text
+    assert "waitlist is full" in blocked_response.text
 
 
 def test_sub_post_request_wrong_position_does_not_fill_post(client: TestClient):
@@ -120,13 +164,13 @@ def test_sub_post_request_wrong_position_does_not_fill_post(client: TestClient):
         subs_needed=4,
         positions=[
             {
-                "position_label": "any",
+                "position_label": "field_player",
                 "player_group": "men",
                 "spots_needed": 2,
                 "sort_order": 0,
             },
             {
-                "position_label": "any",
+                "position_label": "field_player",
                 "player_group": "women",
                 "spots_needed": 2,
                 "sort_order": 1,
@@ -137,12 +181,8 @@ def test_sub_post_request_wrong_position_does_not_fill_post(client: TestClient):
     second_request = request_spot(client, second["id"], post, 0).json()
 
     authenticate_as(owner["id"])
-    client.patch(f"/need-a-sub/requests/{first_request['id']}/accept")
-    client.patch(f"/need-a-sub/requests/{second_request['id']}/accept")
-    authenticate_as(first["id"])
-    client.patch(f"/need-a-sub/requests/{first_request['id']}/confirm")
-    authenticate_as(second["id"])
-    client.patch(f"/need-a-sub/requests/{second_request['id']}/confirm")
+    assert client.patch(f"/need-a-sub/requests/{first_request['id']}/accept").status_code == 200
+    assert client.patch(f"/need-a-sub/requests/{second_request['id']}/accept").status_code == 200
 
     response = client.get(f"/need-a-sub/posts/{post['id']}")
     assert response.status_code == 200
@@ -161,12 +201,9 @@ def test_sub_post_request_cancel_reopens_filled_post(client: TestClient):
     authenticate_as(owner["id"])
     client.patch(f"/need-a-sub/requests/{first_request['id']}/accept")
     client.patch(f"/need-a-sub/requests/{second_request['id']}/accept")
-    authenticate_as(first["id"])
-    client.patch(f"/need-a-sub/requests/{first_request['id']}/confirm")
-    authenticate_as(second["id"])
-    client.patch(f"/need-a-sub/requests/{second_request['id']}/confirm")
     assert client.get(f"/need-a-sub/posts/{post['id']}").json()["post_status"] == "filled"
 
+    authenticate_as(second["id"])
     cancel_response = client.patch(f"/need-a-sub/requests/{second_request['id']}/cancel")
     assert cancel_response.status_code == 200, cancel_response.text
     assert cancel_response.json()["request_status"] == "canceled_by_player"
@@ -180,8 +217,6 @@ def test_sub_post_request_no_show_requires_game_end(client: TestClient):
     request = request_spot(client, requester["id"], post, 0).json()
     authenticate_as(owner["id"])
     client.patch(f"/need-a-sub/requests/{request['id']}/accept")
-    authenticate_as(requester["id"])
-    client.patch(f"/need-a-sub/requests/{request['id']}/confirm")
 
     authenticate_as(owner["id"])
     early_response = client.patch(

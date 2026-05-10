@@ -31,7 +31,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             (
-                "new_status IN ('pending', 'accepted', 'confirmed', 'declined', "
+                "new_status IN ('pending', 'confirmed', 'declined', "
                 "'sub_waitlist', 'canceled_by_player', 'canceled_by_owner', "
                 "'no_show_reported', 'expired')"
             ),
@@ -39,8 +39,8 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             (
-                "old_status IS NULL OR old_status IN ('pending', 'accepted', "
-                "'confirmed', 'declined', 'sub_waitlist', 'canceled_by_player', "
+                "old_status IS NULL OR old_status IN ('pending', 'confirmed', "
+                "'declined', 'sub_waitlist', 'canceled_by_player', "
                 "'canceled_by_owner', 'no_show_reported', 'expired')"
             ),
             name="ck_sub_post_request_status_history_old_status",
