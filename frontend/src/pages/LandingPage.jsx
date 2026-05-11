@@ -3,7 +3,6 @@ import BrowseAppNav from '../components/BrowseAppNav.jsx'
 import LandingAuthCard from '../components/LandingAuthCard.jsx'
 import LandingFeatureBar from '../components/LandingFeatureBar.jsx'
 import { ArrowRightIcon } from '../components/LandingIcons.jsx'
-import SiteNav from '../components/SiteNav.jsx'
 import { useAuth } from '../hooks/useAuth.js'
 import '../styles/browse-games.css'
 import '../styles/landing.css'
@@ -23,7 +22,7 @@ function LandingPage() {
 
   return (
     <div className="landing-page">
-      {showSignedInHome || isLoading ? <BrowseAppNav isLoading={isLoading} /> : <SiteNav />}
+      <BrowseAppNav isLoading={isLoading} />
 
       <main className={heroClassName}>
         <section className="landing-hero__copy">

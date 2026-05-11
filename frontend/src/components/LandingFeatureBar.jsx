@@ -20,7 +20,7 @@ const features = [
 
 function LandingFeatureBar() {
   return (
-    <section className="feature-bar" aria-label="Pickup Lane benefits">
+    <section className="feature-bar" id="how-it-works" aria-label="Pickup Lane benefits">
       {features.map((feature) => {
         const Icon = feature.icon
 
