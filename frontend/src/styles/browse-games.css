@@ -95,6 +95,19 @@
   padding: 0 10px;
 }
 
+.browse-nav__brand:hover,
+.browse-nav__link:hover,
+.browse-nav__user:hover {
+  color: var(--lime);
+}
+
+.browse-nav__brand:focus-visible,
+.browse-nav__link:focus-visible,
+.browse-nav__user:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 4px;
+}
+
 .browse-nav__loading-text {
   color: rgba(248, 250, 252, 0.42);
   font-size: 0.86rem;
@@ -153,6 +166,10 @@
   border-radius: 999px;
   background: rgba(248, 250, 252, 0.045);
   font-weight: 800;
+}
+
+.browse-nav__user--guest {
+  padding: 0 16px;
 }
 
 .browse-nav__user span {

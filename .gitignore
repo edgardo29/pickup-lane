@@ -19,6 +19,10 @@ venv/
 # Local dev-only scripts
 backend/scripts/seed_dev_auth_users.py
 
+# Local agent notes
+AGENTS.md
+docs/
+
 # Node
 node_modules/
 dist/

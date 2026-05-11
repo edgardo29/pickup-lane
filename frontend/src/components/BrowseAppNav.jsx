@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth.js'
 import { apiRequest } from '../lib/apiClient.js'
 
 const navItems = [
+  { label: 'How it Works', href: '/#how-it-works', auth: 'public-only' },
   { label: 'Browse Games', to: '/games', auth: 'public' },
   { label: 'My Games', to: '/my-games', auth: 'private' },
   { label: 'Create Game', to: '/create-game', auth: 'private' },
@@ -51,9 +52,17 @@ function BrowseAppNav({ isLoading: isForcedLoading = false }) {
 
   const displayName = appUser ? getDisplayName(appUser, currentUser) : 'Sign In'
   const initials = getInitials(appUser, currentUser)
-  const visibleNavItems = navItems.filter(
-    (item) => item.auth === 'public' || Boolean(appUser),
-  )
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.auth === 'public') {
+      return true
+    }
+
+    if (item.auth === 'public-only') {
+      return !appUser
+    }
+
+    return Boolean(appUser)
+  })
 
   return (
     <header className="browse-nav">
@@ -64,17 +73,23 @@ function BrowseAppNav({ isLoading: isForcedLoading = false }) {
         </span>
       </NavLink>
 
-      <nav className="browse-nav__links" aria-label="Public navigation">
+      <nav className="browse-nav__links" aria-label="Main navigation">
         {isLoading
           ? <span className="browse-nav__loading-text">Loading your account</span>
-          : visibleNavItems.map((item) => (
-              <NavLink className="browse-nav__link" to={item.to} key={item.label}>
-                {item.label}
-                {item.label === 'Inbox' && unreadCount > 0 && (
-                  <span className="browse-nav__badge">{unreadCount}</span>
-                )}
-              </NavLink>
-            ))}
+          : visibleNavItems.map((item) =>
+              item.href ? (
+                <a className="browse-nav__link" href={item.href} key={item.label}>
+                  {item.label}
+                </a>
+              ) : (
+                <NavLink className="browse-nav__link" to={item.to} key={item.label}>
+                  {item.label}
+                  {item.label === 'Inbox' && unreadCount > 0 && (
+                    <span className="browse-nav__badge">{unreadCount}</span>
+                  )}
+                </NavLink>
+              ),
+            )}
       </nav>
 
       <div className="browse-nav__actions">
@@ -85,9 +100,8 @@ function BrowseAppNav({ isLoading: isForcedLoading = false }) {
           </span>
         ) : (
           <Link
-            className="browse-nav__user"
+            className={`browse-nav__user ${appUser ? '' : 'browse-nav__user--guest'}`}
             to={appUser ? '/profile' : '/sign-in'}
-            aria-label={appUser ? 'Open profile' : 'Sign in'}
           >
             {appUser && <span>{initials}</span>}
             {displayName}
