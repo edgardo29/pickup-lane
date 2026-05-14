@@ -298,6 +298,7 @@ def test_join_game_with_guests_creates_party_booking_and_guest_participants(
     assert booking_response.status_code == 200, booking_response.text
     booking = booking_response.json()
     assert booking["participant_count"] == 3
+    assert booking["booking_status"] == "confirmed"
     assert booking["payment_status"] == "paid"
     assert booking["total_cents"] == game["price_per_player_cents"] * 3
 
@@ -373,6 +374,7 @@ def test_join_game_waitlists_whole_party_when_not_enough_spots(client: TestClien
     assert booking_response.status_code == 200, booking_response.text
     booking = booking_response.json()
     assert booking["participant_count"] == 3
+    assert booking["booking_status"] == "waitlisted"
     assert booking["payment_status"] == "unpaid"
 
     participants_response = client.get(f"/game-participants?game_id={game['id']}")
@@ -385,6 +387,217 @@ def test_join_game_waitlists_whole_party_when_not_enough_spots(client: TestClien
     assert len(participants) == 3
     assert sum(item["participant_type"] == "guest" for item in participants) == 2
     assert {item["participant_status"] for item in participants} == {"waitlisted"}
+
+
+def test_community_external_host_join_creates_no_player_payment(
+    client: TestClient,
+):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        price_per_player_cents=1500,
+    )
+
+    response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"], "guest_count": 1},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["status"] == "joined"
+
+    booking_response = client.get(f"/bookings/{body['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "confirmed"
+    assert booking["payment_status"] == "not_required"
+    assert booking["participant_count"] == 2
+    assert booking["total_cents"] == 3000
+
+    payments_response = client.get(f"/payments?booking_id={body['booking_id']}")
+    assert payments_response.status_code == 200, payments_response.text
+    assert payments_response.json() == []
+
+
+def test_community_free_join_creates_no_player_payment(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        payment_collection_type="none",
+        price_per_player_cents=0,
+    )
+
+    response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+
+    assert response.status_code == 201, response.text
+    booking_response = client.get(f"/bookings/{response.json()['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "confirmed"
+    assert booking["payment_status"] == "not_required"
+    assert booking["total_cents"] == 0
+
+    payments_response = client.get(f"/payments?booking_id={booking['id']}")
+    assert payments_response.status_code == 200, payments_response.text
+    assert payments_response.json() == []
+
+
+def test_community_waitlist_creates_no_player_payment(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        format_label="3v3",
+        total_spots=6,
+        price_per_player_cents=1500,
+    )
+
+    for _index in range(6):
+        player = create_user(client)
+        fill_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert fill_response.status_code == 201, fill_response.text
+
+    waitlisted_player = create_user(client)
+    response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": waitlisted_player["id"], "guest_count": 1},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["status"] == "waitlisted"
+
+    booking_response = client.get(f"/bookings/{body['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "waitlisted"
+    assert booking["payment_status"] == "not_required"
+    assert booking["participant_count"] == 2
+
+    payments_response = client.get(f"/payments?booking_id={body['booking_id']}")
+    assert payments_response.status_code == 200, payments_response.text
+    assert payments_response.json() == []
+
+
+def test_community_waitlist_promotion_creates_no_player_payment(
+    client: TestClient,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        format_label="3v3",
+        total_spots=6,
+        price_per_player_cents=1500,
+    )
+    joined_players = []
+
+    for _index in range(6):
+        player = create_user(client)
+        fill_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert fill_response.status_code == 201, fill_response.text
+        joined_players.append(player)
+
+    waitlisted_player = create_user(client)
+    waitlist_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": waitlisted_player["id"]},
+    )
+    assert waitlist_response.status_code == 201, waitlist_response.text
+    waitlist_body = waitlist_response.json()
+
+    leave_response = client.post(
+        f"/games/{game['id']}/leave",
+        json={"acting_user_id": joined_players[0]["id"]},
+    )
+    assert leave_response.status_code == 200, leave_response.text
+
+    promoted_booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    assert promoted_booking_response.status_code == 200, promoted_booking_response.text
+    promoted_booking = promoted_booking_response.json()
+    assert promoted_booking["booking_status"] == "confirmed"
+    assert promoted_booking["payment_status"] == "not_required"
+
+    payments_response = client.get(f"/payments?booking_id={waitlist_body['booking_id']}")
+    assert payments_response.status_code == 200, payments_response.text
+    assert payments_response.json() == []
+
+    notifications_response = client.get(f"/notifications?user_id={waitlisted_player['id']}")
+    assert notifications_response.status_code == 200, notifications_response.text
+    promotion_notice = next(
+        item
+        for item in notifications_response.json()
+        if item["notification_type"] == "waitlist_promoted"
+    )
+    assert "charged" not in promotion_notice["body"].lower()
+
+
+def test_community_leave_game_keeps_payment_not_required(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        price_per_player_cents=1500,
+    )
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+    assert join_response.status_code == 201, join_response.text
+
+    response = client.post(
+        f"/games/{game['id']}/leave",
+        json={"acting_user_id": player["id"]},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["refund_eligible"] is False
+
+    booking_response = client.get(f"/bookings/{join_response.json()['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "cancelled"
+    assert booking["payment_status"] == "not_required"
 
 
 def test_leave_game_cancels_participant(client: TestClient):
@@ -485,6 +698,44 @@ def test_remove_guest_keeps_player_joined_and_marks_payment_partially_refunded(
     payments_response = client.get(f"/payments?booking_id={booking_id}")
     assert payments_response.status_code == 200, payments_response.text
     assert payments_response.json()[0]["payment_status"] == "partially_refunded"
+
+
+def test_community_remove_guest_keeps_payment_not_required(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        price_per_player_cents=1500,
+    )
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"], "guest_count": 2},
+    )
+    assert join_response.status_code == 201, join_response.text
+    booking_id = join_response.json()["booking_id"]
+
+    response = client.post(
+        f"/games/{game['id']}/guests/remove",
+        json={"acting_user_id": player["id"], "remove_count": 1},
+    )
+
+    assert response.status_code == 200, response.text
+
+    booking_response = client.get(f"/bookings/{booking_id}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "partially_cancelled"
+    assert booking["payment_status"] == "not_required"
+
+    payments_response = client.get(f"/payments?booking_id={booking_id}")
+    assert payments_response.status_code == 200, payments_response.text
+    assert payments_response.json() == []
 
 
 def test_leave_waitlist_with_guests_keeps_booking_unpaid(client: TestClient):
