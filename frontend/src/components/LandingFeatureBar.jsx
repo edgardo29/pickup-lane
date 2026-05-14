@@ -21,21 +21,27 @@ const features = [
 function LandingFeatureBar() {
   return (
     <section className="feature-bar" id="how-it-works" aria-label="Pickup Lane benefits">
-      {features.map((feature) => {
-        const Icon = feature.icon
+      <h2 className="feature-bar__heading">
+        Why <span>Pickup</span> Lane?
+      </h2>
 
-        return (
-          <article className="feature-item" key={feature.title}>
-            <div className="feature-item__icon">
-              <Icon />
-            </div>
-            <div>
-              <h2>{feature.title}</h2>
-              <p>{feature.description}</p>
-            </div>
-          </article>
-        )
-      })}
+      <div className="feature-bar__grid">
+        {features.map((feature) => {
+          const Icon = feature.icon
+
+          return (
+            <article className="feature-item" key={feature.title}>
+              <div className="feature-item__icon">
+                <Icon />
+              </div>
+              <div>
+                <h3>{feature.title}</h3>
+                <p>{feature.description}</p>
+              </div>
+            </article>
+          )
+        })}
+      </div>
     </section>
   )
 }

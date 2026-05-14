@@ -1,0 +1,9 @@
+.auth-page--check-email .auth-primary-button {
+  width: fit-content;
+}
+
+@media (max-width: 640px) {
+  .auth-page--check-email .auth-primary-button {
+    width: min(100%, 280px);
+  }
+}

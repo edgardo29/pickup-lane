@@ -24,7 +24,7 @@ import {
   formatTime,
   getSpotsLeft,
 } from './NeedASubPage.jsx'
-import '../styles/browse-games.css'
+import '../styles/browse-games/BrowseGamesPage.css'
 import '../styles/need-a-sub.css'
 
 const MAX_WAITLIST_REQUESTS_PER_POST = 25

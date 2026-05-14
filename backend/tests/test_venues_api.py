@@ -43,3 +43,44 @@ def test_venues_reject_approved_without_approver(client: TestClient):
 
     assert response.status_code == 400, response.text
     assert "approved_by_user_id" in response.text
+
+
+def test_venues_reuse_matching_active_venue(client: TestClient):
+    user = create_user(client)
+    venue = create_venue(
+        client,
+        user["id"],
+        name="Reusable Field",
+        address_line_1="500 Match Ave",
+        city="Chicago",
+        state="IL",
+        postal_code="60607",
+        neighborhood="West Loop",
+    )
+
+    duplicate_response = client.post(
+        "/venues",
+        json={
+            "name": "Reusable Field",
+            "address_line_1": "500 Match Ave",
+            "city": "Chicago",
+            "state": "IL",
+            "postal_code": "60607",
+            "country_code": "US",
+            "neighborhood": "West Loop",
+            "venue_status": "approved",
+            "created_by_user_id": user["id"],
+            "approved_by_user_id": user["id"],
+            "is_active": True,
+        },
+    )
+
+    assert duplicate_response.status_code == 201, duplicate_response.text
+    assert duplicate_response.json()["id"] == venue["id"]
+
+    list_response = client.get("/venues")
+    assert list_response.status_code == 200, list_response.text
+    matching_venues = [
+        item for item in list_response.json() if item["name"] == "Reusable Field"
+    ]
+    assert len(matching_venues) == 1

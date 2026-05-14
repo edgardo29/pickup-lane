@@ -93,7 +93,6 @@ def upgrade() -> None:
         sa.Column("custom_rules_text", sa.Text(), nullable=True),
         sa.Column("custom_cancellation_text", sa.Text(), nullable=True),
         sa.Column("game_notes", sa.Text(), nullable=True),
-        sa.Column("arrival_notes", sa.Text(), nullable=True),
         sa.Column("parking_notes", sa.Text(), nullable=True),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),

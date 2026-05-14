@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,52 @@ from backend.schemas import VenueCreate, VenueRead, VenueUpdate
 router = APIRouter(prefix="/venues", tags=["venues"])
 
 APPROVED_VENUE_STATUS = "approved"
+
+
+def normalize_venue_lookup_value(value: str | None) -> str:
+    return " ".join((value or "").strip().lower().split())
+
+
+def find_matching_active_venue(
+    db: Session,
+    *,
+    name: str,
+    address_line_1: str,
+    city: str,
+    state: str,
+    postal_code: str,
+    country_code: str = "US",
+    neighborhood: str | None = None,
+) -> Venue | None:
+    name_key = normalize_venue_lookup_value(name)
+    street_key = normalize_venue_lookup_value(address_line_1)
+    city_key = normalize_venue_lookup_value(city)
+    state_key = normalize_venue_lookup_value(state)
+    postal_key = normalize_venue_lookup_value(postal_code)
+    country_key = normalize_venue_lookup_value(country_code).upper()
+    neighborhood_key = normalize_venue_lookup_value(neighborhood)
+
+    if not all([name_key, street_key, city_key, state_key, postal_key, country_key]):
+        return None
+
+    statement = (
+        select(Venue)
+        .where(
+            Venue.deleted_at.is_(None),
+            Venue.is_active.is_(True),
+            func.lower(func.trim(Venue.name)) == name_key,
+            func.lower(func.trim(Venue.address_line_1)) == street_key,
+            func.lower(func.trim(Venue.city)) == city_key,
+            func.lower(func.trim(Venue.state)) == state_key,
+            func.lower(func.trim(Venue.postal_code)) == postal_key,
+            func.upper(func.trim(Venue.country_code)) == country_key,
+            func.lower(func.trim(func.coalesce(Venue.neighborhood, "")))
+            == neighborhood_key,
+        )
+        .order_by(Venue.created_at.asc())
+        .limit(1)
+    )
+    return db.scalars(statement).first()
 
 
 def build_venue_conflict_detail(exc: IntegrityError) -> str:
@@ -75,6 +121,19 @@ def create_venue(venue: VenueCreate, db: Session = Depends(get_db)) -> Venue:
         venue.approved_by_user_id,
         venue.approved_at,
     )
+
+    matching_venue = find_matching_active_venue(
+        db,
+        name=venue.name,
+        address_line_1=venue.address_line_1,
+        city=venue.city,
+        state=venue.state,
+        postal_code=venue.postal_code,
+        country_code=venue.country_code,
+        neighborhood=venue.neighborhood,
+    )
+    if matching_venue is not None:
+        return matching_venue
 
     new_venue = Venue(
         id=uuid.uuid4(),

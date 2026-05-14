@@ -145,7 +145,7 @@ export function AuthProvider({ children }) {
       },
       sendPasswordReset: async (email) => {
         await sendPasswordResetEmail(auth, email, {
-          url: `${window.location.origin}/sign-in?reset=success`,
+          url: `${window.location.origin}/reset-password`,
           handleCodeInApp: true,
         })
       },
@@ -174,6 +174,7 @@ export function AuthProvider({ children }) {
       },
       signInWithGoogle: async () => {
         setPendingGoogleSignup(true)
+
         try {
           const credential = await signInWithPopup(auth, googleProvider)
           const existingUser = await loadExistingAppUser(credential.user)

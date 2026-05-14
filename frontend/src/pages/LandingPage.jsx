@@ -1,28 +1,44 @@
 import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import BrowseAppNav from '../components/BrowseAppNav.jsx'
 import LandingAuthCard from '../components/LandingAuthCard.jsx'
 import LandingFeatureBar from '../components/LandingFeatureBar.jsx'
 import { ArrowRightIcon } from '../components/LandingIcons.jsx'
 import { useAuth } from '../hooks/useAuth.js'
-import '../styles/browse-games.css'
+import '../styles/browse-games/BrowseGamesPage.css'
 import '../styles/landing.css'
 
 function LandingPage() {
   const { appUser, currentUser, isLoading } = useAuth()
-  const showGuestActions = !isLoading && !appUser
+  const [showPublicFallback, setShowPublicFallback] = useState(false)
+  const showGuestActions = !appUser && (!isLoading || showPublicFallback)
   const showSignedInHome = !isLoading && appUser
+  const shouldShowNavLoading = isLoading && !showPublicFallback
   const firstName = getFirstName(appUser, currentUser)
   const heroClassName = [
     'landing-hero',
     showSignedInHome ? 'landing-hero--signed-in' : '',
-    isLoading ? 'landing-hero--loading' : '',
+    shouldShowNavLoading ? 'landing-hero--loading' : '',
   ]
     .filter(Boolean)
     .join(' ')
 
+  useEffect(() => {
+    if (!isLoading || appUser) {
+      setShowPublicFallback(false)
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowPublicFallback(true)
+    }, 1200)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [appUser, isLoading])
+
   return (
     <div className="landing-page">
-      <BrowseAppNav isLoading={isLoading} />
+      <BrowseAppNav isLoading={shouldShowNavLoading} preferPublicWhileLoading={showPublicFallback} />
 
       <main className={heroClassName}>
         <section className="landing-hero__copy">
@@ -44,11 +60,12 @@ function LandingPage() {
           )}
         </section>
 
-        {showGuestActions && <LandingAuthCard />}
+        {showGuestActions && <LandingAuthCard showWhileLoading={showPublicFallback} variant="hero" />}
         {showSignedInHome && <SignedInHeroPanel />}
       </main>
 
       <LandingFeatureBar />
+      {showGuestActions && <LandingAuthCard showWhileLoading={showPublicFallback} variant="mobile" />}
     </div>
   )
 }

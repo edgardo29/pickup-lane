@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import BrowseAppNav from '../components/BrowseAppNav.jsx'
-import BrowseDateStrip from '../components/BrowseDateStrip.jsx'
-import { MapPinIcon, SoccerBallIcon } from '../components/BrowseIcons.jsx'
-import BrowseTimeSection from '../components/BrowseTimeSection.jsx'
-import { apiRequest, buildMediaUrl } from '../lib/apiClient.js'
-import '../styles/browse-games.css'
+import BrowseAppNav from '../../components/BrowseAppNav.jsx'
+import { MapPinIcon, SoccerBallIcon } from '../../components/BrowseIcons.jsx'
+import { apiRequest, buildMediaUrl } from '../../lib/apiClient.js'
+import '../../styles/browse-games/BrowseGamesPage.css'
+import BrowseDateStrip from './BrowseDateStrip.jsx'
+import BrowseTimeSection from './BrowseTimeSection.jsx'
 
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
 
@@ -56,6 +56,7 @@ function BrowseGamesPage() {
   const activeDateKey = dateOptions.some((date) => date.key === selectedDateKey)
     ? selectedDateKey
     : dateOptions[0]?.key || ''
+  const activeDate = dateOptions.find((date) => date.key === activeDateKey)
 
   const gamesForSelectedDate = useMemo(
     () => visibleGames.filter((game) => getDateKey(game.starts_at) === activeDateKey),
@@ -102,7 +103,10 @@ function BrowseGamesPage() {
               Chicago, IL
             </button>
 
-            <h1 id="browse-title">Find your next game</h1>
+            <h1 id="browse-title">
+              <span>Find your</span>
+              <span>next game</span>
+            </h1>
             <p>Pickup games available near Chicago</p>
           </div>
         </section>
@@ -111,6 +115,14 @@ function BrowseGamesPage() {
           <div className="browse-panel__summary">
             <span>
               <SoccerBallIcon />
+              {activeDate && (
+                <>
+                  <strong className="browse-panel__summary-date">
+                    {activeDate.weekday.slice(0, 3)} {activeDate.day}
+                  </strong>
+                  <i aria-hidden="true" />
+                </>
+              )}
               {visibleGames.length} {visibleGames.length === 1 ? 'game' : 'games'} available
             </span>
           </div>

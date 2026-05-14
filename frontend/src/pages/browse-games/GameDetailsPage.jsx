@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import defaultCommunityVenueImage from '../assets/community-default/default-venue.png'
-import BrowseAppNav from '../components/BrowseAppNav.jsx'
+import defaultCommunityVenueImage from '../../assets/community-default/default-venue-wide.png'
+import BrowseAppNav from '../../components/BrowseAppNav.jsx'
 import {
   BuildingIcon,
   CalendarIcon,
@@ -9,7 +9,7 @@ import {
   MapPinIcon,
   StopwatchIcon,
   UsersIcon,
-} from '../components/BrowseIcons.jsx'
+} from '../../components/BrowseIcons.jsx'
 import {
   BookingRulesCard,
   ChatPanel,
@@ -18,23 +18,26 @@ import {
   GameChatCard,
   GameGallery,
   JoinCard,
+  LeaveGameModal,
   PlayersCard,
   PlayersListModal,
   QuickFacts,
   StatusPill,
   WhereToGoCard,
-} from '../components/GameDetailsSections.jsx'
-import { useAuth } from '../hooks/useAuth.js'
-import { apiRequest, buildMediaUrl } from '../lib/apiClient.js'
-import '../styles/game-details.css'
+} from './GameDetailsSections.jsx'
+import { useAuth } from '../../hooks/useAuth.js'
+import { apiRequest, buildMediaUrl } from '../../lib/apiClient.js'
+import '../../styles/browse-games/BrowseGamesPage.css'
+import '../../styles/browse-games/GameDetailsPage.css'
 
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
-const GUEST_JOIN_MESSAGE = 'Sign in or create an account to join this game.'
+const ACTIVE_JOIN_STATUSES = new Set(['pending_payment', 'confirmed', 'waitlisted'])
+const GUEST_JOIN_MESSAGE = 'Create an account or sign in to join this game.'
 
 function GameDetailsPage() {
   const { gameId } = useParams()
   const navigate = useNavigate()
-  const { appUser } = useAuth()
+  const { appUser, isLoading: isAuthLoading } = useAuth()
 
   const [game, setGame] = useState(null)
   const [venue, setVenue] = useState(null)
@@ -43,7 +46,13 @@ function GameDetailsPage() {
   const [currentUser, setCurrentUser] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
   const [activeImageIndex, setActiveImageIndex] = useState(0)
-  const [joinNotice, setJoinNotice] = useState(false)
+  const [joinNotice, setJoinNotice] = useState('')
+  const [shareNotice, setShareNotice] = useState('')
+  const [isJoining, setIsJoining] = useState(false)
+  const [isLeaving, setIsLeaving] = useState(false)
+  const [isAddingHostGuest, setIsAddingHostGuest] = useState(false)
+  const [isUpdatingGuests, setIsUpdatingGuests] = useState(false)
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false)
   const [isPlayerListOpen, setIsPlayerListOpen] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [hasUnreadChat, setHasUnreadChat] = useState(false)
@@ -57,7 +66,12 @@ function GameDetailsPage() {
     async function loadGameDetails() {
       setStatus('loading')
       setError('')
-      setJoinNotice(false)
+      setJoinNotice('')
+      setShareNotice('')
+      setIsJoining(false)
+      setIsLeaving(false)
+      setIsAddingHostGuest(false)
+      setIsLeaveModalOpen(false)
       setIsPlayerListOpen(false)
       setIsChatOpen(false)
       setHasUnreadChat(false)
@@ -134,6 +148,19 @@ function GameDetailsPage() {
     () => getParticipantSummary(participants, game?.total_spots),
     [game?.total_spots, participants],
   )
+  const currentParticipant = useMemo(
+    () =>
+      participants.find(
+        (participant) =>
+          participant.user_id === currentUser?.id &&
+          ACTIVE_JOIN_STATUSES.has(participant.participant_status),
+      ) || null,
+    [currentUser?.id, participants],
+  )
+  const currentGuestCount = useMemo(
+    () => getCurrentGuestCount(participants, currentParticipant, currentUser?.id),
+    [currentParticipant, currentUser?.id, participants],
+  )
   const latestChatMessage = chatMessages.at(-1) || null
   const chatSenderNames = useMemo(() => buildChatSenderNames(participants), [participants])
 
@@ -182,16 +209,27 @@ function GameDetailsPage() {
   const aboutText =
     game.description ||
     'Fast-paced pickup soccer. All skill levels welcome. Show up ready to play and have fun.'
-  const arrivalText =
-    game.arrival_notes ||
-    game.parking_notes ||
-    'Check your confirmation before kickoff for final entry details.'
+  const parkingNote = game.parking_notes || ''
   const ruleItems = buildRuleItems(game)
   const canEditGame =
     game.game_type === 'community' &&
     currentUser?.id === game.host_user_id &&
     game.publish_status === 'published' &&
     ['scheduled', 'full'].includes(game.game_status)
+  const isHost = currentUser?.id && currentUser.id === game.host_user_id
+  const isGameClosed =
+    !['published'].includes(game.publish_status) ||
+    !['scheduled', 'full'].includes(game.game_status) ||
+    new Date(game.starts_at) <= new Date()
+  const joinLabel = getJoinLabel({
+    currentParticipant,
+    isGameClosed,
+    isHost,
+    isJoining,
+    participantSummary,
+    waitlistEnabled: game.waitlist_enabled,
+  })
+  const isJoinDisabled = Boolean(isHost || currentParticipant || isGameClosed || isJoining)
 
   function handlePreviousImage() {
     setActiveImageIndex((currentIndex) =>
@@ -206,22 +244,156 @@ function GameDetailsPage() {
   }
 
   async function handleShareGame() {
+    const shareUrl = `${window.location.origin}/games/${game.id}`
     const shareData = {
       title,
       text: `${title} at ${venueName}`,
-      url: window.location.href,
+      url: shareUrl,
     }
 
-    if (navigator.share) {
-      await navigator.share(shareData).catch(() => {})
+    try {
+      setShareNotice('')
+
+      if (navigator.share) {
+        await navigator.share(shareData)
+        setShareNotice('Shared.')
+        return
+      }
+
+      await navigator.clipboard?.writeText(shareUrl)
+      setShareNotice('Game link copied.')
+    } catch (shareError) {
+      if (shareError?.name === 'AbortError') {
+        return
+      }
+
+      setShareNotice('Unable to share right now.')
+    }
+  }
+
+  async function refreshParticipants() {
+    const [participantsResponse, gameResponse] = await Promise.all([
+      apiRequest(`/game-participants?game_id=${gameId}`),
+      apiRequest(`/games/${gameId}`),
+    ])
+    setParticipants(participantsResponse)
+    setGame(gameResponse)
+  }
+
+  async function handleJoinIntent() {
+    setShareNotice('')
+
+    if (isAuthLoading) {
+      setJoinNotice('Checking your account...')
       return
     }
 
-    await navigator.clipboard?.writeText(window.location.href).catch(() => {})
+    if (!currentUser?.id) {
+      setJoinNotice(GUEST_JOIN_MESSAGE)
+      return
+    }
+
+    if (!hasCompleteProfile(currentUser)) {
+      navigate('/finish-profile', { state: { from: `/games/${game.id}` } })
+      return
+    }
+
+    if (isHost) {
+      setJoinNotice('You are hosting this game.')
+      return
+    }
+
+    if (currentParticipant) {
+      setJoinNotice(
+        currentParticipant.participant_status === 'waitlisted'
+          ? 'You are already on the waitlist.'
+          : 'You already joined this game.',
+      )
+      return
+    }
+
+    if (isGameClosed) {
+      setJoinNotice('This game is not open for joining.')
+      return
+    }
+
+    navigate(`/games/${game.id}/checkout`)
   }
 
-  function handleJoinIntent() {
-    setJoinNotice(true)
+  async function handleLeaveGame() {
+    if (!currentUser?.id || !currentParticipant) {
+      setIsLeaveModalOpen(false)
+      return
+    }
+
+    setIsLeaving(true)
+    setJoinNotice('')
+
+    try {
+      await apiRequest(`/games/${game.id}/leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acting_user_id: currentUser.id }),
+      })
+      await refreshParticipants()
+      setJoinNotice('')
+      setIsLeaveModalOpen(false)
+    } catch (requestError) {
+      setJoinNotice(
+        requestError instanceof Error ? requestError.message : 'Unable to leave this game.',
+      )
+    } finally {
+      setIsLeaving(false)
+    }
+  }
+
+  async function handleRemoveGuests(removeCount) {
+    if (!currentUser?.id || !currentParticipant || removeCount <= 0) {
+      return
+    }
+
+    setIsUpdatingGuests(true)
+    setJoinNotice('')
+
+    try {
+      await apiRequest(`/games/${game.id}/guests/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acting_user_id: currentUser.id, remove_count: removeCount }),
+      })
+      await refreshParticipants()
+      setIsLeaveModalOpen(false)
+    } catch (requestError) {
+      setJoinNotice(
+        requestError instanceof Error ? requestError.message : 'Unable to update attendance.',
+      )
+    } finally {
+      setIsUpdatingGuests(false)
+    }
+  }
+
+  async function handleAddHostGuest() {
+    if (!currentUser?.id || !isHost) {
+      return
+    }
+
+    setIsAddingHostGuest(true)
+    setJoinNotice('')
+
+    try {
+      await apiRequest(`/games/${game.id}/guests/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acting_user_id: currentUser.id, guest_count: 1 }),
+      })
+      await refreshParticipants()
+    } catch (requestError) {
+      setJoinNotice(
+        requestError instanceof Error ? requestError.message : 'Unable to add host guest.',
+      )
+    } finally {
+      setIsAddingHostGuest(false)
+    }
   }
 
   function handleOpenChat() {
@@ -247,11 +419,6 @@ function GameDetailsPage() {
 
               <StatusPill label={gameToneLabel} />
 
-              {canEditGame && (
-                <Link className="details-host-edit-link" to={`/games/${game.id}/edit`}>
-                  Edit Game
-                </Link>
-              )}
             </div>
 
             <div className="details-heading">
@@ -275,11 +442,6 @@ function GameDetailsPage() {
             <section className="details-mobile-summary">
               <div className="details-mobile-summary__meta">
                 <StatusPill label={gameToneLabel} />
-                {canEditGame && (
-                  <Link className="details-host-edit-link" to={`/games/${game.id}/edit`}>
-                    Edit Game
-                  </Link>
-                )}
               </div>
 
               <h1>{title}</h1>
@@ -311,9 +473,9 @@ function GameDetailsPage() {
 
             <WhereToGoCard
               address={venueAddress}
-              arrivalText={arrivalText}
               mapIcon={<MapPinIcon />}
               mapsUrl={mapsUrl}
+              parkingNote={parkingNote}
               venueName={venueName}
             />
           </div>
@@ -325,9 +487,30 @@ function GameDetailsPage() {
               gameToneLabel={gameToneLabel}
               joinMessage={GUEST_JOIN_MESSAGE}
               joinNotice={joinNotice}
+              joinLabel={joinLabel}
+              joinDisabled={isJoinDisabled}
+              leaveLabel={
+                currentParticipant?.participant_status === 'waitlisted'
+                  ? 'Leave Waitlist'
+                  : 'Edit Attendance'
+              }
               onJoin={handleJoinIntent}
+              onLeave={
+                currentParticipant && !isHost ? () => setIsLeaveModalOpen(true) : null
+              }
               onShare={handleShareGame}
               price={price}
+              returnPath={`/games/${game.id}`}
+              shareNotice={shareNotice}
+              editGameUrl={canEditGame ? `/games/${game.id}/edit` : ''}
+              hostGuestCount={isHost ? currentGuestCount : 0}
+              hostGuestMax={game.allow_guests ? game.max_guests_per_booking || 0 : 0}
+              isAddingHostGuest={isAddingHostGuest}
+              isUpdatingHostGuests={isUpdatingGuests}
+              onAddHostGuest={isHost ? handleAddHostGuest : null}
+              onRemoveHostGuest={
+                isHost && currentGuestCount > 0 ? () => handleRemoveGuests(1) : null
+              }
             />
           </aside>
         </section>
@@ -339,11 +522,23 @@ function GameDetailsPage() {
           <span>per player</span>
         </div>
 
-        <button type="button" onClick={handleJoinIntent}>
-          Join Game
+        <button type="button" disabled={isJoinDisabled} onClick={handleJoinIntent}>
+          {joinLabel}
         </button>
 
-        {joinNotice && <p>{GUEST_JOIN_MESSAGE}</p>}
+        {currentParticipant && !isHost && (
+          <button
+            className="details-mobile-leave"
+            type="button"
+            onClick={() => setIsLeaveModalOpen(true)}
+          >
+            {currentParticipant.participant_status === 'waitlisted'
+              ? 'Leave Waitlist'
+              : 'Edit Attendance'}
+          </button>
+        )}
+
+        {joinNotice && <p>{joinNotice}</p>}
       </div>
 
       {isPlayerListOpen && (
@@ -362,33 +557,89 @@ function GameDetailsPage() {
           senderNames={chatSenderNames}
         />
       )}
+
+      {isLeaveModalOpen && (
+        <LeaveGameModal
+          isLeaving={isLeaving}
+          isUpdatingGuests={isUpdatingGuests}
+          isWaitlisted={currentParticipant?.participant_status === 'waitlisted'}
+          guestCount={currentGuestCount}
+          onClose={() => setIsLeaveModalOpen(false)}
+          onConfirm={handleLeaveGame}
+          onRemoveGuests={handleRemoveGuests}
+          refundEligible={isRefundEligible(game.starts_at)}
+        />
+      )}
     </div>
   )
 }
 
 function getParticipantSummary(participants, totalSpots = 0) {
-  const roster = participants
+  const rosterParticipants = participants
     .filter((participant) => ACTIVE_PARTICIPANT_STATUSES.has(participant.participant_status))
     .sort(
       (first, second) =>
         Number(first.roster_order || 999) - Number(second.roster_order || 999) ||
         first.display_name_snapshot.localeCompare(second.display_name_snapshot),
     )
-  const waitlist = participants.filter(
+  const waitlistParticipants = participants.filter(
     (participant) => participant.participant_status === 'waitlisted',
   )
+  const roster = groupParticipantParties(rosterParticipants)
+  const waitlist = groupParticipantParties(waitlistParticipants)
   const host = roster.find((participant) => participant.participant_type === 'host') || null
-  const spotsLeft = Math.max((totalSpots || 0) - roster.length, 0)
+  const spotsLeft = Math.max((totalSpots || 0) - rosterParticipants.length, 0)
 
   return {
     host,
     roster,
-    signedUpCount: roster.length,
+    signedUpCount: rosterParticipants.length,
     spotsLeft,
-    totalSpots: totalSpots || roster.length,
+    totalSpots: totalSpots || rosterParticipants.length,
     waitlist,
-    waitlistCount: waitlist.length,
+    waitlistCount: waitlistParticipants.length,
   }
+}
+
+function getCurrentGuestCount(participants, currentParticipant, currentUserId) {
+  if (!currentParticipant) {
+    return 0
+  }
+
+  return participants.filter((participant) => {
+    if (participant.participant_type !== 'guest' || !ACTIVE_JOIN_STATUSES.has(participant.participant_status)) {
+      return false
+    }
+
+    if (currentParticipant.booking_id && participant.booking_id === currentParticipant.booking_id) {
+      return true
+    }
+
+    return participant.guest_of_user_id === currentUserId
+  }).length
+}
+
+function groupParticipantParties(participants) {
+  const guestsByBookingId = new Map()
+  const visibleParticipants = []
+
+  participants.forEach((participant) => {
+    if (participant.participant_type === 'guest' && participant.booking_id) {
+      const guests = guestsByBookingId.get(participant.booking_id) || []
+      guests.push(participant)
+      guestsByBookingId.set(participant.booking_id, guests)
+      return
+    }
+
+    visibleParticipants.push(participant)
+  })
+
+  return visibleParticipants.map((participant) => ({
+    ...participant,
+    guest_count: participant.booking_id
+      ? guestsByBookingId.get(participant.booking_id)?.length || 0
+      : 0,
+  }))
 }
 
 function buildChatSenderNames(participants) {
@@ -399,6 +650,49 @@ function buildChatSenderNames(participants) {
 
     return names
   }, new Map())
+}
+
+function hasCompleteProfile(user) {
+  return Boolean(user?.first_name && user?.last_name && user?.date_of_birth)
+}
+
+function getJoinLabel({
+  currentParticipant,
+  isGameClosed,
+  isHost,
+  isJoining,
+  participantSummary,
+  waitlistEnabled,
+}) {
+  if (isJoining) {
+    return 'Joining...'
+  }
+
+  if (isHost) {
+    return 'Hosting'
+  }
+
+  if (currentParticipant?.participant_status === 'waitlisted') {
+    return 'On Waitlist'
+  }
+
+  if (currentParticipant) {
+    return 'Joined'
+  }
+
+  if (isGameClosed) {
+    return 'Unavailable'
+  }
+
+  if (participantSummary.spotsLeft <= 0 && waitlistEnabled) {
+    return 'Join Waitlist'
+  }
+
+  return 'Join Game'
+}
+
+function isRefundEligible(startsAt) {
+  return new Date(startsAt).getTime() - Date.now() >= 24 * 60 * 60 * 1000
 }
 
 function buildRuleItems(game) {

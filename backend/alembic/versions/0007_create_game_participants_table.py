@@ -21,6 +21,7 @@ def upgrade() -> None:
         sa.Column("booking_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("participant_type", sa.String(length=20), nullable=False),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("guest_of_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("guest_name", sa.String(length=120), nullable=True),
         sa.Column("guest_email", sa.String(length=255), nullable=True),
         sa.Column("guest_phone", sa.String(length=30), nullable=True),
@@ -127,6 +128,14 @@ def upgrade() -> None:
             name="ck_game_participants_guest_requires_guest_name",
         ),
         sa.CheckConstraint(
+            "(participant_type <> 'guest' OR guest_of_user_id IS NOT NULL)",
+            name="ck_game_participants_guest_requires_owner",
+        ),
+        sa.CheckConstraint(
+            "(participant_type = 'guest' OR guest_of_user_id IS NULL)",
+            name="ck_game_participants_owner_only_for_guest",
+        ),
+        sa.CheckConstraint(
             (
                 "(participant_type NOT IN ('registered_user', 'host', 'admin_added') "
                 "OR user_id IS NOT NULL)"
@@ -167,6 +176,11 @@ def upgrade() -> None:
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
+            ["guest_of_user_id"],
+            ["users.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
             ["marked_attendance_by_user_id"],
             ["users.id"],
             ondelete="SET NULL",
@@ -189,6 +203,12 @@ def upgrade() -> None:
         "ix_game_participants_user_id",
         "game_participants",
         ["user_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_game_participants_guest_of_user_id",
+        "game_participants",
+        ["guest_of_user_id"],
         unique=False,
     )
     op.create_index(
@@ -260,6 +280,7 @@ def downgrade() -> None:
         "ix_game_participants_participant_status",
         table_name="game_participants",
     )
+    op.execute("DROP INDEX IF EXISTS ix_game_participants_guest_of_user_id")
     op.drop_index("ix_game_participants_user_id", table_name="game_participants")
     op.drop_index("ix_game_participants_booking_id", table_name="game_participants")
     op.drop_index("ix_game_participants_game_id", table_name="game_participants")

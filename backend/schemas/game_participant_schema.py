@@ -16,6 +16,7 @@ class GameParticipantCreate(BaseModel):
     booking_id: UUID | None = None
     participant_type: str
     user_id: UUID | None = None
+    guest_of_user_id: UUID | None = None
     guest_name: str | None = None
     guest_email: str | None = None
     guest_phone: str | None = None
@@ -46,6 +47,7 @@ class GameParticipantRead(BaseModel):
     booking_id: UUID | None
     participant_type: str
     user_id: UUID | None
+    guest_of_user_id: UUID | None
     guest_name: str | None
     guest_email: str | None
     guest_phone: str | None
@@ -76,6 +78,7 @@ class GameParticipantUpdate(BaseModel):
     booking_id: UUID | None = None
     participant_type: str | None = None
     user_id: UUID | None = None
+    guest_of_user_id: UUID | None = None
     guest_name: str | None = None
     guest_email: str | None = None
     guest_phone: str | None = None

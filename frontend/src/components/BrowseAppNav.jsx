@@ -14,10 +14,11 @@ const navItems = [
   { label: 'Profile', to: '/profile', auth: 'private' },
 ]
 
-function BrowseAppNav({ isLoading: isForcedLoading = false }) {
+function BrowseAppNav({ isLoading: isForcedLoading = false, preferPublicWhileLoading = false }) {
   const { appUser, currentUser, isLoading: isAuthLoading } = useAuth()
-  const isLoading = isForcedLoading || isAuthLoading
+  const isLoading = (isForcedLoading || isAuthLoading) && !preferPublicWhileLoading
   const [unreadCount, setUnreadCount] = useState(0)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -50,7 +51,7 @@ function BrowseAppNav({ isLoading: isForcedLoading = false }) {
     }
   }, [appUser?.id])
 
-  const displayName = appUser ? getDisplayName(appUser, currentUser) : 'Sign In'
+  const displayName = appUser ? getDisplayName(appUser, currentUser) : 'Sign In / Register'
   const initials = getInitials(appUser, currentUser)
   const visibleNavItems = navItems.filter((item) => {
     if (item.auth === 'public') {
@@ -64,6 +65,10 @@ function BrowseAppNav({ isLoading: isForcedLoading = false }) {
     return Boolean(appUser)
   })
 
+  function closeMenu() {
+    setIsMenuOpen(false)
+  }
+
   return (
     <header className="browse-nav">
       <NavLink className="browse-nav__brand" to="/" aria-label="Pickup Lane home">
@@ -73,16 +78,19 @@ function BrowseAppNav({ isLoading: isForcedLoading = false }) {
         </span>
       </NavLink>
 
-      <nav className="browse-nav__links" aria-label="Main navigation">
+      <nav
+        className={`browse-nav__links ${isMenuOpen ? 'browse-nav__links--open' : ''}`}
+        aria-label="Main navigation"
+      >
         {isLoading
           ? <span className="browse-nav__loading-text">Loading your account</span>
           : visibleNavItems.map((item) =>
               item.href ? (
-                <a className="browse-nav__link" href={item.href} key={item.label}>
+                <a className="browse-nav__link" href={item.href} key={item.label} onClick={closeMenu}>
                   {item.label}
                 </a>
               ) : (
-                <NavLink className="browse-nav__link" to={item.to} key={item.label}>
+                <NavLink className="browse-nav__link" to={item.to} key={item.label} onClick={closeMenu}>
                   {item.label}
                   {item.label === 'Inbox' && unreadCount > 0 && (
                     <span className="browse-nav__badge">{unreadCount}</span>
@@ -102,10 +110,24 @@ function BrowseAppNav({ isLoading: isForcedLoading = false }) {
           <Link
             className={`browse-nav__user ${appUser ? '' : 'browse-nav__user--guest'}`}
             to={appUser ? '/profile' : '/sign-in'}
+            onClick={closeMenu}
           >
             {appUser && <span>{initials}</span>}
             {displayName}
           </Link>
+        )}
+        {!isLoading && (
+          <button
+            className="browse-nav__menu-button"
+            type="button"
+            aria-label="Toggle navigation menu"
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen((current) => !current)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
         )}
       </div>
     </header>

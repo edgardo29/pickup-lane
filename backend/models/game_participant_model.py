@@ -74,6 +74,14 @@ class GameParticipant(Base):
             name="ck_game_participants_guest_requires_guest_name",
         ),
         CheckConstraint(
+            "(participant_type <> 'guest' OR guest_of_user_id IS NOT NULL)",
+            name="ck_game_participants_guest_requires_owner",
+        ),
+        CheckConstraint(
+            "(participant_type = 'guest' OR guest_of_user_id IS NULL)",
+            name="ck_game_participants_owner_only_for_guest",
+        ),
+        CheckConstraint(
             (
                 "(participant_type NOT IN ('registered_user', 'host', 'admin_added') "
                 "OR user_id IS NOT NULL)"
@@ -103,6 +111,7 @@ class GameParticipant(Base):
         Index("ix_game_participants_game_id", "game_id"),
         Index("ix_game_participants_booking_id", "booking_id"),
         Index("ix_game_participants_user_id", "user_id"),
+        Index("ix_game_participants_guest_of_user_id", "guest_of_user_id"),
         Index("ix_game_participants_participant_status", "participant_status"),
         Index("ix_game_participants_attendance_status", "attendance_status"),
         Index(
@@ -145,6 +154,11 @@ class GameParticipant(Base):
     )
     participant_type: Mapped[str] = mapped_column(String(20), nullable=False)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    guest_of_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,

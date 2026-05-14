@@ -12,7 +12,7 @@ import {
   listMyNeedASubRequests,
   listNeedASubPosts,
 } from '../lib/needASubApi.js'
-import '../styles/browse-games.css'
+import '../styles/browse-games/BrowseGamesPage.css'
 import '../styles/need-a-sub.css'
 
 const formatOptions = ['5v5', '6v6', '7v7', '8v8', '9v9', '10v10', '11v11']
