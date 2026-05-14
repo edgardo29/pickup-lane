@@ -5,13 +5,14 @@ from backend.models.booking_model import Booking
 from backend.models.booking_policy_acceptance_model import BookingPolicyAcceptance
 from backend.models.booking_status_history_model import BookingStatusHistory
 from backend.models.chat_message_model import ChatMessage
+from backend.models.community_game_detail_model import CommunityGameDetail
 from backend.models.game_chat_model import GameChat
 from backend.models.game_image_model import GameImage
 from backend.models.game_model import Game
 from backend.models.game_participant_model import GameParticipant
 from backend.models.game_status_history_model import GameStatusHistory
-from backend.models.host_deposit_model import HostDeposit
-from backend.models.host_deposit_event_model import HostDepositEvent
+from backend.models.host_profile_model import HostProfile
+from backend.models.host_publish_fee_model import HostPublishFee
 from backend.models.notification_model import Notification
 from backend.models.participant_status_history_model import ParticipantStatusHistory
 from backend.models.payment_event_model import PaymentEvent
@@ -42,6 +43,7 @@ __all__ = [
     "Venue",
     "VenueApprovalRequest",
     "Game",
+    "CommunityGameDetail",
     "GameImage",
     "GameChat",
     "ChatMessage",
@@ -51,8 +53,8 @@ __all__ = [
     "BookingPolicyAcceptance",
     "GameParticipant",
     "ParticipantStatusHistory",
-    "HostDeposit",
-    "HostDepositEvent",
+    "HostProfile",
+    "HostPublishFee",
     "Notification",
     "AdminAction",
     "WaitlistEntry",

@@ -13,7 +13,6 @@ from backend.models import (
     ChatMessage,
     Game,
     GameParticipant,
-    HostDeposit,
     Payment,
     User,
     Venue,
@@ -35,9 +34,6 @@ VALID_ACTION_TYPES = {
     "reject_venue",
     "remove_chat_message",
     "hide_chat_message",
-    "forfeit_host_deposit",
-    "release_host_deposit",
-    "waive_host_deposit",
     "update_game",
     "update_booking",
     "update_participant",
@@ -51,7 +47,6 @@ TARGET_FIELDS = {
     "target_payment_id",
     "target_venue_id",
     "target_message_id",
-    "target_host_deposit_id",
 }
 IMMUTABLE_ADMIN_ACTION_UPDATE_FIELDS = {
     "admin_user_id",
@@ -63,7 +58,6 @@ IMMUTABLE_ADMIN_ACTION_UPDATE_FIELDS = {
     "target_payment_id",
     "target_venue_id",
     "target_message_id",
-    "target_host_deposit_id",
 }
 
 
@@ -204,14 +198,6 @@ def validate_admin_action_references(
             "Target message not found.",
         )
 
-    if action_data["target_host_deposit_id"] is not None:
-        get_existing_record_or_404(
-            db,
-            HostDeposit,
-            action_data["target_host_deposit_id"],
-            "Target host deposit not found.",
-        )
-
 
 def normalize_admin_action_data(action_data: dict[str, Any]) -> dict[str, Any]:
     normalized_data = dict(action_data)
@@ -292,7 +278,6 @@ def list_admin_actions(
     target_payment_id: uuid.UUID | None = None,
     target_venue_id: uuid.UUID | None = None,
     target_message_id: uuid.UUID | None = None,
-    target_host_deposit_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ) -> list[AdminAction]:
     statement = select(AdminAction)
@@ -330,11 +315,6 @@ def list_admin_actions(
 
     if target_message_id is not None:
         statement = statement.where(AdminAction.target_message_id == target_message_id)
-
-    if target_host_deposit_id is not None:
-        statement = statement.where(
-            AdminAction.target_host_deposit_id == target_host_deposit_id
-        )
 
     admin_actions = db.scalars(
         statement.order_by(AdminAction.created_at.desc())

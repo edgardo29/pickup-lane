@@ -16,16 +16,16 @@ class BookingStatusHistory(Base):
         CheckConstraint(
             (
                 "(old_booking_status IS NULL OR old_booking_status IN "
-                "('pending_payment', 'confirmed', 'partially_cancelled', "
-                "'cancelled', 'expired', 'failed'))"
+                "('pending_payment', 'confirmed', 'waitlisted', "
+                "'partially_cancelled', 'cancelled', 'expired', 'failed'))"
             ),
             name="ck_booking_status_history_old_booking_status",
         ),
         CheckConstraint(
             (
                 "new_booking_status IN ("
-                "'pending_payment', 'confirmed', 'partially_cancelled', "
-                "'cancelled', 'expired', 'failed'"
+                "'pending_payment', 'confirmed', 'waitlisted', "
+                "'partially_cancelled', 'cancelled', 'expired', 'failed'"
                 ")"
             ),
             name="ck_booking_status_history_new_booking_status",
@@ -33,16 +33,16 @@ class BookingStatusHistory(Base):
         CheckConstraint(
             (
                 "(old_payment_status IS NULL OR old_payment_status IN ("
-                "'unpaid', 'requires_action', 'processing', 'paid', 'failed', "
-                "'partially_refunded', 'refunded', 'disputed'))"
+                "'not_required', 'unpaid', 'requires_action', 'processing', "
+                "'paid', 'failed', 'partially_refunded', 'refunded', 'disputed'))"
             ),
             name="ck_booking_status_history_old_payment_status",
         ),
         CheckConstraint(
             (
                 "(new_payment_status IS NULL OR new_payment_status IN ("
-                "'unpaid', 'requires_action', 'processing', 'paid', 'failed', "
-                "'partially_refunded', 'refunded', 'disputed'))"
+                "'not_required', 'unpaid', 'requires_action', 'processing', "
+                "'paid', 'failed', 'partially_refunded', 'refunded', 'disputed'))"
             ),
             name="ck_booking_status_history_new_payment_status",
         ),

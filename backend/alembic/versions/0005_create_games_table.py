@@ -18,6 +18,7 @@ def upgrade() -> None:
         "games",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("game_type", sa.String(length=20), nullable=False),
+        sa.Column("payment_collection_type", sa.String(length=30), nullable=False),
         sa.Column(
             "publish_status",
             sa.String(length=20),
@@ -118,6 +119,10 @@ def upgrade() -> None:
             name="ck_games_game_type",
         ),
         sa.CheckConstraint(
+            "payment_collection_type IN ('in_app', 'external_host', 'none')",
+            name="ck_games_payment_collection_type",
+        ),
+        sa.CheckConstraint(
             "publish_status IN ('draft', 'published', 'archived')",
             name="ck_games_publish_status",
         ),
@@ -160,6 +165,21 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "(game_type <> 'community' OR host_user_id IS NOT NULL)",
             name="ck_games_community_requires_host_user",
+        ),
+        sa.CheckConstraint(
+            "(game_type <> 'official' OR payment_collection_type = 'in_app')",
+            name="ck_games_official_payment_collection",
+        ),
+        sa.CheckConstraint(
+            (
+                "(game_type <> 'community' "
+                "OR payment_collection_type IN ('external_host', 'none'))"
+            ),
+            name="ck_games_community_payment_collection",
+        ),
+        sa.CheckConstraint(
+            "(payment_collection_type <> 'none' OR price_per_player_cents = 0)",
+            name="ck_games_no_payment_requires_free",
         ),
         sa.CheckConstraint(
             "(game_type <> 'official' OR policy_mode = 'official_standard')",

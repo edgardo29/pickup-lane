@@ -123,6 +123,7 @@ def seed_payment_event_scenario() -> dict[str, UUID]:
             DEV_IDS["payment_event_game_id"],
             {
                 "game_type": "official",
+                "payment_collection_type": "in_app",
                 "publish_status": "published",
                 "game_status": "scheduled",
                 "title": "Dev Game Ready For Payment Events",

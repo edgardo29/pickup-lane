@@ -30,11 +30,6 @@ def upgrade() -> None:
         sa.Column("target_payment_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("target_venue_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("target_message_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column(
-            "target_host_deposit_id",
-            postgresql.UUID(as_uuid=True),
-            nullable=True,
-        ),
         sa.Column("reason", sa.Text(), nullable=True),
         sa.Column("metadata", postgresql.JSONB(), nullable=True),
         sa.Column(
@@ -50,8 +45,7 @@ def upgrade() -> None:
                 "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
                 "'reject_venue', 'remove_chat_message', 'hide_chat_message', "
-                "'forfeit_host_deposit', 'release_host_deposit', "
-                "'waive_host_deposit', 'update_game', 'update_booking', "
+                "'update_game', 'update_booking', "
                 "'update_participant'"
                 ")"
             ),
@@ -65,8 +59,7 @@ def upgrade() -> None:
                 "OR target_participant_id IS NOT NULL "
                 "OR target_payment_id IS NOT NULL "
                 "OR target_venue_id IS NOT NULL "
-                "OR target_message_id IS NOT NULL "
-                "OR target_host_deposit_id IS NOT NULL"
+                "OR target_message_id IS NOT NULL"
             ),
             name="ck_admin_actions_target_required",
         ),
@@ -108,11 +101,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["target_message_id"],
             ["chat_messages.id"],
-            ondelete="SET NULL",
-        ),
-        sa.ForeignKeyConstraint(
-            ["target_host_deposit_id"],
-            ["host_deposits.id"],
             ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id"),
@@ -178,12 +166,6 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
-        "ix_admin_actions_target_host_deposit_id",
-        "admin_actions",
-        ["target_host_deposit_id"],
-        unique=False,
-    )
-    op.create_index(
         "ix_admin_actions_admin_user_id_created_at",
         "admin_actions",
         ["admin_user_id", "created_at"],
@@ -206,10 +188,6 @@ def downgrade() -> None:
     )
     op.drop_index(
         "ix_admin_actions_admin_user_id_created_at",
-        table_name="admin_actions",
-    )
-    op.drop_index(
-        "ix_admin_actions_target_host_deposit_id",
         table_name="admin_actions",
     )
     op.drop_index("ix_admin_actions_target_message_id", table_name="admin_actions")

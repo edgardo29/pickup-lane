@@ -36,6 +36,7 @@ from backend.schemas import (
 router = APIRouter(prefix="/games", tags=["games"])
 
 VALID_GAME_TYPES = {"official", "community"}
+VALID_PAYMENT_COLLECTION_TYPES = {"in_app", "external_host", "none"}
 VALID_PUBLISH_STATUSES = {"draft", "published", "archived"}
 VALID_GAME_STATUSES = {"scheduled", "full", "cancelled", "completed", "abandoned"}
 VALID_ENVIRONMENT_TYPES = {"indoor", "outdoor"}
@@ -285,6 +286,15 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
             detail="game_type must be 'official' or 'community'.",
         )
 
+    if game_data["payment_collection_type"] not in VALID_PAYMENT_COLLECTION_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "payment_collection_type must be 'in_app', "
+                "'external_host', or 'none'."
+            ),
+        )
+
     if game_data["publish_status"] not in VALID_PUBLISH_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -363,6 +373,15 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
             detail="price_per_player_cents must be greater than or equal to 0.",
         )
 
+    if (
+        game_data["payment_collection_type"] == "none"
+        and game_data["price_per_player_cents"] != 0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Free games must have price_per_player_cents set to 0.",
+        )
+
     if game_data["max_guests_per_booking"] < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -391,12 +410,33 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
         )
 
     if (
+        game_data["game_type"] == "official"
+        and game_data["payment_collection_type"] != "in_app"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Official games require payment_collection_type 'in_app'.",
+        )
+
+    if (
         game_data["game_type"] == "community"
         and game_data["policy_mode"] != "custom_hosted"
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Community games require policy_mode 'custom_hosted'.",
+        )
+
+    if (
+        game_data["game_type"] == "community"
+        and game_data["payment_collection_type"] not in {"external_host", "none"}
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Community games require payment_collection_type "
+                "'external_host' or 'none'."
+            ),
         )
 
 
@@ -1486,6 +1526,9 @@ def update_game(
     update_data = game_update.model_dump(exclude_unset=True)
     effective_game_data = {
         "game_type": update_data.get("game_type", db_game.game_type),
+        "payment_collection_type": update_data.get(
+            "payment_collection_type", db_game.payment_collection_type
+        ),
         "publish_status": update_data.get("publish_status", db_game.publish_status),
         "game_status": update_data.get("game_status", db_game.game_status),
         "title": update_data.get("title", db_game.title),
@@ -1720,6 +1763,7 @@ def host_edit_game(
 
     effective_game_data = {
         "game_type": db_game.game_type,
+        "payment_collection_type": db_game.payment_collection_type,
         "publish_status": db_game.publish_status,
         "game_status": db_game.game_status,
         "title": update_data.get("title", db_game.title),

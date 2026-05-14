@@ -31,6 +31,10 @@ class Game(Base):
             name="ck_games_game_type",
         ),
         CheckConstraint(
+            "payment_collection_type IN ('in_app', 'external_host', 'none')",
+            name="ck_games_payment_collection_type",
+        ),
+        CheckConstraint(
             "publish_status IN ('draft', 'published', 'archived')",
             name="ck_games_publish_status",
         ),
@@ -75,6 +79,21 @@ class Game(Base):
             name="ck_games_community_requires_host_user",
         ),
         CheckConstraint(
+            "(game_type <> 'official' OR payment_collection_type = 'in_app')",
+            name="ck_games_official_payment_collection",
+        ),
+        CheckConstraint(
+            (
+                "(game_type <> 'community' "
+                "OR payment_collection_type IN ('external_host', 'none'))"
+            ),
+            name="ck_games_community_payment_collection",
+        ),
+        CheckConstraint(
+            "(payment_collection_type <> 'none' OR price_per_player_cents = 0)",
+            name="ck_games_no_payment_requires_free",
+        ),
+        CheckConstraint(
             "(game_type <> 'official' OR policy_mode = 'official_standard')",
             name="ck_games_official_policy_mode",
         ),
@@ -111,6 +130,7 @@ class Game(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     game_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    payment_collection_type: Mapped[str] = mapped_column(String(30), nullable=False)
     publish_status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'draft'")
     )

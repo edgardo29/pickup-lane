@@ -14,7 +14,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 VALID_PAYMENT_TYPES = {
     "booking",
-    "host_deposit",
+    "community_publish_fee",
     "refund_adjustment",
     "admin_charge",
 }
@@ -108,7 +108,7 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "payment_type must be 'booking', 'host_deposit', "
+                "payment_type must be 'booking', 'community_publish_fee', "
                 "'refund_adjustment', or 'admin_charge'."
             ),
         )
@@ -154,21 +154,21 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
         )
 
     if (
-        payment_data["payment_type"] == "host_deposit"
+        payment_data["payment_type"] == "community_publish_fee"
         and payment_data["game_id"] is None
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Host deposit payments require game_id.",
+            detail="Community publish fee payments require game_id.",
         )
 
     if (
-        payment_data["payment_type"] == "host_deposit"
+        payment_data["payment_type"] == "community_publish_fee"
         and payment_data["booking_id"] is not None
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Host deposit payments cannot include booking_id.",
+            detail="Community publish fee payments cannot include booking_id.",
         )
 
     if (
@@ -316,7 +316,7 @@ def list_payments(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "payment_type must be 'booking', 'host_deposit', "
+                    "payment_type must be 'booking', 'community_publish_fee', "
                     "'refund_adjustment', or 'admin_charge'."
                 ),
             )

@@ -20,14 +20,15 @@ from backend.database import Base
 
 
 # This table stores Stripe-backed payment attempts and payment records without
-# storing raw card data or introducing host_deposit circular references.
+# storing raw card data.
 class Payment(Base):
     __tablename__ = "payments"
     __table_args__ = (
         CheckConstraint(
             (
                 "payment_type IN ("
-                "'booking', 'host_deposit', 'refund_adjustment', 'admin_charge'"
+                "'booking', 'community_publish_fee', 'refund_adjustment', "
+                "'admin_charge'"
                 ")"
             ),
             name="ck_payments_payment_type",
@@ -58,8 +59,11 @@ class Payment(Base):
             name="ck_payments_booking_requires_booking_id",
         ),
         CheckConstraint(
-            "(payment_type <> 'host_deposit' OR game_id IS NOT NULL)",
-            name="ck_payments_host_deposit_requires_game_id",
+            (
+                "(payment_type <> 'community_publish_fee' "
+                "OR (game_id IS NOT NULL AND booking_id IS NULL))"
+            ),
+            name="ck_payments_community_publish_fee_game_only",
         ),
         CheckConstraint(
             "(payment_status <> 'succeeded' OR paid_at IS NOT NULL)",

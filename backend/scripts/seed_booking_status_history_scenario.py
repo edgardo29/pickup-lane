@@ -122,6 +122,7 @@ def seed_booking_status_history_scenario() -> dict[str, UUID]:
             DEV_IDS["booking_history_game_id"],
             {
                 "game_type": "official",
+                "payment_collection_type": "in_app",
                 "publish_status": "published",
                 "game_status": "scheduled",
                 "title": "Dev Game Ready For Booking History",

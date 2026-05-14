@@ -186,6 +186,7 @@ function CreateGamePage() {
 
       const game = await postJson('/games', {
         game_type: 'community',
+        payment_collection_type: priceCents > 0 ? 'external_host' : 'none',
         publish_status: 'published',
         game_status: 'scheduled',
         title: `${form.venueName.trim()} ${form.format}`,

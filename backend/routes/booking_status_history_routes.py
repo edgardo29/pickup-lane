@@ -18,12 +18,14 @@ router = APIRouter(prefix="/booking-status-history", tags=["booking_status_histo
 VALID_BOOKING_STATUSES = {
     "pending_payment",
     "confirmed",
+    "waitlisted",
     "partially_cancelled",
     "cancelled",
     "expired",
     "failed",
 }
 VALID_PAYMENT_STATUSES = {
+    "not_required",
     "unpaid",
     "requires_action",
     "processing",
