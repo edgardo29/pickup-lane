@@ -42,6 +42,7 @@ def test_games_reject_invalid_schedule(client: TestClient):
         "/games",
         json={
             "game_type": "official",
+            "payment_collection_type": "in_app",
             "publish_status": "draft",
             "game_status": "scheduled",
             "title": "Bad Schedule",
@@ -75,6 +76,7 @@ def test_games_reject_past_start_time(client: TestClient):
         "/games",
         json={
             "game_type": "official",
+            "payment_collection_type": "in_app",
             "publish_status": "published",
             "game_status": "scheduled",
             "title": "Past Start",
@@ -108,6 +110,7 @@ def test_games_reject_total_spots_below_format_minimum(client: TestClient):
         "/games",
         json={
             "game_type": "official",
+            "payment_collection_type": "in_app",
             "publish_status": "published",
             "game_status": "scheduled",
             "title": "Too Few Spots",

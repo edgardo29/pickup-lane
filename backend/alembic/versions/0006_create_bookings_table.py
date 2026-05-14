@@ -79,7 +79,7 @@ def upgrade() -> None:
         sa.CheckConstraint(
             (
                 "booking_status IN ("
-                "'pending_payment', 'confirmed', 'partially_cancelled', "
+                "'pending_payment', 'confirmed', 'waitlisted', 'partially_cancelled', "
                 "'cancelled', 'expired', 'failed'"
                 ")"
             ),
@@ -88,8 +88,8 @@ def upgrade() -> None:
         sa.CheckConstraint(
             (
                 "payment_status IN ("
-                "'unpaid', 'requires_action', 'processing', 'paid', 'failed', "
-                "'partially_refunded', 'refunded', 'disputed'"
+                "'not_required', 'unpaid', 'requires_action', 'processing', "
+                "'paid', 'failed', 'partially_refunded', 'refunded', 'disputed'"
                 ")"
             ),
             name="ck_bookings_payment_status",

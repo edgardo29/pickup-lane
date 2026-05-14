@@ -13,7 +13,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Ninth schema migration: create payments as the Stripe-backed payment
-    # record for booking payments and game-related host deposit payments.
+    # record for booking payments and game-related publish fees.
     op.create_table(
         "payments",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -60,7 +60,8 @@ def upgrade() -> None:
         sa.CheckConstraint(
             (
                 "payment_type IN ("
-                "'booking', 'host_deposit', 'refund_adjustment', 'admin_charge'"
+                "'booking', 'community_publish_fee', 'refund_adjustment', "
+                "'admin_charge'"
                 ")"
             ),
             name="ck_payments_payment_type",
@@ -91,8 +92,11 @@ def upgrade() -> None:
             name="ck_payments_booking_requires_booking_id",
         ),
         sa.CheckConstraint(
-            "(payment_type <> 'host_deposit' OR game_id IS NOT NULL)",
-            name="ck_payments_host_deposit_requires_game_id",
+            (
+                "(payment_type <> 'community_publish_fee' "
+                "OR (game_id IS NOT NULL AND booking_id IS NULL))"
+            ),
+            name="ck_payments_community_publish_fee_game_only",
         ),
         sa.CheckConstraint(
             "(payment_status <> 'succeeded' OR paid_at IS NOT NULL)",

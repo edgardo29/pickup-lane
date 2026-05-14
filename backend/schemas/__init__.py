@@ -26,6 +26,11 @@ from backend.schemas.chat_message_schema import (
     ChatMessageRead,
     ChatMessageUpdate,
 )
+from backend.schemas.community_game_detail_schema import (
+    CommunityGameDetailCreate,
+    CommunityGameDetailRead,
+    CommunityGameDetailUpdate,
+)
 from backend.schemas.game_chat_schema import GameChatCreate, GameChatRead, GameChatUpdate
 from backend.schemas.game_image_schema import (
     GameImageCreate,
@@ -56,15 +61,15 @@ from backend.schemas.game_status_history_schema import (
     GameStatusHistoryRead,
     GameStatusHistoryUpdate,
 )
-from backend.schemas.host_deposit_schema import (
-    HostDepositCreate,
-    HostDepositRead,
-    HostDepositUpdate,
+from backend.schemas.host_profile_schema import (
+    HostProfileCreate,
+    HostProfileRead,
+    HostProfileUpdate,
 )
-from backend.schemas.host_deposit_event_schema import (
-    HostDepositEventCreate,
-    HostDepositEventRead,
-    HostDepositEventUpdate,
+from backend.schemas.host_publish_fee_schema import (
+    HostPublishFeeCreate,
+    HostPublishFeeRead,
+    HostPublishFeeUpdate,
 )
 from backend.schemas.notification_schema import (
     NotificationCreate,
@@ -160,6 +165,9 @@ __all__ = [
     "ChatMessageCreate",
     "ChatMessageRead",
     "ChatMessageUpdate",
+    "CommunityGameDetailCreate",
+    "CommunityGameDetailRead",
+    "CommunityGameDetailUpdate",
     "UserCreate",
     "UserRead",
     "UserUpdate",
@@ -199,12 +207,12 @@ __all__ = [
     "ParticipantStatusHistoryCreate",
     "ParticipantStatusHistoryRead",
     "ParticipantStatusHistoryUpdate",
-    "HostDepositCreate",
-    "HostDepositRead",
-    "HostDepositUpdate",
-    "HostDepositEventCreate",
-    "HostDepositEventRead",
-    "HostDepositEventUpdate",
+    "HostProfileCreate",
+    "HostProfileRead",
+    "HostProfileUpdate",
+    "HostPublishFeeCreate",
+    "HostPublishFeeRead",
+    "HostPublishFeeUpdate",
     "NotificationCreate",
     "NotificationRead",
     "NotificationUpdate",

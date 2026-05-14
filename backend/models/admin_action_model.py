@@ -9,7 +9,7 @@ from backend.database import Base
 
 
 # Admin actions store audit rows for important admin/support actions across
-# users, games, payments, venues, chat messages, and host deposits.
+# users, games, payments, venues, and chat messages.
 class AdminAction(Base):
     __tablename__ = "admin_actions"
     __table_args__ = (
@@ -20,8 +20,7 @@ class AdminAction(Base):
                 "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
                 "'reject_venue', 'remove_chat_message', 'hide_chat_message', "
-                "'forfeit_host_deposit', 'release_host_deposit', "
-                "'waive_host_deposit', 'update_game', 'update_booking', "
+                "'update_game', 'update_booking', "
                 "'update_participant'"
                 ")"
             ),
@@ -35,8 +34,7 @@ class AdminAction(Base):
                 "OR target_participant_id IS NOT NULL "
                 "OR target_payment_id IS NOT NULL "
                 "OR target_venue_id IS NOT NULL "
-                "OR target_message_id IS NOT NULL "
-                "OR target_host_deposit_id IS NOT NULL"
+                "OR target_message_id IS NOT NULL"
             ),
             name="ck_admin_actions_target_required",
         ),
@@ -50,7 +48,6 @@ class AdminAction(Base):
         Index("ix_admin_actions_target_payment_id", "target_payment_id"),
         Index("ix_admin_actions_target_venue_id", "target_venue_id"),
         Index("ix_admin_actions_target_message_id", "target_message_id"),
-        Index("ix_admin_actions_target_host_deposit_id", "target_host_deposit_id"),
         Index(
             "ix_admin_actions_admin_user_id_created_at",
             "admin_user_id",
@@ -112,12 +109,6 @@ class AdminAction(Base):
     target_message_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("chat_messages.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-
-    target_host_deposit_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("host_deposits.id", ondelete="SET NULL"),
         nullable=True,
     )
 

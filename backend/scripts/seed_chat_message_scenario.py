@@ -122,6 +122,7 @@ def seed_chat_message_scenario() -> dict[str, UUID]:
             DEV_IDS["chat_message_ready_game_id"],
             {
                 "game_type": "official",
+                "payment_collection_type": "in_app",
                 "publish_status": "published",
                 "game_status": "scheduled",
                 "title": "Dev Game Ready For Chat Messages",

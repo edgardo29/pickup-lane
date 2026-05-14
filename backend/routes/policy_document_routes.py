@@ -22,7 +22,6 @@ VALID_POLICY_TYPES = {
     "privacy_policy",
     "refund_policy",
     "player_cancellation_policy",
-    "host_deposit_policy",
     "community_host_agreement",
     "official_game_rules",
 }

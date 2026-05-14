@@ -21,7 +21,6 @@ class AdminActionCreate(BaseModel):
     target_payment_id: UUID | None = None
     target_venue_id: UUID | None = None
     target_message_id: UUID | None = None
-    target_host_deposit_id: UUID | None = None
     reason: str | None = None
     metadata: dict[str, Any] | None = None
 
@@ -40,7 +39,6 @@ class AdminActionRead(BaseModel):
     target_payment_id: UUID | None
     target_venue_id: UUID | None
     target_message_id: UUID | None
-    target_host_deposit_id: UUID | None
     reason: str | None
     metadata: dict[str, Any] | None = Field(
         validation_alias="metadata_",
@@ -63,6 +61,5 @@ class AdminActionUpdate(BaseModel):
     target_payment_id: UUID | None = None
     target_venue_id: UUID | None = None
     target_message_id: UUID | None = None
-    target_host_deposit_id: UUID | None = None
     reason: str | None = None
     metadata: dict[str, Any] | None = None

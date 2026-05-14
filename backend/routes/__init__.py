@@ -10,6 +10,9 @@ from backend.routes.booking_status_history_routes import (
     router as booking_status_history_router,
 )
 from backend.routes.chat_message_routes import router as chat_messages_router
+from backend.routes.community_game_detail_routes import (
+    router as community_game_details_router,
+)
 from backend.routes.game_chat_routes import router as game_chats_router
 from backend.routes.game_image_routes import router as game_images_router
 from backend.routes.game_routes import router as games_router
@@ -17,8 +20,8 @@ from backend.routes.game_participant_routes import router as game_participants_r
 from backend.routes.game_status_history_routes import (
     router as game_status_history_router,
 )
-from backend.routes.host_deposit_event_routes import router as host_deposit_events_router
-from backend.routes.host_deposit_routes import router as host_deposits_router
+from backend.routes.host_profile_routes import router as host_profiles_router
+from backend.routes.host_publish_fee_routes import router as host_publish_fees_router
 from backend.routes.notification_routes import router as notifications_router
 from backend.routes.participant_status_history_routes import (
     router as participant_status_history_router,
@@ -56,6 +59,7 @@ __all__ = [
     "booking_policy_acceptances_router",
     "booking_status_history_router",
     "chat_messages_router",
+    "community_game_details_router",
     "users_router",
     "user_settings_router",
     "user_stats_router",
@@ -68,8 +72,8 @@ __all__ = [
     "game_participants_router",
     "game_status_history_router",
     "participant_status_history_router",
-    "host_deposits_router",
-    "host_deposit_events_router",
+    "host_profiles_router",
+    "host_publish_fees_router",
     "notifications_router",
     "waitlist_entries_router",
     "payments_router",

@@ -26,8 +26,8 @@ class PolicyDocument(Base):
             (
                 "policy_type IN ("
                 "'terms_of_service', 'privacy_policy', 'refund_policy', "
-                "'player_cancellation_policy', 'host_deposit_policy', "
-                "'community_host_agreement', 'official_game_rules'"
+                "'player_cancellation_policy', 'community_host_agreement', "
+                "'official_game_rules'"
                 ")"
             ),
             name="ck_policy_documents_policy_type",

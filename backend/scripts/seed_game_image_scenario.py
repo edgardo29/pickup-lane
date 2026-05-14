@@ -122,6 +122,7 @@ def seed_game_image_scenario() -> dict[str, UUID]:
             DEV_IDS["game_image_game_id"],
             {
                 "game_type": "official",
+                "payment_collection_type": "in_app",
                 "publish_status": "published",
                 "game_status": "scheduled",
                 "title": "Dev Game Ready For Images",

@@ -15,12 +15,14 @@ router = APIRouter(prefix="/bookings", tags=["bookings"])
 VALID_BOOKING_STATUSES = {
     "pending_payment",
     "confirmed",
+    "waitlisted",
     "partially_cancelled",
     "cancelled",
     "expired",
     "failed",
 }
 VALID_PAYMENT_STATUSES = {
+    "not_required",
     "unpaid",
     "requires_action",
     "processing",
@@ -72,7 +74,8 @@ def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "booking_status must be 'pending_payment', 'confirmed', "
-                "'partially_cancelled', 'cancelled', 'expired', or 'failed'."
+                "'waitlisted', 'partially_cancelled', 'cancelled', "
+                "'expired', or 'failed'."
             ),
         )
 
@@ -81,8 +84,8 @@ def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "payment_status must be 'unpaid', 'requires_action', "
-                "'processing', 'paid', 'failed', 'partially_refunded', "
-                "'refunded', or 'disputed'."
+                "'not_required', 'processing', 'paid', 'failed', "
+                "'partially_refunded', 'refunded', or 'disputed'."
             ),
         )
 
@@ -128,11 +131,11 @@ def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
 
     if (
         booking_data["booking_status"] == "confirmed"
-        and booking_data["payment_status"] != "paid"
+        and booking_data["payment_status"] not in {"paid", "not_required"}
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Confirmed bookings require payment_status 'paid'.",
+            detail="Confirmed bookings require payment_status 'paid' or 'not_required'.",
         )
 
     if (
@@ -276,7 +279,8 @@ def list_bookings(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
                     "booking_status must be 'pending_payment', 'confirmed', "
-                    "'partially_cancelled', 'cancelled', 'expired', or 'failed'."
+                    "'waitlisted', 'partially_cancelled', 'cancelled', "
+                    "'expired', or 'failed'."
                 ),
             )
         statement = statement.where(Booking.booking_status == booking_status)
@@ -287,8 +291,8 @@ def list_bookings(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
                     "payment_status must be 'unpaid', 'requires_action', "
-                    "'processing', 'paid', 'failed', 'partially_refunded', "
-                    "'refunded', or 'disputed'."
+                    "'not_required', 'processing', 'paid', 'failed', "
+                    "'partially_refunded', 'refunded', or 'disputed'."
                 ),
             )
         statement = statement.where(Booking.payment_status == payment_status)

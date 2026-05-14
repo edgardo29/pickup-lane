@@ -12,6 +12,7 @@ class GameCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     game_type: str
+    payment_collection_type: str
     publish_status: str = "draft"
     game_status: str = "scheduled"
     title: str
@@ -58,6 +59,7 @@ class GameRead(BaseModel):
 
     id: UUID
     game_type: str
+    payment_collection_type: str
     publish_status: str
     game_status: str
     title: str
@@ -106,6 +108,7 @@ class GameUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     game_type: str | None = None
+    payment_collection_type: str | None = None
     publish_status: str | None = None
     game_status: str | None = None
     title: str | None = None

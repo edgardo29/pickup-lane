@@ -13,13 +13,14 @@ from backend.routes import (
     booking_status_history_router,
     bookings_router,
     chat_messages_router,
+    community_game_details_router,
     game_chats_router,
     game_images_router,
     games_router,
     game_participants_router,
     game_status_history_router,
-    host_deposit_events_router,
-    host_deposits_router,
+    host_profiles_router,
+    host_publish_fees_router,
     notifications_router,
     participant_status_history_router,
     payment_events_router,
@@ -92,6 +93,7 @@ app.include_router(venue_approval_requests_router)
 app.include_router(game_chats_router)
 app.include_router(game_images_router)
 app.include_router(chat_messages_router)
+app.include_router(community_game_details_router)
 app.include_router(games_router)
 app.include_router(bookings_router)
 app.include_router(booking_status_history_router)
@@ -99,8 +101,8 @@ app.include_router(booking_policy_acceptances_router)
 app.include_router(game_participants_router)
 app.include_router(game_status_history_router)
 app.include_router(participant_status_history_router)
-app.include_router(host_deposits_router)
-app.include_router(host_deposit_events_router)
+app.include_router(host_profiles_router)
+app.include_router(host_publish_fees_router)
 app.include_router(notifications_router)
 app.include_router(admin_actions_router)
 app.include_router(waitlist_entries_router)

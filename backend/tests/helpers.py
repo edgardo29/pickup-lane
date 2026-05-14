@@ -125,6 +125,7 @@ def create_game(
     ends_at = starts_at + timedelta(hours=1)
     payload = {
         "game_type": "official",
+        "payment_collection_type": "in_app",
         "publish_status": "published",
         "game_status": "scheduled",
         "title": "CI Test Match",
@@ -150,6 +151,11 @@ def create_game(
         "policy_mode": "official_standard",
     }
     payload.update(overrides)
+    if (
+        payload["game_type"] == "community"
+        and "payment_collection_type" not in overrides
+    ):
+        payload["payment_collection_type"] = "external_host"
 
     response = client.post("/games", json=payload)
 
@@ -329,47 +335,6 @@ def create_refund(
     payload.update(overrides)
 
     response = client.post("/refunds", json=payload)
-
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
-def create_host_deposit(
-    client: TestClient,
-    game_id: str,
-    host_user_id: str,
-    **overrides: object,
-) -> dict:
-    payload = {
-        "game_id": game_id,
-        "host_user_id": host_user_id,
-        "required_amount_cents": 2500,
-        "currency": "USD",
-        "deposit_status": "required",
-    }
-    payload.update(overrides)
-
-    response = client.post("/host-deposits", json=payload)
-
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
-def create_host_deposit_event(
-    client: TestClient,
-    host_deposit_id: str,
-    **overrides: object,
-) -> dict:
-    payload = {
-        "host_deposit_id": host_deposit_id,
-        "old_status": "payment_pending",
-        "new_status": "paid",
-        "change_source": "system",
-        "reason": "CI host deposit event row",
-    }
-    payload.update(overrides)
-
-    response = client.post("/host-deposit-events", json=payload)
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -658,6 +623,71 @@ def create_game_image(
     payload.update(overrides)
 
     response = client.post("/game-images", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def create_host_profile(
+    client: TestClient,
+    user_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "user_id": user_id,
+        "default_payment_methods": ["venmo"],
+        "default_payment_instructions": "Pay before kickoff.",
+        "default_payment_due_timing": "before_game",
+        "default_refund_policy": "Refunds if the host cancels.",
+        "default_game_rules": "Bring light and dark shirts.",
+    }
+    payload.update(overrides)
+
+    response = client.post("/host-profiles", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def create_community_game_detail(
+    client: TestClient,
+    game_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "game_id": game_id,
+        "payment_methods_snapshot": ["venmo"],
+        "payment_instructions_snapshot": "Pay the host before kickoff.",
+        "payment_due_timing_snapshot": "before_game",
+        "price_note_snapshot": "Host collects off-app.",
+        "refund_policy_snapshot": "Refunds if the host cancels.",
+        "equipment_notes_snapshot": "Bring light and dark shirts.",
+    }
+    payload.update(overrides)
+
+    response = client.post("/community-game-details", json=payload)
+
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def create_host_publish_fee(
+    client: TestClient,
+    game_id: str,
+    host_user_id: str,
+    **overrides: object,
+) -> dict:
+    payload = {
+        "game_id": game_id,
+        "host_user_id": host_user_id,
+        "amount_cents": 0,
+        "currency": "USD",
+        "fee_status": "waived",
+        "waiver_reason": "first_game_free",
+    }
+    payload.update(overrides)
+
+    response = client.post("/host-publish-fees", json=payload)
 
     assert response.status_code == 201, response.text
     return response.json()
