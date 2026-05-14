@@ -42,7 +42,6 @@ class GameCreate(BaseModel):
     custom_rules_text: str | None = None
     custom_cancellation_text: str | None = None
     game_notes: str | None = None
-    arrival_notes: str | None = None
     parking_notes: str | None = None
     published_at: datetime | None = None
     cancelled_at: datetime | None = None
@@ -89,7 +88,6 @@ class GameRead(BaseModel):
     custom_rules_text: str | None
     custom_cancellation_text: str | None
     game_notes: str | None
-    arrival_notes: str | None
     parking_notes: str | None
     published_at: datetime | None
     cancelled_at: datetime | None
@@ -138,7 +136,6 @@ class GameUpdate(BaseModel):
     custom_rules_text: str | None = None
     custom_cancellation_text: str | None = None
     game_notes: str | None = None
-    arrival_notes: str | None = None
     parking_notes: str | None = None
     published_at: datetime | None = None
     cancelled_at: datetime | None = None
@@ -167,5 +164,60 @@ class GameHostEdit(BaseModel):
     total_spots: int | None = None
     price_per_player_cents: int | None = None
     game_notes: str | None = None
-    arrival_notes: str | None = None
     parking_notes: str | None = None
+
+
+class GameJoinCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    acting_user_id: UUID
+    guest_count: int = 0
+
+
+class GameJoinRead(BaseModel):
+    status: str
+    message: str
+    participant_id: UUID | None = None
+    booking_id: UUID | None = None
+    waitlist_entry_id: UUID | None = None
+
+
+class GameLeaveCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    acting_user_id: UUID
+
+
+class GameLeaveRead(BaseModel):
+    status: str
+    message: str
+    refund_eligible: bool
+    participant_id: UUID
+    booking_id: UUID | None = None
+
+
+class GameGuestAddCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    acting_user_id: UUID
+    guest_count: int = 1
+
+
+class GameGuestAddRead(BaseModel):
+    status: str
+    message: str
+    added_count: int
+
+
+class GameGuestRemoveCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    acting_user_id: UUID
+    remove_count: int
+
+
+class GameGuestRemoveRead(BaseModel):
+    status: str
+    message: str
+    removed_count: int
+    booking_id: UUID | None = None

@@ -1,9 +1,7 @@
-import {
-  ChatIcon,
-  ShieldCheckIcon,
-  UsersIcon,
-} from './BrowseIcons.jsx'
-import BrowseAppNav from './BrowseAppNav.jsx'
+import { Link } from 'react-router-dom'
+import { ChatIcon, ShieldCheckIcon, UsersIcon } from '../../components/BrowseIcons.jsx'
+import BrowseAppNav from '../../components/BrowseAppNav.jsx'
+import darkMapPreview from '../../assets/maps/dark-map-preview.png'
 
 export function DetailsScaffold({ state }) {
   return (
@@ -23,7 +21,13 @@ export function StatusPill({ label }) {
   )
 }
 
-export function GameGallery({ activeImageIndex, images, onNext, onPrevious, onSelectImage }) {
+export function GameGallery({
+  activeImageIndex,
+  images,
+  onNext,
+  onPrevious,
+  onSelectImage,
+}) {
   const activeImage = images[activeImageIndex]
   const hasMultipleImages = images.length > 1
 
@@ -96,10 +100,10 @@ export function QuickFacts({ facts, price, variant }) {
 
 export function PlayersCard({ onOpenPlayerList, participantSummary }) {
   const spotsLabel = participantSummary.spotsLeft === 1 ? 'spot left' : 'spots left'
-  const hostLabel = participantSummary.host ? 'Game day host' : ''
 
   return (
     <InfoCard
+      className="details-info-card--players"
       icon={<UsersIcon />}
       title="Players"
       cta="View player list"
@@ -112,20 +116,14 @@ export function PlayersCard({ onOpenPlayerList, participantSummary }) {
         players
       </p>
 
-      <p className="details-player-card__meta">
-        <strong>{participantSummary.spotsLeft}</strong> {spotsLabel} ·{' '}
-        <strong>{participantSummary.waitlistCount}</strong> waitlist
-      </p>
-
-      {participantSummary.host && (
-        <div className="details-host-row">
-          <span>{getInitials(participantSummary.host.display_name_snapshot)}</span>
-          <p>
-            <small>{hostLabel}</small>
-            <strong>{participantSummary.host.display_name_snapshot}</strong>
-          </p>
-        </div>
-      )}
+      <div className="details-player-card__pills">
+        <span className="details-stat-pill">
+          <strong>{participantSummary.spotsLeft}</strong> {spotsLabel}
+        </span>
+        <span className="details-stat-pill">
+          <strong>{participantSummary.waitlistCount}</strong> waitlist
+        </span>
+      </div>
 
       {participantSummary.roster.length > 0 && (
         <div className="details-avatars" aria-hidden="true">
@@ -228,7 +226,7 @@ export function GameChatCard({
       onCtaClick={onOpenChat}
     >
       <div className="details-chat-preview">
-        <span>{getInitials(senderLabel)}</span>
+        <span className="details-chat-preview__avatar">{getInitials(senderLabel)}</span>
         <p>
           <strong>{senderLabel}</strong>
           {latestChatMessage && <> · {formatRelativeTime(latestChatMessage.created_at)}</>}
@@ -297,43 +295,96 @@ export function BookingRulesCard({ rules }) {
   )
 }
 
-export function WhereToGoCard({ address, arrivalText, mapsUrl, venueName, mapIcon }) {
+export function WhereToGoCard({
+  address,
+  mapsUrl,
+  parkingNote,
+  venueName,
+  mapIcon,
+}) {
+  const notes = [parkingNote && { icon: <ParkingIcon />, label: 'Parking', text: parkingNote }].filter(Boolean)
+
   return (
     <section className="details-card details-location">
-      <div className="details-card__heading">
-        {mapIcon}
-        <div>
+      <div className="details-location__header">
+        <div className="details-location__title">
+          <span className="details-location__icon">{mapIcon}</span>
           <h2>Where to Go</h2>
-          <h3>{venueName}</h3>
-          <p>{address}</p>
         </div>
-      </div>
 
-      <div className="details-map" role="img" aria-label={`Static map preview for ${venueName}`}>
-        <span className="details-map__pin" />
-      </div>
-
-      <div className="details-location__notes">
-        <p>{arrivalText}</p>
         {mapsUrl && (
-          <a href={mapsUrl} target="_blank" rel="noreferrer">
+          <a className="details-location__map-link" href={mapsUrl} target="_blank" rel="noreferrer">
             Open in Maps
           </a>
         )}
       </div>
+
+      <div className="details-location__rows">
+        <div className="details-location__row details-location__row--venue">
+          <span>Venue</span>
+          <div>
+            <h3>{venueName}</h3>
+            <p>{address}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="details-location__map-preview" role="img" aria-label={`Map preview for ${venueName}`}>
+        <img src={darkMapPreview} alt="" />
+      </div>
+
+      {notes.length > 0 && (
+        <div className={`details-location__notes details-location__notes--${notes.length}`}>
+          {notes.map((note) => (
+            <div className="details-location__note" key={note.label}>
+              <span className="details-location__note-icon">{note.icon}</span>
+              <div>
+                <strong>{note.label}</strong>
+                <p>{note.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
+  )
+}
+
+function ParkingIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m5.2 11 1.7-4.2A2 2 0 0 1 8.8 5.5h6.4a2 2 0 0 1 1.9 1.3L18.8 11" />
+      <rect x="4" y="10" width="16" height="7" rx="2" />
+      <path d="M6.5 17v1.5" />
+      <path d="M17.5 17v1.5" />
+      <path d="M7.5 13.5h.1" />
+      <path d="M16.5 13.5h.1" />
+    </svg>
   )
 }
 
 export function JoinCard({
   aboutText,
+  editGameUrl,
   facts,
   gameToneLabel,
+  hostGuestCount,
+  hostGuestMax,
+  isAddingHostGuest,
+  isUpdatingHostGuests,
+  joinDisabled,
+  joinLabel,
   joinMessage,
   joinNotice,
+  leaveLabel,
   onJoin,
+  onAddHostGuest,
+  onLeave,
+  onRemoveHostGuest,
   onShare,
   price,
+  returnPath,
+  shareNotice,
 }) {
   return (
     <div className="details-booking-card">
@@ -342,15 +393,79 @@ export function JoinCard({
         <span>per player</span>
       </div>
 
-      <button className="details-join-button" type="button" onClick={onJoin}>
-        Join Game <span>›</span>
+      <button
+        className="details-join-button"
+        type="button"
+        disabled={joinDisabled}
+        onClick={onJoin}
+      >
+        {joinLabel || 'Join Game'}
       </button>
 
-      {joinNotice && <p className="details-join-notice">{joinMessage}</p>}
+      {joinNotice && (
+        <p className="details-join-notice">
+          {joinNotice === joinMessage ? (
+            <>
+              <Link state={{ from: returnPath }} to="/create-account">
+                Create an account
+              </Link>{' '}
+              or{' '}
+              <Link state={{ from: returnPath }} to="/sign-in">
+                sign in
+              </Link>{' '}
+              to join this game.
+            </>
+          ) : (
+            joinNotice
+          )}
+        </p>
+      )}
+
+      {editGameUrl && (
+        <Link className="details-host-edit-action" to={editGameUrl}>
+          Edit Game
+        </Link>
+      )}
+
+      {onAddHostGuest && hostGuestMax > 0 && (
+        <div className="details-host-guest-actions">
+          <div>
+            <strong>Host guests</strong>
+            <span>
+              {hostGuestCount}/{hostGuestMax}
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={isAddingHostGuest || hostGuestCount >= hostGuestMax}
+            onClick={onAddHostGuest}
+          >
+            {isAddingHostGuest ? 'Adding...' : 'Add Guest'}
+          </button>
+          {onRemoveHostGuest && (
+            <button
+              className="details-host-guest-actions__remove"
+              type="button"
+              disabled={isUpdatingHostGuests}
+              onClick={onRemoveHostGuest}
+            >
+              {isUpdatingHostGuests ? 'Removing...' : 'Remove Guest'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {onLeave && (
+        <button className="details-leave-button" type="button" onClick={onLeave}>
+          {leaveLabel || 'Leave Game'}
+        </button>
+      )}
 
       <button className="details-share-button" type="button" onClick={onShare}>
         Share Game
       </button>
+
+      {shareNotice && <p className="details-join-notice">{shareNotice}</p>}
 
       <div className="details-sidebar-section">
         <h2>Quick Facts</h2>
@@ -373,6 +488,66 @@ export function JoinCard({
           Visit Help Center
         </a>
       </div>
+    </div>
+  )
+}
+export function LeaveGameModal({
+  guestCount,
+  isLeaving,
+  isUpdatingGuests,
+  isWaitlisted,
+  onClose,
+  onConfirm,
+  onRemoveGuests,
+  refundEligible,
+}) {
+  const title = isWaitlisted ? 'Edit waitlist?' : 'Edit attendance?'
+  const message = isWaitlisted
+    ? 'You will give up your waitlist position.'
+    : refundEligible
+      ? 'You are more than 24 hours from kickoff, so this cancellation is eligible for a refund.'
+      : 'This game starts within 24 hours, so leaving now will not receive a refund.'
+
+  return (
+    <div className="details-modal-backdrop" role="presentation" onClick={onClose}>
+      <section
+        className="details-confirm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="details-leave-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="details-leave-title">{title}</h2>
+        <p>{message}</p>
+        {guestCount > 0 && (
+          <div className="details-attendance-actions">
+            <button
+              type="button"
+              disabled={isLeaving || isUpdatingGuests}
+              onClick={() => onRemoveGuests(1)}
+            >
+              {isUpdatingGuests ? 'Updating...' : 'Remove 1 Guest'}
+            </button>
+            {guestCount > 1 && (
+              <button
+                type="button"
+                disabled={isLeaving || isUpdatingGuests}
+                onClick={() => onRemoveGuests(guestCount)}
+              >
+                Remove All Guests
+              </button>
+            )}
+          </div>
+        )}
+        <div className="details-confirm-modal__actions">
+          <button type="button" onClick={onClose}>
+            Keep Spot
+          </button>
+          <button className="danger" type="button" disabled={isLeaving} onClick={onConfirm}>
+            {isLeaving ? 'Leaving...' : isWaitlisted ? 'Leave Waitlist' : 'Leave Game'}
+          </button>
+        </div>
+      </section>
     </div>
   )
 }
@@ -404,8 +579,15 @@ function RosterSection({ emptyText, players }) {
             <div className="details-roster-player" key={player.id}>
               <span>{getInitials(player.display_name_snapshot)}</span>
               <div>
-                <strong>{player.display_name_snapshot}</strong>
-                <small>{formatParticipantLabel(player)}</small>
+                <div className="details-roster-player__name">
+                  <strong>{player.display_name_snapshot}</strong>
+                  {player.guest_count > 0 && (
+                    <span className="details-guest-pill">
+                      +{player.guest_count} {player.guest_count === 1 ? 'guest' : 'guests'}
+                    </span>
+                  )}
+                </div>
+                {formatParticipantLabel(player) && <small>{formatParticipantLabel(player)}</small>}
               </div>
             </div>
           ))}
@@ -442,6 +624,7 @@ function InfoCard({
         {cta && (
           <button className="details-text-button" type="button" onClick={onCtaClick}>
             {cta}
+            <span aria-hidden="true">›</span>
           </button>
         )}
       </div>
@@ -510,10 +693,11 @@ function formatParticipantLabel(player) {
     return 'Pending payment'
   }
 
-  return (
-    player.participant_status.charAt(0).toUpperCase() +
-    player.participant_status.slice(1).replaceAll('_', ' ')
-  )
+  if (player.participant_status === 'waitlisted') {
+    return 'Waitlist'
+  }
+
+  return ''
 }
 
 function Rule({ kind, title, text }) {

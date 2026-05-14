@@ -11,7 +11,7 @@ import {
 } from '../components/BrowseIcons.jsx'
 import { useAuth } from '../hooks/useAuth.js'
 import { apiRequest, buildMediaUrl } from '../lib/apiClient.js'
-import '../styles/browse-games.css'
+import '../styles/browse-games/BrowseGamesPage.css'
 import '../styles/my-games.css'
 
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])

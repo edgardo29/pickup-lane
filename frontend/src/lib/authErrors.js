@@ -26,6 +26,10 @@ export function getAuthErrorMessage(error) {
     return 'Sign-in was cancelled before it finished.'
   }
 
+  if (normalized.includes('unauthorized-domain')) {
+    return 'Google sign-in is not enabled for this local address yet.'
+  }
+
   if (normalized.includes('provider-already-linked')) {
     return 'Password sign-in is already enabled for this account.'
   }

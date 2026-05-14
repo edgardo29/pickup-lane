@@ -71,7 +71,7 @@ def seed_notifications(
             "age": timedelta(hours=12),
             "notification_type": "game_updated",
             "title": "Game Update",
-            "body": "Alex's Community Run has updated arrival notes.",
+            "body": "Alex's Community Run has updated game notes.",
             "related_game_key": "my-hosted-upcoming",
             "is_read": True,
         },

@@ -1,19 +1,19 @@
 .create-game-page {
   --lime: #b8ff24;
+  --lime-bright: #d7ff35;
   --blue: #3394ff;
+  --nav-surface: #070d14;
   --red: #ff3b30;
-  --surface: #070d14;
+  --surface: #0c141d;
   --surface-strong: #0c141d;
-  --line: rgba(248, 250, 252, 0.15);
-  --muted: rgba(248, 250, 252, 0.66);
+  --surface-soft: #070d14;
+  --line: rgba(248, 250, 252, 0.07);
+  --muted: rgba(248, 250, 252, 0.68);
   --text: #f8fafc;
 
   min-height: 100svh;
   color: var(--text);
-  background:
-    radial-gradient(circle at 74% 8%, rgba(184, 255, 36, 0.09), transparent 28%),
-    radial-gradient(circle at 20% 14%, rgba(51, 148, 255, 0.08), transparent 26%),
-    linear-gradient(180deg, #050a10 0%, #08111a 50%, #050a10 100%);
+  background: #010409;
 }
 
 .create-game-page svg {
@@ -27,7 +27,7 @@
 .create-game-shell {
   width: min(1320px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 28px 0 70px;
+  padding: 24px 0 64px;
 }
 
 .create-game-topbar {
@@ -41,10 +41,10 @@
 .create-game-topbar button {
   width: 44px;
   height: 44px;
-  border: 1px solid rgba(248, 250, 252, 0.12);
+  border: 1px solid var(--line);
   border-radius: 999px;
   color: #ffffff;
-  background: rgba(8, 14, 21, 0.84);
+  background: var(--surface);
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -71,7 +71,7 @@
 .create-game-topbar h1 {
   margin-top: 5px;
   color: #ffffff;
-  font-size: clamp(2rem, 3.3vw, 3rem);
+  font-size: clamp(1.85rem, 3vw, 2.65rem);
   line-height: 1;
 }
 
@@ -81,7 +81,7 @@
 }
 
 .create-game-steps {
-  margin: 24px 0 0;
+  margin: 22px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -90,20 +90,20 @@
 }
 
 .create-game-steps li {
-  min-height: 74px;
-  padding: 12px;
-  border: 1px solid rgba(248, 250, 252, 0.12);
+  min-height: 66px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
   border-radius: 12px;
   color: rgba(248, 250, 252, 0.58);
-  background: rgba(8, 14, 21, 0.62);
+  background: var(--surface);
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
 .create-game-steps span {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border: 2px solid rgba(248, 250, 252, 0.22);
   border-radius: 999px;
   display: grid;
@@ -113,13 +113,13 @@
 }
 
 .create-game-steps strong {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .create-game-steps li.active {
   border-color: rgba(184, 255, 36, 0.42);
   color: var(--lime);
-  background: rgba(184, 255, 36, 0.05);
+  background: var(--surface);
 }
 
 .create-game-steps li.complete {
@@ -133,10 +133,10 @@
 }
 
 .create-game-layout {
-  margin-top: 28px;
+  margin-top: 24px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 26px;
+  gap: 22px;
   align-items: start;
 }
 
@@ -144,12 +144,12 @@
 .create-game-preview {
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(8, 14, 21, 0.86);
-  box-shadow: 0 20px 58px rgba(0, 0, 0, 0.22);
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .create-game-panel {
-  padding: 24px;
+  padding: 20px;
 }
 
 .create-game-heading h2,
@@ -159,18 +159,18 @@
 
 .create-game-heading h2 {
   color: #ffffff;
-  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  font-size: clamp(1.55rem, 2.5vw, 2.25rem);
   line-height: 1.05;
 }
 
 .create-game-heading p {
-  margin-top: 10px;
+  margin-top: 8px;
   color: rgba(248, 250, 252, 0.68);
-  font-size: 1.05rem;
+  font-size: 0.98rem;
 }
 
 .create-game-section {
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 .create-game-section-label {
@@ -185,11 +185,11 @@
 .create-game-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .create-game-grid--single {
-  margin-top: 26px;
+  margin-top: 22px;
   grid-template-columns: 1fr;
 }
 
@@ -199,11 +199,11 @@
 }
 
 .create-game-field {
-  min-height: 76px;
-  padding: 13px 14px;
-  border: 1px solid rgba(248, 250, 252, 0.13);
+  min-height: 66px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(248, 250, 252, 0.035);
+  background: var(--surface-soft);
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 4px 14px;
@@ -211,8 +211,8 @@
 }
 
 .create-game-field svg {
-  width: 23px;
-  height: 23px;
+  width: 21px;
+  height: 21px;
   color: var(--lime);
   grid-row: span 2;
 }
@@ -229,13 +229,36 @@
 .create-game-textarea-field textarea {
   width: 100%;
   min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
   border: 0;
   color: #ffffff;
   background: transparent;
   font: inherit;
-  font-size: 1rem;
+  font-size: 0.96rem;
   font-weight: 850;
   outline: 0;
+  text-align: left;
+}
+
+.create-game-field input[type="date"],
+.create-game-field input[type="time"] {
+  display: block;
+  grid-column: 2;
+  justify-self: start;
+  line-height: 1.2;
+}
+
+.create-game-field input[type="date"]::-webkit-date-and-time-value,
+.create-game-field input[type="time"]::-webkit-date-and-time-value {
+  margin: 0;
+  text-align: left;
+}
+
+.create-game-field input[type="date"]::-webkit-calendar-picker-indicator,
+.create-game-field input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.65;
+  filter: invert(1);
 }
 
 .create-game-field select {
@@ -249,7 +272,7 @@
     transparent;
   appearance: none;
   font: inherit;
-  font-size: 1rem;
+  font-size: 0.96rem;
   font-weight: 850;
   outline: 0;
   padding-right: 30px;
@@ -257,7 +280,7 @@
 
 .create-game-field select option {
   color: #ffffff;
-  background: #081019;
+  background: #070d14;
 }
 
 .create-game-field input::placeholder,
@@ -276,37 +299,37 @@
 .create-game-textarea-field textarea {
   min-height: 50px;
   padding: 0 14px;
-  border: 1px solid rgba(248, 250, 252, 0.14);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(248, 250, 252, 0.035);
+  background: var(--surface-soft);
 }
 
 .create-game-textarea-field {
-  margin-top: 18px;
+  margin-top: 16px;
   position: relative;
 }
 
 .create-game-textarea-field textarea {
-  min-height: 116px;
+  min-height: 104px;
   padding: 14px;
-  resize: vertical;
+  resize: none;
 }
 
 .create-game-stepper {
   width: min(180px, 100%);
   min-height: 40px;
-  border: 1px solid rgba(248, 250, 252, 0.13);
+  border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) 42px;
-  background: rgba(5, 10, 16, 0.68);
+  background: #010409;
 }
 
 .create-game-stepper button {
   border: 0;
   color: #ffffff;
-  background: rgba(248, 250, 252, 0.055);
+  background: rgba(248, 250, 252, 0.04);
   cursor: pointer;
   font: inherit;
   font-size: 1.35rem;
@@ -324,9 +347,9 @@
   width: min(180px, 100%);
   min-height: 40px;
   padding: 0 12px;
-  border: 1px solid rgba(248, 250, 252, 0.13);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(5, 10, 16, 0.68);
+  background: #010409;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -355,8 +378,8 @@
 
 .create-game-divider {
   height: 1px;
-  margin: 24px 0 4px;
-  background: rgba(248, 250, 252, 0.12);
+  margin: 20px 0 4px;
+  background: var(--line);
 }
 
 .create-game-note {
@@ -378,9 +401,9 @@
 .create-game-payment-row,
 .create-game-total-row {
   margin-top: 20px;
-  border: 1px solid rgba(248, 250, 252, 0.14);
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(248, 250, 252, 0.035);
+  background: var(--surface-soft);
 }
 
 .create-game-review-card {
@@ -393,7 +416,7 @@
   width: 100%;
   margin: 4px 0;
   border: 0;
-  border-top: 1px solid rgba(248, 250, 252, 0.12);
+  border-top: 1px solid var(--line);
 }
 
 .create-game-review-row {
@@ -469,7 +492,7 @@
 }
 
 .create-game-actions {
-  margin-top: 28px;
+  margin-top: 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -486,7 +509,7 @@
 .create-game-secondary,
 .create-game-cancel,
 .create-game-danger {
-  min-height: 54px;
+  min-height: 48px;
   padding: 0 22px;
   border-radius: 10px;
   cursor: pointer;
@@ -500,11 +523,11 @@
 }
 
 .create-game-primary {
-  min-width: 240px;
+  min-width: 220px;
   border: 0;
   color: #071006;
   background: var(--lime);
-  box-shadow: 0 16px 42px rgba(184, 255, 36, 0.14);
+  box-shadow: none;
 }
 
 .create-game-primary:disabled {
@@ -513,20 +536,30 @@
 }
 
 .create-game-secondary {
-  border: 1px solid rgba(248, 250, 252, 0.14);
+  border: 1px solid var(--line);
   color: #ffffff;
-  background: rgba(248, 250, 252, 0.04);
+  background: var(--surface-soft);
 }
 
 .create-game-cancel {
-  border: 1px solid transparent;
-  color: rgba(248, 250, 252, 0.64);
-  background: transparent;
+  border: 1px solid rgba(255, 90, 82, 0.22);
+  color: #ff8a84;
+  background: rgba(255, 90, 82, 0.055);
 }
 
 .create-game-cancel:hover {
-  color: #ffffff;
-  background: rgba(248, 250, 252, 0.045);
+  border-color: rgba(255, 90, 82, 0.34);
+  color: #ffaaa5;
+  background: rgba(255, 90, 82, 0.085);
+}
+
+.create-game-primary:focus-visible,
+.create-game-secondary:focus-visible,
+.create-game-cancel:focus-visible,
+.create-game-danger:focus-visible,
+.create-game-topbar button:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
 }
 
 .create-game-danger {
@@ -536,7 +569,7 @@
 }
 
 .create-game-preview {
-  padding: 22px;
+  padding: 20px;
   position: sticky;
   top: 96px;
 }
@@ -559,7 +592,7 @@
 }
 
 .create-game-preview__facts {
-  margin-top: 20px;
+  margin-top: 18px;
   display: grid;
   gap: 12px;
 }
@@ -579,9 +612,9 @@
 
 .create-game-preview__money {
   min-height: 58px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(248, 250, 252, 0.1);
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -606,9 +639,9 @@
 .create-game-preview__card {
   margin: 18px 0 0;
   padding: 14px;
-  border: 1px solid rgba(248, 250, 252, 0.1);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(248, 250, 252, 0.035);
+  background: var(--surface-soft);
 }
 
 .create-game-error {
@@ -630,10 +663,10 @@
 .create-game-modal {
   width: min(440px, 100%);
   padding: 24px;
-  border: 1px solid rgba(248, 250, 252, 0.15);
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: #081019;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .create-game-modal h2,
@@ -678,7 +711,7 @@
   background: rgba(184, 255, 36, 0.08);
   display: grid;
   place-items: center;
-  box-shadow: 0 0 58px rgba(184, 255, 36, 0.16);
+  box-shadow: none;
 }
 
 .create-game-success__mark svg {
@@ -753,7 +786,7 @@
   }
 
   .create-game-panel {
-    padding: 20px;
+    padding: 16px;
   }
 
   .create-game-review-row {

@@ -297,7 +297,6 @@ DEFAULT_GAME_DETAILS = {
         "Fast-paced pickup soccer with balanced teams, clear communication, "
         "and a welcoming competitive level."
     ),
-    "arrival_notes": "Arrive 10 minutes early and check in with the host near the field entrance.",
     "parking_notes": "Street parking is limited near kickoff, so give yourself a little extra time.",
     "custom_rules_text": None,
     "custom_cancellation_text": None,
@@ -311,11 +310,9 @@ GAME_DETAILS_BY_KEY = {
             "Competitive indoor 7v7 with quick rotations and high tempo play. "
             "All skill levels are welcome, but expect a steady pace."
         ),
-        "arrival_notes": "Enter through the main entrance and meet the host beside the indoor field.",
     },
     "skinner-park": {
         "description": "Outdoor West Loop pickup with organized teams and a friendly competitive pace.",
-        "arrival_notes": "Meet near the field gate closest to Adams St.",
         "parking_notes": "Street parking is usually easiest on nearby side streets.",
     },
     "rauner-outdoor-915pm": {
@@ -392,7 +389,6 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
                 "custom_rules_text": details["custom_rules_text"],
                 "custom_cancellation_text": details["custom_cancellation_text"],
                 "game_notes": details["game_notes"],
-                "arrival_notes": details["arrival_notes"],
                 "parking_notes": details["parking_notes"],
                 "published_at": timestamp,
                 "cancelled_at": timestamp if game_status == "cancelled" else None,

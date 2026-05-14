@@ -24,7 +24,7 @@ import {
   hydrateNeedASubForm,
   validateForm,
 } from './NeedASubPage.jsx'
-import '../styles/browse-games.css'
+import '../styles/browse-games/BrowseGamesPage.css'
 import '../styles/need-a-sub.css'
 
 function NeedASubManagePage() {

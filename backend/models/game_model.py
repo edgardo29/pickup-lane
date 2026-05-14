@@ -173,7 +173,6 @@ class Game(Base):
     custom_rules_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     custom_cancellation_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     game_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    arrival_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     parking_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

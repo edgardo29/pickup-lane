@@ -1,11 +1,15 @@
 import BrowseGameCard from './BrowseGameCard.jsx'
+import { ClockIcon } from '../../components/BrowseIcons.jsx'
 
 function BrowseTimeSection({ group, imageUrlsByGameId, participantCountsByGameId }) {
   return (
     <section className="time-section">
       <div className="time-section__header">
-        <h2>{group.label}</h2>
-        <span>
+        <h2>
+          <ClockIcon />
+          {group.label}
+        </h2>
+        <span className="time-section__count">
           {group.games.length} {group.games.length === 1 ? 'game' : 'games'}
         </span>
       </div>

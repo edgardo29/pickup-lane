@@ -40,6 +40,8 @@ def test_core_routes_are_registered(client: TestClient):
         ("POST", "/games"),
         ("GET", "/games"),
         ("GET", "/games/{game_id}"),
+        ("POST", "/games/{game_id}/join"),
+        ("POST", "/games/{game_id}/leave"),
         ("PATCH", "/games/{game_id}"),
         ("DELETE", "/games/{game_id}"),
         ("POST", "/bookings"),

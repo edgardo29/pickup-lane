@@ -1,0 +1,5 @@
+.auth-page--finish-profile .auth-inline-note,
+.auth-page--finish-profile .auth-secure-note {
+  max-width: 440px;
+  margin-inline: auto;
+}
