@@ -140,6 +140,13 @@ def game_has_paid_booking_payment(db: Session, game_id: uuid.UUID) -> bool:
     )
 
 
+def game_requires_app_player_payment(db_game: Game) -> bool:
+    return (
+        db_game.game_type == "official"
+        and db_game.payment_collection_type == "in_app"
+    )
+
+
 def create_host_edit_venue(
     db: Session, db_game: Game, game_update: GameHostEdit
 ) -> Venue:
@@ -629,13 +636,21 @@ def build_booking(
     is_confirmed: bool,
 ) -> Booking:
     subtotal_cents = db_game.price_per_player_cents * party_size
+    requires_app_payment = game_requires_app_player_payment(db_game)
+
+    if is_confirmed:
+        booking_status = "confirmed"
+        payment_status = "paid" if requires_app_payment else "not_required"
+    else:
+        booking_status = "waitlisted"
+        payment_status = "unpaid" if requires_app_payment else "not_required"
 
     return Booking(
         id=uuid.uuid4(),
         game_id=db_game.id,
         buyer_user_id=joining_user.id,
-        booking_status="confirmed" if is_confirmed else "pending_payment",
-        payment_status="paid" if is_confirmed else "unpaid",
+        booking_status=booking_status,
+        payment_status=payment_status,
         participant_count=party_size,
         subtotal_cents=subtotal_cents,
         platform_fee_cents=0,
@@ -807,13 +822,18 @@ def create_waitlist_promotion_notification(
     waitlist_entry: WaitlistEntry,
     participant: GameParticipant,
 ) -> None:
+    if game_requires_app_player_payment(db_game):
+        body = "Enough spots opened. You were charged and moved to the player list."
+    else:
+        body = "Enough spots opened. You were moved to the player list."
+
     db.add(
         Notification(
             id=uuid.uuid4(),
             user_id=waitlist_entry.user_id,
             notification_type="waitlist_promoted",
             title="Moved into the game",
-            body="Enough spots opened. You were charged and moved to the player list.",
+            body=body,
             related_game_id=db_game.id,
             related_booking_id=participant.booking_id,
             related_participant_id=participant.id,
@@ -883,11 +903,22 @@ def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
             db.add(booking_participant)
 
         booking.booking_status = "confirmed"
-        booking.payment_status = "paid"
+        booking.payment_status = (
+            "paid" if game_requires_app_player_payment(db_game) else "not_required"
+        )
         booking.booked_at = now
         booking.updated_at = now
         db.add(booking)
-        db.add(create_booking_payment(db_game, booking, booking.buyer_user_id, now, source="waitlist_auto_promote"))
+        if game_requires_app_player_payment(db_game):
+            db.add(
+                create_booking_payment(
+                    db_game,
+                    booking,
+                    booking.buyer_user_id,
+                    now,
+                    source="waitlist_auto_promote",
+                )
+            )
 
         waitlist_entry.waitlist_status = "accepted"
         waitlist_entry.promoted_booking_id = booking.id
@@ -1030,11 +1061,12 @@ def join_game(
 
         try:
             db.add(booking)
-            db.add(
-                create_booking_payment(
-                    db_game, booking, joining_user.id, now, source="checkout_demo"
+            if game_requires_app_player_payment(db_game):
+                db.add(
+                    create_booking_payment(
+                        db_game, booking, joining_user.id, now, source="checkout_demo"
+                    )
                 )
-            )
             db.add_all(participants)
             db.add(db_game)
             db.commit()
@@ -1147,6 +1179,8 @@ def leave_game(
 
     now = datetime.now(timezone.utc)
     refundable = is_refund_eligible(db_game.starts_at, now)
+    app_payment_required = game_requires_app_player_payment(db_game)
+    app_refund_eligible = refundable and app_payment_required
     was_waitlisted = participant.participant_status == "waitlisted"
 
     waitlist_entry = get_existing_active_waitlist_entry(db, db_game.id, leaving_user.id)
@@ -1184,7 +1218,9 @@ def leave_game(
     if booking is not None:
         booking.booking_status = "cancelled"
         booking.payment_status = (
-            "refunded" if refundable and not was_waitlisted else booking.payment_status
+            "refunded"
+            if app_refund_eligible and not was_waitlisted
+            else booking.payment_status
         )
         booking.cancelled_at = now
         booking.cancelled_by_user_id = leaving_user.id
@@ -1196,7 +1232,7 @@ def leave_game(
             )
         booking.updated_at = now
         db.add(booking)
-        if refundable and not was_waitlisted:
+        if app_refund_eligible and not was_waitlisted:
             update_booking_payment_status(db, booking.id, "refunded", now)
 
     if db_game.game_status == "full" and not was_waitlisted:
@@ -1222,15 +1258,17 @@ def leave_game(
 
     if was_waitlisted:
         message = "You left the waitlist."
-    elif refundable:
+    elif app_refund_eligible:
         message = "You left the game. Your payment is marked for refund."
-    else:
+    elif app_payment_required:
         message = "You left the game. This is within 24 hours, so no refund is due."
+    else:
+        message = "You left the game."
 
     return GameLeaveRead(
         status="left_waitlist" if was_waitlisted else "left_game",
         message=message,
-        refund_eligible=refundable and not was_waitlisted,
+        refund_eligible=app_refund_eligible and not was_waitlisted,
         participant_id=participant.id,
         booking_id=booking.id if booking is not None else None,
     )
@@ -1369,6 +1407,7 @@ def remove_game_guests(
 
     now = datetime.now(timezone.utc)
     refundable = is_refund_eligible(db_game.starts_at, now)
+    app_payment_required = game_requires_app_player_payment(db_game)
     was_waitlisted = participant.participant_status == "waitlisted"
     booking = db.get(Booking, participant.booking_id) if participant.booking_id else None
 
@@ -1426,11 +1465,13 @@ def remove_game_guests(
         booking.subtotal_cents = db_game.price_per_player_cents * len(remaining_participants)
         booking.total_cents = booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
         if was_waitlisted:
-            booking.booking_status = "pending_payment"
-            booking.payment_status = "unpaid"
+            booking.booking_status = "waitlisted"
+            booking.payment_status = (
+                "unpaid" if app_payment_required else "not_required"
+            )
         else:
             booking.booking_status = "partially_cancelled"
-            if refundable:
+            if refundable and app_payment_required:
                 booking.payment_status = "partially_refunded"
                 update_booking_payment_status(db, booking.id, "partially_refunded", now)
         booking.updated_at = now
