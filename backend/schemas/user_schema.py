@@ -34,6 +34,7 @@ class UserRead(BaseModel):
     auth_user_id: str | None
     role: str
     email: str | None
+    email_verified_at: datetime | None
     phone: str | None
     first_name: str | None
     last_name: str | None
@@ -57,6 +58,7 @@ class UserUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     email: str | None = None
+    email_verified_at: datetime | None = None
     phone: str | None = None
     first_name: str | None = None
     last_name: str | None = None

@@ -1,6 +1,7 @@
 import { apiRequest } from '../../lib/apiClient.js'
 
-export const HOST_DEPOSIT_CENTS = 1000
+export const COMMUNITY_PUBLISH_FEE_CENTS = 499
+const MINIMUM_TOTAL_SPOTS = 6
 
 export const formatOptions = ['3v3', '4v4', '5v5', '6v6', '7v7', '8v8', '9v9', '10v10', '11v11']
 
@@ -28,6 +29,17 @@ export const steps = [
   { id: 4, label: 'Review & Publish' },
 ]
 
+export const paymentMethodOptions = [
+  { label: 'None', value: 'none' },
+  { label: 'Venmo', value: 'venmo' },
+  { label: 'Zelle', value: 'zelle' },
+  { label: 'Cash App', value: 'cash_app' },
+  { label: 'PayPal', value: 'paypal' },
+  { label: 'Apple Cash', value: 'apple_cash' },
+  { label: 'Cash', value: 'cash' },
+  { label: 'Other', value: 'other' },
+]
+
 export const initialForm = {
   date: getDefaultDate(),
   startTime: '18:00',
@@ -44,6 +56,7 @@ export const initialForm = {
   neighborhood: '',
   parkingNote: '',
   gameNotes: '',
+  paymentMethods: [{ type: 'venmo', value: '' }],
 }
 
 export async function postJson(path, payload) {
@@ -65,10 +78,17 @@ export async function patchJson(path, payload) {
 export async function loadEditableGame(gameId) {
   const game = await apiRequest(`/games/${gameId}`)
   const venue = await apiRequest(`/venues/${game.venue_id}`).catch(() => null)
-  return { game, venue }
+  const communityDetails = await apiRequest(`/community-game-details?game_id=${gameId}`)
+    .then((details) => details[0] || null)
+    .catch(() => null)
+  return { communityDetails, game, venue }
 }
 
-export function mapGameToForm(game, venue) {
+export async function loadHostPublishFees(userId) {
+  return apiRequest(`/host-publish-fees?host_user_id=${userId}`).catch(() => [])
+}
+
+export function mapGameToForm(game, venue, communityDetails = null) {
   const startsAt = new Date(game.starts_at)
   const endsAt = new Date(game.ends_at)
 
@@ -88,6 +108,9 @@ export function mapGameToForm(game, venue) {
     neighborhood: venue?.neighborhood || game.neighborhood_snapshot || '',
     parkingNote: game.parking_notes || '',
     gameNotes: game.game_notes || '',
+    paymentMethods: normalizePaymentMethods(
+      communityDetails?.payment_methods_snapshot,
+    ),
   }
 }
 
@@ -108,21 +131,56 @@ export function buildDateTime(date, time) {
 }
 
 export function getMinimumSpotsForFormat(format) {
+  const sideSize = getSideSizeForFormat(format)
+
+  if (!sideSize) {
+    return MINIMUM_TOTAL_SPOTS
+  }
+
+  return Math.max(sideSize * 2, MINIMUM_TOTAL_SPOTS)
+}
+
+export function getHostGuestMaxForFormat(format) {
+  return Math.max((getSideSizeForFormat(format) || 1) - 1, 0)
+}
+
+function getSideSizeForFormat(format) {
   const [homeSide, awaySide] = String(format || '').toLowerCase().split('v')
   const homeCount = Number(homeSide)
   const awayCount = Number(awaySide)
 
   if (!Number.isFinite(homeCount) || homeCount !== awayCount) {
-    return 6
+    return 0
   }
 
-  return Math.max(homeCount * 2, 6)
+  return homeCount
 }
 
 export function buildAddress(form) {
   const stateLine = [form.state.trim(), form.zip.trim()].filter(Boolean).join(' ')
   const cityLine = [form.city.trim(), stateLine].filter(Boolean).join(', ')
   return [form.street.trim(), cityLine].filter(Boolean).join(', ')
+}
+
+export function getPriceCents(form) {
+  return Number(form.price) * 100
+}
+
+export function getPaymentCollectionType(form) {
+  return getPriceCents(form) > 0 ? 'external_host' : 'none'
+}
+
+export function cleanNullable(value) {
+  const cleaned = String(value || '').trim()
+  return cleaned || null
+}
+
+export function buildCommunityGameDetailPayload(form, gameId) {
+  return {
+    game_id: gameId,
+    payment_methods_snapshot: serializePaymentMethods(form.paymentMethods),
+    payment_instructions_snapshot: null,
+  }
 }
 
 export function buildPreviewLocation(form) {
@@ -172,11 +230,15 @@ export function validateStep(step, form) {
 }
 
 export function validateCreateGame(form) {
-  for (const step of [1, 2]) {
+  for (const step of [1, 2, 3]) {
     const message = validateStep(step, form)
     if (message) {
       return { step, message }
     }
+  }
+
+  if (getPriceCents(form) > 0 && serializePaymentMethods(form.paymentMethods).length === 0) {
+    return { step: 3, message: 'Add at least one host payment method.' }
   }
 
   return null
@@ -205,6 +267,25 @@ export function formatPaymentMethod(paymentMethod) {
   }
 
   return `${capitalize(paymentMethod.card_brand || 'card')} .... ${paymentMethod.card_last4}`
+}
+
+export function formatHostPaymentMethods(paymentMethods) {
+  const methods = serializePaymentMethods(paymentMethods)
+
+  if (methods.length === 0) {
+    return 'Not added'
+  }
+
+  return methods
+    .map((method) => {
+      const label = getPaymentMethodLabel(method.type)
+      return `${label}: ${method.value}`
+    })
+    .join(', ')
+}
+
+export function getPaymentMethodLabel(value) {
+  return paymentMethodOptions.find((option) => option.value === value)?.label || 'Other'
 }
 
 export function formatTime(value) {
@@ -251,4 +332,35 @@ function toTimeInputValue(date) {
 
 function getStreetFromAddressSnapshot(addressSnapshot) {
   return addressSnapshot?.split(',')[0]?.trim() || ''
+}
+
+function normalizePaymentMethods(paymentMethods) {
+  if (!Array.isArray(paymentMethods) || paymentMethods.length === 0) {
+    return initialForm.paymentMethods
+  }
+
+  const normalizedMethods = paymentMethods
+    .filter((method) => method && typeof method === 'object')
+    .map((method) => ({
+      type: typeof method.type === 'string' ? method.type : 'other',
+      value: typeof method.value === 'string' ? method.value : '',
+    }))
+
+  return normalizedMethods.length > 0 ? normalizedMethods : initialForm.paymentMethods
+}
+
+export function serializePaymentMethods(paymentMethods) {
+  if (!Array.isArray(paymentMethods)) {
+    return []
+  }
+
+  return paymentMethods
+    .filter((method) => method && typeof method === 'object')
+    .map((method) => ({
+      type: typeof method.type === 'string' && method.type ? method.type : 'other',
+      value: method.type === 'cash'
+        ? String(method.value || 'Cash').trim()
+        : String(method.value || '').trim(),
+    }))
+    .filter((method) => method.type !== 'none' && method.value)
 }

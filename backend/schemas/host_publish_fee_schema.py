@@ -14,12 +14,9 @@ class HostPublishFeeCreate(BaseModel):
     payment_id: UUID | None = None
     amount_cents: int
     currency: str = "USD"
-    fee_status: str = "pending"
+    fee_status: str
     waiver_reason: str = "none"
-    required_at: datetime | None = None
     paid_at: datetime | None = None
-    failed_at: datetime | None = None
-    refunded_at: datetime | None = None
 
 
 class HostPublishFeeRead(BaseModel):
@@ -33,10 +30,7 @@ class HostPublishFeeRead(BaseModel):
     currency: str
     fee_status: str
     waiver_reason: str
-    required_at: datetime
     paid_at: datetime | None
-    failed_at: datetime | None
-    refunded_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -51,7 +45,4 @@ class HostPublishFeeUpdate(BaseModel):
     currency: str | None = None
     fee_status: str | None = None
     waiver_reason: str | None = None
-    required_at: datetime | None = None
     paid_at: datetime | None = None
-    failed_at: datetime | None = None
-    refunded_at: datetime | None = None

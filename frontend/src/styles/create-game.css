@@ -10,6 +10,10 @@
   --line: rgba(248, 250, 252, 0.07);
   --muted: rgba(248, 250, 252, 0.68);
   --text: #f8fafc;
+  --button-dark: var(--pl-button-dark);
+  --button-green: var(--pl-button-green);
+  --button-red: var(--pl-button-red);
+  --button-inset: var(--pl-button-inset);
 
   min-height: 100svh;
   color: var(--text);
@@ -25,22 +29,22 @@
 }
 
 .create-game-shell {
-  width: min(1320px, calc(100% - 48px));
+  width: min(1180px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 24px 0 64px;
+  padding: 18px 0 56px;
 }
 
 .create-game-topbar {
-  min-height: 64px;
+  min-height: 58px;
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
 }
 
 .create-game-topbar button {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--line);
   border-radius: 999px;
   color: #ffffff;
@@ -71,7 +75,7 @@
 .create-game-topbar h1 {
   margin-top: 5px;
   color: #ffffff;
-  font-size: clamp(1.85rem, 3vw, 2.65rem);
+  font-size: clamp(1.65rem, 2.6vw, 2.25rem);
   line-height: 1;
 }
 
@@ -81,7 +85,7 @@
 }
 
 .create-game-steps {
-  margin: 22px 0 0;
+  margin: 18px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -90,8 +94,8 @@
 }
 
 .create-game-steps li {
-  min-height: 66px;
-  padding: 10px 12px;
+  min-height: 54px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 12px;
   color: rgba(248, 250, 252, 0.58);
@@ -102,8 +106,8 @@
 }
 
 .create-game-steps span {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: 2px solid rgba(248, 250, 252, 0.22);
   border-radius: 999px;
   display: grid;
@@ -133,10 +137,10 @@
 }
 
 .create-game-layout {
-  margin-top: 24px;
+  margin-top: 18px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 22px;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 18px;
   align-items: start;
 }
 
@@ -149,7 +153,7 @@
 }
 
 .create-game-panel {
-  padding: 20px;
+  padding: 16px;
 }
 
 .create-game-heading h2,
@@ -159,18 +163,18 @@
 
 .create-game-heading h2 {
   color: #ffffff;
-  font-size: clamp(1.55rem, 2.5vw, 2.25rem);
+  font-size: clamp(1.35rem, 2.1vw, 1.9rem);
   line-height: 1.05;
 }
 
 .create-game-heading p {
-  margin-top: 8px;
+  margin-top: 6px;
   color: rgba(248, 250, 252, 0.68);
-  font-size: 0.98rem;
+  font-size: 0.92rem;
 }
 
 .create-game-section {
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .create-game-section-label {
@@ -185,11 +189,11 @@
 .create-game-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .create-game-grid--single {
-  margin-top: 22px;
+  margin-top: 16px;
   grid-template-columns: 1fr;
 }
 
@@ -198,9 +202,13 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.create-game-grid--compact {
+  align-items: start;
+}
+
 .create-game-field {
-  min-height: 66px;
-  padding: 11px 14px;
+  min-height: 58px;
+  padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface-soft);
@@ -226,6 +234,7 @@
 
 .create-game-field input,
 .create-game-text-field input,
+.create-game-text-field select,
 .create-game-textarea-field textarea {
   width: 100%;
   min-width: 0;
@@ -296,44 +305,56 @@
 }
 
 .create-game-text-field input,
+.create-game-text-field select,
 .create-game-textarea-field textarea {
-  min-height: 50px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-soft);
 }
 
+.create-game-text-field select {
+  color: #ffffff;
+  appearance: none;
+  outline: 0;
+}
+
 .create-game-textarea-field {
-  margin-top: 16px;
+  margin-top: 14px;
   position: relative;
 }
 
+.create-game-grid--compact .create-game-textarea-field {
+  margin-top: 0;
+}
+
 .create-game-textarea-field textarea {
-  min-height: 104px;
-  padding: 14px;
+  min-height: 86px;
+  padding: 12px;
   resize: none;
 }
 
 .create-game-stepper {
   width: min(180px, 100%);
-  min-height: 40px;
+  min-height: 36px;
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
   background: #010409;
 }
 
 .create-game-stepper button {
   border: 0;
   color: #ffffff;
-  background: rgba(248, 250, 252, 0.04);
+  background: var(--button-dark);
   cursor: pointer;
   font: inherit;
   font-size: 1.35rem;
   font-weight: 900;
+  box-shadow: var(--button-inset);
 }
 
 .create-game-stepper strong {
@@ -345,7 +366,7 @@
 
 .create-game-money-input {
   width: min(180px, 100%);
-  min-height: 40px;
+  min-height: 36px;
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -396,8 +417,167 @@
   color: var(--lime);
 }
 
+.create-game-check-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.create-game-check-field {
+  min-height: 50px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 3px 10px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.create-game-check-field input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.create-game-check-field > span {
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(248, 250, 252, 0.26);
+  border-radius: 6px;
+  background: #010409;
+  display: grid;
+  place-items: center;
+}
+
+.create-game-check-field input:checked + span {
+  border-color: var(--lime);
+  background: var(--lime);
+}
+
+.create-game-check-field input:checked + span::after {
+  width: 8px;
+  height: 5px;
+  border-left: 2px solid #071006;
+  border-bottom: 2px solid #071006;
+  content: "";
+  transform: rotate(-45deg) translateY(-1px);
+}
+
+.create-game-check-field strong {
+  color: #ffffff;
+  font-size: 0.92rem;
+}
+
+.create-game-check-field small {
+  grid-column: 2;
+  color: rgba(248, 250, 252, 0.56);
+}
+
+.create-game-methods {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.create-game-method {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: rgba(248, 250, 252, 0.72);
+  background: var(--surface-soft);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+}
+
+.create-game-method.active {
+  border-color: rgba(184, 255, 36, 0.48);
+  color: #071006;
+  background: var(--lime);
+}
+
+.create-game-payment-methods {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.create-game-payment-method-row {
+  display: grid;
+  grid-template-columns: minmax(136px, 0.35fr) minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.create-game-payment-method-row label {
+  display: grid;
+  gap: 8px;
+}
+
+.create-game-payment-method-row span {
+  color: rgba(248, 250, 252, 0.66);
+  font-weight: 750;
+}
+
+.create-game-payment-method-row input,
+.create-game-payment-method-row select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--surface-soft);
+  font: inherit;
+  font-size: 0.96rem;
+  font-weight: 850;
+  outline: 0;
+}
+
+.create-game-payment-method-row input::placeholder {
+  color: rgba(248, 250, 252, 0.36);
+}
+
+.create-game-payment-method-row__note {
+  min-height: 42px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: rgba(248, 250, 252, 0.66);
+  background: var(--surface-soft);
+  display: flex;
+  align-items: center;
+  font-weight: 750;
+}
+
+.create-game-method-remove {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 90, 82, 0.28);
+  border-radius: 10px;
+  color: #ffe1de;
+  background: var(--button-red);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 950;
+  box-shadow: var(--button-inset);
+}
+
+.create-game-method-add {
+  width: fit-content;
+  min-height: 38px;
+  min-width: 0;
+}
+
 .create-game-review-card,
-.create-game-deposit-card,
+.create-game-fee-card,
 .create-game-payment-row,
 .create-game-total-row {
   margin-top: 20px;
@@ -407,9 +587,9 @@
 }
 
 .create-game-review-card {
-  padding: 18px;
+  padding: 14px;
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .create-game-review-card hr {
@@ -421,14 +601,14 @@
 
 .create-game-review-row {
   display: grid;
-  grid-template-columns: 28px 180px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 24px 150px minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
 }
 
 .create-game-review-row svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   color: var(--lime);
 }
 
@@ -441,40 +621,37 @@
   text-align: right;
 }
 
-.create-game-deposit-card {
-  padding: 20px;
+.create-game-fee-card {
+  min-height: 58px;
+  padding: 12px 16px;
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
   align-items: center;
 }
 
-.create-game-deposit-card > svg {
-  width: 52px;
-  height: 52px;
-  color: var(--lime);
-}
-
-.create-game-deposit-card span,
-.create-game-deposit-card p {
+.create-game-fee-card span,
+.create-game-fee-card p {
   color: rgba(248, 250, 252, 0.68);
 }
 
-.create-game-deposit-card strong {
-  color: #ffffff;
+.create-game-fee-card strong {
+  color: var(--lime);
   display: block;
-  font-size: 1.8rem;
+  font-size: 1.12rem;
   line-height: 1.1;
 }
 
-.create-game-deposit-card p {
-  margin: 6px 0 0;
+.create-game-fee-card p {
+  margin: 0;
+  text-align: right;
+  font-weight: 750;
 }
 
 .create-game-payment-row,
 .create-game-total-row {
-  min-height: 62px;
-  padding: 0 18px;
+  min-height: 52px;
+  padding: 0 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -488,11 +665,11 @@
 
 .create-game-total-row strong {
   color: #ffffff;
-  font-size: 1.22rem;
+  font-size: 1.08rem;
 }
 
 .create-game-actions {
-  margin-top: 24px;
+  margin-top: 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -509,25 +686,25 @@
 .create-game-secondary,
 .create-game-cancel,
 .create-game-danger {
-  min-height: 48px;
-  padding: 0 22px;
-  border-radius: 10px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 12px;
   text-decoration: none;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 950;
 }
 
 .create-game-primary {
-  min-width: 220px;
+  min-width: 170px;
   border: 0;
   color: #071006;
-  background: var(--lime);
-  box-shadow: none;
+  background: var(--button-green);
+  box-shadow: var(--button-inset);
 }
 
 .create-game-primary:disabled {
@@ -536,21 +713,23 @@
 }
 
 .create-game-secondary {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(248, 250, 252, 0.1);
   color: #ffffff;
-  background: var(--surface-soft);
+  background: var(--button-dark);
+  box-shadow: var(--button-inset);
 }
 
 .create-game-cancel {
-  border: 1px solid rgba(255, 90, 82, 0.22);
-  color: #ff8a84;
-  background: rgba(255, 90, 82, 0.055);
+  border: 1px solid rgba(255, 90, 82, 0.34);
+  color: #ffe1de;
+  background: var(--button-red);
+  box-shadow: var(--button-inset);
 }
 
 .create-game-cancel:hover {
-  border-color: rgba(255, 90, 82, 0.34);
-  color: #ffaaa5;
-  background: rgba(255, 90, 82, 0.085);
+  border-color: rgba(255, 90, 82, 0.42);
+  color: #ffffff;
+  background: linear-gradient(180deg, #662529, #3d181b);
 }
 
 .create-game-primary:focus-visible,
@@ -563,13 +742,14 @@
 }
 
 .create-game-danger {
-  border: 1px solid rgba(255, 59, 48, 0.46);
-  color: #ffffff;
-  background: rgba(255, 59, 48, 0.16);
+  border: 1px solid rgba(255, 59, 48, 0.5);
+  color: #ffd6d2;
+  background: var(--button-red);
+  box-shadow: var(--button-inset);
 }
 
 .create-game-preview {
-  padding: 20px;
+  padding: 16px;
   position: sticky;
   top: 96px;
 }
@@ -587,14 +767,14 @@
   margin-top: 8px;
   color: #ffffff;
   display: block;
-  font-size: 1.35rem;
+  font-size: 1.18rem;
   line-height: 1.12;
 }
 
 .create-game-preview__facts {
-  margin-top: 18px;
+  margin-top: 14px;
   display: grid;
-  gap: 12px;
+  gap: 9px;
 }
 
 .create-game-preview__facts span {
@@ -611,9 +791,9 @@
 }
 
 .create-game-preview__money {
-  min-height: 58px;
-  margin-top: 14px;
-  padding-top: 14px;
+  min-height: 48px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
   display: flex;
   align-items: center;
@@ -628,7 +808,7 @@
 
 .create-game-preview__money strong {
   color: var(--lime);
-  font-size: 1.3rem;
+  font-size: 1.15rem;
 }
 
 .create-game-preview__note {
@@ -648,6 +828,73 @@
   margin: 18px 0 0;
   color: var(--red);
   font-weight: 800;
+}
+
+.create-game-blocker {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(184, 255, 36, 0.28);
+  border-radius: 14px;
+  background: var(--surface);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 238px);
+  align-items: center;
+  gap: 28px;
+}
+
+.create-game-blocker p,
+.create-game-blocker h2,
+.create-game-blocker span {
+  margin: 0;
+}
+
+.create-game-blocker p {
+  color: var(--lime);
+  font-size: 0.78rem;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.create-game-blocker h2 {
+  margin-top: 8px;
+  color: #ffffff;
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.create-game-blocker span {
+  margin-top: 8px;
+  color: rgba(248, 250, 252, 0.68);
+  display: block;
+  line-height: 1.5;
+}
+
+.create-game-blocker__notice,
+.create-game-blocker__error {
+  margin-top: 0;
+  display: block;
+  text-align: center;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.create-game-blocker__notice {
+  color: var(--lime);
+}
+
+.create-game-blocker__error {
+  color: var(--red);
+}
+
+.create-game-blocker__actions {
+  display: grid;
+  gap: 8px;
+  justify-items: stretch;
+}
+
+.create-game-blocker__actions .create-game-primary {
+  text-align: center;
 }
 
 .create-game-modal-backdrop {
@@ -800,6 +1047,25 @@
 
   .create-game-actions {
     display: grid;
+  }
+
+  .create-game-payment-method-row,
+  .create-game-blocker {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .create-game-fee-card {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .create-game-fee-card p {
+    text-align: left;
+  }
+
+  .create-game-blocker__actions {
+    justify-items: stretch;
   }
 
   .create-game-actions__right {

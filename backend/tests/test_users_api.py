@@ -16,10 +16,22 @@ def test_users_create_get_list_update_and_soft_delete(client: TestClient):
 
     patch_response = client.patch(
         f"/users/{user['id']}",
-        json={"first_name": "Updated"},
+        json={
+            "first_name": "Updated",
+            "email_verified_at": "2026-01-01T12:00:00Z",
+        },
     )
     assert patch_response.status_code == 200, patch_response.text
     assert patch_response.json()["first_name"] == "Updated"
+    assert patch_response.json()["email_verified_at"] is not None
+
+    email_patch_response = client.patch(
+        f"/users/{user['id']}",
+        json={"email": "updated-user@example.com"},
+    )
+    assert email_patch_response.status_code == 200, email_patch_response.text
+    assert email_patch_response.json()["email"] == "updated-user@example.com"
+    assert email_patch_response.json()["email_verified_at"] is None
 
     delete_response = client.delete(f"/users/{user['id']}")
     assert delete_response.status_code == 200, delete_response.text

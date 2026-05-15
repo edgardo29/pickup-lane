@@ -37,6 +37,7 @@ class GameCreate(BaseModel):
     minimum_age: int | None = None
     allow_guests: bool = True
     max_guests_per_booking: int = 2
+    host_guest_max: int | None = None
     waitlist_enabled: bool = True
     is_chat_enabled: bool = True
     policy_mode: str
@@ -84,6 +85,7 @@ class GameRead(BaseModel):
     minimum_age: int | None
     allow_guests: bool
     max_guests_per_booking: int
+    host_guest_max: int
     waitlist_enabled: bool
     is_chat_enabled: bool
     policy_mode: str
@@ -133,6 +135,7 @@ class GameUpdate(BaseModel):
     minimum_age: int | None = None
     allow_guests: bool | None = None
     max_guests_per_booking: int | None = None
+    host_guest_max: int | None = None
     waitlist_enabled: bool | None = None
     is_chat_enabled: bool | None = None
     policy_mode: str | None = None

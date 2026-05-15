@@ -23,7 +23,7 @@ def create_community_game_setup(client: TestClient) -> tuple[dict, dict]:
     return host, game
 
 
-def test_host_publish_fee_create_get_list_and_update_failed(client: TestClient):
+def test_host_publish_fee_create_get_list_and_update_waiver(client: TestClient):
     host, game = create_community_game_setup(client)
     host_publish_fee = create_host_publish_fee(client, game["id"], host["id"])
 
@@ -38,14 +38,15 @@ def test_host_publish_fee_create_get_list_and_update_failed(client: TestClient):
     patch_response = client.patch(
         f"/host-publish-fees/{host_publish_fee['id']}",
         json={
-            "fee_status": "failed",
-            "waiver_reason": "none",
-            "amount_cents": 499,
+            "fee_status": "waived",
+            "waiver_reason": "admin_comp",
+            "amount_cents": 0,
         },
     )
     assert patch_response.status_code == 200, patch_response.text
-    assert patch_response.json()["fee_status"] == "failed"
-    assert patch_response.json()["failed_at"] is not None
+    assert patch_response.json()["fee_status"] == "waived"
+    assert patch_response.json()["waiver_reason"] == "admin_comp"
+    assert patch_response.json()["paid_at"] is None
 
 
 def test_host_publish_fee_supports_paid_publish_payment(client: TestClient):

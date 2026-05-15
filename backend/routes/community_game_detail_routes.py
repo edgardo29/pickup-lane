@@ -16,14 +16,6 @@ from backend.schemas import (
 
 router = APIRouter(prefix="/community-game-details", tags=["community_game_details"])
 
-VALID_PAYMENT_DUE_TIMINGS = {
-    "before_game",
-    "at_arrival",
-    "after_confirmation",
-    "custom",
-}
-
-
 def build_community_game_detail_conflict_detail(exc: IntegrityError) -> str:
     error_text = str(exc.orig)
 
@@ -56,21 +48,11 @@ def validate_community_game_detail_business_rules(
 ) -> None:
     payment_methods = detail_data["payment_methods_snapshot"]
     if not isinstance(payment_methods, list) or not all(
-        isinstance(method, str) for method in payment_methods
+        isinstance(method, dict) for method in payment_methods
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="payment_methods_snapshot must be a list of strings.",
-        )
-
-    due_timing = detail_data["payment_due_timing_snapshot"]
-    if due_timing is not None and due_timing not in VALID_PAYMENT_DUE_TIMINGS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "payment_due_timing_snapshot must be 'before_game', "
-                "'at_arrival', 'after_confirmation', or 'custom'."
-            ),
+            detail="payment_methods_snapshot must be a list of payment method objects.",
         )
 
 
@@ -171,41 +153,6 @@ def update_community_game_detail(
         "payment_instructions_snapshot": update_data.get(
             "payment_instructions_snapshot",
             db_community_game_detail.payment_instructions_snapshot,
-        ),
-        "payment_due_timing_snapshot": update_data.get(
-            "payment_due_timing_snapshot",
-            db_community_game_detail.payment_due_timing_snapshot,
-        ),
-        "price_note_snapshot": update_data.get(
-            "price_note_snapshot", db_community_game_detail.price_note_snapshot
-        ),
-        "refund_policy_snapshot": update_data.get(
-            "refund_policy_snapshot",
-            db_community_game_detail.refund_policy_snapshot,
-        ),
-        "cancellation_policy_snapshot": update_data.get(
-            "cancellation_policy_snapshot",
-            db_community_game_detail.cancellation_policy_snapshot,
-        ),
-        "no_show_policy_snapshot": update_data.get(
-            "no_show_policy_snapshot",
-            db_community_game_detail.no_show_policy_snapshot,
-        ),
-        "arrival_expectations_snapshot": update_data.get(
-            "arrival_expectations_snapshot",
-            db_community_game_detail.arrival_expectations_snapshot,
-        ),
-        "equipment_notes_snapshot": update_data.get(
-            "equipment_notes_snapshot",
-            db_community_game_detail.equipment_notes_snapshot,
-        ),
-        "behavior_rules_snapshot": update_data.get(
-            "behavior_rules_snapshot",
-            db_community_game_detail.behavior_rules_snapshot,
-        ),
-        "player_message_snapshot": update_data.get(
-            "player_message_snapshot",
-            db_community_game_detail.player_message_snapshot,
         ),
     }
     validate_community_game_detail_business_rules(effective_detail_data)

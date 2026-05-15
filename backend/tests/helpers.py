@@ -628,27 +628,6 @@ def create_game_image(
     return response.json()
 
 
-def create_host_profile(
-    client: TestClient,
-    user_id: str,
-    **overrides: object,
-) -> dict:
-    payload = {
-        "user_id": user_id,
-        "default_payment_methods": ["venmo"],
-        "default_payment_instructions": "Pay before kickoff.",
-        "default_payment_due_timing": "before_game",
-        "default_refund_policy": "Refunds if the host cancels.",
-        "default_game_rules": "Bring light and dark shirts.",
-    }
-    payload.update(overrides)
-
-    response = client.post("/host-profiles", json=payload)
-
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
 def create_community_game_detail(
     client: TestClient,
     game_id: str,
@@ -656,12 +635,8 @@ def create_community_game_detail(
 ) -> dict:
     payload = {
         "game_id": game_id,
-        "payment_methods_snapshot": ["venmo"],
+        "payment_methods_snapshot": [{"type": "venmo", "value": "@pickup-host"}],
         "payment_instructions_snapshot": "Pay the host before kickoff.",
-        "payment_due_timing_snapshot": "before_game",
-        "price_note_snapshot": "Host collects off-app.",
-        "refund_policy_snapshot": "Refunds if the host cancels.",
-        "equipment_notes_snapshot": "Bring light and dark shirts.",
     }
     payload.update(overrides)
 

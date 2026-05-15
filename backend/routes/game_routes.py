@@ -217,7 +217,9 @@ def build_host_edit_address_snapshot(game_update: GameHostEdit) -> str:
     )
 
 
-def host_edit_changes_location(db: Session, db_game: Game, game_update: GameHostEdit) -> bool:
+def host_edit_changes_location(
+    db: Session, db_game: Game, game_update: GameHostEdit
+) -> bool:
     update_data = game_update.model_dump(exclude_unset=True)
 
     if not LOCATION_FIELDS.intersection(update_data):
@@ -225,7 +227,9 @@ def host_edit_changes_location(db: Session, db_game: Game, game_update: GameHost
 
     db_venue = db.get(Venue, db_game.venue_id)
     existing_values = {
-        "venue_name": db_venue.name if db_venue is not None else db_game.venue_name_snapshot,
+        "venue_name": (
+            db_venue.name if db_venue is not None else db_game.venue_name_snapshot
+        ),
         "address_line_1": (
             db_venue.address_line_1
             if db_venue is not None
@@ -259,7 +263,7 @@ def ensure_timezone(value: datetime) -> datetime:
     return value
 
 
-def get_minimum_spots_for_format(format_label: str) -> int:
+def get_side_size_for_format(format_label: str) -> int:
     label = (format_label or "").strip().lower()
     home_side, separator, away_side = label.partition("v")
 
@@ -274,7 +278,15 @@ def get_minimum_spots_for_format(format_label: str) -> int:
             detail="format_label must be a player format like '7v7'.",
         )
 
-    return max(int(home_side) * 2, MINIMUM_TOTAL_SPOTS)
+    return int(home_side)
+
+
+def get_minimum_spots_for_format(format_label: str) -> int:
+    return max(get_side_size_for_format(format_label) * 2, MINIMUM_TOTAL_SPOTS)
+
+
+def get_default_host_guest_max(format_label: str) -> int:
+    return max(get_side_size_for_format(format_label) - 1, 0)
 
 
 def host_edit_field_changed(db_game: Game, field_name: str, new_value: object) -> bool:
@@ -365,6 +377,7 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
         )
 
     format_minimum_spots = get_minimum_spots_for_format(game_data["format_label"])
+    default_host_guest_max = get_default_host_guest_max(game_data["format_label"])
     if game_data["total_spots"] < format_minimum_spots:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -393,6 +406,24 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="max_guests_per_booking must be greater than or equal to 0.",
+        )
+
+    if game_data.get("host_guest_max") is None:
+        game_data["host_guest_max"] = default_host_guest_max
+
+    if game_data["host_guest_max"] < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="host_guest_max must be greater than or equal to 0.",
+        )
+
+    if game_data["host_guest_max"] > default_host_guest_max:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"host_guest_max must be at most {default_host_guest_max} "
+                f"for {game_data['format_label']}."
+            ),
         )
 
     if game_data["minimum_age"] is not None and game_data["minimum_age"] < 13:
@@ -1308,7 +1339,13 @@ def add_host_game_guests(
             detail="Only published scheduled or full games can be updated.",
         )
 
-    guest_count = validate_guest_count(db_game, guest_request.guest_count)
+    if guest_request.guest_count < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="guest_count must be greater than or equal to 0.",
+        )
+
+    guest_count = guest_request.guest_count
     if guest_count <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1325,7 +1362,7 @@ def add_host_game_guests(
             GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
         )
     ) or 0
-    max_guests = db_game.max_guests_per_booking if db_game.allow_guests else 0
+    max_guests = db_game.host_guest_max if db_game.allow_guests else 0
     if current_host_guest_count + guest_count > max_guests:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1565,6 +1602,11 @@ def update_game(
         )
 
     update_data = game_update.model_dump(exclude_unset=True)
+    if "format_label" in update_data and "host_guest_max" not in update_data:
+        update_data["host_guest_max"] = get_default_host_guest_max(
+            update_data["format_label"]
+        )
+
     effective_game_data = {
         "game_type": update_data.get("game_type", db_game.game_type),
         "payment_collection_type": update_data.get(
@@ -1608,6 +1650,7 @@ def update_game(
         "max_guests_per_booking": update_data.get(
             "max_guests_per_booking", db_game.max_guests_per_booking
         ),
+        "host_guest_max": update_data.get("host_guest_max", db_game.host_guest_max),
         "waitlist_enabled": update_data.get(
             "waitlist_enabled", db_game.waitlist_enabled
         ),
@@ -1648,6 +1691,9 @@ def update_game(
         "completed_by_user_id",
     ):
         update_data[lifecycle_field] = effective_game_data[lifecycle_field]
+
+    if "host_guest_max" in update_data:
+        update_data["host_guest_max"] = effective_game_data["host_guest_max"]
 
     for field_name, field_value in update_data.items():
         setattr(db_game, field_name, field_value)
@@ -1709,6 +1755,10 @@ def host_edit_game(
 
     update_data = game_update.model_dump(exclude_unset=True)
     update_data.pop("acting_user_id", None)
+    if "format_label" in update_data:
+        update_data["host_guest_max"] = get_default_host_guest_max(
+            update_data["format_label"]
+        )
 
     if any(
         field in update_data and update_data[field] is None
@@ -1799,7 +1849,10 @@ def host_edit_game(
         update_data["state_snapshot"] = new_venue.state
         update_data["neighborhood_snapshot"] = new_venue.neighborhood
         update_data["title"] = f"{new_venue.name} {update_data.get('format_label', db_game.format_label)}"
-    elif "format_label" in update_data and update_data["format_label"] != db_game.format_label:
+    elif (
+        "format_label" in update_data
+        and update_data["format_label"] != db_game.format_label
+    ):
         update_data["title"] = f"{db_game.venue_name_snapshot} {update_data['format_label']}"
 
     effective_game_data = {
@@ -1839,6 +1892,7 @@ def host_edit_game(
         "minimum_age": db_game.minimum_age,
         "allow_guests": db_game.allow_guests,
         "max_guests_per_booking": db_game.max_guests_per_booking,
+        "host_guest_max": update_data.get("host_guest_max", db_game.host_guest_max),
         "waitlist_enabled": db_game.waitlist_enabled,
         "is_chat_enabled": db_game.is_chat_enabled,
         "policy_mode": db_game.policy_mode,
@@ -1854,6 +1908,8 @@ def host_edit_game(
         "completed_by_user_id": db_game.completed_by_user_id,
     }
     validate_game_business_rules(effective_game_data)
+    if "host_guest_max" in update_data:
+        update_data["host_guest_max"] = effective_game_data["host_guest_max"]
 
     for field_name, field_value in update_data.items():
         if field_name in LOCATION_FIELDS:

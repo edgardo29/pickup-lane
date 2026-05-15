@@ -61,11 +61,6 @@ from backend.schemas.game_status_history_schema import (
     GameStatusHistoryRead,
     GameStatusHistoryUpdate,
 )
-from backend.schemas.host_profile_schema import (
-    HostProfileCreate,
-    HostProfileRead,
-    HostProfileUpdate,
-)
 from backend.schemas.host_publish_fee_schema import (
     HostPublishFeeCreate,
     HostPublishFeeRead,
@@ -207,9 +202,6 @@ __all__ = [
     "ParticipantStatusHistoryCreate",
     "ParticipantStatusHistoryRead",
     "ParticipantStatusHistoryUpdate",
-    "HostProfileCreate",
-    "HostProfileRead",
-    "HostProfileUpdate",
     "HostPublishFeeCreate",
     "HostPublishFeeRead",
     "HostPublishFeeUpdate",

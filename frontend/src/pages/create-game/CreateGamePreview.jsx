@@ -11,12 +11,12 @@ import BrowseAppNav from '../../components/BrowseAppNav.jsx'
 import {
   buildPreviewLocation,
   capitalize,
+  COMMUNITY_PUBLISH_FEE_CENTS,
   formatMoney,
   formatPaymentMethod,
-  HOST_DEPOSIT_CENTS,
 } from './createGameUtils.js'
 
-export function CreateGamePreview({ form, paymentMethod, review }) {
+export function CreateGamePreview({ firstPublishIsFree, form, paymentMethod, review }) {
   return (
     <aside className="create-game-preview" aria-label="Game preview">
       <div className="create-game-preview__header">
@@ -38,15 +38,17 @@ export function CreateGamePreview({ form, paymentMethod, review }) {
       </div>
 
       <div className="create-game-preview__money">
-        <span>Host deposit</span>
-        <strong>{formatMoney(HOST_DEPOSIT_CENTS)}</strong>
+        <span>Publish fee</span>
+        <strong>{firstPublishIsFree ? 'Free' : formatMoney(COMMUNITY_PUBLISH_FEE_CENTS)}</strong>
       </div>
 
       <p className="create-game-preview__note">
         {form.gameNotes || 'Add a note so players know what to bring.'}
       </p>
 
-      <p className="create-game-preview__card">Paying with {formatPaymentMethod(paymentMethod)}</p>
+      <p className="create-game-preview__card">
+        {firstPublishIsFree ? 'First community game fee waived' : `Paying with ${formatPaymentMethod(paymentMethod)}`}
+      </p>
     </aside>
   )
 }

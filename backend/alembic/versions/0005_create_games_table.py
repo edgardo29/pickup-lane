@@ -79,6 +79,12 @@ def upgrade() -> None:
             server_default=sa.text("2"),
         ),
         sa.Column(
+            "host_guest_max",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
             "waitlist_enabled",
             sa.Boolean(),
             nullable=False,
@@ -157,6 +163,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "max_guests_per_booking >= 0",
             name="ck_games_max_guests_per_booking",
+        ),
+        sa.CheckConstraint(
+            "host_guest_max >= 0",
+            name="ck_games_host_guest_max",
         ),
         sa.CheckConstraint(
             "(minimum_age IS NULL OR minimum_age >= 13)",
