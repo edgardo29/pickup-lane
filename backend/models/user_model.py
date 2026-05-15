@@ -54,6 +54,9 @@ class User(Base):
         String(20), nullable=False, server_default=text("'player'")
     )
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)

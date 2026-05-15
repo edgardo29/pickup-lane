@@ -900,3 +900,83 @@ def test_host_can_add_and_remove_host_guests(client: TestClient):
     ]
     assert sum(item["participant_status"] == "confirmed" for item in updated_host_guests) == 1
     assert sum(item["participant_status"] == "cancelled" for item in updated_host_guests) == 1
+
+
+def test_host_guest_limit_uses_format_side_not_player_guest_limit(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        format_label="4v4",
+        total_spots=8,
+        max_guests_per_booking=2,
+    )
+    create_game_participant(
+        client,
+        host["id"],
+        game["id"],
+        participant_type="host",
+        price_cents=0,
+    )
+
+    assert game["host_guest_max"] == 3
+
+    add_response = client.post(
+        f"/games/{game['id']}/guests/add",
+        json={"acting_user_id": host["id"], "guest_count": 3},
+    )
+    assert add_response.status_code == 201, add_response.text
+    assert add_response.json()["added_count"] == 3
+
+    over_limit_response = client.post(
+        f"/games/{game['id']}/guests/add",
+        json={"acting_user_id": host["id"], "guest_count": 1},
+    )
+    assert over_limit_response.status_code == 400, over_limit_response.text
+    assert "up to 3 host guests" in over_limit_response.text
+
+
+def test_host_guest_add_does_not_override_roster_capacity(client: TestClient):
+    host = create_user(client)
+    player_one = create_user(client)
+    player_two = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        format_label="4v4",
+        total_spots=8,
+    )
+    create_game_participant(
+        client,
+        host["id"],
+        game["id"],
+        participant_type="host",
+        price_cents=0,
+    )
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player_one["id"], "guest_count": 2},
+    )
+    assert join_response.status_code == 201, join_response.text
+    second_join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player_two["id"], "guest_count": 2},
+    )
+    assert second_join_response.status_code == 201, second_join_response.text
+
+    add_response = client.post(
+        f"/games/{game['id']}/guests/add",
+        json={"acting_user_id": host["id"], "guest_count": 2},
+    )
+    assert add_response.status_code == 400, add_response.text
+    assert "Not enough spots" in add_response.text

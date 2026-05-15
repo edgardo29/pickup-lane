@@ -6,6 +6,7 @@ import {
   createUserWithEmailAndPassword,
   linkWithCredential,
   onAuthStateChanged,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -149,6 +150,46 @@ export function AuthProvider({ children }) {
           handleCodeInApp: true,
         })
       },
+      sendCurrentUserVerificationEmail: async () => {
+        const activeUser = firebaseUser || await waitForCurrentFirebaseUser()
+
+        if (!activeUser) {
+          throw new Error('Sign in before verifying your email.')
+        }
+
+        await sendEmailVerification(activeUser, {
+          url: `${window.location.origin}/create-game`,
+          handleCodeInApp: false,
+        })
+      },
+      refreshCurrentUserVerification: async () => {
+        const activeUser = firebaseUser || await waitForCurrentFirebaseUser()
+
+        if (!activeUser) {
+          return null
+        }
+
+        await activeUser.reload()
+        const refreshedUser = auth.currentUser || activeUser
+        setFirebaseUser(refreshedUser)
+
+        if (!refreshedUser) {
+          return null
+        }
+
+        const refreshedAppUser = await getAuthenticatedAppUser(refreshedUser, true)
+        setAppUser((currentAppUser) => {
+          if (
+            currentAppUser?.id === refreshedAppUser?.id &&
+            currentAppUser?.email_verified_at === refreshedAppUser?.email_verified_at
+          ) {
+            return currentAppUser
+          }
+
+          return refreshedAppUser
+        })
+        return refreshedAppUser
+      },
       verifyPasswordReset: async (code) => {
         return verifyPasswordResetCode(auth, code)
       },
@@ -233,6 +274,31 @@ function isMissingAppUserError(error) {
     message.includes('USER_NOT_FOUND') ||
     message.toLowerCase().includes('user not found')
   )
+}
+
+function waitForCurrentFirebaseUser(timeoutMs = 5000) {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser)
+  }
+
+  return new Promise((resolve) => {
+    let settled = false
+    let unsubscribe = () => {}
+
+    const finish = (user) => {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      window.clearTimeout(timeoutId)
+      unsubscribe()
+      resolve(user || auth.currentUser || null)
+    }
+
+    const timeoutId = window.setTimeout(() => finish(auth.currentUser || null), timeoutMs)
+    unsubscribe = onAuthStateChanged(auth, finish, () => finish(null))
+  })
 }
 
 function hasCompleteProfile(user) {

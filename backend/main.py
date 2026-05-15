@@ -19,7 +19,6 @@ from backend.routes import (
     games_router,
     game_participants_router,
     game_status_history_router,
-    host_profiles_router,
     host_publish_fees_router,
     notifications_router,
     participant_status_history_router,
@@ -101,7 +100,6 @@ app.include_router(booking_policy_acceptances_router)
 app.include_router(game_participants_router)
 app.include_router(game_status_history_router)
 app.include_router(participant_status_history_router)
-app.include_router(host_profiles_router)
 app.include_router(host_publish_fees_router)
 app.include_router(notifications_router)
 app.include_router(admin_actions_router)

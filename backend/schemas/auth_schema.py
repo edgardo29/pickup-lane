@@ -8,6 +8,7 @@ class AuthSyncUserRequest(BaseModel):
 
     auth_user_id: str
     email: str
+    email_verified: bool = False
 
 
 class AuthDeleteAccountRequest(BaseModel):

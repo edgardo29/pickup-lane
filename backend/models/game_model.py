@@ -71,6 +71,10 @@ class Game(Base):
             name="ck_games_max_guests_per_booking",
         ),
         CheckConstraint(
+            "host_guest_max >= 0",
+            name="ck_games_host_guest_max",
+        ),
+        CheckConstraint(
             "(minimum_age IS NULL OR minimum_age >= 13)",
             name="ck_games_minimum_age",
         ),
@@ -182,6 +186,9 @@ class Game(Base):
     )
     max_guests_per_booking: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("2")
+    )
+    host_guest_max: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
     )
     waitlist_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")

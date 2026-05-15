@@ -107,6 +107,12 @@ def update_user(
         )
 
     update_data = user_update.model_dump(exclude_unset=True)
+    if (
+        "email" in update_data
+        and update_data["email"] != db_user.email
+        and "email_verified_at" not in update_data
+    ):
+        db_user.email_verified_at = None
 
     for field_name, field_value in update_data.items():
         setattr(db_user, field_name, field_value)

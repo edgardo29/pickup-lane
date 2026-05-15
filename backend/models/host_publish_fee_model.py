@@ -31,7 +31,7 @@ class HostPublishFee(Base):
             name="ck_host_publish_fees_currency",
         ),
         CheckConstraint(
-            "fee_status IN ('pending', 'paid', 'waived', 'failed', 'refunded')",
+            "fee_status IN ('paid', 'waived')",
             name="ck_host_publish_fees_fee_status",
         ),
         CheckConstraint(
@@ -53,17 +53,6 @@ class HostPublishFee(Base):
                 "AND payment_id IS NULL)"
             ),
             name="ck_host_publish_fees_waived_requirements",
-        ),
-        CheckConstraint(
-            "(fee_status <> 'failed' OR failed_at IS NOT NULL)",
-            name="ck_host_publish_fees_failed_requires_failed_at",
-        ),
-        CheckConstraint(
-            (
-                "fee_status <> 'refunded' OR ("
-                "payment_id IS NOT NULL AND refunded_at IS NOT NULL)"
-            ),
-            name="ck_host_publish_fees_refunded_requires_payment",
         ),
         UniqueConstraint("game_id", name="uq_host_publish_fees_game_id"),
         UniqueConstraint("payment_id", name="uq_host_publish_fees_payment_id"),
@@ -99,22 +88,11 @@ class HostPublishFee(Base):
     currency: Mapped[str] = mapped_column(
         CHAR(3), nullable=False, server_default=text("'USD'")
     )
-    fee_status: Mapped[str] = mapped_column(
-        String(30), nullable=False, server_default=text("'pending'")
-    )
+    fee_status: Mapped[str] = mapped_column(String(30), nullable=False)
     waiver_reason: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'none'")
     )
-    required_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("now()")
-    )
     paid_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    failed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    refunded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(

@@ -18,6 +18,7 @@ import {
   GameChatCard,
   GameGallery,
   JoinCard,
+  HostGuestModal,
   LeaveGameModal,
   PlayersCard,
   PlayersListModal,
@@ -52,6 +53,7 @@ function GameDetailsPage() {
   const [isLeaving, setIsLeaving] = useState(false)
   const [isAddingHostGuest, setIsAddingHostGuest] = useState(false)
   const [isUpdatingGuests, setIsUpdatingGuests] = useState(false)
+  const [isHostGuestModalOpen, setIsHostGuestModalOpen] = useState(false)
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false)
   const [isPlayerListOpen, setIsPlayerListOpen] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
@@ -71,6 +73,7 @@ function GameDetailsPage() {
       setIsJoining(false)
       setIsLeaving(false)
       setIsAddingHostGuest(false)
+      setIsHostGuestModalOpen(false)
       setIsLeaveModalOpen(false)
       setIsPlayerListOpen(false)
       setIsChatOpen(false)
@@ -217,6 +220,11 @@ function GameDetailsPage() {
     game.publish_status === 'published' &&
     ['scheduled', 'full'].includes(game.game_status)
   const isHost = currentUser?.id && currentUser.id === game.host_user_id
+  const hostGuestMax = game.allow_guests ? game.host_guest_max || 0 : 0
+  const hostGuestAddSlots = Math.max(
+    Math.min(hostGuestMax - currentGuestCount, participantSummary.spotsLeft),
+    0,
+  )
   const isGameClosed =
     !['published'].includes(game.publish_status) ||
     !['scheduled', 'full'].includes(game.game_status) ||
@@ -347,7 +355,45 @@ function GameDetailsPage() {
     }
   }
 
-  async function handleRemoveGuests(removeCount) {
+  async function handleSaveHostGuestCount(nextGuestCount) {
+    if (!currentUser?.id || !isHost) {
+      return
+    }
+
+    const guestDelta = nextGuestCount - currentGuestCount
+    if (guestDelta === 0) {
+      setIsHostGuestModalOpen(false)
+      return
+    }
+
+    setJoinNotice('')
+
+    if (guestDelta > 0) {
+      setIsAddingHostGuest(true)
+
+      try {
+        await apiRequest(`/games/${game.id}/guests/add`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acting_user_id: currentUser.id, guest_count: guestDelta }),
+        })
+        await refreshParticipants()
+        setIsHostGuestModalOpen(false)
+      } catch (requestError) {
+        setJoinNotice(
+          requestError instanceof Error ? requestError.message : 'Unable to update host guests.',
+        )
+      } finally {
+        setIsAddingHostGuest(false)
+      }
+
+      return
+    }
+
+    await handleRemoveGuests(Math.abs(guestDelta), { closeHostGuestModal: true })
+  }
+
+  async function handleRemoveGuests(removeCount, options = {}) {
     if (!currentUser?.id || !currentParticipant || removeCount <= 0) {
       return
     }
@@ -363,36 +409,15 @@ function GameDetailsPage() {
       })
       await refreshParticipants()
       setIsLeaveModalOpen(false)
+      if (options.closeHostGuestModal) {
+        setIsHostGuestModalOpen(false)
+      }
     } catch (requestError) {
       setJoinNotice(
         requestError instanceof Error ? requestError.message : 'Unable to update attendance.',
       )
     } finally {
       setIsUpdatingGuests(false)
-    }
-  }
-
-  async function handleAddHostGuest() {
-    if (!currentUser?.id || !isHost) {
-      return
-    }
-
-    setIsAddingHostGuest(true)
-    setJoinNotice('')
-
-    try {
-      await apiRequest(`/games/${game.id}/guests/add`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acting_user_id: currentUser.id, guest_count: 1 }),
-      })
-      await refreshParticipants()
-    } catch (requestError) {
-      setJoinNotice(
-        requestError instanceof Error ? requestError.message : 'Unable to add host guest.',
-      )
-    } finally {
-      setIsAddingHostGuest(false)
     }
   }
 
@@ -454,6 +479,32 @@ function GameDetailsPage() {
               <QuickFacts facts={facts} price={price} variant="mobile" />
             </section>
 
+            {(canEditGame || isHost) && (
+              <section className="details-card details-mobile-host-actions">
+                {canEditGame && (
+                  <Link className="details-host-edit-action" to={`/games/${game.id}/edit`}>
+                    Edit Game
+                  </Link>
+                )}
+
+                {isHost && hostGuestMax > 0 && (
+                  <button
+                    className="details-host-guest-action"
+                    type="button"
+                    disabled={isAddingHostGuest || isUpdatingGuests}
+                    onClick={() => setIsHostGuestModalOpen(true)}
+                  >
+                    <span className="details-host-guest-action__label">Manage Guests</span>
+                    <strong>{currentGuestCount}/{hostGuestMax}</strong>
+                  </button>
+                )}
+
+                <button className="details-share-button" type="button" onClick={handleShareGame}>
+                  Share Game
+                </button>
+              </section>
+            )}
+
             <section className="details-card-grid">
               <PlayersCard
                 onOpenPlayerList={() => setIsPlayerListOpen(true)}
@@ -478,6 +529,19 @@ function GameDetailsPage() {
               parkingNote={parkingNote}
               venueName={venueName}
             />
+
+            <section className="details-card details-mobile-info-section">
+              <h2>About This Game</h2>
+              <p>{aboutText}</p>
+            </section>
+
+            <section className="details-card details-mobile-info-section">
+              <h2>Questions?</h2>
+              <p>Check out our Help Center or contact our support team.</p>
+              <a className="details-help-button" href="mailto:support@pickuplane.local">
+                Visit Help Center
+              </a>
+            </section>
           </div>
 
           <aside className="details-sidebar" aria-label="Join game">
@@ -504,13 +568,10 @@ function GameDetailsPage() {
               shareNotice={shareNotice}
               editGameUrl={canEditGame ? `/games/${game.id}/edit` : ''}
               hostGuestCount={isHost ? currentGuestCount : 0}
-              hostGuestMax={game.allow_guests ? game.max_guests_per_booking || 0 : 0}
+              hostGuestMax={hostGuestMax}
               isAddingHostGuest={isAddingHostGuest}
               isUpdatingHostGuests={isUpdatingGuests}
-              onAddHostGuest={isHost ? handleAddHostGuest : null}
-              onRemoveHostGuest={
-                isHost && currentGuestCount > 0 ? () => handleRemoveGuests(1) : null
-              }
+              onManageHostGuests={isHost ? () => setIsHostGuestModalOpen(true) : null}
             />
           </aside>
         </section>
@@ -555,6 +616,18 @@ function GameDetailsPage() {
           messages={chatMessages}
           onClose={() => setIsChatOpen(false)}
           senderNames={chatSenderNames}
+        />
+      )}
+
+      {isHostGuestModalOpen && (
+        <HostGuestModal
+          guestCount={currentGuestCount}
+          guestMax={hostGuestMax}
+          addableCount={hostGuestAddSlots}
+          isAdding={isAddingHostGuest}
+          isRemoving={isUpdatingGuests}
+          onClose={() => setIsHostGuestModalOpen(false)}
+          onSave={handleSaveHostGuestCount}
         />
       )}
 
@@ -621,13 +694,21 @@ function getCurrentGuestCount(participants, currentParticipant, currentUserId) {
 
 function groupParticipantParties(participants) {
   const guestsByBookingId = new Map()
+  const guestsByUserId = new Map()
   const visibleParticipants = []
 
   participants.forEach((participant) => {
-    if (participant.participant_type === 'guest' && participant.booking_id) {
-      const guests = guestsByBookingId.get(participant.booking_id) || []
-      guests.push(participant)
-      guestsByBookingId.set(participant.booking_id, guests)
+    if (participant.participant_type === 'guest') {
+      if (participant.booking_id) {
+        const guests = guestsByBookingId.get(participant.booking_id) || []
+        guests.push(participant)
+        guestsByBookingId.set(participant.booking_id, guests)
+      } else if (participant.guest_of_user_id) {
+        const guests = guestsByUserId.get(participant.guest_of_user_id) || []
+        guests.push(participant)
+        guestsByUserId.set(participant.guest_of_user_id, guests)
+      }
+
       return
     }
 
@@ -636,9 +717,10 @@ function groupParticipantParties(participants) {
 
   return visibleParticipants.map((participant) => ({
     ...participant,
-    guest_count: participant.booking_id
-      ? guestsByBookingId.get(participant.booking_id)?.length || 0
-      : 0,
+    guest_count: (
+      (participant.booking_id ? guestsByBookingId.get(participant.booking_id)?.length || 0 : 0) +
+      (participant.user_id ? guestsByUserId.get(participant.user_id)?.length || 0 : 0)
+    ),
   }))
 }
 

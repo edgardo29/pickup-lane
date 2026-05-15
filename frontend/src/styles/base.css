@@ -1,5 +1,11 @@
 :root {
   --app-bg: #010409;
+  --pl-lime: #b8ff24;
+  --pl-lime-bright: #d7ff35;
+  --pl-button-dark: linear-gradient(180deg, #172331, #0a121b);
+  --pl-button-green: linear-gradient(180deg, #d7ff35, #98ef0e);
+  --pl-button-red: linear-gradient(180deg, #7a2024, #4a1114);
+  --pl-button-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",

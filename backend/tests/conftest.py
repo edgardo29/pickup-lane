@@ -33,7 +33,6 @@ TEST_TABLES = (
     "booking_policy_acceptances",
     "bookings",
     "user_stats",
-    "host_profiles",
     "user_payment_methods",
     "user_settings",
     "game_images",

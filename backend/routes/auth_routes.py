@@ -65,10 +65,25 @@ def get_bearer_token(authorization: str | None) -> str:
     return token
 
 
+def sync_email_verification_from_firebase(
+    user: User,
+    email_verified: bool,
+    db: Session,
+) -> bool:
+    if not email_verified or user.email_verified_at is not None:
+        return False
+
+    user.email_verified_at = datetime.now(timezone.utc)
+    user.updated_at = user.email_verified_at
+    db.add(user)
+    return True
+
+
 def get_authenticated_user_from_token(
     authorization: str | None, db: Session
 ) -> User:
-    auth_user_id = get_auth_user_id_from_token(authorization)
+    decoded_token = get_decoded_firebase_token(authorization)
+    auth_user_id = decoded_token["uid"]
     user = get_active_user_by_auth_id(auth_user_id, db)
 
     if user is None:
@@ -76,6 +91,19 @@ def get_authenticated_user_from_token(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found.",
         )
+
+    if sync_email_verification_from_firebase(
+        user,
+        bool(decoded_token.get("email_verified")),
+        db,
+    ):
+        try:
+            return commit_user_sync(db, user)
+        except IntegrityError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=build_conflict_detail(exc),
+            ) from exc
 
     return user
 
@@ -88,6 +116,10 @@ def get_current_app_user(
 
 
 def get_auth_user_id_from_token(authorization: str | None) -> str:
+    return get_decoded_firebase_token(authorization)["uid"]
+
+
+def get_decoded_firebase_token(authorization: str | None) -> dict:
     token = get_bearer_token(authorization)
 
     try:
@@ -111,7 +143,7 @@ def get_auth_user_id_from_token(authorization: str | None) -> str:
             detail="Authentication token is missing a Firebase user id.",
         )
 
-    return auth_user_id
+    return decoded_token
 
 
 def add_missing_user_context_rows(user: User, db: Session) -> bool:
@@ -364,6 +396,14 @@ def sync_user(payload: AuthSyncUserRequest, db: Session = Depends(get_db)) -> Us
             db.add(existing_user)
             should_commit = True
 
+        should_commit = (
+            sync_email_verification_from_firebase(
+                existing_user,
+                payload.email_verified,
+                db,
+            )
+            or should_commit
+        )
         should_commit = add_missing_user_context_rows(existing_user, db) or should_commit
 
         if should_commit:
@@ -389,7 +429,14 @@ def sync_user(payload: AuthSyncUserRequest, db: Session = Depends(get_db)) -> Us
             and email_owner.deleted_at is None
             and email_owner.account_status != "pending_deletion"
         ):
-            if add_missing_user_context_rows(email_owner, db):
+            should_commit = sync_email_verification_from_firebase(
+                email_owner,
+                payload.email_verified,
+                db,
+            )
+            should_commit = add_missing_user_context_rows(email_owner, db) or should_commit
+
+            if should_commit:
                 try:
                     return commit_user_sync(db, email_owner)
                 except IntegrityError as exc:
@@ -413,6 +460,9 @@ def sync_user(payload: AuthSyncUserRequest, db: Session = Depends(get_db)) -> Us
         id=uuid.uuid4(),
         auth_user_id=payload.auth_user_id,
         email=payload.email,
+        email_verified_at=(
+            datetime.now(timezone.utc) if payload.email_verified else None
+        ),
     )
 
     try:

@@ -11,7 +11,6 @@ from backend.models.game_image_model import GameImage
 from backend.models.game_model import Game
 from backend.models.game_participant_model import GameParticipant
 from backend.models.game_status_history_model import GameStatusHistory
-from backend.models.host_profile_model import HostProfile
 from backend.models.host_publish_fee_model import HostPublishFee
 from backend.models.notification_model import Notification
 from backend.models.participant_status_history_model import ParticipantStatusHistory
@@ -53,7 +52,6 @@ __all__ = [
     "BookingPolicyAcceptance",
     "GameParticipant",
     "ParticipantStatusHistory",
-    "HostProfile",
     "HostPublishFee",
     "Notification",
     "AdminAction",

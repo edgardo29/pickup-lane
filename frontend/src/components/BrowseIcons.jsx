@@ -55,6 +55,25 @@ export function PlusCircleIcon() {
   )
 }
 
+export function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m4.5 16.8-.9 3.6 3.6-.9L18.6 8.1l-2.7-2.7Z" />
+      <path d="m14.7 6.6 2.7 2.7" />
+    </svg>
+  )
+}
+
+export function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 15.5v-11" />
+      <path d="m7.5 8.8 4.5-4.5 4.5 4.5" />
+      <path d="M6 12.5v6h12v-6" />
+    </svg>
+  )
+}
+
 export function ShieldCheckIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -94,6 +113,18 @@ export function UsersIcon() {
       <path d="M2.8 19.2c.4-3.3 2.4-5 5.5-5s5.1 1.7 5.5 5" />
       <circle cx="16.8" cy="9.5" r="2.7" />
       <path d="M14.8 14.8c3.4-.4 5.7 1.1 6.4 4.4" />
+    </svg>
+  )
+}
+
+export function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 6.5h15" />
+      <path d="M9 6.5V4.8h6v1.7" />
+      <path d="M7 9h10l-.7 10.2H7.7Z" />
+      <path d="M10.2 11.5v5" />
+      <path d="M13.8 11.5v5" />
     </svg>
   )
 }

@@ -32,14 +32,20 @@ def test_community_game_detail_create_get_list_and_update(client: TestClient):
     patch_response = client.patch(
         f"/community-game-details/{detail['id']}",
         json={
-            "payment_methods_snapshot": ["zelle"],
-            "payment_due_timing_snapshot": "at_arrival",
-            "player_message_snapshot": "Check in with the host on arrival.",
+            "payment_methods_snapshot": [
+                {"type": "zelle", "value": "zelle@example.com"}
+            ],
+            "payment_instructions_snapshot": "Pay the host after confirmation.",
         },
     )
     assert patch_response.status_code == 200, patch_response.text
-    assert patch_response.json()["payment_methods_snapshot"] == ["zelle"]
-    assert patch_response.json()["payment_due_timing_snapshot"] == "at_arrival"
+    assert patch_response.json()["payment_methods_snapshot"] == [
+        {"type": "zelle", "value": "zelle@example.com"}
+    ]
+    assert (
+        patch_response.json()["payment_instructions_snapshot"]
+        == "Pay the host after confirmation."
+    )
 
 
 def test_community_game_detail_rejects_official_game(client: TestClient):
@@ -51,7 +57,7 @@ def test_community_game_detail_rejects_official_game(client: TestClient):
         "/community-game-details",
         json={
             "game_id": game["id"],
-            "payment_methods_snapshot": ["venmo"],
+            "payment_methods_snapshot": [{"type": "venmo", "value": "@host"}],
         },
     )
 
@@ -76,7 +82,7 @@ def test_community_game_detail_rejects_duplicate_game(client: TestClient):
         "/community-game-details",
         json={
             "game_id": game["id"],
-            "payment_methods_snapshot": ["cash"],
+            "payment_methods_snapshot": [{"type": "cash", "value": "Cash"}],
         },
     )
 

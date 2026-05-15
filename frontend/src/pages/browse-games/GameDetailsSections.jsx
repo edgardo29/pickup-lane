@@ -1,5 +1,14 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChatIcon, ShieldCheckIcon, UsersIcon } from '../../components/BrowseIcons.jsx'
+import {
+  BuildingIcon,
+  CalendarIcon,
+  ChatIcon,
+  PencilIcon,
+  ShareIcon,
+  ShieldCheckIcon,
+  UsersIcon,
+} from '../../components/BrowseIcons.jsx'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
 import darkMapPreview from '../../assets/maps/dark-map-preview.png'
 
@@ -91,6 +100,7 @@ export function QuickFacts({ facts, price, variant }) {
       ))}
 
       <div className="details-price-fact">
+        <span aria-hidden="true">$</span>
         <strong>{price}</strong>
         <span>per player</span>
       </div>
@@ -321,8 +331,11 @@ export function WhereToGoCard({
 
       <div className="details-location__rows">
         <div className="details-location__row details-location__row--venue">
-          <span>Venue</span>
+          <span className="details-location__note-icon">
+            <BuildingIcon />
+          </span>
           <div>
+            <strong>Venue</strong>
             <h3>{venueName}</h3>
             <p>{address}</p>
           </div>
@@ -378,9 +391,8 @@ export function JoinCard({
   joinNotice,
   leaveLabel,
   onJoin,
-  onAddHostGuest,
   onLeave,
-  onRemoveHostGuest,
+  onManageHostGuests,
   onShare,
   price,
   returnPath,
@@ -399,6 +411,7 @@ export function JoinCard({
         disabled={joinDisabled}
         onClick={onJoin}
       >
+        {joinLabel === 'Hosting' && <CalendarIcon />}
         {joinLabel || 'Join Game'}
       </button>
 
@@ -423,36 +436,24 @@ export function JoinCard({
 
       {editGameUrl && (
         <Link className="details-host-edit-action" to={editGameUrl}>
+          <PencilIcon />
           Edit Game
         </Link>
       )}
 
-      {onAddHostGuest && hostGuestMax > 0 && (
-        <div className="details-host-guest-actions">
-          <div>
-            <strong>Host guests</strong>
-            <span>
-              {hostGuestCount}/{hostGuestMax}
-            </span>
-          </div>
-          <button
-            type="button"
-            disabled={isAddingHostGuest || hostGuestCount >= hostGuestMax}
-            onClick={onAddHostGuest}
-          >
-            {isAddingHostGuest ? 'Adding...' : 'Add Guest'}
-          </button>
-          {onRemoveHostGuest && (
-            <button
-              className="details-host-guest-actions__remove"
-              type="button"
-              disabled={isUpdatingHostGuests}
-              onClick={onRemoveHostGuest}
-            >
-              {isUpdatingHostGuests ? 'Removing...' : 'Remove Guest'}
-            </button>
-          )}
-        </div>
+      {onManageHostGuests && hostGuestMax > 0 && (
+        <button
+          className="details-host-guest-action"
+          type="button"
+          disabled={isAddingHostGuest || isUpdatingHostGuests}
+          onClick={onManageHostGuests}
+        >
+          <span className="details-host-guest-action__label">
+            <UsersIcon />
+            Manage Guests
+          </span>
+          <strong>{hostGuestCount}/{hostGuestMax}</strong>
+        </button>
       )}
 
       {onLeave && (
@@ -462,6 +463,7 @@ export function JoinCard({
       )}
 
       <button className="details-share-button" type="button" onClick={onShare}>
+        <ShareIcon />
         Share Game
       </button>
 
@@ -491,6 +493,116 @@ export function JoinCard({
     </div>
   )
 }
+
+export function HostGuestModal({
+  addableCount,
+  guestCount,
+  guestMax,
+  isAdding,
+  isRemoving,
+  onClose,
+  onSave,
+}) {
+  const [nextGuestCount, setNextGuestCount] = useState(guestCount)
+  const isSaving = isAdding || isRemoving
+  const maxSelectableGuests = Math.min(guestMax, guestCount + addableCount)
+  const canDecrease = nextGuestCount > 0
+  const canIncrease = nextGuestCount < maxSelectableGuests
+  const hasChanges = nextGuestCount !== guestCount
+
+  function changeGuestCount(delta) {
+    setNextGuestCount((currentCount) => (
+      Math.min(Math.max(currentCount + delta, 0), maxSelectableGuests)
+    ))
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault()
+
+    if (!hasChanges) {
+      onClose()
+      return
+    }
+
+    onSave(nextGuestCount)
+  }
+
+  return (
+    <div className="details-modal-backdrop" role="presentation" onClick={onClose}>
+      <form
+        className="details-confirm-modal details-host-guest-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="host-guest-modal-title"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={handleSubmit}
+      >
+        <div className="details-host-guest-modal__header">
+          <span className="details-host-guest-modal__icon">
+            <UsersIcon />
+          </span>
+          <div>
+            <h2 id="host-guest-modal-title">Manage Guests</h2>
+            <p>
+              Choose how many guest spots you want reserved.
+            </p>
+          </div>
+          <button
+            className="details-host-guest-modal__close"
+            type="button"
+            aria-label="Close host guest manager"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="details-host-guest-stepper" aria-label="Host guest count">
+          <button
+            type="button"
+            aria-label="Remove one guest"
+            disabled={!canDecrease || isSaving}
+            onClick={() => changeGuestCount(-1)}
+          >
+            −
+          </button>
+          <div>
+            <strong>{nextGuestCount}</strong>
+            <span>of {guestMax}</span>
+          </div>
+          <button
+            type="button"
+            aria-label="Add one guest"
+            disabled={!canIncrease || isSaving}
+            onClick={() => changeGuestCount(1)}
+          >
+            +
+          </button>
+        </div>
+
+        {maxSelectableGuests < guestMax && (
+          <p className="details-host-guest-modal__limit">
+            Only {maxSelectableGuests} can be reserved right now.
+          </p>
+        )}
+
+        <div className="details-host-guest-modal__actions">
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button className="primary" type="submit" disabled={isSaving}>
+            {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Done'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 export function LeaveGameModal({
   guestCount,
   isLeaving,

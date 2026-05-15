@@ -16,7 +16,7 @@ from backend.schemas import (
 
 router = APIRouter(prefix="/host-publish-fees", tags=["host_publish_fees"])
 
-VALID_FEE_STATUSES = {"pending", "paid", "waived", "failed", "refunded"}
+VALID_FEE_STATUSES = {"paid", "waived"}
 VALID_WAIVER_REASONS = {"none", "first_game_free", "admin_comp"}
 VALID_CURRENCY = "USD"
 
@@ -79,12 +79,6 @@ def normalize_host_publish_fee_lifecycle_fields(
     normalized_data = dict(fee_data)
     now = datetime.now(timezone.utc)
 
-    normalized_data["required_at"] = (
-        normalized_data.get("required_at")
-        or (existing_fee.required_at if existing_fee is not None else None)
-        or now
-    )
-
     if normalized_data["fee_status"] == "paid":
         normalized_data["paid_at"] = (
             normalized_data.get("paid_at")
@@ -93,24 +87,6 @@ def normalize_host_publish_fee_lifecycle_fields(
         )
     else:
         normalized_data["paid_at"] = None
-
-    if normalized_data["fee_status"] == "failed":
-        normalized_data["failed_at"] = (
-            normalized_data.get("failed_at")
-            or (existing_fee.failed_at if existing_fee is not None else None)
-            or now
-        )
-    else:
-        normalized_data["failed_at"] = None
-
-    if normalized_data["fee_status"] == "refunded":
-        normalized_data["refunded_at"] = (
-            normalized_data.get("refunded_at")
-            or (existing_fee.refunded_at if existing_fee is not None else None)
-            or now
-        )
-    else:
-        normalized_data["refunded_at"] = None
 
     return normalized_data
 
@@ -125,7 +101,6 @@ def validate_host_publish_fee_business_rules(
         "currency",
         "fee_status",
         "waiver_reason",
-        "required_at",
     ):
         if fee_data[field_name] is None:
             raise HTTPException(
@@ -148,10 +123,7 @@ def validate_host_publish_fee_business_rules(
     if fee_data["fee_status"] not in VALID_FEE_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "fee_status must be 'pending', 'paid', 'waived', "
-                "'failed', or 'refunded'."
-            ),
+            detail="fee_status must be 'paid' or 'waived'.",
         )
 
     if fee_data["waiver_reason"] not in VALID_WAIVER_REASONS:
@@ -184,20 +156,6 @@ def validate_host_publish_fee_business_rules(
                 "Waived publish fees require amount_cents 0, a waiver reason, "
                 "and no payment_id."
             ),
-        )
-
-    if fee_data["fee_status"] == "failed" and fee_data["failed_at"] is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed publish fees require failed_at.",
-        )
-
-    if fee_data["fee_status"] == "refunded" and (
-        fee_data["payment_id"] is None or fee_data["refunded_at"] is None
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refunded publish fees require payment_id and refunded_at.",
         )
 
 
@@ -353,12 +311,7 @@ def update_host_publish_fee(
         "waiver_reason": update_data.get(
             "waiver_reason", db_host_publish_fee.waiver_reason
         ),
-        "required_at": update_data.get("required_at", db_host_publish_fee.required_at),
         "paid_at": update_data.get("paid_at", db_host_publish_fee.paid_at),
-        "failed_at": update_data.get("failed_at", db_host_publish_fee.failed_at),
-        "refunded_at": update_data.get(
-            "refunded_at", db_host_publish_fee.refunded_at
-        ),
     }
     effective_fee_data = normalize_host_publish_fee_lifecycle_fields(
         effective_fee_data, db_host_publish_fee
@@ -369,10 +322,7 @@ def update_host_publish_fee(
     for field_name, field_value in update_data.items():
         setattr(db_host_publish_fee, field_name, field_value)
 
-    db_host_publish_fee.required_at = effective_fee_data["required_at"]
     db_host_publish_fee.paid_at = effective_fee_data["paid_at"]
-    db_host_publish_fee.failed_at = effective_fee_data["failed_at"]
-    db_host_publish_fee.refunded_at = effective_fee_data["refunded_at"]
     db_host_publish_fee.updated_at = datetime.now(timezone.utc)
 
     try:

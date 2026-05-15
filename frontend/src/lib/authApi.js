@@ -6,12 +6,12 @@ export function checkEmailAvailability(email) {
   return apiRequest(`/auth/email-availability?email=${encodedEmail}`)
 }
 
-export async function getAuthenticatedAppUser(firebaseUser) {
+export async function getAuthenticatedAppUser(firebaseUser, forceRefresh = false) {
   if (!firebaseUser) {
     return null
   }
 
-  const idToken = await firebaseUser.getIdToken()
+  const idToken = await firebaseUser.getIdToken(forceRefresh)
 
   return apiRequest('/auth/me', {
     headers: {
@@ -31,6 +31,7 @@ export function syncFirebaseUser(firebaseUser) {
     body: JSON.stringify({
       auth_user_id: firebaseUser.uid,
       email: firebaseUser.email,
+      email_verified: Boolean(firebaseUser.emailVerified),
     }),
   })
 }

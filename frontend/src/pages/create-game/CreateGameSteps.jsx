@@ -1,4 +1,3 @@
-import { InfoIcon, ShieldCheckIcon } from '../../components/AuthIcons.jsx'
 import {
   BuildingIcon,
   CalendarIcon,
@@ -11,6 +10,7 @@ import {
 import {
   CurrencyInput,
   FormField,
+  PaymentMethodsEditor,
   ReviewRow,
   SectionLabel,
   StepHeading,
@@ -22,13 +22,14 @@ import {
   buildAddress,
   capitalize,
   clampDate,
+  COMMUNITY_PUBLISH_FEE_CENTS,
   environmentOptions,
+  formatHostPaymentMethods,
   formatMoney,
   formatOptions,
   formatPaymentMethod,
   getMinimumSpotsForFormat,
   getTodayDate,
-  HOST_DEPOSIT_CENTS,
   steps,
   timeOptions,
 } from './createGameUtils.js'
@@ -58,6 +59,19 @@ export function BasicsStep({ form, updateField }) {
     const nextMinimumSpots = getMinimumSpotsForFormat(nextFormat)
     if (Number(form.totalSpots) < nextMinimumSpots) {
       updateField('totalSpots', nextMinimumSpots)
+    }
+  }
+
+  function handlePriceChange(nextPrice) {
+    updateField('price', nextPrice)
+
+    if (nextPrice === 0) {
+      updateField('paymentMethods', [{ type: 'none', value: '' }])
+      return
+    }
+
+    if (form.paymentMethods.length === 1 && form.paymentMethods[0]?.type === 'none') {
+      updateField('paymentMethods', [{ type: 'venmo', value: '' }])
     }
   }
 
@@ -154,7 +168,7 @@ export function BasicsStep({ form, updateField }) {
           <FormField icon={<SoccerBallIcon />} label="Price per player">
             <CurrencyInput
               value={form.price}
-              onChange={(value) => updateField('price', value)}
+              onChange={handlePriceChange}
             />
           </FormField>
         </div>
@@ -216,12 +230,23 @@ export function LocationStep({ form, updateField }) {
 }
 
 export function NotesStep({ form, updateField }) {
+  const isFreeGame = Number(form.price) === 0
+
   return (
     <>
       <StepHeading
-        title="Anything players should know?"
-        text="Add a short note that will appear on the game page."
+        title="Notes and Payment"
+        text="Add anything players should know before they join."
       />
+
+      <div className="create-game-section">
+        <SectionLabel>Host Payment</SectionLabel>
+        <PaymentMethodsEditor
+          allowNoPayment={isFreeGame}
+          methods={form.paymentMethods}
+          onChange={(methods) => updateField('paymentMethods', methods)}
+        />
+      </div>
 
       <TextareaInput
         form={form}
@@ -231,16 +256,13 @@ export function NotesStep({ form, updateField }) {
         maxLength={200}
         placeholder="Share any important info with players..."
       />
-
-      <p className="create-game-note">
-        <InfoIcon />
-        Keep it short and helpful. This will be visible to all players.
-      </p>
     </>
   )
 }
 
-export function ReviewStep({ form, isEditMode, paymentMethod, publishError, review }) {
+export function ReviewStep({ form, firstPublishIsFree, isEditMode, paymentMethod, publishError, review }) {
+  const publishFeeCents = firstPublishIsFree ? 0 : COMMUNITY_PUBLISH_FEE_CENTS
+
   return (
     <>
       <StepHeading
@@ -268,27 +290,37 @@ export function ReviewStep({ form, isEditMode, paymentMethod, publishError, revi
         <ReviewRow icon={<MapPinIcon />} label="Address" value={buildAddress(form) || 'Not added'} />
         <hr />
         <ReviewRow icon={<ChatIcon />} label="Game notes" value={form.gameNotes || 'No notes added.'} />
+        <ReviewRow
+          icon={<SoccerBallIcon />}
+          label="Host payment"
+          value={
+            Number(form.price) === 0
+              ? 'No payment needed'
+              : formatHostPaymentMethods(form.paymentMethods)
+          }
+        />
       </div>
 
       {!isEditMode && (
         <>
-          <div className="create-game-deposit-card">
-            <ShieldCheckIcon />
+          <div className="create-game-fee-card">
             <div>
-              <span>Refundable host deposit</span>
-              <strong>{formatMoney(HOST_DEPOSIT_CENTS)}</strong>
-              <p>Held after publishing. Released after the game is successfully hosted.</p>
+              <span>Publish fee</span>
+              <strong>{firstPublishIsFree ? 'Free' : formatMoney(COMMUNITY_PUBLISH_FEE_CENTS)}</strong>
             </div>
+            <p>{firstPublishIsFree ? 'First community game waived.' : 'Charged once when published.'}</p>
           </div>
 
-          <div className="create-game-payment-row">
-            <span>Payment method</span>
-            <strong>{formatPaymentMethod(paymentMethod)}</strong>
-          </div>
+          {!firstPublishIsFree && (
+            <div className="create-game-payment-row">
+              <span>Payment method</span>
+              <strong>{formatPaymentMethod(paymentMethod)}</strong>
+            </div>
+          )}
 
           <div className="create-game-total-row">
-            <span>Deposit due today</span>
-            <strong>{formatMoney(HOST_DEPOSIT_CENTS)}</strong>
+            <span>Due today</span>
+            <strong>{formatMoney(publishFeeCents)}</strong>
           </div>
         </>
       )}
