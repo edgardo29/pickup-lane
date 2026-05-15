@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeftIcon } from '../../components/AuthIcons.jsx'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
@@ -56,7 +56,9 @@ function CreateGamePage() {
   const [verificationError, setVerificationError] = useState('')
   const [verificationNotice, setVerificationNotice] = useState('')
   const [verificationStatus, setVerificationStatus] = useState('idle')
+  const [verificationCooldownSeconds, setVerificationCooldownSeconds] = useState(0)
   const [showDiscardModal, setShowDiscardModal] = useState(false)
+  const blockedVerificationRefreshRef = useRef('')
 
   useEffect(() => {
     let ignore = false
@@ -129,10 +131,14 @@ function CreateGamePage() {
             setFormBaseline(initialForm)
           }
 
-          refreshBlockedHost()
+          if (blockedVerificationRefreshRef.current !== appUser.id) {
+            blockedVerificationRefreshRef.current = appUser.id
+            refreshBlockedHost()
+          }
           return
         }
 
+        blockedVerificationRefreshRef.current = ''
         await loadVerifiedContext(appUser)
       } catch (error) {
         if (!ignore) {
@@ -147,6 +153,18 @@ function CreateGamePage() {
       ignore = true
     }
   }, [appUser, gameId, isEditMode, isLoading, refreshCurrentUserVerification])
+
+  useEffect(() => {
+    if (verificationCooldownSeconds <= 0) {
+      return undefined
+    }
+
+    const intervalId = window.setInterval(() => {
+      setVerificationCooldownSeconds((currentSeconds) => Math.max(currentSeconds - 1, 0))
+    }, 1000)
+
+    return () => window.clearInterval(intervalId)
+  }, [verificationCooldownSeconds])
 
   const review = useMemo(() => buildReview(form), [form])
   const hasUnsavedChanges = useMemo(
@@ -395,6 +413,7 @@ function CreateGamePage() {
           </section>
         ) : shouldBlockForEmailVerification ? (
           <EmailVerificationBlocker
+            cooldownSeconds={verificationCooldownSeconds}
             error={verificationError}
             notice={verificationNotice}
             status={verificationStatus}
@@ -479,16 +498,27 @@ function CreateGamePage() {
     try {
       await sendCurrentUserVerificationEmail()
       setVerificationStatus('sent')
+      setVerificationCooldownSeconds(60)
     } catch (error) {
-      setVerificationError(error instanceof Error ? error.message : 'Unable to send verification email.')
+      const verificationMessage = getEmailVerificationErrorMessage(error)
+      setVerificationError(verificationMessage.message)
+      setVerificationCooldownSeconds(verificationMessage.cooldownSeconds)
       setVerificationStatus('idle')
     }
   }
 
 }
 
-function EmailVerificationBlocker({ error, notice, onSend, status }) {
+function EmailVerificationBlocker({ cooldownSeconds, error, notice, onSend, status }) {
   const isSending = status === 'sending'
+  const isCoolingDown = cooldownSeconds > 0
+  const buttonLabel = isSending
+    ? 'Sending...'
+    : isCoolingDown
+      ? `Try again in ${cooldownSeconds}s`
+      : status === 'sent'
+        ? 'Resend verification email'
+        : 'Send verification email'
 
   return (
     <section className="create-game-blocker">
@@ -497,23 +527,56 @@ function EmailVerificationBlocker({ error, notice, onSend, status }) {
         <h2>{status === 'sent' ? 'Check your email to continue.' : 'Verify your email to become a host.'}</h2>
         <span>
           {status === 'sent'
-            ? 'We sent a verification link to your account email. Check your inbox and spam folder. If it doesn’t show up, wait a minute before resending.'
+            ? 'We sent a verification link to your account email. Check your inbox and spam folder, then use the resend timer if delivery is slow.'
             : 'Before you can publish a community game, we need to confirm your email address. This helps keep host accounts real and protects players from fake listings.'}
         </span>
       </div>
       <div className="create-game-blocker__actions">
-        <button className="create-game-primary" disabled={isSending} type="button" onClick={onSend}>
-          {isSending
-            ? 'Sending...'
-            : status === 'sent'
-              ? 'Resend verification email'
-              : 'Send verification email'}
+        <button
+          className="create-game-primary"
+          disabled={isSending || isCoolingDown}
+          type="button"
+          onClick={onSend}
+        >
+          {buttonLabel}
         </button>
         {notice && <strong className="create-game-blocker__notice">{notice}</strong>}
         {error && <strong className="create-game-blocker__error">{error}</strong>}
       </div>
     </section>
   )
+}
+
+function getEmailVerificationErrorMessage(error) {
+  const code = error?.code || ''
+  const message = error?.message || ''
+  const normalizedError = `${code} ${message}`.toLowerCase()
+
+  if (normalizedError.includes('too-many-requests')) {
+    return {
+      cooldownSeconds: 300,
+      message: 'We hit the email sending limit for this account. Try again when the timer finishes.',
+    }
+  }
+
+  if (normalizedError.includes('network-request-failed') || normalizedError.includes('failed to fetch')) {
+    return {
+      cooldownSeconds: 0,
+      message: 'Network issue. Check your connection and try again.',
+    }
+  }
+
+  if (normalizedError.includes('requires-recent-login')) {
+    return {
+      cooldownSeconds: 0,
+      message: 'Sign in again, then resend the verification email.',
+    }
+  }
+
+  return {
+    cooldownSeconds: 0,
+    message: 'Unable to send verification email right now. Please try again in a minute.',
+  }
 }
 
 export default CreateGamePage

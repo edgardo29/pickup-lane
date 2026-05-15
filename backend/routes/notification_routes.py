@@ -11,6 +11,7 @@ from backend.models import (
     Booking,
     ChatMessage,
     Game,
+    GameChat,
     GameParticipant,
     Notification,
     User,
@@ -42,6 +43,7 @@ IMMUTABLE_NOTIFICATION_UPDATE_FIELDS = {
     "title",
     "body",
     "related_game_id",
+    "related_chat_id",
     "related_booking_id",
     "related_participant_id",
     "related_message_id",
@@ -130,6 +132,24 @@ def validate_notification_references(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Related game not found.",
+            )
+
+    if notification_data["related_chat_id"] is not None:
+        db_chat = db.get(GameChat, notification_data["related_chat_id"])
+
+        if db_chat is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Related game chat not found.",
+            )
+
+        if (
+            notification_data["related_game_id"] is not None
+            and db_chat.game_id != notification_data["related_game_id"]
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="related_chat_id must belong to related_game_id.",
             )
 
     if notification_data["related_booking_id"] is not None:
@@ -263,6 +283,7 @@ def list_notifications(
     notification_type: str | None = None,
     is_read: bool | None = None,
     related_game_id: uuid.UUID | None = None,
+    related_chat_id: uuid.UUID | None = None,
     related_booking_id: uuid.UUID | None = None,
     related_participant_id: uuid.UUID | None = None,
     related_message_id: uuid.UUID | None = None,
@@ -286,6 +307,9 @@ def list_notifications(
 
     if related_game_id is not None:
         statement = statement.where(Notification.related_game_id == related_game_id)
+
+    if related_chat_id is not None:
+        statement = statement.where(Notification.related_chat_id == related_chat_id)
 
     if related_booking_id is not None:
         statement = statement.where(
@@ -348,6 +372,10 @@ def update_notification(
             "related_game_id",
             db_notification.related_game_id,
         ),
+        "related_chat_id": update_data.get(
+            "related_chat_id",
+            db_notification.related_chat_id,
+        ),
         "related_booking_id": update_data.get(
             "related_booking_id",
             db_notification.related_booking_id,
@@ -376,6 +404,8 @@ def update_notification(
 
     for field_name, field_value in update_data.items():
         setattr(db_notification, field_name, field_value)
+
+    db_notification.updated_at = datetime.now(timezone.utc)
 
     try:
         db.add(db_notification)

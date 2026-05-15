@@ -17,6 +17,7 @@ TEST_TABLES = (
     "sub_post_positions",
     "sub_posts",
     "admin_actions",
+    "game_chat_reads",
     "notifications",
     "chat_messages",
     "game_chats",

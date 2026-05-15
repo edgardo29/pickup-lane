@@ -1,5 +1,5 @@
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { applyActionCode } from 'firebase/auth'
 import { LockIcon, ShieldCheckIcon } from '../../components/AuthIcons.jsx'
 import { useAuth } from '../../hooks/useAuth.js'
@@ -187,15 +187,17 @@ export function ResetPasswordPage() {
 function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
   const [status, setStatus] = useState(code ? 'checking' : 'invalid')
   const [error, setError] = useState(code ? '' : 'This verification link is missing or invalid.')
+  const processedCodeRef = useRef('')
 
   useEffect(() => {
     let ignore = false
 
     async function verifyEmailCode() {
-      if (!code) {
+      if (!code || processedCodeRef.current === code) {
         return
       }
 
+      processedCodeRef.current = code
       setStatus('checking')
       setError('')
 
@@ -245,58 +247,60 @@ function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
   return (
     <AuthShell backLabel="Back to create game" backTo="/create-game" variant="reset-password">
       <AuthPanel>
-        <AuthHalo icon={<ShieldCheckIcon />} />
+        <div className="auth-action-result">
+          <AuthHalo icon={<ShieldCheckIcon />} />
 
-        {status === 'checking' && (
-          <AuthHeader
-            title="Verifying email"
-            subtitle="One moment while we verify your email."
-          />
-        )}
-
-        {status === 'invalid' && (
-          <>
+          {status === 'checking' && (
             <AuthHeader
-              title="Verification link unavailable"
-              subtitle="Send a new verification email from Create Game."
+              title="Verifying email"
+              subtitle="One moment while we verify your email."
             />
-            {error && <p className="auth-error">{error}</p>}
-            <Link className="auth-primary-button" to="/create-game">
-              Back to Create Game
-            </Link>
-          </>
-        )}
+          )}
 
-        {status === 'unavailable' && (
-          <>
-            <AuthHeader
-              title="Verification status unavailable"
-              subtitle="Return to Create Game. If hosting is still locked, send a new verification email."
-            />
-            <Link className="auth-primary-button" to="/create-game">
-              Back to Create Game
-            </Link>
-          </>
-        )}
+          {status === 'invalid' && (
+            <>
+              <AuthHeader
+                title="Verification link unavailable"
+                subtitle="Send a new verification email from Create Game."
+              />
+              {error && <p className="auth-error">{error}</p>}
+              <Link className="auth-primary-button" to="/create-game">
+                Back to Create Game
+              </Link>
+            </>
+          )}
 
-        {status === 'success' && (
-          <>
-            <AuthHeader
-              title="Email verified"
-              subtitle="You can now publish a community game."
-            />
-            <Link className="auth-primary-button" to="/create-game">
-              Continue
-            </Link>
-          </>
-        )}
+          {status === 'unavailable' && (
+            <>
+              <AuthHeader
+                title="Verification not confirmed"
+                subtitle="Return to Create Game. If hosting is still locked, request a fresh verification email."
+              />
+              <Link className="auth-primary-button" to="/create-game">
+                Back to Create Game
+              </Link>
+            </>
+          )}
+
+          {status === 'success' && (
+            <>
+              <AuthHeader
+                title="Email verified"
+                subtitle="You can now publish a community game."
+              />
+              <Link className="auth-primary-button" to="/create-game">
+                Continue
+              </Link>
+            </>
+          )}
+        </div>
       </AuthPanel>
     </AuthShell>
   )
 }
 
 async function waitForEmailVerification(refreshCurrentUserVerification, shouldStop) {
-  const maxAttempts = 12
+  const maxAttempts = 3
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (shouldStop()) {
@@ -310,7 +314,7 @@ async function waitForEmailVerification(refreshCurrentUserVerification, shouldSt
     }
 
     if (attempt < maxAttempts - 1) {
-      await wait(1000)
+      await wait(700)
     }
   }
 

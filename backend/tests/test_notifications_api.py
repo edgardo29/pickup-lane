@@ -26,7 +26,7 @@ def create_notification_setup(
 
 
 def test_notifications_create_get_list_and_mark_read(client: TestClient):
-    user, game, _booking, _participant, _game_chat, chat_message = (
+    user, game, _booking, _participant, game_chat, chat_message = (
         create_notification_setup(client)
     )
     notification = create_notification(
@@ -36,12 +36,14 @@ def test_notifications_create_get_list_and_mark_read(client: TestClient):
         title="New message",
         body="A new chat message was posted.",
         related_game_id=game["id"],
+        related_chat_id=game_chat["id"],
         related_message_id=chat_message["id"],
     )
 
     get_response = client.get(f"/notifications/{notification['id']}")
     assert get_response.status_code == 200, get_response.text
     assert get_response.json()["id"] == notification["id"]
+    assert get_response.json()["related_chat_id"] == game_chat["id"]
 
     list_response = client.get(f"/notifications?user_id={user['id']}")
     assert list_response.status_code == 200, list_response.text

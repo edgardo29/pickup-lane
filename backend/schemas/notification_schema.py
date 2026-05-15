@@ -16,6 +16,7 @@ class NotificationCreate(BaseModel):
     title: str
     body: str
     related_game_id: UUID | None = None
+    related_chat_id: UUID | None = None
     related_booking_id: UUID | None = None
     related_participant_id: UUID | None = None
     related_message_id: UUID | None = None
@@ -33,12 +34,14 @@ class NotificationRead(BaseModel):
     title: str
     body: str
     related_game_id: UUID | None
+    related_chat_id: UUID | None
     related_booking_id: UUID | None
     related_participant_id: UUID | None
     related_message_id: UUID | None
     is_read: bool
     read_at: datetime | None
     created_at: datetime
+    updated_at: datetime
 
 
 # NotificationUpdate supports partial notification updates, so every field is
@@ -51,6 +54,7 @@ class NotificationUpdate(BaseModel):
     title: str | None = None
     body: str | None = None
     related_game_id: UUID | None = None
+    related_chat_id: UUID | None = None
     related_booking_id: UUID | None = None
     related_participant_id: UUID | None = None
     related_message_id: UUID | None = None

@@ -8,7 +8,16 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import ChatMessage, GameChat, User
+from backend.routes.auth_routes import get_current_app_user
 from backend.schemas import ChatMessageCreate, ChatMessageRead, ChatMessageUpdate
+from backend.services.game_chat_service import (
+    create_or_update_chat_notifications,
+    get_latest_visible_messages,
+    mark_chat_read,
+    normalize_message_body,
+    require_chat_member,
+    validate_sender_cooldown,
+)
 
 router = APIRouter(prefix="/chat-messages", tags=["chat_messages"])
 
@@ -230,9 +239,24 @@ def validate_chat_message_is_editable(db_chat_message: ChatMessage) -> None:
 @router.post("", response_model=ChatMessageRead, status_code=status.HTTP_201_CREATED)
 def create_chat_message(
     chat_message: ChatMessageCreate,
+    current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> ChatMessage:
-    message_data = normalize_chat_message_lifecycle_fields(chat_message.model_dump())
+    now = datetime.now(timezone.utc)
+    message_data = chat_message.model_dump()
+    db_game_chat = get_game_chat_or_404(db, message_data["chat_id"])
+    db_game = require_chat_member(db, db_game_chat, current_user)
+
+    if message_data["sender_user_id"] not in {None, current_user.id}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="sender_user_id must match the authenticated user.",
+        )
+
+    message_data["sender_user_id"] = current_user.id
+    message_data["message_body"] = normalize_message_body(message_data["message_body"])
+    validate_sender_cooldown(db, db_game_chat.id, current_user.id, now)
+    message_data = normalize_chat_message_lifecycle_fields(message_data)
     validate_chat_message_business_rules(message_data)
     validate_chat_message_references(db, message_data)
 
@@ -243,6 +267,16 @@ def create_chat_message(
 
     try:
         db.add(new_chat_message)
+        db.flush()
+        create_or_update_chat_notifications(
+            db,
+            db_game,
+            db_game_chat,
+            new_chat_message,
+            current_user,
+            now,
+        )
+        mark_chat_read(db, db_game_chat, current_user, now)
         db.commit()
         db.refresh(new_chat_message)
     except IntegrityError as exc:
@@ -263,6 +297,7 @@ def create_chat_message(
 )
 def get_chat_message(
     chat_message_id: uuid.UUID,
+    current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> ChatMessage:
     db_chat_message = db.get(ChatMessage, chat_message_id)
@@ -272,6 +307,9 @@ def get_chat_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Chat message not found.",
         )
+
+    db_game_chat = get_game_chat_or_404(db, db_chat_message.chat_id)
+    require_chat_member(db, db_game_chat, current_user)
 
     return db_chat_message
 
@@ -283,12 +321,25 @@ def list_chat_messages(
     sender_user_id: uuid.UUID | None = None,
     moderation_status: str | None = None,
     is_pinned: bool | None = None,
+    limit: int = 50,
+    current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> list[ChatMessage]:
+    if chat_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="chat_id is required.",
+        )
+
+    db_game_chat = get_game_chat_or_404(db, chat_id)
+    require_chat_member(db, db_game_chat, current_user)
+
+    if sender_user_id is None and moderation_status in {None, "visible"} and is_pinned is None:
+        return get_latest_visible_messages(db, chat_id, limit)
+
     statement = select(ChatMessage)
 
-    if chat_id is not None:
-        statement = statement.where(ChatMessage.chat_id == chat_id)
+    statement = statement.where(ChatMessage.chat_id == chat_id)
 
     if sender_user_id is not None:
         statement = statement.where(ChatMessage.sender_user_id == sender_user_id)
@@ -307,7 +358,11 @@ def list_chat_messages(
     if is_pinned is not None:
         statement = statement.where(ChatMessage.is_pinned == is_pinned)
 
-    chat_messages = db.scalars(statement.order_by(ChatMessage.created_at.asc())).all()
+    page_limit = max(1, min(limit, 50))
+    chat_messages = db.scalars(
+        statement.order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc()).limit(page_limit)
+    ).all()
+    chat_messages = list(reversed(chat_messages))
     return list(chat_messages)
 
 
@@ -321,6 +376,7 @@ def list_chat_messages(
 def update_chat_message(
     chat_message_id: uuid.UUID,
     chat_message_update: ChatMessageUpdate,
+    current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> ChatMessage:
     db_chat_message = db.get(ChatMessage, chat_message_id)
@@ -332,6 +388,15 @@ def update_chat_message(
         )
 
     validate_chat_message_is_editable(db_chat_message)
+    db_game_chat = get_game_chat_or_404(db, db_chat_message.chat_id)
+    if current_user.role != "admin":
+        require_chat_member(db, db_game_chat, current_user)
+
+        if db_chat_message.sender_user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the sender can update this chat message.",
+            )
 
     update_data = chat_message_update.model_dump(exclude_unset=True)
 
@@ -371,6 +436,24 @@ def update_chat_message(
         db_chat_message,
     )
     validate_chat_message_business_rules(effective_message_data)
+    if (
+        effective_message_data["moderation_status"] == "hidden_by_admin"
+        and current_user.role != "admin"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="hidden_by_admin messages require an admin deleted_by_user_id.",
+        )
+
+    if (
+        effective_message_data["moderation_status"] == "deleted_by_sender"
+        and current_user.id != db_chat_message.sender_user_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the sender can delete this chat message.",
+        )
+
     validate_chat_message_references(
         db,
         effective_message_data,

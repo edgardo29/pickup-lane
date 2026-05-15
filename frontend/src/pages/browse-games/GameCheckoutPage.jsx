@@ -159,6 +159,12 @@ function GameCheckoutPage() {
   const address = formatVenueAddress(game, venue)
   const paymentMethod = paymentMethods.find((method) => method.is_default) || paymentMethods[0]
   const chargeTiming = isWaitlistCheckout ? 'later' : ''
+  const confirmLabel = getConfirmLabel({
+    agreed,
+    isBlockedByCapacity,
+    isSubmitting,
+    isWaitlistCheckout,
+  })
 
   return (
     <div className="checkout-page">
@@ -205,15 +211,24 @@ function GameCheckoutPage() {
             <section className="checkout-card">
               <div className="checkout-section-heading">
                 <h2>{isWaitlistCheckout ? 'Waitlist' : 'Players'}</h2>
-                {maxGuests > 0 && <span>{maxGuests} guests max</span>}
+                {maxGuests > 0 && (
+                  <span className="checkout-guest-limit">
+                    <UsersIcon />
+                    Guest limit: {maxGuests}
+                  </span>
+                )}
               </div>
               <div className="checkout-player-row">
                 <span className="checkout-avatar">{getInitials(appUser)}</span>
                 <div>
                   <strong>You</strong>
                   <p>{getDisplayName(appUser)}</p>
+                  {effectiveGuestCount > 0 && (
+                    <p className="checkout-party-note">
+                      +{effectiveGuestCount} {effectiveGuestCount === 1 ? 'guest' : 'guests'}
+                    </p>
+                  )}
                 </div>
-                <strong>{isWaitlistCheckout ? 'No charge now' : formatMoney(price)}</strong>
               </div>
               {maxGuests > 0 && (
                 <div className="checkout-guest-row">
@@ -286,6 +301,22 @@ function GameCheckoutPage() {
               </p>
             )}
             {submitError && <p className="checkout-error">{submitError}</p>}
+
+            <div className="checkout-mobile-action">
+              <button
+                className="checkout-confirm-button"
+                type="button"
+                disabled={!agreed || isSubmitting || Boolean(existingParticipant) || isBlockedByCapacity}
+                onClick={confirmBooking}
+              >
+                {confirmLabel}
+              </button>
+
+              <p className="checkout-secure-note">
+                <ShieldCheckIcon />
+                Secure checkout
+              </p>
+            </div>
           </div>
 
           <aside className="checkout-card checkout-summary-card">
@@ -308,18 +339,12 @@ function GameCheckoutPage() {
             </div>
 
             <button
-              className="checkout-confirm-button"
+              className="checkout-confirm-button checkout-confirm-button--desktop"
               type="button"
               disabled={!agreed || isSubmitting || Boolean(existingParticipant) || isBlockedByCapacity}
               onClick={confirmBooking}
             >
-              {isSubmitting
-                ? 'Confirming...'
-                : isBlockedByCapacity
-                  ? 'Not Enough Spots'
-                  : isWaitlistCheckout
-                    ? 'Join Waitlist'
-                    : 'Confirm & Pay'}
+              {confirmLabel}
             </button>
 
             <p className="checkout-secure-note">
@@ -340,6 +365,22 @@ function CheckoutLine({ label, value }) {
       <strong>{value}</strong>
     </div>
   )
+}
+
+function getConfirmLabel({ agreed, isBlockedByCapacity, isSubmitting, isWaitlistCheckout }) {
+  if (isSubmitting) {
+    return 'Confirming...'
+  }
+
+  if (isBlockedByCapacity) {
+    return 'Not Enough Spots'
+  }
+
+  if (!agreed) {
+    return 'Accept Terms to Continue'
+  }
+
+  return isWaitlistCheckout ? 'Join Waitlist' : 'Confirm & Pay'
 }
 
 function getParticipantSummary(participants, totalSpots = 0) {
@@ -388,7 +429,20 @@ function formatVenueAddress(game, venue) {
   const city = game.city_snapshot || venue?.city
   const state = game.state_snapshot || venue?.state
   const postalCode = venue?.postal_code
+
+  if (street && addressIncludesLocality(street, city, state, postalCode)) {
+    return street
+  }
+
   return [street, [city, state, postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+}
+
+function addressIncludesLocality(address, city, state, postalCode) {
+  const normalizedAddress = address.toLowerCase()
+
+  return [city, state, postalCode]
+    .filter(Boolean)
+    .some((addressPart) => normalizedAddress.includes(String(addressPart).toLowerCase()))
 }
 
 function formatDate(value) {
