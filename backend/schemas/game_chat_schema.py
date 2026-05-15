@@ -16,6 +16,12 @@ class GameChatCreate(BaseModel):
     locked_at: datetime | None = None
 
 
+class GameChatEnsureCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    acting_user_id: UUID | None = None
+
+
 # GameChatRead defines the game chat payload returned by the API.
 class GameChatRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -26,6 +32,8 @@ class GameChatRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     locked_at: datetime | None
+    unread_count: int = 0
+    last_read_at: datetime | None = None
 
 
 # GameChatUpdate supports partial chat updates, so every field is optional and

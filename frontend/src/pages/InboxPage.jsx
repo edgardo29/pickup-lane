@@ -209,7 +209,7 @@ function InboxSection({ gamesById, items, onOpenNotification, section }) {
 function InboxRow({ game, notification, onOpenNotification }) {
   const isGameActivity = GAME_ACTIVITY_TYPES.has(notification.notification_type)
   const title = isGameActivity && game ? game.title : notification.title
-  const body = isGameActivity ? 'New activity in game chat.' : notification.body
+  const body = notification.body
 
   return (
     <button

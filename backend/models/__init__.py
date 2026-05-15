@@ -7,6 +7,7 @@ from backend.models.booking_status_history_model import BookingStatusHistory
 from backend.models.chat_message_model import ChatMessage
 from backend.models.community_game_detail_model import CommunityGameDetail
 from backend.models.game_chat_model import GameChat
+from backend.models.game_chat_read_model import GameChatRead
 from backend.models.game_image_model import GameImage
 from backend.models.game_model import Game
 from backend.models.game_participant_model import GameParticipant
@@ -45,6 +46,7 @@ __all__ = [
     "CommunityGameDetail",
     "GameImage",
     "GameChat",
+    "GameChatRead",
     "ChatMessage",
     "GameStatusHistory",
     "Booking",

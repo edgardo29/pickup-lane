@@ -7,6 +7,9 @@ import {
   CalendarIcon,
   ClockIcon,
   MapPinIcon,
+  PencilIcon,
+  ShareIcon,
+  ShieldCheckIcon,
   StopwatchIcon,
   UsersIcon,
 } from '../../components/BrowseIcons.jsx'
@@ -34,18 +37,22 @@ import '../../styles/browse-games/GameDetailsPage.css'
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
 const ACTIVE_JOIN_STATUSES = new Set(['pending_payment', 'confirmed', 'waitlisted'])
 const GUEST_JOIN_MESSAGE = 'Create an account or sign in to join this game.'
+const CHAT_MESSAGE_MAX_LENGTH = 300
 
 function GameDetailsPage() {
   const { gameId } = useParams()
   const navigate = useNavigate()
-  const { appUser, isLoading: isAuthLoading } = useAuth()
+  const { appUser, currentUser: firebaseUser, isLoading: isAuthLoading } = useAuth()
 
   const [game, setGame] = useState(null)
   const [venue, setVenue] = useState(null)
   const [gameImages, setGameImages] = useState([])
   const [participants, setParticipants] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
+  const [activeChat, setActiveChat] = useState(null)
   const [chatMessages, setChatMessages] = useState([])
+  const [chatDraft, setChatDraft] = useState('')
+  const [chatError, setChatError] = useState('')
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [joinNotice, setJoinNotice] = useState('')
   const [shareNotice, setShareNotice] = useState('')
@@ -57,6 +64,7 @@ function GameDetailsPage() {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false)
   const [isPlayerListOpen, setIsPlayerListOpen] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const [isSendingChatMessage, setIsSendingChatMessage] = useState(false)
   const [hasUnreadChat, setHasUnreadChat] = useState(false)
   const [activePlayerTab, setActivePlayerTab] = useState('going')
   const [status, setStatus] = useState('loading')
@@ -77,6 +85,10 @@ function GameDetailsPage() {
       setIsLeaveModalOpen(false)
       setIsPlayerListOpen(false)
       setIsChatOpen(false)
+      setActiveChat(null)
+      setChatDraft('')
+      setChatError('')
+      setIsSendingChatMessage(false)
       setHasUnreadChat(false)
       setActivePlayerTab('going')
       setActiveImageIndex(0)
@@ -84,22 +96,33 @@ function GameDetailsPage() {
       try {
         const gameResponse = await apiRequest(`/games/${gameId}`)
 
-        const [imagesResponse, participantsResponse, venueResponse, chatsResponse] =
-          await Promise.all([
-            apiRequest(`/game-images?game_id=${gameId}&image_status=active`),
-            apiRequest(`/game-participants?game_id=${gameId}`),
-            apiRequest(`/venues/${gameResponse.venue_id}`).catch(() => null),
-            gameResponse.is_chat_enabled
-              ? apiRequest(`/game-chats?game_id=${gameId}&chat_status=active`).catch(() => [])
-              : Promise.resolve([]),
-          ])
+        const [imagesResponse, participantsResponse, venueResponse] = await Promise.all([
+          apiRequest(`/game-images?game_id=${gameId}&image_status=active`),
+          apiRequest(`/game-participants?game_id=${gameId}`),
+          apiRequest(`/venues/${gameResponse.venue_id}`).catch(() => null),
+        ])
+        const canLoadChat = canUseGameChat(gameResponse, participantsResponse, appUser)
+        let activeChatResponse = null
+        let messagesResponse = []
 
-        const activeChat = chatsResponse[0]
-        const messagesResponse = activeChat
-          ? await apiRequest(`/chat-messages?chat_id=${activeChat.id}&moderation_status=visible`).catch(
-              () => [],
-            )
-          : []
+        if (gameResponse.is_chat_enabled && canLoadChat && firebaseUser) {
+          const chatHeaders = await getChatAuthHeaders(firebaseUser)
+          activeChatResponse = await apiRequest(`/game-chats/for-game/${gameId}`, {
+            method: 'POST',
+            headers: {
+              ...chatHeaders,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+          }).catch(() => null)
+
+          if (activeChatResponse) {
+            messagesResponse = await apiRequest(
+              `/chat-messages?chat_id=${activeChatResponse.id}&moderation_status=visible&limit=50`,
+              { headers: chatHeaders },
+            ).catch(() => [])
+          }
+        }
 
         if (!ignore) {
           setGame(gameResponse)
@@ -107,8 +130,9 @@ function GameDetailsPage() {
           setGameImages(imagesResponse)
           setParticipants(participantsResponse)
           setCurrentUser(appUser || null)
+          setActiveChat(activeChatResponse)
           setChatMessages(messagesResponse)
-          setHasUnreadChat(messagesResponse.length > 0)
+          setHasUnreadChat(Boolean(activeChatResponse?.unread_count))
           setStatus('success')
         }
       } catch (requestError) {
@@ -124,7 +148,83 @@ function GameDetailsPage() {
     return () => {
       ignore = true
     }
-  }, [appUser, gameId])
+  }, [appUser, firebaseUser, gameId])
+
+  useEffect(() => {
+    if (!activeChat?.id || !firebaseUser || isChatOpen) {
+      return undefined
+    }
+
+    let ignore = false
+
+    async function refreshChatPreview() {
+      try {
+        const chatHeaders = await getChatAuthHeaders(firebaseUser)
+        const [readStateResponse, messagesResponse] = await Promise.all([
+          apiRequest(`/game-chats/${activeChat.id}/read-state`, { headers: chatHeaders }),
+          apiRequest(
+            `/chat-messages?chat_id=${activeChat.id}&moderation_status=visible&limit=50`,
+            { headers: chatHeaders },
+          ),
+        ])
+
+        if (!ignore) {
+          setChatMessages(messagesResponse)
+          setHasUnreadChat(Boolean(readStateResponse.unread_count))
+        }
+      } catch {
+        // Chat preview refresh is best-effort; the page should stay usable.
+      }
+    }
+
+    const intervalId = window.setInterval(refreshChatPreview, 30000)
+    return () => {
+      ignore = true
+      window.clearInterval(intervalId)
+    }
+  }, [activeChat?.id, firebaseUser, isChatOpen])
+
+  useEffect(() => {
+    if (!activeChat?.id || !firebaseUser || !isChatOpen) {
+      return undefined
+    }
+
+    let ignore = false
+
+    async function refreshOpenChat() {
+      try {
+        const chatHeaders = await getChatAuthHeaders(firebaseUser)
+        const messagesResponse = await apiRequest(
+          `/chat-messages?chat_id=${activeChat.id}&moderation_status=visible&limit=50`,
+          { headers: chatHeaders },
+        )
+
+        if (!ignore) {
+          setChatMessages(messagesResponse)
+          setHasUnreadChat(false)
+        }
+
+        await apiRequest(`/game-chats/${activeChat.id}/read`, {
+          method: 'POST',
+          headers: {
+            ...chatHeaders,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        }).catch(() => null)
+      } catch {
+        // Open chat refresh is best-effort; sending and manual refresh still work.
+      }
+    }
+
+    refreshOpenChat()
+    const intervalId = window.setInterval(refreshOpenChat, 5000)
+
+    return () => {
+      ignore = true
+      window.clearInterval(intervalId)
+    }
+  }, [activeChat?.id, firebaseUser, isChatOpen])
 
   const images = useMemo(
     () => {
@@ -220,6 +320,15 @@ function GameDetailsPage() {
     game.publish_status === 'published' &&
     ['scheduled', 'full'].includes(game.game_status)
   const isHost = currentUser?.id && currentUser.id === game.host_user_id
+  const canOpenGameChat = canUseGameChat(game, participants, currentUser)
+  const chatDisabledReason = getChatDisabledReason({
+    activeChat,
+    canUseChat: canOpenGameChat,
+    currentParticipant,
+    currentUser,
+    game,
+    isHost,
+  })
   const hostGuestMax = game.allow_guests ? game.host_guest_max || 0 : 0
   const hostGuestAddSlots = Math.max(
     Math.min(hostGuestMax - currentGuestCount, participantSummary.spotsLeft),
@@ -421,9 +530,73 @@ function GameDetailsPage() {
     }
   }
 
-  function handleOpenChat() {
+  async function handleOpenChat() {
+    if (!canOpenGameChat || !activeChat?.id || !firebaseUser) {
+      return
+    }
+
     setIsChatOpen(true)
     setHasUnreadChat(false)
+    setChatError('')
+
+    try {
+      await apiRequest(`/game-chats/${activeChat.id}/read`, {
+        method: 'POST',
+        headers: {
+          ...(await getChatAuthHeaders(firebaseUser)),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
+    } catch {
+      // Opening chat should not be blocked by a failed read-state sync.
+    }
+  }
+
+  async function handleSendChatMessage(event) {
+    event.preventDefault()
+
+    if (!activeChat?.id || !firebaseUser) {
+      return
+    }
+
+    const trimmedMessage = chatDraft.trim()
+    if (!trimmedMessage) {
+      setChatError('Type a message first.')
+      return
+    }
+
+    if (trimmedMessage.length > CHAT_MESSAGE_MAX_LENGTH) {
+      setChatError(`Keep messages under ${CHAT_MESSAGE_MAX_LENGTH} characters.`)
+      return
+    }
+
+    setIsSendingChatMessage(true)
+    setChatError('')
+
+    try {
+      const newMessage = await apiRequest('/chat-messages', {
+        method: 'POST',
+        headers: {
+          ...(await getChatAuthHeaders(firebaseUser)),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chat_id: activeChat.id,
+          message_body: trimmedMessage,
+        }),
+      })
+
+      setChatMessages((currentMessages) => [...currentMessages, newMessage].slice(-50))
+      setChatDraft('')
+      setHasUnreadChat(false)
+    } catch (requestError) {
+      setChatError(
+        requestError instanceof Error ? requestError.message : 'Unable to send message.',
+      )
+    } finally {
+      setIsSendingChatMessage(false)
+    }
   }
 
   return (
@@ -482,36 +655,72 @@ function GameDetailsPage() {
             {(canEditGame || isHost) && (
               <section className="details-card details-mobile-host-actions">
                 {canEditGame && (
-                  <Link className="details-host-edit-action" to={`/games/${game.id}/edit`}>
-                    Edit Game
+                  <Link className="details-secondary-action details-host-edit-action" to={`/games/${game.id}/edit`}>
+                    <span className="details-action-icon">
+                      <PencilIcon />
+                    </span>
+                    <span>Edit Game</span>
+                    <span className="details-action-chevron" aria-hidden="true">›</span>
                   </Link>
                 )}
 
                 {isHost && hostGuestMax > 0 && (
                   <button
-                    className="details-host-guest-action"
+                    className="details-secondary-action details-host-guest-action"
                     type="button"
                     disabled={isAddingHostGuest || isUpdatingGuests}
                     onClick={() => setIsHostGuestModalOpen(true)}
                   >
-                    <span className="details-host-guest-action__label">Manage Guests</span>
-                    <strong>{currentGuestCount}/{hostGuestMax}</strong>
+                    <span className="details-action-icon">
+                      <UsersIcon />
+                    </span>
+                    <span>Manage Guests</span>
+                    <strong className="details-action-count">{currentGuestCount}/{hostGuestMax}</strong>
+                    <span className="details-action-chevron" aria-hidden="true">›</span>
                   </button>
                 )}
 
-                <button className="details-share-button" type="button" onClick={handleShareGame}>
-                  Share Game
+                <button className="details-secondary-action details-share-button" type="button" onClick={handleShareGame}>
+                  <span className="details-action-icon">
+                    <ShareIcon />
+                  </span>
+                  <span>Share Game</span>
+                  <span className="details-action-chevron" aria-hidden="true">›</span>
+                </button>
+              </section>
+            )}
+
+            {currentParticipant && !isHost && (
+              <section className="details-card details-mobile-attendance-actions">
+                <button
+                  className="details-secondary-action"
+                  type="button"
+                  onClick={() => setIsLeaveModalOpen(true)}
+                >
+                  <span className="details-action-icon">
+                    <PencilIcon />
+                  </span>
+                  <span>
+                    {currentParticipant.participant_status === 'waitlisted'
+                      ? 'Leave Waitlist'
+                      : 'Edit Attendance'}
+                  </span>
+                  <span className="details-action-chevron" aria-hidden="true">›</span>
                 </button>
               </section>
             )}
 
             <section className="details-card-grid">
               <PlayersCard
-                onOpenPlayerList={() => setIsPlayerListOpen(true)}
+                cta={currentUser?.id ? 'View player list' : 'Sign in to view players'}
+                ctaDisabled={!currentUser?.id}
+                onOpenPlayerList={currentUser?.id ? () => setIsPlayerListOpen(true) : undefined}
                 participantSummary={participantSummary}
               />
 
               <GameChatCard
+                canOpenChat={canOpenGameChat && Boolean(activeChat)}
+                disabledReason={chatDisabledReason}
                 hasUnread={hasUnreadChat}
                 isChatEnabled={game.is_chat_enabled}
                 latestChatMessage={latestChatMessage}
@@ -577,29 +786,59 @@ function GameDetailsPage() {
         </section>
       </main>
 
-      <div className="details-mobile-join">
-        <div>
-          <strong>{price}</strong>
-          <span>per player</span>
-        </div>
+      <div
+        className={[
+          'details-mobile-join',
+          isHost ? 'details-mobile-join--host' : '',
+          !isHost && currentParticipant ? 'details-mobile-join--participant' : '',
+        ].filter(Boolean).join(' ')}
+      >
+        {isHost ? (
+          <>
+            <div>
+              <strong>{price}</strong>
+              <span>per player</span>
+            </div>
 
-        <button type="button" disabled={isJoinDisabled} onClick={handleJoinIntent}>
-          {joinLabel}
-        </button>
+            <span className="details-mobile-status-pill">
+              <CalendarIcon />
+              Hosting
+            </span>
+          </>
+        ) : currentParticipant ? (
+          <>
+            <div>
+              <strong>{price}</strong>
+              <span>per player</span>
+            </div>
 
-        {currentParticipant && !isHost && (
-          <button
-            className="details-mobile-leave"
-            type="button"
-            onClick={() => setIsLeaveModalOpen(true)}
-          >
-            {currentParticipant.participant_status === 'waitlisted'
-              ? 'Leave Waitlist'
-              : 'Edit Attendance'}
-          </button>
+            <span className="details-mobile-status-pill">
+              <ShieldCheckIcon />
+              {currentParticipant.participant_status === 'waitlisted' ? 'Waitlisted' : 'Joined'}
+            </span>
+          </>
+        ) : (
+          <>
+            <div>
+              <strong>{price}</strong>
+              <span>per player</span>
+            </div>
+
+            <button type="button" disabled={isJoinDisabled} onClick={handleJoinIntent}>
+              {joinLabel}
+            </button>
+
+            {joinNotice && (
+              <p>
+                {joinNotice === GUEST_JOIN_MESSAGE ? (
+                  <AuthJoinNotice gameId={game.id} />
+                ) : (
+                  joinNotice
+                )}
+              </p>
+            )}
+          </>
         )}
-
-        {joinNotice && <p>{joinNotice}</p>}
       </div>
 
       {isPlayerListOpen && (
@@ -613,8 +852,16 @@ function GameDetailsPage() {
 
       {isChatOpen && (
         <ChatPanel
+          currentUserId={currentUser?.id || ''}
+          currentUserName={getUserDisplayName(currentUser)}
+          draft={chatDraft}
+          error={chatError}
+          isSending={isSendingChatMessage}
+          maxLength={CHAT_MESSAGE_MAX_LENGTH}
           messages={chatMessages}
+          onChangeDraft={setChatDraft}
           onClose={() => setIsChatOpen(false)}
+          onSend={handleSendChatMessage}
           senderNames={chatSenderNames}
         />
       )}
@@ -644,6 +891,79 @@ function GameDetailsPage() {
         />
       )}
     </div>
+  )
+}
+
+async function getChatAuthHeaders(firebaseUser) {
+  const token = await firebaseUser.getIdToken()
+  return {
+    Authorization: `Bearer ${token}`,
+  }
+}
+
+function canUseGameChat(game, participants, user) {
+  if (!game?.is_chat_enabled || !user?.id) {
+    return false
+  }
+
+  if (game.host_user_id === user.id) {
+    return true
+  }
+
+  return participants.some(
+    (participant) =>
+      participant.user_id === user.id &&
+      participant.participant_status === 'confirmed' &&
+      ['registered_user', 'host', 'admin_added'].includes(participant.participant_type),
+  )
+}
+
+function getChatDisabledReason({ activeChat, canUseChat, currentParticipant, currentUser, game, isHost }) {
+  if (!game?.is_chat_enabled) {
+    return 'Chat disabled'
+  }
+
+  if (canUseChat && !activeChat) {
+    return 'Chat is temporarily unavailable'
+  }
+
+  if (currentUser?.id && isHost) {
+    return ''
+  }
+
+  if (currentUser?.id && currentParticipant?.participant_status === 'confirmed') {
+    return ''
+  }
+
+  if (!currentUser?.id) {
+    return 'Sign in and join to unlock chat'
+  }
+
+  if (currentParticipant?.participant_status === 'waitlisted') {
+    return 'Chat opens when your spot is confirmed'
+  }
+
+  if (currentParticipant?.participant_status && currentParticipant.participant_status !== 'confirmed') {
+    return 'Chat opens once your spot is confirmed'
+  }
+
+  return 'Join this game to unlock chat'
+}
+
+function AuthJoinNotice({ gameId }) {
+  const returnPath = `/games/${gameId}`
+
+  return (
+    <>
+      <Link state={{ from: returnPath }} to="/create-account">
+        Create Account
+      </Link>{' '}
+      or{' '}
+      <Link state={{ from: returnPath }} to="/sign-in">
+        Sign In
+      </Link>{' '}
+      to join.
+    </>
   )
 }
 
@@ -736,6 +1056,10 @@ function buildChatSenderNames(participants) {
 
 function hasCompleteProfile(user) {
   return Boolean(user?.first_name && user?.last_name && user?.date_of_birth)
+}
+
+function getUserDisplayName(user) {
+  return `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.email || ''
 }
 
 function getJoinLabel({

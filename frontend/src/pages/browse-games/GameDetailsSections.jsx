@@ -4,7 +4,9 @@ import {
   BuildingIcon,
   CalendarIcon,
   ChatIcon,
+  MapPinIcon,
   PencilIcon,
+  PlusCircleIcon,
   ShareIcon,
   ShieldCheckIcon,
   UsersIcon,
@@ -108,7 +110,7 @@ export function QuickFacts({ facts, price, variant }) {
   )
 }
 
-export function PlayersCard({ onOpenPlayerList, participantSummary }) {
+export function PlayersCard({ cta = 'View player list', ctaDisabled = false, onOpenPlayerList, participantSummary }) {
   const spotsLabel = participantSummary.spotsLeft === 1 ? 'spot left' : 'spots left'
 
   return (
@@ -116,7 +118,9 @@ export function PlayersCard({ onOpenPlayerList, participantSummary }) {
       className="details-info-card--players"
       icon={<UsersIcon />}
       title="Players"
-      cta="View player list"
+      cta={cta}
+      ctaDisabled={ctaDisabled}
+      ctaIcon={<UsersIcon />}
       onCtaClick={onOpenPlayerList}
     >
       <p className="details-player-card__summary">
@@ -211,6 +215,8 @@ export function PlayersListModal({ activeTab, onClose, onSelectTab, participantS
 }
 
 export function GameChatCard({
+  canOpenChat,
+  disabledReason,
   hasUnread,
   isChatEnabled,
   latestChatMessage,
@@ -220,36 +226,57 @@ export function GameChatCard({
   const body = latestChatMessage?.message_body || 'No messages yet.'
   const senderLabel = getMessageSenderLabel(latestChatMessage, senderNames)
   const eyebrow = isChatEnabled
-    ? hasUnread
+    ? !canOpenChat
+      ? disabledReason || 'Members only'
+      : hasUnread
       ? 'New messages'
       : 'Chat available'
     : 'Chat disabled'
 
   return (
     <InfoCard
-      className={hasUnread ? 'details-info-card--unread' : ''}
+      className={[
+        hasUnread ? 'details-info-card--unread' : '',
+        !canOpenChat ? 'details-info-card--disabled' : '',
+      ].filter(Boolean).join(' ')}
       icon={<ChatIconWithDot active={hasUnread} />}
       title="Game Chat"
-      badge={hasUnread ? 'New' : ''}
+      badge={hasUnread && canOpenChat ? 'New' : ''}
       eyebrow={eyebrow}
       cta="Open chat"
+      ctaDisabled={!canOpenChat}
+      ctaIcon={<ChatIcon />}
       onCtaClick={onOpenChat}
     >
       <div className="details-chat-preview">
         <span className="details-chat-preview__avatar">{getInitials(senderLabel)}</span>
-        <p>
-          <strong>{senderLabel}</strong>
-          {latestChatMessage && <> · {formatRelativeTime(latestChatMessage.created_at)}</>}
-          <br />
-          {body}
-        </p>
+        <div className="details-chat-preview__body">
+          <div className="details-chat-preview__meta">
+            <strong>{senderLabel}</strong>
+            {latestChatMessage && <small>{formatRelativeTime(latestChatMessage.created_at)}</small>}
+          </div>
+          <p>{body}</p>
+        </div>
       </div>
     </InfoCard>
   )
 }
 
-export function ChatPanel({ messages, onClose, senderNames }) {
+export function ChatPanel({
+  currentUserId,
+  currentUserName,
+  draft,
+  error,
+  isSending,
+  maxLength,
+  messages,
+  onChangeDraft,
+  onClose,
+  onSend,
+  senderNames,
+}) {
   const pinnedMessage = messages.find((message) => message.is_pinned)
+  const remainingCharacters = maxLength - draft.length
 
   return (
     <div className="details-modal-backdrop" role="presentation" onClick={onClose}>
@@ -262,8 +289,12 @@ export function ChatPanel({ messages, onClose, senderNames }) {
       >
         <div className="details-player-modal__header">
           <div>
-            <h2 id="details-chat-panel-title">Game Chat</h2>
-            <p>{messages.length > 0 ? 'Latest team updates' : 'No messages yet'}</p>
+            <h2 className="details-chat-title" id="details-chat-panel-title">
+              <span>
+                <ChatIcon />
+              </span>
+              Game Chat
+            </h2>
           </div>
 
           <button type="button" aria-label="Close chat" onClick={onClose}>
@@ -279,10 +310,41 @@ export function ChatPanel({ messages, onClose, senderNames }) {
         )}
 
         <div className="details-chat-thread">
-          {messages.map((message) => (
-            <ChatMessageRow message={message} senderNames={senderNames} key={message.id} />
-          ))}
+          {messages.length > 0 ? (
+            messages.map((message) => (
+              <ChatMessageRow
+                currentUserId={currentUserId}
+                currentUserName={currentUserName}
+                message={message}
+                senderNames={senderNames}
+                key={message.id}
+              />
+            ))
+          ) : (
+            <p className="details-chat-empty">No messages yet.</p>
+          )}
         </div>
+
+        <form className="details-chat-composer" onSubmit={onSend}>
+          <label htmlFor="details-chat-message">Message</label>
+          <textarea
+            id="details-chat-message"
+            maxLength={maxLength}
+            placeholder="Type a message"
+            rows={2}
+            value={draft}
+            onChange={(event) => onChangeDraft(event.target.value)}
+          />
+          <div className="details-chat-composer__footer">
+            <span className={remainingCharacters < 30 ? 'warn' : ''}>
+              {draft.length}/{maxLength}
+            </span>
+            <button type="submit" disabled={isSending || !draft.trim()}>
+              {isSending ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+          {error && <p className="details-chat-error">{error}</p>}
+        </form>
       </section>
     </div>
   )
@@ -323,8 +385,17 @@ export function WhereToGoCard({
         </div>
 
         {mapsUrl && (
-          <a className="details-location__map-link" href={mapsUrl} target="_blank" rel="noreferrer">
-            Open in Maps
+          <a
+            className="details-secondary-action details-location__map-link"
+            href={mapsUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="details-action-icon">
+              <MapPinIcon />
+            </span>
+            <span>Open in Maps</span>
+            <span className="details-action-chevron" aria-hidden="true">›</span>
           </a>
         )}
       </div>
@@ -405,28 +476,35 @@ export function JoinCard({
         <span>per player</span>
       </div>
 
-      <button
-        className="details-join-button"
-        type="button"
-        disabled={joinDisabled}
-        onClick={onJoin}
-      >
-        {joinLabel === 'Hosting' && <CalendarIcon />}
-        {joinLabel || 'Join Game'}
-      </button>
+      {joinLabel === 'Hosting' ? (
+        <div className="details-status-display" aria-label="Hosting status">
+          <CalendarIcon />
+          Hosting
+        </div>
+      ) : (
+        <button
+          className="details-join-button"
+          type="button"
+          disabled={joinDisabled}
+          onClick={onJoin}
+        >
+          {(joinLabel === 'Join Game' || joinLabel === 'Join Waitlist' || !joinLabel) && <PlusCircleIcon />}
+          {joinLabel || 'Join Game'}
+        </button>
+      )}
 
       {joinNotice && (
         <p className="details-join-notice">
           {joinNotice === joinMessage ? (
             <>
               <Link state={{ from: returnPath }} to="/create-account">
-                Create an account
+                Create Account
               </Link>{' '}
               or{' '}
               <Link state={{ from: returnPath }} to="/sign-in">
-                sign in
+                Sign In
               </Link>{' '}
-              to join this game.
+              to join.
             </>
           ) : (
             joinNotice
@@ -435,24 +513,28 @@ export function JoinCard({
       )}
 
       {editGameUrl && (
-        <Link className="details-host-edit-action" to={editGameUrl}>
-          <PencilIcon />
-          Edit Game
+        <Link className="details-secondary-action details-host-edit-action" to={editGameUrl}>
+          <span className="details-action-icon">
+            <PencilIcon />
+          </span>
+          <span>Edit Game</span>
+          <span className="details-action-chevron" aria-hidden="true">›</span>
         </Link>
       )}
 
       {onManageHostGuests && hostGuestMax > 0 && (
         <button
-          className="details-host-guest-action"
+          className="details-secondary-action details-host-guest-action"
           type="button"
           disabled={isAddingHostGuest || isUpdatingHostGuests}
           onClick={onManageHostGuests}
         >
-          <span className="details-host-guest-action__label">
+          <span className="details-action-icon">
             <UsersIcon />
-            Manage Guests
           </span>
-          <strong>{hostGuestCount}/{hostGuestMax}</strong>
+          <span>Manage Guests</span>
+          <strong className="details-action-count">{hostGuestCount}/{hostGuestMax}</strong>
+          <span className="details-action-chevron" aria-hidden="true">›</span>
         </button>
       )}
 
@@ -462,9 +544,12 @@ export function JoinCard({
         </button>
       )}
 
-      <button className="details-share-button" type="button" onClick={onShare}>
-        <ShareIcon />
-        Share Game
+      <button className="details-secondary-action details-share-button" type="button" onClick={onShare}>
+        <span className="details-action-icon">
+          <ShareIcon />
+        </span>
+        <span>Share Game</span>
+        <span className="details-action-chevron" aria-hidden="true">›</span>
       </button>
 
       {shareNotice && <p className="details-join-notice">{shareNotice}</p>}
@@ -714,10 +799,12 @@ function RosterSection({ emptyText, players }) {
 function InfoCard({
   badge = '',
   className = '',
+  ctaDisabled = false,
   icon,
   title,
   eyebrow,
   cta,
+  ctaIcon,
   onCtaClick,
   rightArrow,
   children,
@@ -734,9 +821,15 @@ function InfoCard({
         {eyebrow && <p className="details-eyebrow">{eyebrow}</p>}
         {children}
         {cta && (
-          <button className="details-text-button" type="button" onClick={onCtaClick}>
-            {cta}
-            <span aria-hidden="true">›</span>
+          <button
+            className="details-secondary-action details-text-button"
+            type="button"
+            disabled={ctaDisabled}
+            onClick={onCtaClick}
+          >
+            {ctaIcon && <span className="details-action-icon">{ctaIcon}</span>}
+            <span>{cta}</span>
+            <span className="details-action-chevron" aria-hidden="true">›</span>
           </button>
         )}
       </div>
@@ -766,16 +859,24 @@ function ChatIconWithDot({ active }) {
   )
 }
 
-function ChatMessageRow({ message, senderNames }) {
+function ChatMessageRow({ currentUserId, currentUserName, message, senderNames }) {
   const senderLabel = getMessageSenderLabel(message, senderNames)
   const isSystem = message.message_type === 'system' || message.message_type === 'pinned_update'
+  const isOwn = !isSystem && currentUserId && message.sender_user_id === currentUserId
+  const avatarLabel = isOwn ? currentUserName || senderLabel : senderLabel
 
   return (
-    <article className={`details-chat-message ${isSystem ? 'details-chat-message--system' : ''}`}>
-      <span>{getInitials(senderLabel)}</span>
+    <article
+      className={[
+        'details-chat-message',
+        isSystem ? 'details-chat-message--system' : '',
+        isOwn ? 'details-chat-message--own' : '',
+      ].filter(Boolean).join(' ')}
+    >
+      <span>{getInitials(avatarLabel)}</span>
       <div>
         <header>
-          <strong>{senderLabel}</strong>
+          <strong>{isOwn ? 'You' : senderLabel}</strong>
           <small>{formatRelativeTime(message.created_at)}</small>
         </header>
         <p>{message.message_body}</p>

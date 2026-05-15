@@ -59,6 +59,7 @@ class Notification(Base):
             "created_at",
         ),
         Index("ix_notifications_related_game_id", "related_game_id"),
+        Index("ix_notifications_related_chat_id", "related_chat_id"),
         Index("ix_notifications_related_booking_id", "related_booking_id"),
         Index("ix_notifications_related_participant_id", "related_participant_id"),
         Index("ix_notifications_related_message_id", "related_message_id"),
@@ -81,6 +82,12 @@ class Notification(Base):
     related_game_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("games.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    related_chat_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("game_chats.id", ondelete="SET NULL"),
         nullable=True,
     )
 
@@ -111,5 +118,9 @@ class Notification(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )

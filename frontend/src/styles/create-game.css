@@ -890,10 +890,11 @@
 .create-game-blocker__actions {
   display: grid;
   gap: 8px;
-  justify-items: stretch;
+  justify-items: center;
 }
 
 .create-game-blocker__actions .create-game-primary {
+  width: min(100%, 238px);
   text-align: center;
 }
 
@@ -1065,7 +1066,7 @@
   }
 
   .create-game-blocker__actions {
-    justify-items: stretch;
+    justify-items: center;
   }
 
   .create-game-actions__right {

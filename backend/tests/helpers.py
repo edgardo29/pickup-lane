@@ -359,14 +359,18 @@ def create_chat_message(
     sender_user_id: str | None = None,
     **overrides: object,
 ) -> dict:
+    if sender_user_id is not None:
+        authenticate_as(sender_user_id)
+
     payload = {
         "chat_id": chat_id,
-        "sender_user_id": sender_user_id,
         "message_type": "text",
         "message_body": "CI chat message",
         "is_pinned": False,
         "moderation_status": "visible",
     }
+    if sender_user_id is not None:
+        payload["sender_user_id"] = sender_user_id
     payload.update(overrides)
 
     response = client.post("/chat-messages", json=payload)
