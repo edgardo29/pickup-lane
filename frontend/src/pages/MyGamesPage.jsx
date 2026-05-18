@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import defaultCommunityVenueImage from '../assets/community-default/default-venue.png'
+import defaultCommunityVenueImage from '../assets/community-default/default-venue-wide.png'
 import BrowseAppNav from '../components/BrowseAppNav.jsx'
 import {
   CalendarIcon,
+  ClockIcon,
   MapPinIcon,
   ShieldCheckIcon,
   SoccerBallIcon,
@@ -15,10 +16,15 @@ import '../styles/browse-games/BrowseGamesPage.css'
 import '../styles/my-games.css'
 
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
+const UPCOMING_MY_GAME_STATUSES = new Set(['pending_payment', 'confirmed', 'waitlisted'])
+const HISTORY_MY_GAME_STATUSES = new Set(['confirmed'])
+const GAME_CANCELLED_TYPES = new Set(['host_cancelled', 'admin_cancelled'])
+const UPCOMING_WINDOW_DAYS = 14
 
 function MyGamesPage() {
   const { appUser, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState('upcoming')
+  const [visibleUpcomingWindows, setVisibleUpcomingWindows] = useState(1)
   const [currentUser, setCurrentUser] = useState(null)
   const [games, setGames] = useState([])
   const [images, setImages] = useState([])
@@ -26,6 +32,18 @@ function MyGamesPage() {
   const [myParticipants, setMyParticipants] = useState([])
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
+  const [nowMs, setNowMs] = useState(null)
+
+  useEffect(() => {
+    function updateNow() {
+      setNowMs(Date.now())
+    }
+
+    updateNow()
+    const intervalId = window.setInterval(updateNow, 30000)
+
+    return () => window.clearInterval(intervalId)
+  }, [])
 
   useEffect(() => {
     let ignore = false
@@ -105,22 +123,35 @@ function MyGamesPage() {
   }, [participants])
 
   const myGameItems = useMemo(
-    () => buildMyGameItems(myParticipants, gamesById, currentUser),
-    [currentUser, gamesById, myParticipants],
+    () => (nowMs === null ? [] : buildMyGameItems(myParticipants, gamesById, currentUser, nowMs)),
+    [currentUser, gamesById, myParticipants, nowMs],
   )
   const upcomingItems = myGameItems.filter((item) => item.bucket === 'upcoming')
   const historyItems = myGameItems.filter((item) => item.bucket === 'history')
-  const activeItems = activeTab === 'history' ? historyItems : upcomingItems
-  const historyGroups = useMemo(() => groupMyGameItems(historyItems), [historyItems])
+  const visibleUpcomingItems = useMemo(
+    () => (nowMs === null ? [] : getVisibleUpcomingItems(upcomingItems, visibleUpcomingWindows, nowMs)),
+    [nowMs, upcomingItems, visibleUpcomingWindows],
+  )
+  const hasMoreUpcomingItems = visibleUpcomingItems.length < upcomingItems.length
+  const activeItems = activeTab === 'history' ? historyItems : visibleUpcomingItems
+  const hasHiddenUpcomingItems =
+    activeTab === 'upcoming' && upcomingItems.length > 0 && visibleUpcomingItems.length === 0
+  const upcomingGroups = useMemo(
+    () => groupUpcomingAgendaItems(visibleUpcomingItems),
+    [visibleUpcomingItems],
+  )
+  const historyGroups = useMemo(() => groupHistoryAgendaItems(historyItems), [historyItems])
 
   return (
-    <div className="my-games-page">
+    <div className="browse-page my-games-page">
       <BrowseAppNav />
 
-      <main className="my-games-shell">
-        <section className="my-games-hero">
-          <div>
-            <h1>My Games</h1>
+      <main className="browse-shell my-games-shell">
+        <section className="browse-hero my-games-hero" aria-labelledby="my-games-title">
+          <div className="browse-hero__copy my-games-hero__copy">
+            <h1 id="my-games-title">
+              <span>My Games</span>
+            </h1>
             <div className="my-games-tabs" role="tablist" aria-label="My games sections">
               <button
                 className={activeTab === 'upcoming' ? 'active' : ''}
@@ -143,68 +174,108 @@ function MyGamesPage() {
             </div>
           </div>
 
-          <Link className="my-games-hero__calendar" to="/games" aria-label="Browse games">
-            <CalendarIcon />
-          </Link>
         </section>
 
-        {status === 'loading' && <MyGamesState title="Loading your games" />}
-        {status === 'error' && <MyGamesState title="Could not load games" message={error} />}
-        {status === 'success' && activeItems.length === 0 && (
-          <MyGamesState
-            title={activeTab === 'history' ? 'No game history yet' : 'No upcoming games yet'}
-            message="Once you join or host a game, it will show up here."
-          />
-        )}
+        <section className="browse-panel my-games-panel" aria-label="My games">
+          {status === 'loading' && <MyGamesState title="Loading your games" />}
+          {status === 'error' && <MyGamesState title="Could not load games" message={error} />}
+          {status === 'success' && activeItems.length === 0 && (
+            <MyGamesState
+              title={
+                activeTab === 'history'
+                  ? 'No game history yet'
+                  : hasHiddenUpcomingItems
+                    ? 'No games in this window'
+                    : 'No upcoming games yet'
+              }
+              message={
+                hasHiddenUpcomingItems
+                  ? 'You have games scheduled further out.'
+                  : 'Once you join or host a game, it will show up here.'
+              }
+            />
+          )}
 
-        {status === 'success' && activeItems.length > 0 && (
-          <div className="my-games-timeline">
-            {activeTab === 'upcoming' ? (
-              <section className="my-games-group">
-                <div className="my-games-group__items">
-                  {upcomingItems.map((item) => (
-                    <MyGameCard
-                      imageUrl={imageUrlsByGameId.get(item.game.id)}
-                      item={item}
-                      participantCount={participantCountsByGameId.get(item.game.id) || 0}
-                      key={item.participant.id}
-                    />
+          {status === 'success' && (activeItems.length > 0 || hasMoreUpcomingItems) && (
+            <div className="browse-results my-games-timeline">
+              {activeTab === 'upcoming' ? (
+                <>
+                  {upcomingGroups.map((dateGroup) => (
+                    <section className="my-games-agenda-day" key={dateGroup.key}>
+                      <div className="time-section__header my-games-agenda-day__header">
+                        <h2>
+                          <CalendarIcon />
+                          {dateGroup.label}
+                        </h2>
+                      </div>
+
+                      <div className="my-games-agenda-grid">
+                        {dateGroup.items.map((item) => (
+                          <MyGameCard
+                            imageUrl={imageUrlsByGameId.get(item.game.id)}
+                            item={item}
+                            participantCount={participantCountsByGameId.get(item.game.id) || 0}
+                            key={item.participant.id}
+                          />
+                        ))}
+                      </div>
+                    </section>
                   ))}
-                </div>
-              </section>
-            ) : (
-              historyGroups.map((group) => (
-                <section className="my-games-group" key={group.key}>
-                  <h2>{group.label}</h2>
 
-                  <div className="my-games-group__items">
-                    {group.items.map((item) => (
-                      <MyGameCard
-                        imageUrl={imageUrlsByGameId.get(item.game.id)}
-                        item={item}
-                        participantCount={participantCountsByGameId.get(item.game.id) || 0}
-                        key={item.participant.id}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))
-            )}
-          </div>
-        )}
+                  {hasMoreUpcomingItems && (
+                    <button
+                      className="my-games-view-more"
+                      type="button"
+                      onClick={() => setVisibleUpcomingWindows((windowCount) => windowCount + 1)}
+                    >
+                      View more games
+                    </button>
+                  )}
+                </>
+              ) : (
+                historyGroups.map((dateGroup) => (
+                  <section className="my-games-agenda-day" key={dateGroup.key}>
+                    <div className="time-section__header my-games-agenda-day__header">
+                      <h2>
+                        <CalendarIcon />
+                        {dateGroup.label}
+                      </h2>
+                    </div>
+
+                    <div className="my-games-agenda-grid">
+                      {dateGroup.items.map((item) => (
+                        <MyGameCard
+                          imageUrl={imageUrlsByGameId.get(item.game.id)}
+                          item={item}
+                          participantCount={participantCountsByGameId.get(item.game.id) || 0}
+                          key={item.participant.id}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ))
+              )}
+            </div>
+          )}
+        </section>
       </main>
     </div>
   )
 }
 
 function MyGameCard({ imageUrl, item, participantCount }) {
-  const { game, isHost, statusLabel, statusTone } = item
-  const tone = statusTone === 'cancelled' ? 'cancelled' : game.game_type
-  const cardImageUrl = imageUrl || (game.game_type === 'community' ? defaultCommunityVenueImage : '')
+  const { bucket, game, statusLabel, statusTone } = item
+  const tone = game.game_type === 'community' ? 'community' : 'official'
+  const title = game.venue_name_snapshot || game.title
+  const cardImageUrl = imageUrl || (tone === 'community' ? defaultCommunityVenueImage : '')
+  const isFull = participantCount >= game.total_spots
+  const isHistory = bucket === 'history'
 
   return (
     <Link
-      className={`game-card my-game-card my-game-card--${tone} my-game-card--${statusTone}`}
+      className={`game-card game-card--${tone} ${
+        isFull ? 'game-card--full' : ''
+      } my-game-card my-game-card--${statusTone}`}
       to={`/games/${game.id}`}
     >
       <div className="game-card__media">
@@ -214,58 +285,58 @@ function MyGameCard({ imageUrl, item, participantCount }) {
 
         {cardImageUrl && <img src={cardImageUrl} alt="" loading="lazy" />}
 
-        <span className="game-card__time">{formatStartTime(game.starts_at)}</span>
-        <GameTypeBadge gameType={game.game_type} isCancelled={statusTone === 'cancelled'} />
+        <GameTypeBadge gameType={game.game_type} />
+        {isFull && !isHistory && <span className="game-card__full-badge">Full</span>}
       </div>
 
       <div className="game-card__body">
-        <div className="my-game-card__title-row">
-          <h3>{game.title}</h3>
-          {isHost && <span className="my-game-card__host-badge">Your Game</span>}
-        </div>
-
-        <p className="game-card__location my-game-card__date">
-          <CalendarIcon />
-          {formatShortDate(game.starts_at)}
-        </p>
-
-        <p className="game-card__location">
-          <MapPinIcon />
-          {game.neighborhood_snapshot || game.city_snapshot}, {game.state_snapshot}
-        </p>
-
-        <p className="game-card__meta">
-          {formatEnvironment(game.environment_type)}
-          <span aria-hidden="true">•</span>
-          {game.format_label}
-        </p>
-
-        <div className="game-card__footer my-game-card__footer">
-          <span>
-            <UsersIcon />
-            <strong>{participantCount}/{game.total_spots}</strong> players
-          </span>
-
+        <div className="my-game-card__heading">
+          <h3>{title}</h3>
           <span className={`my-game-card__status my-game-card__status--${statusTone}`}>
             {statusLabel}
           </span>
         </div>
+
+        <p className="game-card__location">
+          <MapPinIcon />
+          {game.city_snapshot}
+        </p>
+
+        <p className="game-card__meta">
+          <ClockIcon />
+          {formatTimeRange(game.starts_at, game.ends_at)}
+        </p>
+
+        <p className="game-card__meta">
+          <SoccerBallIcon />
+          {formatEnvironment(game.environment_type)}
+          <span aria-hidden="true">•</span>
+          {game.format_label}
+        </p>
+      </div>
+
+      <div className="game-card__footer">
+        <span>
+          <UsersIcon />
+          <strong>
+            {participantCount}/{game.total_spots}
+          </strong>{' '}
+          spots
+        </span>
+
+        <span>{formatPrice(game.price_per_player_cents, game.currency)}</span>
       </div>
     </Link>
   )
 }
 
-function GameTypeBadge({ gameType, isCancelled }) {
+function GameTypeBadge({ gameType }) {
   const isCommunity = gameType === 'community'
 
   return (
-    <span
-      className={`game-card__badge game-card__badge--${gameType} ${
-        isCancelled ? 'game-card__badge--cancelled' : ''
-      }`}
-    >
+    <span className={`game-card__badge game-card__badge--${gameType}`}>
       {isCommunity ? <SoccerBallIcon /> : <ShieldCheckIcon />}
-      {isCancelled ? 'Cancelled' : isCommunity ? 'Community' : 'Official'}
+      {isCommunity ? 'Community' : 'Official'}
     </span>
   )
 }
@@ -280,9 +351,7 @@ function MyGamesState({ title, message }) {
   )
 }
 
-function buildMyGameItems(myParticipants, gamesById, currentUser) {
-  const now = Date.now()
-
+function buildMyGameItems(myParticipants, gamesById, currentUser, nowMs) {
   return myParticipants
     .map((participant) => {
       const game = gamesById.get(participant.game_id)
@@ -291,10 +360,15 @@ function buildMyGameItems(myParticipants, gamesById, currentUser) {
         return null
       }
 
-      const isPast = new Date(game.ends_at).getTime() < now || game.game_status === 'completed'
+      const isPast = new Date(game.ends_at).getTime() < nowMs || game.game_status === 'completed'
       const isCancelled = game.game_status === 'cancelled'
       const isHost = participant.participant_type === 'host' || game.host_user_id === currentUser?.id
-      const bucket = isPast || isCancelled ? 'history' : 'upcoming'
+      const bucket = getMyGameBucket(game, participant, isPast, isCancelled, isHost)
+
+      if (!bucket) {
+        return null
+      }
+
       const status = getMyGameStatus(game, participant, isHost, bucket)
 
       return {
@@ -313,6 +387,43 @@ function buildMyGameItems(myParticipants, gamesById, currentUser) {
     )
 }
 
+function getMyGameBucket(game, participant, isPast, isCancelled, isHost) {
+  if (isCancelled) {
+    return isGameCancelledHistoryParticipant(participant, isHost) ? 'history' : null
+  }
+
+  if (isPast) {
+    return isHistoricalParticipant(participant, isHost) ? 'history' : null
+  }
+
+  if (UPCOMING_MY_GAME_STATUSES.has(participant.participant_status) || isHost) {
+    return 'upcoming'
+  }
+
+  return null
+}
+
+function isGameCancelledHistoryParticipant(participant, isHost) {
+  if (UPCOMING_MY_GAME_STATUSES.has(participant.participant_status) || isHost) {
+    return true
+  }
+
+  return (
+    participant.participant_status === 'cancelled' &&
+    GAME_CANCELLED_TYPES.has(participant.cancellation_type)
+  )
+}
+
+function isHistoricalParticipant(participant, isHost) {
+  return HISTORY_MY_GAME_STATUSES.has(participant.participant_status) || isHost
+}
+
+function getVisibleUpcomingItems(items, visibleWindowCount, nowMs) {
+  const windowEnd = nowMs + visibleWindowCount * UPCOMING_WINDOW_DAYS * 24 * 60 * 60 * 1000
+
+  return items.filter((item) => new Date(item.game.starts_at).getTime() <= windowEnd)
+}
+
 function getMyGameStatus(game, participant, isHost, bucket) {
   if (game.game_status === 'cancelled') {
     return { statusLabel: 'Cancelled', statusTone: 'cancelled' }
@@ -320,8 +431,8 @@ function getMyGameStatus(game, participant, isHost, bucket) {
 
   if (bucket === 'history') {
     return {
-      statusLabel: participant.attendance_status === 'attended' ? 'Played' : 'Completed',
-      statusTone: 'history',
+      statusLabel: isHost ? 'Hosted' : 'Played',
+      statusTone: isHost ? 'hosted' : 'played',
     }
   }
 
@@ -336,10 +447,30 @@ function getMyGameStatus(game, participant, isHost, bucket) {
   return { statusLabel: 'Confirmed', statusTone: 'confirmed' }
 }
 
-function groupMyGameItems(items) {
+function groupUpcomingAgendaItems(items) {
+  const dateGroups = new Map()
+
+  items.forEach((item) => {
+    const dateKey = getDateKey(item.game.starts_at)
+
+    if (!dateGroups.has(dateKey)) {
+      dateGroups.set(dateKey, {
+        key: dateKey,
+        label: formatAgendaDate(item.game.starts_at),
+        items: [],
+      })
+    }
+
+    dateGroups.get(dateKey).items.push(item)
+  })
+
+  return [...dateGroups.values()]
+}
+
+function groupHistoryAgendaItems(items) {
   const groups = items.reduce((groupMap, item) => {
-    const key = getMonthKey(item.game.starts_at)
-    const label = formatMonth(item.game.starts_at)
+    const key = getDateKey(item.game.starts_at)
+    const label = formatAgendaDate(item.game.starts_at)
 
     if (!groupMap.has(key)) {
       groupMap.set(key, { key, label, items: [] })
@@ -352,24 +483,19 @@ function groupMyGameItems(items) {
   return [...groups.values()]
 }
 
-function getMonthKey(value) {
+function getDateKey(value) {
   const date = new Date(value)
-  return `${date.getFullYear()}-${date.getMonth()}`
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
 }
 
-function formatMonth(value) {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(value))
-}
-
-function formatShortDate(value) {
+function formatAgendaDate(value) {
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-  }).format(new Date(value))
+  })
+    .format(new Date(value))
+    .toUpperCase()
 }
 
 function formatStartTime(value) {
@@ -379,8 +505,20 @@ function formatStartTime(value) {
   }).format(new Date(value))
 }
 
+function formatTimeRange(start, end) {
+  return `${formatStartTime(start)} - ${formatStartTime(end)}`
+}
+
 function formatEnvironment(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1).replaceAll('_', ' ') : 'Pickup'
+}
+
+function formatPrice(cents, currency) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    maximumFractionDigits: 0,
+  }).format((cents || 0) / 100)
 }
 
 export default MyGamesPage

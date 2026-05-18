@@ -16,6 +16,7 @@ import '../../styles/browse-games/GameCheckoutPage.css'
 
 const ACTIVE_ROSTER_STATUSES = new Set(['pending_payment', 'confirmed'])
 const ACTIVE_JOIN_STATUSES = new Set(['pending_payment', 'confirmed', 'waitlisted'])
+const JOIN_WINDOW_MINUTES = 5
 
 function GameCheckoutPage() {
   const { gameId } = useParams()
@@ -39,6 +40,18 @@ function GameCheckoutPage() {
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
   const [submitError, setSubmitError] = useState('')
+  const [nowMs, setNowMs] = useState(null)
+
+  useEffect(() => {
+    function updateNow() {
+      setNowMs(Date.now())
+    }
+
+    updateNow()
+    const intervalId = window.setInterval(updateNow, 30000)
+
+    return () => window.clearInterval(intervalId)
+  }, [])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
@@ -126,6 +139,10 @@ function GameCheckoutPage() {
   const platformFee = 0
   const subtotal = price * partySize
   const total = subtotal + platformFee
+  const isJoinWindowClosed = game
+    ? nowMs !== null &&
+      nowMs >= new Date(game.starts_at).getTime() + JOIN_WINDOW_MINUTES * 60 * 1000
+    : false
 
   async function confirmBooking() {
     const isExistingConfirmedPlayer = existingParticipant?.participant_status === 'confirmed'
@@ -133,6 +150,7 @@ function GameCheckoutPage() {
       !agreed ||
       !game ||
       !appUser?.id ||
+      isJoinWindowClosed ||
       (!isAddGuestsCheckout && existingParticipant) ||
       (isAddGuestsCheckout && (!isExistingConfirmedPlayer || effectiveGuestCount <= 0))
     ) {
@@ -191,11 +209,11 @@ function GameCheckoutPage() {
   const title = game.title || `${game.venue_name_snapshot} ${game.format_label}`
   const address = formatVenueAddress(game, venue)
   const paymentMethod = paymentMethods.find((method) => method.is_default) || paymentMethods[0]
-  const chargeTiming = isWaitlistCheckout ? 'later' : ''
   const confirmLabel = getConfirmLabel({
     agreed,
     isAddGuestsCheckout,
     isBlockedByCapacity,
+    isJoinWindowClosed,
     isSubmitting,
     isWaitlistCheckout,
   })
@@ -301,12 +319,6 @@ function GameCheckoutPage() {
                   </div>
                 </div>
               )}
-              {isWaitlistCheckout && (
-                <p className="checkout-waitlist-note">
-                  You won’t be charged now. If enough spots open, your saved payment method will be
-                  charged automatically and you’ll move to the player list.
-                </p>
-              )}
               {isBlockedByCapacity && (
                 <p className="checkout-error">
                   {isAddGuestsCheckout
@@ -353,6 +365,13 @@ function GameCheckoutPage() {
                 Only confirmed players can add guests to an existing booking.
               </p>
             )}
+            {isJoinWindowClosed && (
+              <p className="checkout-error">
+                {isAddGuestsCheckout
+                  ? 'Attendance changes are closed for this game.'
+                  : 'Joining is closed for this game.'}
+              </p>
+            )}
             {existingParticipant && !isAddGuestsCheckout && (
               <p className="checkout-error">
                 {existingParticipant.participant_status === 'waitlisted'
@@ -370,6 +389,7 @@ function GameCheckoutPage() {
                   !agreed ||
                   isSubmitting ||
                   isBlockedByCapacity ||
+                  isJoinWindowClosed ||
                   isAddGuestsBlockedByParticipant ||
                   (!isAddGuestsCheckout && Boolean(existingParticipant))
                 }
@@ -390,21 +410,28 @@ function GameCheckoutPage() {
             {!isAddGuestsCheckout && (
               <CheckoutLine
                 label="1 x Player"
-                value={formatMoneyWithTiming(price, chargeTiming)}
+                value={formatMoney(price)}
               />
             )}
             {effectiveGuestCount > 0 && (
               <CheckoutLine
                 label={`${effectiveGuestCount} x ${effectiveGuestCount === 1 ? 'Guest' : 'Guests'}`}
-                value={formatMoneyWithTiming(price * effectiveGuestCount, chargeTiming)}
+                value={formatMoney(price * effectiveGuestCount)}
               />
             )}
             {!isWaitlistCheckout && <CheckoutLine label="Pickup Lane fee" value={formatMoney(platformFee)} />}
             {isWaitlistCheckout && <p className="checkout-summary-note">No charge now</p>}
             <div className="checkout-total">
               <span>Total</span>
-              <strong>{formatMoneyWithTiming(total, chargeTiming)}</strong>
+              <strong>{formatMoney(total)}</strong>
             </div>
+
+            {isWaitlistCheckout && (
+              <p className="checkout-summary-waitlist-note">
+                You won’t be charged now. You’ll only be charged if a spot opens and you’re moved
+                into the game.
+              </p>
+            )}
 
             <button
               className="checkout-confirm-button checkout-confirm-button--desktop"
@@ -413,6 +440,7 @@ function GameCheckoutPage() {
                 !agreed ||
                 isSubmitting ||
                 isBlockedByCapacity ||
+                isJoinWindowClosed ||
                 isAddGuestsBlockedByParticipant ||
                 (!isAddGuestsCheckout && Boolean(existingParticipant))
               }
@@ -441,9 +469,20 @@ function CheckoutLine({ label, value }) {
   )
 }
 
-function getConfirmLabel({ agreed, isAddGuestsCheckout, isBlockedByCapacity, isSubmitting, isWaitlistCheckout }) {
+function getConfirmLabel({
+  agreed,
+  isAddGuestsCheckout,
+  isBlockedByCapacity,
+  isJoinWindowClosed,
+  isSubmitting,
+  isWaitlistCheckout,
+}) {
   if (isSubmitting) {
     return 'Confirming...'
+  }
+
+  if (isJoinWindowClosed) {
+    return isAddGuestsCheckout ? 'Attendance Closed' : 'Join Closed'
   }
 
   if (isBlockedByCapacity) {
@@ -565,11 +604,6 @@ function formatMoney(cents) {
     style: 'currency',
     currency: 'USD',
   }).format((cents || 0) / 100)
-}
-
-function formatMoneyWithTiming(cents, timing) {
-  const amount = formatMoney(cents)
-  return timing ? `${amount} ${timing}` : amount
 }
 
 function formatPaymentMethod(paymentMethod) {

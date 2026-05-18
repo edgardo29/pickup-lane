@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -22,6 +22,14 @@ VALID_WAITLIST_STATUSES = {
     "removed",
 }
 PROMOTION_HISTORY_WAITLIST_STATUSES = {"promoted", "accepted", "declined", "expired"}
+JOIN_WINDOW_MINUTES = 5
+
+
+def ensure_timezone(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+
+    return value
 
 
 def build_waitlist_entry_conflict_detail(exc: IntegrityError) -> str:
@@ -144,6 +152,18 @@ def validate_game_accepts_waitlist_status(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This game does not have waitlist enabled.",
+        )
+
+    join_window_closes_at = ensure_timezone(db_game.starts_at) + timedelta(
+        minutes=JOIN_WINDOW_MINUTES
+    )
+    if (
+        waitlist_status in {"active", "promoted"}
+        and datetime.now(timezone.utc) >= join_window_closes_at
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The waitlist is closed for this game.",
         )
 
 

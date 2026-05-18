@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -65,6 +65,7 @@ MINIMUM_TOTAL_SPOTS = 6
 MAXIMUM_TOTAL_SPOTS = 99
 MAX_CANCEL_REASON_LENGTH = 500
 REFUND_CUTOFF_HOURS = 24
+JOIN_WINDOW_MINUTES = 5
 LOCATION_FIELDS = {
     "venue_name",
     "address_line_1",
@@ -274,6 +275,24 @@ def ensure_timezone(value: datetime) -> datetime:
         return value.replace(tzinfo=timezone.utc)
 
     return value
+
+
+def get_join_window_closes_at(db_game: Game) -> datetime:
+    return ensure_timezone(db_game.starts_at) + timedelta(minutes=JOIN_WINDOW_MINUTES)
+
+
+def is_roster_locked(db_game: Game, now: datetime) -> bool:
+    return now >= get_join_window_closes_at(db_game)
+
+
+def require_roster_window_open(db_game: Game, now: datetime, detail: str) -> None:
+    if is_roster_locked(db_game, now):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+
+def require_game_not_started(db_game: Game, now: datetime, detail: str) -> None:
+    if now >= ensure_timezone(db_game.starts_at):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
 def get_side_size_for_format(format_label: str) -> int:
@@ -1183,6 +1202,10 @@ def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
         sync_game_capacity_status(db, db_game)
         return
 
+    if is_roster_locked(db_game, now):
+        sync_game_capacity_status(db, db_game)
+        return
+
     available_spots = max(db_game.total_spots - count_roster_players(db, db_game.id), 0)
     if available_spots <= 0:
         sync_game_capacity_status(db, db_game)
@@ -1344,11 +1367,8 @@ def join_game(
             detail="This game is not open for joining.",
         )
 
-    if ensure_timezone(db_game.starts_at) <= datetime.now(timezone.utc):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This game has already started.",
-        )
+    now = datetime.now(timezone.utc)
+    require_roster_window_open(db_game, now, "Joining is closed for this game.")
 
     existing_participant = get_existing_active_participant(
         db, db_game.id, joining_user.id
@@ -1366,7 +1386,6 @@ def join_game(
             detail="You are already on the waitlist for this game.",
         )
 
-    now = datetime.now(timezone.utc)
     roster_count = count_roster_players(db, db_game.id)
     display_name = get_display_name(joining_user)
     guest_count = validate_guest_count(db_game, join_request.guest_count)
@@ -1514,6 +1533,7 @@ def leave_game(
         )
 
     now = datetime.now(timezone.utc)
+    require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
     refundable = is_refund_eligible(db_game.starts_at, now)
     app_payment_required = game_requires_app_player_payment(db_game)
     app_refund_eligible = refundable and app_payment_required
@@ -1638,11 +1658,8 @@ def add_booking_game_guests(
             detail="Only published scheduled or full games can add guests.",
         )
 
-    if ensure_timezone(db_game.starts_at) <= datetime.now(timezone.utc):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This game has already started.",
-        )
+    now = datetime.now(timezone.utc)
+    require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
 
     if guest_request.guest_count <= 0:
         raise HTTPException(
@@ -1697,7 +1714,6 @@ def add_booking_game_guests(
             detail="Not enough spots are available for guests.",
         )
 
-    now = datetime.now(timezone.utc)
     added_guests = build_added_booking_guest_participants(
         db_game,
         booking,
@@ -1785,6 +1801,9 @@ def add_host_game_guests(
             detail="Only published scheduled or full games can be updated.",
         )
 
+    now = datetime.now(timezone.utc)
+    require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
+
     if guest_request.guest_count < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1822,7 +1841,6 @@ def add_host_game_guests(
             detail="Not enough spots are available for host guests.",
         )
 
-    now = datetime.now(timezone.utc)
     guests = build_host_guest_participants(
         db_game,
         acting_user,
@@ -1889,6 +1907,7 @@ def remove_game_guests(
         )
 
     now = datetime.now(timezone.utc)
+    require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
     refundable = is_refund_eligible(db_game.starts_at, now)
     app_payment_required = game_requires_app_player_payment(db_game)
     was_waitlisted = participant.participant_status == "waitlisted"
@@ -2028,6 +2047,7 @@ def cancel_game(
         )
 
     now = datetime.now(timezone.utc)
+    require_game_not_started(db_game, now, "Games cannot be cancelled after start time.")
     old_game_status = db_game.game_status
     cancel_reason = normalize_cancel_reason(cancel_request.cancel_reason)
     change_source = "admin" if cancellation_type == "admin_cancelled" else "host"
@@ -2148,6 +2168,9 @@ def update_game(
         get_active_user_or_404(
             db, game_update.completed_by_user_id, "Completed-by user not found."
         )
+
+    now = datetime.now(timezone.utc)
+    require_game_not_started(db_game, now, "Games cannot be edited after start time.")
 
     update_data = game_update.model_dump(exclude_unset=True)
     if "format_label" in update_data and "host_guest_max" not in update_data:
@@ -2301,6 +2324,9 @@ def host_edit_game(
             detail="Only published scheduled or full games can be edited.",
         )
 
+    now = datetime.now(timezone.utc)
+    require_game_not_started(db_game, now, "Games cannot be edited after start time.")
+
     update_data = game_update.model_dump(exclude_unset=True)
     update_data.pop("acting_user_id", None)
     if "format_label" in update_data:
@@ -2367,7 +2393,7 @@ def host_edit_game(
     )
     effective_ends_at = ensure_timezone(update_data.get("ends_at", db_game.ends_at))
 
-    if effective_starts_at <= datetime.now(timezone.utc):
+    if effective_starts_at <= now:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Game start time must be in the future.",

@@ -44,6 +44,7 @@ const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
 const ACTIVE_JOIN_STATUSES = new Set(['pending_payment', 'confirmed', 'waitlisted'])
 const GUEST_JOIN_MESSAGE = 'Create an Account or Sign In to join this game.'
 const CHAT_MESSAGE_MAX_LENGTH = 300
+const JOIN_WINDOW_MINUTES = 5
 
 function GameDetailsPage() {
   const { gameId } = useParams()
@@ -78,6 +79,18 @@ function GameDetailsPage() {
   const [activePlayerTab, setActivePlayerTab] = useState('going')
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
+  const [nowMs, setNowMs] = useState(null)
+
+  useEffect(() => {
+    function updateNow() {
+      setNowMs(Date.now())
+    }
+
+    updateNow()
+    const intervalId = window.setInterval(updateNow, 30000)
+
+    return () => window.clearInterval(intervalId)
+  }, [])
   const chatMessagesRef = useRef([])
   const shareCopiedTimeoutRef = useRef(null)
 
@@ -339,8 +352,9 @@ function GameDetailsPage() {
 
   const title = game.title || `${game.venue_name_snapshot || 'Pickup'} Game`
   const venueName = game.venue_name_snapshot || venue?.name || 'Pickup Lane'
-  const neighborhood = game.neighborhood_snapshot || venue?.neighborhood || game.city_snapshot
   const city = game.city_snapshot || venue?.city || 'Chicago'
+  const state = game.state_snapshot || venue?.state
+  const heroLocation = formatHeroLocation(venueName, game.neighborhood_snapshot || venue?.neighborhood, city, state)
   const isCancelledGame = game.game_status === 'cancelled'
   const gameToneLabel = isCancelledGame
     ? 'Cancelled'
@@ -367,30 +381,36 @@ function GameDetailsPage() {
   const hostPaymentMethods = getVisibleHostPaymentMethods(game, communityGameDetails)
   const parkingNote = game.parking_notes || ''
   const ruleItems = buildRuleItems(game)
-  const canEditGame =
+  const scheduledStartMs = new Date(game.starts_at).getTime()
+  const isGameStarted = nowMs !== null && nowMs >= scheduledStartMs
+  const canShowEditGame =
     game.game_type === 'community' &&
     currentUser?.id === game.host_user_id &&
     game.publish_status === 'published' &&
     ['scheduled', 'full'].includes(game.game_status)
+  const canEditGame = canShowEditGame && !isGameStarted
   const isHost = currentUser?.id && currentUser.id === game.host_user_id
-  const canCancelGame =
+  const canShowCancelGame =
     game.publish_status === 'published' &&
     ['scheduled', 'full'].includes(game.game_status) &&
     (
       currentUser?.role === 'admin' ||
       (game.game_type === 'community' && isHost)
     )
+  const canCancelGame = canShowCancelGame && !isGameStarted
   const canOpenGameChat = canUseGameChat(game, participants, currentUser)
   const hostGuestMax = game.allow_guests ? game.host_guest_max || 0 : 0
   const hostGuestAddSlots = Math.max(
     Math.min(hostGuestMax - currentGuestCount, participantSummary.spotsLeft),
     0,
   )
-  const hasGameStarted = new Date(game.starts_at) <= new Date()
+  const isJoinWindowClosed =
+    nowMs !== null &&
+    nowMs >= scheduledStartMs + JOIN_WINDOW_MINUTES * 60 * 1000
   const isGameClosed =
     !['published'].includes(game.publish_status) ||
     !['scheduled', 'full'].includes(game.game_status) ||
-    hasGameStarted
+    isJoinWindowClosed
   const playerGuestMax = game.allow_guests ? game.max_guests_per_booking || 0 : 0
   const isConfirmedPlayer =
     Boolean(currentParticipant) &&
@@ -404,7 +424,7 @@ function GameDetailsPage() {
   const joinLabel = getJoinLabel({
     currentParticipant,
     gameStatus: game.game_status,
-    hasGameStarted,
+    isJoinWindowClosed,
     isCancelledGame,
     isGameClosed,
     isPublished: game.publish_status === 'published',
@@ -415,12 +435,12 @@ function GameDetailsPage() {
   })
   const isJoinDisabled = Boolean(isHost || currentParticipant || isGameClosed || isJoining)
   const isClosedJoinStatus =
-    isJoinDisabled && ['Cancelled', 'Completed', 'Game Started', 'Game Closed'].includes(joinLabel)
+    isJoinDisabled && ['Cancelled', 'Completed', 'Join Closed', 'Game Closed'].includes(joinLabel)
   const mobileActionCount = [
-    canEditGame,
+    canShowEditGame,
     isHost && hostGuestMax > 0,
-    currentParticipant && !isHost,
-    canCancelGame,
+    currentParticipant && !isHost && !isJoinWindowClosed,
+    canShowCancelGame,
     true,
   ].filter(Boolean).length
 
@@ -776,7 +796,7 @@ function GameDetailsPage() {
               <h1>{title}</h1>
               <p>
                 <MapPinIcon />
-                {venueName} – {neighborhood}, {city}
+                {heroLocation}
               </p>
             </div>
 
@@ -799,7 +819,7 @@ function GameDetailsPage() {
 
               <p>
                 <MapPinIcon />
-                {venueName} – {neighborhood}, {city}
+                {heroLocation}
               </p>
 
               <QuickFacts facts={facts} price={price} variant="mobile" />
@@ -812,21 +832,35 @@ function GameDetailsPage() {
                 mobileActionCount === 1 ? 'details-mobile-host-actions--single' : '',
               ].filter(Boolean).join(' ')}
             >
-              {canEditGame && (
-                <Link className="details-secondary-action details-host-edit-action" to={`/games/${game.id}/edit`}>
-                  <span className="details-action-icon">
-                    <PencilIcon />
-                  </span>
-                  <span>Edit Game</span>
-                  <span className="details-action-chevron" aria-hidden="true">›</span>
-                </Link>
+              {canShowEditGame && (
+                canEditGame ? (
+                  <Link className="details-secondary-action details-host-edit-action" to={`/games/${game.id}/edit`}>
+                    <span className="details-action-icon">
+                      <PencilIcon />
+                    </span>
+                    <span>Edit Game</span>
+                    <span className="details-action-chevron" aria-hidden="true">›</span>
+                  </Link>
+                ) : (
+                  <button
+                    className="details-secondary-action details-host-edit-action"
+                    type="button"
+                    disabled
+                  >
+                    <span className="details-action-icon">
+                      <PencilIcon />
+                    </span>
+                    <span>Edit Game</span>
+                    <span className="details-action-chevron" aria-hidden="true">›</span>
+                  </button>
+                )
               )}
 
               {isHost && hostGuestMax > 0 && (
                 <button
                   className="details-secondary-action details-host-guest-action"
                   type="button"
-                  disabled={isAddingHostGuest || isUpdatingGuests}
+                  disabled={isJoinWindowClosed || isAddingHostGuest || isUpdatingGuests}
                   onClick={() => setIsHostGuestModalOpen(true)}
                 >
                   <span className="details-action-icon">
@@ -838,7 +872,7 @@ function GameDetailsPage() {
                 </button>
               )}
 
-              {currentParticipant && !isHost && (
+              {currentParticipant && !isHost && !isJoinWindowClosed && (
                 <button
                   className="details-secondary-action"
                   type="button"
@@ -856,11 +890,11 @@ function GameDetailsPage() {
                 </button>
               )}
 
-              {canCancelGame && (
+              {canShowCancelGame && (
                 <button
                   className="details-secondary-action details-cancel-game-action"
                   type="button"
-                  disabled={isCancellingGame}
+                  disabled={!canCancelGame || isCancellingGame}
                   onClick={() => setIsCancelGameModalOpen(true)}
                 >
                   <span className="details-action-icon">
@@ -871,7 +905,12 @@ function GameDetailsPage() {
                 </button>
               )}
 
-              <button className="details-secondary-action details-share-button" type="button" onClick={handleShareGame}>
+              <button
+                className="details-secondary-action details-share-button"
+                type="button"
+                disabled={isCancelledGame}
+                onClick={handleShareGame}
+              >
                 <span className="details-action-icon">
                   <ShareIcon />
                 </span>
@@ -972,20 +1011,28 @@ function GameDetailsPage() {
               }
               onJoin={handleJoinIntent}
               onLeave={
-                currentParticipant && !isHost ? () => setIsLeaveModalOpen(true) : null
+                currentParticipant && !isHost && !isJoinWindowClosed
+                  ? () => setIsLeaveModalOpen(true)
+                  : null
               }
               onShare={handleShareGame}
-              onCancelGame={canCancelGame ? () => setIsCancelGameModalOpen(true) : null}
+              shareDisabled={isCancelledGame}
+              onCancelGame={canShowCancelGame ? () => setIsCancelGameModalOpen(true) : null}
+              cancelGameDisabled={!canCancelGame}
               price={price}
               returnPath={`/games/${game.id}`}
               shareCopied={shareCopied}
-              editGameUrl={canEditGame ? `/games/${game.id}/edit` : ''}
+              editGameUrl={canShowEditGame ? `/games/${game.id}/edit` : ''}
+              editGameDisabled={!canEditGame}
               hostGuestCount={isHost ? currentGuestCount : 0}
               hostGuestMax={hostGuestMax}
               isAddingHostGuest={isAddingHostGuest}
               isUpdatingHostGuests={isUpdatingGuests}
               isCancellingGame={isCancellingGame}
-              onManageHostGuests={isHost ? () => setIsHostGuestModalOpen(true) : null}
+              onManageHostGuests={
+                isHost ? () => setIsHostGuestModalOpen(true) : null
+              }
+              manageHostGuestsDisabled={isCancelledGame || isJoinWindowClosed}
             />
           </aside>
         </section>
@@ -1052,7 +1099,13 @@ function GameDetailsPage() {
                     : 'details-mobile-status-pill--closed',
                 ].filter(Boolean).join(' ')}
               >
-                {isCancelledGame ? <TrashIcon /> : <ShieldCheckIcon />}
+                {isCancelledGame ? (
+                  <TrashIcon />
+                ) : joinLabel === 'Join Closed' ? (
+                  <ClockIcon />
+                ) : (
+                  <ShieldCheckIcon />
+                )}
                 {joinLabel}
               </span>
             ) : (
@@ -1337,7 +1390,7 @@ function getUserDisplayName(user) {
 function getJoinLabel({
   currentParticipant,
   gameStatus,
-  hasGameStarted,
+  isJoinWindowClosed,
   isCancelledGame,
   isGameClosed,
   isPublished,
@@ -1375,8 +1428,8 @@ function getJoinLabel({
       return 'Completed'
     }
 
-    if (hasGameStarted) {
-      return 'Game Started'
+    if (isJoinWindowClosed) {
+      return 'Join Closed'
     }
 
     return 'Game Closed'
@@ -1407,6 +1460,11 @@ function buildRuleItems(game) {
       text: isCommunityGame
         ? 'The host should contact players with next steps for any off-app payments.'
         : 'Players receive a refund or game credit when Pickup Lane cancels an official game.',
+    },
+    {
+      title: 'Signup Window',
+      kind: 'clock',
+      text: 'New signups close 5 minutes after the scheduled start time.',
     },
     {
       title: 'Waitlist',
@@ -1445,6 +1503,20 @@ function formatVenueAddress(game, venue) {
   const postalCode = venue?.postal_code
 
   return [street, [city, state, postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+}
+
+function formatHeroLocation(venueName, neighborhood, city, state) {
+  const placeParts = []
+
+  if (neighborhood && neighborhood !== city) {
+    placeParts.push(neighborhood)
+  }
+
+  if (city) {
+    placeParts.push(state ? `${city}, ${state}` : city)
+  }
+
+  return [venueName, placeParts.join(', ')].filter(Boolean).join(' – ')
 }
 
 function buildMapsUrl(venue, address) {

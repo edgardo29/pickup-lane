@@ -10,9 +10,10 @@
   --muted: rgba(248, 250, 252, 0.68);
   --text: #f8fafc;
 
-  min-height: 100svh;
+  min-height: 100vh;
   color: var(--text);
   background: #010409;
+  box-shadow: 0 100vh 0 100vh #010409;
 }
 
 .browse-page svg {
@@ -393,12 +394,55 @@
   color: var(--lime);
 }
 
+.browse-date-strip-shell {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 0 12px;
+}
+
 .browse-date-strip {
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(7, minmax(96px, 1fr));
   gap: 14px;
   overflow-x: auto;
-  padding: 4px 0 12px;
+  padding: 2px 0 0;
+}
+
+.browse-date-arrow {
+  min-width: 0;
+  min-height: 74px;
+  border: 1px solid rgba(248, 250, 252, 0.08);
+  border-radius: 9px;
+  color: rgba(248, 250, 252, 0.86);
+  background: var(--surface-strong);
+  cursor: pointer;
+  font-size: 1.35rem;
+  font-weight: 950;
+  line-height: 1;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.browse-date-arrow:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(184, 255, 36, 0.32);
+  color: var(--lime);
+}
+
+.browse-date-arrow:disabled {
+  cursor: default;
+  opacity: 0.32;
+}
+
+.browse-date-arrow:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
 }
 
 .browse-date {
@@ -579,8 +623,8 @@
   left: 0;
 }
 
-.game-card__time,
-.game-card__badge {
+.game-card__badge,
+.game-card__full-badge {
   border: 1px solid rgba(248, 250, 252, 0.07);
   border-radius: 5px;
   background: rgba(5, 10, 16, 0.94);
@@ -589,17 +633,9 @@
   z-index: 2;
 }
 
-.game-card__time {
-  top: 10px;
-  left: 10px;
-  padding: 6px 9px;
-  font-size: 0.78rem;
-  font-weight: 750;
-}
-
 .game-card__badge {
   top: 10px;
-  right: 10px;
+  left: 10px;
   min-height: 30px;
   padding: 0 9px;
   display: inline-flex;
@@ -618,6 +654,22 @@
 
 .game-card__badge--community {
   color: var(--blue);
+}
+
+.game-card__full-badge {
+  top: 10px;
+  right: 10px;
+  min-height: 30px;
+  padding: 0 11px;
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #ffb4ac;
+  background: rgba(37, 11, 14, 0.82);
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .game-card--community .game-card__footer svg,
@@ -656,6 +708,13 @@
   width: 16px;
   height: 16px;
   color: var(--lime);
+}
+
+.game-card__meta svg {
+  width: 16px;
+  height: 16px;
+  color: rgba(248, 250, 252, 0.62);
+  flex: 0 0 auto;
 }
 
 .game-card__footer {
@@ -795,9 +854,18 @@
 }
 
 @media (max-width: 760px) {
+  .browse-date-strip-shell {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    gap: 8px;
+  }
+
   .browse-date-strip {
     grid-template-columns: repeat(7, 86px);
     gap: 10px;
+  }
+
+  .browse-date-arrow {
+    min-height: 72px;
   }
 
   .browse-date {
@@ -904,13 +972,25 @@
     font-size: 0.95rem;
   }
 
+  .browse-date-strip-shell {
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    gap: 7px;
+    padding: 8px 0 16px;
+  }
+
   .browse-date-strip {
     display: flex;
     gap: 10px;
     margin-inline: 0;
-    padding: 4px 0 16px;
+    padding: 2px 0 0;
     scroll-snap-type: x proximity;
     scroll-padding-inline: 0;
+  }
+
+  .browse-date-arrow {
+    min-height: 62px;
+    border-radius: 10px;
+    font-size: 1.1rem;
   }
 
   .browse-date {
@@ -1007,9 +1087,10 @@
     height: 14px;
   }
 
-  .game-card__time {
-    padding: 5px 7px;
-    font-size: 0.7rem;
+  .game-card__full-badge {
+    min-height: 26px;
+    padding: 0 8px;
+    font-size: 0.58rem;
   }
 }
 
