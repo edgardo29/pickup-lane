@@ -1,26 +1,32 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import defaultCommunityVenueImage from '../../assets/community-default/default-venue-wide.png'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
 import {
   BuildingIcon,
   CalendarIcon,
+  CheckIcon,
   ClockIcon,
+  CopyIcon,
   MapPinIcon,
   PencilIcon,
+  PlusCircleIcon,
   ShareIcon,
   ShieldCheckIcon,
   StopwatchIcon,
+  TrashIcon,
   UsersIcon,
 } from '../../components/BrowseIcons.jsx'
 import {
   BookingRulesCard,
+  CancelGameModal,
   ChatPanel,
   DetailsScaffold,
   DetailsState,
   GameChatCard,
   GameGallery,
   JoinCard,
+  HostPaymentSection,
   HostGuestModal,
   LeaveGameModal,
   PlayersCard,
@@ -36,7 +42,7 @@ import '../../styles/browse-games/GameDetailsPage.css'
 
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
 const ACTIVE_JOIN_STATUSES = new Set(['pending_payment', 'confirmed', 'waitlisted'])
-const GUEST_JOIN_MESSAGE = 'Create an account or sign in to join this game.'
+const GUEST_JOIN_MESSAGE = 'Create an Account or Sign In to join this game.'
 const CHAT_MESSAGE_MAX_LENGTH = 300
 
 function GameDetailsPage() {
@@ -47,6 +53,7 @@ function GameDetailsPage() {
   const [game, setGame] = useState(null)
   const [venue, setVenue] = useState(null)
   const [gameImages, setGameImages] = useState([])
+  const [communityGameDetails, setCommunityGameDetails] = useState(null)
   const [participants, setParticipants] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [activeChat, setActiveChat] = useState(null)
@@ -55,12 +62,14 @@ function GameDetailsPage() {
   const [chatError, setChatError] = useState('')
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [joinNotice, setJoinNotice] = useState('')
-  const [shareNotice, setShareNotice] = useState('')
+  const [shareCopied, setShareCopied] = useState(false)
   const [isJoining, setIsJoining] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [isAddingHostGuest, setIsAddingHostGuest] = useState(false)
   const [isUpdatingGuests, setIsUpdatingGuests] = useState(false)
+  const [isCancellingGame, setIsCancellingGame] = useState(false)
   const [isHostGuestModalOpen, setIsHostGuestModalOpen] = useState(false)
+  const [isCancelGameModalOpen, setIsCancelGameModalOpen] = useState(false)
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false)
   const [isPlayerListOpen, setIsPlayerListOpen] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
@@ -69,6 +78,18 @@ function GameDetailsPage() {
   const [activePlayerTab, setActivePlayerTab] = useState('going')
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
+  const chatMessagesRef = useRef([])
+  const shareCopiedTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    chatMessagesRef.current = chatMessages
+  }, [chatMessages])
+
+  useEffect(() => () => {
+    if (shareCopiedTimeoutRef.current) {
+      window.clearTimeout(shareCopiedTimeoutRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     let ignore = false
@@ -77,11 +98,13 @@ function GameDetailsPage() {
       setStatus('loading')
       setError('')
       setJoinNotice('')
-      setShareNotice('')
+      setShareCopied(false)
       setIsJoining(false)
       setIsLeaving(false)
       setIsAddingHostGuest(false)
+      setIsCancellingGame(false)
       setIsHostGuestModalOpen(false)
+      setIsCancelGameModalOpen(false)
       setIsLeaveModalOpen(false)
       setIsPlayerListOpen(false)
       setIsChatOpen(false)
@@ -101,6 +124,11 @@ function GameDetailsPage() {
           apiRequest(`/game-participants?game_id=${gameId}`),
           apiRequest(`/venues/${gameResponse.venue_id}`).catch(() => null),
         ])
+        const communityDetailsResponse = gameResponse.game_type === 'community'
+          ? await apiRequest(`/community-game-details?game_id=${gameId}`)
+            .then((details) => details[0] || null)
+            .catch(() => null)
+          : null
         const canLoadChat = canUseGameChat(gameResponse, participantsResponse, appUser)
         let activeChatResponse = null
         let messagesResponse = []
@@ -118,7 +146,7 @@ function GameDetailsPage() {
 
           if (activeChatResponse) {
             messagesResponse = await apiRequest(
-              `/chat-messages?chat_id=${activeChatResponse.id}&moderation_status=visible&limit=50`,
+              buildChatMessagesPath(activeChatResponse.id),
               { headers: chatHeaders },
             ).catch(() => [])
           }
@@ -128,6 +156,7 @@ function GameDetailsPage() {
           setGame(gameResponse)
           setVenue(venueResponse)
           setGameImages(imagesResponse)
+          setCommunityGameDetails(communityDetailsResponse)
           setParticipants(participantsResponse)
           setCurrentUser(appUser || null)
           setActiveChat(activeChatResponse)
@@ -159,25 +188,36 @@ function GameDetailsPage() {
 
     async function refreshChatPreview() {
       try {
+        if (document.hidden) {
+          return
+        }
+
         const chatHeaders = await getChatAuthHeaders(firebaseUser)
-        const [readStateResponse, messagesResponse] = await Promise.all([
-          apiRequest(`/game-chats/${activeChat.id}/read-state`, { headers: chatHeaders }),
-          apiRequest(
-            `/chat-messages?chat_id=${activeChat.id}&moderation_status=visible&limit=50`,
-            { headers: chatHeaders },
-          ),
-        ])
+        const readStateResponse = await apiRequest(
+          `/game-chats/${activeChat.id}/read-state`,
+          { headers: chatHeaders },
+        )
 
         if (!ignore) {
-          setChatMessages(messagesResponse)
           setHasUnreadChat(Boolean(readStateResponse.unread_count))
+        }
+
+        if (readStateResponse.unread_count > 0) {
+          const messagesResponse = await apiRequest(
+            buildChatMessagesPath(activeChat.id, getLatestMessageCreatedAt(chatMessagesRef.current)),
+            { headers: chatHeaders },
+          )
+
+          if (!ignore && messagesResponse.length > 0) {
+            setChatMessages((currentMessages) => mergeChatMessages(currentMessages, messagesResponse))
+          }
         }
       } catch {
         // Chat preview refresh is best-effort; the page should stay usable.
       }
     }
 
-    const intervalId = window.setInterval(refreshChatPreview, 30000)
+    const intervalId = window.setInterval(refreshChatPreview, 60000)
     return () => {
       ignore = true
       window.clearInterval(intervalId)
@@ -193,25 +233,32 @@ function GameDetailsPage() {
 
     async function refreshOpenChat() {
       try {
+        if (document.hidden) {
+          return
+        }
+
         const chatHeaders = await getChatAuthHeaders(firebaseUser)
+        const afterCreatedAt = getLatestMessageCreatedAt(chatMessagesRef.current)
         const messagesResponse = await apiRequest(
-          `/chat-messages?chat_id=${activeChat.id}&moderation_status=visible&limit=50`,
+          buildChatMessagesPath(activeChat.id, afterCreatedAt),
           { headers: chatHeaders },
         )
 
-        if (!ignore) {
-          setChatMessages(messagesResponse)
+        if (!ignore && messagesResponse.length > 0) {
+          setChatMessages((currentMessages) => mergeChatMessages(currentMessages, messagesResponse))
           setHasUnreadChat(false)
         }
 
-        await apiRequest(`/game-chats/${activeChat.id}/read`, {
-          method: 'POST',
-          headers: {
-            ...chatHeaders,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}),
-        }).catch(() => null)
+        if (messagesResponse.length > 0 || hasUnreadChat) {
+          await apiRequest(`/game-chats/${activeChat.id}/read`, {
+            method: 'POST',
+            headers: {
+              ...chatHeaders,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+          }).catch(() => null)
+        }
       } catch {
         // Open chat refresh is best-effort; sending and manual refresh still work.
       }
@@ -224,7 +271,7 @@ function GameDetailsPage() {
       ignore = true
       window.clearInterval(intervalId)
     }
-  }, [activeChat?.id, firebaseUser, isChatOpen])
+  }, [activeChat?.id, firebaseUser, hasUnreadChat, isChatOpen])
 
   const images = useMemo(
     () => {
@@ -294,7 +341,12 @@ function GameDetailsPage() {
   const venueName = game.venue_name_snapshot || venue?.name || 'Pickup Lane'
   const neighborhood = game.neighborhood_snapshot || venue?.neighborhood || game.city_snapshot
   const city = game.city_snapshot || venue?.city || 'Chicago'
-  const gameToneLabel = game.game_type === 'community' ? 'Community Game' : 'Official Game'
+  const isCancelledGame = game.game_status === 'cancelled'
+  const gameToneLabel = isCancelledGame
+    ? 'Cancelled'
+    : game.game_type === 'community'
+      ? 'Community Game'
+      : 'Official Game'
   const dateLabel = formatDate(game.starts_at)
   const timeLabel = formatTimeRange(game.starts_at, game.ends_at)
   const durationLabel = getDurationLabel(game.starts_at, game.ends_at)
@@ -312,6 +364,7 @@ function GameDetailsPage() {
   const aboutText =
     game.description ||
     'Fast-paced pickup soccer. All skill levels welcome. Show up ready to play and have fun.'
+  const hostPaymentMethods = getVisibleHostPaymentMethods(game, communityGameDetails)
   const parkingNote = game.parking_notes || ''
   const ruleItems = buildRuleItems(game)
   const canEditGame =
@@ -320,33 +373,56 @@ function GameDetailsPage() {
     game.publish_status === 'published' &&
     ['scheduled', 'full'].includes(game.game_status)
   const isHost = currentUser?.id && currentUser.id === game.host_user_id
+  const canCancelGame =
+    game.publish_status === 'published' &&
+    ['scheduled', 'full'].includes(game.game_status) &&
+    (
+      currentUser?.role === 'admin' ||
+      (game.game_type === 'community' && isHost)
+    )
   const canOpenGameChat = canUseGameChat(game, participants, currentUser)
-  const chatDisabledReason = getChatDisabledReason({
-    activeChat,
-    canUseChat: canOpenGameChat,
-    currentParticipant,
-    currentUser,
-    game,
-    isHost,
-  })
   const hostGuestMax = game.allow_guests ? game.host_guest_max || 0 : 0
   const hostGuestAddSlots = Math.max(
     Math.min(hostGuestMax - currentGuestCount, participantSummary.spotsLeft),
     0,
   )
+  const hasGameStarted = new Date(game.starts_at) <= new Date()
   const isGameClosed =
     !['published'].includes(game.publish_status) ||
     !['scheduled', 'full'].includes(game.game_status) ||
-    new Date(game.starts_at) <= new Date()
+    hasGameStarted
+  const playerGuestMax = game.allow_guests ? game.max_guests_per_booking || 0 : 0
+  const isConfirmedPlayer =
+    Boolean(currentParticipant) &&
+    !isHost &&
+    currentParticipant.participant_status === 'confirmed'
+  const canShowBookingGuestAction = isConfirmedPlayer && playerGuestMax > 0
+  const bookingGuestAddSlots = canShowBookingGuestAction
+    ? Math.max(Math.min(playerGuestMax - currentGuestCount, participantSummary.spotsLeft), 0)
+    : 0
+  const canAddBookingGuests = canShowBookingGuestAction && !isGameClosed && bookingGuestAddSlots > 0
   const joinLabel = getJoinLabel({
     currentParticipant,
+    gameStatus: game.game_status,
+    hasGameStarted,
+    isCancelledGame,
     isGameClosed,
+    isPublished: game.publish_status === 'published',
     isHost,
     isJoining,
     participantSummary,
     waitlistEnabled: game.waitlist_enabled,
   })
   const isJoinDisabled = Boolean(isHost || currentParticipant || isGameClosed || isJoining)
+  const isClosedJoinStatus =
+    isJoinDisabled && ['Cancelled', 'Completed', 'Game Started', 'Game Closed'].includes(joinLabel)
+  const mobileActionCount = [
+    canEditGame,
+    isHost && hostGuestMax > 0,
+    currentParticipant && !isHost,
+    canCancelGame,
+    true,
+  ].filter(Boolean).length
 
   function handlePreviousImage() {
     setActiveImageIndex((currentIndex) =>
@@ -369,22 +445,66 @@ function GameDetailsPage() {
     }
 
     try {
-      setShareNotice('')
+      setShareCopied(false)
 
       if (navigator.share) {
         await navigator.share(shareData)
-        setShareNotice('Shared.')
+        showShareCopied()
         return
       }
 
       await navigator.clipboard?.writeText(shareUrl)
-      setShareNotice('Game link copied.')
+      showShareCopied()
     } catch (shareError) {
       if (shareError?.name === 'AbortError') {
         return
       }
+    }
+  }
 
-      setShareNotice('Unable to share right now.')
+  function showShareCopied() {
+    setShareCopied(true)
+
+    if (shareCopiedTimeoutRef.current) {
+      window.clearTimeout(shareCopiedTimeoutRef.current)
+    }
+
+    shareCopiedTimeoutRef.current = window.setTimeout(() => {
+      setShareCopied(false)
+      shareCopiedTimeoutRef.current = null
+    }, 1800)
+  }
+
+  async function handleCancelGame() {
+    if (!canCancelGame || !firebaseUser) {
+      return
+    }
+
+    setIsCancellingGame(true)
+    setJoinNotice('')
+
+    try {
+      await apiRequest(`/games/${game.id}/cancel`, {
+        method: 'POST',
+        headers: {
+          ...(await getChatAuthHeaders(firebaseUser)),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
+      await refreshParticipants()
+      setActiveChat(null)
+      setChatMessages([])
+      setHasUnreadChat(false)
+      setIsChatOpen(false)
+      setIsCancelGameModalOpen(false)
+      setJoinNotice('Game cancelled. Players were notified.')
+    } catch (requestError) {
+      setJoinNotice(
+        requestError instanceof Error ? requestError.message : 'Unable to cancel this game.',
+      )
+    } finally {
+      setIsCancellingGame(false)
     }
   }
 
@@ -398,7 +518,7 @@ function GameDetailsPage() {
   }
 
   async function handleJoinIntent() {
-    setShareNotice('')
+    setShareCopied(false)
 
     if (isAuthLoading) {
       setJoinNotice('Checking your account...')
@@ -406,7 +526,7 @@ function GameDetailsPage() {
     }
 
     if (!currentUser?.id) {
-      setJoinNotice(GUEST_JOIN_MESSAGE)
+      navigate('/create-account', { state: { from: `/games/${game.id}` } })
       return
     }
 
@@ -502,6 +622,16 @@ function GameDetailsPage() {
     await handleRemoveGuests(Math.abs(guestDelta), { closeHostGuestModal: true })
   }
 
+  function handleAddBookingGuests(guestCount) {
+    if (!currentUser?.id || !canAddBookingGuests || guestCount <= 0) {
+      return
+    }
+
+    setJoinNotice('')
+    setShareCopied(false)
+    navigate(`/games/${game.id}/checkout?mode=add-guests&guest_count=${guestCount}`)
+  }
+
   async function handleRemoveGuests(removeCount, options = {}) {
     if (!currentUser?.id || !currentParticipant || removeCount <= 0) {
       return
@@ -531,25 +661,48 @@ function GameDetailsPage() {
   }
 
   async function handleOpenChat() {
-    if (!canOpenGameChat || !activeChat?.id || !firebaseUser) {
+    if (!canOpenGameChat || !firebaseUser) {
       return
     }
 
-    setIsChatOpen(true)
-    setHasUnreadChat(false)
+    setShareCopied(false)
     setChatError('')
 
     try {
-      await apiRequest(`/game-chats/${activeChat.id}/read`, {
+      const chatHeaders = await getChatAuthHeaders(firebaseUser)
+      const chat = activeChat?.id
+        ? activeChat
+        : await apiRequest(`/game-chats/for-game/${game.id}`, {
+          method: 'POST',
+          headers: {
+            ...chatHeaders,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        })
+
+      setActiveChat(chat)
+      setIsChatOpen(true)
+      setHasUnreadChat(false)
+
+      const messagesResponse = await apiRequest(
+        buildChatMessagesPath(chat.id),
+        { headers: chatHeaders },
+      ).catch(() => [])
+      setChatMessages(messagesResponse)
+
+      await apiRequest(`/game-chats/${chat.id}/read`, {
         method: 'POST',
         headers: {
-          ...(await getChatAuthHeaders(firebaseUser)),
+          ...chatHeaders,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({}),
       })
-    } catch {
-      // Opening chat should not be blocked by a failed read-state sync.
+    } catch (requestError) {
+      setJoinNotice(
+        requestError instanceof Error ? requestError.message : 'Unable to open chat.',
+      )
     }
   }
 
@@ -652,46 +805,40 @@ function GameDetailsPage() {
               <QuickFacts facts={facts} price={price} variant="mobile" />
             </section>
 
-            {(canEditGame || isHost) && (
-              <section className="details-card details-mobile-host-actions">
-                {canEditGame && (
-                  <Link className="details-secondary-action details-host-edit-action" to={`/games/${game.id}/edit`}>
-                    <span className="details-action-icon">
-                      <PencilIcon />
-                    </span>
-                    <span>Edit Game</span>
-                    <span className="details-action-chevron" aria-hidden="true">›</span>
-                  </Link>
-                )}
-
-                {isHost && hostGuestMax > 0 && (
-                  <button
-                    className="details-secondary-action details-host-guest-action"
-                    type="button"
-                    disabled={isAddingHostGuest || isUpdatingGuests}
-                    onClick={() => setIsHostGuestModalOpen(true)}
-                  >
-                    <span className="details-action-icon">
-                      <UsersIcon />
-                    </span>
-                    <span>Manage Guests</span>
-                    <strong className="details-action-count">{currentGuestCount}/{hostGuestMax}</strong>
-                    <span className="details-action-chevron" aria-hidden="true">›</span>
-                  </button>
-                )}
-
-                <button className="details-secondary-action details-share-button" type="button" onClick={handleShareGame}>
+            <section
+              className={[
+                'details-card',
+                'details-mobile-host-actions',
+                mobileActionCount === 1 ? 'details-mobile-host-actions--single' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              {canEditGame && (
+                <Link className="details-secondary-action details-host-edit-action" to={`/games/${game.id}/edit`}>
                   <span className="details-action-icon">
-                    <ShareIcon />
+                    <PencilIcon />
                   </span>
-                  <span>Share Game</span>
+                  <span>Edit Game</span>
+                  <span className="details-action-chevron" aria-hidden="true">›</span>
+                </Link>
+              )}
+
+              {isHost && hostGuestMax > 0 && (
+                <button
+                  className="details-secondary-action details-host-guest-action"
+                  type="button"
+                  disabled={isAddingHostGuest || isUpdatingGuests}
+                  onClick={() => setIsHostGuestModalOpen(true)}
+                >
+                  <span className="details-action-icon">
+                    <UsersIcon />
+                  </span>
+                  <span>Manage Guests</span>
+                  <strong className="details-action-count">{currentGuestCount}/{hostGuestMax}</strong>
                   <span className="details-action-chevron" aria-hidden="true">›</span>
                 </button>
-              </section>
-            )}
+              )}
 
-            {currentParticipant && !isHost && (
-              <section className="details-card details-mobile-attendance-actions">
+              {currentParticipant && !isHost && (
                 <button
                   className="details-secondary-action"
                   type="button"
@@ -707,29 +854,89 @@ function GameDetailsPage() {
                   </span>
                   <span className="details-action-chevron" aria-hidden="true">›</span>
                 </button>
+              )}
+
+              {canCancelGame && (
+                <button
+                  className="details-secondary-action details-cancel-game-action"
+                  type="button"
+                  disabled={isCancellingGame}
+                  onClick={() => setIsCancelGameModalOpen(true)}
+                >
+                  <span className="details-action-icon">
+                    <TrashIcon />
+                  </span>
+                  <span>{isCancellingGame ? 'Cancelling...' : 'Cancel Game'}</span>
+                  <span className="details-action-chevron" aria-hidden="true">›</span>
+                </button>
+              )}
+
+              <button className="details-secondary-action details-share-button" type="button" onClick={handleShareGame}>
+                <span className="details-action-icon">
+                  <ShareIcon />
+                </span>
+                <span>Share Game</span>
+                <span
+                  className={[
+                    'details-action-chevron',
+                    'details-share-indicator',
+                    shareCopied ? 'details-share-indicator--copied' : '',
+                  ].filter(Boolean).join(' ')}
+                  aria-hidden="true"
+                >
+                  {shareCopied ? <CheckIcon /> : <CopyIcon />}
+                </span>
+              </button>
+            </section>
+
+            {!currentUser?.id && !isCancelledGame && (
+              <section className="details-member-access-notice">
+                <p>
+                  <Link state={{ from: `/games/${game.id}` }} to="/create-account">
+                    Create an Account
+                  </Link>{' '}
+                  or{' '}
+                  <Link state={{ from: `/games/${game.id}` }} to="/sign-in">
+                    Sign In
+                  </Link>{' '}
+                  to view the player list and use game chat.
+                </p>
               </section>
             )}
 
+            <section className="details-card details-mobile-info-section details-mobile-about-section">
+              <h2 className="details-section-heading">
+                <span className="details-section-icon">
+                  <PencilIcon />
+                </span>
+                About This Game
+              </h2>
+              <p>{aboutText}</p>
+
+              {hostPaymentMethods.length > 0 && (
+                <HostPaymentSection methods={hostPaymentMethods} />
+              )}
+            </section>
+
             <section className="details-card-grid">
               <PlayersCard
-                cta={currentUser?.id ? 'View player list' : 'Sign in to view players'}
+                cta="View player list"
                 ctaDisabled={!currentUser?.id}
                 onOpenPlayerList={currentUser?.id ? () => setIsPlayerListOpen(true) : undefined}
                 participantSummary={participantSummary}
               />
 
               <GameChatCard
-                canOpenChat={canOpenGameChat && Boolean(activeChat)}
-                disabledReason={chatDisabledReason}
+                canOpenChat={canOpenGameChat}
                 hasUnread={hasUnreadChat}
-                isChatEnabled={game.is_chat_enabled}
                 latestChatMessage={latestChatMessage}
+                messageCount={chatMessages.length}
                 onOpenChat={handleOpenChat}
                 senderNames={chatSenderNames}
               />
             </section>
 
-            <BookingRulesCard rules={ruleItems} />
+            <BookingRulesCard policyUrl="/policies/cancellation-refunds" rules={ruleItems} />
 
             <WhereToGoCard
               address={venueAddress}
@@ -738,11 +945,6 @@ function GameDetailsPage() {
               parkingNote={parkingNote}
               venueName={venueName}
             />
-
-            <section className="details-card details-mobile-info-section">
-              <h2>About This Game</h2>
-              <p>{aboutText}</p>
-            </section>
 
             <section className="details-card details-mobile-info-section">
               <h2>Questions?</h2>
@@ -758,6 +960,7 @@ function GameDetailsPage() {
               aboutText={aboutText}
               facts={facts}
               gameToneLabel={gameToneLabel}
+              hostPaymentMethods={hostPaymentMethods}
               joinMessage={GUEST_JOIN_MESSAGE}
               joinNotice={joinNotice}
               joinLabel={joinLabel}
@@ -772,14 +975,16 @@ function GameDetailsPage() {
                 currentParticipant && !isHost ? () => setIsLeaveModalOpen(true) : null
               }
               onShare={handleShareGame}
+              onCancelGame={canCancelGame ? () => setIsCancelGameModalOpen(true) : null}
               price={price}
               returnPath={`/games/${game.id}`}
-              shareNotice={shareNotice}
+              shareCopied={shareCopied}
               editGameUrl={canEditGame ? `/games/${game.id}/edit` : ''}
               hostGuestCount={isHost ? currentGuestCount : 0}
               hostGuestMax={hostGuestMax}
               isAddingHostGuest={isAddingHostGuest}
               isUpdatingHostGuests={isUpdatingGuests}
+              isCancellingGame={isCancellingGame}
               onManageHostGuests={isHost ? () => setIsHostGuestModalOpen(true) : null}
             />
           </aside>
@@ -800,9 +1005,14 @@ function GameDetailsPage() {
               <span>per player</span>
             </div>
 
-            <span className="details-mobile-status-pill">
-              <CalendarIcon />
-              Hosting
+            <span
+              className={[
+                'details-mobile-status-pill',
+                isCancelledGame ? 'details-mobile-status-pill--cancelled' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              {isCancelledGame ? <TrashIcon /> : <CalendarIcon />}
+              {isCancelledGame ? 'Cancelled' : 'Hosting'}
             </span>
           </>
         ) : currentParticipant ? (
@@ -812,9 +1022,18 @@ function GameDetailsPage() {
               <span>per player</span>
             </div>
 
-            <span className="details-mobile-status-pill">
-              <ShieldCheckIcon />
-              {currentParticipant.participant_status === 'waitlisted' ? 'Waitlisted' : 'Joined'}
+            <span
+              className={[
+                'details-mobile-status-pill',
+                isCancelledGame ? 'details-mobile-status-pill--cancelled' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              {isCancelledGame ? <TrashIcon /> : <ShieldCheckIcon />}
+              {isCancelledGame
+                ? 'Cancelled'
+                : currentParticipant.participant_status === 'waitlisted'
+                  ? 'Waitlisted'
+                  : 'Joined'}
             </span>
           </>
         ) : (
@@ -824,9 +1043,26 @@ function GameDetailsPage() {
               <span>per player</span>
             </div>
 
-            <button type="button" disabled={isJoinDisabled} onClick={handleJoinIntent}>
-              {joinLabel}
-            </button>
+            {isClosedJoinStatus ? (
+              <span
+                className={[
+                  'details-mobile-status-pill',
+                  isCancelledGame
+                    ? 'details-mobile-status-pill--cancelled'
+                    : 'details-mobile-status-pill--closed',
+                ].filter(Boolean).join(' ')}
+              >
+                {isCancelledGame ? <TrashIcon /> : <ShieldCheckIcon />}
+                {joinLabel}
+              </span>
+            ) : (
+              <button type="button" disabled={isJoinDisabled} onClick={handleJoinIntent}>
+                {(joinLabel === 'Join Game' || joinLabel === 'Join Waitlist' || !joinLabel) && (
+                  <PlusCircleIcon />
+                )}
+                {joinLabel}
+              </button>
+            )}
 
             {joinNotice && (
               <p>
@@ -878,16 +1114,28 @@ function GameDetailsPage() {
         />
       )}
 
+      {isCancelGameModalOpen && (
+        <CancelGameModal
+          gameType={game.game_type}
+          isCancelling={isCancellingGame}
+          onClose={() => setIsCancelGameModalOpen(false)}
+          onConfirm={handleCancelGame}
+        />
+      )}
+
       {isLeaveModalOpen && (
         <LeaveGameModal
+          addableGuestCount={bookingGuestAddSlots}
+          canAddGuests={canAddBookingGuests}
           isLeaving={isLeaving}
           isUpdatingGuests={isUpdatingGuests}
           isWaitlisted={currentParticipant?.participant_status === 'waitlisted'}
           guestCount={currentGuestCount}
+          guestMax={playerGuestMax}
           onClose={() => setIsLeaveModalOpen(false)}
+          onAddGuests={handleAddBookingGuests}
           onConfirm={handleLeaveGame}
           onRemoveGuests={handleRemoveGuests}
-          refundEligible={isRefundEligible(game.starts_at)}
         />
       )}
     </div>
@@ -901,8 +1149,48 @@ async function getChatAuthHeaders(firebaseUser) {
   }
 }
 
+function buildChatMessagesPath(chatId, afterCreatedAt = '') {
+  const query = new URLSearchParams({
+    chat_id: chatId,
+    moderation_status: 'visible',
+    limit: '50',
+  })
+
+  if (afterCreatedAt) {
+    query.set('after_created_at', afterCreatedAt)
+  }
+
+  return `/chat-messages?${query.toString()}`
+}
+
+function getLatestMessageCreatedAt(messages) {
+  if (!messages.length) {
+    return ''
+  }
+
+  return messages.reduce((latest, message) => (
+    !latest || new Date(message.created_at) > new Date(latest) ? message.created_at : latest
+  ), '')
+}
+
+function mergeChatMessages(currentMessages, incomingMessages) {
+  const messagesById = new Map()
+
+  for (const message of [...currentMessages, ...incomingMessages]) {
+    messagesById.set(message.id, message)
+  }
+
+  return [...messagesById.values()]
+    .sort((first, second) => new Date(first.created_at) - new Date(second.created_at))
+    .slice(-50)
+}
+
 function canUseGameChat(game, participants, user) {
   if (!game?.is_chat_enabled || !user?.id) {
+    return false
+  }
+
+  if (!['scheduled', 'full'].includes(game.game_status)) {
     return false
   }
 
@@ -918,36 +1206,20 @@ function canUseGameChat(game, participants, user) {
   )
 }
 
-function getChatDisabledReason({ activeChat, canUseChat, currentParticipant, currentUser, game, isHost }) {
-  if (!game?.is_chat_enabled) {
-    return 'Chat disabled'
+function getVisibleHostPaymentMethods(game, communityGameDetails) {
+  if (
+    game?.game_type !== 'community' ||
+    game?.payment_collection_type !== 'external_host'
+  ) {
+    return []
   }
 
-  if (canUseChat && !activeChat) {
-    return 'Chat is temporarily unavailable'
-  }
-
-  if (currentUser?.id && isHost) {
-    return ''
-  }
-
-  if (currentUser?.id && currentParticipant?.participant_status === 'confirmed') {
-    return ''
-  }
-
-  if (!currentUser?.id) {
-    return 'Sign in and join to unlock chat'
-  }
-
-  if (currentParticipant?.participant_status === 'waitlisted') {
-    return 'Chat opens when your spot is confirmed'
-  }
-
-  if (currentParticipant?.participant_status && currentParticipant.participant_status !== 'confirmed') {
-    return 'Chat opens once your spot is confirmed'
-  }
-
-  return 'Join this game to unlock chat'
+  return (communityGameDetails?.payment_methods_snapshot || [])
+    .filter((method) => method?.type && method.type !== 'none' && method?.value)
+    .map((method) => ({
+      type: String(method.type).trim(),
+      value: String(method.value).trim(),
+    }))
 }
 
 function AuthJoinNotice({ gameId }) {
@@ -962,7 +1234,7 @@ function AuthJoinNotice({ gameId }) {
       <Link state={{ from: returnPath }} to="/sign-in">
         Sign In
       </Link>{' '}
-      to join.
+      to join this game.
     </>
   )
 }
@@ -1064,7 +1336,11 @@ function getUserDisplayName(user) {
 
 function getJoinLabel({
   currentParticipant,
+  gameStatus,
+  hasGameStarted,
+  isCancelledGame,
   isGameClosed,
+  isPublished,
   isHost,
   isJoining,
   participantSummary,
@@ -1074,12 +1350,16 @@ function getJoinLabel({
     return 'Joining...'
   }
 
+  if (isCancelledGame) {
+    return 'Cancelled'
+  }
+
   if (isHost) {
     return 'Hosting'
   }
 
   if (currentParticipant?.participant_status === 'waitlisted') {
-    return 'On Waitlist'
+    return 'Waitlisted'
   }
 
   if (currentParticipant) {
@@ -1087,7 +1367,19 @@ function getJoinLabel({
   }
 
   if (isGameClosed) {
-    return 'Unavailable'
+    if (!isPublished) {
+      return 'Game Closed'
+    }
+
+    if (gameStatus === 'completed') {
+      return 'Completed'
+    }
+
+    if (hasGameStarted) {
+      return 'Game Started'
+    }
+
+    return 'Game Closed'
   }
 
   if (participantSummary.spotsLeft <= 0 && waitlistEnabled) {
@@ -1097,39 +1389,36 @@ function getJoinLabel({
   return 'Join Game'
 }
 
-function isRefundEligible(startsAt) {
-  return new Date(startsAt).getTime() - Date.now() >= 24 * 60 * 60 * 1000
-}
-
 function buildRuleItems(game) {
   const isCommunityGame = game.game_type === 'community'
+  const isOutdoorGame = game.environment_type === 'outdoor'
   const rules = [
     {
-      title: 'Cancellation',
+      title: 'Canceling Your Spot',
       kind: 'clock',
-      text:
-        game.custom_cancellation_text ||
-        'Cancel 24+ hours before the game starts to receive game credit.',
+      text: isCommunityGame
+        ? game.custom_cancellation_text ||
+          'Check the host payment note before canceling. Pickup Lane does not process player refunds for community games.'
+        : 'Cancel 24+ hours before game time for refund or game credit eligibility.',
     },
     {
-      title: isCommunityGame ? 'If Host Cancels' : 'If We Cancel',
+      title: isCommunityGame ? 'If The Host Cancels' : 'If Pickup Lane Cancels',
       kind: 'shield',
       text: isCommunityGame
-        ? 'If the host cancels the game, players will receive full game credit.'
-        : 'If the game is canceled by Pickup Lane, you will receive full game credit.',
+        ? 'The host should contact players with next steps for any off-app payments.'
+        : 'Players receive a refund or game credit when Pickup Lane cancels an official game.',
+    },
+    {
+      title: 'Waitlist',
+      kind: 'players',
+      text: 'Waitlisted players only pay if moved to the confirmed player list.',
     },
     {
       title: 'Weather',
       kind: 'weather',
-      text:
-        game.environment_type === 'outdoor'
-          ? 'Outdoor games may be canceled for dangerous weather, including thunderstorms, lightning, or unsafe field conditions.'
-          : 'Indoor games run rain or shine unless the venue has an unexpected closure.',
-    },
-    {
-      title: 'Payment',
-      kind: 'payment',
-      text: 'Card payment only.',
+      text: isOutdoorGame
+        ? 'Outdoor games may be canceled for dangerous weather, including thunderstorms, lightning, or unsafe field conditions.'
+        : 'Indoor games run unless the venue has an unexpected closure or unsafe condition.',
     },
     {
       title: 'Age Requirement',

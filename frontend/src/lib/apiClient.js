@@ -1,6 +1,15 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? 'http://127.0.0.1:8000'
 
+export class ApiRequestError extends Error {
+  constructor(message, { detail = null, status = 0 } = {}) {
+    super(message)
+    this.name = 'ApiRequestError'
+    this.detail = detail
+    this.status = status
+  }
+}
+
 export async function apiRequest(path, options = {}) {
   const response = await fetch(buildApiUrl(path), {
     ...options,
@@ -13,7 +22,10 @@ export async function apiRequest(path, options = {}) {
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null)
     const detail = errorBody?.detail
-    throw new Error(typeof detail === 'string' ? detail : `Request failed with status ${response.status}`)
+    throw new ApiRequestError(
+      typeof detail === 'string' ? detail : `Request failed with status ${response.status}`,
+      { detail, status: response.status },
+    )
   }
 
   if (response.status === 204) {

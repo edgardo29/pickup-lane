@@ -5,6 +5,7 @@ export function useCleanupUnfinishedSignupOnEntry({
   appUser,
   cleanupUnfinishedSignup,
   currentUser,
+  disabled = false,
   isLoading,
   pendingGoogleSignup,
   pendingSignup,
@@ -15,6 +16,7 @@ export function useCleanupUnfinishedSignupOnEntry({
 
     async function cleanup() {
       if (
+        disabled ||
         isLoading ||
         !currentUser ||
         appUser?.id ||
@@ -27,9 +29,9 @@ export function useCleanupUnfinishedSignupOnEntry({
       try {
         await cleanupUnfinishedSignup()
       } catch {
-        if (!ignore) {
-          setError('Could not reset the previous sign-up. Please try again.')
-        }
+        // Local/dev Firebase Admin cleanup can fail even though a local sign-out
+        // is enough to unblock the next sign-in attempt.
+        if (!ignore) setError('')
       }
     }
 
@@ -42,6 +44,7 @@ export function useCleanupUnfinishedSignupOnEntry({
     appUser?.id,
     cleanupUnfinishedSignup,
     currentUser,
+    disabled,
     isLoading,
     pendingGoogleSignup,
     pendingSignup,

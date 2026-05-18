@@ -17,6 +17,23 @@ export function ChatIcon() {
   )
 }
 
+export function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m5.5 12.4 4.2 4.2 8.8-9.2" />
+    </svg>
+  )
+}
+
+export function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="8.2" y="5.8" width="9.4" height="9.4" rx="1.8" />
+      <rect x="5.8" y="8.8" width="9.4" height="9.4" rx="1.8" />
+    </svg>
+  )
+}
+
 export function ChevronDownIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -135,6 +152,15 @@ export function ClockIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="8.5" />
       <path d="M12 7.5V12l3.2 2" />
+    </svg>
+  )
+}
+
+export function PriceTagIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 12.8V5.5h7.3l7.7 7.7-7.3 7.3Z" />
+      <circle cx="8.4" cy="8.4" r="1.3" />
     </svg>
   )
 }

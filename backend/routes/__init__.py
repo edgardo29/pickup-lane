@@ -14,6 +14,7 @@ from backend.routes.community_game_detail_routes import (
     router as community_game_details_router,
 )
 from backend.routes.game_chat_routes import router as game_chats_router
+from backend.routes.game_credit_routes import router as game_credits_router
 from backend.routes.game_image_routes import router as game_images_router
 from backend.routes.game_routes import router as games_router
 from backend.routes.game_participant_routes import router as game_participants_router
@@ -66,6 +67,7 @@ __all__ = [
     "venues_router",
     "venue_approval_requests_router",
     "game_chats_router",
+    "game_credits_router",
     "game_images_router",
     "games_router",
     "game_participants_router",

@@ -8,6 +8,8 @@ from backend.models.chat_message_model import ChatMessage
 from backend.models.community_game_detail_model import CommunityGameDetail
 from backend.models.game_chat_model import GameChat
 from backend.models.game_chat_read_model import GameChatRead
+from backend.models.game_credit_model import GameCredit
+from backend.models.game_credit_usage_model import GameCreditUsage
 from backend.models.game_image_model import GameImage
 from backend.models.game_model import Game
 from backend.models.game_participant_model import GameParticipant
@@ -47,6 +49,8 @@ __all__ = [
     "GameImage",
     "GameChat",
     "GameChatRead",
+    "GameCredit",
+    "GameCreditUsage",
     "ChatMessage",
     "GameStatusHistory",
     "Booking",

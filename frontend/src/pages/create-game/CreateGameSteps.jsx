@@ -27,7 +27,6 @@ import {
   formatHostPaymentMethods,
   formatMoney,
   formatOptions,
-  formatPaymentMethod,
   getMinimumSpotsForFormat,
   getTodayDate,
   steps,
@@ -260,7 +259,7 @@ export function NotesStep({ form, updateField }) {
   )
 }
 
-export function ReviewStep({ form, firstPublishIsFree, isEditMode, paymentMethod, publishError, review }) {
+export function ReviewStep({ form, firstPublishIsFree, isEditMode, publishError, review }) {
   const publishFeeCents = firstPublishIsFree ? 0 : COMMUNITY_PUBLISH_FEE_CENTS
 
   return (
@@ -310,13 +309,6 @@ export function ReviewStep({ form, firstPublishIsFree, isEditMode, paymentMethod
             </div>
             <p>{firstPublishIsFree ? 'First community game waived.' : 'Charged once when published.'}</p>
           </div>
-
-          {!firstPublishIsFree && (
-            <div className="create-game-payment-row">
-              <span>Payment method</span>
-              <strong>{formatPaymentMethod(paymentMethod)}</strong>
-            </div>
-          )}
 
           <div className="create-game-total-row">
             <span>Due today</span>

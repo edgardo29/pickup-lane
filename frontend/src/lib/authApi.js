@@ -13,11 +13,25 @@ export async function getAuthenticatedAppUser(firebaseUser, forceRefresh = false
 
   const idToken = await firebaseUser.getIdToken(forceRefresh)
 
-  return apiRequest('/auth/me', {
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-    },
-  })
+  try {
+    return await apiRequest('/auth/me', {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+      },
+    })
+  } catch (error) {
+    if (!forceRefresh && error?.status === 401) {
+      const refreshedToken = await firebaseUser.getIdToken(true)
+
+      return apiRequest('/auth/me', {
+        headers: {
+          Authorization: `Bearer ${refreshedToken}`,
+        },
+      })
+    }
+
+    throw error
+  }
 }
 
 export function syncFirebaseUser(firebaseUser) {

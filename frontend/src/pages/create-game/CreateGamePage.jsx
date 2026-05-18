@@ -273,10 +273,6 @@ function CreateGamePage() {
         return
       }
 
-      if (!firstPublishIsFree && !paymentMethod) {
-        throw new Error('Add a saved payment method before paying the community publish fee.')
-      }
-
       const venue = await postJson('/venues', {
         name: form.venueName.trim(),
         address_line_1: form.street.trim(),
@@ -430,7 +426,6 @@ function CreateGamePage() {
                   firstPublishIsFree={firstPublishIsFree}
                   form={form}
                   isEditMode={isEditMode}
-                  paymentMethod={paymentMethod}
                   publishError={publishError}
                   review={review}
                 />
@@ -477,7 +472,6 @@ function CreateGamePage() {
             <CreateGamePreview
               firstPublishIsFree={firstPublishIsFree}
               form={form}
-              paymentMethod={paymentMethod}
               review={review}
             />
           </section>
@@ -527,7 +521,7 @@ function EmailVerificationBlocker({ cooldownSeconds, error, notice, onSend, stat
         <h2>{status === 'sent' ? 'Check your email to continue.' : 'Verify your email to become a host.'}</h2>
         <span>
           {status === 'sent'
-            ? 'We sent a verification link to your account email. Check your inbox and spam folder, then use the resend timer if delivery is slow.'
+            ? 'We sent a verification link to your email. Check your inbox or spam folder, then open the link to verify your account.'
             : 'Before you can publish a community game, we need to confirm your email address. This helps keep host accounts real and protects players from fake listings.'}
         </span>
       </div>
@@ -555,7 +549,7 @@ function getEmailVerificationErrorMessage(error) {
   if (normalizedError.includes('too-many-requests')) {
     return {
       cooldownSeconds: 300,
-      message: 'We hit the email sending limit for this account. Try again when the timer finishes.',
+      message: 'Too many verification emails were sent. Try again in a few minutes.',
     }
   }
 

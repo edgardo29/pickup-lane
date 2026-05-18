@@ -321,6 +321,7 @@ def list_chat_messages(
     sender_user_id: uuid.UUID | None = None,
     moderation_status: str | None = None,
     is_pinned: bool | None = None,
+    after_created_at: datetime | None = None,
     limit: int = 50,
     current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
@@ -334,12 +335,20 @@ def list_chat_messages(
     db_game_chat = get_game_chat_or_404(db, chat_id)
     require_chat_member(db, db_game_chat, current_user)
 
-    if sender_user_id is None and moderation_status in {None, "visible"} and is_pinned is None:
+    if (
+        sender_user_id is None
+        and moderation_status in {None, "visible"}
+        and is_pinned is None
+        and after_created_at is None
+    ):
         return get_latest_visible_messages(db, chat_id, limit)
 
     statement = select(ChatMessage)
 
     statement = statement.where(ChatMessage.chat_id == chat_id)
+
+    if after_created_at is not None:
+        statement = statement.where(ChatMessage.created_at > after_created_at)
 
     if sender_user_id is not None:
         statement = statement.where(ChatMessage.sender_user_id == sender_user_id)
