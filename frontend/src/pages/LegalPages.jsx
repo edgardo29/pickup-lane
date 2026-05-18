@@ -52,6 +52,42 @@ export function PrivacyPage() {
   )
 }
 
+export function CancellationRefundPolicyPage() {
+  return (
+    <LegalShell title="Cancellation and Refund Policy" eyebrow="Policy">
+      <LegalSection title="Official games">
+        For official games, Pickup Lane manages checkout, refunds, and game credits.
+        Cancel 24+ hours before game time to be eligible for a refund or game credit.
+        Late cancellations may not be refunded.
+      </LegalSection>
+      <LegalSection title="If Pickup Lane cancels">
+        If Pickup Lane cancels an official game because of weather, venue issues, or
+        another operational reason, confirmed players receive a refund or game credit.
+      </LegalSection>
+      <LegalSection title="Community games">
+        Community games use the host's posted payment instructions. Pickup Lane does
+        not process player refunds for off-app payments between players and hosts.
+      </LegalSection>
+      <LegalSection title="Waitlist">
+        Waitlisted players only pay if they are moved to the confirmed player list.
+      </LegalSection>
+      <LegalSection title="Guests">
+        Guest spots follow the same cancellation timing as the player's booking. If a
+        guest is removed before the game, any refund or credit depends on the game type
+        and posted policy.
+      </LegalSection>
+      <LegalSection title="Weather and safety">
+        Outdoor games may be canceled for dangerous weather, including thunderstorms,
+        lightning, unsafe field conditions, or severe weather.
+      </LegalSection>
+      <LegalSection title="Development notice">
+        This policy is a working product policy while Pickup Lane is in development.
+        Final legal language should be reviewed before launch.
+      </LegalSection>
+    </LegalShell>
+  )
+}
+
 function LegalShell({ children, eyebrow, title }) {
   const location = useLocation()
   const from = location.state?.from || '/'

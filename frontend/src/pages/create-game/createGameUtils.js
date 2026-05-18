@@ -261,14 +261,6 @@ export function sanitizeMoney(value) {
   return Math.min(Number(digitsOnly), 999)
 }
 
-export function formatPaymentMethod(paymentMethod) {
-  if (!paymentMethod) {
-    return 'Visa .... 4242'
-  }
-
-  return `${capitalize(paymentMethod.card_brand || 'card')} .... ${paymentMethod.card_last4}`
-}
-
 export function formatHostPaymentMethods(paymentMethods) {
   const methods = serializePaymentMethods(paymentMethods)
 

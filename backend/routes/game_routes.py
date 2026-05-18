@@ -7,10 +7,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.routes.auth_routes import get_current_app_user
 from backend.models import (
+    AdminAction,
     Booking,
     Game,
+    GameChat,
     GameParticipant,
+    GameStatusHistory,
     Notification,
     Payment,
     User,
@@ -19,6 +23,7 @@ from backend.models import (
 )
 from backend.routes.venue_routes import find_matching_active_venue
 from backend.schemas import (
+    GameCancelCreate,
     GameCreate,
     GameGuestAddCreate,
     GameGuestAddRead,
@@ -43,14 +48,22 @@ VALID_ENVIRONMENT_TYPES = {"indoor", "outdoor"}
 VALID_POLICY_MODES = {"official_standard", "custom_hosted"}
 VALID_CURRENCY = "USD"
 HOST_EDITABLE_GAME_STATUSES = {"scheduled", "full"}
+CANCELLABLE_GAME_STATUSES = {"scheduled", "full"}
 ACTIVE_PLAYER_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
 RESERVED_PLAYER_STATUSES = {"pending_payment", "confirmed"}
 ROSTER_PLAYER_STATUSES = {"pending_payment", "confirmed"}
 ACTIVE_JOIN_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
 ACTIVE_WAITLIST_STATUSES = {"active", "promoted"}
+ACTIVE_BOOKING_STATUSES = {
+    "pending_payment",
+    "confirmed",
+    "waitlisted",
+    "partially_cancelled",
+}
 JOINABLE_GAME_STATUSES = {"scheduled", "full"}
 MINIMUM_TOTAL_SPOTS = 6
 MAXIMUM_TOTAL_SPOTS = 99
+MAX_CANCEL_REASON_LENGTH = 500
 REFUND_CUTOFF_HOURS = 24
 LOCATION_FIELDS = {
     "venue_name",
@@ -527,6 +540,230 @@ def get_display_name(user: User) -> str:
     return full_name or user.email or "Pickup Lane Player"
 
 
+def normalize_cancel_reason(cancel_reason: str | None) -> str | None:
+    if cancel_reason is None:
+        return None
+
+    normalized_reason = " ".join(cancel_reason.strip().split())
+    if not normalized_reason:
+        return None
+
+    if len(normalized_reason) > MAX_CANCEL_REASON_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"cancel_reason must be {MAX_CANCEL_REASON_LENGTH} characters or fewer.",
+        )
+
+    return normalized_reason
+
+
+def require_cancel_permission(db_game: Game, current_user: User) -> str:
+    if current_user.account_status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account cannot cancel games right now.",
+        )
+
+    if current_user.role == "admin":
+        return "admin_cancelled"
+
+    if db_game.game_type == "community":
+        if db_game.host_user_id == current_user.id:
+            return "host_cancelled"
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the community game host or an admin can cancel this game.",
+        )
+
+    if db_game.game_type == "official":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an admin can cancel official games.",
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="This game type cannot be cancelled.",
+    )
+
+
+def cancel_game_participants(
+    db: Session,
+    db_game: Game,
+    now: datetime,
+    cancellation_type: str,
+) -> list[uuid.UUID]:
+    notified_user_ids: set[uuid.UUID] = set()
+    participants = db.scalars(
+        select(GameParticipant).where(
+            GameParticipant.game_id == db_game.id,
+            GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
+        )
+    ).all()
+
+    for participant in participants:
+        should_notify = (
+            participant.user_id is not None
+            and participant.user_id != db_game.host_user_id
+            and participant.participant_type in {"registered_user", "admin_added"}
+            and participant.participant_status in {"confirmed", "waitlisted"}
+        )
+        if should_notify:
+            notified_user_ids.add(participant.user_id)
+
+        participant.participant_status = "cancelled"
+        participant.cancellation_type = cancellation_type
+        participant.cancelled_at = now
+        participant.attendance_status = "not_applicable"
+        participant.updated_at = now
+        db.add(participant)
+
+    return list(notified_user_ids)
+
+
+def cancel_game_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
+    waitlist_entries = db.scalars(
+        select(WaitlistEntry).where(
+            WaitlistEntry.game_id == db_game.id,
+            WaitlistEntry.waitlist_status.in_(ACTIVE_WAITLIST_STATUSES),
+        )
+    ).all()
+
+    for waitlist_entry in waitlist_entries:
+        waitlist_entry.waitlist_status = "cancelled"
+        waitlist_entry.cancelled_at = now
+        waitlist_entry.updated_at = now
+        db.add(waitlist_entry)
+
+
+def cancel_game_bookings(
+    db: Session,
+    db_game: Game,
+    current_user: User,
+    now: datetime,
+    cancellation_type: str,
+) -> None:
+    bookings = db.scalars(
+        select(Booking).where(
+            Booking.game_id == db_game.id,
+            Booking.booking_status.in_(ACTIVE_BOOKING_STATUSES),
+        )
+    ).all()
+    app_payment_required = game_requires_app_player_payment(db_game)
+
+    for booking in bookings:
+        booking.booking_status = "cancelled"
+        if app_payment_required and booking.payment_status in {
+            "paid",
+            "partially_refunded",
+        }:
+            booking.payment_status = "refunded"
+            update_booking_payment_status(db, booking.id, "refunded", now)
+        booking.cancelled_at = now
+        booking.cancelled_by_user_id = current_user.id
+        booking.cancel_reason = cancellation_type
+        booking.updated_at = now
+        db.add(booking)
+
+
+def archive_game_chats(db: Session, db_game: Game, now: datetime) -> None:
+    game_chats = db.scalars(
+        select(GameChat).where(
+            GameChat.game_id == db_game.id,
+            GameChat.chat_status.in_({"active", "locked"}),
+        )
+    ).all()
+
+    for game_chat in game_chats:
+        game_chat.chat_status = "archived"
+        game_chat.updated_at = now
+        db.add(game_chat)
+
+
+def create_game_cancelled_notifications(
+    db: Session,
+    db_game: Game,
+    recipient_user_ids: list[uuid.UUID],
+    now: datetime,
+) -> None:
+    if not recipient_user_ids:
+        return
+
+    game_title = db_game.title or db_game.venue_name_snapshot or "Your game"
+    for recipient_user_id in sorted(set(recipient_user_ids)):
+        db.add(
+            Notification(
+                id=uuid.uuid4(),
+                user_id=recipient_user_id,
+                notification_type="game_cancelled",
+                title="Game cancelled",
+                body=f"{game_title} was cancelled.",
+                related_game_id=db_game.id,
+                is_read=False,
+                read_at=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+
+def create_game_cancellation_history(
+    db: Session,
+    db_game: Game,
+    current_user: User,
+    old_game_status: str,
+    cancel_reason: str | None,
+    change_source: str,
+    now: datetime,
+) -> None:
+    db.add(
+        GameStatusHistory(
+            id=uuid.uuid4(),
+            game_id=db_game.id,
+            old_publish_status=db_game.publish_status,
+            new_publish_status=db_game.publish_status,
+            old_game_status=old_game_status,
+            new_game_status="cancelled",
+            changed_by_user_id=current_user.id,
+            change_source=change_source,
+            change_reason=cancel_reason,
+            created_at=now,
+        )
+    )
+
+
+def create_game_cancellation_admin_action(
+    db: Session,
+    db_game: Game,
+    current_user: User,
+    cancellation_type: str,
+    old_game_status: str,
+    cancel_reason: str | None,
+    notified_user_ids: list[uuid.UUID],
+    now: datetime,
+) -> None:
+    if cancellation_type != "admin_cancelled":
+        return
+
+    db.add(
+        AdminAction(
+            id=uuid.uuid4(),
+            admin_user_id=current_user.id,
+            action_type="cancel_game",
+            target_game_id=db_game.id,
+            reason=cancel_reason,
+            metadata_={
+                "old_game_status": old_game_status,
+                "new_game_status": "cancelled",
+                "notified_user_count": len(set(notified_user_ids)),
+                "cancelled_at": now.isoformat(),
+            },
+            created_at=now,
+        )
+    )
+
+
 def require_join_ready_user(user: User) -> None:
     if not user.first_name or not user.last_name or user.date_of_birth is None:
         raise HTTPException(
@@ -724,6 +961,37 @@ def create_booking_payment(
     )
 
 
+def create_booking_guest_add_payment(
+    db_game: Game,
+    booking: Booking,
+    payer_user_id: uuid.UUID,
+    added_count: int,
+    now: datetime,
+) -> Payment:
+    payment_id = uuid.uuid4()
+    return Payment(
+        id=payment_id,
+        payer_user_id=payer_user_id,
+        booking_id=booking.id,
+        game_id=None,
+        payment_type="booking",
+        provider="stripe",
+        provider_payment_intent_id=f"pi_demo_booking_add_guests_{payment_id}",
+        provider_charge_id=f"ch_demo_booking_add_guests_{payment_id}",
+        idempotency_key=f"booking:{booking.id}:add_guests:{payment_id}:succeeded",
+        amount_cents=db_game.price_per_player_cents * added_count,
+        currency=booking.currency,
+        payment_status="succeeded",
+        paid_at=now,
+        payment_metadata={
+            "source": "booking_guest_add_demo",
+            "game_id": str(db_game.id),
+            "added_guest_count": added_count,
+            "demo": True,
+        },
+    )
+
+
 def update_booking_payment_status(
     db: Session, booking_id: uuid.UUID, payment_status: str, now: datetime
 ) -> None:
@@ -801,6 +1069,43 @@ def build_booking_participants(
         )
 
     return participants
+
+
+def build_added_booking_guest_participants(
+    db_game: Game,
+    booking: Booking,
+    joining_user: User,
+    display_name: str,
+    guest_count: int,
+    current_guest_count: int,
+    now: datetime,
+    first_roster_order: int,
+) -> list[GameParticipant]:
+    guests = []
+    for index in range(guest_count):
+        guest_number = current_guest_count + index + 1
+        guests.append(
+            GameParticipant(
+                id=uuid.uuid4(),
+                game_id=db_game.id,
+                booking_id=booking.id,
+                participant_type="guest",
+                user_id=None,
+                guest_of_user_id=joining_user.id,
+                guest_name=f"Guest {guest_number}",
+                display_name_snapshot=f"{display_name} guest {guest_number}",
+                participant_status="confirmed",
+                attendance_status="unknown",
+                cancellation_type="none",
+                price_cents=db_game.price_per_player_cents,
+                currency=db_game.currency,
+                roster_order=first_roster_order + index,
+                joined_at=now,
+                confirmed_at=now,
+            )
+        )
+
+    return guests
 
 
 def build_host_guest_participants(
@@ -1306,6 +1611,147 @@ def leave_game(
 
 
 @router.post(
+    "/{game_id}/booking-guests/add",
+    response_model=GameGuestAddRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_booking_game_guests(
+    game_id: uuid.UUID,
+    guest_request: GameGuestAddCreate,
+    db: Session = Depends(get_db),
+) -> GameGuestAddRead:
+    db_game = db.get(Game, game_id)
+
+    if db_game is None or db_game.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
+        )
+
+    acting_user = get_active_user_or_404(
+        db, guest_request.acting_user_id, "Acting user not found."
+    )
+
+    if db_game.publish_status != "published" or db_game.game_status not in JOINABLE_GAME_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only published scheduled or full games can add guests.",
+        )
+
+    if ensure_timezone(db_game.starts_at) <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This game has already started.",
+        )
+
+    if guest_request.guest_count <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="guest_count must be greater than 0.",
+        )
+
+    participant = get_existing_active_participant(db, db_game.id, acting_user.id)
+    if participant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="You are not currently joined to this game.",
+        )
+
+    if (
+        participant.participant_status != "confirmed"
+        or participant.participant_type != "registered_user"
+        or participant.booking_id is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only confirmed players can add guests.",
+        )
+
+    booking = db.get(Booking, participant.booking_id)
+    if booking is None or booking.booking_status not in {"confirmed", "partially_cancelled"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your booking is not eligible for guest changes.",
+        )
+
+    booking_participants = get_booking_participants(
+        db, db_game.id, booking.id, ACTIVE_JOIN_STATUSES
+    )
+    current_guest_count = sum(
+        booking_participant.participant_type == "guest"
+        for booking_participant in booking_participants
+    )
+    max_guests = db_game.max_guests_per_booking if db_game.allow_guests else 0
+    if current_guest_count + guest_request.guest_count > max_guests:
+        detail = (
+            "This game does not allow guests."
+            if max_guests == 0
+            else f"This game allows up to {max_guests} guests."
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+    roster_count = count_roster_players(db, db_game.id)
+    if guest_request.guest_count > max(db_game.total_spots - roster_count, 0):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Not enough spots are available for guests.",
+        )
+
+    now = datetime.now(timezone.utc)
+    added_guests = build_added_booking_guest_participants(
+        db_game,
+        booking,
+        acting_user,
+        get_display_name(acting_user),
+        guest_request.guest_count,
+        current_guest_count,
+        now,
+        get_next_roster_order(db, db_game.id),
+    )
+    booking.participant_count += len(added_guests)
+    booking.subtotal_cents = db_game.price_per_player_cents * booking.participant_count
+    booking.total_cents = booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
+    booking.booking_status = "confirmed"
+    booking.payment_status = (
+        "paid" if game_requires_app_player_payment(db_game) else "not_required"
+    )
+    booking.updated_at = now
+    db_game.updated_at = now
+
+    db.add_all(added_guests)
+    db.add(booking)
+    if game_requires_app_player_payment(db_game):
+        db.add(
+            create_booking_guest_add_payment(
+                db_game,
+                booking,
+                acting_user.id,
+                len(added_guests),
+                now,
+            )
+        )
+    db.flush()
+    sync_game_capacity_status(db, db_game)
+
+    try:
+        db.add(db_game)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=build_game_conflict_detail(exc),
+        ) from exc
+
+    return GameGuestAddRead(
+        status="guests_added",
+        message="Guests added to your booking.",
+        added_count=len(added_guests),
+        booking_id=booking.id,
+    )
+
+
+@router.post(
     "/{game_id}/guests/add",
     response_model=GameGuestAddRead,
     status_code=status.HTTP_201_CREATED,
@@ -1540,6 +1986,108 @@ def remove_game_guests(
         removed_count=len(guests_to_remove),
         booking_id=booking.id if booking is not None else None,
     )
+
+
+@router.post(
+    "/{game_id}/cancel",
+    response_model=GameRead,
+    status_code=status.HTTP_200_OK,
+)
+def cancel_game(
+    game_id: uuid.UUID,
+    cancel_request: GameCancelCreate,
+    current_user: User = Depends(get_current_app_user),
+    db: Session = Depends(get_db),
+) -> Game:
+    db_game = db.get(Game, game_id)
+
+    if db_game is None or db_game.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
+        )
+
+    cancellation_type = require_cancel_permission(db_game, current_user)
+
+    if db_game.publish_status != "published":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only published games can be cancelled.",
+        )
+
+    if db_game.game_status == "cancelled":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This game is already cancelled.",
+        )
+
+    if db_game.game_status not in CANCELLABLE_GAME_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only scheduled or full games can be cancelled.",
+        )
+
+    now = datetime.now(timezone.utc)
+    old_game_status = db_game.game_status
+    cancel_reason = normalize_cancel_reason(cancel_request.cancel_reason)
+    change_source = "admin" if cancellation_type == "admin_cancelled" else "host"
+    notified_user_ids = cancel_game_participants(
+        db,
+        db_game,
+        now,
+        cancellation_type,
+    )
+    if (
+        cancellation_type == "admin_cancelled"
+        and db_game.game_type == "community"
+        and db_game.host_user_id is not None
+        and db_game.host_user_id != current_user.id
+    ):
+        notified_user_ids.append(db_game.host_user_id)
+    cancel_game_waitlist_entries(db, db_game, now)
+    cancel_game_bookings(db, db_game, current_user, now, cancellation_type)
+    archive_game_chats(db, db_game, now)
+    create_game_cancelled_notifications(db, db_game, notified_user_ids, now)
+    create_game_cancellation_history(
+        db,
+        db_game,
+        current_user,
+        old_game_status,
+        cancel_reason,
+        change_source,
+        now,
+    )
+    create_game_cancellation_admin_action(
+        db,
+        db_game,
+        current_user,
+        cancellation_type,
+        old_game_status,
+        cancel_reason,
+        notified_user_ids,
+        now,
+    )
+
+    db_game.game_status = "cancelled"
+    db_game.cancelled_at = now
+    db_game.cancelled_by_user_id = current_user.id
+    db_game.cancel_reason = cancel_reason
+    db_game.completed_at = None
+    db_game.completed_by_user_id = None
+    db_game.updated_at = now
+
+    try:
+        db.add(db_game)
+        db.commit()
+        db.refresh(db_game)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=build_game_conflict_detail(exc),
+        ) from exc
+
+    return db_game
 
 
 # This route fetches a single game record by its internal UUID.

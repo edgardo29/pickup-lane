@@ -217,6 +217,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 0 1 auto;
 }
 
 .browse-nav__user--guest {
@@ -233,6 +234,7 @@
   place-items: center;
   font-size: 0.76rem;
   font-weight: 950;
+  flex: 0 0 30px;
 }
 
 .browse-nav__user--loading {
@@ -738,7 +740,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1180px) {
   .browse-nav {
     min-height: auto;
     padding: 16px 18px;
@@ -817,7 +819,7 @@
   }
 
   .browse-nav__brand {
-    max-width: min(48vw, 260px);
+    max-width: min(44vw, 220px);
   }
 
   .browse-nav__brand span {
@@ -846,12 +848,16 @@
 
   .browse-nav__user {
     min-height: 40px;
-    max-width: clamp(126px, 38vw, 190px);
-    padding: 0 15px;
+    max-width: clamp(142px, 42vw, 178px);
+    padding: 0 10px 0 5px;
   }
 
   .browse-nav__user span {
-    display: none;
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+    font-size: 0.7rem;
   }
 
   .browse-shell {

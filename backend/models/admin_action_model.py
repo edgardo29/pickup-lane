@@ -21,7 +21,7 @@ class AdminAction(Base):
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
                 "'reject_venue', 'remove_chat_message', 'hide_chat_message', "
                 "'update_game', 'update_booking', "
-                "'update_participant'"
+                "'update_participant', 'issue_credit', 'reverse_credit'"
                 ")"
             ),
             name="ck_admin_actions_action_type",

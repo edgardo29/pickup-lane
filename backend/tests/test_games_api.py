@@ -2,10 +2,12 @@ from fastapi.testclient import TestClient
 from datetime import UTC, datetime, timedelta
 
 from backend.tests.helpers import (
+    authenticate_as,
     create_game,
     create_game_participant,
     create_user,
     create_venue,
+    set_user_role,
 )
 
 
@@ -32,6 +34,341 @@ def test_games_create_get_list_update_and_soft_delete(client: TestClient):
     delete_response = client.delete(f"/games/{game['id']}")
     assert delete_response.status_code == 200, delete_response.text
     assert delete_response.json()["deleted_at"] is not None
+
+
+def test_host_can_cancel_own_community_game(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+
+    authenticate_as(host["id"])
+    response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "  Weather   changed\nquickly.  "},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["game_status"] == "cancelled"
+    assert body["cancelled_at"] is not None
+    assert body["cancelled_by_user_id"] == host["id"]
+    assert body["cancel_reason"] == "Weather changed quickly."
+
+
+def test_non_host_cannot_cancel_community_game(client: TestClient):
+    host = create_user(client)
+    other_user = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+
+    authenticate_as(other_user["id"])
+    response = client.post(f"/games/{game['id']}/cancel", json={})
+
+    assert response.status_code == 403, response.text
+    assert "Only the community game host or an admin" in response.text
+
+
+def test_admin_can_cancel_community_game_and_notify_host(client: TestClient):
+    host = create_user(client)
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    player = create_user(client)
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+    assert join_response.status_code == 201, join_response.text
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Support intervention"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["game_status"] == "cancelled"
+    assert body["cancelled_by_user_id"] == admin["id"]
+    assert body["cancel_reason"] == "Support intervention"
+
+    participants_response = client.get(f"/game-participants?game_id={game['id']}")
+    assert participants_response.status_code == 200, participants_response.text
+    assert all(
+        item["cancellation_type"] == "admin_cancelled"
+        for item in participants_response.json()
+    )
+
+    for recipient in [host, player]:
+        notifications_response = client.get(
+            f"/notifications?user_id={recipient['id']}&notification_type=game_cancelled"
+        )
+        assert notifications_response.status_code == 200, notifications_response.text
+        assert len(notifications_response.json()) == 1
+
+    admin_actions_response = client.get(
+        f"/admin-actions?target_game_id={game['id']}&action_type=cancel_game"
+    )
+    assert admin_actions_response.status_code == 200, admin_actions_response.text
+    admin_actions = admin_actions_response.json()
+    assert len(admin_actions) == 1
+    assert admin_actions[0]["admin_user_id"] == admin["id"]
+    assert admin_actions[0]["reason"] == "Support intervention"
+
+
+def test_admin_can_cancel_official_game(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Field closure"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["game_status"] == "cancelled"
+    assert body["cancelled_by_user_id"] == admin["id"]
+    assert body["cancel_reason"] == "Field closure"
+
+
+def test_non_admin_cannot_cancel_official_game(client: TestClient):
+    user = create_user(client)
+    venue = create_venue(client, user["id"])
+    game = create_game(client, user["id"], venue)
+
+    authenticate_as(user["id"])
+    response = client.post(f"/games/{game['id']}/cancel", json={})
+
+    assert response.status_code == 403, response.text
+    assert "Only an admin" in response.text
+
+
+def test_cancel_game_requires_authentication(client: TestClient):
+    user = create_user(client)
+    venue = create_venue(client, user["id"])
+    game = create_game(
+        client,
+        user["id"],
+        venue,
+        game_type="community",
+        host_user_id=user["id"],
+        policy_mode="custom_hosted",
+    )
+
+    response = client.post(f"/games/{game['id']}/cancel", json={})
+
+    assert response.status_code == 401, response.text
+
+
+def test_cancel_community_game_cancels_roster_waitlist_and_notifies_members(
+    client: TestClient,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        format_label="3v3",
+        total_spots=6,
+    )
+    joined_players = []
+
+    for _index in range(6):
+        player = create_user(client)
+        join_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert join_response.status_code == 201, join_response.text
+        joined_players.append(player)
+
+    waitlisted_player = create_user(client)
+    waitlist_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": waitlisted_player["id"]},
+    )
+    assert waitlist_response.status_code == 201, waitlist_response.text
+    assert waitlist_response.json()["status"] == "waitlisted"
+
+    authenticate_as(host["id"])
+    cancel_response = client.post(f"/games/{game['id']}/cancel", json={})
+
+    assert cancel_response.status_code == 200, cancel_response.text
+    assert cancel_response.json()["game_status"] == "cancelled"
+
+    participants_response = client.get(f"/game-participants?game_id={game['id']}")
+    assert participants_response.status_code == 200, participants_response.text
+    participants = participants_response.json()
+    assert all(item["participant_status"] == "cancelled" for item in participants)
+    assert all(item["cancellation_type"] == "host_cancelled" for item in participants)
+
+    bookings_response = client.get(f"/bookings?game_id={game['id']}")
+    assert bookings_response.status_code == 200, bookings_response.text
+    bookings = bookings_response.json()
+    assert len(bookings) == 7
+    assert all(item["booking_status"] == "cancelled" for item in bookings)
+    assert all(item["payment_status"] == "not_required" for item in bookings)
+
+    waitlist_entries_response = client.get(f"/waitlist-entries?game_id={game['id']}")
+    assert waitlist_entries_response.status_code == 200, waitlist_entries_response.text
+    assert waitlist_entries_response.json()[0]["waitlist_status"] == "cancelled"
+
+    for player in [*joined_players, waitlisted_player]:
+        notifications_response = client.get(
+            f"/notifications?user_id={player['id']}&notification_type=game_cancelled"
+        )
+        assert notifications_response.status_code == 200, notifications_response.text
+        assert len(notifications_response.json()) == 1
+
+    host_notifications_response = client.get(
+        f"/notifications?user_id={host['id']}&notification_type=game_cancelled"
+    )
+    assert host_notifications_response.status_code == 200, host_notifications_response.text
+    assert host_notifications_response.json() == []
+
+
+def test_cancel_official_game_refunds_demo_payments_and_writes_audit_rows(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    player = create_user(client)
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+    assert join_response.status_code == 201, join_response.text
+    booking_id = join_response.json()["booking_id"]
+
+    authenticate_as(admin["id"])
+    cancel_response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Venue closed"},
+    )
+
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    booking_response = client.get(f"/bookings/{booking_id}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "cancelled"
+    assert booking["payment_status"] == "refunded"
+    assert booking["cancel_reason"] == "admin_cancelled"
+
+    payments_response = client.get(f"/payments?booking_id={booking_id}")
+    assert payments_response.status_code == 200, payments_response.text
+    assert payments_response.json()[0]["payment_status"] == "refunded"
+
+    admin_actions_response = client.get(
+        f"/admin-actions?target_game_id={game['id']}&action_type=cancel_game"
+    )
+    assert admin_actions_response.status_code == 200, admin_actions_response.text
+    admin_actions = admin_actions_response.json()
+    assert len(admin_actions) == 1
+    assert admin_actions[0]["admin_user_id"] == admin["id"]
+    assert admin_actions[0]["reason"] == "Venue closed"
+
+    history_response = client.get(f"/game-status-history?game_id={game['id']}")
+    assert history_response.status_code == 200, history_response.text
+    history = history_response.json()
+    assert len(history) == 1
+    assert history[0]["old_game_status"] == "scheduled"
+    assert history[0]["new_game_status"] == "cancelled"
+    assert history[0]["change_source"] == "admin"
+
+
+def test_cancel_game_archives_chat_and_blocks_chat_reads(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    create_game_participant(
+        client,
+        host["id"],
+        game["id"],
+        participant_type="host",
+        price_cents=0,
+    )
+    create_game_participant(client, player["id"], game["id"])
+    chat_response = client.post(
+        "/game-chats",
+        json={"game_id": game["id"], "chat_status": "active"},
+    )
+    assert chat_response.status_code == 201, chat_response.text
+    chat = chat_response.json()
+
+    authenticate_as(host["id"])
+    cancel_response = client.post(f"/games/{game['id']}/cancel", json={})
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    get_chat_response = client.get(f"/game-chats/{chat['id']}")
+    assert get_chat_response.status_code == 200, get_chat_response.text
+    assert get_chat_response.json()["chat_status"] == "archived"
+
+    authenticate_as(player["id"])
+    messages_response = client.get(
+        f"/chat-messages?chat_id={chat['id']}&moderation_status=visible"
+    )
+    assert messages_response.status_code == 403, messages_response.text
+
+
+def test_cancel_game_cannot_be_retried(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+
+    authenticate_as(host["id"])
+    first_response = client.post(f"/games/{game['id']}/cancel", json={})
+    second_response = client.post(f"/games/{game['id']}/cancel", json={})
+
+    assert first_response.status_code == 200, first_response.text
+    assert second_response.status_code == 409, second_response.text
 
 
 def test_games_reject_invalid_schedule(client: TestClient):
@@ -324,6 +661,156 @@ def test_join_game_with_guests_creates_party_booking_and_guest_participants(
     assert len(payments) == 1
     assert payments[0]["payment_status"] == "succeeded"
     assert payments[0]["amount_cents"] == game["price_per_player_cents"] * 3
+
+
+def test_confirmed_player_can_add_guests_to_existing_booking(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue, max_guests_per_booking=2)
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+    assert join_response.status_code == 201, join_response.text
+    booking_id = join_response.json()["booking_id"]
+
+    response = client.post(
+        f"/games/{game['id']}/booking-guests/add",
+        json={"acting_user_id": player["id"], "guest_count": 2},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["status"] == "guests_added"
+    assert body["added_count"] == 2
+    assert body["booking_id"] == booking_id
+
+    booking_response = client.get(f"/bookings/{booking_id}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["participant_count"] == 3
+    assert booking["booking_status"] == "confirmed"
+    assert booking["payment_status"] == "paid"
+    assert booking["total_cents"] == game["price_per_player_cents"] * 3
+
+    participants_response = client.get(f"/game-participants?game_id={game['id']}")
+    assert participants_response.status_code == 200, participants_response.text
+    participants = [
+        item
+        for item in participants_response.json()
+        if item["booking_id"] == booking_id
+    ]
+    assert len(participants) == 3
+    assert sum(item["participant_type"] == "guest" for item in participants) == 2
+    assert all(
+        item["guest_of_user_id"] == player["id"]
+        for item in participants
+        if item["participant_type"] == "guest"
+    )
+
+    payments_response = client.get(f"/payments?booking_id={booking_id}")
+    assert payments_response.status_code == 200, payments_response.text
+    payment_amounts = sorted(item["amount_cents"] for item in payments_response.json())
+    assert payment_amounts == [
+        game["price_per_player_cents"],
+        game["price_per_player_cents"] * 2,
+    ]
+
+
+def test_community_player_add_guests_keeps_payment_not_required(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        max_guests_per_booking=2,
+    )
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+    assert join_response.status_code == 201, join_response.text
+    booking_id = join_response.json()["booking_id"]
+
+    response = client.post(
+        f"/games/{game['id']}/booking-guests/add",
+        json={"acting_user_id": player["id"], "guest_count": 1},
+    )
+
+    assert response.status_code == 201, response.text
+    booking_response = client.get(f"/bookings/{booking_id}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["participant_count"] == 2
+    assert booking["payment_status"] == "not_required"
+
+    payments_response = client.get(f"/payments?booking_id={booking_id}")
+    assert payments_response.status_code == 200, payments_response.text
+    assert payments_response.json() == []
+
+
+def test_waitlisted_player_cannot_add_guests_to_booking(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue, total_spots=10)
+
+    for _ in range(10):
+        player = create_user(client)
+        join_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert join_response.status_code == 201, join_response.text
+
+    waitlisted_player = create_user(client)
+    waitlist_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": waitlisted_player["id"]},
+    )
+    assert waitlist_response.status_code == 201, waitlist_response.text
+    assert waitlist_response.json()["status"] == "waitlisted"
+
+    response = client.post(
+        f"/games/{game['id']}/booking-guests/add",
+        json={"acting_user_id": waitlisted_player["id"], "guest_count": 1},
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == "Only confirmed players can add guests."
+
+
+def test_confirmed_player_cannot_add_guests_when_no_spots_left(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue, total_spots=10, max_guests_per_booking=2)
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+    assert join_response.status_code == 201, join_response.text
+
+    for _ in range(9):
+        other_player = create_user(client)
+        other_join_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": other_player["id"]},
+        )
+        assert other_join_response.status_code == 201, other_join_response.text
+
+    response = client.post(
+        f"/games/{game['id']}/booking-guests/add",
+        json={"acting_user_id": player["id"], "guest_count": 1},
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == "Not enough spots are available for guests."
 
 
 def test_join_game_rejects_too_many_guests(client: TestClient):

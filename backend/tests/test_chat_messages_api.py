@@ -1,4 +1,7 @@
 from fastapi.testclient import TestClient
+from uuid import UUID
+from datetime import UTC, datetime, timedelta
+from urllib.parse import quote
 
 from backend.tests.helpers import (
     authenticate_as,
@@ -41,6 +44,39 @@ def test_chat_messages_create_get_list_and_update(client: TestClient):
     assert patch_response.status_code == 200, patch_response.text
     assert patch_response.json()["message_body"] == "Updated CI chat message"
     assert patch_response.json()["edited_at"] is not None
+
+
+def test_chat_messages_list_after_created_at_returns_newer_messages(client: TestClient):
+    user, _venue, _game, game_chat = create_chat_message_setup(client)
+    first_message = create_chat_message(client, game_chat["id"], user["id"])
+
+    from backend.database import SessionLocal
+    from backend.models import ChatMessage
+
+    with SessionLocal() as db:
+        db_first_message = db.get(ChatMessage, UUID(first_message["id"]))
+        assert db_first_message is not None
+        db_first_message.created_at = datetime.now(UTC) - timedelta(seconds=3)
+        db.commit()
+        after_created_at = quote(db_first_message.created_at.isoformat())
+
+    second_message = create_chat_message(
+        client,
+        game_chat["id"],
+        user["id"],
+        message_body="Newer CI chat message",
+    )
+    authenticate_as(user["id"])
+
+    response = client.get(
+        f"/chat-messages?chat_id={game_chat['id']}"
+        f"&moderation_status=visible&after_created_at={after_created_at}"
+    )
+
+    assert response.status_code == 200, response.text
+    message_ids = [item["id"] for item in response.json()]
+    assert second_message["id"] in message_ids
+    assert first_message["id"] not in message_ids
 
 
 def test_chat_messages_reject_message_to_locked_chat(client: TestClient):

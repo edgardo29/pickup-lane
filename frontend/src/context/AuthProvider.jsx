@@ -119,12 +119,23 @@ export function AuthProvider({ children }) {
           return
         }
 
-        await cleanupUnfinishedAccount(firebaseUser)
+        let cleanupError = null
+
+        try {
+          await cleanupUnfinishedAccount(firebaseUser)
+        } catch (error) {
+          cleanupError = error
+        }
+
         await signOut(auth).catch(() => {})
         setFirebaseUser(null)
         setAppUser(null)
         setPendingSignup(null)
         setPendingGoogleSignup(false)
+
+        if (cleanupError) {
+          throw cleanupError
+        }
       },
       deleteAccount: async (confirmation) => {
         try {

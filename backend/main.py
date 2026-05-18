@@ -15,6 +15,7 @@ from backend.routes import (
     chat_messages_router,
     community_game_details_router,
     game_chats_router,
+    game_credits_router,
     game_images_router,
     games_router,
     game_participants_router,
@@ -90,6 +91,7 @@ app.include_router(user_payment_method_router)
 app.include_router(venues_router)
 app.include_router(venue_approval_requests_router)
 app.include_router(game_chats_router)
+app.include_router(game_credits_router)
 app.include_router(game_images_router)
 app.include_router(chat_messages_router)
 app.include_router(community_game_details_router)

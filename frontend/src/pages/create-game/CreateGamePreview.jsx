@@ -13,10 +13,9 @@ import {
   capitalize,
   COMMUNITY_PUBLISH_FEE_CENTS,
   formatMoney,
-  formatPaymentMethod,
 } from './createGameUtils.js'
 
-export function CreateGamePreview({ firstPublishIsFree, form, paymentMethod, review }) {
+export function CreateGamePreview({ firstPublishIsFree, form, review }) {
   return (
     <aside className="create-game-preview" aria-label="Game preview">
       <div className="create-game-preview__header">
@@ -47,7 +46,7 @@ export function CreateGamePreview({ firstPublishIsFree, form, paymentMethod, rev
       </p>
 
       <p className="create-game-preview__card">
-        {firstPublishIsFree ? 'First community game fee waived' : `Paying with ${formatPaymentMethod(paymentMethod)}`}
+        {firstPublishIsFree ? 'First community game fee waived' : 'Publish fee charged when published'}
       </p>
     </aside>
   )

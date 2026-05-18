@@ -187,47 +187,37 @@ export function ResetPasswordPage() {
 function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
   const [status, setStatus] = useState(code ? 'checking' : 'invalid')
   const [error, setError] = useState(code ? '' : 'This verification link is missing or invalid.')
-  const processedCodeRef = useRef('')
+  const actionCodeRef = useRef({ code: '', promise: null })
 
   useEffect(() => {
     let ignore = false
 
     async function verifyEmailCode() {
-      if (!code || processedCodeRef.current === code) {
+      if (!code) {
         return
       }
 
-      processedCodeRef.current = code
       setStatus('checking')
       setError('')
 
-      let appliedCode = false
-
-      try {
-        await applyActionCode(auth, code)
-        appliedCode = true
-      } catch {
-        // Firebase may report a reused code after the email has already been
-        // verified. We still give the signed-in user a chance to refresh below.
+      if (actionCodeRef.current.code !== code) {
+        actionCodeRef.current = { code, promise: null }
       }
 
-      if (appliedCode) {
-        refreshCurrentUserVerification().catch(() => {})
-
-        if (!ignore) {
-          setStatus('success')
-        }
-
-        return
+      if (!actionCodeRef.current.promise) {
+        actionCodeRef.current.promise = applyActionCode(auth, code)
+          .then(() => ({ applied: true, error: null }))
+          .catch((requestError) => ({ applied: false, error: requestError }))
       }
 
+      const applyResult = await actionCodeRef.current.promise
       const refreshedUser = await waitForEmailVerification(
         refreshCurrentUserVerification,
         () => ignore,
       )
 
       if (!ignore) {
-        if (refreshedUser?.email_verified_at) {
+        if (refreshedUser?.email_verified_at || applyResult.applied) {
           setStatus('success')
           return
         }

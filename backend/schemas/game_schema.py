@@ -213,6 +213,7 @@ class GameGuestAddRead(BaseModel):
     status: str
     message: str
     added_count: int
+    booking_id: UUID | None = None
 
 
 class GameGuestRemoveCreate(BaseModel):
@@ -227,3 +228,9 @@ class GameGuestRemoveRead(BaseModel):
     message: str
     removed_count: int
     booking_id: UUID | None = None
+
+
+class GameCancelCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    cancel_reason: str | None = None

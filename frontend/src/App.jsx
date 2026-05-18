@@ -16,7 +16,7 @@ import {
 import { CreateGamePage } from './pages/create-game/index.js'
 import InboxPage from './pages/InboxPage.jsx'
 import LandingPage from './pages/LandingPage.jsx'
-import { PrivacyPage, TermsPage } from './pages/LegalPages.jsx'
+import { CancellationRefundPolicyPage, PrivacyPage, TermsPage } from './pages/LegalPages.jsx'
 import MyGamesPage from './pages/MyGamesPage.jsx'
 import NeedASubManagePage from './pages/NeedASubManagePage.jsx'
 import NeedASubDetailPage from './pages/NeedASubDetailPage.jsx'
@@ -38,6 +38,7 @@ function App() {
         <Route path="/check-email" element={<CheckEmailPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/policies/cancellation-refunds" element={<CancellationRefundPolicyPage />} />
         <Route path="/games" element={<BrowseGamesPage />} />
         <Route path="/games/:gameId" element={<GameDetailsPage />} />
         <Route

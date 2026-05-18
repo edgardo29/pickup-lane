@@ -38,12 +38,20 @@ from backend.schemas.game_chat_schema import (
     GameChatUpdate,
 )
 from backend.schemas.game_chat_read_schema import GameChatReadStateRead
+from backend.schemas.game_credit_schema import (
+    GameCreditBalanceRead,
+    GameCreditIssueCreate,
+    GameCreditRead,
+    GameCreditReverseCreate,
+    GameCreditUsageRead,
+)
 from backend.schemas.game_image_schema import (
     GameImageCreate,
     GameImageRead,
     GameImageUpdate,
 )
 from backend.schemas.game_schema import (
+    GameCancelCreate,
     GameCreate,
     GameGuestAddCreate,
     GameGuestAddRead,
@@ -186,9 +194,15 @@ __all__ = [
     "GameChatRead",
     "GameChatReadStateRead",
     "GameChatUpdate",
+    "GameCreditBalanceRead",
+    "GameCreditIssueCreate",
+    "GameCreditRead",
+    "GameCreditReverseCreate",
+    "GameCreditUsageRead",
     "GameImageCreate",
     "GameImageRead",
     "GameImageUpdate",
+    "GameCancelCreate",
     "GameCreate",
     "GameGuestAddCreate",
     "GameGuestAddRead",

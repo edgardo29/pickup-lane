@@ -13,7 +13,7 @@ import {
   ProviderButtons,
 } from '../../features/auth/AuthFormParts.jsx'
 import { AuthShell } from '../../features/auth/AuthShell.jsx'
-import { useCleanupUnfinishedSignupOnEntry, useGoogleRedirectCompletion } from '../../features/auth/authHooks.js'
+import { useGoogleRedirectCompletion } from '../../features/auth/authHooks.js'
 import { getPostAuthPath, isValidEmail } from '../../features/auth/authHelpers.js'
 import '../../styles/auth/SignInPage.css'
 
@@ -23,11 +23,9 @@ export function SignInPage() {
   const [searchParams] = useSearchParams()
   const {
     appUser,
-    cleanupUnfinishedSignup,
     currentUser,
     isLoading,
     pendingGoogleSignup,
-    pendingSignup,
     settleGoogleSignupRedirect,
     signInWithEmail,
     signInWithGoogle,
@@ -39,16 +37,6 @@ export function SignInPage() {
   const [error, setError] = useState('')
   const resetStatus = searchParams.get('reset')
   const returnPath = typeof location.state?.from === 'string' ? location.state.from : ''
-
-  useCleanupUnfinishedSignupOnEntry({
-    appUser,
-    cleanupUnfinishedSignup,
-    currentUser,
-    isLoading,
-    pendingGoogleSignup,
-    pendingSignup,
-    setError,
-  })
 
   useGoogleRedirectCompletion({
     appUser,
