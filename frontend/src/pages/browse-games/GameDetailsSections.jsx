@@ -5,6 +5,7 @@ import {
   CalendarIcon,
   CheckIcon,
   ChatIcon,
+  ClockIcon,
   CopyIcon,
   MapPinIcon,
   PencilIcon,
@@ -125,12 +126,19 @@ export function PlayersCard({
   participantSummary,
 }) {
   const spotsLabel = participantSummary.spotsLeft === 1 ? 'spot left' : 'spots left'
+  const isFull = participantSummary.spotsLeft <= 0
 
   return (
     <InfoCard
       className="details-info-card--players"
       icon={<UsersIcon />}
       title="Players"
+      badge={isFull ? (
+        <>
+          <UsersIcon />
+          Full
+        </>
+      ) : ''}
       cta={cta}
       ctaDisabled={ctaDisabled}
       ctaIcon={<UsersIcon />}
@@ -469,7 +477,9 @@ function ParkingIcon() {
 
 export function JoinCard({
   aboutText,
+  cancelGameDisabled = false,
   editGameUrl,
+  editGameDisabled = false,
   facts,
   gameToneLabel,
   hostPaymentMethods = [],
@@ -483,6 +493,7 @@ export function JoinCard({
   joinMessage,
   joinNotice,
   leaveLabel,
+  manageHostGuestsDisabled = false,
   onJoin,
   onCancelGame,
   onLeave,
@@ -491,6 +502,7 @@ export function JoinCard({
   price,
   returnPath,
   shareCopied,
+  shareDisabled = false,
 }) {
   return (
     <div className="details-booking-card">
@@ -526,6 +538,7 @@ export function JoinCard({
           onClick={onJoin}
         >
           {(joinLabel === 'Join Game' || joinLabel === 'Join Waitlist' || !joinLabel) && <PlusCircleIcon />}
+          {joinLabel === 'Join Closed' && <ClockIcon />}
           {joinLabel || 'Join Game'}
         </button>
       )}
@@ -550,20 +563,30 @@ export function JoinCard({
       )}
 
       {editGameUrl && (
-        <Link className="details-secondary-action details-host-edit-action" to={editGameUrl}>
-          <span className="details-action-icon">
-            <PencilIcon />
-          </span>
-          <span>Edit Game</span>
-          <span className="details-action-chevron" aria-hidden="true">›</span>
-        </Link>
+        editGameDisabled ? (
+          <button className="details-secondary-action details-host-edit-action" type="button" disabled>
+            <span className="details-action-icon">
+              <PencilIcon />
+            </span>
+            <span>Edit Game</span>
+            <span className="details-action-chevron" aria-hidden="true">›</span>
+          </button>
+        ) : (
+          <Link className="details-secondary-action details-host-edit-action" to={editGameUrl}>
+            <span className="details-action-icon">
+              <PencilIcon />
+            </span>
+            <span>Edit Game</span>
+            <span className="details-action-chevron" aria-hidden="true">›</span>
+          </Link>
+        )
       )}
 
       {onManageHostGuests && hostGuestMax > 0 && (
         <button
           className="details-secondary-action details-host-guest-action"
           type="button"
-          disabled={isAddingHostGuest || isUpdatingHostGuests}
+          disabled={manageHostGuestsDisabled || isAddingHostGuest || isUpdatingHostGuests}
           onClick={onManageHostGuests}
         >
           <span className="details-action-icon">
@@ -589,7 +612,7 @@ export function JoinCard({
         <button
           className="details-secondary-action details-cancel-game-action"
           type="button"
-          disabled={isCancellingGame}
+          disabled={cancelGameDisabled || isCancellingGame}
           onClick={onCancelGame}
         >
           <span className="details-action-icon">
@@ -600,7 +623,12 @@ export function JoinCard({
         </button>
       )}
 
-      <button className="details-secondary-action details-share-button" type="button" onClick={onShare}>
+      <button
+        className="details-secondary-action details-share-button"
+        type="button"
+        disabled={shareDisabled}
+        onClick={onShare}
+      >
         <span className="details-action-icon">
           <ShareIcon />
         </span>
@@ -713,47 +741,42 @@ export function HostGuestModal({
         onClick={(event) => event.stopPropagation()}
         onSubmit={handleSubmit}
       >
-        <div className="details-host-guest-modal__header">
-          <span className="details-host-guest-modal__icon">
+        <h2 id="host-guest-modal-title" className="details-confirm-modal__title">
+          <span className="details-confirm-modal__title-icon">
             <UsersIcon />
           </span>
-          <div>
-            <h2 id="host-guest-modal-title">Manage Guests</h2>
-            <p>
-              Choose how many guest spots you want reserved.
-            </p>
-          </div>
-          <button
-            className="details-host-guest-modal__close"
-            type="button"
-            aria-label="Close host guest manager"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
+          Manage Guests
+        </h2>
 
-        <div className="details-host-guest-stepper" aria-label="Host guest count">
-          <button
-            type="button"
-            aria-label="Remove one guest"
-            disabled={!canDecrease || isSaving}
-            onClick={() => changeGuestCount(-1)}
-          >
-            −
-          </button>
-          <div>
-            <strong>{nextGuestCount}</strong>
-            <span>of {guestMax}</span>
+        <div className="details-attendance-actions details-host-guest-modal__body">
+          <div className="details-attendance-actions__group details-attendance-actions__group--guests">
+            <div>
+              <strong>Guests</strong>
+              <span>{nextGuestCount}/{guestMax} reserved for your game</span>
+            </div>
+            <div className="details-attendance-stepper" aria-label="Host guest count">
+              <button
+                type="button"
+                aria-label="Remove one guest"
+                disabled={!canDecrease || isSaving}
+                onClick={() => changeGuestCount(-1)}
+              >
+                −
+              </button>
+              <span>{nextGuestCount}</span>
+              <button
+                type="button"
+                aria-label="Add one guest"
+                disabled={!canIncrease || isSaving}
+                onClick={() => changeGuestCount(1)}
+              >
+                +
+              </button>
+            </div>
+            <button type="submit" disabled={!hasChanges || isSaving}>
+              {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'No Changes'}
+            </button>
           </div>
-          <button
-            type="button"
-            aria-label="Add one guest"
-            disabled={!canIncrease || isSaving}
-            onClick={() => changeGuestCount(1)}
-          >
-            +
-          </button>
         </div>
 
         {maxSelectableGuests < guestMax && (
@@ -762,7 +785,7 @@ export function HostGuestModal({
           </p>
         )}
 
-        <div className="details-host-guest-modal__actions">
+        <div className="details-confirm-modal__actions">
           <button
             type="button"
             disabled={isSaving}
@@ -871,7 +894,12 @@ export function LeaveGameModal({
         aria-labelledby="details-leave-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="details-leave-title">{title}</h2>
+        <h2 id="details-leave-title" className="details-confirm-modal__title">
+          <span className="details-confirm-modal__title-icon">
+            <UsersIcon />
+          </span>
+          {title}
+        </h2>
         {isWaitlisted && <p>You will give up your waitlist position.</p>}
         {!isWaitlisted && (
           <div className="details-attendance-actions">

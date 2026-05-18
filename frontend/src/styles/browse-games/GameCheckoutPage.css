@@ -320,14 +320,6 @@
   text-align: center;
 }
 
-.checkout-waitlist-note {
-  margin: 12px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid rgba(248, 250, 252, 0.08);
-  color: rgba(248, 250, 252, 0.76);
-  line-height: 1.45;
-}
-
 .checkout-payment-row {
   min-height: 52px;
   padding: 10px 14px;
@@ -436,6 +428,15 @@
   color: rgba(184, 255, 36, 0.84);
   font-size: 0.82rem;
   font-weight: 900;
+}
+
+.checkout-summary-waitlist-note {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(248, 250, 252, 0.1);
+  color: rgba(248, 250, 252, 0.76);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .checkout-error {

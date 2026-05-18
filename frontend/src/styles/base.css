@@ -31,6 +31,7 @@ html {
 body {
   min-width: 320px;
   min-height: 100svh;
+  min-height: 100vh;
   margin: 0;
   background: var(--app-bg);
 }
@@ -58,4 +59,6 @@ img {
 #root {
   width: 100%;
   min-height: 100svh;
+  min-height: 100vh;
+  background: var(--app-bg);
 }

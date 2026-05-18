@@ -7,14 +7,30 @@ import BrowseDateStrip from './BrowseDateStrip.jsx'
 import BrowseTimeSection from './BrowseTimeSection.jsx'
 
 const ACTIVE_PARTICIPANT_STATUSES = new Set(['pending_payment', 'confirmed'])
+const BROWSE_VISIBLE_AFTER_START_MINUTES = 15
+const DATE_WINDOW_DAYS = 14
+const DATE_PAGE_SIZE = 7
 
 function BrowseGamesPage() {
   const [games, setGames] = useState([])
   const [gameImages, setGameImages] = useState([])
   const [participants, setParticipants] = useState([])
   const [selectedDateKey, setSelectedDateKey] = useState('')
+  const [datePageIndex, setDatePageIndex] = useState(0)
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
+  const [nowMs, setNowMs] = useState(null)
+
+  useEffect(() => {
+    function updateNow() {
+      setNowMs(Date.now())
+    }
+
+    updateNow()
+    const intervalId = window.setInterval(updateNow, 30000)
+
+    return () => window.clearInterval(intervalId)
+  }, [])
 
   useEffect(() => {
     let ignore = false
@@ -51,12 +67,24 @@ function BrowseGamesPage() {
     }
   }, [])
 
-  const visibleGames = useMemo(() => getVisibleGames(games), [games])
-  const dateOptions = useMemo(() => buildDateOptions(visibleGames), [visibleGames])
+  const visibleGames = useMemo(
+    () => (nowMs === null ? [] : getVisibleGames(games, nowMs)),
+    [games, nowMs],
+  )
+  const dateOptions = useMemo(
+    () => (nowMs === null ? [] : buildDateOptions(nowMs)),
+    [nowMs],
+  )
   const activeDateKey = dateOptions.some((date) => date.key === selectedDateKey)
     ? selectedDateKey
     : dateOptions[0]?.key || ''
-  const activeDate = dateOptions.find((date) => date.key === activeDateKey)
+  const datePageCount = Math.ceil(dateOptions.length / DATE_PAGE_SIZE)
+  const visibleDateOptions = dateOptions.slice(
+    datePageIndex * DATE_PAGE_SIZE,
+    datePageIndex * DATE_PAGE_SIZE + DATE_PAGE_SIZE,
+  )
+  const canGoPreviousDates = datePageIndex > 0
+  const canGoNextDates = datePageIndex < datePageCount - 1
 
   const gamesForSelectedDate = useMemo(
     () => visibleGames.filter((game) => getDateKey(game.starts_at) === activeDateKey),
@@ -91,6 +119,16 @@ function BrowseGamesPage() {
 
   const timeGroups = useMemo(() => groupGamesByHour(gamesForSelectedDate), [gamesForSelectedDate])
 
+  function selectDatePage(nextPageIndex) {
+    const safePageIndex = Math.min(Math.max(nextPageIndex, 0), Math.max(datePageCount - 1, 0))
+    const nextDate = dateOptions[safePageIndex * DATE_PAGE_SIZE]
+
+    setDatePageIndex(safePageIndex)
+    if (nextDate) {
+      setSelectedDateKey(nextDate.key)
+    }
+  }
+
   return (
     <div className="browse-page">
       <BrowseAppNav />
@@ -112,23 +150,12 @@ function BrowseGamesPage() {
         </section>
 
         <section className="browse-panel" aria-label="Available games">
-          <div className="browse-panel__summary">
-            <span>
-              <SoccerBallIcon />
-              {activeDate && (
-                <>
-                  <strong className="browse-panel__summary-date">
-                    {activeDate.weekday.slice(0, 3)} {activeDate.day}
-                  </strong>
-                  <i aria-hidden="true" />
-                </>
-              )}
-              {visibleGames.length} {visibleGames.length === 1 ? 'game' : 'games'} available
-            </span>
-          </div>
-
           <BrowseDateStrip
-            dates={dateOptions}
+            canGoNext={canGoNextDates}
+            canGoPrevious={canGoPreviousDates}
+            dates={visibleDateOptions}
+            onNext={() => selectDatePage(datePageIndex + 1)}
+            onPrevious={() => selectDatePage(datePageIndex - 1)}
             selectedDateKey={activeDateKey}
             onSelectDate={setSelectedDateKey}
           />
@@ -167,12 +194,12 @@ function BrowseState({ title, message }) {
   )
 }
 
-function buildDateOptions(games) {
-  const startDate = games.length > 0 ? new Date(games[0].starts_at) : new Date()
+function buildDateOptions(nowMs) {
+  const startDate = new Date(nowMs)
+  startDate.setHours(12, 0, 0, 0)
 
-  return Array.from({ length: 7 }, (_, index) => {
+  return Array.from({ length: DATE_WINDOW_DAYS }, (_, index) => {
     const date = new Date(startDate)
-    date.setHours(12, 0, 0, 0)
     date.setDate(startDate.getDate() + index)
 
     return {
@@ -193,14 +220,19 @@ function getDateKey(value) {
   return `${year}-${month}-${day}`
 }
 
-function getVisibleGames(games) {
-  const now = Date.now()
+function getVisibleGames(games, nowMs) {
   const upcomingGames = games
     .filter(
-      (game) =>
-        !game.deleted_at &&
-        game.game_status !== 'cancelled' &&
-        new Date(game.starts_at).getTime() >= now,
+      (game) => {
+        const browseVisibleUntil =
+          new Date(game.starts_at).getTime() + BROWSE_VISIBLE_AFTER_START_MINUTES * 60 * 1000
+
+        return (
+          !game.deleted_at &&
+          game.game_status !== 'cancelled' &&
+          browseVisibleUntil > nowMs
+        )
+      },
     )
     .sort((first, second) => new Date(first.starts_at) - new Date(second.starts_at))
 

@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from backend.tests.helpers import (
     authenticate_as,
@@ -9,6 +10,18 @@ from backend.tests.helpers import (
     create_venue,
     set_user_role,
 )
+
+
+def set_game_times(game_id: str, starts_at: datetime, ends_at: datetime | None = None) -> None:
+    from backend.database import SessionLocal
+    from backend.models import Game
+
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game_id))
+        assert db_game is not None
+        db_game.starts_at = starts_at
+        db_game.ends_at = ends_at or starts_at + timedelta(hours=1)
+        db.commit()
 
 
 def test_games_create_get_list_update_and_soft_delete(client: TestClient):
@@ -60,6 +73,26 @@ def test_host_can_cancel_own_community_game(client: TestClient):
     assert body["cancelled_at"] is not None
     assert body["cancelled_by_user_id"] == host["id"]
     assert body["cancel_reason"] == "Weather changed quickly."
+
+
+def test_host_cannot_cancel_community_game_after_start_time(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    set_game_times(game["id"], datetime.now(UTC) - timedelta(minutes=1))
+
+    authenticate_as(host["id"])
+    response = client.post(f"/games/{game['id']}/cancel", json={})
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == "Games cannot be cancelled after start time."
 
 
 def test_non_host_cannot_cancel_community_game(client: TestClient):
@@ -514,6 +547,31 @@ def test_host_edit_allows_host_to_update_empty_community_game(client: TestClient
     assert updated_game["game_notes"] == "Bring a light and dark shirt."
 
 
+def test_host_edit_rejects_after_start_time(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    set_game_times(game["id"], datetime.now(UTC) - timedelta(minutes=1))
+
+    response = client.patch(
+        f"/games/{game['id']}/host-edit",
+        json={
+            "acting_user_id": host["id"],
+            "game_notes": "Too late to change this.",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == "Games cannot be edited after start time."
+
+
 def test_host_edit_reuses_existing_matching_venue(client: TestClient):
     host = create_user(client)
     original_venue = create_venue(client, host["id"])
@@ -611,6 +669,38 @@ def test_join_game_creates_booking_and_participant(client: TestClient):
         item["user_id"] == player["id"] and item["participant_status"] == "confirmed"
         for item in participants_response.json()
     )
+
+
+def test_join_game_allows_signup_inside_start_grace_window(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue)
+    set_game_times(game["id"], datetime.now(UTC) - timedelta(minutes=4))
+
+    response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "joined"
+
+
+def test_join_game_rejects_signup_after_start_grace_window(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue)
+    set_game_times(game["id"], datetime.now(UTC) - timedelta(minutes=6))
+
+    response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == "Joining is closed for this game."
 
 
 def test_join_game_with_guests_creates_party_booking_and_guest_participants(
@@ -1051,6 +1141,56 @@ def test_community_waitlist_promotion_creates_no_player_payment(
         if item["notification_type"] == "waitlist_promoted"
     )
     assert "charged" not in promotion_notice["body"].lower()
+
+
+def test_leave_game_rejects_drop_after_start_grace_window_without_promotion(
+    client: TestClient,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        format_label="3v3",
+        total_spots=6,
+        price_per_player_cents=1500,
+    )
+    joined_players = []
+
+    for _index in range(6):
+        player = create_user(client)
+        fill_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert fill_response.status_code == 201, fill_response.text
+        joined_players.append(player)
+
+    waitlisted_player = create_user(client)
+    waitlist_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": waitlisted_player["id"]},
+    )
+    assert waitlist_response.status_code == 201, waitlist_response.text
+    waitlist_body = waitlist_response.json()
+    set_game_times(game["id"], datetime.now(UTC) - timedelta(minutes=6))
+
+    leave_response = client.post(
+        f"/games/{game['id']}/leave",
+        json={"acting_user_id": joined_players[0]["id"]},
+    )
+    assert leave_response.status_code == 400, leave_response.text
+    assert leave_response.json()["detail"] == "Attendance changes are closed for this game."
+
+    waitlisted_booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    assert waitlisted_booking_response.status_code == 200, waitlisted_booking_response.text
+    waitlisted_booking = waitlisted_booking_response.json()
+    assert waitlisted_booking["booking_status"] == "waitlisted"
+    assert waitlisted_booking["payment_status"] == "not_required"
 
 
 def test_community_leave_game_keeps_payment_not_required(client: TestClient):

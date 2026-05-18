@@ -361,6 +361,10 @@
   gap: 10px;
 }
 
+.details-info-card--players .details-info-card__title {
+  justify-content: space-between;
+}
+
 .details-info-card__title span {
   min-height: 22px;
   padding: 0 8px;
@@ -373,6 +377,19 @@
   font-size: 0.72rem;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.details-info-card__title span svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.details-info-card--players .details-info-card__title span {
+  border-color: rgba(248, 113, 113, 0.46);
+  color: #ffb4ac;
+  background: rgba(37, 11, 14, 0.62);
+  gap: 6px;
 }
 
 .details-info-card p {
@@ -984,6 +1001,7 @@
 
 .details-secondary-action {
   width: 100%;
+  min-width: 0;
   min-height: 38px;
   margin-top: 8px;
   padding: 0 10px;
@@ -1000,6 +1018,7 @@
   text-decoration: none;
   font-size: 0.9rem;
   font-weight: 900;
+  overflow: hidden;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 10px 24px rgba(0, 0, 0, 0.18);
@@ -1027,6 +1046,13 @@
   color: var(--lime);
 }
 
+.details-secondary-action > span:not(.details-action-icon):not(.details-action-chevron) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .details-cancel-game-action {
   border-color: rgba(248, 113, 113, 0.48);
   color: #ffe1de;
@@ -1045,10 +1071,15 @@
 }
 
 .details-secondary-action .details-action-chevron {
+  flex: 0 0 auto;
   margin-left: auto;
   color: rgba(248, 250, 252, 0.72);
   font-size: 1.4rem;
   line-height: 1;
+}
+
+.details-share-button {
+  max-width: 100%;
 }
 
 .details-secondary-action .details-action-chevron svg {
@@ -1059,7 +1090,9 @@
 
 .details-share-button .details-share-indicator {
   width: 24px;
+  min-width: 24px;
   height: 24px;
+  flex: 0 0 24px;
   margin-left: auto;
   color: rgba(248, 250, 252, 0.7);
   display: grid;
@@ -1140,8 +1173,11 @@
 }
 
 .details-host-guest-modal {
-  width: min(390px, calc(100vw - 32px));
-  padding: 18px;
+  width: min(430px, calc(100vw - 32px));
+}
+
+.details-host-guest-modal__body {
+  margin-top: 14px;
 }
 
 .details-host-guest-modal__header {
@@ -1296,6 +1332,29 @@
   font-size: 1.22rem;
 }
 
+.details-confirm-modal__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.details-confirm-modal__title-icon {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(184, 255, 36, 0.28);
+  border-radius: 999px;
+  color: var(--lime);
+  background: rgba(184, 255, 36, 0.06);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.details-confirm-modal__title-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
 .details-confirm-modal p {
   margin: 12px 0 0;
   color: rgba(248, 250, 252, 0.76);
@@ -1403,6 +1462,12 @@
   border-color: rgba(248, 113, 113, 0.5);
   color: #ffd6d2;
   background: var(--button-red);
+}
+
+.details-confirm-modal__actions .primary {
+  border-color: rgba(184, 255, 36, 0.28);
+  color: #061006;
+  background: var(--button-green);
 }
 
 .details-cancel-game-modal {
@@ -1971,8 +2036,8 @@
   }
 
   .details-mobile-host-actions--single {
-    grid-template-columns: minmax(220px, 340px);
-    justify-content: start;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
   }
 
   .details-mobile-host-actions .details-secondary-action > span:not(.details-action-icon):not(.details-action-chevron) {
@@ -2112,9 +2177,9 @@
   }
 
   .details-mobile-status-pill--closed {
-    border-color: rgba(148, 163, 184, 0.28);
-    color: rgba(248, 250, 252, 0.76) !important;
-    background: rgba(15, 23, 42, 0.82);
+    border-color: rgba(184, 255, 36, 0.28);
+    color: var(--lime) !important;
+    background: var(--button-dark);
   }
 
   .details-mobile-join button:not(.details-mobile-edit-attendance) {
@@ -2256,9 +2321,9 @@
   }
 
   .details-mobile-status-pill--closed {
-    border-color: rgba(148, 163, 184, 0.28);
-    color: rgba(248, 250, 252, 0.76) !important;
-    background: rgba(15, 23, 42, 0.82);
+    border-color: rgba(184, 255, 36, 0.28);
+    color: var(--lime) !important;
+    background: var(--button-dark);
   }
 
   .details-mobile-join button:not(.details-mobile-edit-attendance) {
