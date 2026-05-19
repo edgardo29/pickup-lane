@@ -13,6 +13,7 @@ from backend.routes.chat_message_routes import router as chat_messages_router
 from backend.routes.community_game_detail_routes import (
     router as community_game_details_router,
 )
+from backend.routes.community_game_publish_routes import router as community_games_router
 from backend.routes.game_chat_routes import router as game_chats_router
 from backend.routes.game_credit_routes import router as game_credits_router
 from backend.routes.game_image_routes import router as game_images_router
@@ -60,6 +61,7 @@ __all__ = [
     "booking_status_history_router",
     "chat_messages_router",
     "community_game_details_router",
+    "community_games_router",
     "users_router",
     "user_settings_router",
     "user_stats_router",

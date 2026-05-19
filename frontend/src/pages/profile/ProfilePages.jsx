@@ -1,17 +1,17 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import BrowseAppNav from '../components/BrowseAppNav.jsx'
+import { AppPageHeader, AppPageShell } from '../../components/app/index.js'
 import {
   CalendarIcon,
   MapPinIcon,
   ShieldCheckIcon,
   SoccerBallIcon,
   UserIcon,
-} from '../components/BrowseIcons.jsx'
-import { useAuth } from '../hooks/useAuth.js'
-import { apiRequest } from '../lib/apiClient.js'
-import { getAuthErrorMessage } from '../lib/authErrors.js'
-import '../styles/profile-settings.css'
+} from '../../components/BrowseIcons.jsx'
+import { useAuth } from '../../hooks/useAuth.js'
+import { apiRequest } from '../../lib/apiClient.js'
+import { getAuthErrorMessage } from '../../lib/authErrors.js'
+import '../../styles/profile-settings.css'
 
 const emptyStats = {
   games_played_count: 0,
@@ -67,6 +67,8 @@ export function ProfilePage() {
 
   return (
     <ProfileShell>
+      <AppPageHeader title="Profile" />
+
       <section className="profile-hero-card">
         <InitialsAvatar user={currentUser} size="large" />
 
@@ -93,7 +95,11 @@ export function ProfilePage() {
             </span>
           </div>
 
-          <Link className="profile-secondary-action" to="/profile/edit">
+          <Link
+            className="profile-secondary-action"
+            state={{ from: '/profile', fromLabel: 'Back to profile' }}
+            to="/profile/edit"
+          >
             <PencilIcon />
             Edit profile
           </Link>
@@ -117,11 +123,14 @@ export function ProfilePage() {
 }
 
 export function EditProfilePage() {
+  const location = useLocation()
   const navigate = useNavigate()
   const { currentUser, settings, status, error } = useProfileContext()
   const [formEdits, setFormEdits] = useState({})
   const [saveStatus, setSaveStatus] = useState('idle')
   const [saveError, setSaveError] = useState('')
+  const returnPath = location.state?.from || '/settings'
+  const returnLabel = location.state?.fromLabel || 'Back to settings'
 
   const loadedForm = useMemo(() => {
     if (!currentUser) {
@@ -180,7 +189,7 @@ export function EditProfilePage() {
         selected_state: trimmedForm.home_state || null,
       })
 
-      navigate('/profile')
+      navigate(returnPath)
     } catch (requestError) {
       setSaveError(
         requestError instanceof Error ? requestError.message : 'Unable to save profile.',
@@ -193,8 +202,8 @@ export function EditProfilePage() {
     <ProfileShell>
       <section className="profile-edit-layout">
         <div className="settings-heading">
-          <Link className="settings-back-link" to="/profile">
-            Back to profile
+          <Link className="settings-back-link" to={returnPath}>
+            {returnLabel}
           </Link>
           <p className="profile-kicker">Profile</p>
           <h1>Edit profile</h1>
@@ -252,7 +261,7 @@ export function EditProfilePage() {
           {saveError && <p className="profile-edit-error">{saveError}</p>}
 
           <div className="profile-edit-actions">
-            <Link className="profile-edit-cancel" to="/profile">
+            <Link className="profile-edit-cancel" to={returnPath}>
               Cancel
             </Link>
             <button className="profile-primary-action" disabled={saveStatus === 'saving'} type="submit">
@@ -296,10 +305,6 @@ export function SettingsPage() {
     [settings, settingsOverride],
   )
 
-  useEffect(() => {
-    setEmailNotificationsEnabled(Boolean(effectiveSettings.email_notifications_enabled))
-  }, [effectiveSettings.email_notifications_enabled])
-
   if (status !== 'success') {
     return <ProfileShell state={<ProfileState title={status === 'loading' ? 'Loading settings' : 'Could not load settings'} message={error} />} />
   }
@@ -312,6 +317,16 @@ export function SettingsPage() {
     Boolean(authUser?.email) &&
     providerIds.includes('google.com') &&
     !providerIds.includes('password')
+
+  const accountDetailRows = [
+    {
+      icon: <UserIcon />,
+      title: getFullName(currentUser),
+      text: currentUser.email,
+      state: { from: '/settings', fromLabel: 'Back to settings' },
+      to: '/profile/edit',
+    },
+  ]
 
   const preferenceRows = [
     {
@@ -489,38 +504,13 @@ export function SettingsPage() {
             <h1>Settings</h1>
           </div>
 
-          <Link className="settings-account-row" to="/profile">
-            <InitialsAvatar user={currentUser} />
-            <div>
-              <strong>{getFullName(currentUser)}</strong>
-              <span>{currentUser.email}</span>
-            </div>
-            <ChevronRightIcon />
-          </Link>
-
+          <SettingsGroup title="Account Details" rows={accountDetailRows} />
           <SettingsGroup title="Preferences & Account" rows={preferenceRows} />
           {accountAccessRows.length > 0 && (
             <SettingsGroup title="Account Access" rows={accountAccessRows} />
           )}
           <SettingsGroup title="Account" rows={accountRows} />
         </div>
-
-        <aside className="settings-summary-card">
-          <InitialsAvatar user={currentUser} />
-          <h2>{getFullName(currentUser)}</h2>
-          <p>{formatLocation(currentUser, settings)}</p>
-
-          <div className="settings-summary-card__items">
-            <span>
-              <strong>{capitalize(currentUser.account_status)}</strong>
-              Account status
-            </span>
-            <span>
-              <strong>{formatMemberSince(currentUser.member_since)}</strong>
-              Member since
-            </span>
-          </div>
-        </aside>
       </section>
 
       {isDeleteOpen && (
@@ -721,10 +711,9 @@ function ProfileEditField({ label, onChange, required = false, type = 'text', ..
 
 function ProfileShell({ children, state }) {
   return (
-    <div className="profile-page">
-      <BrowseAppNav />
-      <main className="profile-shell">{state || children}</main>
-    </div>
+    <AppPageShell className="profile-page" mainClassName="app-page-shell--narrow profile-shell">
+      {state || children}
+    </AppPageShell>
   )
 }
 
@@ -922,8 +911,8 @@ function capitalize(value) {
 function GearIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="3.4" />
-      <path d="M19.4 13.7a7.8 7.8 0 0 0 .1-1.7l2-1.5-2-3.5-2.4 1a7.3 7.3 0 0 0-1.4-.8L15.4 4h-4l-.4 3.2c-.5.2-1 .5-1.4.8l-2.4-1-2 3.5 2 1.5a7.8 7.8 0 0 0 .1 1.7l-2 1.5 2 3.5 2.4-1c.4.3.9.6 1.4.8l.4 3.2h4l.4-3.2c.5-.2 1-.5 1.4-.8l2.4 1 2-3.5Z" />
+      <path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.2a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4A2 2 0 0 0 4 9.8l.2.1a2 2 0 0 1 1 1.7v.8a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.2a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.2a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.8a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.2a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   )
 }

@@ -62,6 +62,7 @@ def test_core_routes_are_registered(client: TestClient):
         ("GET", "/payments/{payment_id}"),
         ("PATCH", "/payments/{payment_id}"),
         ("POST", "/community-game-details"),
+        ("POST", "/community-games/publish"),
         ("GET", "/community-game-details"),
         ("GET", "/community-game-details/{community_game_detail_id}"),
         ("PATCH", "/community-game-details/{community_game_detail_id}"),

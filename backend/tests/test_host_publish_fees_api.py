@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from datetime import UTC, datetime, timedelta
 
 from backend.tests.helpers import (
     create_game,
@@ -98,6 +99,10 @@ def test_host_publish_fee_rejects_official_game(client: TestClient):
 def test_host_publish_fee_rejects_second_first_free_game(client: TestClient):
     host = create_user(client)
     venue = create_venue(client, host["id"])
+    first_start = (datetime.now(UTC) + timedelta(days=7)).replace(
+        hour=18, minute=0, second=0, microsecond=0
+    )
+    second_start = first_start + timedelta(days=1)
     first_game = create_game(
         client,
         host["id"],
@@ -105,6 +110,8 @@ def test_host_publish_fee_rejects_second_first_free_game(client: TestClient):
         game_type="community",
         host_user_id=host["id"],
         policy_mode="custom_hosted",
+        starts_at=first_start.isoformat(),
+        ends_at=(first_start + timedelta(hours=1)).isoformat(),
     )
     second_game = create_game(
         client,
@@ -114,6 +121,8 @@ def test_host_publish_fee_rejects_second_first_free_game(client: TestClient):
         host_user_id=host["id"],
         policy_mode="custom_hosted",
         title="Second Community Game",
+        starts_at=second_start.isoformat(),
+        ends_at=(second_start + timedelta(hours=1)).isoformat(),
     )
     create_host_publish_fee(client, first_game["id"], host["id"])
 

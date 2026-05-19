@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
@@ -92,10 +93,15 @@ NON_NULL_HOST_EDIT_FIELDS = MAJOR_HOST_EDIT_FIELDS | {
 
 
 def build_game_conflict_detail(exc: IntegrityError) -> str:
+    error_text = str(exc.orig)
+
+    if "ux_games_one_active_community_game_per_host_date" in error_text:
+        return "You already have a community game on this date."
+
     # The games table does not currently expose user-facing unique constraints,
     # so fall back to the database error text for now if an integrity issue
     # occurs.
-    return str(exc.orig)
+    return error_text
 
 
 def get_active_venue_or_404(db: Session, venue_id: uuid.UUID) -> Venue:
@@ -277,6 +283,20 @@ def ensure_timezone(value: datetime) -> datetime:
     return value
 
 
+def get_valid_timezone(timezone_name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="timezone must be a valid IANA timezone.",
+        ) from exc
+
+
+def get_game_local_date(starts_at: datetime, timezone_name: str) -> date:
+    return ensure_timezone(starts_at).astimezone(get_valid_timezone(timezone_name)).date()
+
+
 def get_join_window_closes_at(db_game: Game) -> datetime:
     return ensure_timezone(db_game.starts_at) + timedelta(minutes=JOIN_WINDOW_MINUTES)
 
@@ -381,6 +401,7 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
 
     starts_at = ensure_timezone(game_data["starts_at"])
     ends_at = ensure_timezone(game_data["ends_at"])
+    get_valid_timezone(game_data["timezone"])
 
     if ends_at <= starts_at:
         raise HTTPException(
@@ -515,6 +536,12 @@ def normalize_game_lifecycle_fields(
 ) -> dict[str, object]:
     normalized_data = dict(game_data)
     now = datetime.now(timezone.utc)
+    normalized_data["starts_at"] = ensure_timezone(normalized_data["starts_at"])
+    normalized_data["ends_at"] = ensure_timezone(normalized_data["ends_at"])
+    normalized_data["starts_on_local"] = get_game_local_date(
+        normalized_data["starts_at"],
+        normalized_data["timezone"],
+    )
 
     if normalized_data["publish_status"] == "published":
         normalized_data["published_at"] = (
@@ -2265,6 +2292,7 @@ def update_game(
 
     if "host_guest_max" in update_data:
         update_data["host_guest_max"] = effective_game_data["host_guest_max"]
+    update_data["starts_on_local"] = effective_game_data["starts_on_local"]
 
     for field_name, field_value in update_data.items():
         setattr(db_game, field_name, field_value)
@@ -2481,9 +2509,11 @@ def host_edit_game(
         "completed_at": db_game.completed_at,
         "completed_by_user_id": db_game.completed_by_user_id,
     }
+    effective_game_data = normalize_game_lifecycle_fields(effective_game_data, db_game)
     validate_game_business_rules(effective_game_data)
     if "host_guest_max" in update_data:
         update_data["host_guest_max"] = effective_game_data["host_guest_max"]
+    update_data["starts_on_local"] = effective_game_data["starts_on_local"]
 
     for field_name, field_value in update_data.items():
         if field_name in LOCATION_FIELDS:

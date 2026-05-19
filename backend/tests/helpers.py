@@ -47,6 +47,19 @@ def set_user_role(user_id: str, role: str) -> None:
         db.commit()
 
 
+def mark_user_email_verified(user_id: str) -> None:
+    from datetime import UTC, datetime
+
+    from backend.database import SessionLocal
+    from backend.models import User
+
+    with SessionLocal() as db:
+        db_user = db.get(User, UUID(user_id))
+        assert db_user is not None
+        db_user.email_verified_at = datetime.now(UTC)
+        db.commit()
+
+
 def authenticate_as(user_id: str) -> None:
     from backend.database import SessionLocal
     from backend.main import app

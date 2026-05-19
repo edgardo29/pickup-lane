@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from backend.tests.helpers import (
     authenticate_as,
@@ -8,6 +9,7 @@ from backend.tests.helpers import (
     create_game_participant,
     create_user,
     create_venue,
+    mark_user_email_verified,
     set_user_role,
 )
 
@@ -22,6 +24,49 @@ def set_game_times(game_id: str, starts_at: datetime, ends_at: datetime | None =
         db_game.starts_at = starts_at
         db_game.ends_at = ends_at or starts_at + timedelta(hours=1)
         db.commit()
+
+
+def build_community_game_payload(
+    host: dict,
+    venue: dict,
+    starts_at: datetime,
+    ends_at: datetime,
+    timezone_name: str = "America/Chicago",
+    **overrides: object,
+) -> dict:
+    payload = {
+        "game_type": "community",
+        "payment_collection_type": "external_host",
+        "publish_status": "published",
+        "game_status": "scheduled",
+        "title": "Community Game",
+        "venue_id": venue["id"],
+        "venue_name_snapshot": venue["name"],
+        "address_snapshot": venue["address_line_1"],
+        "city_snapshot": venue["city"],
+        "state_snapshot": venue["state"],
+        "host_user_id": host["id"],
+        "created_by_user_id": host["id"],
+        "starts_at": starts_at.isoformat(),
+        "ends_at": ends_at.isoformat(),
+        "timezone": timezone_name,
+        "format_label": "5v5",
+        "environment_type": "indoor",
+        "total_spots": 10,
+        "price_per_player_cents": 1200,
+        "policy_mode": "custom_hosted",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def first_sunday_of_november(year: int) -> int:
+    november_first = datetime(year, 11, 1, tzinfo=UTC)
+    return 1 + ((6 - november_first.weekday()) % 7)
+
+
+def local_date_string(starts_at: datetime, timezone_name: str) -> str:
+    return starts_at.astimezone(ZoneInfo(timezone_name)).date().isoformat()
 
 
 def test_games_create_get_list_update_and_soft_delete(client: TestClient):
@@ -502,6 +547,370 @@ def test_games_reject_total_spots_below_format_minimum(client: TestClient):
 
     assert response.status_code == 400, response.text
     assert "at least 14" in response.text
+
+
+def test_community_host_can_only_publish_one_active_game_per_local_date(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    starts_at = (datetime.now(UTC) + timedelta(days=8)).replace(
+        hour=18, minute=0, second=0, microsecond=0
+    )
+    ends_at = starts_at + timedelta(hours=2)
+    create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=starts_at.isoformat(),
+        ends_at=ends_at.isoformat(),
+    )
+
+    response = client.post(
+        "/games",
+        json={
+            "game_type": "community",
+            "payment_collection_type": "external_host",
+            "publish_status": "published",
+            "game_status": "scheduled",
+            "title": "Second Community Game",
+            "venue_id": venue["id"],
+            "venue_name_snapshot": venue["name"],
+            "address_snapshot": venue["address_line_1"],
+            "city_snapshot": venue["city"],
+            "state_snapshot": venue["state"],
+            "host_user_id": host["id"],
+            "created_by_user_id": host["id"],
+            "starts_at": (starts_at + timedelta(hours=3)).isoformat(),
+            "ends_at": (starts_at + timedelta(hours=5)).isoformat(),
+            "timezone": "America/Chicago",
+            "format_label": "5v5",
+            "environment_type": "indoor",
+            "total_spots": 10,
+            "price_per_player_cents": 1200,
+            "policy_mode": "custom_hosted",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "You already have a community game on this date."
+
+
+def test_community_host_allows_same_utc_date_when_local_dates_differ(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    utc_day = (datetime.now(UTC) + timedelta(days=8)).replace(
+        hour=1, minute=30, second=0, microsecond=0
+    )
+    first_game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=utc_day.isoformat(),
+        ends_at=(utc_day + timedelta(hours=1)).isoformat(),
+    )
+    second_start = utc_day.replace(hour=18)
+    second_game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=second_start.isoformat(),
+        ends_at=(second_start + timedelta(hours=1)).isoformat(),
+    )
+
+    assert utc_day.date() == second_start.date()
+    assert first_game["starts_on_local"] == local_date_string(
+        utc_day, "America/Chicago"
+    )
+    assert second_game["starts_on_local"] == local_date_string(
+        second_start, "America/Chicago"
+    )
+    assert first_game["starts_on_local"] != second_game["starts_on_local"]
+
+
+def test_community_host_rejects_different_utc_dates_when_local_date_matches(
+    client: TestClient,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    starts_at = (datetime.now(UTC) + timedelta(days=9)).replace(
+        hour=18, minute=0, second=0, microsecond=0
+    )
+    first_game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=starts_at.isoformat(),
+        ends_at=(starts_at + timedelta(hours=1)).isoformat(),
+    )
+    second_start = starts_at + timedelta(hours=10)
+
+    assert starts_at.date() != second_start.date()
+    assert first_game["starts_on_local"] == local_date_string(
+        second_start, "America/Chicago"
+    )
+
+    response = client.post(
+        "/games",
+        json=build_community_game_payload(
+            host,
+            venue,
+            second_start,
+            second_start + timedelta(hours=1),
+            title="Different UTC Same Local Date",
+        ),
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "You already have a community game on this date."
+
+
+def test_community_host_date_rule_uses_each_game_timezone(client: TestClient):
+    host = create_user(client)
+    new_york_venue = create_venue(
+        client,
+        host["id"],
+        name="NYC Test Field",
+        city="New York",
+        state="NY",
+        postal_code="10001",
+    )
+    los_angeles_venue = create_venue(
+        client,
+        host["id"],
+        name="LA Test Field",
+        city="Los Angeles",
+        state="CA",
+        postal_code="90001",
+    )
+    starts_at = (datetime.now(UTC) + timedelta(days=10)).replace(
+        hour=6, minute=30, second=0, microsecond=0
+    )
+    new_york_game = create_game(
+        client,
+        host["id"],
+        new_york_venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=starts_at.isoformat(),
+        ends_at=(starts_at + timedelta(hours=1)).isoformat(),
+        timezone="America/New_York",
+    )
+    los_angeles_game = create_game(
+        client,
+        host["id"],
+        los_angeles_venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=starts_at.isoformat(),
+        ends_at=(starts_at + timedelta(hours=1)).isoformat(),
+        timezone="America/Los_Angeles",
+    )
+
+    assert new_york_game["starts_on_local"] == local_date_string(
+        starts_at, "America/New_York"
+    )
+    assert los_angeles_game["starts_on_local"] == local_date_string(
+        starts_at, "America/Los_Angeles"
+    )
+    assert new_york_game["starts_on_local"] != los_angeles_game["starts_on_local"]
+
+
+def test_community_host_date_rule_handles_dst_boundary(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    dst_year = datetime.now(UTC).year + 1
+    transition_day = first_sunday_of_november(dst_year)
+    first_start = datetime(dst_year, 11, transition_day, 5, 30, tzinfo=UTC)
+    second_start = datetime(dst_year, 11, transition_day, 8, 30, tzinfo=UTC)
+    first_game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=first_start.isoformat(),
+        ends_at=(first_start + timedelta(hours=1)).isoformat(),
+    )
+
+    response = client.post(
+        "/games",
+        json=build_community_game_payload(
+            host,
+            venue,
+            second_start,
+            second_start + timedelta(hours=1),
+            title="DST Boundary Community Game",
+        ),
+    )
+
+    expected_local_date = local_date_string(first_start, "America/Chicago")
+    assert expected_local_date == local_date_string(second_start, "America/Chicago")
+    assert first_game["starts_on_local"] == expected_local_date
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "You already have a community game on this date."
+
+
+def test_cancelled_community_game_does_not_block_same_day_publish(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    starts_at = (datetime.now(UTC) + timedelta(days=9)).replace(
+        hour=18, minute=0, second=0, microsecond=0
+    )
+    create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        game_status="cancelled",
+        starts_at=starts_at.isoformat(),
+        ends_at=(starts_at + timedelta(hours=2)).isoformat(),
+    )
+
+    allowed_game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=(starts_at + timedelta(hours=3)).isoformat(),
+        ends_at=(starts_at + timedelta(hours=5)).isoformat(),
+    )
+
+    assert allowed_game["game_status"] == "scheduled"
+
+
+def test_community_host_edit_rejects_same_local_date_collision(client: TestClient):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    first_start = (datetime.now(UTC) + timedelta(days=10)).replace(
+        hour=18, minute=0, second=0, microsecond=0
+    )
+    second_start = first_start + timedelta(days=1)
+    create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=first_start.isoformat(),
+        ends_at=(first_start + timedelta(hours=2)).isoformat(),
+    )
+    second_game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        starts_at=second_start.isoformat(),
+        ends_at=(second_start + timedelta(hours=2)).isoformat(),
+    )
+
+    response = client.patch(
+        f"/games/{second_game['id']}/host-edit",
+        json={
+            "acting_user_id": host["id"],
+            "starts_at": (first_start + timedelta(hours=4)).isoformat(),
+            "ends_at": (first_start + timedelta(hours=6)).isoformat(),
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "You already have a community game on this date."
+
+
+def test_official_games_are_not_limited_by_community_host_date_rule(client: TestClient):
+    user = create_user(client)
+    venue = create_venue(client, user["id"])
+    starts_at = (datetime.now(UTC) + timedelta(days=12)).replace(
+        hour=18, minute=0, second=0, microsecond=0
+    )
+    first_game = create_game(
+        client,
+        user["id"],
+        venue,
+        starts_at=starts_at.isoformat(),
+        ends_at=(starts_at + timedelta(hours=2)).isoformat(),
+    )
+    second_game = create_game(
+        client,
+        user["id"],
+        venue,
+        starts_at=(starts_at + timedelta(hours=3)).isoformat(),
+        ends_at=(starts_at + timedelta(hours=5)).isoformat(),
+    )
+
+    assert first_game["game_type"] == "official"
+    assert second_game["game_type"] == "official"
+
+
+def test_publish_community_game_endpoint_creates_publish_records_transactionally(
+    client: TestClient,
+):
+    host = create_user(client)
+    mark_user_email_verified(host["id"])
+    starts_at = datetime.now(UTC) + timedelta(days=13)
+
+    response = client.post(
+        "/community-games/publish",
+        json={
+            "host_user_id": host["id"],
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=2)).isoformat(),
+            "timezone": "America/Chicago",
+            "format_label": "7v7",
+            "environment_type": "outdoor",
+            "total_spots": 14,
+            "price_per_player_cents": 2500,
+            "venue": {
+                "name": "Community Publish Field",
+                "address_line_1": "123 Publish Ave",
+                "city": "Chicago",
+                "state": "IL",
+                "postal_code": "60601",
+                "country_code": "US",
+                "neighborhood": "Loop",
+            },
+            "payment_methods_snapshot": [{"type": "venmo", "value": "@host"}],
+            "game_notes": "Bring a ball.",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    game = response.json()["game"]
+    assert game["game_type"] == "community"
+    assert game["host_user_id"] == host["id"]
+
+    participants_response = client.get(f"/game-participants?game_id={game['id']}")
+    assert participants_response.status_code == 200, participants_response.text
+    assert any(
+        participant["participant_type"] == "host"
+        for participant in participants_response.json()
+    )
+
+    details_response = client.get(f"/community-game-details?game_id={game['id']}")
+    assert details_response.status_code == 200, details_response.text
+    assert details_response.json()[0]["payment_methods_snapshot"] == [
+        {"type": "venmo", "value": "@host"}
+    ]
 
 
 def test_host_edit_allows_host_to_update_empty_community_game(client: TestClient):

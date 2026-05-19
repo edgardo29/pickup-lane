@@ -5,33 +5,8 @@
   background: #010409;
 }
 
-.my-games-hero__copy {
-  min-width: 0;
-}
-
-.my-games-tabs {
-  margin-top: 18px;
-  display: inline-flex;
-  gap: 26px;
-}
-
-.my-games-tabs button {
-  min-height: 38px;
-  padding: 0 0 10px;
-  border: 0;
-  color: rgba(248, 250, 252, 0.62);
-  background: transparent;
-  cursor: pointer;
-  font-size: 0.98rem;
-  font-weight: 900;
-}
-
-.my-games-tabs button.active {
-  color: var(--lime);
-}
-
 .my-games-panel {
-  margin-top: 28px;
+  margin-top: 36px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -181,20 +156,22 @@
   margin: 0;
 }
 
-@media (max-width: 540px) {
-  .my-games-tabs {
-    gap: 22px;
-  }
-
+@media (max-width: 760px) {
   .my-games-agenda-day {
     gap: 14px;
   }
 
   .my-games-agenda-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .my-games-view-more {
     width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .my-games-agenda-grid {
+    grid-template-columns: 1fr;
   }
 }

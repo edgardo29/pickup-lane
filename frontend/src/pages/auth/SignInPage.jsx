@@ -68,7 +68,7 @@ export function SignInPage() {
 
     try {
       const signedInUser = await signInWithEmail(trimmedEmail, password)
-      navigate(returnPath || getPostAuthPath(signedInUser))
+      navigate(returnPath || getPostAuthPath(signedInUser), { replace: true })
     } catch (requestError) {
       setError(getAuthErrorMessage(requestError))
       setStatus('idle')
@@ -82,9 +82,9 @@ export function SignInPage() {
     try {
       const signedInUser = await signInWithGoogle()
       if (signedInUser) {
-        navigate(returnPath || getPostAuthPath(signedInUser))
+        navigate(returnPath || getPostAuthPath(signedInUser), { replace: true })
       } else {
-        navigate('/finish-profile', { state: { from: returnPath } })
+        navigate('/finish-profile', { replace: true, state: { from: returnPath } })
       }
     } catch (requestError) {
       setError(getAuthErrorMessage(requestError))

@@ -10,22 +10,19 @@ import { DiscardModal } from './CreateGameControls.jsx'
 import { CreateGamePreview, PublishedState } from './CreateGamePreview.jsx'
 import { BasicsStep, LocationStep, NotesStep, ReviewStep, StepRail } from './CreateGameSteps.jsx'
 import {
-  buildAddress,
-  buildCommunityGameDetailPayload,
-  buildDateTime,
-  buildReview,
-  cleanNullable,
-  COMMUNITY_PUBLISH_FEE_CENTS,
-  getExitPath,
-  getPaymentCollectionType,
-  getHostGuestMaxForFormat,
-  getPriceCents,
-  initialForm,
   loadEditableGame,
   loadHostPublishFees,
-  mapGameToForm,
   patchJson,
   postJson,
+  publishCommunityGame,
+} from './createGameApi.js'
+import { buildCommunityPublishPayload, buildHostEditPayload } from './createGamePayloads.js'
+import {
+  buildCommunityGameDetailPayload,
+  buildReview,
+  getExitPath,
+  initialForm,
+  mapGameToForm,
   steps,
   validateCreateGame,
   validateStep,
@@ -56,9 +53,14 @@ function CreateGamePage() {
   const [verificationError, setVerificationError] = useState('')
   const [verificationNotice, setVerificationNotice] = useState('')
   const [verificationStatus, setVerificationStatus] = useState('idle')
+  const [verificationCooldownUntil, setVerificationCooldownUntil] = useState(0)
   const [verificationCooldownSeconds, setVerificationCooldownSeconds] = useState(0)
   const [showDiscardModal, setShowDiscardModal] = useState(false)
   const blockedVerificationRefreshRef = useRef('')
+  const visibleUser = currentUser || appUser
+  const isWaitingForUser = isLoading && !visibleUser
+  const isHostEmailVerified = Boolean(visibleUser?.email_verified_at)
+  const shouldBlockForEmailVerification = visibleUser && !isEditMode && !isHostEmailVerified
 
   useEffect(() => {
     let ignore = false
@@ -103,6 +105,12 @@ function CreateGamePage() {
         return
       }
 
+      clearEmailVerificationCooldown(refreshedAppUser.id)
+      setVerificationCooldownUntil(0)
+      setVerificationCooldownSeconds(0)
+      setVerificationError('')
+      setVerificationNotice('')
+      setVerificationStatus('idle')
       await loadVerifiedContext(refreshedAppUser)
     }
 
@@ -155,27 +163,92 @@ function CreateGamePage() {
   }, [appUser, gameId, isEditMode, isLoading, refreshCurrentUserVerification])
 
   useEffect(() => {
-    if (verificationCooldownSeconds <= 0) {
+    const timeoutId = window.setTimeout(() => {
+      if (!appUser?.id || appUser.email_verified_at) {
+        if (appUser?.id) {
+          clearEmailVerificationCooldown(appUser.id)
+        }
+        setVerificationCooldownUntil(0)
+        setVerificationCooldownSeconds(0)
+        return
+      }
+
+      const storedCooldownUntil = getEmailVerificationCooldown(appUser.id)
+      setVerificationCooldownUntil(storedCooldownUntil)
+      setVerificationCooldownSeconds(getRemainingCooldownSeconds(storedCooldownUntil))
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [appUser?.email_verified_at, appUser?.id])
+
+  useEffect(() => {
+    if (!shouldBlockForEmailVerification || !visibleUser?.id) {
       return undefined
     }
 
+    async function refreshIfVerified() {
+      const refreshedAppUser = await refreshCurrentUserVerification().catch(() => null)
+
+      if (!refreshedAppUser?.email_verified_at) {
+        return
+      }
+
+      clearEmailVerificationCooldown(refreshedAppUser.id)
+      setVerificationCooldownUntil(0)
+      setVerificationCooldownSeconds(0)
+      setVerificationError('')
+      setVerificationNotice('')
+      setVerificationStatus('idle')
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        refreshIfVerified()
+      }
+    }
+
+    window.addEventListener('focus', refreshIfVerified)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', refreshIfVerified)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [refreshCurrentUserVerification, shouldBlockForEmailVerification, visibleUser?.id])
+
+  useEffect(() => {
+    if (verificationCooldownUntil <= Date.now()) {
+      const timeoutId = window.setTimeout(() => {
+        setVerificationCooldownSeconds(0)
+      }, 0)
+
+      return () => window.clearTimeout(timeoutId)
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setVerificationCooldownSeconds(getRemainingCooldownSeconds(verificationCooldownUntil))
+    }, 0)
+
     const intervalId = window.setInterval(() => {
-      setVerificationCooldownSeconds((currentSeconds) => Math.max(currentSeconds - 1, 0))
+      const remainingSeconds = getRemainingCooldownSeconds(verificationCooldownUntil)
+      setVerificationCooldownSeconds(remainingSeconds)
+
+      if (remainingSeconds <= 0) {
+        window.clearInterval(intervalId)
+      }
     }, 1000)
 
-    return () => window.clearInterval(intervalId)
-  }, [verificationCooldownSeconds])
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.clearInterval(intervalId)
+    }
+  }, [verificationCooldownUntil])
 
   const review = useMemo(() => buildReview(form), [form])
   const hasUnsavedChanges = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(formBaseline),
     [form, formBaseline],
   )
-  const visibleUser = currentUser || appUser
-  const isWaitingForUser = isLoading && !visibleUser
-  const isHostEmailVerified = Boolean(visibleUser?.email_verified_at)
-  const shouldBlockForEmailVerification = visibleUser && !isEditMode && !isHostEmailVerified
-
   function updateField(field, value) {
     setStepError('')
     setPublishError('')
@@ -238,26 +311,8 @@ function CreateGamePage() {
     setPublishError('')
 
     try {
-      const priceCents = getPriceCents(form)
-
       if (isEditMode) {
-        await patchJson(`/games/${gameId}/host-edit`, {
-          acting_user_id: currentUser.id,
-          starts_at: buildDateTime(form.date, form.startTime),
-          ends_at: buildDateTime(form.date, form.endTime),
-          format_label: form.format,
-          environment_type: form.environment,
-          total_spots: Number(form.totalSpots),
-          price_per_player_cents: priceCents,
-          venue_name: form.venueName.trim(),
-          address_line_1: form.street.trim(),
-          city: form.city.trim(),
-          state: form.state.trim(),
-          postal_code: form.zip.trim(),
-          neighborhood: form.neighborhood.trim() || null,
-          game_notes: form.gameNotes.trim() || null,
-          parking_notes: form.parkingNote.trim() || null,
-        })
+        await patchJson(`/games/${gameId}/host-edit`, buildHostEditPayload(form, currentUser))
 
         const communityGameDetailPayload = buildCommunityGameDetailPayload(form, gameId)
         if (communityGameDetailId) {
@@ -273,99 +328,9 @@ function CreateGamePage() {
         return
       }
 
-      const venue = await postJson('/venues', {
-        name: form.venueName.trim(),
-        address_line_1: form.street.trim(),
-        city: form.city.trim(),
-        state: form.state.trim(),
-        postal_code: form.zip.trim(),
-        country_code: 'US',
-        neighborhood: form.neighborhood.trim() || null,
-        venue_status: 'approved',
-        created_by_user_id: currentUser.id,
-        approved_by_user_id: currentUser.id,
-        is_active: true,
-      })
-
-      const game = await postJson('/games', {
-        game_type: 'community',
-        payment_collection_type: getPaymentCollectionType(form),
-        publish_status: 'published',
-        game_status: 'scheduled',
-        title: `${form.venueName.trim()} ${form.format}`,
-        description: cleanNullable(form.gameNotes),
-        venue_id: venue.id,
-        venue_name_snapshot: venue.name,
-        address_snapshot: buildAddress(form),
-        city_snapshot: venue.city,
-        state_snapshot: venue.state,
-        neighborhood_snapshot: venue.neighborhood,
-        host_user_id: currentUser.id,
-        created_by_user_id: currentUser.id,
-        starts_at: buildDateTime(form.date, form.startTime),
-        ends_at: buildDateTime(form.date, form.endTime),
-        timezone: 'America/Chicago',
-        sport_type: 'soccer',
-        format_label: form.format,
-        environment_type: form.environment,
-        total_spots: Number(form.totalSpots),
-        price_per_player_cents: priceCents,
-        currency: 'USD',
-        minimum_age: 18,
-        allow_guests: true,
-        max_guests_per_booking: 2,
-        host_guest_max: getHostGuestMaxForFormat(form.format),
-        waitlist_enabled: true,
-        is_chat_enabled: true,
-        policy_mode: 'custom_hosted',
-        game_notes: form.gameNotes.trim() || null,
-        parking_notes: form.parkingNote.trim() || null,
-      })
-
-      await postJson('/game-participants', {
-        game_id: game.id,
-        participant_type: 'host',
-        user_id: currentUser.id,
-        display_name_snapshot: `${currentUser.first_name} ${currentUser.last_name}`,
-        participant_status: 'confirmed',
-        attendance_status: 'unknown',
-        cancellation_type: 'none',
-        price_cents: 0,
-        currency: 'USD',
-        roster_order: 1,
-      })
-
-      await postJson('/community-game-details', buildCommunityGameDetailPayload(form, game.id))
-
-      let payment = null
-      if (!firstPublishIsFree) {
-        payment = await postJson('/payments', {
-          payer_user_id: currentUser.id,
-          game_id: game.id,
-          payment_type: 'community_publish_fee',
-          provider: 'stripe',
-          provider_payment_intent_id: `pi_demo_community_publish_fee_${game.id}`,
-          provider_charge_id: `ch_demo_community_publish_fee_${game.id}`,
-          idempotency_key: `community-publish-fee:${game.id}:${currentUser.id}`,
-          amount_cents: COMMUNITY_PUBLISH_FEE_CENTS,
-          currency: 'USD',
-          payment_status: 'succeeded',
-          metadata: {
-            source: 'create_game_mock',
-            payment_method_id: paymentMethod?.id || null,
-          },
-        })
-      }
-
-      await postJson('/host-publish-fees', {
-        game_id: game.id,
-        host_user_id: currentUser.id,
-        payment_id: payment?.id || null,
-        amount_cents: firstPublishIsFree ? 0 : COMMUNITY_PUBLISH_FEE_CENTS,
-        currency: 'USD',
-        fee_status: firstPublishIsFree ? 'waived' : 'paid',
-        waiver_reason: firstPublishIsFree ? 'first_game_free' : 'none',
-      })
+      const game = await publishCommunityGame(
+        buildCommunityPublishPayload(form, currentUser, paymentMethod),
+      )
 
       setCreatedGameId(game.id)
       setStatus('published')
@@ -485,6 +450,18 @@ function CreateGamePage() {
   )
 
   async function sendEmailVerificationLink() {
+    const activeUserId = appUser?.id || visibleUser?.id
+    const storedCooldownUntil = getEmailVerificationCooldown(activeUserId)
+    const storedCooldownSeconds = getRemainingCooldownSeconds(storedCooldownUntil)
+
+    if (verificationCooldownSeconds > 0 || storedCooldownSeconds > 0) {
+      if (storedCooldownSeconds > 0) {
+        setVerificationCooldownUntil(storedCooldownUntil)
+        setVerificationCooldownSeconds(storedCooldownSeconds)
+      }
+      return
+    }
+
     setVerificationError('')
     setVerificationNotice('')
     setVerificationStatus('sending')
@@ -492,13 +469,23 @@ function CreateGamePage() {
     try {
       await sendCurrentUserVerificationEmail()
       setVerificationStatus('sent')
-      setVerificationCooldownSeconds(60)
+      startEmailVerificationCooldown(activeUserId, 60)
     } catch (error) {
       const verificationMessage = getEmailVerificationErrorMessage(error)
       setVerificationError(verificationMessage.message)
-      setVerificationCooldownSeconds(verificationMessage.cooldownSeconds)
+      if (verificationMessage.cooldownSeconds > 0) {
+        startEmailVerificationCooldown(activeUserId, verificationMessage.cooldownSeconds)
+      }
       setVerificationStatus('idle')
     }
+  }
+
+  function startEmailVerificationCooldown(userId, seconds) {
+    const cooldownUntil = Date.now() + seconds * 1000
+
+    setEmailVerificationCooldown(userId, cooldownUntil)
+    setVerificationCooldownUntil(cooldownUntil)
+    setVerificationCooldownSeconds(seconds)
   }
 
 }
@@ -571,6 +558,56 @@ function getEmailVerificationErrorMessage(error) {
     cooldownSeconds: 0,
     message: 'Unable to send verification email right now. Please try again in a minute.',
   }
+}
+
+function getEmailVerificationCooldownKey(userId) {
+  return `pickup-lane:email-verification-cooldown:${userId}`
+}
+
+function getEmailVerificationCooldown(userId) {
+  if (!userId) {
+    return 0
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(getEmailVerificationCooldownKey(userId))
+    const cooldownUntil = Number(storedValue)
+
+    return Number.isFinite(cooldownUntil) && cooldownUntil > Date.now() ? cooldownUntil : 0
+  } catch {
+    return 0
+  }
+}
+
+function setEmailVerificationCooldown(userId, cooldownUntil) {
+  if (!userId) {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(
+      getEmailVerificationCooldownKey(userId),
+      String(cooldownUntil),
+    )
+  } catch {
+    // Local storage is best-effort; Firebase still enforces the real limit.
+  }
+}
+
+function clearEmailVerificationCooldown(userId) {
+  if (!userId) {
+    return
+  }
+
+  try {
+    window.localStorage.removeItem(getEmailVerificationCooldownKey(userId))
+  } catch {
+    // Ignore private browsing/storage failures.
+  }
+}
+
+function getRemainingCooldownSeconds(cooldownUntil) {
+  return Math.max(Math.ceil((cooldownUntil - Date.now()) / 1000), 0)
 }
 
 export default CreateGamePage
