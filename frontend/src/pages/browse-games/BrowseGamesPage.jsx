@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
-import { MapPinIcon, SoccerBallIcon } from '../../components/BrowseIcons.jsx'
+import { SoccerBallIcon } from '../../components/BrowseIcons.jsx'
 import { apiRequest, buildMediaUrl } from '../../lib/apiClient.js'
 import '../../styles/browse-games/BrowseGamesPage.css'
 import BrowseDateStrip from './BrowseDateStrip.jsx'
@@ -136,16 +136,11 @@ function BrowseGamesPage() {
       <main className="browse-shell">
         <section className="browse-hero" aria-labelledby="browse-title">
           <div className="browse-hero__copy">
-            <button className="location-pill" type="button">
-              <MapPinIcon />
-              Chicago, IL
-            </button>
-
             <h1 id="browse-title">
               <span>Find your</span>
               <span>next game</span>
             </h1>
-            <p>Pickup games available near Chicago</p>
+            <p>Pickup games available now.</p>
           </div>
         </section>
 

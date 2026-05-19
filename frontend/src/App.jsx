@@ -14,14 +14,14 @@ import {
   GameDetailsPage,
 } from './pages/browse-games/index.js'
 import { CreateGamePage } from './pages/create-game/index.js'
-import InboxPage from './pages/InboxPage.jsx'
+import { InboxPage } from './pages/inbox/index.js'
 import LandingPage from './pages/LandingPage.jsx'
 import { CancellationRefundPolicyPage, PrivacyPage, TermsPage } from './pages/LegalPages.jsx'
-import MyGamesPage from './pages/MyGamesPage.jsx'
+import { MyGamesPage } from './pages/my-games/index.js'
 import NeedASubManagePage from './pages/NeedASubManagePage.jsx'
 import NeedASubDetailPage from './pages/NeedASubDetailPage.jsx'
 import NeedASubPage from './pages/NeedASubPage.jsx'
-import { EditProfilePage, ProfilePage, SettingsPage } from './pages/ProfilePages.jsx'
+import { EditProfilePage, ProfilePage, SettingsPage } from './pages/profile/index.js'
 import { useAuth } from './hooks/useAuth.js'
 
 function App() {
@@ -30,8 +30,22 @@ function App() {
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/sign-in" element={<SignInPage />} />
-        <Route path="/create-account" element={<CreateAccountPage />} />
+        <Route
+          path="/sign-in"
+          element={
+            <RedirectSignedIn>
+              <SignInPage />
+            </RedirectSignedIn>
+          }
+        />
+        <Route
+          path="/create-account"
+          element={
+            <RedirectSignedIn>
+              <CreateAccountPage />
+            </RedirectSignedIn>
+          }
+        />
         <Route path="/finish-profile" element={<FinishProfilePage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -172,13 +186,36 @@ function resetPageScroll() {
 
 function RequireAppUser({ children }) {
   const { appUser, isLoading } = useAuth()
+  const location = useLocation()
 
   if (isLoading) {
     return null
   }
 
   if (!appUser) {
-    return <Navigate to="/" replace />
+    return (
+      <Navigate
+        to="/sign-in"
+        replace
+        state={{ from: `${location.pathname}${location.search}` }}
+      />
+    )
+  }
+
+  return children
+}
+
+function RedirectSignedIn({ children }) {
+  const { appUser, isLoading } = useAuth()
+  const location = useLocation()
+
+  if (isLoading) {
+    return null
+  }
+
+  if (appUser) {
+    const returnPath = typeof location.state?.from === 'string' ? location.state.from : ''
+    return <Navigate to={returnPath || '/games'} replace />
   }
 
   return children

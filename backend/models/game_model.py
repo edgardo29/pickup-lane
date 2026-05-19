@@ -1,10 +1,11 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
     CHAR,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -122,7 +123,20 @@ class Game(Base):
         Index("ix_games_venue_id", "venue_id"),
         Index("ix_games_host_user_id", "host_user_id"),
         Index("ix_games_created_by_user_id", "created_by_user_id"),
+        Index("ix_games_starts_on_local", "starts_on_local"),
         Index("ix_games_starts_at", "starts_at"),
+        Index(
+            "ux_games_one_active_community_game_per_host_date",
+            "host_user_id",
+            "starts_on_local",
+            unique=True,
+            postgresql_where=text(
+                "game_type = 'community' "
+                "AND publish_status = 'published' "
+                "AND game_status IN ('scheduled', 'full') "
+                "AND deleted_at IS NULL"
+            ),
+        ),
         Index(
             "ix_games_browse_city_publish_status_game_status_starts_at",
             "city_snapshot",
@@ -167,6 +181,7 @@ class Game(Base):
     )
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    starts_on_local: Mapped[date] = mapped_column(Date, nullable=False)
     timezone: Mapped[str] = mapped_column(
         String(60), nullable=False, server_default=text("'America/Chicago'")
     )

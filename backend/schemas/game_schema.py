@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -27,6 +27,7 @@ class GameCreate(BaseModel):
     created_by_user_id: UUID
     starts_at: datetime
     ends_at: datetime
+    starts_on_local: date | None = None
     timezone: str = "America/Chicago"
     sport_type: str = "soccer"
     format_label: str
@@ -75,6 +76,7 @@ class GameRead(BaseModel):
     created_by_user_id: UUID
     starts_at: datetime
     ends_at: datetime
+    starts_on_local: date
     timezone: str
     sport_type: str
     format_label: str
@@ -125,6 +127,7 @@ class GameUpdate(BaseModel):
     created_by_user_id: UUID | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
+    starts_on_local: date | None = None
     timezone: str | None = None
     sport_type: str | None = None
     format_label: str | None = None

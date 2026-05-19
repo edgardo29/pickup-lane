@@ -78,7 +78,7 @@ export function BasicsStep({ form, updateField }) {
     <>
       <StepHeading
         title="Let's start with the basics"
-        text="Tell players when and what kind of game you're hosting."
+        text="Community hosts can create one game per day."
       />
 
       <div className="create-game-section">

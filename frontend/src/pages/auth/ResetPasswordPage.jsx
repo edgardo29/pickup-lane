@@ -217,8 +217,14 @@ function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
       )
 
       if (!ignore) {
-        if (refreshedUser?.email_verified_at || applyResult.applied) {
+        if (refreshedUser?.email_verified_at) {
           setStatus('success')
+          return
+        }
+
+        if (!applyResult.applied) {
+          setError('This verification link is expired or already used.')
+          setStatus('invalid')
           return
         }
 

@@ -31,6 +31,11 @@ from backend.schemas.community_game_detail_schema import (
     CommunityGameDetailRead,
     CommunityGameDetailUpdate,
 )
+from backend.schemas.community_game_publish_schema import (
+    CommunityGamePublishCreate,
+    CommunityGamePublishRead,
+    CommunityGameVenuePayload,
+)
 from backend.schemas.game_chat_schema import (
     GameChatCreate,
     GameChatEnsureCreate,
@@ -177,6 +182,9 @@ __all__ = [
     "CommunityGameDetailCreate",
     "CommunityGameDetailRead",
     "CommunityGameDetailUpdate",
+    "CommunityGamePublishCreate",
+    "CommunityGamePublishRead",
+    "CommunityGameVenuePayload",
     "UserCreate",
     "UserRead",
     "UserUpdate",

@@ -168,6 +168,15 @@ export function AuthProvider({ children }) {
           throw new Error('Sign in before verifying your email.')
         }
 
+        await activeUser.reload()
+        const latestUser = auth.currentUser || activeUser
+        if (latestUser.emailVerified) {
+          const syncedUser = await syncFirebaseUser(latestUser)
+          setFirebaseUser(latestUser)
+          setAppUser(syncedUser)
+          return
+        }
+
         await sendEmailVerification(activeUser, {
           url: `${window.location.origin}/create-game`,
           handleCodeInApp: false,
@@ -188,7 +197,9 @@ export function AuthProvider({ children }) {
           return null
         }
 
-        const refreshedAppUser = await getAuthenticatedAppUser(refreshedUser, true)
+        const refreshedAppUser = refreshedUser.emailVerified
+          ? await syncFirebaseUser(refreshedUser)
+          : await getAuthenticatedAppUser(refreshedUser, true)
         setAppUser((currentAppUser) => {
           if (
             currentAppUser?.id === refreshedAppUser?.id &&

@@ -43,6 +43,7 @@ def upgrade() -> None:
         sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("starts_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("ends_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("starts_on_local", sa.Date(), nullable=False),
         sa.Column(
             "timezone",
             sa.String(length=60),
@@ -243,7 +244,20 @@ def upgrade() -> None:
     op.create_index(
         "ix_games_created_by_user_id", "games", ["created_by_user_id"], unique=False
     )
+    op.create_index("ix_games_starts_on_local", "games", ["starts_on_local"], unique=False)
     op.create_index("ix_games_starts_at", "games", ["starts_at"], unique=False)
+    op.create_index(
+        "ux_games_one_active_community_game_per_host_date",
+        "games",
+        ["host_user_id", "starts_on_local"],
+        unique=True,
+        postgresql_where=sa.text(
+            "game_type = 'community' "
+            "AND publish_status = 'published' "
+            "AND game_status IN ('scheduled', 'full') "
+            "AND deleted_at IS NULL"
+        ),
+    )
     op.create_index(
         "ix_games_browse_city_publish_status_game_status_starts_at",
         "games",
@@ -255,11 +269,13 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Downgrade removes the games table and its indexes because this migration
     # only introduces that single table.
+    op.execute("DROP INDEX IF EXISTS ux_games_one_active_community_game_per_host_date")
     op.drop_index(
         "ix_games_browse_city_publish_status_game_status_starts_at",
         table_name="games",
     )
     op.drop_index("ix_games_starts_at", table_name="games")
+    op.execute("DROP INDEX IF EXISTS ix_games_starts_on_local")
     op.drop_index("ix_games_created_by_user_id", table_name="games")
     op.drop_index("ix_games_host_user_id", table_name="games")
     op.drop_index("ix_games_venue_id", table_name="games")

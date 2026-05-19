@@ -1050,6 +1050,10 @@
 
   .create-game-actions {
     display: grid;
+    grid-template-columns: auto auto;
+    justify-content: space-between;
+    align-items: start;
+    gap: 10px 12px;
   }
 
   .create-game-payment-method-row,
@@ -1073,16 +1077,56 @@
 
   .create-game-actions__right {
     display: grid;
+    justify-items: end;
+    gap: 10px;
+    width: auto;
   }
 
-  .create-game-primary,
-  .create-game-secondary,
-  .create-game-cancel,
-  .create-game-danger {
-    width: 100%;
+  .create-game-actions__right .create-game-primary {
+    order: 2;
+  }
+
+  .create-game-actions__right .create-game-secondary {
+    order: 1;
+  }
+
+  .create-game-actions .create-game-secondary,
+  .create-game-actions > .create-game-cancel {
+    min-width: 90px;
   }
 
   .create-game-modal__actions {
     display: grid;
+  }
+}
+
+@media (max-width: 420px) {
+  .create-game-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .create-game-actions__right {
+    order: 1;
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .create-game-actions__right .create-game-primary {
+    order: 1;
+  }
+
+  .create-game-actions__right .create-game-secondary {
+    order: 2;
+  }
+
+  .create-game-actions > .create-game-cancel {
+    order: 2;
+  }
+
+  .create-game-actions .create-game-primary,
+  .create-game-actions .create-game-secondary,
+  .create-game-actions > .create-game-cancel {
+    min-width: 0;
+    width: 100%;
   }
 }

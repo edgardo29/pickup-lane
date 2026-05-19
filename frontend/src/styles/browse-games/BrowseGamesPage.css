@@ -273,9 +273,9 @@
 }
 
 .browse-shell {
-  width: min(1640px, calc(100% - 48px));
+  width: min(1640px, calc(100% - 56px));
   margin: 0 auto;
-  padding: 20px 0 52px;
+  padding: 24px 0 52px;
 }
 
 .browse-hero {
@@ -335,7 +335,7 @@
 
 .browse-hero h1 {
   margin: 0;
-  font-size: clamp(2.55rem, 3.8vw, 4rem);
+  font-size: clamp(2.15rem, 2.75vw, 3rem);
   line-height: 0.96;
   font-weight: 950;
   text-transform: uppercase;
@@ -350,9 +350,9 @@
 }
 
 .browse-hero p {
-  margin: 12px 0 0;
+  margin: 10px 0 0;
   color: var(--muted);
-  font-size: 1.15rem;
+  font-size: 1rem;
 }
 
 .browse-panel {
@@ -941,7 +941,7 @@
   }
 
   .browse-hero h1 {
-    font-size: 2.1rem;
+    font-size: 1.9rem;
     line-height: 0.96;
   }
 
