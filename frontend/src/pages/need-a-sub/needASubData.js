@@ -1,0 +1,208 @@
+export const FORMAT_OPTIONS = ['3v3', '4v4', '5v5', '6v6', '7v7', '8v8', '9v9', '10v10', '11v11']
+
+export const SKILL_OPTIONS = [
+  { label: 'Any Skill', value: 'any' },
+  { label: 'Beginner', value: 'beginner' },
+  { label: 'Recreational', value: 'recreational' },
+  { label: 'Intermediate', value: 'intermediate' },
+  { label: 'Advanced', value: 'advanced' },
+  { label: 'Competitive', value: 'competitive' },
+]
+
+export const ENVIRONMENT_OPTIONS = [
+  { label: 'Indoor', value: 'indoor' },
+  { label: 'Outdoor', value: 'outdoor' },
+]
+
+export const US_STATE_OPTIONS = [
+  { label: 'AL', value: 'AL' },
+  { label: 'AK', value: 'AK' },
+  { label: 'AZ', value: 'AZ' },
+  { label: 'AR', value: 'AR' },
+  { label: 'CA', value: 'CA' },
+  { label: 'CO', value: 'CO' },
+  { label: 'CT', value: 'CT' },
+  { label: 'DE', value: 'DE' },
+  { label: 'FL', value: 'FL' },
+  { label: 'GA', value: 'GA' },
+  { label: 'HI', value: 'HI' },
+  { label: 'ID', value: 'ID' },
+  { label: 'IL', value: 'IL' },
+  { label: 'IN', value: 'IN' },
+  { label: 'IA', value: 'IA' },
+  { label: 'KS', value: 'KS' },
+  { label: 'KY', value: 'KY' },
+  { label: 'LA', value: 'LA' },
+  { label: 'ME', value: 'ME' },
+  { label: 'MD', value: 'MD' },
+  { label: 'MA', value: 'MA' },
+  { label: 'MI', value: 'MI' },
+  { label: 'MN', value: 'MN' },
+  { label: 'MS', value: 'MS' },
+  { label: 'MO', value: 'MO' },
+  { label: 'MT', value: 'MT' },
+  { label: 'NE', value: 'NE' },
+  { label: 'NV', value: 'NV' },
+  { label: 'NH', value: 'NH' },
+  { label: 'NJ', value: 'NJ' },
+  { label: 'NM', value: 'NM' },
+  { label: 'NY', value: 'NY' },
+  { label: 'NC', value: 'NC' },
+  { label: 'ND', value: 'ND' },
+  { label: 'OH', value: 'OH' },
+  { label: 'OK', value: 'OK' },
+  { label: 'OR', value: 'OR' },
+  { label: 'PA', value: 'PA' },
+  { label: 'RI', value: 'RI' },
+  { label: 'SC', value: 'SC' },
+  { label: 'SD', value: 'SD' },
+  { label: 'TN', value: 'TN' },
+  { label: 'TX', value: 'TX' },
+  { label: 'UT', value: 'UT' },
+  { label: 'VT', value: 'VT' },
+  { label: 'VA', value: 'VA' },
+  { label: 'WA', value: 'WA' },
+  { label: 'WV', value: 'WV' },
+  { label: 'WI', value: 'WI' },
+  { label: 'WY', value: 'WY' },
+  { label: 'DC', value: 'DC' },
+]
+
+export const GROUP_OPTIONS = [
+  { label: 'Men', value: 'men' },
+  { label: 'Women', value: 'women' },
+  { label: 'Coed', value: 'coed' },
+]
+
+export const POSITION_OPTIONS = [
+  { label: 'Field Player', value: 'field_player' },
+  { label: 'Goalkeeper', value: 'goalkeeper' },
+]
+
+export const MAX_SUB_ROWS = 6
+export const MAX_TOTAL_SUBS = 11
+export const MAX_WAITLIST_REQUESTS_PER_POST = 25
+
+export const POST_TABS = [
+  { key: 'all', label: 'All Posts' },
+  { key: 'mine', label: 'My Posts' },
+]
+
+export function buildInitialNeedASubForm() {
+  return {
+    date: getDefaultDate(),
+    startTime: '19:00',
+    endTime: '21:00',
+    formatLabel: '7v7',
+    environment: '',
+    skillLevel: 'intermediate',
+    gamePlayerGroup: 'coed',
+    locationName: '',
+    addressLine1: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    neighborhood: '',
+    priceDue: '',
+    notes: '',
+    positions: getDefaultPositions('coed'),
+  }
+}
+
+export const TIME_OPTIONS = buildTimeOptions()
+export const MIN_DATE_VALUE = toDateInputValue(new Date())
+
+export function getDefaultDate() {
+  const date = new Date()
+  date.setDate(date.getDate() + 3)
+  return toDateInputValue(date)
+}
+
+export function toDateInputValue(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function buildTimeOptions() {
+  const options = []
+  for (let hour = 5; hour <= 23; hour += 1) {
+    for (let minute = 0; minute < 60; minute += 5) {
+      const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+      const date = new Date(`2026-01-01T${value}:00`)
+      options.push({
+        value,
+        label: new Intl.DateTimeFormat('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+        }).format(date),
+      })
+    }
+  }
+  return options
+}
+
+export function getDefaultPositionGroup(postGroup) {
+  if (postGroup === 'men') {
+    return 'men'
+  }
+  if (postGroup === 'women') {
+    return 'women'
+  }
+  return 'open'
+}
+
+export function getDefaultPositions(postGroup) {
+  return [
+    {
+      position_label: 'field_player',
+      player_group: getDefaultPositionGroup(postGroup),
+      spots_needed: 1,
+      sort_order: 0,
+    },
+  ]
+}
+
+export function getPositionGroupOptions(postGroup) {
+  if (postGroup === 'men') {
+    return [{ label: 'Men', value: 'men' }]
+  }
+
+  if (postGroup === 'women') {
+    return [{ label: 'Women', value: 'women' }]
+  }
+
+  return [
+    { label: 'Any Player', value: 'open' },
+    { label: 'Men', value: 'men' },
+    { label: 'Women', value: 'women' },
+  ]
+}
+
+export function getMaxPositionRows(postGroup) {
+  return POSITION_OPTIONS.length * getPositionGroupOptions(postGroup).length
+}
+
+export function getNextPosition(positions, postGroup) {
+  const usedPairs = new Set(
+    positions.map((position) => `${position.position_label}:${position.player_group}`),
+  )
+  const groups = getPositionGroupOptions(postGroup).map((option) => option.value)
+
+  for (const position of POSITION_OPTIONS) {
+    for (const group of groups) {
+      if (!usedPairs.has(`${position.value}:${group}`)) {
+        return {
+          position_label: position.value,
+          player_group: group,
+        }
+      }
+    }
+  }
+
+  return {
+    position_label: 'field_player',
+    player_group: getDefaultPositionGroup(postGroup),
+  }
+}

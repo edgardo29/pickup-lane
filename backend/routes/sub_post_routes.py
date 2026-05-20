@@ -1,21 +1,33 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User
-from backend.routes.auth_routes import get_current_app_user
-from backend.schemas import SubPostCancel, SubPostCreate, SubPostRead, SubPostRemove, SubPostUpdate
+from backend.routes.auth_routes import get_current_app_user, get_optional_current_app_user
+from backend.schemas import (
+    SubPostCancel,
+    SubPostCreate,
+    SubPostPublicRead,
+    SubPostRead,
+    SubPostRemove,
+    SubPostUpdate,
+)
 from backend.services.need_a_sub_service import (
     cancel_sub_post,
     create_sub_post,
+    expire_due_posts_and_requests,
     get_sub_post_or_404,
+    is_publicly_visible_sub_post,
+    query_owner_posts,
     query_visible_posts,
     remove_sub_post,
+    serialize_public_sub_post,
     serialize_sub_post,
     update_sub_post,
+    user_can_view_private_sub_post,
 )
 
 router = APIRouter(prefix="/need-a-sub/posts", tags=["need_a_sub_posts"])
@@ -31,7 +43,7 @@ def create_need_a_sub_post(
     return serialize_sub_post(db, new_post)
 
 
-@router.get("", response_model=list[SubPostRead], status_code=status.HTTP_200_OK)
+@router.get("", response_model=list[SubPostPublicRead], status_code=status.HTTP_200_OK)
 def list_need_a_sub_posts(
     city: str | None = None,
     state: str | None = Query(default=None),
@@ -40,9 +52,11 @@ def list_need_a_sub_posts(
     skill_level: str | None = None,
     game_player_group: str | None = None,
     format_label: str | None = None,
+    environment_type: str | None = None,
     sport_type: str | None = None,
     db: Session = Depends(get_db),
 ) -> list[dict]:
+    expire_due_posts_and_requests(db)
     posts = query_visible_posts(
         db,
         city=city,
@@ -52,18 +66,45 @@ def list_need_a_sub_posts(
         skill_level=skill_level,
         game_player_group=game_player_group,
         format_label=format_label,
+        environment_type=environment_type,
         sport_type=sport_type,
     )
+    return [serialize_public_sub_post(db, sub_post) for sub_post in posts]
+
+
+@router.get("/mine", response_model=list[SubPostRead], status_code=status.HTTP_200_OK)
+def list_my_need_a_sub_posts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_app_user),
+) -> list[dict]:
+    expire_due_posts_and_requests(db)
+    posts = query_owner_posts(db, current_user)
     return [serialize_sub_post(db, sub_post) for sub_post in posts]
 
 
-@router.get("/{sub_post_id}", response_model=SubPostRead, status_code=status.HTTP_200_OK)
+@router.get(
+    "/{sub_post_id}",
+    response_model=SubPostRead | SubPostPublicRead,
+    status_code=status.HTTP_200_OK,
+)
 def get_need_a_sub_post(
     sub_post_id: uuid.UUID,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_app_user),
 ) -> dict:
+    expire_due_posts_and_requests(db)
     sub_post = get_sub_post_or_404(db, sub_post_id)
-    return serialize_sub_post(db, sub_post)
+
+    if user_can_view_private_sub_post(sub_post, current_user):
+        return serialize_sub_post(db, sub_post)
+
+    if not is_publicly_visible_sub_post(sub_post):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub post not found.",
+        )
+
+    return serialize_public_sub_post(db, sub_post)
 
 
 @router.patch("/{sub_post_id}", response_model=SubPostRead, status_code=status.HTTP_200_OK)
@@ -73,6 +114,7 @@ def update_need_a_sub_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
 ) -> dict:
+    expire_due_posts_and_requests(db)
     sub_post = update_sub_post(db, current_user, sub_post_id, payload)
     return serialize_sub_post(db, sub_post)
 
@@ -88,6 +130,7 @@ def cancel_need_a_sub_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
 ) -> dict:
+    expire_due_posts_and_requests(db)
     sub_post = cancel_sub_post(db, current_user, sub_post_id, payload.cancel_reason)
     return serialize_sub_post(db, sub_post)
 
@@ -103,5 +146,6 @@ def remove_need_a_sub_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
 ) -> dict:
+    expire_due_posts_and_requests(db)
     sub_post = remove_sub_post(db, current_user, sub_post_id, payload.remove_reason)
     return serialize_sub_post(db, sub_post)

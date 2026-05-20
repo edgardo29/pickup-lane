@@ -182,6 +182,7 @@ def build_sub_post_payload(**overrides: object) -> dict:
     payload = {
         "sport_type": "soccer",
         "format_label": "7v7",
+        "environment_type": "outdoor",
         "skill_level": "intermediate",
         "game_player_group": "coed",
         "team_name": "CI FC",

@@ -25,6 +25,7 @@ def upgrade() -> None:
             server_default=sa.text("'soccer'"),
         ),
         sa.Column("format_label", sa.String(length=20), nullable=False),
+        sa.Column("environment_type", sa.String(length=20), nullable=False),
         sa.Column("skill_level", sa.String(length=30), nullable=False),
         sa.Column("game_player_group", sa.String(length=30), nullable=False),
         sa.Column("team_name", sa.String(length=120), nullable=True),
@@ -84,7 +85,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
         sa.CheckConstraint(
-            "post_status IN ('draft', 'active', 'filled', 'expired', 'canceled', 'removed')",
+            "post_status IN ('active', 'filled', 'expired', 'canceled', 'removed')",
             name="ck_sub_posts_post_status",
         ),
         sa.CheckConstraint(
@@ -99,8 +100,12 @@ def upgrade() -> None:
             name="ck_sub_posts_skill_level",
         ),
         sa.CheckConstraint(
-            "game_player_group IN ('open', 'men', 'women', 'coed')",
+            "game_player_group IN ('men', 'women', 'coed')",
             name="ck_sub_posts_game_player_group",
+        ),
+        sa.CheckConstraint(
+            "environment_type IN ('indoor', 'outdoor')",
+            name="ck_sub_posts_environment_type",
         ),
         sa.CheckConstraint("subs_needed > 0", name="ck_sub_posts_subs_needed_positive"),
         sa.CheckConstraint(

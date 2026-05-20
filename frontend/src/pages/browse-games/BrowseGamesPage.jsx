@@ -137,10 +137,10 @@ function BrowseGamesPage() {
         <section className="browse-hero" aria-labelledby="browse-title">
           <div className="browse-hero__copy">
             <h1 id="browse-title">
-              <span>Find your</span>
-              <span>next game</span>
+              <span>Browse</span>
+              <span>Games</span>
             </h1>
-            <p>Pickup games available now.</p>
+            <p>Find open pickup games near you.</p>
           </div>
         </section>
 

@@ -366,6 +366,16 @@ def get_current_app_user(
     return get_authenticated_user_from_token(authorization, db)
 
 
+def get_optional_current_app_user(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if not authorization:
+        return None
+
+    return get_authenticated_user_from_token(authorization, db)
+
+
 @router.post(
     "/sync-user",
     response_model=UserRead,

@@ -75,6 +75,7 @@ function InboxPage() {
     <AppPageShell className="inbox-page" mainClassName="app-page-shell--narrow inbox-shell">
       <AppPageHeader
         title="Inbox"
+        subtitle="Review notifications and game activity."
         tabs={
           <AppTabs
             ariaLabel="Inbox filters"

@@ -290,11 +290,12 @@
 .browse-hero__copy::before {
   content: "";
   width: 4px;
+  height: calc(100% + 16px);
+  min-height: 64px;
   border-radius: 999px;
   background: var(--lime);
   position: absolute;
-  top: 4px;
-  bottom: 3px;
+  top: 0;
   left: 0;
 }
 
@@ -304,7 +305,7 @@
   height: 1px;
   background: rgba(248, 250, 252, 0.18);
   position: absolute;
-  bottom: -18px;
+  bottom: -16px;
   left: 18px;
 }
 
@@ -350,9 +351,12 @@
 }
 
 .browse-hero p {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 1rem;
+  max-width: 34rem;
+  margin: 9px 0 0;
+  color: var(--lime);
+  font-size: 0.96rem;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .browse-panel {

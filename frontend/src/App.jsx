@@ -18,9 +18,11 @@ import { InboxPage } from './pages/inbox/index.js'
 import LandingPage from './pages/LandingPage.jsx'
 import { CancellationRefundPolicyPage, PrivacyPage, TermsPage } from './pages/LegalPages.jsx'
 import { MyGamesPage } from './pages/my-games/index.js'
-import NeedASubManagePage from './pages/NeedASubManagePage.jsx'
-import NeedASubDetailPage from './pages/NeedASubDetailPage.jsx'
-import NeedASubPage from './pages/NeedASubPage.jsx'
+import {
+  NeedASubDetailPage,
+  NeedASubManagePage,
+  NeedASubPage,
+} from './pages/need-a-sub/index.js'
 import { EditProfilePage, ProfilePage, SettingsPage } from './pages/profile/index.js'
 import { useAuth } from './hooks/useAuth.js'
 
@@ -87,22 +89,8 @@ function App() {
             </RequireAppUser>
           }
         />
-        <Route
-          path="/need-a-sub"
-          element={
-            <RequireAppUser>
-              <NeedASubPage />
-            </RequireAppUser>
-          }
-        />
-        <Route
-          path="/need-a-sub/posts/:postId"
-          element={
-            <RequireAppUser>
-              <NeedASubDetailPage />
-            </RequireAppUser>
-          }
-        />
+        <Route path="/need-a-sub" element={<NeedASubPage />} />
+        <Route path="/need-a-sub/posts/:postId" element={<NeedASubDetailPage />} />
         <Route
           path="/need-a-sub/posts/:postId/manage"
           element={

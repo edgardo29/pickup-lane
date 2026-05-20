@@ -67,7 +67,7 @@ export function ProfilePage() {
 
   return (
     <ProfileShell>
-      <AppPageHeader title="Profile" />
+      <AppPageHeader title="Profile" subtitle="Manage your account, stats, and player details." />
 
       <section className="profile-hero-card">
         <InitialsAvatar user={currentUser} size="large" />
@@ -201,12 +201,14 @@ export function EditProfilePage() {
   return (
     <ProfileShell>
       <section className="profile-edit-layout">
-        <div className="settings-heading">
-          <Link className="settings-back-link" to={returnPath}>
+        <div className="profile-subpage-heading">
+          <Link className="settings-header-back" to={returnPath}>
             {returnLabel}
           </Link>
-          <p className="profile-kicker">Profile</p>
-          <h1>Edit profile</h1>
+          <AppPageHeader
+            title="Edit Profile"
+            subtitle="Update the details players and hosts see."
+          />
         </div>
 
         <form className="profile-edit-card" onSubmit={handleSubmit}>
@@ -214,7 +216,6 @@ export function EditProfilePage() {
             <InitialsAvatar user={{ first_name: form.first_name, last_name: form.last_name }} />
             <div>
               <h2>{`${form.first_name} ${form.last_name}`.trim() || 'Player'}</h2>
-              <p>Update the account details players and hosts see around the app.</p>
             </div>
           </div>
 
@@ -496,12 +497,14 @@ export function SettingsPage() {
     <ProfileShell>
       <section className="settings-layout">
         <div className="settings-main">
-          <div className="settings-heading">
-            <Link className="settings-back-link" to="/profile">
+          <div className="profile-subpage-heading">
+            <Link className="settings-header-back" to="/profile">
               Back to profile
             </Link>
-            <p className="profile-kicker">Account</p>
-            <h1>Settings</h1>
+            <AppPageHeader
+              title="Settings"
+              subtitle="Update account preferences and support options."
+            />
           </div>
 
           <SettingsGroup title="Account Details" rows={accountDetailRows} />
