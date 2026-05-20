@@ -306,6 +306,35 @@
   color: var(--lime);
 }
 
+.settings-header-back {
+  width: fit-content;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(248, 250, 252, 0.1);
+  border-radius: 999px;
+  color: rgba(248, 250, 252, 0.78);
+  background: rgba(248, 250, 252, 0.035);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.settings-header-back::before {
+  content: "←";
+}
+
+.settings-header-back:hover {
+  color: var(--lime);
+  background: rgba(184, 255, 36, 0.06);
+}
+
+.profile-subpage-heading {
+  display: grid;
+  gap: 14px;
+}
+
 .settings-account-row {
   min-height: 74px;
   margin-top: 36px;
@@ -345,6 +374,10 @@
 }
 
 .settings-heading + .settings-group {
+  margin-top: 36px;
+}
+
+.settings-main > .profile-subpage-heading + .settings-group {
   margin-top: 36px;
 }
 
@@ -445,15 +478,18 @@
 }
 
 .profile-edit-layout {
-  width: min(620px, 100%);
+  width: min(880px, 100%);
+  margin: 0 auto;
 }
 
 .profile-edit-card {
-  margin-top: 18px;
+  width: 100%;
+  margin-top: 36px;
   padding: 16px;
 }
 
 .profile-edit-card__intro {
+  min-height: 60px;
   padding-bottom: 14px;
   border-bottom: 1px solid rgba(248, 250, 252, 0.1);
   display: flex;

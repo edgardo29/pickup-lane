@@ -12,7 +12,7 @@ class SubPost(Base):
     __tablename__ = "sub_posts"
     __table_args__ = (
         CheckConstraint(
-            "post_status IN ('draft', 'active', 'filled', 'expired', 'canceled', 'removed')",
+            "post_status IN ('active', 'filled', 'expired', 'canceled', 'removed')",
             name="ck_sub_posts_post_status",
         ),
         CheckConstraint("sport_type IN ('soccer')", name="ck_sub_posts_sport_type"),
@@ -24,8 +24,12 @@ class SubPost(Base):
             name="ck_sub_posts_skill_level",
         ),
         CheckConstraint(
-            "game_player_group IN ('open', 'men', 'women', 'coed')",
+            "game_player_group IN ('men', 'women', 'coed')",
             name="ck_sub_posts_game_player_group",
+        ),
+        CheckConstraint(
+            "environment_type IN ('indoor', 'outdoor')",
+            name="ck_sub_posts_environment_type",
         ),
         CheckConstraint("subs_needed > 0", name="ck_sub_posts_subs_needed_positive"),
         CheckConstraint(
@@ -74,6 +78,7 @@ class SubPost(Base):
         String(50), nullable=False, server_default=text("'soccer'")
     )
     format_label: Mapped[str] = mapped_column(String(20), nullable=False)
+    environment_type: Mapped[str] = mapped_column(String(20), nullable=False)
     skill_level: Mapped[str] = mapped_column(String(30), nullable=False)
     game_player_group: Mapped[str] = mapped_column(String(30), nullable=False)
     team_name: Mapped[str | None] = mapped_column(String(120), nullable=True)

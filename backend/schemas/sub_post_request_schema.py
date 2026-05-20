@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -15,7 +15,15 @@ class SubPostRequestCreate(BaseModel):
 class SubPostRequestAction(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def strip_reason(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
 
 
 class SubPostRequestRead(BaseModel):

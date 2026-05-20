@@ -14,9 +14,14 @@ from backend.models import (
     SubPostStatusHistory,
     User,
 )
-from backend.schemas import SubPostCreate, SubPostUpdate
+from backend.schemas import (
+    MAX_SUB_POST_POSITION_ROWS,
+    MAX_SUB_POST_TOTAL_SUBS,
+    SubPostCreate,
+    SubPostUpdate,
+)
 
-POST_STATUSES = {"draft", "active", "filled", "expired", "canceled", "removed"}
+POST_STATUSES = {"active", "filled", "expired", "canceled", "removed"}
 REQUEST_STATUSES = {
     "pending",
     "confirmed",
@@ -31,6 +36,27 @@ ACTIVE_VISIBLE_POST_STATUSES = {"active", "filled"}
 ACTIVE_REQUEST_STATUSES = {"pending", "confirmed", "sub_waitlist"}
 QUEUE_HOLD_REQUEST_STATUSES = {"pending", "confirmed"}
 MAX_WAITLIST_REQUESTS_PER_POST = 25
+VALID_FORMAT_LABELS = {
+    "3v3",
+    "4v4",
+    "5v5",
+    "6v6",
+    "7v7",
+    "8v8",
+    "9v9",
+    "10v10",
+    "11v11",
+}
+VALID_SKILL_LEVELS = {
+    "any",
+    "beginner",
+    "recreational",
+    "intermediate",
+    "advanced",
+    "competitive",
+}
+VALID_ENVIRONMENT_TYPES = {"indoor", "outdoor"}
+VALID_POSITION_LABELS = {"field_player", "goalkeeper"}
 TERMINAL_REQUEST_STATUSES = {
     "declined",
     "canceled_by_player",
@@ -41,9 +67,8 @@ TERMINAL_REQUEST_STATUSES = {
 ADMIN_ROLES = {"admin", "moderator"}
 POST_STATUS_CHANGE_SOURCES = {"owner", "admin", "system", "scheduled_job"}
 VALID_POSITION_GROUPS_BY_POST_GROUP = {
-    "open": {"open"},
-    "men": {"open", "men"},
-    "women": {"open", "women"},
+    "men": {"men"},
+    "women": {"women"},
     "coed": {"open", "men", "women"},
 }
 
@@ -70,6 +95,22 @@ def get_sub_post_or_404(db: Session, sub_post_id: uuid.UUID) -> SubPost:
     return sub_post
 
 
+def get_sub_post_for_update_or_404(db: Session, sub_post_id: uuid.UUID) -> SubPost:
+    sub_post = db.scalar(
+        select(SubPost)
+        .where(SubPost.id == sub_post_id)
+        .with_for_update()
+    )
+
+    if sub_post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub post not found.",
+        )
+
+    return sub_post
+
+
 def get_sub_post_request_or_404(db: Session, request_id: uuid.UUID) -> SubPostRequest:
     sub_request = db.get(SubPostRequest, request_id)
 
@@ -82,8 +123,19 @@ def get_sub_post_request_or_404(db: Session, request_id: uuid.UUID) -> SubPostRe
     return sub_request
 
 
-def get_position_or_404(db: Session, position_id: uuid.UUID) -> SubPostPosition:
-    position = db.get(SubPostPosition, position_id)
+def get_position_or_404(
+    db: Session,
+    position_id: uuid.UUID,
+    lock_for_update: bool = False,
+) -> SubPostPosition:
+    if lock_for_update:
+        position = db.scalar(
+            select(SubPostPosition)
+            .where(SubPostPosition.id == position_id)
+            .with_for_update()
+        )
+    else:
+        position = db.get(SubPostPosition, position_id)
 
     if position is None:
         raise HTTPException(
@@ -107,6 +159,22 @@ def require_admin(user: User) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only an admin or moderator can perform this action.",
+        )
+
+
+def require_before_post_start(sub_post: SubPost, detail: str) -> None:
+    if now_utc() >= ensure_aware(sub_post.starts_at):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+def require_live_sub_post(sub_post: SubPost, detail: str) -> None:
+    if sub_post.post_status not in ACTIVE_VISIBLE_POST_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
         )
 
 
@@ -183,6 +251,30 @@ def validate_post_creation(post_create: SubPostCreate) -> None:
             detail="sport_type must be 'soccer'.",
         )
 
+    if post_create.format_label not in VALID_FORMAT_LABELS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="format_label is not supported.",
+        )
+
+    if post_create.environment_type not in VALID_ENVIRONMENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="environment_type is not supported.",
+        )
+
+    if post_create.skill_level not in VALID_SKILL_LEVELS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="skill_level is not supported.",
+        )
+
+    if post_create.game_player_group not in VALID_POSITION_GROUPS_BY_POST_GROUP:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="game_player_group is not supported.",
+        )
+
     if post_create.currency != "USD":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -199,6 +291,12 @@ def validate_post_creation(post_create: SubPostCreate) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="subs_needed must be greater than 0.",
+        )
+
+    if post_create.subs_needed > MAX_SUB_POST_TOTAL_SUBS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Need a Sub posts can include up to {MAX_SUB_POST_TOTAL_SUBS} total subs.",
         )
 
     required_location_values = [
@@ -221,12 +319,34 @@ def validate_post_creation(post_create: SubPostCreate) -> None:
             detail="At least one position requirement is required.",
         )
 
+    if len(post_create.positions) > MAX_SUB_POST_POSITION_ROWS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Need a Sub posts can include up to {MAX_SUB_POST_POSITION_ROWS} sub requirements.",
+        )
+
     total_spots = sum(position.spots_needed for position in post_create.positions)
     if total_spots != post_create.subs_needed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Position spots must add up to subs_needed.",
         )
+
+    seen_position_keys = set()
+    for position in post_create.positions:
+        if position.position_label not in VALID_POSITION_LABELS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="position_label is not supported.",
+            )
+
+        position_key = (position.position_label, position.player_group)
+        if position_key in seen_position_keys:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Each position and player group row must be unique.",
+            )
+        seen_position_keys.add(position_key)
 
     allowed_groups = VALID_POSITION_GROUPS_BY_POST_GROUP[post_create.game_player_group]
     invalid_groups = {
@@ -336,6 +456,7 @@ def build_effective_post_create(db: Session, sub_post: SubPost, post_update: Sub
         for field in (
             "sport_type",
             "format_label",
+            "environment_type",
             "skill_level",
             "game_player_group",
             "team_name",
@@ -469,6 +590,8 @@ def update_sub_post(
             detail="Only active or filled posts can be edited.",
         )
 
+    require_before_post_start(sub_post, "Posts cannot be edited after the game starts.")
+
     effective_post = build_effective_post_create(db, sub_post, post_update)
     validate_post_creation(effective_post)
     update_data = post_update.model_dump(exclude_unset=True, exclude={"positions"})
@@ -532,6 +655,7 @@ def serialize_sub_post(db: Session, sub_post: SubPost) -> dict:
                 "post_status",
                 "sport_type",
                 "format_label",
+                "environment_type",
                 "skill_level",
                 "game_player_group",
                 "team_name",
@@ -570,6 +694,58 @@ def serialize_sub_post(db: Session, sub_post: SubPost) -> dict:
         "confirmed_count": counts.get("confirmed", 0),
         "sub_waitlist_count": counts.get("sub_waitlist", 0),
     }
+
+
+def serialize_public_sub_post(db: Session, sub_post: SubPost) -> dict:
+    counts = count_requests_by_status(db, sub_post.id)
+    return {
+        **{
+            field: getattr(sub_post, field)
+            for field in (
+                "id",
+                "post_status",
+                "sport_type",
+                "format_label",
+                "environment_type",
+                "skill_level",
+                "game_player_group",
+                "starts_at",
+                "ends_at",
+                "timezone",
+                "location_name",
+                "city",
+                "state",
+                "neighborhood",
+                "subs_needed",
+                "price_due_at_venue_cents",
+                "currency",
+                "expires_at",
+                "created_at",
+                "updated_at",
+            )
+        },
+        "positions": [
+            serialize_sub_post_position(db, position)
+            for position in list_positions(db, sub_post.id)
+        ],
+        "pending_count": counts.get("pending", 0),
+        "confirmed_count": counts.get("confirmed", 0),
+        "sub_waitlist_count": counts.get("sub_waitlist", 0),
+    }
+
+
+def is_publicly_visible_sub_post(sub_post: SubPost) -> bool:
+    return (
+        sub_post.post_status in ACTIVE_VISIBLE_POST_STATUSES
+        and ensure_aware(sub_post.starts_at) >= now_utc()
+    )
+
+
+def user_can_view_private_sub_post(sub_post: SubPost, user: User | None) -> bool:
+    if user is None:
+        return False
+
+    return is_publicly_visible_sub_post(sub_post)
 
 
 def count_waitlist_ahead(db: Session, sub_request: SubPostRequest) -> int:
@@ -642,6 +818,7 @@ def query_visible_posts(
     skill_level: str | None = None,
     game_player_group: str | None = None,
     format_label: str | None = None,
+    environment_type: str | None = None,
     sport_type: str | None = None,
 ) -> list[SubPost]:
     statement = select(SubPost).where(
@@ -663,10 +840,28 @@ def query_visible_posts(
         statement = statement.where(SubPost.game_player_group == game_player_group)
     if format_label:
         statement = statement.where(SubPost.format_label == format_label)
+    if environment_type:
+        statement = statement.where(SubPost.environment_type == environment_type)
     if sport_type:
         statement = statement.where(SubPost.sport_type == sport_type)
 
     return list(db.scalars(statement.order_by(SubPost.starts_at.asc())).all())
+
+
+def query_owner_posts(db: Session, owner: User) -> list[SubPost]:
+    current_time = now_utc()
+
+    return list(
+        db.scalars(
+            select(SubPost)
+            .where(
+                SubPost.owner_user_id == owner.id,
+                SubPost.post_status.in_(ACTIVE_VISIBLE_POST_STATUSES),
+                SubPost.starts_at >= current_time,
+            )
+            .order_by(SubPost.starts_at.desc(), SubPost.created_at.desc())
+        ).all()
+    )
 
 
 def create_request(
@@ -675,14 +870,14 @@ def create_request(
     sub_post_id: uuid.UUID,
     sub_post_position_id: uuid.UUID,
 ) -> SubPostRequest:
-    sub_post = get_sub_post_or_404(db, sub_post_id)
-    position = get_position_or_404(db, sub_post_position_id)
+    sub_post = get_sub_post_for_update_or_404(db, sub_post_id)
+    position = get_position_or_404(db, sub_post_position_id, lock_for_update=True)
     current_time = now_utc()
 
-    if sub_post.post_status != "active":
+    if sub_post.post_status not in {"active", "filled"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Requests can only be created for active posts.",
+            detail="Requests can only be created for open posts.",
         )
 
     if current_time >= ensure_aware(sub_post.expires_at):
@@ -881,7 +1076,7 @@ def promote_next_waitlisted_request(
     change_source: str,
 ) -> SubPostRequest | None:
     db.flush()
-    position = get_position_or_404(db, sub_post_position_id)
+    position = get_position_or_404(db, sub_post_position_id, lock_for_update=True)
 
     if count_queued_slots(db, sub_post_position_id) >= position.spots_needed:
         return None
@@ -912,9 +1107,10 @@ def promote_next_waitlisted_request(
 def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> SubPostRequest:
     sub_request = get_sub_post_request_or_404(db, request_id)
     sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
-    position = get_position_or_404(db, sub_request.sub_post_position_id)
+    position = get_position_or_404(db, sub_request.sub_post_position_id, lock_for_update=True)
     current_time = now_utc()
     require_owner(sub_post, owner)
+    require_before_post_start(sub_post, "Requests cannot be accepted after the game starts.")
 
     if sub_request.request_status != "pending":
         raise HTTPException(
@@ -947,6 +1143,8 @@ def owner_decline_request(
     sub_request = get_sub_post_request_or_404(db, request_id)
     sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
     require_owner(sub_post, owner)
+    require_live_sub_post(sub_post, "Only active or filled posts can be reviewed.")
+    require_before_post_start(sub_post, "Requests cannot be declined after the game starts.")
 
     if sub_request.request_status not in {"pending", "sub_waitlist"}:
         raise HTTPException(
@@ -977,6 +1175,8 @@ def requester_cancel_request(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the requester can cancel this request.",
         )
+    require_before_post_start(sub_post, "Requests cannot be canceled after the game starts.")
+    require_live_sub_post(sub_post, "Only active or filled posts can be updated.")
 
     if sub_request.request_status not in ACTIVE_REQUEST_STATUSES:
         raise HTTPException(
@@ -1008,6 +1208,8 @@ def owner_cancel_request(
     sub_request = get_sub_post_request_or_404(db, request_id)
     sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
     require_owner(sub_post, owner)
+    require_before_post_start(sub_post, "Confirmed players cannot be removed after the game starts.")
+    require_live_sub_post(sub_post, "Only active or filled posts can be reviewed.")
 
     if sub_request.request_status != "confirmed":
         raise HTTPException(
@@ -1060,7 +1262,7 @@ def cancel_sub_post(
     sub_post_id: uuid.UUID,
     reason: str | None = None,
 ) -> SubPost:
-    sub_post = get_sub_post_or_404(db, sub_post_id)
+    sub_post = get_sub_post_for_update_or_404(db, sub_post_id)
     require_owner(sub_post, owner)
 
     if sub_post.post_status not in {"active", "filled"}:
@@ -1068,6 +1270,8 @@ def cancel_sub_post(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only active or filled posts can be canceled.",
         )
+
+    require_before_post_start(sub_post, "Posts cannot be canceled after the game starts.")
 
     current_time = now_utc()
     old_status = sub_post.post_status
@@ -1108,7 +1312,7 @@ def remove_sub_post(
     reason: str | None = None,
 ) -> SubPost:
     require_admin(admin_user)
-    sub_post = get_sub_post_or_404(db, sub_post_id)
+    sub_post = get_sub_post_for_update_or_404(db, sub_post_id)
 
     if sub_post.post_status == "removed":
         raise HTTPException(
@@ -1133,6 +1337,24 @@ def remove_sub_post(
         "admin",
         reason,
     )
+
+    active_requests = db.scalars(
+        select(SubPostRequest).where(
+            SubPostRequest.sub_post_id == sub_post.id,
+            SubPostRequest.request_status.in_(ACTIVE_REQUEST_STATUSES),
+        )
+    ).all()
+    for sub_request in active_requests:
+        change_request_status(
+            db,
+            sub_request,
+            "canceled_by_owner",
+            admin_user.id,
+            "admin",
+            reason or "Post removed by admin.",
+            current_time,
+        )
+
     db.commit()
     db.refresh(sub_post)
     return sub_post

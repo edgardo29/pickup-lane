@@ -133,6 +133,7 @@ function MyGamesPage() {
     <AppPageShell className="browse-page my-games-page">
       <AppPageHeader
         title="My Games"
+        subtitle="Track the games you joined or hosted."
         tabs={<AppTabs ariaLabel="My games sections" items={tabs} onChange={setActiveTab} value={activeTab} />}
       />
 

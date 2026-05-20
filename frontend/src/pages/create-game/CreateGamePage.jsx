@@ -349,13 +349,19 @@ function CreateGamePage() {
       <BrowseAppNav />
 
       <main className="create-game-shell">
-        <header className="create-game-topbar">
-          <button type="button" onClick={goBack} aria-label="Go back">
-            <ArrowLeftIcon />
-          </button>
+        <header className={`create-game-topbar ${isEditMode ? '' : 'create-game-topbar--main'}`.trim()}>
+          {isEditMode && (
+            <button type="button" onClick={goBack} aria-label="Go back">
+              <ArrowLeftIcon />
+            </button>
+          )}
           <div>
-            <p>Host a community game</p>
             <h1>{isEditMode ? 'Edit Game' : 'Create Game'}</h1>
+            <p>
+              {isEditMode
+                ? 'Update your community game details.'
+                : 'Post a community game for players to join.'}
+            </p>
           </div>
           <span>Step {activeStep} of {steps.length}</span>
         </header>

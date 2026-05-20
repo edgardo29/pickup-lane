@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -9,10 +10,10 @@ REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 class SubPostPositionCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    position_label: str
-    player_group: str = "open"
-    spots_needed: int = 1
-    sort_order: int = 0
+    position_label: Literal["field_player", "goalkeeper"]
+    player_group: Literal["open", "men", "women"] = "open"
+    spots_needed: int = Field(default=1, ge=1, le=11)
+    sort_order: int = Field(default=0, ge=0)
 
 
 class SubPostPositionRead(BaseModel):

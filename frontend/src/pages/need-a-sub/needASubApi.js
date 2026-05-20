@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient.js'
+import { apiRequest } from '../../lib/apiClient.js'
 
 export function listNeedASubPosts(query = {}) {
   const params = new URLSearchParams()
@@ -13,7 +13,15 @@ export function listNeedASubPosts(query = {}) {
   return apiRequest(`/need-a-sub/posts${queryString ? `?${queryString}` : ''}`)
 }
 
-export function getNeedASubPost(postId) {
+export async function listMyNeedASubPosts(firebaseUser) {
+  return authenticatedRequest(firebaseUser, '/need-a-sub/posts/mine')
+}
+
+export function getNeedASubPost(postId, firebaseUser = null) {
+  if (firebaseUser) {
+    return authenticatedRequest(firebaseUser, `/need-a-sub/posts/${postId}`)
+  }
+
   return apiRequest(`/need-a-sub/posts/${postId}`)
 }
 

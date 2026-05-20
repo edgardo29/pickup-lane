@@ -154,6 +154,90 @@ def test_sub_post_request_blocks_when_post_waitlist_is_full(client: TestClient):
     assert "waitlist is full" in blocked_response.text
 
 
+def test_sub_post_request_filled_post_accepts_new_waitlist_requests(client: TestClient):
+    owner = create_user(client)
+    first = create_user(client)
+    second = create_user(client)
+    waitlisted = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    first_request = request_spot(client, first["id"], post, 0).json()
+    second_request = request_spot(client, second["id"], post, 1).json()
+
+    authenticate_as(owner["id"])
+    assert client.patch(f"/need-a-sub/requests/{first_request['id']}/accept").status_code == 200
+    assert client.patch(f"/need-a-sub/requests/{second_request['id']}/accept").status_code == 200
+    filled_post = client.get(f"/need-a-sub/posts/{post['id']}")
+    assert filled_post.status_code == 200
+    assert filled_post.json()["post_status"] == "filled"
+
+    waitlist_response = request_spot(client, waitlisted["id"], post, 0)
+    assert waitlist_response.status_code == 201, waitlist_response.text
+    assert waitlist_response.json()["request_status"] == "sub_waitlist"
+
+
+def test_sub_post_request_create_rejects_canceled_post(client: TestClient):
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+
+    authenticate_as(owner["id"])
+    cancel_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/cancel",
+        json={"cancel_reason": "No longer needed."},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    response = request_spot(client, requester["id"], post, 0)
+
+    assert response.status_code == 400, response.text
+    assert "Requests can only be created for open posts" in response.text
+
+
+def test_sub_post_request_actions_reject_canceled_post_even_with_stale_request(
+    client: TestClient,
+):
+    from backend.database import SessionLocal
+    from backend.models import SubPost
+
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    sub_request = request_spot(client, requester["id"], post, 0).json()
+
+    with SessionLocal() as db:
+        db_post = db.get(SubPost, UUID(post["id"]))
+        db_post.post_status = "canceled"
+        db_post.canceled_at = datetime.now(UTC)
+        db_post.canceled_by_user_id = UUID(owner["id"])
+        db.commit()
+
+    authenticate_as(owner["id"])
+    accept_response = client.patch(f"/need-a-sub/requests/{sub_request['id']}/accept")
+    assert accept_response.status_code == 400, accept_response.text
+    assert "not accepting requests" in accept_response.text
+
+    decline_response = client.patch(
+        f"/need-a-sub/requests/{sub_request['id']}/decline",
+        json={},
+    )
+    assert decline_response.status_code == 400, decline_response.text
+    assert "Only active or filled posts can be reviewed" in decline_response.text
+
+    owner_cancel_response = client.patch(
+        f"/need-a-sub/requests/{sub_request['id']}/cancel-by-owner",
+        json={},
+    )
+    assert owner_cancel_response.status_code == 400, owner_cancel_response.text
+    assert "Only active or filled posts can be reviewed" in owner_cancel_response.text
+
+    authenticate_as(requester["id"])
+    requester_cancel_response = client.patch(
+        f"/need-a-sub/requests/{sub_request['id']}/cancel"
+    )
+    assert requester_cancel_response.status_code == 400, requester_cancel_response.text
+    assert "Only active or filled posts can be updated" in requester_cancel_response.text
+
+
 def test_sub_post_request_wrong_position_does_not_fill_post(client: TestClient):
     owner = create_user(client)
     first = create_user(client)
@@ -208,6 +292,63 @@ def test_sub_post_request_cancel_reopens_filled_post(client: TestClient):
     assert cancel_response.status_code == 200, cancel_response.text
     assert cancel_response.json()["request_status"] == "canceled_by_player"
     assert client.get(f"/need-a-sub/posts/{post['id']}").json()["post_status"] == "active"
+
+
+def test_sub_post_request_create_after_start_expires_and_blocks_post(client: TestClient):
+    from backend.database import SessionLocal
+    from backend.models import SubPost
+
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+
+    with SessionLocal() as db:
+        db_post = db.get(SubPost, UUID(post["id"]))
+        db_post.starts_at = datetime.now(UTC) - timedelta(minutes=5)
+        db_post.ends_at = datetime.now(UTC) + timedelta(minutes=55)
+        db_post.expires_at = db_post.starts_at
+        db.commit()
+
+    blocked_response = request_spot(client, requester["id"], post, 0)
+    assert blocked_response.status_code == 400, blocked_response.text
+
+    with SessionLocal() as db:
+        db_post = db.get(SubPost, UUID(post["id"]))
+        assert db_post.post_status == "expired"
+
+
+def test_sub_post_request_confirmed_player_and_owner_actions_after_start_are_blocked(client: TestClient):
+    from backend.database import SessionLocal
+    from backend.models import SubPost
+
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    request = request_spot(client, requester["id"], post, 0).json()
+
+    authenticate_as(owner["id"])
+    accept_response = client.patch(f"/need-a-sub/requests/{request['id']}/accept")
+    assert accept_response.status_code == 200, accept_response.text
+
+    with SessionLocal() as db:
+        db_post = db.get(SubPost, UUID(post["id"]))
+        db_post.starts_at = datetime.now(UTC) - timedelta(minutes=5)
+        db_post.ends_at = datetime.now(UTC) + timedelta(minutes=55)
+        db_post.expires_at = db_post.starts_at
+        db.commit()
+
+    authenticate_as(requester["id"])
+    cancel_response = client.patch(f"/need-a-sub/requests/{request['id']}/cancel")
+    assert cancel_response.status_code == 400, cancel_response.text
+    assert "after the game starts" in cancel_response.text
+
+    authenticate_as(owner["id"])
+    owner_cancel_response = client.patch(
+        f"/need-a-sub/requests/{request['id']}/cancel-by-owner",
+        json={},
+    )
+    assert owner_cancel_response.status_code == 400, owner_cancel_response.text
+    assert "after the game starts" in owner_cancel_response.text
 
 
 def test_sub_post_request_no_show_requires_game_end(client: TestClient):
