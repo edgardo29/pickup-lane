@@ -10,6 +10,7 @@
   min-height: 100svh;
   background: #010409;
   color: var(--text);
+  box-shadow: 0 100vh 0 100vh #010409;
 }
 
 .checkout-page svg {

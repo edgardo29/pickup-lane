@@ -13,6 +13,7 @@
   padding: 30px 24px;
   color: var(--auth-text);
   background: var(--auth-bg);
+  box-shadow: 0 100vh 0 100vh var(--auth-bg);
   display: grid;
   place-items: center;
   position: relative;

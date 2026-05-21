@@ -53,7 +53,6 @@ export function CreateGameLayout({
                 : 'Post a community game for players to join.'}
             </p>
           </div>
-          <span>Step {activeStep} of {steps.length}</span>
         </header>
 
         <StepRail activeStep={activeStep} />
