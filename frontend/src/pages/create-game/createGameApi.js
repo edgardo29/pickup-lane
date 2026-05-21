@@ -33,3 +33,7 @@ export async function loadEditableGame(gameId) {
 export async function loadHostPublishFees(userId) {
   return apiRequest(`/host-publish-fees?host_user_id=${userId}`).catch(() => [])
 }
+
+export async function loadUserPaymentMethods(userId) {
+  return apiRequest(`/user-payment-methods?user_id=${userId}`)
+}

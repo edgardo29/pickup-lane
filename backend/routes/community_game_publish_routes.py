@@ -285,6 +285,7 @@ def publish_community_game(
                 },
             )
             db.add(payment)
+            db.flush()
 
         db.add(
             HostPublishFee(

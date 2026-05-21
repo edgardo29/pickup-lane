@@ -7,7 +7,7 @@ import {
   SoccerBallIcon,
   UsersIcon,
 } from '../../components/BrowseIcons.jsx'
-import { formatEnvironment, formatPrice, formatTimeRange } from './myGamesData.js'
+import { formatEnvironment, formatPrice, formatTimeRange } from './myGamesFormatters.js'
 
 function MyGameCard({ imageUrl, item, participantCount }) {
   const { bucket, game, statusLabel, statusTone } = item

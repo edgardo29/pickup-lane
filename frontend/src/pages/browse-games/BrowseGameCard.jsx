@@ -7,6 +7,11 @@ import {
   SoccerBallIcon,
   UsersIcon,
 } from '../../components/BrowseIcons.jsx'
+import {
+  formatEnvironment,
+  formatPrice,
+  formatTimeRange,
+} from './browseGameFormatters.js'
 
 function BrowseGameCard({ game, imageUrl, signedUpCount }) {
   const tone = game.game_type === 'community' ? 'community' : 'official'
@@ -40,7 +45,7 @@ function BrowseGameCard({ game, imageUrl, signedUpCount }) {
 
         <p className="game-card__meta">
           <ClockIcon />
-          {formatTimeRange(game.starts_at, game.ends_at)}
+          {formatTimeRange(game.starts_at, game.ends_at, { separator: ' - ' })}
         </p>
 
         <p className="game-card__meta">
@@ -64,33 +69,6 @@ function BrowseGameCard({ game, imageUrl, signedUpCount }) {
       </div>
     </Link>
   )
-}
-
-function formatEnvironment(value) {
-  if (!value) {
-    return 'Pickup'
-  }
-
-  return value.charAt(0).toUpperCase() + value.slice(1).replaceAll('_', ' ')
-}
-
-function formatPrice(cents, currency) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    maximumFractionDigits: 0,
-  }).format((cents || 0) / 100)
-}
-
-function formatStartTime(value) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value))
-}
-
-function formatTimeRange(start, end) {
-  return `${formatStartTime(start)} - ${formatStartTime(end)}`
 }
 
 export default BrowseGameCard

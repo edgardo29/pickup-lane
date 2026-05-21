@@ -8,12 +8,12 @@ import {
   UsersIcon,
 } from '../../components/BrowseIcons.jsx'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
+import { COMMUNITY_PUBLISH_FEE_CENTS } from './createGameData.js'
 import {
   buildPreviewLocation,
   capitalize,
-  COMMUNITY_PUBLISH_FEE_CENTS,
   formatMoney,
-} from './createGameUtils.js'
+} from './createGameFormatters.js'
 
 export function CreateGamePreview({ firstPublishIsFree, form, review }) {
   return (

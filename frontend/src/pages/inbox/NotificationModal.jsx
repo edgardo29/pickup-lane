@@ -1,4 +1,4 @@
-import { formatFullDate } from './inboxData.js'
+import { formatFullDate } from './inboxFormatters.js'
 
 function NotificationModal({ game, notification, onClose, onViewGame }) {
   return (

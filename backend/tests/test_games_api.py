@@ -913,6 +913,62 @@ def test_publish_community_game_endpoint_creates_publish_records_transactionally
     ]
 
 
+def test_second_community_publish_creates_paid_publish_fee(client: TestClient):
+    host = create_user(client)
+    mark_user_email_verified(host["id"])
+    starts_at = datetime.now(UTC) + timedelta(days=13)
+
+    base_payload = {
+        "host_user_id": host["id"],
+        "starts_at": starts_at.isoformat(),
+        "ends_at": (starts_at + timedelta(hours=2)).isoformat(),
+        "timezone": "America/Chicago",
+        "format_label": "7v7",
+        "environment_type": "outdoor",
+        "total_spots": 14,
+        "price_per_player_cents": 2500,
+        "venue": {
+            "name": "Community Publish Field",
+            "address_line_1": "123 Publish Ave",
+            "city": "Chicago",
+            "state": "IL",
+            "postal_code": "60601",
+            "country_code": "US",
+            "neighborhood": "Loop",
+        },
+        "payment_methods_snapshot": [{"type": "venmo", "value": "@host"}],
+        "game_notes": "Bring a ball.",
+    }
+    first_response = client.post("/community-games/publish", json=base_payload)
+    assert first_response.status_code == 201, first_response.text
+
+    second_starts_at = starts_at + timedelta(days=1)
+    second_response = client.post(
+        "/community-games/publish",
+        json={
+            **base_payload,
+            "starts_at": second_starts_at.isoformat(),
+            "ends_at": (second_starts_at + timedelta(hours=2)).isoformat(),
+            "venue": {
+                **base_payload["venue"],
+                "address_line_1": "456 Paid Publish Ave",
+                "postal_code": "60602",
+            },
+        },
+    )
+
+    assert second_response.status_code == 201, second_response.text
+    second_game = second_response.json()["game"]
+
+    fees_response = client.get(f"/host-publish-fees?game_id={second_game['id']}")
+    assert fees_response.status_code == 200, fees_response.text
+    paid_fee = fees_response.json()[0]
+    assert paid_fee["amount_cents"] == 499
+    assert paid_fee["fee_status"] == "paid"
+    assert paid_fee["payment_id"] is not None
+    assert paid_fee["paid_at"] is not None
+
+
 def test_host_edit_allows_host_to_update_empty_community_game(client: TestClient):
     host = create_user(client)
     venue = create_venue(client, host["id"])

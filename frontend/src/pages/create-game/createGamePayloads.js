@@ -1,8 +1,9 @@
+import { normalizeUsStateCode } from '../../data/usStates.js'
 import {
-  buildDateTime,
   getPriceCents,
   serializePaymentMethods,
-} from './createGameUtils.js'
+} from './createGamePayment.js'
+import { buildDateTime } from './createGameSchedule.js'
 
 export function buildCommunityPublishPayload(form, currentUser, paymentMethod) {
   return {
@@ -18,7 +19,7 @@ export function buildCommunityPublishPayload(form, currentUser, paymentMethod) {
       name: form.venueName.trim(),
       address_line_1: form.street.trim(),
       city: form.city.trim(),
-      state: form.state.trim(),
+      state: normalizeUsStateCode(form.state) || form.state.trim().toUpperCase(),
       postal_code: form.zip.trim(),
       country_code: 'US',
       neighborhood: form.neighborhood.trim() || null,
@@ -43,10 +44,18 @@ export function buildHostEditPayload(form, currentUser) {
     venue_name: form.venueName.trim(),
     address_line_1: form.street.trim(),
     city: form.city.trim(),
-    state: form.state.trim(),
+    state: normalizeUsStateCode(form.state) || form.state.trim().toUpperCase(),
     postal_code: form.zip.trim(),
     neighborhood: form.neighborhood.trim() || null,
     game_notes: form.gameNotes.trim() || null,
     parking_notes: form.parkingNote.trim() || null,
+  }
+}
+
+export function buildCommunityGameDetailPayload(form, gameId) {
+  return {
+    game_id: gameId,
+    payment_methods_snapshot: serializePaymentMethods(form.paymentMethods),
+    payment_instructions_snapshot: null,
   }
 }

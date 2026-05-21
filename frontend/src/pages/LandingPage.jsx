@@ -6,7 +6,7 @@ import LandingFeatureBar from '../components/LandingFeatureBar.jsx'
 import { ArrowRightIcon } from '../components/LandingIcons.jsx'
 import { useAuth } from '../hooks/useAuth.js'
 import '../styles/browse-games/BrowseGamesPage.css'
-import '../styles/landing.css'
+import '../styles/landing/LandingPage.css'
 
 function LandingPage() {
   const { appUser, currentUser, isLoading } = useAuth()
