@@ -36,15 +36,15 @@
 }
 
 .need-sub-shell--form {
-  width: min(960px, calc(100% - 56px));
+  width: min(1640px, calc(100% - 56px));
 }
 
 .need-sub-detail-shell {
-  width: min(1120px, calc(100% - 56px));
+  width: min(1640px, calc(100% - 56px));
 }
 
 .need-sub-manage-shell {
-  width: min(960px, calc(100% - 56px));
+  width: min(1640px, calc(100% - 56px));
 }
 
 .need-sub-page .app-page-header {
@@ -55,7 +55,9 @@
   margin: 0 0 28px;
   padding-left: 18px;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, auto) auto;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
@@ -152,11 +154,33 @@
 }
 
 .need-sub-create-panel {
-  width: 100%;
+  width: min(960px, 100%);
   margin: 0 auto;
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+.need-sub-shell--form > .need-sub-alert,
+.need-sub-shell--form > .need-sub-state,
+.need-sub-detail-shell > .need-sub-manage-top,
+.need-sub-detail-shell > .need-sub-alert,
+.need-sub-detail-shell > .need-sub-empty,
+.need-sub-detail-shell > .need-sub-detail-grid {
+  width: min(1120px, 100%);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.need-sub-manage-shell > .need-sub-manage-top,
+.need-sub-manage-shell > .need-sub-alert,
+.need-sub-manage-shell > .need-sub-empty,
+.need-sub-manage-shell > .need-sub-form,
+.need-sub-manage-shell > .need-sub-manage-hero,
+.need-sub-manage-shell > .need-sub-manage-focus-grid {
+  width: min(960px, 100%);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .need-sub-list-toolbar {
@@ -1831,7 +1855,7 @@
   }
 
   .need-sub-browse-controls .need-sub-header-action {
-    justify-self: start;
+    justify-self: end;
   }
 
   .need-sub-form-section,
@@ -1874,6 +1898,25 @@
   .need-sub-post {
     height: 306px;
     grid-template-rows: 70px 112px 82px 42px;
+  }
+
+  .need-sub-browse-controls {
+    gap: 8px;
+  }
+
+  .need-sub-browse-controls .app-tabs {
+    gap: 6px;
+  }
+
+  .need-sub-browse-controls .app-tabs button {
+    padding: 0 10px;
+    font-size: 0.82rem;
+  }
+
+  .need-sub-browse-controls .need-sub-header-action {
+    min-width: 0;
+    padding: 0 11px;
+    font-size: 0.82rem;
   }
 
   .need-sub-post__top,

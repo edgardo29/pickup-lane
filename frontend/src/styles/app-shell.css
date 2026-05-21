@@ -11,7 +11,8 @@
 
   min-height: 100svh;
   color: var(--text);
-  background: var(--app-bg);
+  background: #010409;
+  box-shadow: 0 100vh 0 100vh #010409;
 }
 
 .app-page svg {

@@ -17,6 +17,7 @@
   min-height: 100svh;
   color: var(--text);
   background: #010409;
+  box-shadow: 0 100vh 0 100vh #010409;
 }
 
 .details-page svg {
@@ -28,12 +29,14 @@
 }
 
 .details-shell {
-  width: min(1280px, calc(100% - 56px));
+  width: min(1640px, calc(100% - 56px));
   margin: 0 auto;
-  padding: 18px 0 48px;
+  padding: 24px 0 48px;
 }
 
 .details-layout {
+  width: min(1280px, 100%);
+  margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 24px;
@@ -1563,6 +1566,8 @@
 }
 
 .details-state {
+  width: min(1280px, 100%);
+  margin: 0 auto;
   min-height: 340px;
   border: 1px dashed rgba(248, 250, 252, 0.12);
   border-radius: 14px;

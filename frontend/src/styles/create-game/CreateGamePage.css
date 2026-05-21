@@ -18,6 +18,7 @@
   min-height: 100svh;
   color: var(--text);
   background: #010409;
+  box-shadow: 0 100vh 0 100vh #010409;
 }
 
 .create-game-page svg {
@@ -29,21 +30,22 @@
 }
 
 .create-game-shell {
-  width: min(1180px, calc(100% - 48px));
+  width: min(1640px, calc(100% - 56px));
   margin: 0 auto;
-  padding: 18px 0 56px;
+  padding: 24px 0 56px;
 }
 
 .create-game-topbar {
+  width: min(1180px, 100%);
   min-height: 76px;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
 }
 
 .create-game-topbar--main {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .create-game-topbar button {
@@ -110,15 +112,12 @@
   font-size: clamp(2.15rem, 2.75vw, 3rem);
   line-height: 0.96;
   font-weight: 950;
-}
-
-.create-game-topbar > span {
-  color: rgba(248, 250, 252, 0.62);
-  font-weight: 850;
+  text-transform: uppercase;
 }
 
 .create-game-steps {
-  margin: 34px 0 0;
+  width: min(1180px, 100%);
+  margin: 34px auto 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -170,7 +169,8 @@
 }
 
 .create-game-layout {
-  margin-top: 18px;
+  width: min(1180px, 100%);
+  margin: 18px auto 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
   gap: 18px;
@@ -870,13 +870,15 @@
 }
 
 .create-game-error {
-  margin: 18px 0 0;
+  width: min(1180px, 100%);
+  margin: 18px auto 0;
   color: var(--red);
   font-weight: 800;
 }
 
 .create-game-blocker {
-  margin-top: 18px;
+  width: min(1180px, 100%);
+  margin: 18px auto 0;
   padding: 18px;
   border: 1px solid rgba(184, 255, 36, 0.28);
   border-radius: 14px;
@@ -1063,10 +1065,6 @@
 
   .create-game-topbar p {
     font-size: 0.92rem;
-  }
-
-  .create-game-topbar > span {
-    display: none;
   }
 
   .create-game-steps {

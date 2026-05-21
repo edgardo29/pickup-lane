@@ -10,7 +10,7 @@
 
   min-height: 100svh;
   color: var(--text);
-  background: var(--app-bg);
+  background: #010409;
 }
 
 .profile-page svg {
@@ -22,7 +22,7 @@
 }
 
 .profile-shell {
-  width: min(1180px, calc(100% - 56px));
+  width: min(1640px, calc(100% - 56px));
   margin: 0 auto;
   padding: 24px 0 68px;
 }
@@ -40,8 +40,8 @@
 }
 
 .profile-hero-card {
-  margin-top: 34px;
-  width: 100%;
+  margin: 34px auto 0;
+  width: min(1180px, 100%);
   padding: 20px;
   display: grid;
   grid-template-columns: 96px minmax(0, 1fr);
@@ -181,8 +181,8 @@
 }
 
 .profile-stat-grid {
-  width: 100%;
-  margin-top: 14px;
+  width: min(1180px, 100%);
+  margin: 14px auto 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(230px, 1fr));
   gap: 12px;
@@ -251,13 +251,23 @@
 }
 
 .settings-layout {
-  width: min(880px, 100%);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   display: block;
 }
 
 .settings-main {
   min-width: 0;
+}
+
+.settings-main > .profile-subpage-heading {
+  width: min(880px, 100%);
+}
+
+.settings-main > .settings-group {
+  width: min(880px, 100%);
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .settings-heading {
@@ -478,14 +488,18 @@
 }
 
 .profile-edit-layout {
-  width: min(880px, 100%);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
 }
 
 .profile-edit-card {
-  width: 100%;
-  margin-top: 36px;
+  width: min(880px, 100%);
+  margin: 36px auto 0;
   padding: 16px;
+}
+
+.profile-edit-layout > .profile-subpage-heading {
+  width: min(880px, 100%);
 }
 
 .profile-edit-card__intro {
@@ -796,8 +810,9 @@
 }
 
 .profile-state {
+  width: min(1180px, 100%);
   min-height: 260px;
-  margin-top: 34px;
+  margin: 34px auto 0;
   padding: 26px;
   display: grid;
   place-items: center;
