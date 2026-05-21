@@ -1,22 +1,13 @@
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
-import defaultCommunityVenueImage from '../../assets/community-default/default-venue-wide.png'
+import { useEffect, useState } from 'react'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
-import {
-  CalendarIcon,
-  ClockIcon,
-  MapPinIcon,
-  ShieldCheckIcon,
-  UsersIcon,
-} from '../../components/BrowseIcons.jsx'
+import GameCheckoutLayout from './GameCheckoutLayout.jsx'
+import { buildGameCheckoutViewModel } from './gameCheckoutViewModel.js'
+import { useGameCheckoutActions } from './useGameCheckoutActions.js'
+import { useGameCheckoutData } from './useGameCheckoutData.js'
 import { useAuth } from '../../hooks/useAuth.js'
-import { apiRequest, buildMediaUrl } from '../../lib/apiClient.js'
 import '../../styles/browse-games/BrowseGamesPage.css'
 import '../../styles/browse-games/GameCheckoutPage.css'
-
-const ACTIVE_ROSTER_STATUSES = new Set(['pending_payment', 'confirmed'])
-const ACTIVE_JOIN_STATUSES = new Set(['pending_payment', 'confirmed', 'waitlisted'])
-const JOIN_WINDOW_MINUTES = 5
 
 function GameCheckoutPage() {
   const { gameId } = useParams()
@@ -26,20 +17,12 @@ function GameCheckoutPage() {
   const isAddGuestsCheckout = searchParams.get('mode') === 'add-guests'
   const requestedGuestCount = Number.parseInt(searchParams.get('guest_count') || '', 10)
 
-  const [game, setGame] = useState(null)
-  const [venue, setVenue] = useState(null)
-  const [images, setImages] = useState([])
-  const [participants, setParticipants] = useState([])
-  const [paymentMethods, setPaymentMethods] = useState([])
   const [guestCount, setGuestCount] = useState(() => (
     isAddGuestsCheckout && Number.isFinite(requestedGuestCount)
       ? Math.max(requestedGuestCount, 1)
       : 0
   ))
   const [agreed, setAgreed] = useState(false)
-  const [status, setStatus] = useState('loading')
-  const [error, setError] = useState('')
-  const [submitError, setSubmitError] = useState('')
   const [nowMs, setNowMs] = useState(null)
 
   useEffect(() => {
@@ -52,132 +35,37 @@ function GameCheckoutPage() {
 
     return () => window.clearInterval(intervalId)
   }, [])
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const checkoutData = useGameCheckoutData({
+    appUser,
+    gameId,
+    isAuthLoading,
+    navigate,
+  })
+  const {
+    confirmBooking,
+    isSubmitting,
+    resetSubmitError,
+    submitError,
+  } = useGameCheckoutActions({ navigate })
+  const checkout = buildGameCheckoutViewModel({
+    agreed,
+    appUser,
+    game: checkoutData.game,
+    guestCount,
+    images: checkoutData.images,
+    isAddGuestsCheckout,
+    isSubmitting,
+    nowMs,
+    participants: checkoutData.participants,
+    paymentMethods: checkoutData.paymentMethods,
+    venue: checkoutData.venue,
+  })
 
   useEffect(() => {
-    let ignore = false
+    resetSubmitError()
+  }, [appUser?.id, gameId, isAddGuestsCheckout, resetSubmitError])
 
-    async function loadCheckout() {
-      if (isAuthLoading) {
-        return
-      }
-
-      if (!appUser?.id) {
-        navigate('/sign-in', { replace: true })
-        return
-      }
-
-      if (!hasCompleteProfile(appUser)) {
-        navigate('/finish-profile', { replace: true })
-        return
-      }
-
-      setStatus('loading')
-      setError('')
-      setSubmitError('')
-
-      try {
-        const gameResponse = await apiRequest(`/games/${gameId}`)
-        const [venueResponse, imageResponse, participantResponse, methodResponse] =
-          await Promise.all([
-            apiRequest(`/venues/${gameResponse.venue_id}`).catch(() => null),
-            apiRequest(`/game-images?game_id=${gameId}&image_status=active`).catch(() => []),
-            apiRequest(`/game-participants?game_id=${gameId}`),
-            apiRequest(`/user-payment-methods?user_id=${appUser.id}`).catch(() => []),
-          ])
-
-        if (!ignore) {
-          setGame(gameResponse)
-          setVenue(venueResponse)
-          setImages(imageResponse)
-          setParticipants(participantResponse)
-          setPaymentMethods(methodResponse)
-          setStatus('success')
-        }
-      } catch (requestError) {
-        if (!ignore) {
-          setError(requestError instanceof Error ? requestError.message : 'Unable to load checkout.')
-          setStatus('error')
-        }
-      }
-    }
-
-    loadCheckout()
-
-    return () => {
-      ignore = true
-    }
-  }, [appUser, gameId, isAuthLoading, navigate])
-
-  const summary = useMemo(() => getParticipantSummary(participants, game?.total_spots), [game, participants])
-  const existingParticipant = useMemo(
-    () =>
-      participants.find(
-        (participant) =>
-          participant.user_id === appUser?.id &&
-          ACTIVE_JOIN_STATUSES.has(participant.participant_status),
-      ) || null,
-    [appUser?.id, participants],
-  )
-  const primaryImage = useMemo(() => getPrimaryImage(images, game), [game, images])
-  const maxGuests = game?.allow_guests ? game.max_guests_per_booking || 0 : 0
-  const currentGuestCount = useMemo(
-    () => getCurrentGuestCount(participants, existingParticipant, appUser?.id),
-    [appUser?.id, existingParticipant, participants],
-  )
-  const addableGuestCount = isAddGuestsCheckout
-    ? Math.max(Math.min(maxGuests - currentGuestCount, summary.spotsLeft), 0)
-    : maxGuests
-  const minGuestCount = isAddGuestsCheckout && addableGuestCount > 0 ? 1 : 0
-  const maxSelectableGuests = Math.max(addableGuestCount, 0)
-  const effectiveGuestCount = Math.min(Math.max(guestCount, minGuestCount), maxSelectableGuests)
-  const projectedGuestCount = isAddGuestsCheckout
-    ? Math.min(currentGuestCount + effectiveGuestCount, maxGuests)
-    : effectiveGuestCount
-  const partySize = isAddGuestsCheckout ? effectiveGuestCount : effectiveGuestCount + 1
-  const price = game?.price_per_player_cents || 0
-  const platformFee = 0
-  const subtotal = price * partySize
-  const total = subtotal + platformFee
-  const isJoinWindowClosed = game
-    ? nowMs !== null &&
-      nowMs >= new Date(game.starts_at).getTime() + JOIN_WINDOW_MINUTES * 60 * 1000
-    : false
-
-  async function confirmBooking() {
-    const isExistingConfirmedPlayer = existingParticipant?.participant_status === 'confirmed'
-    if (
-      !agreed ||
-      !game ||
-      !appUser?.id ||
-      isJoinWindowClosed ||
-      (!isAddGuestsCheckout && existingParticipant) ||
-      (isAddGuestsCheckout && (!isExistingConfirmedPlayer || effectiveGuestCount <= 0))
-    ) {
-      return
-    }
-
-    setIsSubmitting(true)
-    setSubmitError('')
-
-    try {
-      const endpoint = isAddGuestsCheckout
-        ? `/games/${game.id}/booking-guests/add`
-        : `/games/${game.id}/join`
-      await apiRequest(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acting_user_id: appUser.id, guest_count: effectiveGuestCount }),
-      })
-      navigate(`/games/${game.id}`, { replace: true })
-    } catch (requestError) {
-      setSubmitError(requestError instanceof Error ? requestError.message : 'Unable to confirm booking.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  if (status === 'loading') {
+  if (checkoutData.status === 'loading') {
     return (
       <div className="checkout-page">
         <BrowseAppNav />
@@ -186,436 +74,61 @@ function GameCheckoutPage() {
     )
   }
 
-  if (status === 'error' || !game) {
+  if (checkoutData.status === 'error' || !checkoutData.game) {
     return (
       <div className="checkout-page">
         <BrowseAppNav />
         <main className="checkout-shell checkout-state">
           <h1>Checkout unavailable</h1>
-          <p>{error || 'This game could not be loaded.'}</p>
+          <p>{checkoutData.error || 'This game could not be loaded.'}</p>
           <Link to={`/games/${gameId}`}>Back to game</Link>
         </main>
       </div>
     )
   }
 
-  const hasEnoughSpots = partySize <= summary.spotsLeft
-  const isWaitlistCheckout = !isAddGuestsCheckout && !hasEnoughSpots && game.waitlist_enabled
-  const isBlockedByCapacity = isAddGuestsCheckout
-    ? effectiveGuestCount <= 0
-    : !hasEnoughSpots && !game.waitlist_enabled
-  const isAddGuestsBlockedByParticipant =
-    isAddGuestsCheckout && existingParticipant?.participant_status !== 'confirmed'
-  const title = game.title || `${game.venue_name_snapshot} ${game.format_label}`
-  const address = formatVenueAddress(game, venue)
-  const paymentMethod = paymentMethods.find((method) => method.is_default) || paymentMethods[0]
-  const confirmLabel = getConfirmLabel({
-    agreed,
-    isAddGuestsCheckout,
-    isBlockedByCapacity,
-    isJoinWindowClosed,
-    isSubmitting,
-    isWaitlistCheckout,
-  })
-
   return (
-    <div className="checkout-page">
-      <BrowseAppNav />
-
-      <main className="checkout-shell">
-        <header className="checkout-header">
-          <button className="checkout-back" type="button" onClick={() => navigate(`/games/${game.id}`)}>
-            ←
-          </button>
-          <div>
-            <span>
-              {isAddGuestsCheckout
-                ? 'Guest checkout'
-                : isWaitlistCheckout
-                  ? 'Waitlist checkout'
-                  : 'Game checkout'}
-            </span>
-            <h1>
-              {isAddGuestsCheckout
-                ? 'Add Guests'
-                : isWaitlistCheckout
-                  ? 'Join Waitlist'
-                  : 'Confirm Spot'}
-            </h1>
-          </div>
-        </header>
-
-        <section className="checkout-card checkout-game-card">
-          <img src={primaryImage} alt="" />
-          <div>
-            <h2>{title}</h2>
-            <p className="checkout-location">
-              <MapPinIcon />
-              <span>
-                {game.venue_name_snapshot}
-                <small>{address}</small>
-              </span>
-            </p>
-            <div className="checkout-chips">
-              <span>
-                <CalendarIcon /> {formatDate(game.starts_at)}
-              </span>
-              <span>
-                <ClockIcon /> {formatTimeRange(game.starts_at, game.ends_at)}
-              </span>
-              <span>
-                <UsersIcon /> {game.format_label}
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <div className="checkout-layout">
-          <div className="checkout-stack">
-            <section className="checkout-card">
-              <div className="checkout-section-heading">
-                <h2>{isAddGuestsCheckout ? 'Guests' : isWaitlistCheckout ? 'Waitlist' : 'Players'}</h2>
-                {maxGuests > 0 && (
-                  <span className="checkout-guest-limit">
-                    <UsersIcon />
-                    Guest limit: {projectedGuestCount}/{maxGuests}
-                  </span>
-                )}
-              </div>
-              <div className="checkout-player-row">
-                <span className="checkout-avatar">{getInitials(appUser)}</span>
-                <div>
-                  <strong>{isAddGuestsCheckout ? 'Your Booking' : 'You'}</strong>
-                  <p>{getDisplayName(appUser)}</p>
-                  {effectiveGuestCount > 0 && (
-                    <p className="checkout-party-note">
-                      {isAddGuestsCheckout ? 'Adding ' : '+'}
-                      {effectiveGuestCount} {effectiveGuestCount === 1 ? 'guest' : 'guests'}
-                    </p>
-                  )}
-                </div>
-              </div>
-              {maxSelectableGuests > 0 && (
-                <div className="checkout-guest-row">
-                  <div>
-                    <strong>{isAddGuestsCheckout ? 'Guests to add' : 'Guests'}</strong>
-                  </div>
-                  <div className="checkout-guest-stepper" aria-label="Guest count">
-                    <button
-                      type="button"
-                      disabled={effectiveGuestCount <= minGuestCount}
-                      onClick={() => setGuestCount((count) => Math.max(count - 1, minGuestCount))}
-                    >
-                      -
-                    </button>
-                    <span>{effectiveGuestCount}</span>
-                    <button
-                      type="button"
-                      disabled={effectiveGuestCount >= maxSelectableGuests}
-                      onClick={() => setGuestCount((count) => Math.min(count + 1, maxSelectableGuests))}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              )}
-              {isBlockedByCapacity && (
-                <p className="checkout-error">
-                  {isAddGuestsCheckout
-                    ? 'No guest spots are available right now.'
-                    : 'Not enough spots are available for this join.'}
-                </p>
-              )}
-            </section>
-
-            <section className="checkout-card">
-              <h2>Payment method</h2>
-              <div className="checkout-payment-row">
-                <strong>{paymentMethod ? formatPaymentMethod(paymentMethod) : 'Demo card .... 4242'}</strong>
-                <span>Change payment coming soon</span>
-              </div>
-            </section>
-
-            <section className="checkout-card checkout-policy">
-              <ShieldCheckIcon />
-              <div>
-                <h2>Cancellation</h2>
-                <p>
-                  Free cancellation up to 24 hours before game time. After that, refunds are not issued.
-                </p>
-                <Link
-                  to="/policies/cancellation-refunds"
-                  state={{ from: `/games/${game.id}/checkout`, fromLabel: 'Back to checkout' }}
-                >
-                  View policy
-                </Link>
-              </div>
-            </section>
-
-            <label className="checkout-card checkout-agree">
-              <input checked={agreed} type="checkbox" onChange={(event) => setAgreed(event.target.checked)} />
-              <span>
-                I agree to the Pickup Lane <Link to="/terms">Terms of Service</Link> and{' '}
-                <Link to="/policies/cancellation-refunds">refund policy</Link>.
-              </span>
-            </label>
-
-            {isAddGuestsBlockedByParticipant && (
-              <p className="checkout-error">
-                Only confirmed players can add guests to an existing booking.
-              </p>
-            )}
-            {isJoinWindowClosed && (
-              <p className="checkout-error">
-                {isAddGuestsCheckout
-                  ? 'Attendance changes are closed for this game.'
-                  : 'Joining is closed for this game.'}
-              </p>
-            )}
-            {existingParticipant && !isAddGuestsCheckout && (
-              <p className="checkout-error">
-                {existingParticipant.participant_status === 'waitlisted'
-                  ? 'You are already on the waitlist for this game.'
-                  : 'You already joined this game.'}
-              </p>
-            )}
-            {submitError && <p className="checkout-error">{submitError}</p>}
-
-            <div className="checkout-mobile-action">
-              <button
-                className="checkout-confirm-button"
-                type="button"
-                disabled={
-                  !agreed ||
-                  isSubmitting ||
-                  isBlockedByCapacity ||
-                  isJoinWindowClosed ||
-                  isAddGuestsBlockedByParticipant ||
-                  (!isAddGuestsCheckout && Boolean(existingParticipant))
-                }
-                onClick={confirmBooking}
-              >
-                {confirmLabel}
-              </button>
-
-              <p className="checkout-secure-note">
-                <ShieldCheckIcon />
-                Secure checkout
-              </p>
-            </div>
-          </div>
-
-          <aside className="checkout-card checkout-summary-card">
-            <h2>Order summary</h2>
-            {!isAddGuestsCheckout && (
-              <CheckoutLine
-                label="1 x Player"
-                value={formatMoney(price)}
-              />
-            )}
-            {effectiveGuestCount > 0 && (
-              <CheckoutLine
-                label={`${effectiveGuestCount} x ${effectiveGuestCount === 1 ? 'Guest' : 'Guests'}`}
-                value={formatMoney(price * effectiveGuestCount)}
-              />
-            )}
-            {!isWaitlistCheckout && <CheckoutLine label="Pickup Lane fee" value={formatMoney(platformFee)} />}
-            {isWaitlistCheckout && <p className="checkout-summary-note">No charge now</p>}
-            <div className="checkout-total">
-              <span>Total</span>
-              <strong>{formatMoney(total)}</strong>
-            </div>
-
-            {isWaitlistCheckout && (
-              <p className="checkout-summary-waitlist-note">
-                You won’t be charged now. You’ll only be charged if a spot opens and you’re moved
-                into the game.
-              </p>
-            )}
-
-            <button
-              className="checkout-confirm-button checkout-confirm-button--desktop"
-              type="button"
-              disabled={
-                !agreed ||
-                isSubmitting ||
-                isBlockedByCapacity ||
-                isJoinWindowClosed ||
-                isAddGuestsBlockedByParticipant ||
-                (!isAddGuestsCheckout && Boolean(existingParticipant))
-              }
-              onClick={confirmBooking}
-            >
-              {confirmLabel}
-            </button>
-
-            <p className="checkout-secure-note">
-              <ShieldCheckIcon />
-              Secure checkout
-            </p>
-          </aside>
-        </div>
-      </main>
-    </div>
+    <GameCheckoutLayout
+      address={checkout.address}
+      agreed={agreed}
+      appUser={appUser}
+      confirmLabel={checkout.confirmLabel}
+      effectiveGuestCount={checkout.effectiveGuestCount}
+      existingParticipant={checkout.existingParticipant}
+      game={checkoutData.game}
+      isAddGuestsBlockedByParticipant={checkout.isAddGuestsBlockedByParticipant}
+      isAddGuestsCheckout={isAddGuestsCheckout}
+      isBlockedByCapacity={checkout.isBlockedByCapacity}
+      isJoinWindowClosed={checkout.isJoinWindowClosed}
+      isSubmitting={isSubmitting}
+      isWaitlistCheckout={checkout.isWaitlistCheckout}
+      maxGuests={checkout.maxGuests}
+      maxSelectableGuests={checkout.maxSelectableGuests}
+      minGuestCount={checkout.minGuestCount}
+      onBack={() => navigate(`/games/${checkoutData.game.id}`)}
+      onConfirmBooking={() =>
+        confirmBooking({
+          agreed,
+          appUser,
+          effectiveGuestCount: checkout.effectiveGuestCount,
+          existingParticipant: checkout.existingParticipant,
+          game: checkoutData.game,
+          isAddGuestsCheckout,
+          isJoinWindowClosed: checkout.isJoinWindowClosed,
+        })
+      }
+      onGuestCountChange={setGuestCount}
+      onSetAgreed={setAgreed}
+      paymentMethod={checkout.paymentMethod}
+      platformFee={checkout.platformFee}
+      price={checkout.price}
+      primaryImage={checkout.primaryImage}
+      projectedGuestCount={checkout.projectedGuestCount}
+      submitError={submitError}
+      title={checkout.title}
+      total={checkout.total}
+    />
   )
-}
-
-function CheckoutLine({ label, value }) {
-  return (
-    <div className="checkout-line">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
-}
-
-function getConfirmLabel({
-  agreed,
-  isAddGuestsCheckout,
-  isBlockedByCapacity,
-  isJoinWindowClosed,
-  isSubmitting,
-  isWaitlistCheckout,
-}) {
-  if (isSubmitting) {
-    return 'Confirming...'
-  }
-
-  if (isJoinWindowClosed) {
-    return isAddGuestsCheckout ? 'Attendance Closed' : 'Join Closed'
-  }
-
-  if (isBlockedByCapacity) {
-    return 'Not Enough Spots'
-  }
-
-  if (!agreed) {
-    return 'Accept Terms to Continue'
-  }
-
-  if (isAddGuestsCheckout) {
-    return 'Confirm & Pay'
-  }
-
-  return isWaitlistCheckout ? 'Join Waitlist' : 'Confirm & Pay'
-}
-
-function getParticipantSummary(participants, totalSpots = 0) {
-  const signedUpCount = participants.filter((participant) =>
-    ACTIVE_ROSTER_STATUSES.has(participant.participant_status),
-  ).length
-
-  return {
-    signedUpCount,
-    spotsLeft: Math.max((totalSpots || 0) - signedUpCount, 0),
-  }
-}
-
-function getCurrentGuestCount(participants, currentParticipant, currentUserId) {
-  if (!currentParticipant) {
-    return 0
-  }
-
-  return participants.filter((participant) => {
-    if (participant.participant_type !== 'guest' || !ACTIVE_JOIN_STATUSES.has(participant.participant_status)) {
-      return false
-    }
-
-    if (currentParticipant.booking_id && participant.booking_id === currentParticipant.booking_id) {
-      return true
-    }
-
-    return participant.guest_of_user_id === currentUserId
-  }).length
-}
-
-function getPrimaryImage(images, game) {
-  const image = images
-    .slice()
-    .sort(
-      (first, second) =>
-        Number(second.is_primary) - Number(first.is_primary) ||
-        first.sort_order - second.sort_order,
-    )[0]
-
-  if (image?.image_url) {
-    return buildMediaUrl(image.image_url)
-  }
-
-  return game?.game_type === 'community' ? defaultCommunityVenueImage : defaultCommunityVenueImage
-}
-
-function hasCompleteProfile(user) {
-  return Boolean(user?.first_name && user?.last_name && user?.date_of_birth)
-}
-
-function getDisplayName(user) {
-  return `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.email || 'You'
-}
-
-function getInitials(user) {
-  const first = user?.first_name?.[0] || ''
-  const last = user?.last_name?.[0] || ''
-  return `${first}${last}`.toUpperCase() || 'PL'
-}
-
-function formatVenueAddress(game, venue) {
-  const street = game.address_snapshot || venue?.address_line_1
-  const city = game.city_snapshot || venue?.city
-  const state = game.state_snapshot || venue?.state
-  const postalCode = venue?.postal_code
-
-  if (street && addressIncludesLocality(street, city, state, postalCode)) {
-    return street
-  }
-
-  return [street, [city, state, postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-}
-
-function addressIncludesLocality(address, city, state, postalCode) {
-  const normalizedAddress = address.toLowerCase()
-
-  return [city, state, postalCode]
-    .filter(Boolean)
-    .some((addressPart) => normalizedAddress.includes(String(addressPart).toLowerCase()))
-}
-
-function formatDate(value) {
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(value))
-}
-
-function formatTime(value) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value))
-}
-
-function formatTimeRange(start, end) {
-  return `${formatTime(start)} - ${formatTime(end)}`
-}
-
-function formatMoney(cents) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format((cents || 0) / 100)
-}
-
-function formatPaymentMethod(paymentMethod) {
-  if (!paymentMethod) {
-    return 'Demo card .... 4242'
-  }
-
-  return `${capitalize(paymentMethod.card_brand || 'card')} .... ${paymentMethod.card_last4}`
-}
-
-function capitalize(value) {
-  return value ? value.charAt(0).toUpperCase() + value.slice(1) : ''
 }
 
 export default GameCheckoutPage

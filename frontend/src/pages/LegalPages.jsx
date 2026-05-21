@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import BrandMark from '../components/BrandMark.jsx'
-import '../styles/legal.css'
+import '../styles/legal/LegalPages.css'
 
 export function TermsPage() {
   return (

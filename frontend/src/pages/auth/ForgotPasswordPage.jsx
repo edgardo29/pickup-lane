@@ -9,12 +9,12 @@ import {
 import { useAuth } from '../../hooks/useAuth.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import {
-  AuthField,
   AuthHalo,
   AuthHeader,
   AuthPanel,
-  SecurityCallout,
-} from '../../features/auth/AuthFormParts.jsx'
+} from '../../features/auth/AuthLayoutParts.jsx'
+import { AuthField } from '../../features/auth/AuthFields.jsx'
+import { SecurityCallout } from '../../features/auth/AuthSecurity.jsx'
 import { AuthShell } from '../../features/auth/AuthShell.jsx'
 import { isValidEmail } from '../../features/auth/authHelpers.js'
 import '../../styles/auth/ForgotPasswordPage.css'

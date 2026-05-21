@@ -7,8 +7,8 @@ import {
   AuthHalo,
   AuthHeader,
   AuthPanel,
-  AuthStep,
-} from '../../features/auth/AuthFormParts.jsx'
+} from '../../features/auth/AuthLayoutParts.jsx'
+import { AuthStep } from '../../features/auth/AuthSecurity.jsx'
 import { AuthShell } from '../../features/auth/AuthShell.jsx'
 import '../../styles/auth/CheckEmailPage.css'
 

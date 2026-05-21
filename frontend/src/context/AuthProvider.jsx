@@ -1,28 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
-  EmailAuthProvider,
-  GoogleAuthProvider,
-  confirmPasswordReset,
-  createUserWithEmailAndPassword,
-  linkWithCredential,
   onAuthStateChanged,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-  signInWithPopup,
   signOut,
-  verifyPasswordResetCode,
 } from 'firebase/auth'
 import { auth } from '../lib/firebase.js'
 import {
-  cleanupUnfinishedAccount,
-  deleteAuthenticatedAccount,
   getAuthenticatedAppUser,
   syncFirebaseUser,
 } from '../lib/authApi.js'
 import { AuthContext } from './authContext.js'
-
-const googleProvider = new GoogleAuthProvider()
+import { isMissingAppUserError } from './authProviderHelpers.js'
+import { useAuthProviderValue } from './useAuthProviderValue.js'
 
 export function AuthProvider({ children }) {
   const [firebaseUser, setFirebaseUser] = useState(null)
@@ -100,229 +88,19 @@ export function AuthProvider({ children }) {
     return unsubscribe
   }, [loadExistingAppUser])
 
-  const value = useMemo(
-    () => ({
-      appUser,
-      currentUser: firebaseUser,
-      isAuthenticated: Boolean(appUser),
-      isLoading: status === 'loading',
-      beginEmailSignup: (signupData) => {
-        setPendingSignup(signupData)
-      },
-      clearPendingSignup: () => {
-        setPendingSignup(null)
-      },
-      cleanupUnfinishedSignup: async () => {
-        if (!firebaseUser) {
-          setPendingGoogleSignup(false)
-          setPendingSignup(null)
-          return
-        }
-
-        let cleanupError = null
-
-        try {
-          await cleanupUnfinishedAccount(firebaseUser)
-        } catch (error) {
-          cleanupError = error
-        }
-
-        await signOut(auth).catch(() => {})
-        setFirebaseUser(null)
-        setAppUser(null)
-        setPendingSignup(null)
-        setPendingGoogleSignup(false)
-
-        if (cleanupError) {
-          throw cleanupError
-        }
-      },
-      deleteAccount: async (confirmation) => {
-        try {
-          await deleteAuthenticatedAccount(firebaseUser, confirmation)
-        } catch (error) {
-          if (isMissingAppUserError(error)) {
-            return
-          }
-
-          throw error
-        }
-      },
-      logout: async () => {
-        await signOut(auth)
-        setFirebaseUser(null)
-        setAppUser(null)
-        setPendingSignup(null)
-        setPendingGoogleSignup(false)
-      },
-      sendPasswordReset: async (email) => {
-        await sendPasswordResetEmail(auth, email, {
-          url: `${window.location.origin}/reset-password`,
-          handleCodeInApp: true,
-        })
-      },
-      sendCurrentUserVerificationEmail: async () => {
-        const activeUser = firebaseUser || await waitForCurrentFirebaseUser()
-
-        if (!activeUser) {
-          throw new Error('Sign in before verifying your email.')
-        }
-
-        await activeUser.reload()
-        const latestUser = auth.currentUser || activeUser
-        if (latestUser.emailVerified) {
-          const syncedUser = await syncFirebaseUser(latestUser)
-          setFirebaseUser(latestUser)
-          setAppUser(syncedUser)
-          return
-        }
-
-        await sendEmailVerification(activeUser, {
-          url: `${window.location.origin}/create-game`,
-          handleCodeInApp: false,
-        })
-      },
-      refreshCurrentUserVerification: async () => {
-        const activeUser = firebaseUser || await waitForCurrentFirebaseUser()
-
-        if (!activeUser) {
-          return null
-        }
-
-        await activeUser.reload()
-        const refreshedUser = auth.currentUser || activeUser
-        setFirebaseUser(refreshedUser)
-
-        if (!refreshedUser) {
-          return null
-        }
-
-        const refreshedAppUser = refreshedUser.emailVerified
-          ? await syncFirebaseUser(refreshedUser)
-          : await getAuthenticatedAppUser(refreshedUser, true)
-        setAppUser((currentAppUser) => {
-          if (
-            currentAppUser?.id === refreshedAppUser?.id &&
-            currentAppUser?.email_verified_at === refreshedAppUser?.email_verified_at
-          ) {
-            return currentAppUser
-          }
-
-          return refreshedAppUser
-        })
-        return refreshedAppUser
-      },
-      verifyPasswordReset: async (code) => {
-        return verifyPasswordResetCode(auth, code)
-      },
-      confirmPasswordReset: async (code, password) => {
-        await confirmPasswordReset(auth, code, password)
-      },
-      addPasswordToCurrentAccount: async (password) => {
-        if (!firebaseUser?.email) {
-          throw new Error('Sign in before adding a password.')
-        }
-
-        const credential = EmailAuthProvider.credential(firebaseUser.email, password)
-        await linkWithCredential(firebaseUser, credential)
-        await firebaseUser.reload()
-        setFirebaseUser(auth.currentUser)
-      },
-      signInWithEmail: async (email, password) => {
-        const credential = await signInWithEmailAndPassword(auth, email, password)
-        const existingUser = await loadExistingAppUser(credential.user)
-        setPendingSignup(null)
-        setPendingGoogleSignup(false)
-        return existingUser
-      },
-      signInWithGoogle: async () => {
-        setPendingGoogleSignup(true)
-
-        try {
-          const credential = await signInWithPopup(auth, googleProvider)
-          const existingUser = await loadExistingAppUser(credential.user)
-
-          if (existingUser && hasCompleteProfile(existingUser)) {
-            setPendingGoogleSignup(false)
-          }
-
-          setPendingSignup(null)
-          return existingUser
-        } catch (error) {
-          setPendingGoogleSignup(false)
-          throw error
-        }
-      },
-      settleGoogleSignupRedirect: () => {
-        setPendingGoogleSignup(false)
-      },
-      signUpWithEmail: async (email, password) => {
-        const credential = await createUserWithEmailAndPassword(auth, email, password)
-        const syncedUser = await syncAndStoreUser(credential.user)
-        setPendingSignup(null)
-        return syncedUser
-      },
-      syncCurrentFirebaseUser: async () => {
-        if (!firebaseUser) {
-          return null
-        }
-
-        return syncAndStoreUser(firebaseUser)
-      },
-      pendingSignup,
-      pendingGoogleSignup,
-      updateAppUser: setAppUser,
-    }),
-    [
-      appUser,
-      firebaseUser,
-      loadExistingAppUser,
-      pendingGoogleSignup,
-      pendingSignup,
-      status,
-      syncAndStoreUser,
-    ],
-  )
+  const value = useAuthProviderValue({
+    appUser,
+    firebaseUser,
+    loadExistingAppUser,
+    pendingGoogleSignup,
+    pendingSignup,
+    setAppUser,
+    setFirebaseUser,
+    setPendingGoogleSignup,
+    setPendingSignup,
+    status,
+    syncAndStoreUser,
+  })
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-function isMissingAppUserError(error) {
-  const code = error?.code || ''
-  const message = error?.message || ''
-
-  return (
-    code.includes('user-not-found') ||
-    message.includes('USER_NOT_FOUND') ||
-    message.toLowerCase().includes('user not found')
-  )
-}
-
-function waitForCurrentFirebaseUser(timeoutMs = 5000) {
-  if (auth.currentUser) {
-    return Promise.resolve(auth.currentUser)
-  }
-
-  return new Promise((resolve) => {
-    let settled = false
-    let unsubscribe = () => {}
-
-    const finish = (user) => {
-      if (settled) {
-        return
-      }
-
-      settled = true
-      window.clearTimeout(timeoutId)
-      unsubscribe()
-      resolve(user || auth.currentUser || null)
-    }
-
-    const timeoutId = window.setTimeout(() => finish(auth.currentUser || null), timeoutMs)
-    unsubscribe = onAuthStateChanged(auth, finish, () => finish(null))
-  })
-}
-
-function hasCompleteProfile(user) {
-  return Boolean(user?.first_name && user?.last_name && user?.date_of_birth)
 }

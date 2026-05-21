@@ -1,0 +1,55 @@
+import { apiRequest } from '../../lib/apiClient.js'
+import { emptySettings, emptyStats } from './profileData.js'
+
+export async function loadProfileData(userId) {
+  const [settingsResponse, statsResponse, paymentMethodsResponse] = await Promise.all([
+    apiRequest(`/user-settings/${userId}`).catch(() => emptySettings),
+    apiRequest(`/user-stats/${userId}`).catch(() => emptyStats),
+    apiRequest(`/user-payment-methods?user_id=${userId}`).catch(() => []),
+  ])
+
+  return {
+    paymentMethods: paymentMethodsResponse,
+    settings: settingsResponse,
+    stats: statsResponse,
+  }
+}
+
+export function updateProfileUser(userId, profilePayload) {
+  return apiRequest(`/users/${userId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profilePayload),
+  })
+}
+
+export async function saveUserSettings(userId, currentSettings, nextSettings) {
+  try {
+    return await apiRequest(`/user-settings/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nextSettings),
+    })
+  } catch (requestError) {
+    if (
+      requestError instanceof Error &&
+      !requestError.message.toLowerCase().includes('not found')
+    ) {
+      throw requestError
+    }
+
+    return apiRequest('/user-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email_notifications_enabled: currentSettings.email_notifications_enabled,
+        location_permission_status: currentSettings.location_permission_status,
+        marketing_opt_in: currentSettings.marketing_opt_in,
+        push_notifications_enabled: currentSettings.push_notifications_enabled,
+        sms_notifications_enabled: currentSettings.sms_notifications_enabled,
+        user_id: userId,
+        ...nextSettings,
+      }),
+    })
+  }
+}

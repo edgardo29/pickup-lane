@@ -1,4 +1,5 @@
-import { GAME_ACTIVITY_TYPES, formatRelativeTime } from './inboxData.js'
+import { GAME_ACTIVITY_TYPES } from './inboxData.js'
+import { formatRelativeTime } from './inboxFormatters.js'
 
 function InboxRow({ game, notification, onOpenNotification }) {
   const isGameActivity = GAME_ACTIVITY_TYPES.has(notification.notification_type)
