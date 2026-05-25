@@ -438,11 +438,9 @@ def set_current_user_default_payment_method(
             detail="Stripe could not set this default payment method.",
         ) from exc
 
-    unset_other_active_defaults(
-        db,
-        current_user.id,
-        keep_payment_method_id=payment_method.id,
-    )
+    unset_other_active_defaults(db, current_user.id)
+    db.flush()
+
     payment_method.is_default = True
     payment_method.updated_at = datetime.now(timezone.utc)
 
