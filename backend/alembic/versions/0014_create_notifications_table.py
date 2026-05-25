@@ -22,6 +22,7 @@ def upgrade() -> None:
         sa.Column("title", sa.String(length=150), nullable=False),
         sa.Column("body", sa.Text(), nullable=False),
         sa.Column("related_game_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("related_chat_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("related_booking_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column(
             "related_participant_id",
@@ -38,6 +39,12 @@ def upgrade() -> None:
         sa.Column("read_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.text("now()"),
@@ -76,6 +83,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["related_game_id"],
             ["games.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["related_chat_id"],
+            ["game_chats.id"],
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
@@ -132,6 +144,12 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
+        "ix_notifications_related_chat_id",
+        "notifications",
+        ["related_chat_id"],
+        unique=False,
+    )
+    op.create_index(
         "ix_notifications_related_booking_id",
         "notifications",
         ["related_booking_id"],
@@ -160,6 +178,7 @@ def downgrade() -> None:
         table_name="notifications",
     )
     op.drop_index("ix_notifications_related_booking_id", table_name="notifications")
+    op.drop_index("ix_notifications_related_chat_id", table_name="notifications")
     op.drop_index("ix_notifications_related_game_id", table_name="notifications")
     op.drop_index(
         "ix_notifications_user_id_is_read_created_at",

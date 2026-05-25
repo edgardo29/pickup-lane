@@ -4,6 +4,7 @@ import { loadGameCheckout } from './gameCheckoutApi.js'
 
 export function useGameCheckoutData({
   appUser,
+  firebaseUser,
   gameId,
   isAuthLoading,
   navigate,
@@ -38,7 +39,7 @@ export function useGameCheckoutData({
       setError('')
 
       try {
-        const checkout = await loadGameCheckout({ appUserId: appUser.id, gameId })
+        const checkout = await loadGameCheckout({ firebaseUser, gameId })
 
         if (!ignore) {
           setGame(checkout.game)
@@ -61,7 +62,7 @@ export function useGameCheckoutData({
     return () => {
       ignore = true
     }
-  }, [appUser, gameId, isAuthLoading, navigate])
+  }, [appUser, firebaseUser, gameId, isAuthLoading, navigate])
 
   return {
     error,

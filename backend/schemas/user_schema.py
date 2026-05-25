@@ -21,7 +21,6 @@ class UserCreate(BaseModel):
     profile_photo_url: str | None = None
     home_city: str | None = None
     home_state: str | None = None
-    stripe_customer_id: str | None = None
 
 
 # UserRead defines the user shape returned by the API after reading or creating
@@ -45,7 +44,6 @@ class UserRead(BaseModel):
     account_status: str
     hosting_status: str
     hosting_suspended_until: datetime | None
-    stripe_customer_id: str | None
     member_since: datetime
     created_at: datetime
     updated_at: datetime
@@ -66,4 +64,3 @@ class UserUpdate(BaseModel):
     profile_photo_url: str | None = None
     home_city: str | None = None
     home_state: str | None = None
-    stripe_customer_id: str | None = None

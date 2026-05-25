@@ -22,12 +22,30 @@ export function buildDateOptions(nowMs) {
   })
 }
 
-export function buildImageUrlsByGameId(gameImages) {
+export function buildImageUrlsByGameId(games = [], gameImages = [], venueImages = []) {
   const images = new Map()
+  const venueImagesByVenueId = new Map()
 
   gameImages.forEach((image) => {
     if (!images.has(image.game_id)) {
       images.set(image.game_id, buildMediaUrl(image.image_url))
+    }
+  })
+
+  venueImages.forEach((image) => {
+    if (!venueImagesByVenueId.has(image.venue_id)) {
+      venueImagesByVenueId.set(image.venue_id, buildMediaUrl(image.image_url))
+    }
+  })
+
+  games.forEach((game) => {
+    if (game.game_type !== 'official' || images.has(game.id)) {
+      return
+    }
+
+    const venueImageUrl = venueImagesByVenueId.get(game.venue_id)
+    if (venueImageUrl) {
+      images.set(game.id, venueImageUrl)
     }
   })
 

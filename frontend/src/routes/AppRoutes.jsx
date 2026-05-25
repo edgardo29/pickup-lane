@@ -8,6 +8,12 @@ import {
   SignInPage,
 } from '../pages/auth/index.js'
 import {
+  AdminCreateOfficialGamePage,
+  AdminOfficialGamePage,
+  AdminOfficialGamesPage,
+  AdminSignInPage,
+} from '../pages/admin/index.js'
+import {
   BrowseGamesPage,
   GameCheckoutPage,
   GameDetailsPage,
@@ -22,8 +28,13 @@ import {
   NeedASubManagePage,
   NeedASubPage,
 } from '../pages/need-a-sub/index.js'
-import { EditProfilePage, ProfilePage, SettingsPage } from '../pages/profile/index.js'
-import { RedirectSignedIn, RequireAppUser } from './RouteGuards.jsx'
+import {
+  EditProfilePage,
+  PaymentMethodsPage,
+  ProfilePage,
+  SettingsPage,
+} from '../pages/profile/index.js'
+import { RedirectSignedIn, RequireAdmin, RequireAppUser } from './RouteGuards.jsx'
 
 export function AppRoutes() {
   return (
@@ -86,6 +97,42 @@ export function AppRoutes() {
           </RequireAppUser>
         }
       />
+      <Route
+        path="/admin/sign-in"
+        element={<AdminSignInPage />}
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireAdmin>
+            <Navigate to="/admin/official-games" replace />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/official-games"
+        element={
+          <RequireAdmin>
+            <AdminOfficialGamesPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/official-games/new"
+        element={
+          <RequireAdmin>
+            <AdminCreateOfficialGamePage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/official-games/:gameId"
+        element={
+          <RequireAdmin>
+            <AdminOfficialGamePage />
+          </RequireAdmin>
+        }
+      />
       <Route path="/need-a-sub" element={<NeedASubPage />} />
       <Route path="/need-a-sub/posts/:postId" element={<NeedASubDetailPage />} />
       <Route
@@ -126,6 +173,14 @@ export function AppRoutes() {
         element={
           <RequireAppUser>
             <SettingsPage />
+          </RequireAppUser>
+        }
+      />
+      <Route
+        path="/settings/payment-methods"
+        element={
+          <RequireAppUser>
+            <PaymentMethodsPage />
           </RequireAppUser>
         }
       />

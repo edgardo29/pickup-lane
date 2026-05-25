@@ -69,6 +69,7 @@ function buildPreferenceRows({
       text: defaultPaymentMethod
         ? `${capitalize(defaultPaymentMethod.card_brand)} ending ${defaultPaymentMethod.card_last4}`
         : 'No card on file',
+      to: '/settings/payment-methods',
     },
     {
       icon: <HelpIcon />,

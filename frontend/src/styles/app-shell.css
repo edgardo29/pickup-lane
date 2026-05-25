@@ -239,7 +239,20 @@
   display: none;
 }
 
+.app-nav__menu-section {
+  display: contents;
+}
+
+.app-nav__menu-section--menu-only {
+  display: none;
+}
+
+.app-nav__menu-section-title {
+  display: none;
+}
+
 .app-nav__link,
+.app-nav__admin-link,
 .app-nav__user {
   min-height: 40px;
   border: 0;
@@ -266,12 +279,14 @@
 
 .app-nav__brand:hover,
 .app-nav__link:hover,
+.app-nav__admin-link:hover,
 .app-nav__user:hover {
   color: var(--lime);
 }
 
 .app-nav__brand:focus-visible,
 .app-nav__link:focus-visible,
+.app-nav__admin-link:focus-visible,
 .app-nav__user:focus-visible,
 .app-nav__menu-button:focus-visible {
   outline: 2px solid var(--lime);
@@ -287,6 +302,22 @@
   right: 0;
   bottom: -12px;
   left: 0;
+}
+
+.app-nav__admin-link {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(184, 255, 36, 0.22);
+  border-radius: 999px;
+  color: var(--lime);
+  background: rgba(184, 255, 36, 0.06);
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.app-nav__admin-link.active {
+  color: #061006;
+  background: var(--lime);
 }
 
 .app-nav__badge {
@@ -461,7 +492,7 @@
   }
 
   .app-nav__links--open {
-    max-height: 380px;
+    max-height: 620px;
     margin-top: 2px;
     padding: 6px;
     border-color: rgba(248, 250, 252, 0.16);
@@ -489,6 +520,29 @@
     align-items: center;
     gap: 10px;
     text-decoration: none;
+  }
+
+  .app-nav__menu-section {
+    display: grid;
+    gap: 2px;
+  }
+
+  .app-nav__menu-section + .app-nav__menu-section {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(248, 250, 252, 0.08);
+  }
+
+  .app-nav__menu-section-title {
+    min-height: 24px;
+    padding: 0 11px;
+    color: var(--lime);
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   .app-nav__menu-user span {
@@ -546,6 +600,10 @@
     bottom: auto;
     left: 0;
     transform: translateY(-50%);
+  }
+
+  .app-nav__admin-link {
+    display: none;
   }
 
   .app-nav__menu-button {
@@ -607,6 +665,11 @@
     min-height: 36px;
     padding: 0;
     justify-content: center;
+  }
+
+  .app-nav__admin-link {
+    min-height: 34px;
+    padding: 0 10px;
   }
 
   .app-nav__user span {

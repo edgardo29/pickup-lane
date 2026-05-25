@@ -8,11 +8,16 @@ from fastapi.staticfiles import StaticFiles
 from backend.database import check_database_connection
 from backend.routes import (
     admin_actions_router,
+    admin_game_credits_router,
+    admin_lookups_router,
+    admin_official_games_router,
+    admin_venue_images_router,
     auth_router,
     booking_policy_acceptances_router,
     booking_status_history_router,
     bookings_router,
     chat_messages_router,
+    checkout_router,
     community_game_details_router,
     community_games_router,
     game_chats_router,
@@ -29,6 +34,7 @@ from backend.routes import (
     policy_acceptances_router,
     policy_documents_router,
     refunds_router,
+    stripe_webhook_router,
     sub_post_positions_router,
     sub_post_request_status_history_router,
     sub_post_requests_router,
@@ -39,6 +45,7 @@ from backend.routes import (
     user_stats_router,
     users_router,
     venue_approval_requests_router,
+    venue_images_router,
     venues_router,
     waitlist_entries_router,
 )
@@ -91,10 +98,16 @@ app.include_router(user_stats_router)
 app.include_router(user_payment_method_router)
 app.include_router(venues_router)
 app.include_router(venue_approval_requests_router)
+app.include_router(venue_images_router)
 app.include_router(game_chats_router)
 app.include_router(game_credits_router)
+app.include_router(admin_game_credits_router)
+app.include_router(admin_lookups_router)
+app.include_router(admin_official_games_router)
+app.include_router(admin_venue_images_router)
 app.include_router(game_images_router)
 app.include_router(chat_messages_router)
+app.include_router(checkout_router)
 app.include_router(community_game_details_router)
 app.include_router(community_games_router)
 app.include_router(games_router)
@@ -113,6 +126,7 @@ app.include_router(payment_events_router)
 app.include_router(policy_documents_router)
 app.include_router(policy_acceptances_router)
 app.include_router(refunds_router)
+app.include_router(stripe_webhook_router)
 app.include_router(sub_posts_router)
 app.include_router(sub_post_positions_router)
 app.include_router(sub_post_requests_router)

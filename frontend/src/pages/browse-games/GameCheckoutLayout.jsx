@@ -20,8 +20,12 @@ function GameCheckoutLayout({
   isAddGuestsBlockedByParticipant,
   isAddGuestsCheckout,
   isBlockedByCapacity,
+  isExistingParticipantBlocked,
+  isGuestSelectionLocked,
   isJoinWindowClosed,
+  isPaymentActionBlocked,
   isSubmitting,
+  isStripeCheckout,
   isWaitlistCheckout,
   maxGuests,
   maxSelectableGuests,
@@ -29,13 +33,18 @@ function GameCheckoutLayout({
   onBack,
   onConfirmBooking,
   onGuestCountChange,
+  onSelectPaymentMethod,
   onSetAgreed,
   paymentMethod,
+  paymentMethods,
   platformFee,
   price,
   primaryImage,
   projectedGuestCount,
+  selectedPaymentMethodId,
   submitError,
+  stripeStatusMessage,
+  stripeUnavailable,
   title,
   total,
 }) {
@@ -45,7 +54,8 @@ function GameCheckoutLayout({
     isBlockedByCapacity ||
     isJoinWindowClosed ||
     isAddGuestsBlockedByParticipant ||
-    (!isAddGuestsCheckout && Boolean(existingParticipant))
+    isPaymentActionBlocked ||
+    isExistingParticipantBlocked
 
   return (
     <div className="checkout-page">
@@ -72,6 +82,7 @@ function GameCheckoutLayout({
               effectiveGuestCount={effectiveGuestCount}
               isAddGuestsCheckout={isAddGuestsCheckout}
               isBlockedByCapacity={isBlockedByCapacity}
+              isGuestSelectionLocked={isGuestSelectionLocked}
               isWaitlistCheckout={isWaitlistCheckout}
               maxGuests={maxGuests}
               maxSelectableGuests={maxSelectableGuests}
@@ -80,7 +91,15 @@ function GameCheckoutLayout({
               projectedGuestCount={projectedGuestCount}
             />
 
-            <GameCheckoutPaymentCard paymentMethod={paymentMethod} />
+            <GameCheckoutPaymentCard
+              isStripeCheckout={isStripeCheckout}
+              onSelectPaymentMethod={onSelectPaymentMethod}
+              paymentMethod={paymentMethod}
+              paymentMethods={paymentMethods}
+              selectedPaymentMethodId={selectedPaymentMethodId}
+              stripeStatusMessage={stripeStatusMessage}
+              stripeUnavailable={stripeUnavailable}
+            />
 
             <GameCheckoutPolicyCard gameId={game.id} />
 
@@ -90,6 +109,7 @@ function GameCheckoutLayout({
               existingParticipant={existingParticipant}
               isAddGuestsBlockedByParticipant={isAddGuestsBlockedByParticipant}
               isAddGuestsCheckout={isAddGuestsCheckout}
+              isExistingParticipantBlocked={isExistingParticipantBlocked}
               isJoinWindowClosed={isJoinWindowClosed}
               submitError={submitError}
             />

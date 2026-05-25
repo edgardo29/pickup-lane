@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.routes.auth_routes import get_current_app_user
+from backend.routes.auth_routes import get_current_app_user, is_admin
 from backend.models import (
     AdminAction,
     Booking,
@@ -610,7 +610,7 @@ def require_cancel_permission(db_game: Game, current_user: User) -> str:
             detail="Your account cannot cancel games right now.",
         )
 
-    if current_user.role == "admin":
+    if is_admin(current_user):
         return "admin_cancelled"
 
     if db_game.game_type == "community":

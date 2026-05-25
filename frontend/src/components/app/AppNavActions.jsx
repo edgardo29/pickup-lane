@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 
 export function AppNavActions({
   appUser,
@@ -11,6 +11,11 @@ export function AppNavActions({
 }) {
   return (
     <div className="app-nav__actions">
+      {!isLoading && appUser?.role === 'admin' && (
+        <NavLink className="app-nav__admin-link" to="/admin/official-games" onClick={closeMenu}>
+          Admin
+        </NavLink>
+      )}
       {isLoading ? (
         <span className="app-nav__user app-nav__user--loading" aria-hidden="true">
           <span />

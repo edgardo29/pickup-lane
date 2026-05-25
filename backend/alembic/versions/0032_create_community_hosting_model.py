@@ -12,10 +12,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Old local dev DBs may still have the removed host_profiles table from
-    # the earlier version of this branch. Keep clean rebuilds deterministic.
-    op.execute("DROP TABLE IF EXISTS host_profiles CASCADE")
-
     # Create per-game community payment snapshots and paid/waived publish fees.
     op.create_table(
         "community_game_details",
@@ -172,8 +168,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS host_profiles CASCADE")
-
     op.drop_index(
         "ux_host_publish_fees_one_first_free_per_host",
         table_name="host_publish_fees",

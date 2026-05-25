@@ -101,10 +101,10 @@ export function buildMapsUrl(venue, address) {
 
 export function formatPaymentMethod(paymentMethod) {
   if (!paymentMethod) {
-    return 'Demo card .... 4242'
+    return 'Card details needed'
   }
 
-  return `${capitalize(paymentMethod.card_brand || 'card')} .... ${paymentMethod.card_last4}`
+  return `${capitalize(paymentMethod.card_brand || 'card')} ending ${paymentMethod.card_last4}`
 }
 
 function addressIncludesLocality(address, city, state, postalCode) {

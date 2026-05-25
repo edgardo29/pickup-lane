@@ -86,35 +86,8 @@ def upgrade() -> None:
     op.create_index("ix_game_credit_usage_usage_type", "game_credit_usage", ["usage_type"])
     op.create_index("ix_game_credit_usage_user_id", "game_credit_usage", ["user_id"])
 
-    op.drop_constraint("ck_admin_actions_action_type", "admin_actions", type_="check")
-    op.create_check_constraint(
-        "ck_admin_actions_action_type",
-        "admin_actions",
-        (
-            "action_type IN ('cancel_game', 'refund_booking', 'mark_no_show', "
-            "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
-            "'restrict_hosting', 'restore_hosting', 'approve_venue', "
-            "'reject_venue', 'remove_chat_message', 'hide_chat_message', "
-            "'update_game', 'update_booking', 'update_participant', "
-            "'issue_credit', 'reverse_credit')"
-        ),
-    )
-
 
 def downgrade() -> None:
-    op.drop_constraint("ck_admin_actions_action_type", "admin_actions", type_="check")
-    op.create_check_constraint(
-        "ck_admin_actions_action_type",
-        "admin_actions",
-        (
-            "action_type IN ('cancel_game', 'refund_booking', 'mark_no_show', "
-            "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
-            "'restrict_hosting', 'restore_hosting', 'approve_venue', "
-            "'reject_venue', 'remove_chat_message', 'hide_chat_message', "
-            "'update_game', 'update_booking', 'update_participant')"
-        ),
-    )
-
     op.drop_index("ix_game_credit_usage_user_id", table_name="game_credit_usage")
     op.drop_index("ix_game_credit_usage_usage_type", table_name="game_credit_usage")
     op.drop_index("ix_game_credit_usage_game_credit_id", table_name="game_credit_usage")

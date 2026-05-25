@@ -46,7 +46,10 @@ def upgrade() -> None:
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
                 "'reject_venue', 'remove_chat_message', 'hide_chat_message', "
                 "'update_game', 'update_booking', "
-                "'update_participant'"
+                "'update_participant', 'issue_credit', 'reverse_credit', "
+                "'create_official_game', 'update_official_game', "
+                "'assign_official_host', 'remove_official_host', "
+                "'admin_add_player', 'admin_remove_player', 'waive_payment'"
                 ")"
             ),
             name="ck_admin_actions_action_type",

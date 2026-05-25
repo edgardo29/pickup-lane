@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import AdminAction, Game, GameCredit, GameCreditUsage, User
-from backend.routes.auth_routes import get_current_app_user
+from backend.routes.auth_routes import (
+    get_current_admin_user,
+    get_current_app_user,
+    require_admin,
+)
 from backend.routes.user_routes import build_conflict_detail
 from backend.schemas import (
     GameCreditBalanceRead,
@@ -18,6 +22,7 @@ from backend.schemas import (
 )
 
 router = APIRouter(prefix="/game-credits", tags=["game_credits"])
+admin_router = APIRouter(prefix="/admin/game-credits", tags=["admin_game_credits"])
 
 VALID_CREDIT_REASONS = {
     "official_game_cancelled",
@@ -26,14 +31,6 @@ VALID_CREDIT_REASONS = {
     "admin_credit",
     "support_adjustment",
 }
-
-
-def require_admin(user: User) -> None:
-    if user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required.",
-        )
 
 
 def get_active_user_or_404(db: Session, user_id: uuid.UUID) -> User:
@@ -110,14 +107,16 @@ def list_game_credits(
     return list(db.scalars(statement).all())
 
 
-@router.post("/admin/issue", response_model=GameCreditRead, status_code=status.HTTP_201_CREATED)
+@admin_router.post(
+    "/issue",
+    response_model=GameCreditRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def issue_game_credit(
     payload: GameCreditIssueCreate,
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ) -> GameCredit:
-    require_admin(current_user)
-
     if payload.credit_reason not in VALID_CREDIT_REASONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -179,18 +178,17 @@ def issue_game_credit(
     return game_credit
 
 
-@router.post(
-    "/{game_credit_id}/admin/reverse",
+@admin_router.post(
+    "/{game_credit_id}/reverse",
     response_model=GameCreditRead,
     status_code=status.HTTP_200_OK,
 )
 def reverse_game_credit(
     game_credit_id: uuid.UUID,
     payload: GameCreditReverseCreate,
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ) -> GameCredit:
-    require_admin(current_user)
     game_credit = db.get(GameCredit, game_credit_id)
 
     if game_credit is None:

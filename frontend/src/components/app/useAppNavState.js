@@ -75,6 +75,10 @@ export function useAppNavState({
       return !appUser
     }
 
+    if (item.auth === 'admin') {
+      return appUser?.role === 'admin'
+    }
+
     return Boolean(appUser)
   })
 

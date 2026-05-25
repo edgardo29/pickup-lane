@@ -100,5 +100,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Downgrade removes the users table entirely because this migration only
     # introduces that single table.
-    op.execute("DROP TABLE IF EXISTS host_profiles CASCADE")
     op.drop_table("users")

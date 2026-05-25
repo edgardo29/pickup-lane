@@ -377,6 +377,7 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
             game_id,
             {
                 "game_type": game_data["game_type"],
+                "payment_collection_type": game_data["payment_collection_type"],
                 "publish_status": "published",
                 "game_status": game_status,
                 "title": game_data["title"],
@@ -391,6 +392,7 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
                 "created_by_user_id": host.id if is_community else admin.id,
                 "starts_at": game_start,
                 "ends_at": ends_at(game_start),
+                "starts_on_local": game_start.date(),
                 "timezone": "America/Chicago",
                 "sport_type": "soccer",
                 "format_label": game_data["format_label"],

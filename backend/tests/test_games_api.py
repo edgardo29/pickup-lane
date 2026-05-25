@@ -207,7 +207,7 @@ def test_admin_can_cancel_community_game_and_notify_host(client: TestClient):
         assert len(notifications_response.json()) == 1
 
     admin_actions_response = client.get(
-        f"/admin-actions?target_game_id={game['id']}&action_type=cancel_game"
+        f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
     )
     assert admin_actions_response.status_code == 200, admin_actions_response.text
     admin_actions = admin_actions_response.json()
@@ -370,7 +370,7 @@ def test_cancel_official_game_refunds_demo_payments_and_writes_audit_rows(
     assert payments_response.json()[0]["payment_status"] == "refunded"
 
     admin_actions_response = client.get(
-        f"/admin-actions?target_game_id={game['id']}&action_type=cancel_game"
+        f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
     )
     assert admin_actions_response.status_code == 200, admin_actions_response.text
     admin_actions = admin_actions_response.json()

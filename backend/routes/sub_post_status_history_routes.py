@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import SubPostStatusHistory, User
-from backend.routes.auth_routes import get_current_app_user
+from backend.routes.auth_routes import get_current_app_user, is_admin_or_moderator
 from backend.schemas import SubPostStatusHistoryRead
-from backend.services.need_a_sub_service import ADMIN_ROLES, get_sub_post_or_404
+from backend.services.need_a_sub_service import get_sub_post_or_404
 
 router = APIRouter(
     prefix="/need-a-sub/posts/{sub_post_id}/status-history",
@@ -28,7 +28,10 @@ def list_need_a_sub_post_status_history(
 ) -> list[SubPostStatusHistory]:
     sub_post = get_sub_post_or_404(db, sub_post_id)
 
-    if sub_post.owner_user_id != current_user.id and current_user.role not in ADMIN_ROLES:
+    if (
+        sub_post.owner_user_id != current_user.id
+        and not is_admin_or_moderator(current_user)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You cannot view this post history.",

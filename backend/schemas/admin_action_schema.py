@@ -12,7 +12,6 @@ REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 class AdminActionCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    admin_user_id: UUID
     action_type: str
     target_user_id: UUID | None = None
     target_game_id: UUID | None = None
@@ -52,7 +51,6 @@ class AdminActionRead(BaseModel):
 class AdminActionUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    admin_user_id: UUID | None = None
     action_type: str | None = None
     target_user_id: UUID | None = None
     target_game_id: UUID | None = None

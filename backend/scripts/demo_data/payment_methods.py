@@ -20,14 +20,15 @@ def seed_user_payment_methods(
         payment_method_id,
         {
             "user_id": current_user.id,
-            "provider": "stripe",
-            "provider_payment_method_id": "pm_demo_alex_visa_4242",
+            "stripe_customer_id": "cus_demo_alex",
+            "stripe_payment_method_id": "pm_demo_alex_visa_4242",
+            "card_fingerprint": "fp_demo_alex_visa_4242",
             "card_brand": "visa",
             "card_last4": "4242",
             "exp_month": 12,
             "exp_year": 2030,
+            "method_status": "active",
             "is_default": True,
-            "is_active": True,
             "updated_at": timestamp,
         },
     )

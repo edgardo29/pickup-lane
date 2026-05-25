@@ -32,6 +32,11 @@ from backend.schemas import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+ADMIN_ROLE = "admin"
+MODERATOR_ROLE = "moderator"
+ADMIN_ROLES = {ADMIN_ROLE}
+ADMIN_OR_MODERATOR_ROLES = {ADMIN_ROLE, MODERATOR_ROLE}
+
 
 def get_active_user_by_auth_id(auth_user_id: str, db: Session) -> User | None:
     user = db.scalar(
@@ -374,6 +379,44 @@ def get_optional_current_app_user(
         return None
 
     return get_authenticated_user_from_token(authorization, db)
+
+
+def is_admin(user: User) -> bool:
+    return user.role == ADMIN_ROLE
+
+
+def is_admin_or_moderator(user: User) -> bool:
+    return user.role in ADMIN_OR_MODERATOR_ROLES
+
+
+def require_admin(user: User) -> None:
+    if not is_admin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        )
+
+
+def require_admin_or_moderator(user: User) -> None:
+    if not is_admin_or_moderator(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an admin or moderator can perform this action.",
+        )
+
+
+def get_current_admin_user(
+    current_user: User = Depends(get_current_app_user),
+) -> User:
+    require_admin(current_user)
+    return current_user
+
+
+def get_current_admin_or_moderator_user(
+    current_user: User = Depends(get_current_app_user),
+) -> User:
+    require_admin_or_moderator(current_user)
+    return current_user
 
 
 @router.post(

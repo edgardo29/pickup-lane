@@ -14,6 +14,10 @@ from backend.models import (
     SubPostStatusHistory,
     User,
 )
+from backend.routes.auth_routes import (
+    ADMIN_OR_MODERATOR_ROLES,
+    require_admin_or_moderator,
+)
 from backend.schemas import (
     MAX_SUB_POST_POSITION_ROWS,
     MAX_SUB_POST_TOTAL_SUBS,
@@ -64,7 +68,7 @@ TERMINAL_REQUEST_STATUSES = {
     "no_show_reported",
     "expired",
 }
-ADMIN_ROLES = {"admin", "moderator"}
+ADMIN_ROLES = ADMIN_OR_MODERATOR_ROLES
 POST_STATUS_CHANGE_SOURCES = {"owner", "admin", "system", "scheduled_job"}
 VALID_POSITION_GROUPS_BY_POST_GROUP = {
     "men": {"men"},
@@ -155,11 +159,7 @@ def require_owner(sub_post: SubPost, user: User) -> None:
 
 
 def require_admin(user: User) -> None:
-    if user.role not in ADMIN_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only an admin or moderator can perform this action.",
-        )
+    require_admin_or_moderator(user)
 
 
 def require_before_post_start(sub_post: SubPost, detail: str) -> None:

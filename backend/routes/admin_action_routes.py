@@ -17,9 +17,10 @@ from backend.models import (
     User,
     Venue,
 )
+from backend.routes.auth_routes import get_current_admin_user
 from backend.schemas import AdminActionCreate, AdminActionRead, AdminActionUpdate
 
-router = APIRouter(prefix="/admin-actions", tags=["admin_actions"])
+router = APIRouter(prefix="/admin/actions", tags=["admin_actions"])
 
 VALID_ACTION_TYPES = {
     "cancel_game",
@@ -37,8 +38,16 @@ VALID_ACTION_TYPES = {
     "update_game",
     "update_booking",
     "update_participant",
+    "issue_credit",
+    "reverse_credit",
+    "create_official_game",
+    "update_official_game",
+    "assign_official_host",
+    "remove_official_host",
+    "admin_add_player",
+    "admin_remove_player",
+    "waive_payment",
 }
-ADMIN_ALLOWED_ROLES = {"admin", "moderator"}
 TARGET_FIELDS = {
     "target_user_id",
     "target_game_id",
@@ -49,7 +58,6 @@ TARGET_FIELDS = {
     "target_message_id",
 }
 IMMUTABLE_ADMIN_ACTION_UPDATE_FIELDS = {
-    "admin_user_id",
     "action_type",
     "target_user_id",
     "target_game_id",
@@ -110,12 +118,11 @@ def get_existing_record_or_404(
 
 
 def validate_admin_action_business_rules(action_data: dict[str, Any]) -> None:
-    for field_name in ("admin_user_id", "action_type"):
-        if action_data[field_name] is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"{field_name} cannot be null.",
-            )
+    if action_data["action_type"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="action_type cannot be null.",
+        )
 
     if action_data["action_type"] not in VALID_ACTION_TYPES:
         raise HTTPException(
@@ -135,18 +142,6 @@ def validate_admin_action_references(
     db: Session,
     action_data: dict[str, Any],
 ) -> None:
-    db_admin_user = get_user_or_404(
-        db,
-        action_data["admin_user_id"],
-        "Admin user not found.",
-    )
-
-    if db_admin_user.role not in ADMIN_ALLOWED_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="admin_user_id must belong to an admin or moderator user.",
-        )
-
     if action_data["target_user_id"] is not None:
         get_user_or_404(db, action_data["target_user_id"], "Target user not found.")
 
@@ -215,14 +210,16 @@ def validate_admin_action_update_fields(update_data: dict[str, Any]) -> None:
         )
 
 
-# This route records one admin/support audit action after validating the actor,
-# action type, and optional affected target references.
+# This route records one admin/support audit action after validating the
+# authenticated admin, action type, and optional affected target references.
 @router.post("", response_model=AdminActionRead, status_code=status.HTTP_201_CREATED)
 def create_admin_action(
     admin_action: AdminActionCreate,
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ) -> AdminAction:
     action_data = admin_action.model_dump()
+    action_data["admin_user_id"] = current_user.id
     validate_admin_action_business_rules(action_data)
     validate_admin_action_references(db, action_data)
 
@@ -253,6 +250,7 @@ def create_admin_action(
 )
 def get_admin_action(
     admin_action_id: uuid.UUID,
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ) -> AdminAction:
     db_admin_action = db.get(AdminAction, admin_action_id)
@@ -278,6 +276,7 @@ def list_admin_actions(
     target_payment_id: uuid.UUID | None = None,
     target_venue_id: uuid.UUID | None = None,
     target_message_id: uuid.UUID | None = None,
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ) -> list[AdminAction]:
     statement = select(AdminAction)
@@ -332,6 +331,7 @@ def list_admin_actions(
 def update_admin_action(
     admin_action_id: uuid.UUID,
     admin_action_update: AdminActionUpdate,
+    current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ) -> AdminAction:
     db_admin_action = db.get(AdminAction, admin_action_id)

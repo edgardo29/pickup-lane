@@ -6,6 +6,7 @@ export function GameCheckoutPlayerCard({
   effectiveGuestCount,
   isAddGuestsCheckout,
   isBlockedByCapacity,
+  isGuestSelectionLocked,
   isWaitlistCheckout,
   maxGuests,
   maxSelectableGuests,
@@ -45,7 +46,7 @@ export function GameCheckoutPlayerCard({
           <div className="checkout-guest-stepper" aria-label="Guest count">
             <button
               type="button"
-              disabled={effectiveGuestCount <= minGuestCount}
+              disabled={isGuestSelectionLocked || effectiveGuestCount <= minGuestCount}
               onClick={() => onGuestCountChange((count) => Math.max(count - 1, minGuestCount))}
             >
               -
@@ -53,7 +54,7 @@ export function GameCheckoutPlayerCard({
             <span>{effectiveGuestCount}</span>
             <button
               type="button"
-              disabled={effectiveGuestCount >= maxSelectableGuests}
+              disabled={isGuestSelectionLocked || effectiveGuestCount >= maxSelectableGuests}
               onClick={() => onGuestCountChange((count) => Math.min(count + 1, maxSelectableGuests))}
             >
               +

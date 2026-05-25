@@ -6,10 +6,9 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import SubPostRequestStatusHistory, User
-from backend.routes.auth_routes import get_current_app_user
+from backend.routes.auth_routes import get_current_app_user, is_admin_or_moderator
 from backend.schemas import SubPostRequestStatusHistoryRead
 from backend.services.need_a_sub_service import (
-    ADMIN_ROLES,
     get_sub_post_or_404,
     get_sub_post_request_or_404,
 )
@@ -35,7 +34,7 @@ def list_need_a_sub_request_status_history(
     can_view = (
         sub_request.requester_user_id == current_user.id
         or sub_post.owner_user_id == current_user.id
-        or current_user.role in ADMIN_ROLES
+        or is_admin_or_moderator(current_user)
     )
 
     if not can_view:
