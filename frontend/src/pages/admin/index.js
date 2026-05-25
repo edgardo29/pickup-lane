@@ -1,0 +1,4 @@
+export { default as AdminCreateOfficialGamePage } from './official-games/create/AdminCreateOfficialGamePage.jsx'
+export { default as AdminOfficialGamePage } from './official-games/manage/AdminOfficialGamePage.jsx'
+export { default as AdminOfficialGamesPage } from './official-games/list/AdminOfficialGamesPage.jsx'
+export { default as AdminSignInPage } from './sign-in/AdminSignInPage.jsx'

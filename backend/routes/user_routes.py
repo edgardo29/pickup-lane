@@ -60,7 +60,6 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)) -> User:
         profile_photo_url=user.profile_photo_url,
         home_city=user.home_city,
         home_state=user.home_state,
-        stripe_customer_id=user.stripe_customer_id,
     )
 
     try:

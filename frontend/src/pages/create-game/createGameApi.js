@@ -35,5 +35,5 @@ export async function loadHostPublishFees(userId) {
 }
 
 export async function loadUserPaymentMethods(userId) {
-  return apiRequest(`/user-payment-methods?user_id=${userId}`)
+  return apiRequest(`/user-payment-methods?user_id=${userId}`).catch(() => [])
 }

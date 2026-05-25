@@ -13,37 +13,37 @@ depends_on = None
 
 def upgrade() -> None:
     # Third schema migration: create the payment-method reference table for
-    # storing Stripe-linked payment method records per user.
+    # storing Stripe-linked saved card records per user.
     op.create_table(
         "user_payment_methods",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
-            "provider",
-            sa.String(length=20),
-            nullable=False,
-            server_default=sa.text("'stripe'"),
-        ),
-        sa.Column(
-            "provider_payment_method_id",
+            "stripe_customer_id",
             sa.String(length=255),
             nullable=False,
         ),
-        sa.Column("card_brand", sa.String(length=50), nullable=True),
-        sa.Column("card_last4", sa.String(length=4), nullable=True),
-        sa.Column("exp_month", sa.SmallInteger(), nullable=True),
-        sa.Column("exp_year", sa.SmallInteger(), nullable=True),
+        sa.Column(
+            "stripe_payment_method_id",
+            sa.String(length=255),
+            nullable=False,
+        ),
+        sa.Column("card_fingerprint", sa.String(length=255), nullable=False),
+        sa.Column("card_brand", sa.String(length=50), nullable=False),
+        sa.Column("card_last4", sa.String(length=4), nullable=False),
+        sa.Column("exp_month", sa.SmallInteger(), nullable=False),
+        sa.Column("exp_year", sa.SmallInteger(), nullable=False),
+        sa.Column(
+            "method_status",
+            sa.String(length=30),
+            nullable=False,
+            server_default=sa.text("'active'"),
+        ),
         sa.Column(
             "is_default",
             sa.Boolean(),
             nullable=False,
             server_default=sa.text("false"),
-        ),
-        sa.Column(
-            "is_active",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("true"),
         ),
         sa.Column(
             "created_at",
@@ -57,17 +57,26 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
+        sa.Column("detached_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
-            "provider IN ('stripe')",
-            name="ck_user_payment_methods_provider",
+            "method_status IN ('active', 'detached', 'expired')",
+            name="ck_user_payment_methods_method_status",
         ),
         sa.CheckConstraint(
-            "(exp_month IS NULL OR exp_month BETWEEN 1 AND 12)",
+            "exp_month BETWEEN 1 AND 12",
             name="ck_user_payment_methods_exp_month",
         ),
         sa.CheckConstraint(
-            "(card_last4 IS NULL OR char_length(card_last4) = 4)",
+            "char_length(card_last4) = 4",
             name="ck_user_payment_methods_card_last4",
+        ),
+        sa.CheckConstraint(
+            "(is_default = false OR method_status = 'active')",
+            name="ck_user_payment_methods_default_requires_active",
+        ),
+        sa.CheckConstraint(
+            "(method_status = 'detached' OR detached_at IS NULL)",
+            name="ck_user_payment_methods_detached_at_status",
         ),
         sa.ForeignKeyConstraint(
             ["user_id"],
@@ -76,8 +85,8 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "provider_payment_method_id",
-            name="uq_user_payment_methods_provider_payment_method_id",
+            "stripe_payment_method_id",
+            name="uq_user_payment_methods_stripe_payment_method_id",
         ),
     )
     op.create_index(
@@ -91,16 +100,29 @@ def upgrade() -> None:
         "user_payment_methods",
         ["user_id"],
         unique=True,
-        postgresql_where=sa.text("is_default = true AND is_active = true"),
+        postgresql_where=sa.text(
+            "is_default = true AND method_status = 'active'"
+        ),
+    )
+    op.create_index(
+        "ix_user_payment_methods_user_status",
+        "user_payment_methods",
+        ["user_id", "method_status"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_user_payment_methods_user_card_fingerprint",
+        "user_payment_methods",
+        ["user_id", "card_fingerprint"],
+        unique=True,
     )
 
 
 def downgrade() -> None:
     # Downgrade removes the payment-method table and its indexes because this
     # migration only introduces that single table.
-    op.drop_index(
-        "ix_user_payment_methods_one_active_default_per_user",
-        table_name="user_payment_methods",
-    )
-    op.drop_index("ix_user_payment_methods_user_id", table_name="user_payment_methods")
+    op.execute("DROP INDEX IF EXISTS ix_user_payment_methods_user_card_fingerprint")
+    op.execute("DROP INDEX IF EXISTS ix_user_payment_methods_one_active_default_per_user")
+    op.execute("DROP INDEX IF EXISTS ix_user_payment_methods_user_status")
+    op.execute("DROP INDEX IF EXISTS ix_user_payment_methods_user_id")
     op.drop_table("user_payment_methods")

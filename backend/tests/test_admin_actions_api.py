@@ -1,6 +1,11 @@
 from fastapi.testclient import TestClient
 
-from backend.tests.helpers import create_admin_action, create_user, set_user_role
+from backend.tests.helpers import (
+    authenticate_as,
+    create_admin_action,
+    create_user,
+    set_user_role,
+)
 
 
 def create_admin_action_setup(client: TestClient) -> tuple[dict, dict]:
@@ -22,20 +27,21 @@ def test_admin_action_create_get_list_and_update_reason_metadata(
         admin_user["id"],
         target_user_id=target_user["id"],
     )
+    assert admin_action["admin_user_id"] == admin_user["id"]
 
-    get_response = client.get(f"/admin-actions/{admin_action['id']}")
+    get_response = client.get(f"/admin/actions/{admin_action['id']}")
     assert get_response.status_code == 200, get_response.text
     assert get_response.json()["id"] == admin_action["id"]
 
     list_by_admin_response = client.get(
-        f"/admin-actions?admin_user_id={admin_user['id']}"
+        f"/admin/actions?admin_user_id={admin_user['id']}"
     )
     assert list_by_admin_response.status_code == 200, list_by_admin_response.text
     assert any(
         item["id"] == admin_action["id"] for item in list_by_admin_response.json()
     )
 
-    list_by_action_type_response = client.get("/admin-actions?action_type=suspend_user")
+    list_by_action_type_response = client.get("/admin/actions?action_type=suspend_user")
     assert list_by_action_type_response.status_code == 200
     assert any(
         item["id"] == admin_action["id"]
@@ -43,7 +49,7 @@ def test_admin_action_create_get_list_and_update_reason_metadata(
     )
 
     patch_response = client.patch(
-        f"/admin-actions/{admin_action['id']}",
+        f"/admin/actions/{admin_action['id']}",
         json={
             "reason": "Corrected CI admin action reason.",
             "metadata": {"source": "ci", "reviewed": True},
@@ -54,32 +60,56 @@ def test_admin_action_create_get_list_and_update_reason_metadata(
     assert patch_response.json()["metadata"] == {"source": "ci", "reviewed": True}
 
 
-def test_admin_action_reject_non_admin_actor(client: TestClient):
+def test_admin_action_routes_require_authentication(client: TestClient):
+    response = client.get("/admin/actions")
+
+    assert response.status_code == 401, response.text
+
+
+def test_admin_action_reject_non_admin_user(client: TestClient):
     regular_user = create_user(client)
     target_user = create_user(client)
 
+    authenticate_as(regular_user["id"])
     response = client.post(
-        "/admin-actions",
+        "/admin/actions",
         json={
-            "admin_user_id": regular_user["id"],
             "action_type": "suspend_user",
             "target_user_id": target_user["id"],
             "reason": "Regular user should not create admin actions.",
         },
     )
 
-    assert response.status_code == 400, response.text
-    assert "admin or moderator" in response.text
+    assert response.status_code == 403, response.text
+    assert "Admin access required" in response.text
+
+
+def test_admin_action_reject_body_admin_user_id(client: TestClient):
+    admin_user, target_user = create_admin_action_setup(client)
+
+    authenticate_as(admin_user["id"])
+    response = client.post(
+        "/admin/actions",
+        json={
+            "admin_user_id": admin_user["id"],
+            "action_type": "suspend_user",
+            "target_user_id": target_user["id"],
+            "reason": "Client should not choose the audit actor.",
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    assert "admin_user_id" in response.text
 
 
 def test_admin_action_reject_missing_target(client: TestClient):
     admin_user = create_user(client)
     set_user_role(admin_user["id"], "admin")
 
+    authenticate_as(admin_user["id"])
     response = client.post(
-        "/admin-actions",
+        "/admin/actions",
         json={
-            "admin_user_id": admin_user["id"],
             "action_type": "suspend_user",
             "reason": "Missing target.",
         },
@@ -92,10 +122,10 @@ def test_admin_action_reject_missing_target(client: TestClient):
 def test_admin_action_reject_invalid_action_type(client: TestClient):
     admin_user, target_user = create_admin_action_setup(client)
 
+    authenticate_as(admin_user["id"])
     response = client.post(
-        "/admin-actions",
+        "/admin/actions",
         json={
-            "admin_user_id": admin_user["id"],
             "action_type": "delete_everything",
             "target_user_id": target_user["id"],
             "reason": "Invalid action.",
@@ -110,10 +140,10 @@ def test_admin_action_reject_missing_target_user(client: TestClient):
     admin_user = create_user(client)
     set_user_role(admin_user["id"], "admin")
 
+    authenticate_as(admin_user["id"])
     response = client.post(
-        "/admin-actions",
+        "/admin/actions",
         json={
-            "admin_user_id": admin_user["id"],
             "action_type": "suspend_user",
             "target_user_id": "00000000-0000-4000-8000-000000000000",
             "reason": "Missing target user.",
@@ -128,10 +158,10 @@ def test_admin_action_reject_missing_target_game(client: TestClient):
     admin_user = create_user(client)
     set_user_role(admin_user["id"], "admin")
 
+    authenticate_as(admin_user["id"])
     response = client.post(
-        "/admin-actions",
+        "/admin/actions",
         json={
-            "admin_user_id": admin_user["id"],
             "action_type": "cancel_game",
             "target_game_id": "00000000-0000-4000-8000-000000000000",
             "reason": "Missing target game.",
@@ -151,7 +181,7 @@ def test_admin_action_reject_immutable_field_update(client: TestClient):
     )
 
     response = client.patch(
-        f"/admin-actions/{admin_action['id']}",
+        f"/admin/actions/{admin_action['id']}",
         json={"action_type": "unsuspend_user"},
     )
 

@@ -5,6 +5,17 @@ from backend.schemas.admin_action_schema import (
     AdminActionRead,
     AdminActionUpdate,
 )
+from backend.schemas.admin_official_game_schema import (
+    AdminOfficialGameCreate,
+    AdminOfficialGameHostAssign,
+    AdminOfficialGameHostRemove,
+    AdminOfficialGameListRead,
+    AdminOfficialGamePlayerAdd,
+    AdminOfficialGamePlayerRemove,
+    AdminOfficialGameRead,
+    AdminOfficialGameUpdate,
+    AdminOfficialGameVenuePayload,
+)
 from backend.schemas.auth_schema import (
     AuthDeleteAccountRequest,
     AuthEmailAvailabilityRead,
@@ -25,6 +36,11 @@ from backend.schemas.chat_message_schema import (
     ChatMessageCreate,
     ChatMessageRead,
     ChatMessageUpdate,
+)
+from backend.schemas.checkout_schema import (
+    GameCheckoutPaymentIntentCreate,
+    GameCheckoutPaymentIntentRead,
+    GameCheckoutStatusRead,
 )
 from backend.schemas.community_game_detail_schema import (
     CommunityGameDetailCreate,
@@ -142,9 +158,10 @@ from backend.schemas.user_settings_schema import (
     UserSettingsUpdate,
 )
 from backend.schemas.user_payment_method_schema import (
-    UserPaymentMethodCreate,
     UserPaymentMethodRead,
-    UserPaymentMethodUpdate,
+    UserPaymentMethodSetupIntentCreate,
+    UserPaymentMethodSetupIntentRead,
+    UserPaymentMethodSyncCreate,
 )
 from backend.schemas.user_stats_schema import (
     UserStatsCreate,
@@ -155,6 +172,13 @@ from backend.schemas.venue_approval_request_schema import (
     VenueApprovalRequestCreate,
     VenueApprovalRequestRead,
     VenueApprovalRequestUpdate,
+)
+from backend.schemas.venue_image_schema import (
+    VenueImageCompleteUpload,
+    VenueImageRead,
+    VenueImageUpdate,
+    VenueImageUploadCreate,
+    VenueImageUploadRead,
 )
 from backend.schemas.venue_schema import VenueCreate, VenueRead, VenueUpdate
 from backend.schemas.waitlist_entry_schema import (
@@ -167,6 +191,15 @@ __all__ = [
     "AdminActionCreate",
     "AdminActionRead",
     "AdminActionUpdate",
+    "AdminOfficialGameCreate",
+    "AdminOfficialGameHostAssign",
+    "AdminOfficialGameHostRemove",
+    "AdminOfficialGameListRead",
+    "AdminOfficialGamePlayerAdd",
+    "AdminOfficialGamePlayerRemove",
+    "AdminOfficialGameRead",
+    "AdminOfficialGameUpdate",
+    "AdminOfficialGameVenuePayload",
     "AuthSyncUserRequest",
     "AuthDeleteAccountRequest",
     "AuthEmailAvailabilityRead",
@@ -182,6 +215,9 @@ __all__ = [
     "ChatMessageCreate",
     "ChatMessageRead",
     "ChatMessageUpdate",
+    "GameCheckoutPaymentIntentCreate",
+    "GameCheckoutPaymentIntentRead",
+    "GameCheckoutStatusRead",
     "CommunityGameDetailCreate",
     "CommunityGameDetailRead",
     "CommunityGameDetailUpdate",
@@ -194,9 +230,10 @@ __all__ = [
     "UserSettingsCreate",
     "UserSettingsRead",
     "UserSettingsUpdate",
-    "UserPaymentMethodCreate",
     "UserPaymentMethodRead",
-    "UserPaymentMethodUpdate",
+    "UserPaymentMethodSetupIntentCreate",
+    "UserPaymentMethodSetupIntentRead",
+    "UserPaymentMethodSyncCreate",
     "UserStatsCreate",
     "UserStatsRead",
     "UserStatsUpdate",
@@ -274,6 +311,11 @@ __all__ = [
     "VenueApprovalRequestCreate",
     "VenueApprovalRequestRead",
     "VenueApprovalRequestUpdate",
+    "VenueImageCompleteUpload",
+    "VenueImageRead",
+    "VenueImageUpdate",
+    "VenueImageUploadCreate",
+    "VenueImageUploadRead",
     "VenueCreate",
     "VenueRead",
     "VenueUpdate",

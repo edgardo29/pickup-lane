@@ -20,6 +20,7 @@ export function buildGameCheckoutViewModel({
   nowMs,
   participants,
   paymentMethods,
+  selectedPaymentMethodId,
   venue,
 }) {
   const summary = getParticipantSummary(participants, game?.total_spots)
@@ -32,12 +33,17 @@ export function buildGameCheckoutViewModel({
   const primaryImage = getPrimaryImage(images, game)
   const maxGuests = game?.allow_guests ? game.max_guests_per_booking || 0 : 0
   const currentGuestCount = getCurrentGuestCount(participants, existingParticipant, appUser?.id)
+  const isPaymentResume = Boolean(
+    !isAddGuestsCheckout && existingParticipant?.participant_status === 'pending_payment',
+  )
   const addableGuestCount = isAddGuestsCheckout
     ? Math.max(Math.min(maxGuests - currentGuestCount, summary.spotsLeft), 0)
     : maxGuests
   const minGuestCount = isAddGuestsCheckout && addableGuestCount > 0 ? 1 : 0
   const maxSelectableGuests = Math.max(addableGuestCount, 0)
-  const effectiveGuestCount = Math.min(Math.max(guestCount, minGuestCount), maxSelectableGuests)
+  const effectiveGuestCount = isPaymentResume
+    ? currentGuestCount
+    : Math.min(Math.max(guestCount, minGuestCount), maxSelectableGuests)
   const projectedGuestCount = isAddGuestsCheckout
     ? Math.min(currentGuestCount + effectiveGuestCount, maxGuests)
     : effectiveGuestCount
@@ -49,7 +55,9 @@ export function buildGameCheckoutViewModel({
     ? nowMs !== null &&
       nowMs >= new Date(game.starts_at).getTime() + JOIN_WINDOW_MINUTES * 60 * 1000
     : false
-  const hasEnoughSpots = partySize <= summary.spotsLeft
+  const currentPendingPartySize = isPaymentResume ? currentGuestCount + 1 : 0
+  const availableSpotsForCheckout = summary.spotsLeft + currentPendingPartySize
+  const hasEnoughSpots = partySize <= availableSpotsForCheckout
   const isWaitlistCheckout = Boolean(!isAddGuestsCheckout && game && !hasEnoughSpots && game.waitlist_enabled)
   const isBlockedByCapacity = isAddGuestsCheckout
     ? effectiveGuestCount <= 0
@@ -58,7 +66,11 @@ export function buildGameCheckoutViewModel({
     isAddGuestsCheckout && existingParticipant?.participant_status !== 'confirmed'
   const title = game ? game.title || `${game.venue_name_snapshot} ${game.format_label}` : ''
   const address = game ? formatVenueAddress(game, venue, { avoidDuplicateLocality: true }) : ''
-  const paymentMethod = paymentMethods.find((method) => method.is_default) || paymentMethods[0]
+  const paymentMethod =
+    paymentMethods.find((method) => method.id === selectedPaymentMethodId) ||
+    paymentMethods.find((method) => method.is_default) ||
+    paymentMethods[0] ||
+    null
   const confirmLabel = getConfirmLabel({
     agreed,
     isAddGuestsCheckout,
@@ -76,11 +88,13 @@ export function buildGameCheckoutViewModel({
     isAddGuestsBlockedByParticipant,
     isBlockedByCapacity,
     isJoinWindowClosed,
+    isPaymentResume,
     isWaitlistCheckout,
     maxGuests,
     maxSelectableGuests,
     minGuestCount,
     paymentMethod,
+    paymentMethods,
     platformFee,
     price,
     primaryImage,

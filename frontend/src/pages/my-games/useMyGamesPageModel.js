@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth.js'
-import { buildMediaUrl } from '../../lib/apiClient.js'
+import { buildImageUrlsByGameId } from '../browse-games/browseGamesSelectors.js'
 import { loadMyGamesData } from './myGamesApi.js'
 import {
   buildMyGameItems,
@@ -17,6 +17,7 @@ export function useMyGamesPageModel() {
   const [currentUser, setCurrentUser] = useState(null)
   const [games, setGames] = useState([])
   const [images, setImages] = useState([])
+  const [venueImages, setVenueImages] = useState([])
   const [participants, setParticipants] = useState([])
   const [myParticipants, setMyParticipants] = useState([])
   const [status, setStatus] = useState('loading')
@@ -56,6 +57,7 @@ export function useMyGamesPageModel() {
           setCurrentUser(appUser)
           setGames(pageData.games)
           setImages(pageData.images)
+          setVenueImages(pageData.venueImages || [])
           setParticipants(pageData.participants)
           setMyParticipants(pageData.myParticipants)
           setStatus('success')
@@ -78,17 +80,10 @@ export function useMyGamesPageModel() {
   }, [appUser, isLoading])
 
   const gamesById = useMemo(() => new Map(games.map((game) => [game.id, game])), [games])
-  const imageUrlsByGameId = useMemo(() => {
-    const imageMap = new Map()
-
-    images.forEach((image) => {
-      if (!imageMap.has(image.game_id)) {
-        imageMap.set(image.game_id, buildMediaUrl(image.image_url))
-      }
-    })
-
-    return imageMap
-  }, [images])
+  const imageUrlsByGameId = useMemo(
+    () => buildImageUrlsByGameId(games, images, venueImages),
+    [games, images, venueImages],
+  )
   const participantCountsByGameId = useMemo(
     () => buildParticipantCounts(participants),
     [participants],

@@ -43,6 +43,8 @@ def upgrade() -> None:
         ),
         sa.Column("payment_status", sa.String(length=30), nullable=False),
         sa.Column("paid_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("failure_code", sa.String(length=100), nullable=True),
+        sa.Column("failure_message", sa.Text(), nullable=True),
         sa.Column("failure_reason", sa.Text(), nullable=True),
         sa.Column("metadata", postgresql.JSONB(), nullable=True),
         sa.Column(
@@ -73,8 +75,9 @@ def upgrade() -> None:
         sa.CheckConstraint(
             (
                 "payment_status IN ("
-                "'processing', 'requires_action', 'succeeded', 'failed', "
-                "'canceled', 'refunded', 'partially_refunded', 'disputed'"
+                "'requires_payment_method', 'processing', 'requires_action', "
+                "'succeeded', 'failed', 'canceled', 'refunded', "
+                "'partially_refunded', 'disputed'"
                 ")"
             ),
             name="ck_payments_payment_status",

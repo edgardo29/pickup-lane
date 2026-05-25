@@ -58,3 +58,27 @@ def test_users_reject_duplicate_email(client: TestClient):
 
     assert duplicate_response.status_code == 409, duplicate_response.text
     assert "email already exists" in duplicate_response.text
+
+
+def test_users_reject_client_managed_stripe_customer_id(client: TestClient):
+    user = create_user(client)
+
+    create_response = client.post(
+        "/users",
+        json={
+            "auth_user_id": "firebase-client-stripe",
+            "email": "client-stripe@example.com",
+            "phone": "+15550000001",
+            "first_name": "Stripe",
+            "last_name": "Client",
+            "date_of_birth": "1995-01-01",
+            "stripe_customer_id": "cus_client_supplied",
+        },
+    )
+    assert create_response.status_code == 422, create_response.text
+
+    update_response = client.patch(
+        f"/users/{user['id']}",
+        json={"stripe_customer_id": "cus_client_supplied"},
+    )
+    assert update_response.status_code == 422, update_response.text

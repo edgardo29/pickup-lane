@@ -12,33 +12,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "notifications",
-        sa.Column("related_chat_id", postgresql.UUID(as_uuid=True), nullable=True),
-    )
-    op.add_column(
-        "notifications",
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.text("now()"),
-        ),
-    )
-    op.create_foreign_key(
-        "fk_notifications_related_chat_id_game_chats",
-        "notifications",
-        "game_chats",
-        ["related_chat_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_index(
-        "ix_notifications_related_chat_id",
-        "notifications",
-        ["related_chat_id"],
-    )
-
     op.create_table(
         "game_chat_reads",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -81,12 +54,3 @@ def downgrade() -> None:
     op.drop_index("ix_game_chat_reads_user_id", table_name="game_chat_reads")
     op.drop_index("ix_game_chat_reads_chat_id", table_name="game_chat_reads")
     op.drop_table("game_chat_reads")
-
-    op.drop_index("ix_notifications_related_chat_id", table_name="notifications")
-    op.drop_constraint(
-        "fk_notifications_related_chat_id_game_chats",
-        "notifications",
-        type_="foreignkey",
-    )
-    op.drop_column("notifications", "updated_at")
-    op.drop_column("notifications", "related_chat_id")

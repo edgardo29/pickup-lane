@@ -4,7 +4,7 @@ import { emptySettings, emptyStats } from './profileData.js'
 import { loadProfileData } from './profileApi.js'
 
 export function useProfileContext() {
-  const { appUser, isLoading } = useAuth()
+  const { appUser, currentUser: firebaseUser, isLoading } = useAuth()
   const [currentUser, setCurrentUser] = useState(null)
   const [settings, setSettings] = useState(emptySettings)
   const [stats, setStats] = useState(emptyStats)
@@ -28,7 +28,7 @@ export function useProfileContext() {
           throw new Error('Sign in to view your profile.')
         }
 
-        const profileData = await loadProfileData(appUser.id)
+        const profileData = await loadProfileData(appUser.id, firebaseUser)
 
         if (!ignore) {
           setCurrentUser(appUser)
@@ -50,7 +50,7 @@ export function useProfileContext() {
     return () => {
       ignore = true
     }
-  }, [appUser, isLoading])
+  }, [appUser, firebaseUser, isLoading])
 
   return useMemo(
     () => ({ currentUser, error, paymentMethods, settings, stats, status }),

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameParticipant, ParticipantStatusHistory, User
+from backend.routes.auth_routes import is_admin
 from backend.schemas import (
     ParticipantStatusHistoryCreate,
     ParticipantStatusHistoryRead,
@@ -171,7 +172,7 @@ def validate_participant_status_history_references(
                 detail="Host-sourced changes require a host user.",
             )
 
-        if history_data["change_source"] == "admin" and db_user.role != "admin":
+        if history_data["change_source"] == "admin" and not is_admin(db_user):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Admin-sourced changes require an admin user.",

@@ -20,6 +20,7 @@ VALID_PAYMENT_TYPES = {
 }
 VALID_PROVIDERS = {"stripe"}
 VALID_PAYMENT_STATUSES = {
+    "requires_payment_method",
     "processing",
     "requires_action",
     "succeeded",
@@ -123,9 +124,9 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "payment_status must be 'processing', 'requires_action', "
-                "'succeeded', 'failed', 'canceled', 'refunded', "
-                "'partially_refunded', or 'disputed'."
+                "payment_status must be 'requires_payment_method', "
+                "'processing', 'requires_action', 'succeeded', 'failed', "
+                "'canceled', 'refunded', 'partially_refunded', or 'disputed'."
             ),
         )
 
@@ -201,10 +202,15 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
     if (
         payment_data["payment_status"] in FAILED_PAYMENT_STATUSES
         and payment_data["failure_reason"] is None
+        and payment_data["failure_code"] is None
+        and payment_data["failure_message"] is None
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed and canceled payments require failure_reason.",
+            detail=(
+                "Failed and canceled payments require failure_reason, "
+                "failure_code, or failure_message."
+            ),
         )
 
 
@@ -327,9 +333,9 @@ def list_payments(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "payment_status must be 'processing', 'requires_action', "
-                    "'succeeded', 'failed', 'canceled', 'refunded', "
-                    "'partially_refunded', or 'disputed'."
+                    "payment_status must be 'requires_payment_method', "
+                    "'processing', 'requires_action', 'succeeded', 'failed', "
+                    "'canceled', 'refunded', 'partially_refunded', or 'disputed'."
                 ),
             )
         statement = statement.where(Payment.payment_status == payment_status)
@@ -381,6 +387,10 @@ def update_payment(
         "currency": update_data.get("currency", db_payment.currency),
         "payment_status": update_data.get("payment_status", db_payment.payment_status),
         "paid_at": update_data.get("paid_at", db_payment.paid_at),
+        "failure_code": update_data.get("failure_code", db_payment.failure_code),
+        "failure_message": update_data.get(
+            "failure_message", db_payment.failure_message
+        ),
         "failure_reason": update_data.get("failure_reason", db_payment.failure_reason),
         "payment_metadata": update_data.get(
             "payment_metadata", db_payment.payment_metadata

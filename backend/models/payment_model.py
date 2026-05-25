@@ -40,8 +40,9 @@ class Payment(Base):
         CheckConstraint(
             (
                 "payment_status IN ("
-                "'processing', 'requires_action', 'succeeded', 'failed', "
-                "'canceled', 'refunded', 'partially_refunded', 'disputed'"
+                "'requires_payment_method', 'processing', 'requires_action', "
+                "'succeeded', 'failed', 'canceled', 'refunded', "
+                "'partially_refunded', 'disputed'"
                 ")"
             ),
             name="ck_payments_payment_status",
@@ -119,6 +120,8 @@ class Payment(Base):
     paid_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    failure_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    failure_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     payment_metadata: Mapped[dict | None] = mapped_column(
         "metadata", JSONB, nullable=True

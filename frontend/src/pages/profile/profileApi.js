@@ -1,11 +1,12 @@
 import { apiRequest } from '../../lib/apiClient.js'
+import { listUserPaymentMethods } from '../../lib/paymentMethodsApi.js'
 import { emptySettings, emptyStats } from './profileData.js'
 
-export async function loadProfileData(userId) {
+export async function loadProfileData(userId, firebaseUser = null) {
   const [settingsResponse, statsResponse, paymentMethodsResponse] = await Promise.all([
     apiRequest(`/user-settings/${userId}`).catch(() => emptySettings),
     apiRequest(`/user-stats/${userId}`).catch(() => emptyStats),
-    apiRequest(`/user-payment-methods?user_id=${userId}`).catch(() => []),
+    firebaseUser ? listUserPaymentMethods(firebaseUser).catch(() => []) : Promise.resolve([]),
   ])
 
   return {

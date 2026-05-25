@@ -106,9 +106,8 @@ def main() -> None:
     for label, value in ids.items():
         print(f"{label}: {value}")
     print("")
-    print("POST /admin-actions body:")
+    print("Authenticate as the admin user, then POST /admin/actions body:")
     print("{")
-    print(f'  "admin_user_id": "{ids["admin_action_admin_user_id"]}",')
     print('  "action_type": "suspend_user",')
     print(f'  "target_user_id": "{ids["admin_action_target_user_id"]}",')
     print('  "reason": "Test admin action from Postman.",')

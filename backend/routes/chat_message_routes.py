@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import ChatMessage, GameChat, User
-from backend.routes.auth_routes import get_current_app_user
+from backend.routes.auth_routes import get_current_app_user, is_admin
 from backend.schemas import ChatMessageCreate, ChatMessageRead, ChatMessageUpdate
 from backend.services.game_chat_service import (
     create_or_update_chat_notifications,
@@ -218,7 +218,7 @@ def validate_chat_message_references(
 
         if (
             message_data["moderation_status"] == "hidden_by_admin"
-            and deleted_by_user.role != "admin"
+            and not is_admin(deleted_by_user)
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -398,7 +398,7 @@ def update_chat_message(
 
     validate_chat_message_is_editable(db_chat_message)
     db_game_chat = get_game_chat_or_404(db, db_chat_message.chat_id)
-    if current_user.role != "admin":
+    if not is_admin(current_user):
         require_chat_member(db, db_game_chat, current_user)
 
         if db_chat_message.sender_user_id != current_user.id:
@@ -447,7 +447,7 @@ def update_chat_message(
     validate_chat_message_business_rules(effective_message_data)
     if (
         effective_message_data["moderation_status"] == "hidden_by_admin"
-        and current_user.role != "admin"
+        and not is_admin(current_user)
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

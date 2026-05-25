@@ -18,7 +18,7 @@ def test_admin_can_issue_list_balance_and_reverse_game_credit(client: TestClient
 
     authenticate_as(admin["id"])
     issue_response = client.post(
-        "/game-credits/admin/issue",
+        "/admin/game-credits/issue",
         json={
             "user_id": player["id"],
             "amount_cents": 2500,
@@ -45,7 +45,7 @@ def test_admin_can_issue_list_balance_and_reverse_game_credit(client: TestClient
     assert len(list_response.json()) == 1
 
     reverse_response = client.post(
-        f"/game-credits/{credit['id']}/admin/reverse",
+        f"/admin/game-credits/{credit['id']}/reverse",
         json={"idempotency_key": "test-credit-reverse", "note": "Mistake."},
     )
     assert reverse_response.status_code == 200, reverse_response.text
@@ -65,7 +65,7 @@ def test_regular_user_cannot_issue_game_credit(client: TestClient):
     authenticate_as(user["id"])
 
     response = client.post(
-        "/game-credits/admin/issue",
+        "/admin/game-credits/issue",
         json={
             "user_id": player["id"],
             "amount_cents": 2500,
@@ -93,7 +93,7 @@ def test_credit_source_must_be_official_game(client: TestClient):
 
     authenticate_as(admin["id"])
     response = client.post(
-        "/game-credits/admin/issue",
+        "/admin/game-credits/issue",
         json={
             "user_id": player["id"],
             "amount_cents": 2500,

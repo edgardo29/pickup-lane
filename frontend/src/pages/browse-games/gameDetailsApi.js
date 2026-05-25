@@ -5,11 +5,16 @@ import { buildChatMessagesPath, getChatAuthHeaders } from './gameDetailsChat.js'
 export async function loadGameDetails({ appUser, firebaseUser, gameId }) {
   const game = await apiRequest(`/games/${gameId}`)
 
-  const [gameImages, participants, venue] = await Promise.all([
-    apiRequest(`/game-images?game_id=${gameId}&image_status=active`),
+  const [gameImages, venueImages, participants, venue] = await Promise.all([
+    apiRequest(`/game-images?game_id=${gameId}&image_status=active`).catch(() => []),
+    game.game_type === 'official'
+      ? apiRequest(`/venue-images?venue_id=${game.venue_id}`).catch(() => [])
+      : Promise.resolve([]),
     apiRequest(`/game-participants?game_id=${gameId}`),
     apiRequest(`/venues/${game.venue_id}`).catch(() => null),
   ])
+  const displayImages =
+    game.game_type === 'official' && gameImages.length === 0 ? venueImages : gameImages
   const communityGameDetails = game.game_type === 'community'
     ? await apiRequest(`/community-game-details?game_id=${gameId}`)
       .then((details) => details[0] || null)
@@ -32,7 +37,7 @@ export async function loadGameDetails({ appUser, firebaseUser, gameId }) {
     chatMessages,
     communityGameDetails,
     game,
-    gameImages,
+    gameImages: displayImages,
     hasUnreadChat: Boolean(activeChat?.unread_count),
     participants,
     venue,

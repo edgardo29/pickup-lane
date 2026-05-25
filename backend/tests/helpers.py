@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 def unique_suffix() -> str:
     # Generate unique values for fields with database uniqueness constraints
-    # such as email, phone, auth_user_id, and provider payment method IDs.
+    # such as email, phone, auth_user_id, and Stripe payment method IDs.
     return uuid4().hex
 
 
@@ -92,22 +92,56 @@ def create_user_settings(client: TestClient, user_id: str, **overrides: object) 
 def create_user_payment_method(
     client: TestClient, user_id: str, **overrides: object
 ) -> dict:
-    payload = {
-        "user_id": user_id,
-        "provider_payment_method_id": f"pm_{unique_suffix()}",
+    from datetime import UTC, datetime
+
+    from backend.database import SessionLocal
+    from backend.models import User, UserPaymentMethod
+
+    suffix = unique_suffix()
+    defaults = {
+        "stripe_customer_id": f"cus_{suffix}",
+        "stripe_payment_method_id": f"pm_{suffix}",
+        "card_fingerprint": f"fp_{suffix}",
         "card_brand": "visa",
         "card_last4": "4242",
         "exp_month": 12,
         "exp_year": 2030,
+        "method_status": "active",
         "is_default": True,
-        "is_active": True,
     }
-    payload.update(overrides)
+    defaults.update(overrides)
 
-    response = client.post("/user-payment-methods", json=payload)
+    with SessionLocal() as db:
+        db_user = db.get(User, UUID(user_id))
+        assert db_user is not None
+        payment_method_id = uuid4()
+        db_user.stripe_customer_id = str(defaults["stripe_customer_id"])
+        payment_method = UserPaymentMethod(
+            id=payment_method_id,
+            user_id=UUID(user_id),
+            stripe_customer_id=str(defaults["stripe_customer_id"]),
+            stripe_payment_method_id=str(defaults["stripe_payment_method_id"]),
+            card_fingerprint=str(defaults["card_fingerprint"]),
+            card_brand=str(defaults["card_brand"]),
+            card_last4=str(defaults["card_last4"]),
+            exp_month=int(defaults["exp_month"]),
+            exp_year=int(defaults["exp_year"]),
+            method_status=str(defaults["method_status"]),
+            is_default=bool(defaults["is_default"]),
+            updated_at=datetime.now(UTC),
+        )
+        db.add(db_user)
+        db.add(payment_method)
+        db.commit()
 
-    assert response.status_code == 201, response.text
-    return response.json()
+    return {
+        "id": str(payment_method_id),
+        "user_id": user_id,
+        **defaults,
+        "created_at": None,
+        "updated_at": None,
+        "detached_at": None,
+    }
 
 
 def create_venue(client: TestClient, user_id: str, **overrides: object) -> dict:
@@ -505,15 +539,15 @@ def create_admin_action(
     admin_user_id: str,
     **overrides: object,
 ) -> dict:
+    authenticate_as(admin_user_id)
     payload = {
-        "admin_user_id": admin_user_id,
         "action_type": "suspend_user",
         "reason": "CI admin action row",
         "metadata": {"source": "ci"},
     }
     payload.update(overrides)
 
-    response = client.post("/admin-actions", json=payload)
+    response = client.post("/admin/actions", json=payload)
 
     assert response.status_code == 201, response.text
     return response.json()

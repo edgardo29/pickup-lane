@@ -2,6 +2,7 @@ export function GameCheckoutErrors({
   existingParticipant,
   isAddGuestsBlockedByParticipant,
   isAddGuestsCheckout,
+  isExistingParticipantBlocked,
   isJoinWindowClosed,
   submitError,
 }) {
@@ -19,7 +20,7 @@ export function GameCheckoutErrors({
             : 'Joining is closed for this game.'}
         </p>
       )}
-      {existingParticipant && !isAddGuestsCheckout && (
+      {existingParticipant && !isAddGuestsCheckout && isExistingParticipantBlocked && (
         <p className="checkout-error">
           {existingParticipant.participant_status === 'waitlisted'
             ? 'You are already on the waitlist for this game.'
