@@ -2971,6 +2971,12 @@ def delete_game(game_id: uuid.UUID, db: Session = Depends(get_db)) -> Game:
             detail="Game not found.",
         )
 
+    if db_game.game_type == "official":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Official games must be cancelled instead of deleted.",
+        )
+
     db_game.updated_at = datetime.now(timezone.utc)
     db_game.deleted_at = datetime.now(timezone.utc)
 

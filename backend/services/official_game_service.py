@@ -26,6 +26,7 @@ from backend.routes.game_routes import (
     get_next_roster_order,
     normalize_official_game_invariants,
     normalize_game_lifecycle_fields,
+    require_game_not_started,
     sync_game_capacity_status,
     validate_game_business_rules,
 )
@@ -46,6 +47,7 @@ PENDING_ADMIN_INVALIDATED_PAYMENT_STATUSES = {
     "processing",
 }
 ADMIN_REMOVABLE_PLAYER_STATUSES = {"pending_payment", "confirmed"}
+OFFICIAL_HOST_PARTICIPANT_TYPES = {"registered_user", "admin_added"}
 
 ADMIN_EDIT_NON_NULL_FIELDS = {
     "title",
@@ -333,48 +335,6 @@ def add_admin_action(
     return action
 
 
-def create_host_participant(
-    db: Session,
-    *,
-    game: Game,
-    host: User,
-    admin_user_id: uuid.UUID,
-    reason: str | None,
-) -> GameParticipant:
-    now = datetime.now(timezone.utc)
-    participant = GameParticipant(
-        id=uuid.uuid4(),
-        game_id=game.id,
-        participant_type="host",
-        user_id=host.id,
-        display_name_snapshot=build_user_display_name(host),
-        participant_status="confirmed",
-        attendance_status="unknown",
-        cancellation_type="none",
-        price_cents=0,
-        currency="USD",
-        roster_order=get_next_roster_order(db, game.id),
-        confirmed_at=now,
-    )
-    db.add(participant)
-    db.flush()
-
-    db.add(
-        ParticipantStatusHistory(
-            id=uuid.uuid4(),
-            participant_id=participant.id,
-            old_participant_status=None,
-            new_participant_status="confirmed",
-            old_attendance_status=None,
-            new_attendance_status="unknown",
-            changed_by_user_id=admin_user_id,
-            change_source="admin",
-            change_reason=reason or "Official game host assigned at creation.",
-        )
-    )
-    return participant
-
-
 def get_active_participant_for_user(
     db: Session,
     *,
@@ -392,21 +352,70 @@ def get_active_participant_for_user(
     ).first()
 
 
-def list_active_host_participants(
+def list_active_participants_for_user(
     db: Session,
     *,
     game_id: uuid.UUID,
+    user_id: uuid.UUID,
 ) -> list[GameParticipant]:
     return list(
         db.scalars(
             select(GameParticipant)
             .where(
                 GameParticipant.game_id == game_id,
-                GameParticipant.participant_type == "host",
+                GameParticipant.user_id == user_id,
                 GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
             )
             .order_by(GameParticipant.joined_at.asc())
         ).all()
+    )
+
+
+def get_official_host_roster_participant(
+    db: Session,
+    *,
+    game_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> GameParticipant:
+    participants = list_active_participants_for_user(
+        db,
+        game_id=game_id,
+        user_id=user_id,
+    )
+
+    if len(participants) != 1:
+        detail = "Selected host must already be a confirmed roster player for this game."
+        if len(participants) > 1:
+            detail = "Selected host has multiple active roster rows for this game."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+    participant = participants[0]
+    if (
+        participant.participant_status != "confirmed"
+        or participant.participant_type not in OFFICIAL_HOST_PARTICIPANT_TYPES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selected host must be a confirmed roster player for this game.",
+        )
+
+    return participant
+
+
+def require_official_host_change_allowed(game: Game, *, action: str) -> None:
+    if (
+        game.publish_status != "published"
+        or game.game_status not in {"scheduled", "full"}
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Host can only be {action} for published scheduled or full official games.",
+        )
+
+    require_game_not_started(
+        game,
+        datetime.now(timezone.utc),
+        f"Host can only be {action} before the game starts.",
     )
 
 
@@ -421,37 +430,6 @@ def count_confirmed_roster_players(db: Session, game_id: uuid.UUID) -> int:
             )
         )
         or 0
-    )
-
-
-def mark_host_participant_removed(
-    db: Session,
-    *,
-    participant: GameParticipant,
-    admin_user_id: uuid.UUID,
-    reason: str | None,
-) -> None:
-    now = datetime.now(timezone.utc)
-    old_status = participant.participant_status
-    old_attendance_status = participant.attendance_status
-
-    participant.participant_status = "removed"
-    participant.cancellation_type = "admin_cancelled"
-    participant.cancelled_at = participant.cancelled_at or now
-    participant.updated_at = now
-    db.add(participant)
-    db.add(
-        ParticipantStatusHistory(
-            id=uuid.uuid4(),
-            participant_id=participant.id,
-            old_participant_status=old_status,
-            new_participant_status="removed",
-            old_attendance_status=old_attendance_status,
-            new_attendance_status=participant.attendance_status,
-            changed_by_user_id=admin_user_id,
-            change_source="admin",
-            change_reason=reason or "Official game host removed.",
-        )
     )
 
 
@@ -563,8 +541,18 @@ def create_official_game(
         ) from exc
 
 
-def get_official_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
-    game = db.get(Game, game_id)
+def get_official_game_or_404(
+    db: Session,
+    game_id: uuid.UUID,
+    *,
+    for_update: bool = False,
+) -> Game:
+    if for_update:
+        game = db.scalar(
+            select(Game).where(Game.id == game_id).with_for_update()
+        )
+    else:
+        game = db.get(Game, game_id)
 
     if (
         game is None
@@ -770,7 +758,7 @@ def update_official_game(
     game_id: uuid.UUID,
     update_request: AdminOfficialGameUpdate,
 ) -> Game:
-    game = get_official_game_or_404(db, game_id)
+    game = get_official_game_or_404(db, game_id, for_update=True)
     if (
         game.publish_status != "published"
         or game.game_status not in {"scheduled", "full"}
@@ -893,7 +881,7 @@ def add_official_game_player(
     game_id: uuid.UUID,
     add_request: AdminOfficialGamePlayerAdd,
 ) -> GameParticipant:
-    game = get_official_game_or_404(db, game_id)
+    game = get_official_game_or_404(db, game_id, for_update=True)
     if (
         game.publish_status != "published"
         or game.game_status not in {"scheduled", "full"}
@@ -1099,7 +1087,7 @@ def remove_official_game_player(
     participant_id: uuid.UUID,
     remove_request: AdminOfficialGamePlayerRemove,
 ) -> GameParticipant:
-    game = get_official_game_or_404(db, game_id)
+    game = get_official_game_or_404(db, game_id, for_update=True)
     if (
         game.publish_status != "published"
         or game.game_status not in {"scheduled", "full"}
@@ -1126,6 +1114,12 @@ def remove_official_game_player(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Use the host route to remove an official game host.",
+        )
+
+    if participant.user_id is not None and participant.user_id == game.host_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Remove host designation before removing this player.",
         )
 
     now = datetime.now(timezone.utc)
@@ -1247,74 +1241,50 @@ def assign_official_game_host(
     game_id: uuid.UUID,
     host_request: AdminOfficialGameHostAssign,
 ) -> Game:
-    game = get_official_game_or_404(db, game_id)
-    if game.game_status not in {"scheduled", "full"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Host can only be assigned to scheduled or full official games.",
-        )
+    game = get_official_game_or_404(db, game_id, for_update=True)
+    require_official_host_change_allowed(game, action="assigned")
 
     host = get_active_user_or_404(db, host_request.host_user_id, "Host not found.")
-    existing_participant = get_active_participant_for_user(
+    host_participant = get_official_host_roster_participant(
         db,
         game_id=game.id,
         user_id=host.id,
     )
-    active_host_participants = list_active_host_participants(
-        db,
-        game_id=game.id,
-    )
 
-    if (
-        existing_participant is not None
-        and existing_participant.participant_type != "host"
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Selected host already has an active roster row for this game.",
-        )
-
-    if game.host_user_id == host.id and existing_participant is not None:
+    if game.host_user_id == host.id:
         return game
 
-    if (
-        len(active_host_participants) == 0
-        and existing_participant is None
-        and count_roster_players(db, game.id) >= game.total_spots
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot assign a host because the game is already full.",
-        )
-
     old_host_user_id = game.host_user_id
-    old_host_participant_ids = [
-        participant.id for participant in active_host_participants
-    ]
-
-    for active_host_participant in active_host_participants:
-        if active_host_participant.user_id == host.id:
-            continue
-        mark_host_participant_removed(
+    old_host_participant = None
+    if old_host_user_id is not None:
+        old_host_participant = get_active_participant_for_user(
             db,
-            participant=active_host_participant,
-            admin_user_id=admin_user.id,
-            reason=host_request.reason,
+            game_id=game.id,
+            user_id=old_host_user_id,
         )
 
-    if existing_participant is not None:
-        host_participant = existing_participant
-    else:
-        host_participant = create_host_participant(
-            db,
-            game=game,
-            host=host,
-            admin_user_id=admin_user.id,
-            reason=host_request.reason or "Official game host assigned.",
-        )
     game.host_user_id = host.id
     game.updated_at = datetime.now(timezone.utc)
     db.add(game)
+
+    metadata: dict[str, Any] = {
+        "before": {
+            "host_user_id": old_host_user_id,
+            "host_participant_id": (
+                old_host_participant.id if old_host_participant is not None else None
+            ),
+            "host_participant_type": (
+                old_host_participant.participant_type
+                if old_host_participant is not None
+                else None
+            ),
+        },
+        "after": {
+            "host_user_id": host.id,
+            "host_participant_id": host_participant.id,
+            "host_participant_type": host_participant.participant_type,
+        },
+    }
 
     add_admin_action(
         db,
@@ -1324,16 +1294,7 @@ def assign_official_game_host(
         target_user_id=host.id,
         target_participant_id=host_participant.id,
         reason=host_request.reason,
-        metadata={
-            "before": {
-                "host_user_id": old_host_user_id,
-                "host_participant_ids": old_host_participant_ids,
-            },
-            "after": {
-                "host_user_id": host.id,
-                "host_participant_id": host_participant.id,
-            },
-        },
+        metadata=metadata,
     )
 
     try:
@@ -1355,27 +1316,18 @@ def remove_official_game_host(
     game_id: uuid.UUID,
     remove_request: AdminOfficialGameHostRemove,
 ) -> Game:
-    game = get_official_game_or_404(db, game_id)
-    active_host_participants = list_active_host_participants(
-        db,
-        game_id=game.id,
-    )
+    game = get_official_game_or_404(db, game_id, for_update=True)
+    require_official_host_change_allowed(game, action="removed")
 
-    if game.host_user_id is None and len(active_host_participants) == 0:
+    if game.host_user_id is None:
         return game
 
     old_host_user_id = game.host_user_id
-    old_host_participant_ids = [
-        participant.id for participant in active_host_participants
-    ]
-
-    for active_host_participant in active_host_participants:
-        mark_host_participant_removed(
-            db,
-            participant=active_host_participant,
-            admin_user_id=admin_user.id,
-            reason=remove_request.reason,
-        )
+    old_host_participant = get_active_participant_for_user(
+        db,
+        game_id=game.id,
+        user_id=old_host_user_id,
+    )
 
     game.host_user_id = None
     game.updated_at = datetime.now(timezone.utc)
@@ -1388,17 +1340,27 @@ def remove_official_game_host(
         target_game_id=game.id,
         target_user_id=old_host_user_id,
         target_participant_id=(
-            old_host_participant_ids[0] if old_host_participant_ids else None
+            old_host_participant.id if old_host_participant is not None else None
         ),
         reason=remove_request.reason,
         metadata={
             "before": {
                 "host_user_id": old_host_user_id,
-                "host_participant_ids": old_host_participant_ids,
+                "host_participant_id": (
+                    old_host_participant.id
+                    if old_host_participant is not None
+                    else None
+                ),
+                "host_participant_type": (
+                    old_host_participant.participant_type
+                    if old_host_participant is not None
+                    else None
+                ),
             },
             "after": {
                 "host_user_id": None,
                 "host_participant_id": None,
+                "host_participant_type": None,
             },
         },
     )

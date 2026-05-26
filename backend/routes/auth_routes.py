@@ -196,6 +196,20 @@ def commit_user_sync(db: Session, user: User) -> User:
 
 
 def cancel_future_user_activity(user: User, db: Session, now: datetime) -> None:
+    official_hosted_games = db.scalars(
+        select(Game).where(
+            Game.host_user_id == user.id,
+            Game.game_type == "official",
+            Game.starts_at > now,
+            Game.game_status.in_(["scheduled", "full"]),
+        )
+    ).all()
+
+    for game in official_hosted_games:
+        game.host_user_id = None
+        game.updated_at = now
+        db.add(game)
+
     future_participants = db.scalars(
         select(GameParticipant)
         .join(Game, GameParticipant.game_id == Game.id)
@@ -240,6 +254,7 @@ def cancel_future_user_activity(user: User, db: Session, now: datetime) -> None:
     hosted_games = db.scalars(
         select(Game).where(
             Game.host_user_id == user.id,
+            Game.game_type == "community",
             Game.starts_at > now,
             Game.game_status.in_(["scheduled", "full"]),
         )

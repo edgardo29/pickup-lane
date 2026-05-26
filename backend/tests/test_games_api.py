@@ -75,7 +75,14 @@ def local_date_string(starts_at: datetime, timezone_name: str) -> str:
 def test_games_create_get_list_update_and_soft_delete(client: TestClient):
     user = create_user(client)
     venue = create_venue(client, user["id"])
-    game = create_game(client, user["id"], venue)
+    game = create_game(
+        client,
+        user["id"],
+        venue,
+        game_type="community",
+        host_user_id=user["id"],
+        policy_mode="custom_hosted",
+    )
 
     get_response = client.get(f"/games/{game['id']}")
     assert get_response.status_code == 200, get_response.text
