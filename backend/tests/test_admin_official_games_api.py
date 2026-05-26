@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from fastapi.testclient import TestClient
 
@@ -41,6 +42,45 @@ def build_official_game_payload(**overrides: object) -> dict:
     }
     payload.update(overrides)
     return payload
+
+
+def set_game_status(game_id: str, game_status: str) -> None:
+    from backend.database import SessionLocal
+    from backend.models import Game
+
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game_id))
+        assert db_game is not None
+        now = datetime.now(UTC)
+        db_game.game_status = game_status
+        if game_status == "cancelled":
+            db_game.cancelled_at = now
+        if game_status == "completed":
+            db_game.completed_at = now
+        db.commit()
+
+
+def set_game_starts_at(game_id: str, starts_at: datetime) -> None:
+    from backend.database import SessionLocal
+    from backend.models import Game
+
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game_id))
+        assert db_game is not None
+        db_game.starts_at = starts_at
+        db_game.ends_at = starts_at + timedelta(hours=1)
+        db.commit()
+
+
+def set_user_account_status(user_id: str, account_status: str) -> None:
+    from backend.database import SessionLocal
+    from backend.models import User
+
+    with SessionLocal() as db:
+        db_user = db.get(User, UUID(user_id))
+        assert db_user is not None
+        db_user.account_status = account_status
+        db.commit()
 
 
 def test_admin_can_create_official_game_without_initial_host(client: TestClient):
@@ -649,7 +689,9 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
     } == {"removed"}
 
 
-def test_admin_can_assign_change_and_remove_official_game_host(client: TestClient):
+def test_admin_can_assign_replace_and_remove_official_game_host_designation(
+    client: TestClient,
+):
     admin = create_user(client)
     first_host = create_user(client)
     second_host = create_user(client)
@@ -664,6 +706,41 @@ def test_admin_can_assign_change_and_remove_official_game_host(client: TestClien
     game = create_response.json()["game"]
     assert game["host_user_id"] is None
 
+    booking = create_booking(client, first_host["id"], game["id"])
+    first_participant = create_game_participant(
+        client,
+        first_host["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+        roster_order=1,
+    )
+    guest = create_game_participant(
+        client,
+        None,
+        game["id"],
+        booking_id=booking["id"],
+        participant_type="guest",
+        guest_of_user_id=first_host["id"],
+        guest_name="Host guest",
+        display_name_snapshot="Host guest",
+        price_cents=1500,
+        roster_order=2,
+    )
+    payment = create_payment(
+        client,
+        first_host["id"],
+        booking_id=booking["id"],
+        amount_cents=1300,
+        payment_status="succeeded",
+    )
+    add_response = client.post(
+        f"/admin/official-games/{game['id']}/players",
+        json={"user_id": second_host["id"], "reason": "Waive payment."},
+    )
+    assert add_response.status_code == 201, add_response.text
+    second_participant = add_response.json()
+
     assign_response = client.post(
         f"/admin/official-games/{game['id']}/host",
         json={
@@ -673,6 +750,13 @@ def test_admin_can_assign_change_and_remove_official_game_host(client: TestClien
     )
     assert assign_response.status_code == 200, assign_response.text
     assert assign_response.json()["game"]["host_user_id"] == first_host["id"]
+
+    same_host_response = client.post(
+        f"/admin/official-games/{game['id']}/host",
+        json={"host_user_id": first_host["id"], "reason": "No-op reassignment."},
+    )
+    assert same_host_response.status_code == 200, same_host_response.text
+    assert same_host_response.json()["game"]["host_user_id"] == first_host["id"]
 
     change_response = client.post(
         f"/admin/official-games/{game['id']}/host",
@@ -684,38 +768,60 @@ def test_admin_can_assign_change_and_remove_official_game_host(client: TestClien
     assert change_response.status_code == 200, change_response.text
     assert change_response.json()["game"]["host_user_id"] == second_host["id"]
 
-    first_host_participants_response = client.get(
-        f"/game-participants?game_id={game['id']}&user_id={first_host['id']}"
+    first_participant_response = client.get(
+        f"/game-participants/{first_participant['id']}"
     )
-    assert first_host_participants_response.status_code == 200
-    assert first_host_participants_response.json()[0]["participant_status"] == "removed"
+    assert first_participant_response.status_code == 200
+    updated_first_participant = first_participant_response.json()
+    assert updated_first_participant["participant_type"] == "registered_user"
+    assert updated_first_participant["participant_status"] == "confirmed"
+    assert updated_first_participant["booking_id"] == booking["id"]
 
-    second_host_participants_response = client.get(
-        f"/game-participants?game_id={game['id']}&user_id={second_host['id']}"
+    second_participant_response = client.get(
+        f"/game-participants/{second_participant['id']}"
     )
-    assert second_host_participants_response.status_code == 200
-    assert second_host_participants_response.json()[0]["participant_type"] == "host"
-    assert second_host_participants_response.json()[0]["participant_status"] == "confirmed"
+    assert second_participant_response.status_code == 200
+    updated_second_participant = second_participant_response.json()
+    assert updated_second_participant["participant_type"] == "admin_added"
+    assert updated_second_participant["participant_status"] == "confirmed"
+    assert updated_second_participant["booking_id"] == second_participant["booking_id"]
+
+    guest_response = client.get(f"/game-participants/{guest['id']}")
+    assert guest_response.status_code == 200
+    updated_guest = guest_response.json()
+    assert updated_guest["participant_type"] == "guest"
+    assert updated_guest["participant_status"] == "confirmed"
+    assert updated_guest["guest_of_user_id"] == first_host["id"]
+
+    payment_response = client.get(f"/payments/{payment['id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    assert payment_response.json()["payment_status"] == "succeeded"
 
     remove_response = client.request(
         "DELETE",
         f"/admin/official-games/{game['id']}/host",
-        json={"reason": "No host yet."},
+        json={"reason": "No host needed."},
     )
     assert remove_response.status_code == 200, remove_response.text
     assert remove_response.json()["game"]["host_user_id"] is None
 
-    second_host_after_remove_response = client.get(
-        f"/game-participants?game_id={game['id']}&user_id={second_host['id']}"
+    second_after_remove_response = client.get(
+        f"/game-participants/{second_participant['id']}"
     )
-    assert second_host_after_remove_response.status_code == 200
-    assert second_host_after_remove_response.json()[0]["participant_status"] == "removed"
+    assert second_after_remove_response.status_code == 200
+    assert second_after_remove_response.json()["participant_type"] == "admin_added"
+    assert second_after_remove_response.json()["participant_status"] == "confirmed"
 
     assign_audit_response = client.get(
         f"/admin/actions?action_type=assign_official_host&target_game_id={game['id']}"
     )
     assert assign_audit_response.status_code == 200, assign_audit_response.text
-    assert len(assign_audit_response.json()) == 2
+    assign_audit_rows = assign_audit_response.json()
+    assert len(assign_audit_rows) == 2
+    assert {row["target_user_id"] for row in assign_audit_rows} == {
+        first_host["id"],
+        second_host["id"],
+    }
 
     remove_audit_response = client.get(
         f"/admin/actions?action_type=remove_official_host&target_game_id={game['id']}"
@@ -724,7 +830,94 @@ def test_admin_can_assign_change_and_remove_official_game_host(client: TestClien
     assert len(remove_audit_response.json()) == 1
 
 
-def test_admin_official_game_host_rejects_active_player(client: TestClient):
+def test_admin_official_game_host_rejects_off_roster_user(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+
+    response = client.post(
+        f"/admin/official-games/{game['id']}/host",
+        json={"host_user_id": player["id"]},
+    )
+
+    assert response.status_code == 400, response.text
+    assert "confirmed roster player" in response.text
+
+
+def test_admin_official_game_host_rejects_ineligible_roster_statuses(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+
+    for index, participant_status in enumerate(
+        ["pending_payment", "waitlisted", "cancelled", "removed", "refunded"]
+    ):
+        player = create_user(client)
+        overrides = {
+            "participant_status": participant_status,
+            "price_cents": 1500,
+            "roster_order": index + 1,
+        }
+        if participant_status in {"cancelled", "removed", "refunded"}:
+            overrides["cancellation_type"] = "admin_cancelled"
+        create_game_participant(
+            client,
+            player["id"],
+            game["id"],
+            **overrides,
+        )
+
+        response = client.post(
+            f"/admin/official-games/{game['id']}/host",
+            json={"host_user_id": player["id"]},
+        )
+
+        assert response.status_code == 400, response.text
+        assert "confirmed roster player" in response.text
+
+
+def test_admin_official_game_host_rejects_inactive_user(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    create_game_participant(client, player["id"], game["id"], price_cents=1500)
+    set_user_account_status(player["id"], "suspended")
+
+    response = client.post(
+        f"/admin/official-games/{game['id']}/host",
+        json={"host_user_id": player["id"]},
+    )
+
+    assert response.status_code == 400, response.text
+    assert "not active" in response.text
+
+
+def test_admin_official_game_host_rejects_invalid_game_state_and_started_game(
+    client: TestClient,
+):
     admin = create_user(client)
     player = create_user(client)
     set_user_role(admin["id"], "admin")
@@ -738,17 +931,125 @@ def test_admin_official_game_host_rejects_active_player(client: TestClient):
     game = create_response.json()["game"]
     create_game_participant(client, player["id"], game["id"], price_cents=1500)
 
-    response = client.post(
+    set_game_status(game["id"], "cancelled")
+    cancelled_response = client.post(
         f"/admin/official-games/{game['id']}/host",
         json={"host_user_id": player["id"]},
     )
+    assert cancelled_response.status_code == 400, cancelled_response.text
+    assert "published scheduled or full" in cancelled_response.text
+
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(title="Started Official Match"),
+    )
+    assert create_response.status_code == 201, create_response.text
+    started_game = create_response.json()["game"]
+    create_game_participant(client, player["id"], started_game["id"], price_cents=1500)
+    set_game_starts_at(started_game["id"], datetime.now(UTC) - timedelta(minutes=1))
+
+    started_response = client.post(
+        f"/admin/official-games/{started_game['id']}/host",
+        json={"host_user_id": player["id"]},
+    )
+    assert started_response.status_code == 400, started_response.text
+    assert "before the game starts" in started_response.text
+
+
+def test_admin_remove_player_rejects_current_official_host(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    assign_response = client.post(
+        f"/admin/official-games/{game['id']}/host",
+        json={"host_user_id": player["id"]},
+    )
+    assert assign_response.status_code == 200, assign_response.text
+
+    response = client.request(
+        "DELETE",
+        f"/admin/official-games/{game['id']}/participants/{participant['id']}",
+        json={"reason": "Remove host directly."},
+    )
 
     assert response.status_code == 400, response.text
-    assert "already has an active roster row" in response.text
+    assert "Remove host designation" in response.text
+    participant_response = client.get(f"/game-participants/{participant['id']}")
+    assert participant_response.status_code == 200
+    assert participant_response.json()["participant_status"] == "confirmed"
 
 
-def test_admin_official_game_host_rejects_full_game_without_current_host(
+def test_user_delete_rejects_current_future_official_host(client: TestClient):
+    admin = create_user(client)
+    host = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    create_game_participant(client, host["id"], game["id"], price_cents=1500)
+    assign_response = client.post(
+        f"/admin/official-games/{game['id']}/host",
+        json={"host_user_id": host["id"]},
+    )
+    assert assign_response.status_code == 200, assign_response.text
+
+    delete_response = client.delete(f"/users/{host['id']}")
+
+    assert delete_response.status_code == 400, delete_response.text
+    assert "Remove official host designation" in delete_response.text
+    user_response = client.get(f"/users/{host['id']}")
+    assert user_response.status_code == 200
+    assert user_response.json()["deleted_at"] is None
+    game_response = client.get(f"/admin/official-games/{game['id']}")
+    assert game_response.status_code == 200
+    assert game_response.json()["game"]["host_user_id"] == host["id"]
+
+
+def test_generic_game_delete_rejects_official_game(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+
+    delete_response = client.delete(f"/games/{game['id']}")
+
+    assert delete_response.status_code == 400, delete_response.text
+    assert "cancelled instead of deleted" in delete_response.text
+    game_response = client.get(f"/admin/official-games/{game['id']}")
+    assert game_response.status_code == 200
+    assert game_response.json()["game"]["deleted_at"] is None
+
+
+def test_account_delete_clears_future_official_host_without_cancelling_game(
     client: TestClient,
+    monkeypatch,
 ):
     admin = create_user(client)
     host = create_user(client)
@@ -761,24 +1062,46 @@ def test_admin_official_game_host_rejects_full_game_without_current_host(
     )
     assert create_response.status_code == 201, create_response.text
     game = create_response.json()["game"]
-
-    for index in range(game["total_spots"]):
-        player = create_user(client)
-        create_game_participant(
-            client,
-            player["id"],
-            game["id"],
-            price_cents=1500,
-            roster_order=index + 1,
-        )
-
-    response = client.post(
+    participant = create_game_participant(
+        client,
+        host["id"],
+        game["id"],
+        price_cents=1500,
+    )
+    assign_response = client.post(
         f"/admin/official-games/{game['id']}/host",
         json={"host_user_id": host["id"]},
     )
+    assert assign_response.status_code == 200, assign_response.text
 
-    assert response.status_code == 400, response.text
-    assert "already full" in response.text
+    monkeypatch.setattr(
+        "backend.routes.auth_routes.verify_firebase_token",
+        lambda token: {"uid": host["auth_user_id"], "email_verified": True},
+    )
+    monkeypatch.setattr(
+        "backend.routes.auth_routes.delete_firebase_user",
+        lambda auth_user_id: None,
+    )
+
+    delete_response = client.request(
+        "DELETE",
+        "/auth/account",
+        headers={"Authorization": "Bearer test-token"},
+        json={"confirmation": "DELETE"},
+    )
+
+    assert delete_response.status_code == 200, delete_response.text
+    assert delete_response.json()["deleted_at"] is not None
+    game_response = client.get(f"/admin/official-games/{game['id']}")
+    assert game_response.status_code == 200
+    updated_game = game_response.json()["game"]
+    assert updated_game["host_user_id"] is None
+    assert updated_game["game_status"] == "scheduled"
+    participant_response = client.get(f"/game-participants/{participant['id']}")
+    assert participant_response.status_code == 200
+    updated_participant = participant_response.json()
+    assert updated_participant["participant_status"] == "cancelled"
+    assert updated_participant["display_name_snapshot"] == "Deleted User"
 
 
 def test_admin_can_remove_official_game_host_without_body(client: TestClient):
@@ -793,6 +1116,12 @@ def test_admin_can_remove_official_game_host_without_body(client: TestClient):
     )
     assert create_response.status_code == 201, create_response.text
     game = create_response.json()["game"]
+    participant = create_game_participant(
+        client,
+        host["id"],
+        game["id"],
+        price_cents=1500,
+    )
     assign_response = client.post(
         f"/admin/official-games/{game['id']}/host",
         json={"host_user_id": host["id"]},
@@ -803,6 +1132,9 @@ def test_admin_can_remove_official_game_host_without_body(client: TestClient):
 
     assert response.status_code == 200, response.text
     assert response.json()["game"]["host_user_id"] is None
+    participant_response = client.get(f"/game-participants/{participant['id']}")
+    assert participant_response.status_code == 200
+    assert participant_response.json()["participant_status"] == "confirmed"
 
 
 def test_admin_official_game_list_rejects_invalid_status_filter(
@@ -840,6 +1172,17 @@ def test_admin_official_game_routes_reject_non_admin(client: TestClient):
         json={"user_id": user["id"]},
     )
     assert add_player_response.status_code == 403, add_player_response.text
+
+    assign_host_response = client.post(
+        "/admin/official-games/00000000-0000-0000-0000-000000000000/host",
+        json={"host_user_id": user["id"]},
+    )
+    assert assign_host_response.status_code == 403, assign_host_response.text
+
+    remove_host_response = client.delete(
+        "/admin/official-games/00000000-0000-0000-0000-000000000000/host",
+    )
+    assert remove_host_response.status_code == 403, remove_host_response.text
 
     participants_response = client.get(
         "/admin/official-games/00000000-0000-0000-0000-000000000000/participants"

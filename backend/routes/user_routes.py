@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import User
+from backend.models import Game, User
 from backend.schemas import UserCreate, UserRead, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -32,6 +32,30 @@ def build_conflict_detail(exc: IntegrityError) -> str:
             return message
 
     return error_text
+
+
+def require_no_future_official_host_assignment(
+    db: Session,
+    user_id: uuid.UUID,
+    now: datetime,
+) -> None:
+    hosted_game_id = db.scalar(
+        select(Game.id)
+        .where(
+            Game.host_user_id == user_id,
+            Game.game_type == "official",
+            Game.deleted_at.is_(None),
+            Game.starts_at > now,
+            Game.game_status.in_(["scheduled", "full"]),
+        )
+        .limit(1)
+    )
+
+    if hosted_game_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Remove official host designation before deleting this user.",
+        )
 
 
 # This route returns all user profiles currently stored in the app database.
@@ -146,9 +170,12 @@ def delete_user(user_id: uuid.UUID, db: Session = Depends(get_db)) -> User:
             detail="User not found.",
         )
 
+    now = datetime.now(timezone.utc)
+    require_no_future_official_host_assignment(db, db_user.id, now)
+
     db_user.account_status = "deleted"
-    db_user.updated_at = datetime.now(timezone.utc)
-    db_user.deleted_at = datetime.now(timezone.utc)
+    db_user.updated_at = now
+    db_user.deleted_at = now
 
     try:
         db.add(db_user)
