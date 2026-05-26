@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { hasCompleteProfile } from './gameUserSelectors.js'
 import { loadGameCheckout } from './gameCheckoutApi.js'
+import { listUserPaymentMethods } from '../../lib/paymentMethodsApi.js'
 
 export function useGameCheckoutData({
   appUser,
@@ -16,6 +17,17 @@ export function useGameCheckoutData({
   const [paymentMethods, setPaymentMethods] = useState([])
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
+
+  const reloadPaymentMethods = useCallback(async () => {
+    if (!firebaseUser) {
+      setPaymentMethods([])
+      return []
+    }
+
+    const methods = await listUserPaymentMethods(firebaseUser)
+    setPaymentMethods(methods)
+    return methods
+  }, [firebaseUser])
 
   useEffect(() => {
     let ignore = false
@@ -70,6 +82,7 @@ export function useGameCheckoutData({
     images,
     participants,
     paymentMethods,
+    reloadPaymentMethods,
     status,
     venue,
   }

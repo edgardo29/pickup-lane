@@ -106,7 +106,7 @@ export function useGameDetailsPageModel() {
 
   useEffect(() => {
     hydrateChatState(loadedChatState)
-  }, [loadedChatState])
+  }, [hydrateChatState, loadedChatState])
 
   const actions = useGameDetailsActions({
     canAddBookingGuests: viewModel?.canAddBookingGuests || false,

@@ -9,7 +9,7 @@ REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 class UserPaymentMethodSetupIntentCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    set_as_default: bool = True
+    set_as_default: bool = False
 
 
 class UserPaymentMethodSetupIntentRead(BaseModel):
@@ -20,7 +20,7 @@ class UserPaymentMethodSyncCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     setup_intent_id: str
-    set_as_default: bool = True
+    set_as_default: bool = False
 
 
 class UserPaymentMethodRead(BaseModel):

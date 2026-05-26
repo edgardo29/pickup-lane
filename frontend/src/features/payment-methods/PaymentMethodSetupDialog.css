@@ -1,0 +1,127 @@
+.payment-method-setup-backdrop {
+  --lime: #b8ff24;
+
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  padding: 18px;
+  background: rgba(1, 5, 10, 0.74);
+  backdrop-filter: blur(12px);
+  display: grid;
+  place-items: center;
+}
+
+.payment-method-setup-card {
+  width: min(100%, 620px);
+  padding: 18px;
+  border: 1px solid rgba(248, 250, 252, 0.16);
+  border-radius: 10px;
+  background: #0c141d;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.46);
+  display: grid;
+  gap: 14px;
+}
+
+.payment-method-setup-card__copy {
+  display: grid;
+  gap: 5px;
+}
+
+.payment-method-setup-card h2,
+.payment-method-setup-card p {
+  margin: 0;
+}
+
+.payment-method-setup-card h2 {
+  color: #ffffff;
+  font-size: 1.18rem;
+  line-height: 1.15;
+  font-weight: 950;
+}
+
+.payment-method-setup-card p {
+  color: rgba(248, 250, 252, 0.66);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.payment-method-setup-form {
+  display: grid;
+  gap: 12px;
+}
+
+.payment-method-setup-form__element {
+  padding: 14px 13px;
+  border: 1px solid rgba(248, 250, 252, 0.1);
+  border-radius: 8px;
+  background: rgba(5, 10, 16, 0.42);
+}
+
+.payment-method-setup-form__element:focus-within {
+  border-color: rgba(184, 255, 36, 0.36);
+  box-shadow: 0 0 0 3px rgba(184, 255, 36, 0.08);
+}
+
+.payment-method-setup-form__default {
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid rgba(248, 250, 252, 0.1);
+  border-radius: 8px;
+  color: rgba(248, 250, 252, 0.88);
+  background: rgba(5, 10, 16, 0.38);
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.payment-method-setup-form__default input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #b8ff24;
+  flex: 0 0 auto;
+}
+
+.payment-method-setup-form__error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 107, 115, 0.42);
+  border-radius: 8px;
+  color: #ffd5d8;
+  background: rgba(255, 107, 115, 0.12);
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.payment-method-setup-form__actions {
+  padding-top: 2px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.payment-method-setup-form__actions button {
+  min-width: 104px;
+}
+
+.payment-method-setup-form__actions button:disabled {
+  background: rgba(248, 250, 252, 0.08);
+  color: rgba(248, 250, 252, 0.42);
+  opacity: 1;
+}
+
+@media (max-width: 700px) {
+  .payment-method-setup-card {
+    padding: 16px;
+  }
+
+  .payment-method-setup-form__actions {
+    flex-direction: column-reverse;
+  }
+
+  .payment-method-setup-form__actions button {
+    width: 100%;
+  }
+}

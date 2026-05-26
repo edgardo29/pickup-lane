@@ -80,6 +80,22 @@ class Game(Base):
             name="ck_games_minimum_age",
         ),
         CheckConstraint(
+            "(game_type <> 'official' OR minimum_age IS NULL)",
+            name="ck_games_official_minimum_age_null",
+        ),
+        CheckConstraint(
+            "(game_type <> 'official' OR host_guest_max = 0)",
+            name="ck_games_official_host_guest_max_zero",
+        ),
+        CheckConstraint(
+            "(game_type <> 'official' OR custom_rules_text IS NULL)",
+            name="ck_games_official_no_custom_rules",
+        ),
+        CheckConstraint(
+            "(game_type <> 'official' OR custom_cancellation_text IS NULL)",
+            name="ck_games_official_no_custom_cancellation",
+        ),
+        CheckConstraint(
             "(game_type <> 'community' OR host_user_id IS NOT NULL)",
             name="ck_games_community_requires_host_user",
         ),

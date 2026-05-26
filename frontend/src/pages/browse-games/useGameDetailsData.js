@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   loadGameDetails as loadGameDetailsData,
   refreshGameParticipants as refreshGameParticipantsData,
@@ -25,6 +25,11 @@ export function useGameDetailsData({
   const [loadedChatState, setLoadedChatState] = useState(EMPTY_CHAT_STATE)
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
+  const onBeforeLoadRef = useRef(onBeforeLoad)
+
+  useEffect(() => {
+    onBeforeLoadRef.current = onBeforeLoad
+  }, [onBeforeLoad])
 
   useEffect(() => {
     let ignore = false
@@ -33,7 +38,7 @@ export function useGameDetailsData({
       setStatus('loading')
       setError('')
       setLoadedChatState(EMPTY_CHAT_STATE)
-      onBeforeLoad()
+      onBeforeLoadRef.current()
 
       try {
         const details = await loadGameDetailsData({ appUser, firebaseUser, gameId })

@@ -174,6 +174,22 @@ def upgrade() -> None:
             name="ck_games_minimum_age",
         ),
         sa.CheckConstraint(
+            "(game_type <> 'official' OR minimum_age IS NULL)",
+            name="ck_games_official_minimum_age_null",
+        ),
+        sa.CheckConstraint(
+            "(game_type <> 'official' OR host_guest_max = 0)",
+            name="ck_games_official_host_guest_max_zero",
+        ),
+        sa.CheckConstraint(
+            "(game_type <> 'official' OR custom_rules_text IS NULL)",
+            name="ck_games_official_no_custom_rules",
+        ),
+        sa.CheckConstraint(
+            "(game_type <> 'official' OR custom_cancellation_text IS NULL)",
+            name="ck_games_official_no_custom_cancellation",
+        ),
+        sa.CheckConstraint(
             "(game_type <> 'community' OR host_user_id IS NOT NULL)",
             name="ck_games_community_requires_host_user",
         ),

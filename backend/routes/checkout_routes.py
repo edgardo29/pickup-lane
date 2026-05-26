@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -42,6 +42,7 @@ from backend.services.stripe_service import (
     create_payment_intent,
     get_stripe_currency,
     map_payment_intent_status,
+    retrieve_payment_method,
     retrieve_payment_intent,
 )
 
@@ -189,6 +190,21 @@ def get_reusable_pending_checkout(
         return None
 
     booking, payment = row
+    pending_participant_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(GameParticipant)
+            .where(
+                GameParticipant.booking_id == booking.id,
+                GameParticipant.game_id == db_game.id,
+                GameParticipant.participant_status == "pending_payment",
+            )
+        )
+        or 0
+    )
+    if pending_participant_count != party_size:
+        return None
+
     return booking, payment
 
 
@@ -285,6 +301,8 @@ def get_current_user_saved_payment_method(
     db: Session,
     payment_method_id: uuid.UUID | None,
     current_user: User,
+    *,
+    now: datetime,
 ) -> UserPaymentMethod | None:
     if payment_method_id is None:
         return None
@@ -302,6 +320,12 @@ def get_current_user_saved_payment_method(
             detail="Only active payment methods can be used for checkout.",
         )
 
+    if is_saved_payment_method_expired(payment_method, now):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This saved card is expired. Choose another card.",
+        )
+
     if (
         not current_user.stripe_customer_id
         or payment_method.stripe_customer_id != current_user.stripe_customer_id
@@ -311,7 +335,70 @@ def get_current_user_saved_payment_method(
             detail="This payment method is not linked to your Stripe customer.",
         )
 
+    verify_saved_payment_method_with_stripe(payment_method, current_user, now)
+
     return payment_method
+
+
+def is_saved_payment_method_expired(
+    payment_method: UserPaymentMethod,
+    now: datetime,
+) -> bool:
+    return (
+        payment_method.exp_year < now.year
+        or (
+            payment_method.exp_year == now.year
+            and payment_method.exp_month < now.month
+        )
+    )
+
+
+def verify_saved_payment_method_with_stripe(
+    payment_method: UserPaymentMethod,
+    current_user: User,
+    now: datetime,
+) -> None:
+    try:
+        stripe_payment_method = retrieve_payment_method(
+            payment_method.stripe_payment_method_id
+        )
+    except StripeConfigError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This saved card could not be verified. Choose another card.",
+        ) from exc
+
+    if (
+        stripe_payment_method.customer_id != current_user.stripe_customer_id
+        or stripe_payment_method.customer_id != payment_method.stripe_customer_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This saved card is no longer linked to your Stripe customer.",
+        )
+
+    if stripe_payment_method.card_fingerprint != payment_method.card_fingerprint:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This saved card no longer matches the saved card details.",
+        )
+
+    if (
+        stripe_payment_method.exp_year < now.year
+        or (
+            stripe_payment_method.exp_year == now.year
+            and stripe_payment_method.exp_month < now.month
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This saved card is expired. Choose another card.",
+        )
 
 
 def keep_payment_pending_until_webhook(stripe_status: str) -> str:
@@ -355,7 +442,13 @@ def create_game_checkout_payment_intent(
         db,
         checkout_request.payment_method_id,
         current_user,
+        now=now,
     )
+    if saved_payment_method is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Choose a saved card before checkout.",
+        )
     guest_count = validate_guest_count(db_game, checkout_request.guest_count)
     party_size = guest_count + 1
     amount_cents = db_game.price_per_player_cents * party_size
@@ -390,10 +483,10 @@ def create_game_checkout_payment_intent(
                 detail="Stripe could not retrieve this payment intent.",
             ) from exc
 
-        payment_status = map_payment_intent_status(payment_intent.status)
-        if payment_status in PENDING_PAYMENT_STATUSES:
-            stripe_status = payment_intent.status
-            if saved_payment_method is not None:
+        stripe_status = payment_intent.status
+        payment_status = map_payment_intent_status(stripe_status)
+        if payment_status in PENDING_PAYMENT_STATUSES or stripe_status == "succeeded":
+            if stripe_status == "requires_payment_method":
                 try:
                     payment_intent = confirm_payment_intent(
                         payment.provider_payment_intent_id,
@@ -414,7 +507,8 @@ def create_game_checkout_payment_intent(
                     ) from exc
 
                 stripe_status = payment_intent.status
-                payment_status = keep_payment_pending_until_webhook(stripe_status)
+
+            payment_status = keep_payment_pending_until_webhook(stripe_status)
 
             payment.payment_status = payment_status
             payment.provider_charge_id = payment_intent.latest_charge_id

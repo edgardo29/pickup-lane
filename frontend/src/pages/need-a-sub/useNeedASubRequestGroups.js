@@ -8,7 +8,7 @@ export function useNeedASubRequestGroups({ post, requests }) {
 
   const requestGroups = useMemo(
     () => buildRequestGroups(post, requests),
-    [post?.positions, requests],
+    [post, requests],
   )
   const defaultRequestGroup = useMemo(
     () => requestGroups.find((group) => group.pending.length > 0) || requestGroups[0] || null,
@@ -23,14 +23,18 @@ export function useNeedASubRequestGroups({ post, requests }) {
   )
 
   useEffect(() => {
-    if (!requestGroups.length) {
-      setSelectedPositionId('')
-      return
-    }
+    const timerId = window.setTimeout(() => {
+      if (!requestGroups.length) {
+        setSelectedPositionId('')
+        return
+      }
 
-    if (!requestGroups.some((group) => group.position.id === selectedPositionId)) {
-      setSelectedPositionId(defaultRequestGroup?.position.id || requestGroups[0].position.id)
-    }
+      if (!requestGroups.some((group) => group.position.id === selectedPositionId)) {
+        setSelectedPositionId(defaultRequestGroup?.position.id || requestGroups[0].position.id)
+      }
+    }, 0)
+
+    return () => window.clearTimeout(timerId)
   }, [defaultRequestGroup, requestGroups, selectedPositionId])
 
   return {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppPageShell } from '../../components/app/index.js'
 import { useAuth } from '../../hooks/useAuth.js'
@@ -50,7 +50,9 @@ function NeedASubDetailPage() {
     !isOwner &&
     !activeRequest,
   )
-  const selectedPosition = (post?.positions || []).find((position) => position.id === selectedPositionId)
+  const effectiveSelectedPositionId = selectedPositionId || post?.positions?.[0]?.id || ''
+  const selectedPosition = (post?.positions || [])
+    .find((position) => position.id === effectiveSelectedPositionId)
   const selectedPositionNeedsWaitlist = selectedPosition
     ? countHeldSpots(selectedPosition) >= selectedPosition.spots_needed
     : false
@@ -63,17 +65,6 @@ function NeedASubDetailPage() {
   const requestNotice = notice && !isOwner
     ? notice
     : ''
-
-  useEffect(() => {
-    if (!post || selectedPositionId) {
-      return
-    }
-
-    const firstPosition = post.positions?.[0]
-    if (firstPosition) {
-      setSelectedPositionId(firstPosition.id)
-    }
-  }, [post, selectedPositionId])
 
   async function runAction(action, successMessage) {
     setIsActing(true)
@@ -139,7 +130,7 @@ function NeedASubDetailPage() {
             ownerRequests={ownerRequests}
             post={post}
             requestNotice={requestNotice}
-            selectedPositionId={selectedPositionId}
+            selectedPositionId={effectiveSelectedPositionId}
             selectedPositionNeedsWaitlist={selectedPositionNeedsWaitlist}
           />
         )}

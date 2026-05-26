@@ -20,6 +20,13 @@ def create_chat_message_setup(client: TestClient) -> tuple[dict, dict, dict, dic
     user = create_user(client)
     venue = create_venue(client, user["id"])
     game = create_game(client, user["id"], venue, host_user_id=user["id"])
+    booking = create_booking(client, user["id"], game["id"])
+    create_game_participant(
+        client,
+        user["id"],
+        game["id"],
+        booking["id"],
+    )
     game_chat = create_game_chat(client, game["id"])
     return user, venue, game, game_chat
 
@@ -149,6 +156,14 @@ def test_chat_messages_notify_other_confirmed_members_and_mark_read(client: Test
     player = create_user(client)
     venue = create_venue(client, host["id"])
     game = create_game(client, host["id"], venue, host_user_id=host["id"])
+    create_game_participant(
+        client,
+        host["id"],
+        game["id"],
+        participant_type="host",
+        price_cents=0,
+        roster_order=1,
+    )
     booking = create_booking(client, player["id"], game["id"])
     create_game_participant(
         client,

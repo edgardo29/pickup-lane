@@ -5,13 +5,16 @@ from zoneinfo import ZoneInfo
 
 from backend.tests.helpers import (
     authenticate_as,
+    create_booking,
     create_game,
     create_game_participant,
+    create_payment,
     create_user,
     create_venue,
     mark_user_email_verified,
     set_user_role,
 )
+from backend.services.stripe_service import StripeConfigError, StripeRefundResult
 
 
 def set_game_times(game_id: str, starts_at: datetime, ends_at: datetime | None = None) -> None:
@@ -335,8 +338,9 @@ def test_cancel_community_game_cancels_roster_waitlist_and_notifies_members(
     assert host_notifications_response.json() == []
 
 
-def test_cancel_official_game_refunds_demo_payments_and_writes_audit_rows(
+def test_cancel_official_game_refunds_paid_payment_and_writes_audit_rows(
     client: TestClient,
+    monkeypatch,
 ):
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
@@ -349,6 +353,23 @@ def test_cancel_official_game_refunds_demo_payments_and_writes_audit_rows(
     )
     assert join_response.status_code == 201, join_response.text
     booking_id = join_response.json()["booking_id"]
+    refund_calls: list[dict[str, object]] = []
+
+    def fake_create_stripe_refund(**kwargs):
+        refund_calls.append(kwargs)
+        return StripeRefundResult(
+            id="re_official_cancel_success",
+            status="succeeded",
+            amount_cents=int(kwargs["amount_cents"]),
+            currency=str(kwargs["currency"]),
+            charge_id=str(kwargs["charge_id"]),
+            payment_intent_id=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_stripe_refund",
+        fake_create_stripe_refund,
+    )
 
     authenticate_as(admin["id"])
     cancel_response = client.post(
@@ -367,7 +388,31 @@ def test_cancel_official_game_refunds_demo_payments_and_writes_audit_rows(
 
     payments_response = client.get(f"/payments?booking_id={booking_id}")
     assert payments_response.status_code == 200, payments_response.text
-    assert payments_response.json()[0]["payment_status"] == "refunded"
+    payment = payments_response.json()[0]
+    assert payment["payment_status"] == "refunded"
+    assert refund_calls == [
+        {
+            "charge_id": payment["provider_charge_id"],
+            "amount_cents": payment["amount_cents"],
+            "currency": "USD",
+            "idempotency_key": f"game_cancel:{game['id']}:payment:{payment['id']}:refund",
+            "metadata": {
+                "source": "official_game_cancel",
+                "game_id": game["id"],
+                "booking_id": booking_id,
+                "payment_id": payment["id"],
+                "admin_user_id": admin["id"],
+            },
+        }
+    ]
+
+    refunds_response = client.get(f"/refunds?booking_id={booking_id}")
+    assert refunds_response.status_code == 200, refunds_response.text
+    refunds = refunds_response.json()
+    assert len(refunds) == 1
+    assert refunds[0]["provider_refund_id"] == "re_official_cancel_success"
+    assert refunds[0]["refund_status"] == "succeeded"
+    assert refunds[0]["amount_cents"] == payment["amount_cents"]
 
     admin_actions_response = client.get(
         f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
@@ -377,6 +422,10 @@ def test_cancel_official_game_refunds_demo_payments_and_writes_audit_rows(
     assert len(admin_actions) == 1
     assert admin_actions[0]["admin_user_id"] == admin["id"]
     assert admin_actions[0]["reason"] == "Venue closed"
+    assert admin_actions[0]["metadata"]["paid_booking_count"] == 1
+    assert admin_actions[0]["metadata"]["refund_created_count"] == 1
+    assert admin_actions[0]["metadata"]["refund_followup_required"] is False
+    assert admin_actions[0]["metadata"]["payment_refund_created"] is True
 
     history_response = client.get(f"/game-status-history?game_id={game['id']}")
     assert history_response.status_code == 200, history_response.text
@@ -385,6 +434,351 @@ def test_cancel_official_game_refunds_demo_payments_and_writes_audit_rows(
     assert history[0]["old_game_status"] == "scheduled"
     assert history[0]["new_game_status"] == "cancelled"
     assert history[0]["change_source"] == "admin"
+
+
+def test_cancel_official_game_preserves_payment_when_refund_fails(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    player = create_user(client)
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": player["id"]},
+    )
+    assert join_response.status_code == 201, join_response.text
+    booking_id = join_response.json()["booking_id"]
+
+    def fake_create_stripe_refund(**kwargs):
+        raise StripeConfigError("Stripe is not configured.")
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_stripe_refund",
+        fake_create_stripe_refund,
+    )
+    authenticate_as(admin["id"])
+
+    cancel_response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Venue closed"},
+    )
+
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    booking_response = client.get(f"/bookings/{booking_id}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "cancelled"
+    assert booking["payment_status"] == "paid"
+
+    payments_response = client.get(f"/payments?booking_id={booking_id}")
+    assert payments_response.status_code == 200, payments_response.text
+    payment = payments_response.json()[0]
+    assert payment["payment_status"] == "succeeded"
+
+    refunds_response = client.get(f"/refunds?booking_id={booking_id}")
+    assert refunds_response.status_code == 200, refunds_response.text
+    refunds = refunds_response.json()
+    assert len(refunds) == 1
+    assert refunds[0]["provider_refund_id"] is None
+    assert refunds[0]["refund_status"] == "failed"
+    assert refunds[0]["amount_cents"] == payment["amount_cents"]
+
+    admin_actions_response = client.get(
+        f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
+    )
+    assert admin_actions_response.status_code == 200, admin_actions_response.text
+    admin_actions = admin_actions_response.json()
+    assert len(admin_actions) == 1
+    assert admin_actions[0]["metadata"]["refund_failed_count"] == 1
+    assert admin_actions[0]["metadata"]["refund_followup_required"] is True
+    assert admin_actions[0]["metadata"]["payment_refund_created"] is False
+
+
+def test_cancel_official_game_missing_charge_id_flags_refund_followup(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    player = create_user(client)
+    booking = create_booking(client, player["id"], game["id"])
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1300,
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id=None,
+    )
+    authenticate_as(admin["id"])
+
+    cancel_response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Venue closed"},
+    )
+
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    booking_response = client.get(f"/bookings/{booking['id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    updated_booking = booking_response.json()
+    assert updated_booking["booking_status"] == "cancelled"
+    assert updated_booking["payment_status"] == "paid"
+
+    payment_response = client.get(f"/payments/{payment['id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    assert payment_response.json()["payment_status"] == "succeeded"
+
+    refunds_response = client.get(f"/refunds?booking_id={booking['id']}")
+    assert refunds_response.status_code == 200, refunds_response.text
+    refunds = refunds_response.json()
+    assert len(refunds) == 1
+    assert refunds[0]["provider_refund_id"] is None
+    assert refunds[0]["refund_status"] == "failed"
+
+    admin_actions_response = client.get(
+        f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
+    )
+    assert admin_actions_response.status_code == 200, admin_actions_response.text
+    admin_actions = admin_actions_response.json()
+    assert len(admin_actions) == 1
+    assert admin_actions[0]["metadata"]["refund_failed_count"] == 1
+    assert admin_actions[0]["metadata"]["refund_missing_charge_count"] == 1
+    assert admin_actions[0]["metadata"]["refund_followup_required"] is True
+    assert admin_actions[0]["metadata"]["payment_refund_created"] is False
+
+
+def test_cancel_official_game_keeps_refund_followup_when_one_refund_fails(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+
+    missing_charge_player = create_user(client)
+    missing_charge_booking = create_booking(
+        client,
+        missing_charge_player["id"],
+        game["id"],
+    )
+    create_game_participant(
+        client,
+        missing_charge_player["id"],
+        game["id"],
+        booking_id=missing_charge_booking["id"],
+    )
+    create_payment(
+        client,
+        missing_charge_player["id"],
+        booking_id=missing_charge_booking["id"],
+        amount_cents=missing_charge_booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id=None,
+    )
+
+    refunded_player = create_user(client)
+    join_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": refunded_player["id"]},
+    )
+    assert join_response.status_code == 201, join_response.text
+    refunded_booking_id = join_response.json()["booking_id"]
+
+    refund_calls: list[dict[str, object]] = []
+
+    def fake_create_stripe_refund(**kwargs):
+        refund_calls.append(kwargs)
+        return StripeRefundResult(
+            id="re_mixed_cancel_success",
+            status="succeeded",
+            amount_cents=int(kwargs["amount_cents"]),
+            currency=str(kwargs["currency"]),
+            charge_id=str(kwargs["charge_id"]),
+            payment_intent_id=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_stripe_refund",
+        fake_create_stripe_refund,
+    )
+    authenticate_as(admin["id"])
+
+    cancel_response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Venue closed"},
+    )
+
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    missing_booking_response = client.get(
+        f"/bookings/{missing_charge_booking['id']}"
+    )
+    assert missing_booking_response.status_code == 200, missing_booking_response.text
+    assert missing_booking_response.json()["payment_status"] == "paid"
+
+    refunded_booking_response = client.get(f"/bookings/{refunded_booking_id}")
+    assert refunded_booking_response.status_code == 200, refunded_booking_response.text
+    assert refunded_booking_response.json()["payment_status"] == "refunded"
+    assert len(refund_calls) == 1
+
+    admin_actions_response = client.get(
+        f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
+    )
+    assert admin_actions_response.status_code == 200, admin_actions_response.text
+    admin_actions = admin_actions_response.json()
+    assert len(admin_actions) == 1
+    metadata = admin_actions[0]["metadata"]
+    assert metadata["paid_booking_count"] == 2
+    assert metadata["refund_created_count"] == 1
+    assert metadata["refund_failed_count"] == 1
+    assert metadata["refund_missing_charge_count"] == 1
+    assert metadata["refund_followup_required"] is True
+    assert metadata["payment_refund_created"] is True
+
+
+def test_cancel_official_game_releases_uncharged_pending_checkout_hold(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    player = create_user(client)
+    booking = create_booking(
+        client,
+        player["id"],
+        game["id"],
+        booking_status="pending_payment",
+        payment_status="processing",
+    )
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        participant_status="pending_payment",
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="requires_payment_method",
+    )
+
+    authenticate_as(admin["id"])
+    cancel_response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Weather closure"},
+    )
+
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    booking_response = client.get(f"/bookings/{booking['id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    updated_booking = booking_response.json()
+    assert updated_booking["booking_status"] == "cancelled"
+    assert updated_booking["payment_status"] == "failed"
+    assert updated_booking["cancel_reason"] == "admin_cancelled"
+
+    participant_response = client.get(f"/game-participants/{participant['id']}")
+    assert participant_response.status_code == 200, participant_response.text
+    updated_participant = participant_response.json()
+    assert updated_participant["participant_status"] == "cancelled"
+    assert updated_participant["cancellation_type"] == "admin_cancelled"
+
+    payment_response = client.get(f"/payments/{payment['id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    updated_payment = payment_response.json()
+    assert updated_payment["payment_status"] == "canceled"
+    assert updated_payment["failure_code"] == "game_cancelled"
+
+    refunds_response = client.get(f"/refunds?booking_id={booking['id']}")
+    assert refunds_response.status_code == 200, refunds_response.text
+    assert refunds_response.json() == []
+
+    admin_actions_response = client.get(
+        f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
+    )
+    assert admin_actions_response.status_code == 200, admin_actions_response.text
+    admin_actions = admin_actions_response.json()
+    assert len(admin_actions) == 1
+    assert admin_actions[0]["metadata"]["uncharged_pending_booking_count"] == 1
+    assert admin_actions[0]["metadata"]["refund_followup_required"] is False
+    assert admin_actions[0]["metadata"]["payment_refund_created"] is False
+
+
+def test_cancel_official_game_preserves_processing_payment_for_followup(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    player = create_user(client)
+    booking = create_booking(
+        client,
+        player["id"],
+        game["id"],
+        booking_status="pending_payment",
+        payment_status="processing",
+    )
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        participant_status="pending_payment",
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="processing",
+    )
+
+    authenticate_as(admin["id"])
+    cancel_response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Venue emergency"},
+    )
+
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    booking_response = client.get(f"/bookings/{booking['id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    updated_booking = booking_response.json()
+    assert updated_booking["booking_status"] == "cancelled"
+    assert updated_booking["payment_status"] == "processing"
+
+    payment_response = client.get(f"/payments/{payment['id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    assert payment_response.json()["payment_status"] == "processing"
+
+    admin_actions_response = client.get(
+        f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
+    )
+    assert admin_actions_response.status_code == 200, admin_actions_response.text
+    admin_actions = admin_actions_response.json()
+    assert len(admin_actions) == 1
+    assert admin_actions[0]["metadata"]["processing_payment_booking_count"] == 1
+    assert admin_actions[0]["metadata"]["payment_followup_required"] is True
+    assert admin_actions[0]["metadata"]["payment_refund_created"] is False
 
 
 def test_cancel_game_archives_chat_and_blocks_chat_reads(client: TestClient):
@@ -860,6 +1254,78 @@ def test_official_games_are_not_limited_by_community_host_date_rule(client: Test
 
     assert first_game["game_type"] == "official"
     assert second_game["game_type"] == "official"
+
+
+def test_official_game_create_forces_official_only_fields(client: TestClient):
+    admin = create_user(client)
+    host = create_user(client)
+    venue = create_venue(client, admin["id"])
+
+    game = create_game(
+        client,
+        admin["id"],
+        venue,
+        host_user_id=host["id"],
+        minimum_age=21,
+        host_guest_max=4,
+        custom_rules_text="Host custom rules should not apply.",
+        custom_cancellation_text="Host custom cancellation should not apply.",
+    )
+
+    assert game["game_type"] == "official"
+    assert game["host_user_id"] is None
+    assert game["minimum_age"] is None
+    assert game["host_guest_max"] == 0
+    assert game["custom_rules_text"] is None
+    assert game["custom_cancellation_text"] is None
+
+
+def test_official_game_update_forces_fields_and_blocks_location_host_changes(
+    client: TestClient,
+):
+    admin = create_user(client)
+    host = create_user(client)
+    venue = create_venue(client, admin["id"])
+    new_venue = create_venue(
+        client,
+        admin["id"],
+        name="Different Official Field",
+        address_line_1="222 Different Ave",
+    )
+    game = create_game(client, admin["id"], venue)
+
+    update_response = client.patch(
+        f"/games/{game['id']}",
+        json={
+            "title": "Official fields normalized",
+            "minimum_age": 21,
+            "host_guest_max": 4,
+            "custom_rules_text": "Nope.",
+            "custom_cancellation_text": "Also nope.",
+        },
+    )
+
+    assert update_response.status_code == 200, update_response.text
+    updated_game = update_response.json()
+    assert updated_game["title"] == "Official fields normalized"
+    assert updated_game["minimum_age"] is None
+    assert updated_game["host_guest_max"] == 0
+    assert updated_game["custom_rules_text"] is None
+    assert updated_game["custom_cancellation_text"] is None
+
+    location_response = client.patch(
+        f"/games/{game['id']}",
+        json={"venue_id": new_venue["id"]},
+    )
+    assert location_response.status_code == 400, location_response.text
+    assert "venue/location cannot be changed" in location_response.text
+
+    host_response = client.patch(
+        f"/games/{game['id']}",
+        json={"host_user_id": host["id"]},
+    )
+    assert host_response.status_code == 400, host_response.text
+    assert "host assignment route" in host_response.text
 
 
 def test_publish_community_game_endpoint_creates_publish_records_transactionally(

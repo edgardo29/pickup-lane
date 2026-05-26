@@ -1,59 +1,71 @@
-import { Link } from 'react-router-dom'
+import {
+  formatPaymentMethodExpiration,
+  isPaymentMethodExpired,
+} from '../../lib/paymentMethodCards.js'
 import { formatPaymentMethod } from './browseGameFormatters.js'
 
 export function GameCheckoutPaymentCard({
+  canAddPaymentMethod = true,
   isStripeCheckout,
-  onSelectPaymentMethod,
+  onAddPaymentMethod,
+  onChangePaymentMethod,
   paymentMethod,
   paymentMethods = [],
-  selectedPaymentMethodId = '',
+  setupError = '',
   stripeStatusMessage,
   stripeUnavailable,
 }) {
   if (isStripeCheckout) {
     const hasSavedCards = paymentMethods.length > 0
+    const selectedCardIsExpired = isPaymentMethodExpired(paymentMethod)
 
     return (
       <section className="checkout-card">
         <div className="checkout-payment-heading">
           <h2>Payment</h2>
-          <Link to="/settings/payment-methods">Manage cards</Link>
+          {hasSavedCards && (
+            <button
+              className="checkout-payment-change"
+              onClick={onChangePaymentMethod}
+              type="button"
+            >
+              Change
+            </button>
+          )}
         </div>
         {stripeUnavailable && (
           <p className="checkout-payment-note checkout-payment-note--error">
             Secure payment is not configured.
           </p>
         )}
-        {!stripeUnavailable && hasSavedCards && (
-          <div className="checkout-payment-list">
-            {paymentMethods.map((method) => (
-              <label
-                className="checkout-saved-card"
-                key={method.id}
-              >
-                <input
-                  checked={selectedPaymentMethodId === method.id}
-                  name="checkout-payment-method"
-                  onChange={() => onSelectPaymentMethod(method.id)}
-                  type="radio"
-                />
-                <span>
-                  <strong>{formatPaymentMethod(method)}</strong>
-                  <small>
-                    {method.is_default ? 'Default card' : 'Saved card'}
-                    {' · '}
-                    Expires {String(method.exp_month).padStart(2, '0')}/{method.exp_year}
-                  </small>
-                </span>
-              </label>
-            ))}
+        {!stripeUnavailable && hasSavedCards && paymentMethod && (
+          <div
+            className={`checkout-selected-payment${
+              selectedCardIsExpired ? ' checkout-selected-payment--expired' : ''
+            }`}
+          >
+            <strong>{formatPaymentMethod(paymentMethod)}</strong>
+            <span>
+              {selectedCardIsExpired ? 'Expired' : 'Selected for this booking'}
+              {' · '}
+              {selectedCardIsExpired ? 'Expired' : 'Expires'}{' '}
+              {formatPaymentMethodExpiration(paymentMethod)}
+            </span>
           </div>
         )}
         {!stripeUnavailable && !hasSavedCards && (
-          <div className="checkout-payment-row checkout-payment-row--stacked">
-            <strong>No saved card</strong>
-            <span>Add a card from Settings to continue.</span>
+          <div className="checkout-payment-empty">
+            <div>
+              <strong>No payment method</strong>
+              <span>Add a card to reserve your spot.</span>
+            </div>
+            <button disabled={!canAddPaymentMethod} type="button" onClick={onAddPaymentMethod}>
+              Add card
+            </button>
           </div>
+        )}
+        {setupError && (
+          <p className="checkout-payment-note checkout-payment-note--error">{setupError}</p>
         )}
         {stripeStatusMessage && (
           <p className="checkout-payment-note">{stripeStatusMessage}</p>

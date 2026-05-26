@@ -1,14 +1,32 @@
+import { Elements } from '@stripe/react-stripe-js'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
+import {
+  PaymentMethodSetupDialog,
+  PaymentMethodSetupForm,
+} from '../../features/payment-methods/PaymentMethodSetupDialog.jsx'
+import {
+  buildStripeElementsOptions,
+  getRequestErrorMessage,
+  getSetupErrorMessage,
+} from '../../features/payment-methods/paymentMethodSetup.js'
 import GameCheckoutLayout from './GameCheckoutLayout.jsx'
+import { GameCheckoutPaymentSelector } from './GameCheckoutPaymentSelector.jsx'
 import { buildGameCheckoutViewModel } from './gameCheckoutViewModel.js'
 import { useGameCheckoutActions } from './useGameCheckoutActions.js'
 import { useGameCheckoutData } from './useGameCheckoutData.js'
 import { useAuth } from '../../hooks/useAuth.js'
+import { createPaymentMethodSetupIntent } from '../../lib/paymentMethodsApi.js'
+import {
+  getPreferredPaymentMethod,
+  getUsablePaymentMethods,
+} from '../../lib/paymentMethodCards.js'
 import { hasStripePublishableKey, stripePromise } from '../../lib/stripe.js'
 import '../../styles/browse-games/BrowseGamesPage.css'
 import '../../styles/browse-games/GameCheckoutPage.css'
+
+const MAX_SAVED_PAYMENT_METHODS = 5
 
 function GameCheckoutPage() {
   const { gameId } = useParams()
@@ -25,6 +43,11 @@ function GameCheckoutPage() {
   ))
   const [agreed, setAgreed] = useState(false)
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState('')
+  const [setupClientSecret, setSetupClientSecret] = useState('')
+  const [setupError, setSetupError] = useState('')
+  const [setupStatus, setSetupStatus] = useState('idle')
+  const [useNewCardAsDefault, setUseNewCardAsDefault] = useState(false)
+  const [isPaymentSelectorOpen, setIsPaymentSelectorOpen] = useState(false)
   const [nowMs, setNowMs] = useState(null)
 
   useEffect(() => {
@@ -54,6 +77,11 @@ function GameCheckoutPage() {
     stripeStatusMessage,
     submitError,
   } = useGameCheckoutActions({ navigate })
+  const selectedPaymentMethodIsUsable = getUsablePaymentMethods(checkoutData.paymentMethods)
+    .some((method) => method.id === selectedPaymentMethodId)
+  const effectiveSelectedPaymentMethodId = selectedPaymentMethodIsUsable
+    ? selectedPaymentMethodId
+    : getPreferredPaymentMethod(checkoutData.paymentMethods)?.id || ''
   const checkout = buildGameCheckoutViewModel({
     agreed,
     appUser,
@@ -65,7 +93,7 @@ function GameCheckoutPage() {
     nowMs,
     participants: checkoutData.participants,
     paymentMethods: checkoutData.paymentMethods,
-    selectedPaymentMethodId,
+    selectedPaymentMethodId: effectiveSelectedPaymentMethodId,
     venue: checkoutData.venue,
   })
 
@@ -74,23 +102,114 @@ function GameCheckoutPage() {
     resetStripeCheckout()
   }, [appUser?.id, gameId, isAddGuestsCheckout, resetStripeCheckout, resetSubmitError])
 
-  useEffect(() => {
-    const paymentMethods = checkoutData.paymentMethods
-    if (paymentMethods.length === 0) {
-      if (selectedPaymentMethodId) {
-        setSelectedPaymentMethodId('')
-      }
+  async function createFreshSetupIntent(setAsDefault) {
+    if (!firebaseUser) {
+      return null
+    }
+
+    return createPaymentMethodSetupIntent(firebaseUser, setAsDefault)
+  }
+
+  async function handleStartAddCard() {
+    if (setupStatus === 'loading' || setupClientSecret) {
       return
     }
 
-    const selectedMethodExists = paymentMethods.some(
-      (method) => method.id === selectedPaymentMethodId,
-    )
-    if (!selectedMethodExists) {
-      const nextMethod = paymentMethods.find((method) => method.is_default) || paymentMethods[0]
-      setSelectedPaymentMethodId(nextMethod.id)
+    if (checkoutData.paymentMethods.length >= MAX_SAVED_PAYMENT_METHODS) {
+      setSetupError(`You can save up to ${MAX_SAVED_PAYMENT_METHODS} active cards.`)
+      return
     }
-  }, [checkoutData.paymentMethods, selectedPaymentMethodId])
+
+    if (!firebaseUser || !hasStripePublishableKey()) {
+      return
+    }
+
+    const shouldSetDefault = checkoutData.paymentMethods.length === 0
+    setSetupStatus('loading')
+    setSetupError('')
+    setUseNewCardAsDefault(false)
+
+    try {
+      const setupIntent = await createFreshSetupIntent(shouldSetDefault)
+      if (!setupIntent) {
+        throw new Error('Sign in to add a card.')
+      }
+
+      setSetupClientSecret(setupIntent.client_secret)
+      setSetupStatus('ready')
+    } catch (requestError) {
+      setSetupError(getRequestErrorMessage(requestError, 'Unable to start card setup.'))
+      setSetupStatus('idle')
+    }
+  }
+
+  async function handleSetupRejectedAfterStripeSuccess(requestError) {
+    const errorMessage = getSetupErrorMessage(requestError)
+    const shouldSetDefault = checkoutData.paymentMethods.length === 0 || useNewCardAsDefault
+
+    setSetupStatus('loading')
+    setSetupError(errorMessage)
+
+    try {
+      const setupIntent = await createFreshSetupIntent(shouldSetDefault)
+      if (!setupIntent) {
+        throw new Error('Sign in to add a card.')
+      }
+
+      setSetupClientSecret(setupIntent.client_secret)
+      setSetupError(errorMessage)
+      setSetupStatus('ready')
+    } catch (setupRequestError) {
+      setSetupError(
+        getRequestErrorMessage(
+          setupRequestError,
+          'Unable to reset the card form. Close this window and try again.',
+        ),
+      )
+      setSetupStatus('idle')
+    }
+  }
+
+  function handleCancelSetup() {
+    setSetupClientSecret('')
+    setSetupError('')
+    setSetupStatus('idle')
+    setUseNewCardAsDefault(false)
+  }
+
+  async function handleCardSaved(paymentMethod) {
+    setSetupClientSecret('')
+    setSetupError('')
+    setSetupStatus('idle')
+    setUseNewCardAsDefault(false)
+    setIsPaymentSelectorOpen(false)
+
+    const nextPaymentMethods = await checkoutData.reloadPaymentMethods()
+    const savedPaymentMethod =
+      nextPaymentMethods.find((method) => method.id === paymentMethod?.id) ||
+      nextPaymentMethods[0] ||
+      paymentMethod
+
+    if (savedPaymentMethod?.id) {
+      setSelectedPaymentMethodId(savedPaymentMethod.id)
+    }
+  }
+
+  function handleOpenPaymentSelector() {
+    setSetupError('')
+    setIsPaymentSelectorOpen(true)
+  }
+
+  function handleSelectPaymentMethod(paymentMethodId) {
+    setSelectedPaymentMethodId(paymentMethodId)
+    setIsPaymentSelectorOpen(false)
+    resetStripeCheckout()
+  }
+
+  async function handleAddCardFromSelector() {
+    setIsPaymentSelectorOpen(false)
+    await handleStartAddCard()
+  }
 
   if (checkoutData.status === 'loading') {
     return (
@@ -121,7 +240,11 @@ function GameCheckoutPage() {
       !isAddGuestsCheckout,
   )
   const isStripeReady = hasStripePublishableKey()
-  const usesSavedPaymentMethod = Boolean(isStripeCheckout && selectedPaymentMethodId)
+  const hasReachedSavedCardLimit = checkoutData.paymentMethods.length >= MAX_SAVED_PAYMENT_METHODS
+  const canAddPaymentMethod = isStripeReady && !hasReachedSavedCardLimit && setupStatus !== 'loading'
+  const selectedUsablePaymentMethod = getUsablePaymentMethods(checkoutData.paymentMethods)
+    .find((method) => method.id === effectiveSelectedPaymentMethodId)
+  const usesSavedPaymentMethod = Boolean(isStripeCheckout && selectedUsablePaymentMethod)
   const stripeUnavailable = isStripeCheckout && !isStripeReady
   const isExistingParticipantBlocked = Boolean(
     !isAddGuestsCheckout &&
@@ -159,7 +282,7 @@ function GameCheckoutPage() {
         game: checkoutData.game,
         isJoinWindowClosed: checkout.isJoinWindowClosed,
         isPaymentResume: checkout.isPaymentResume,
-        paymentMethodId: selectedPaymentMethodId,
+        paymentMethodId: effectiveSelectedPaymentMethodId,
         returnUrl: `${window.location.origin}/games/${checkoutData.game.id}/checkout`,
         stripePromise,
       })
@@ -198,14 +321,13 @@ function GameCheckoutPage() {
       maxGuests={checkout.maxGuests}
       maxSelectableGuests={checkout.maxSelectableGuests}
       minGuestCount={checkout.minGuestCount}
+      canAddPaymentMethod={canAddPaymentMethod}
       onBack={() => navigate(`/games/${checkoutData.game.id}`)}
+      onAddPaymentMethod={handleStartAddCard}
+      onChangePaymentMethod={handleOpenPaymentSelector}
       onConfirmBooking={handleConfirm}
       onGuestCountChange={(nextGuestCount) => {
         setGuestCount(nextGuestCount)
-        resetStripeCheckout()
-      }}
-      onSelectPaymentMethod={(paymentMethodId) => {
-        setSelectedPaymentMethodId(paymentMethodId)
         resetStripeCheckout()
       }}
       onSetAgreed={setAgreed}
@@ -215,7 +337,7 @@ function GameCheckoutPage() {
       price={checkout.price}
       primaryImage={checkout.primaryImage}
       projectedGuestCount={checkout.projectedGuestCount}
-      selectedPaymentMethodId={selectedPaymentMethodId}
+      setupError={!setupClientSecret ? setupError : ''}
       submitError={submitError}
       stripeStatusMessage={stripeStatusMessage}
       stripeUnavailable={stripeUnavailable}
@@ -224,7 +346,60 @@ function GameCheckoutPage() {
     />
   )
 
-  return renderLayout()
+  return (
+    <>
+      {renderLayout()}
+      {isPaymentSelectorOpen && isStripeCheckout && checkoutData.paymentMethods.length > 0 && (
+        <GameCheckoutPaymentSelector
+          canAddPaymentMethod={canAddPaymentMethod}
+          onAddNewCard={handleAddCardFromSelector}
+          onClose={() => setIsPaymentSelectorOpen(false)}
+          onSelectPaymentMethod={handleSelectPaymentMethod}
+          paymentMethods={checkoutData.paymentMethods}
+          selectedPaymentMethodId={effectiveSelectedPaymentMethodId}
+        />
+      )}
+      {setupClientSecret && stripePromise && (
+        <PaymentMethodSetupDialog
+          description="Save a card for this checkout."
+          title="Add card"
+        >
+          <Elements
+            key={setupClientSecret}
+            options={buildStripeElementsOptions(setupClientSecret)}
+            stripe={stripePromise}
+          >
+            <PaymentMethodSetupForm
+              cancelButtonClassName="checkout-modal-button checkout-modal-button--secondary"
+              defaultOption={
+                checkoutData.paymentMethods.length > 0 ? (
+                  <label className="payment-method-setup-form__default">
+                    <input
+                      checked={useNewCardAsDefault}
+                      type="checkbox"
+                      onChange={(event) => setUseNewCardAsDefault(event.target.checked)}
+                    />
+                    <span>Use this card as my default for future games</span>
+                  </label>
+                ) : null
+              }
+              firebaseUser={firebaseUser}
+              onCancel={handleCancelSetup}
+              onSaved={handleCardSaved}
+              onSyncRejected={handleSetupRejectedAfterStripeSuccess}
+              primaryButtonClassName="checkout-modal-button checkout-modal-button--primary"
+              setAsDefault={checkoutData.paymentMethods.length === 0 || useNewCardAsDefault}
+              setupClientSecret={setupClientSecret}
+              setSetupError={setSetupError}
+              setSetupStatus={setSetupStatus}
+              setupError={setupError}
+              setupStatus={setupStatus}
+            />
+          </Elements>
+        </PaymentMethodSetupDialog>
+      )}
+    </>
+  )
 }
 
 function getConfirmLabel({

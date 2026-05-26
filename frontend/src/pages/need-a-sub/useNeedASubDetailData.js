@@ -39,10 +39,14 @@ export function useNeedASubDetailData({
     } finally {
       setIsLoading(false)
     }
-  }, [appUser?.id, currentUser, postId])
+  }, [appUser, currentUser, postId])
 
   useEffect(() => {
-    loadDetail()
+    const timerId = window.setTimeout(() => {
+      loadDetail()
+    }, 0)
+
+    return () => window.clearTimeout(timerId)
   }, [loadDetail])
 
   return {
