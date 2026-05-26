@@ -41,10 +41,14 @@ export function useNeedASubManageData({
     } finally {
       setIsLoading(false)
     }
-  }, [appUser?.id, currentUser, postId])
+  }, [appUser, currentUser, postId])
 
   useEffect(() => {
-    loadManageView()
+    const timerId = window.setTimeout(() => {
+      loadManageView()
+    }, 0)
+
+    return () => window.clearTimeout(timerId)
   }, [loadManageView])
 
   return {

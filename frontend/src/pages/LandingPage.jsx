@@ -25,8 +25,11 @@ function LandingPage() {
 
   useEffect(() => {
     if (!isLoading || appUser) {
-      setShowPublicFallback(false)
-      return undefined
+      const resetTimeoutId = window.setTimeout(() => {
+        setShowPublicFallback(false)
+      }, 0)
+
+      return () => window.clearTimeout(resetTimeoutId)
     }
 
     const timeoutId = window.setTimeout(() => {

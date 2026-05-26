@@ -1,19 +1,22 @@
-import {
-  Elements,
-  PaymentElement,
-  useElements,
-  useStripe,
-} from '@stripe/react-stripe-js'
+import { Elements } from '@stripe/react-stripe-js'
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { AppPageHeader } from '../../components/app/index.js'
+import {
+  PaymentMethodSetupDialog,
+  PaymentMethodSetupForm,
+} from '../../features/payment-methods/PaymentMethodSetupDialog.jsx'
+import {
+  buildStripeElementsOptions,
+  getRequestErrorMessage,
+  getSetupErrorMessage,
+} from '../../features/payment-methods/paymentMethodSetup.js'
 import { hasStripePublishableKey, stripePromise } from '../../lib/stripe.js'
 import {
   createPaymentMethodSetupIntent,
   listUserPaymentMethods,
   removePaymentMethod,
   setDefaultPaymentMethod,
-  syncPaymentMethod,
 } from '../../lib/paymentMethodsApi.js'
 import { useAuth } from '../../hooks/useAuth.js'
 import { capitalize } from './profileFormatters.js'
@@ -21,64 +24,21 @@ import { ProfileShell } from './ProfileShell.jsx'
 
 const MAX_SAVED_PAYMENT_METHODS = 5
 
-const PAYMENT_ELEMENT_OPTIONS = {
-  layout: {
-    type: 'accordion',
-    defaultCollapsed: false,
-    radios: 'never',
-  },
-  paymentMethodOrder: ['card'],
-  wallets: {
-    applePay: 'never',
-    googlePay: 'never',
-    link: 'never',
-  },
-}
-
-function getRequestErrorMessage(error, fallbackMessage) {
-  return error instanceof Error ? error.message : fallbackMessage
-}
-
-function getSetupErrorMessage(error) {
-  const message = getRequestErrorMessage(error, 'Unable to save this card.')
-  if (message === 'This card is already saved.') {
-    return 'This card is already saved. Enter a different card.'
+function getSafeReturnPath(value) {
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) {
+    return ''
   }
 
-  return message
-}
-
-function buildStripeElementsOptions(clientSecret) {
-  return {
-    clientSecret,
-    appearance: {
-      theme: 'night',
-      variables: {
-        colorPrimary: '#b8ff24',
-        colorBackground: '#0c141d',
-        colorText: '#f8fafc',
-        colorDanger: '#ff6b73',
-        borderRadius: '8px',
-        fontFamily: 'Inter, system-ui, sans-serif',
-      },
-      rules: {
-        '.Input': {
-          border: '1px solid rgba(248, 250, 252, 0.16)',
-        },
-        '.Tab': {
-          border: '1px solid rgba(248, 250, 252, 0.16)',
-        },
-        '.Tab--selected': {
-          borderColor: '#b8ff24',
-          color: '#f8fafc',
-        },
-      },
-    },
-  }
+  return value
 }
 
 export function PaymentMethodsPage() {
   const { currentUser: firebaseUser } = useAuth()
+  const location = useLocation()
+  const searchParams = new URLSearchParams(location.search)
+  const returnTo = getSafeReturnPath(searchParams.get('returnTo'))
+  const backTo = returnTo || '/settings'
+  const backLabel = returnTo ? 'Back to checkout' : 'Back to settings'
   const [paymentMethods, setPaymentMethods] = useState([])
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
@@ -115,7 +75,11 @@ export function PaymentMethodsPage() {
   }, [firebaseUser])
 
   useEffect(() => {
-    loadPaymentMethods()
+    const timerId = window.setTimeout(() => {
+      loadPaymentMethods()
+    }, 0)
+
+    return () => window.clearTimeout(timerId)
   }, [loadPaymentMethods])
 
   async function createFreshSetupIntent() {
@@ -240,8 +204,8 @@ export function PaymentMethodsPage() {
       <section className="settings-layout">
         <div className="settings-main">
           <div className="profile-subpage-heading">
-            <Link className="settings-header-back" to="/settings">
-              Back to settings
+            <Link className="settings-header-back" to={backTo}>
+              {backLabel}
             </Link>
             <AppPageHeader
               title="Payment Methods"
@@ -276,7 +240,12 @@ export function PaymentMethodsPage() {
             )}
 
             {error && <p className="payment-methods-alert payment-methods-alert--error">{error}</p>}
-            {successMessage && <p className="payment-methods-alert">{successMessage}</p>}
+            {successMessage && (
+              <p className="payment-methods-alert payment-methods-alert--inline">
+                <span>{successMessage}</span>
+                {returnTo && <Link to={returnTo}>Return to checkout</Link>}
+              </p>
+            )}
 
             {status === 'loading' && <p className="payment-methods-empty">Loading saved cards...</p>}
 
@@ -308,7 +277,7 @@ export function PaymentMethodsPage() {
 
           </section>
           {setupClientSecret && stripePromise && (
-            <PaymentMethodSetupModal>
+            <PaymentMethodSetupDialog>
               <Elements
                 key={setupClientSecret}
                 options={buildStripeElementsOptions(setupClientSecret)}
@@ -330,9 +299,11 @@ export function PaymentMethodsPage() {
                   setSetupStatus={setSetupStatus}
                   setupError={setupError}
                   setupStatus={setupStatus}
+                  cancelButtonClassName="profile-edit-cancel"
+                  primaryButtonClassName="profile-primary-action"
                 />
               </Elements>
-            </PaymentMethodSetupModal>
+            </PaymentMethodSetupDialog>
           )}
           {removeCandidate && (
             <RemovePaymentMethodModal
@@ -414,25 +385,6 @@ function PaymentMethodMenuIcon() {
   )
 }
 
-function PaymentMethodSetupModal({ children }) {
-  return (
-    <div
-      aria-labelledby="add-payment-method-title"
-      aria-modal="true"
-      className="settings-modal"
-      role="dialog"
-    >
-      <div className="settings-modal__card settings-modal__card--neutral payment-method-setup-modal">
-        <div>
-          <h2 id="add-payment-method-title">Add card</h2>
-          <p>Card details are handled by Stripe.</p>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 function RemovePaymentMethodModal({
   method,
   onCancel,
@@ -474,95 +426,5 @@ function RemovePaymentMethodModal({
         </div>
       </div>
     </div>
-  )
-}
-
-function PaymentMethodSetupForm({
-  firebaseUser,
-  onCancel,
-  onSaved,
-  onSyncRejected,
-  setAsDefault,
-  setupClientSecret,
-  setSetupError,
-  setSetupStatus,
-  setupError,
-  setupStatus,
-}) {
-  const stripe = useStripe()
-  const elements = useElements()
-  const [paymentComplete, setPaymentComplete] = useState(false)
-
-  async function handleSubmit(event) {
-    event.preventDefault()
-
-    if (!stripe || !elements || !firebaseUser) {
-      return
-    }
-
-    setSetupStatus('saving')
-    setSetupError('')
-
-    try {
-      const submitResult = await elements.submit()
-
-      if (submitResult.error) {
-        throw new Error(submitResult.error.message || 'Card setup could not be completed.')
-      }
-
-      const confirmResult = await stripe.confirmSetup({
-        elements,
-        clientSecret: setupClientSecret,
-        confirmParams: {
-          return_url: window.location.href,
-        },
-        redirect: 'if_required',
-      })
-
-      if (confirmResult.error) {
-        throw new Error(confirmResult.error.message || 'Card setup could not be completed.')
-      }
-
-      const setupIntentId = confirmResult.setupIntent?.id
-      if (!setupIntentId) {
-        throw new Error('Stripe did not return a completed setup intent.')
-      }
-
-      try {
-        await syncPaymentMethod(firebaseUser, { setupIntentId, setAsDefault })
-      } catch (syncError) {
-        await onSyncRejected(syncError)
-        return
-      }
-
-      await onSaved()
-    } catch (requestError) {
-      setSetupError(getRequestErrorMessage(requestError, 'Unable to save this card.'))
-      setSetupStatus('ready')
-    }
-  }
-
-  return (
-    <form className="payment-method-setup" onSubmit={handleSubmit}>
-      <PaymentElement
-        onChange={(event) => setPaymentComplete(Boolean(event.complete))}
-        options={PAYMENT_ELEMENT_OPTIONS}
-      />
-      {setupError && (
-        <p className="payment-methods-alert payment-methods-alert--error">{setupError}</p>
-      )}
-      <div className="payment-method-setup__actions">
-        <button className="profile-edit-cancel" onClick={onCancel} type="button">
-          Cancel
-        </button>
-        <button
-          className="profile-primary-action"
-          disabled={!stripe || !elements || !paymentComplete || setupStatus !== 'ready'}
-          type="submit"
-        >
-          {setupStatus === 'saving' ? 'Saving...' : 'Save card'}
-        </button>
-      </div>
-    </form>
   )
 }

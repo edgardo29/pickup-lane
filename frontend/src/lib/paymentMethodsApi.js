@@ -17,7 +17,7 @@ export async function listUserPaymentMethods(firebaseUser) {
   })
 }
 
-export async function createPaymentMethodSetupIntent(firebaseUser, setAsDefault = true) {
+export async function createPaymentMethodSetupIntent(firebaseUser, setAsDefault = false) {
   return apiRequest('/user-payment-methods/setup-intent', {
     method: 'POST',
     headers: {

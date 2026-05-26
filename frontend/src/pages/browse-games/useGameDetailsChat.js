@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   openGameChat,
   sendGameChatMessage,
@@ -45,11 +45,15 @@ export function useGameDetailsChat({
     setHasUnreadChat(false)
   }
 
-  function hydrateChatState({ activeChat: nextActiveChat, chatMessages: nextChatMessages, hasUnreadChat: nextHasUnreadChat }) {
+  const hydrateChatState = useCallback(function hydrateChatState({
+    activeChat: nextActiveChat,
+    chatMessages: nextChatMessages,
+    hasUnreadChat: nextHasUnreadChat,
+  }) {
     setActiveChat(nextActiveChat)
     setChatMessages(nextChatMessages)
     setHasUnreadChat(nextHasUnreadChat)
-  }
+  }, [])
 
   function clearChatState() {
     setActiveChat(null)

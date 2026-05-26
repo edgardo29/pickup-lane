@@ -117,6 +117,44 @@ def test_payment_method_setup_intent_stores_customer_on_user(
         assert db_user.stripe_customer_id == "cus_saved_card_test"
 
 
+def test_payment_method_setup_intent_reuses_existing_customer(
+    client: TestClient,
+    monkeypatch,
+):
+    user = create_user(client)
+    set_user_stripe_customer_id(user["id"], "cus_existing_saved_card")
+    captured_setup: dict[str, object] = {}
+
+    def fake_create_customer(**kwargs):
+        raise AssertionError("existing customer should be reused")
+
+    def fake_create_setup_intent(**kwargs):
+        captured_setup.update(kwargs)
+        return StripeSetupIntentResult(
+            id="seti_existing_saved_card",
+            client_secret="seti_existing_saved_card_secret",
+            status="requires_payment_method",
+            customer_id=kwargs["customer_id"],
+            payment_method_id=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.user_payment_method_routes.create_customer",
+        fake_create_customer,
+    )
+    monkeypatch.setattr(
+        "backend.routes.user_payment_method_routes.create_setup_intent",
+        fake_create_setup_intent,
+    )
+    authenticate_as(user["id"])
+
+    response = client.post("/user-payment-methods/setup-intent", json={})
+
+    assert response.status_code == 201, response.text
+    assert response.json()["client_secret"] == "seti_existing_saved_card_secret"
+    assert captured_setup["customer_id"] == "cus_existing_saved_card"
+
+
 def test_payment_method_sync_stores_stripe_verified_card(client: TestClient, monkeypatch):
     user = create_user(client)
     set_user_stripe_customer_id(user["id"], "cus_saved_card_test")
@@ -139,6 +177,59 @@ def test_payment_method_sync_stores_stripe_verified_card(client: TestClient, mon
     list_response = client.get("/user-payment-methods")
     assert list_response.status_code == 200, list_response.text
     assert [item["id"] for item in list_response.json()] == [payment_method["id"]]
+
+
+def test_payment_method_sync_rejects_setup_intent_for_other_customer(
+    client: TestClient,
+    monkeypatch,
+):
+    user = create_user(client)
+    set_user_stripe_customer_id(user["id"], "cus_saved_card_test")
+    mock_stripe_sync(monkeypatch, customer_id="cus_other_customer")
+    authenticate_as(user["id"])
+
+    response = client.post(
+        "/user-payment-methods/sync",
+        json={"setup_intent_id": "seti_saved_card_test"},
+    )
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == (
+        "This setup intent does not belong to the current user."
+    )
+
+
+def test_payment_method_sync_rejects_incomplete_setup_intent(
+    client: TestClient,
+    monkeypatch,
+):
+    user = create_user(client)
+    set_user_stripe_customer_id(user["id"], "cus_saved_card_test")
+
+    def fake_retrieve_setup_intent(setup_intent_id):
+        return StripeSetupIntentResult(
+            id=setup_intent_id,
+            client_secret=None,
+            status="requires_payment_method",
+            customer_id="cus_saved_card_test",
+            payment_method_id=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.user_payment_method_routes.retrieve_setup_intent",
+        fake_retrieve_setup_intent,
+    )
+    authenticate_as(user["id"])
+
+    response = client.post(
+        "/user-payment-methods/sync",
+        json={"setup_intent_id": "seti_saved_card_test"},
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == (
+        "This setup intent has not completed with a payment method."
+    )
 
 
 def test_payment_methods_reject_client_created_fake_cards(client: TestClient):
@@ -189,7 +280,7 @@ def test_payment_method_sync_adds_second_card_without_changing_default(
 
     response = client.post(
         "/user-payment-methods/sync",
-        json={"setup_intent_id": "seti_saved_card_test", "set_as_default": True},
+        json={"setup_intent_id": "seti_saved_card_test", "set_as_default": False},
     )
 
     assert response.status_code == 201, response.text
@@ -211,6 +302,58 @@ def test_payment_method_sync_adds_second_card_without_changing_default(
         first_payment_method["id"],
         second_payment_method["id"],
     ]
+
+
+def test_payment_method_sync_can_make_new_card_default(
+    client: TestClient,
+    monkeypatch,
+):
+    user = create_user(client)
+    first_payment_method = create_user_payment_method(
+        client,
+        user["id"],
+        stripe_customer_id="cus_saved_card_test",
+        stripe_payment_method_id="pm_first_default",
+        card_fingerprint="fp_first_default",
+    )
+    captured_default: dict[str, str] = {}
+    mock_stripe_sync(
+        monkeypatch,
+        fingerprint="fp_second_default",
+        payment_method_id="pm_second_default",
+    )
+
+    def fake_set_customer_default_payment_method(**kwargs):
+        captured_default.update(kwargs)
+
+    monkeypatch.setattr(
+        "backend.routes.user_payment_method_routes.set_customer_default_payment_method",
+        fake_set_customer_default_payment_method,
+    )
+    authenticate_as(user["id"])
+
+    response = client.post(
+        "/user-payment-methods/sync",
+        json={"setup_intent_id": "seti_saved_card_test", "set_as_default": True},
+    )
+
+    assert response.status_code == 201, response.text
+    second_payment_method = response.json()
+    assert second_payment_method["is_default"] is True
+    assert captured_default == {
+        "customer_id": "cus_saved_card_test",
+        "payment_method_id": "pm_second_default",
+    }
+
+    list_response = client.get("/user-payment-methods")
+    assert list_response.status_code == 200, list_response.text
+    listed_methods = list_response.json()
+    assert [item["id"] for item in listed_methods] == [
+        first_payment_method["id"],
+        second_payment_method["id"],
+    ]
+    assert listed_methods[0]["is_default"] is False
+    assert listed_methods[1]["is_default"] is True
 
 
 def test_payment_method_default_change_keeps_added_order(
@@ -408,6 +551,10 @@ def test_payment_method_delete_detaches_and_hides_card(
         "backend.routes.user_payment_method_routes.detach_payment_method",
         fake_detach_payment_method,
     )
+    monkeypatch.setattr(
+        "backend.routes.user_payment_method_routes.clear_customer_default_payment_method",
+        lambda **kwargs: None,
+    )
     authenticate_as(user["id"])
 
     response = client.delete(f"/user-payment-methods/{payment_method['id']}")
@@ -420,3 +567,57 @@ def test_payment_method_delete_detaches_and_hides_card(
     list_response = client.get("/user-payment-methods")
     assert list_response.status_code == 200, list_response.text
     assert list_response.json() == []
+
+
+def test_payment_method_delete_promotes_oldest_remaining_card(
+    client: TestClient,
+    monkeypatch,
+):
+    user = create_user(client)
+    first_payment_method = create_user_payment_method(
+        client,
+        user["id"],
+        stripe_customer_id="cus_saved_card_test",
+        stripe_payment_method_id="pm_first_default",
+        card_fingerprint="fp_first_default",
+        is_default=True,
+    )
+    second_payment_method = create_user_payment_method(
+        client,
+        user["id"],
+        stripe_customer_id="cus_saved_card_test",
+        stripe_payment_method_id="pm_second_card",
+        card_fingerprint="fp_second_card",
+        is_default=False,
+    )
+    captured_default: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        "backend.routes.user_payment_method_routes.detach_payment_method",
+        lambda stripe_payment_method_id: None,
+    )
+
+    def fake_set_customer_default_payment_method(**kwargs):
+        captured_default.update(kwargs)
+
+    monkeypatch.setattr(
+        "backend.routes.user_payment_method_routes.set_customer_default_payment_method",
+        fake_set_customer_default_payment_method,
+    )
+    authenticate_as(user["id"])
+
+    response = client.delete(f"/user-payment-methods/{first_payment_method['id']}")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["method_status"] == "detached"
+    assert response.json()["is_default"] is False
+    assert captured_default == {
+        "customer_id": "cus_saved_card_test",
+        "payment_method_id": "pm_second_card",
+    }
+
+    list_response = client.get("/user-payment-methods")
+    assert list_response.status_code == 200, list_response.text
+    listed_methods = list_response.json()
+    assert [item["id"] for item in listed_methods] == [second_payment_method["id"]]
+    assert listed_methods[0]["is_default"] is True

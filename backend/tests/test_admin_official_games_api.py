@@ -9,7 +9,9 @@ from backend.tests.helpers import (
     create_game_participant,
     create_payment,
     create_user,
+    create_user_payment_method,
     create_venue,
+    mock_checkout_payment_method_verification,
     set_user_role,
 )
 
@@ -248,9 +250,20 @@ def test_admin_official_game_update_invalidates_pending_checkout(
             status="requires_payment_method",
         )
 
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret="pi_admin_update_pending_secret",
+            status="processing",
+        )
+
     monkeypatch.setattr(
         "backend.routes.checkout_routes.create_payment_intent",
         fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
     )
 
     authenticate_as(admin["id"])
@@ -262,9 +275,19 @@ def test_admin_official_game_update_invalidates_pending_checkout(
     game = create_response.json()["game"]
 
     authenticate_as(player["id"])
+    payment_method = create_user_payment_method(
+        client,
+        player["id"],
+        stripe_customer_id="cus_admin_update_pending",
+        stripe_payment_method_id="pm_admin_update_pending",
+    )
+    mock_checkout_payment_method_verification(monkeypatch, payment_method)
     checkout_response = client.post(
         f"/checkout/games/{game['id']}/payment-intent",
-        json={"guest_count": 0},
+        json={
+            "guest_count": 0,
+            "payment_method_id": payment_method["id"],
+        },
     )
     assert checkout_response.status_code == 201, checkout_response.text
     checkout = checkout_response.json()
@@ -546,9 +569,20 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
             status="requires_payment_method",
         )
 
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret="pi_admin_remove_pending_secret",
+            status="processing",
+        )
+
     monkeypatch.setattr(
         "backend.routes.checkout_routes.create_payment_intent",
         fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
     )
 
     authenticate_as(admin["id"])
@@ -560,9 +594,19 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
     game = create_response.json()["game"]
 
     authenticate_as(player["id"])
+    payment_method = create_user_payment_method(
+        client,
+        player["id"],
+        stripe_customer_id="cus_admin_remove_pending",
+        stripe_payment_method_id="pm_admin_remove_pending",
+    )
+    mock_checkout_payment_method_verification(monkeypatch, payment_method)
     checkout_response = client.post(
         f"/checkout/games/{game['id']}/payment-intent",
-        json={"guest_count": 1},
+        json={
+            "guest_count": 1,
+            "payment_method_id": payment_method["id"],
+        },
     )
     assert checkout_response.status_code == 201, checkout_response.text
     checkout = checkout_response.json()

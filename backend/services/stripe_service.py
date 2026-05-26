@@ -19,6 +19,16 @@ class StripePaymentIntentResult:
 
 
 @dataclass(frozen=True)
+class StripeRefundResult:
+    id: str
+    status: str
+    amount_cents: int
+    currency: str
+    charge_id: str | None
+    payment_intent_id: str | None
+
+
+@dataclass(frozen=True)
 class StripeCustomerResult:
     id: str
 
@@ -104,6 +114,20 @@ def extract_payment_intent_result(payment_intent: Any) -> StripePaymentIntentRes
         client_secret=getattr(payment_intent, "client_secret", None),
         status=payment_intent.status,
         latest_charge_id=latest_charge_id,
+    )
+
+
+def extract_refund_result(refund: Any) -> StripeRefundResult:
+    charge = getattr(refund, "charge", None)
+    payment_intent = getattr(refund, "payment_intent", None)
+
+    return StripeRefundResult(
+        id=refund.id,
+        status=str(getattr(refund, "status", "") or ""),
+        amount_cents=int(getattr(refund, "amount", 0) or 0),
+        currency=str(getattr(refund, "currency", "") or "").upper(),
+        charge_id=charge if isinstance(charge, str) else None,
+        payment_intent_id=payment_intent if isinstance(payment_intent, str) else None,
     )
 
 
@@ -209,6 +233,14 @@ def set_customer_default_payment_method(
     )
 
 
+def clear_customer_default_payment_method(*, customer_id: str) -> None:
+    stripe = get_stripe_module()
+    stripe.Customer.modify(
+        customer_id,
+        invoice_settings={"default_payment_method": None},
+    )
+
+
 def create_payment_intent(
     *,
     amount_cents: int,
@@ -259,6 +291,29 @@ def retrieve_payment_intent(payment_intent_id: str) -> StripePaymentIntentResult
     payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
 
     return extract_payment_intent_result(payment_intent)
+
+
+def create_refund(
+    *,
+    charge_id: str,
+    amount_cents: int,
+    currency: str,
+    idempotency_key: str,
+    metadata: dict[str, object],
+) -> StripeRefundResult:
+    get_stripe_currency()
+    if currency.upper() != DEFAULT_STRIPE_CURRENCY:
+        raise StripeConfigError("Pickup Lane Stripe refunds currently support USD only.")
+
+    stripe = get_stripe_module()
+    refund = stripe.Refund.create(
+        charge=charge_id,
+        amount=amount_cents,
+        metadata=normalize_metadata(metadata),
+        idempotency_key=idempotency_key,
+    )
+
+    return extract_refund_result(refund)
 
 
 def construct_webhook_event(payload: bytes, signature: str) -> Any:

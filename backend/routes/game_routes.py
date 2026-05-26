@@ -18,11 +18,16 @@ from backend.models import (
     GameStatusHistory,
     Notification,
     Payment,
+    Refund,
     User,
     Venue,
     WaitlistEntry,
 )
 from backend.routes.venue_routes import find_matching_active_venue
+from backend.services.stripe_service import (
+    StripeConfigError,
+    create_refund as create_stripe_refund,
+)
 from backend.schemas import (
     GameCancelCreate,
     GameCreate,
@@ -62,6 +67,37 @@ ACTIVE_BOOKING_STATUSES = {
     "partially_cancelled",
 }
 JOINABLE_GAME_STATUSES = {"scheduled", "full"}
+OFFICIAL_FORCED_FIELDS = {
+    "minimum_age",
+    "host_guest_max",
+    "custom_rules_text",
+    "custom_cancellation_text",
+}
+OFFICIAL_LOCATION_FIELDS = {
+    "venue_id",
+    "venue_name_snapshot",
+    "address_snapshot",
+    "city_snapshot",
+    "state_snapshot",
+    "neighborhood_snapshot",
+}
+CANCELLATION_REFUND_FOLLOWUP_BOOKING_PAYMENT_STATUSES = {
+    "paid",
+    "partially_refunded",
+    "refunded",
+    "disputed",
+}
+CANCELLATION_REFUND_FOLLOWUP_PAYMENT_STATUSES = {
+    "succeeded",
+    "partially_refunded",
+    "refunded",
+    "disputed",
+}
+CANCELLATION_UNCHARGED_PENDING_PAYMENT_STATUSES = {
+    "requires_payment_method",
+    "requires_action",
+}
+CANCELLATION_AUTO_REFUND_PAYMENT_STATUSES = {"succeeded"}
 MINIMUM_TOTAL_SPOTS = 6
 MAXIMUM_TOTAL_SPOTS = 99
 MAX_CANCEL_REASON_LENGTH = 500
@@ -97,6 +133,18 @@ def build_game_conflict_detail(exc: IntegrityError) -> str:
 
     if "ux_games_one_active_community_game_per_host_date" in error_text:
         return "You already have a community game on this date."
+
+    if "ck_games_official_minimum_age_null" in error_text:
+        return "Official games require minimum_age to be null."
+
+    if "ck_games_official_host_guest_max_zero" in error_text:
+        return "Official games require host_guest_max to be 0."
+
+    if "ck_games_official_no_custom_rules" in error_text:
+        return "Official games cannot use custom_rules_text."
+
+    if "ck_games_official_no_custom_cancellation" in error_text:
+        return "Official games cannot use custom_cancellation_text."
 
     # The games table does not currently expose user-facing unique constraints,
     # so fall back to the database error text for now if an integrity issue
@@ -341,6 +389,61 @@ def get_default_host_guest_max(format_label: str) -> int:
     return max(get_side_size_for_format(format_label) - 1, 0)
 
 
+def normalize_official_game_invariants(
+    game_data: dict[str, object], *, is_create: bool = False
+) -> dict[str, object]:
+    normalized_data = dict(game_data)
+    if normalized_data.get("game_type") != "official":
+        return normalized_data
+
+    normalized_data["minimum_age"] = None
+    normalized_data["host_guest_max"] = 0
+    normalized_data["custom_rules_text"] = None
+    normalized_data["custom_cancellation_text"] = None
+
+    if is_create:
+        normalized_data["host_user_id"] = None
+
+    return normalized_data
+
+
+def reject_official_location_change(
+    db_game: Game, update_data: dict[str, object]
+) -> None:
+    if db_game.game_type != "official":
+        return
+
+    for field_name in OFFICIAL_LOCATION_FIELDS:
+        if field_name not in update_data:
+            continue
+
+        if update_data[field_name] == getattr(db_game, field_name):
+            continue
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Official game venue/location cannot be changed. "
+                "Cancel and recreate the official game instead."
+            ),
+        )
+
+
+def reject_direct_official_host_change(
+    db_game: Game, update_data: dict[str, object]
+) -> None:
+    if db_game.game_type != "official" or "host_user_id" not in update_data:
+        return
+
+    if update_data["host_user_id"] == db_game.host_user_id:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Use the official game host assignment route to change host_user_id.",
+    )
+
+
 def host_edit_field_changed(db_game: Game, field_name: str, new_value: object) -> bool:
     current_value = getattr(db_game, field_name)
 
@@ -484,6 +587,31 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="minimum_age must be null or greater than or equal to 13.",
         )
+
+    if game_data["game_type"] == "official":
+        if game_data["minimum_age"] is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Official games require minimum_age to be null.",
+            )
+
+        if game_data["host_guest_max"] != 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Official games require host_guest_max to be 0.",
+            )
+
+        if game_data["custom_rules_text"] is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Official games cannot use custom_rules_text.",
+            )
+
+        if game_data["custom_cancellation_text"] is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Official games cannot use custom_cancellation_text.",
+            )
 
     if game_data["game_type"] == "community" and game_data["host_user_id"] is None:
         raise HTTPException(
@@ -689,28 +817,292 @@ def cancel_game_bookings(
     current_user: User,
     now: datetime,
     cancellation_type: str,
-) -> None:
+) -> dict[str, object]:
     bookings = db.scalars(
-        select(Booking).where(
+        select(Booking)
+        .where(
             Booking.game_id == db_game.id,
             Booking.booking_status.in_(ACTIVE_BOOKING_STATUSES),
         )
+        .order_by(Booking.created_at.asc(), Booking.id.asc())
     ).all()
     app_payment_required = game_requires_app_player_payment(db_game)
+    payment_summary: dict[str, object] = {
+        "cancelled_booking_count": 0,
+        "paid_booking_count": 0,
+        "processing_payment_booking_count": 0,
+        "uncharged_pending_booking_count": 0,
+        "refund_followup_required": False,
+        "payment_followup_required": False,
+        "payment_refund_created": False,
+        "refund_created_count": 0,
+        "refund_failed_count": 0,
+        "refund_processing_count": 0,
+        "refund_missing_charge_count": 0,
+    }
 
     for booking in bookings:
+        payments = db.scalars(
+            select(Payment).where(
+                Payment.booking_id == booking.id,
+                Payment.payment_type == "booking",
+            )
+        ).all()
+
+        if app_payment_required:
+            payment_statuses = {payment.payment_status for payment in payments}
+            has_paid_payment = bool(
+                payment_statuses
+                & CANCELLATION_REFUND_FOLLOWUP_PAYMENT_STATUSES
+            ) or (
+                booking.payment_status
+                in CANCELLATION_REFUND_FOLLOWUP_BOOKING_PAYMENT_STATUSES
+            )
+            has_processing_payment = "processing" in payment_statuses
+
+            if has_paid_payment:
+                payment_summary["paid_booking_count"] = (
+                    int(payment_summary["paid_booking_count"]) + 1
+                )
+                refund_summary = create_official_cancellation_refunds(
+                    db,
+                    db_game,
+                    booking,
+                    payments,
+                    current_user,
+                    now,
+                )
+                for key, value in refund_summary.items():
+                    payment_summary[key] = int(payment_summary[key]) + value
+                if refund_summary["refund_created_count"] > 0:
+                    payment_summary["payment_refund_created"] = True
+                booking_refund_followup_required = True
+                if (
+                    refund_summary["refund_failed_count"] == 0
+                    and refund_summary["refund_processing_count"] == 0
+                    and refund_summary["refund_missing_charge_count"] == 0
+                    and all_booking_refundable_payments_refunded(payments)
+                ):
+                    booking.payment_status = "refunded"
+                    booking_refund_followup_required = False
+                if booking_refund_followup_required:
+                    payment_summary["refund_followup_required"] = True
+            elif has_processing_payment:
+                payment_summary["processing_payment_booking_count"] = (
+                    int(payment_summary["processing_payment_booking_count"]) + 1
+                )
+                payment_summary["payment_followup_required"] = True
+            elif booking.booking_status == "pending_payment":
+                for payment in payments:
+                    if (
+                        payment.payment_status
+                        in CANCELLATION_UNCHARGED_PENDING_PAYMENT_STATUSES
+                    ):
+                        payment.payment_status = "canceled"
+                        payment.failure_code = "game_cancelled"
+                        payment.failure_message = (
+                            "Game was cancelled before payment completed."
+                        )
+                        payment.failure_reason = "game_cancelled"
+                        payment.updated_at = now
+                        db.add(payment)
+
+                booking.payment_status = "failed"
+                payment_summary["uncharged_pending_booking_count"] = (
+                    int(payment_summary["uncharged_pending_booking_count"]) + 1
+                )
+
         booking.booking_status = "cancelled"
-        if app_payment_required and booking.payment_status in {
-            "paid",
-            "partially_refunded",
-        }:
-            booking.payment_status = "refunded"
-            update_booking_payment_status(db, booking.id, "refunded", now)
         booking.cancelled_at = now
         booking.cancelled_by_user_id = current_user.id
         booking.cancel_reason = cancellation_type
         booking.updated_at = now
         db.add(booking)
+        payment_summary["cancelled_booking_count"] = (
+            int(payment_summary["cancelled_booking_count"]) + 1
+        )
+
+    return payment_summary
+
+
+def map_stripe_refund_status(stripe_status: str) -> str:
+    normalized_status = stripe_status.strip().lower()
+    if normalized_status == "succeeded":
+        return "succeeded"
+
+    if normalized_status == "failed":
+        return "failed"
+
+    if normalized_status in {"canceled", "cancelled"}:
+        return "cancelled"
+
+    return "processing"
+
+
+def all_booking_refundable_payments_refunded(payments: list[Payment]) -> bool:
+    refundable_payments = [
+        payment
+        for payment in payments
+        if payment.payment_status
+        in CANCELLATION_REFUND_FOLLOWUP_PAYMENT_STATUSES
+    ]
+    return bool(refundable_payments) and all(
+        payment.payment_status == "refunded" for payment in refundable_payments
+    )
+
+
+def build_cancellation_refund_summary() -> dict[str, int]:
+    return {
+        "refund_created_count": 0,
+        "refund_failed_count": 0,
+        "refund_processing_count": 0,
+        "refund_missing_charge_count": 0,
+    }
+
+
+def create_official_cancellation_refunds(
+    db: Session,
+    db_game: Game,
+    booking: Booking,
+    payments: list[Payment],
+    current_user: User,
+    now: datetime,
+) -> dict[str, int]:
+    summary = build_cancellation_refund_summary()
+
+    for payment in payments:
+        if payment.payment_status not in CANCELLATION_AUTO_REFUND_PAYMENT_STATUSES:
+            continue
+
+        existing_refund = db.scalars(
+            select(Refund)
+            .where(
+                Refund.payment_id == payment.id,
+                Refund.booking_id == booking.id,
+                Refund.refund_reason == "game_cancelled",
+                Refund.refund_status.in_(
+                    {"pending", "approved", "processing", "succeeded"}
+                ),
+            )
+            .limit(1)
+        ).first()
+        if existing_refund is not None:
+            continue
+
+        if not payment.provider_charge_id:
+            create_cancellation_refund_record(
+                db,
+                payment,
+                booking,
+                current_user,
+                now,
+                provider_refund_id=None,
+                refund_status="failed",
+            )
+            summary["refund_failed_count"] += 1
+            summary["refund_missing_charge_count"] += 1
+            continue
+
+        refund_idempotency_key = (
+            f"game_cancel:{db_game.id}:payment:{payment.id}:refund"
+        )
+        try:
+            stripe_refund = create_stripe_refund(
+                charge_id=payment.provider_charge_id,
+                amount_cents=payment.amount_cents,
+                currency=payment.currency,
+                idempotency_key=refund_idempotency_key,
+                metadata={
+                    "source": "official_game_cancel",
+                    "game_id": str(db_game.id),
+                    "booking_id": str(booking.id),
+                    "payment_id": str(payment.id),
+                    "admin_user_id": str(current_user.id),
+                },
+            )
+        except StripeConfigError:
+            create_cancellation_refund_record(
+                db,
+                payment,
+                booking,
+                current_user,
+                now,
+                provider_refund_id=None,
+                refund_status="failed",
+            )
+            summary["refund_failed_count"] += 1
+            continue
+        except Exception:
+            create_cancellation_refund_record(
+                db,
+                payment,
+                booking,
+                current_user,
+                now,
+                provider_refund_id=None,
+                refund_status="failed",
+            )
+            summary["refund_failed_count"] += 1
+            continue
+
+        refund_status = map_stripe_refund_status(stripe_refund.status)
+        create_cancellation_refund_record(
+            db,
+            payment,
+            booking,
+            current_user,
+            now,
+            provider_refund_id=stripe_refund.id,
+            refund_status=refund_status,
+        )
+        summary["refund_created_count"] += 1
+
+        if refund_status == "succeeded":
+            payment.payment_status = "refunded"
+            payment.updated_at = now
+            db.add(payment)
+        elif refund_status == "failed":
+            summary["refund_failed_count"] += 1
+        else:
+            summary["refund_processing_count"] += 1
+
+    return summary
+
+
+def create_cancellation_refund_record(
+    db: Session,
+    payment: Payment,
+    booking: Booking,
+    current_user: User,
+    now: datetime,
+    *,
+    provider_refund_id: str | None,
+    refund_status: str,
+) -> Refund:
+    refund = Refund(
+        id=uuid.uuid4(),
+        payment_id=payment.id,
+        booking_id=booking.id,
+        participant_id=None,
+        provider_refund_id=provider_refund_id,
+        amount_cents=payment.amount_cents,
+        currency=payment.currency,
+        refund_reason="game_cancelled",
+        refund_status=refund_status,
+        requested_by_user_id=current_user.id,
+        approved_by_user_id=current_user.id,
+        requested_at=now,
+        approved_at=(
+            now
+            if refund_status in {"approved", "processing", "succeeded"}
+            else None
+        ),
+        refunded_at=now if refund_status == "succeeded" else None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(refund)
+    return refund
 
 
 def archive_game_chats(db: Session, db_game: Game, now: datetime) -> None:
@@ -787,6 +1179,7 @@ def create_game_cancellation_admin_action(
     old_game_status: str,
     cancel_reason: str | None,
     notified_user_ids: list[uuid.UUID],
+    payment_summary: dict[str, object],
     now: datetime,
 ) -> None:
     if cancellation_type != "admin_cancelled":
@@ -804,6 +1197,7 @@ def create_game_cancellation_admin_action(
                 "new_game_status": "cancelled",
                 "notified_user_count": len(set(notified_user_ids)),
                 "cancelled_at": now.isoformat(),
+                **payment_summary,
             },
             created_at=now,
         )
@@ -1324,23 +1718,30 @@ def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
 # venue and user references that the row depends on.
 @router.post("", response_model=GameRead, status_code=status.HTTP_201_CREATED)
 def create_game(game: GameCreate, db: Session = Depends(get_db)) -> Game:
-    get_active_venue_or_404(db, game.venue_id)
-    get_active_user_or_404(db, game.created_by_user_id, "Created-by user not found.")
+    game_data = normalize_official_game_invariants(
+        game.model_dump(), is_create=True
+    )
+    get_active_venue_or_404(db, game_data["venue_id"])
+    get_active_user_or_404(
+        db, game_data["created_by_user_id"], "Created-by user not found."
+    )
 
-    if game.host_user_id is not None:
-        get_active_user_or_404(db, game.host_user_id, "Host user not found.")
+    if game_data["host_user_id"] is not None:
+        get_active_user_or_404(db, game_data["host_user_id"], "Host user not found.")
 
-    if game.cancelled_by_user_id is not None:
+    if game_data["cancelled_by_user_id"] is not None:
         get_active_user_or_404(
-            db, game.cancelled_by_user_id, "Cancelled-by user not found."
+            db, game_data["cancelled_by_user_id"], "Cancelled-by user not found."
         )
 
-    if game.completed_by_user_id is not None:
+    if game_data["completed_by_user_id"] is not None:
         get_active_user_or_404(
-            db, game.completed_by_user_id, "Completed-by user not found."
+            db, game_data["completed_by_user_id"], "Completed-by user not found."
         )
 
-    normalized_game_data = normalize_game_lifecycle_fields(game.model_dump())
+    normalized_game_data = normalize_official_game_invariants(
+        normalize_game_lifecycle_fields(game_data), is_create=True
+    )
     validate_game_business_rules(normalized_game_data)
 
     new_game = Game(
@@ -2092,7 +2493,9 @@ def cancel_game(
     ):
         notified_user_ids.append(db_game.host_user_id)
     cancel_game_waitlist_entries(db, db_game, now)
-    cancel_game_bookings(db, db_game, current_user, now, cancellation_type)
+    payment_summary = cancel_game_bookings(
+        db, db_game, current_user, now, cancellation_type
+    )
     archive_game_chats(db, db_game, now)
     create_game_cancelled_notifications(db, db_game, notified_user_ids, now)
     create_game_cancellation_history(
@@ -2112,6 +2515,7 @@ def cancel_game(
         old_game_status,
         cancel_reason,
         notified_user_ids,
+        payment_summary,
         now,
     )
 
@@ -2175,6 +2579,16 @@ def update_game(
             detail="Game not found.",
         )
 
+    update_data = game_update.model_dump(exclude_unset=True)
+    if "game_type" in update_data and update_data["game_type"] != db_game.game_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="game_type cannot be changed after creation.",
+        )
+
+    reject_official_location_change(db_game, update_data)
+    reject_direct_official_host_change(db_game, update_data)
+
     if game_update.venue_id is not None:
         get_active_venue_or_404(db, game_update.venue_id)
 
@@ -2199,7 +2613,6 @@ def update_game(
     now = datetime.now(timezone.utc)
     require_game_not_started(db_game, now, "Games cannot be edited after start time.")
 
-    update_data = game_update.model_dump(exclude_unset=True)
     if "format_label" in update_data and "host_guest_max" not in update_data:
         update_data["host_guest_max"] = get_default_host_guest_max(
             update_data["format_label"]
@@ -2275,7 +2688,9 @@ def update_game(
             "completed_by_user_id", db_game.completed_by_user_id
         ),
     }
-    effective_game_data = normalize_game_lifecycle_fields(effective_game_data, db_game)
+    effective_game_data = normalize_official_game_invariants(
+        normalize_game_lifecycle_fields(effective_game_data, db_game)
+    )
     validate_game_business_rules(effective_game_data)
 
     # Lifecycle fields are managed from the fully merged game state so partial
@@ -2292,6 +2707,13 @@ def update_game(
 
     if "host_guest_max" in update_data:
         update_data["host_guest_max"] = effective_game_data["host_guest_max"]
+    if effective_game_data["game_type"] == "official":
+        for field_name in OFFICIAL_FORCED_FIELDS:
+            if (
+                field_name in update_data
+                or getattr(db_game, field_name) != effective_game_data[field_name]
+            ):
+                update_data[field_name] = effective_game_data[field_name]
     update_data["starts_on_local"] = effective_game_data["starts_on_local"]
 
     for field_name, field_value in update_data.items():

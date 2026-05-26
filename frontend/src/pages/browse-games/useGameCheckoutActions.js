@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   confirmGameCheckout,
   createGameCheckoutPaymentIntent,
@@ -17,6 +17,22 @@ export function useGameCheckoutActions({ navigate }) {
   const [submitError, setSubmitError] = useState('')
   const [stripeCheckout, setStripeCheckout] = useState(null)
   const [stripeStatusMessage, setStripeStatusMessage] = useState('')
+  const isSubmittingRef = useRef(false)
+
+  const startSubmission = useCallback(function startSubmission() {
+    if (isSubmittingRef.current) {
+      return false
+    }
+
+    isSubmittingRef.current = true
+    setIsSubmitting(true)
+    return true
+  }, [])
+
+  const finishSubmission = useCallback(function finishSubmission() {
+    isSubmittingRef.current = false
+    setIsSubmitting(false)
+  }, [])
 
   const resetSubmitError = useCallback(() => {
     setSubmitError('')
@@ -84,7 +100,10 @@ export function useGameCheckoutActions({ navigate }) {
         return null
       }
 
-      setIsSubmitting(true)
+      if (!startSubmission()) {
+        return null
+      }
+
       setSubmitError('')
       setStripeStatusMessage('')
 
@@ -137,10 +156,10 @@ export function useGameCheckoutActions({ navigate }) {
         )
         return null
       } finally {
-        setIsSubmitting(false)
+        finishSubmission()
       }
     },
-    [pollCheckoutStatus],
+    [finishSubmission, pollCheckoutStatus, startSubmission],
   )
 
   const confirmBooking = useCallback(
@@ -165,7 +184,10 @@ export function useGameCheckoutActions({ navigate }) {
         return
       }
 
-      setIsSubmitting(true)
+      if (!startSubmission()) {
+        return
+      }
+
       setSubmitError('')
 
       try {
@@ -179,10 +201,10 @@ export function useGameCheckoutActions({ navigate }) {
       } catch (requestError) {
         setSubmitError(requestError instanceof Error ? requestError.message : 'Unable to confirm booking.')
       } finally {
-        setIsSubmitting(false)
+        finishSubmission()
       }
     },
-    [navigate],
+    [finishSubmission, navigate, startSubmission],
   )
 
   return {

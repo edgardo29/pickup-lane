@@ -13,6 +13,7 @@ function GameCheckoutLayout({
   address,
   agreed,
   appUser,
+  canAddPaymentMethod,
   confirmLabel,
   effectiveGuestCount,
   existingParticipant,
@@ -30,10 +31,11 @@ function GameCheckoutLayout({
   maxGuests,
   maxSelectableGuests,
   minGuestCount,
+  onAddPaymentMethod,
   onBack,
+  onChangePaymentMethod,
   onConfirmBooking,
   onGuestCountChange,
-  onSelectPaymentMethod,
   onSetAgreed,
   paymentMethod,
   paymentMethods,
@@ -41,7 +43,7 @@ function GameCheckoutLayout({
   price,
   primaryImage,
   projectedGuestCount,
-  selectedPaymentMethodId,
+  setupError,
   submitError,
   stripeStatusMessage,
   stripeUnavailable,
@@ -92,11 +94,13 @@ function GameCheckoutLayout({
             />
 
             <GameCheckoutPaymentCard
+              canAddPaymentMethod={canAddPaymentMethod}
               isStripeCheckout={isStripeCheckout}
-              onSelectPaymentMethod={onSelectPaymentMethod}
+              onAddPaymentMethod={onAddPaymentMethod}
+              onChangePaymentMethod={onChangePaymentMethod}
               paymentMethod={paymentMethod}
               paymentMethods={paymentMethods}
-              selectedPaymentMethodId={selectedPaymentMethodId}
+              setupError={setupError}
               stripeStatusMessage={stripeStatusMessage}
               stripeUnavailable={stripeUnavailable}
             />

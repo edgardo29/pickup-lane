@@ -889,6 +889,21 @@
   background: rgba(255, 107, 115, 0.12);
 }
 
+.payment-methods-alert--inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.payment-methods-alert--inline a {
+  color: var(--lime);
+  font-size: 0.84rem;
+  font-weight: 950;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .payment-methods-empty {
   color: var(--muted);
   background: rgba(5, 10, 16, 0.42);

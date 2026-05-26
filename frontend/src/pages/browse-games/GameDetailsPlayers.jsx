@@ -1,5 +1,6 @@
 import { UsersIcon } from '../../components/BrowseIcons.jsx'
-import { getInitials, InfoCard } from './GameDetailsPrimitives.jsx'
+import { getInitials } from './gameDetailsFormatters.js'
+import { InfoCard } from './GameDetailsPrimitives.jsx'
 
 export function PlayersCard({
   cta = 'View player list',

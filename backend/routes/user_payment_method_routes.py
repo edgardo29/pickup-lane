@@ -18,6 +18,7 @@ from backend.schemas import (
 )
 from backend.services.stripe_service import (
     StripeConfigError,
+    clear_customer_default_payment_method,
     create_customer,
     create_setup_intent,
     detach_payment_method,
@@ -136,6 +137,32 @@ def count_active_payment_methods(db: Session, user_id: uuid.UUID) -> int:
             select(UserPaymentMethod.id).where(
                 UserPaymentMethod.user_id == user_id,
                 UserPaymentMethod.method_status == ACTIVE_METHOD_STATUS,
+            )
+        ).all()
+    )
+
+
+def list_active_payment_methods(
+    db: Session,
+    user_id: uuid.UUID,
+    *,
+    excluding_payment_method_id: uuid.UUID | None = None,
+) -> list[UserPaymentMethod]:
+    statement = select(UserPaymentMethod).where(
+        UserPaymentMethod.user_id == user_id,
+        UserPaymentMethod.method_status == ACTIVE_METHOD_STATUS,
+    )
+
+    if excluding_payment_method_id is not None:
+        statement = statement.where(
+            UserPaymentMethod.id != excluding_payment_method_id
+        )
+
+    return list(
+        db.scalars(
+            statement.order_by(
+                UserPaymentMethod.created_at.asc(),
+                UserPaymentMethod.id.asc(),
             )
         ).all()
     )
@@ -322,7 +349,9 @@ def sync_current_user_payment_method(
             detail=f"You can save up to {MAX_ACTIVE_PAYMENT_METHODS} active cards.",
         )
 
-    should_default = active_payment_method_count == 0
+    should_default = (
+        active_payment_method_count == 0 or sync_request.set_as_default
+    )
     if should_default:
         try:
             set_customer_default_payment_method(
@@ -340,6 +369,7 @@ def sync_current_user_payment_method(
                 detail="Stripe could not set this default payment method.",
             ) from exc
         unset_other_active_defaults(db, current_user.id)
+        db.flush()
 
     if existing_card is None:
         payment_method = UserPaymentMethod(
@@ -488,10 +518,53 @@ def detach_current_user_payment_method(
         ) from exc
 
     now = datetime.now(timezone.utc)
+    was_default = bool(payment_method.is_default)
     payment_method.method_status = DETACHED_METHOD_STATUS
     payment_method.is_default = False
     payment_method.detached_at = now
     payment_method.updated_at = now
+    db.add(payment_method)
+    db.flush()
+    next_default_payment_method: UserPaymentMethod | None = None
+
+    if was_default:
+        stripe_customer_id = (
+            current_user.stripe_customer_id or payment_method.stripe_customer_id
+        )
+        remaining_payment_methods = list_active_payment_methods(
+            db,
+            current_user.id,
+            excluding_payment_method_id=payment_method.id,
+        )
+        next_default_payment_method = (
+            remaining_payment_methods[0] if remaining_payment_methods else None
+        )
+
+        try:
+            if next_default_payment_method is not None and stripe_customer_id:
+                set_customer_default_payment_method(
+                    customer_id=stripe_customer_id,
+                    payment_method_id=next_default_payment_method.stripe_payment_method_id,
+                )
+            elif stripe_customer_id:
+                clear_customer_default_payment_method(
+                    customer_id=stripe_customer_id,
+                )
+        except StripeConfigError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Stripe could not update the default payment method.",
+            ) from exc
+
+        if next_default_payment_method is not None:
+            next_default_payment_method.is_default = True
+            next_default_payment_method.updated_at = now
+            db.add(next_default_payment_method)
 
     try:
         db.add(payment_method)

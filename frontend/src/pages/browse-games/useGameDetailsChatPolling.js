@@ -58,7 +58,7 @@ export function useGameDetailsChatPolling({
       ignore = true
       window.clearInterval(intervalId)
     }
-  }, [activeChat?.id, firebaseUser, isChatOpen])
+  }, [activeChat?.id, chatMessagesRef, firebaseUser, isChatOpen, setChatMessages, setHasUnreadChat])
 
   useEffect(() => {
     if (!activeChat?.id || !firebaseUser || !isChatOpen) {
@@ -96,5 +96,13 @@ export function useGameDetailsChatPolling({
       ignore = true
       window.clearInterval(intervalId)
     }
-  }, [activeChat?.id, firebaseUser, hasUnreadChat, isChatOpen])
+  }, [
+    activeChat?.id,
+    chatMessagesRef,
+    firebaseUser,
+    hasUnreadChat,
+    isChatOpen,
+    setChatMessages,
+    setHasUnreadChat,
+  ])
 }

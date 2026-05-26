@@ -20,9 +20,11 @@ from backend.models import (
 )
 from backend.routes.game_routes import (
     ACTIVE_JOIN_STATUSES,
+    OFFICIAL_FORCED_FIELDS,
     build_game_conflict_detail,
     count_roster_players,
     get_next_roster_order,
+    normalize_official_game_invariants,
     normalize_game_lifecycle_fields,
     sync_game_capacity_status,
     validate_game_business_rules,
@@ -512,12 +514,15 @@ def create_official_game(
         admin_user_id=admin_user.id,
         create_request=create_request,
     )
-    game_data = normalize_game_lifecycle_fields(
-        build_official_game_data(
-            admin_user_id=admin_user.id,
-            create_request=create_request,
-            venue=venue,
-        )
+    game_data = normalize_official_game_invariants(
+        normalize_game_lifecycle_fields(
+            build_official_game_data(
+                admin_user_id=admin_user.id,
+                create_request=create_request,
+                venue=venue,
+            )
+        ),
+        is_create=True,
     )
     validate_game_business_rules(game_data)
 
@@ -813,13 +818,18 @@ def update_official_game(
         )
 
     effective_game_data = build_effective_official_game_data(game, request_data)
-    effective_game_data = normalize_game_lifecycle_fields(effective_game_data, game)
+    effective_game_data = normalize_official_game_invariants(
+        normalize_game_lifecycle_fields(effective_game_data, game)
+    )
     validate_game_business_rules(effective_game_data)
 
     if "starts_at" in request_data:
         request_data["starts_at"] = effective_game_data["starts_at"]
     if "ends_at" in request_data:
         request_data["ends_at"] = effective_game_data["ends_at"]
+    for field_name in OFFICIAL_FORCED_FIELDS:
+        if getattr(game, field_name) != effective_game_data[field_name]:
+            request_data[field_name] = effective_game_data[field_name]
     request_data["starts_on_local"] = effective_game_data["starts_on_local"]
 
     field_names = set(request_data)

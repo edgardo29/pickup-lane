@@ -144,6 +144,41 @@ def create_user_payment_method(
     }
 
 
+def mock_checkout_payment_method_verification(
+    monkeypatch,
+    payment_method: dict,
+    **overrides: object,
+) -> None:
+    from backend.services.stripe_service import StripePaymentMethodCardResult
+
+    values = {
+        "id": payment_method["stripe_payment_method_id"],
+        "customer_id": payment_method["stripe_customer_id"],
+        "card_fingerprint": payment_method["card_fingerprint"],
+        "card_brand": payment_method["card_brand"],
+        "card_last4": payment_method["card_last4"],
+        "exp_month": payment_method["exp_month"],
+        "exp_year": payment_method["exp_year"],
+    }
+    values.update(overrides)
+
+    def fake_retrieve_payment_method(stripe_payment_method_id):
+        return StripePaymentMethodCardResult(
+            id=str(stripe_payment_method_id),
+            customer_id=str(values["customer_id"]),
+            card_fingerprint=str(values["card_fingerprint"]),
+            card_brand=str(values["card_brand"]),
+            card_last4=str(values["card_last4"]),
+            exp_month=int(values["exp_month"]),
+            exp_year=int(values["exp_year"]),
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.retrieve_payment_method",
+        fake_retrieve_payment_method,
+    )
+
+
 def create_venue(client: TestClient, user_id: str, **overrides: object) -> dict:
     payload = {
         "name": "CI Test Field",
@@ -262,23 +297,28 @@ def create_sub_post(client: TestClient, owner_user_id: str, **overrides: object)
     return response.json()
 
 
-def create_booking(client: TestClient, user_id: str, game_id: str) -> dict:
+def create_booking(
+    client: TestClient, user_id: str, game_id: str, **overrides: object
+) -> dict:
+    payload = {
+        "game_id": game_id,
+        "buyer_user_id": user_id,
+        "booking_status": "confirmed",
+        "payment_status": "paid",
+        "participant_count": 1,
+        "subtotal_cents": 1200,
+        "platform_fee_cents": 100,
+        "discount_cents": 0,
+        "total_cents": 1300,
+        "currency": "USD",
+        "price_per_player_snapshot_cents": 1200,
+        "platform_fee_snapshot_cents": 100,
+    }
+    payload.update(overrides)
+
     response = client.post(
         "/bookings",
-        json={
-            "game_id": game_id,
-            "buyer_user_id": user_id,
-            "booking_status": "confirmed",
-            "payment_status": "paid",
-            "participant_count": 1,
-            "subtotal_cents": 1200,
-            "platform_fee_cents": 100,
-            "discount_cents": 0,
-            "total_cents": 1300,
-            "currency": "USD",
-            "price_per_player_snapshot_cents": 1200,
-            "platform_fee_snapshot_cents": 100,
-        },
+        json=payload,
     )
 
     assert response.status_code == 201, response.text

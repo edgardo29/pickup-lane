@@ -1,5 +1,6 @@
 import { ChatIcon } from '../../components/BrowseIcons.jsx'
-import { getInitials, InfoCard } from './GameDetailsPrimitives.jsx'
+import { getInitials } from './gameDetailsFormatters.js'
+import { InfoCard } from './GameDetailsPrimitives.jsx'
 
 export function GameChatCard({
   canOpenChat,

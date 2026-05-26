@@ -59,8 +59,12 @@ function NeedASubPage() {
       return
     }
 
-    setNotice(routedNotice)
-    navigate(location.pathname, { replace: true })
+    const timerId = window.setTimeout(() => {
+      setNotice(routedNotice)
+      navigate(location.pathname, { replace: true })
+    }, 0)
+
+    return () => window.clearTimeout(timerId)
   }, [location.pathname, location.state, navigate])
 
   const visiblePosts = postView === 'mine' ? myPosts : posts
