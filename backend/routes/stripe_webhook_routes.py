@@ -26,6 +26,10 @@ from backend.routes.game_routes import (
     sync_game_capacity_status,
 )
 from backend.routes.payment_event_routes import build_payment_event_conflict_detail
+from backend.services.game_credit_service import (
+    redeem_reserved_game_credits,
+    release_reserved_game_credits,
+)
 from backend.services.stripe_service import StripeConfigError, construct_webhook_event
 
 router = APIRouter(prefix="/stripe", tags=["stripe"])
@@ -414,6 +418,17 @@ def apply_payment_intent_succeeded(
         mark_event_failed(event, "Game roster is over capacity before confirmation.")
         return
 
+    try:
+        redeem_reserved_game_credits(
+            db,
+            booking.id,
+            now=now,
+            user_id=booking.buyer_user_id,
+        )
+    except ValueError as exc:
+        mark_event_failed(event, str(exc))
+        return
+
     old_booking_status = booking.booking_status
     old_payment_status = booking.payment_status
     next_roster_order = get_next_roster_order(db, booking.game_id)
@@ -626,6 +641,19 @@ def apply_payment_intent_failed_or_canceled(
     if payment.payment_status == terminal_payment_status:
         mark_event_processed(event, now)
         return
+
+    if booking.booking_status == "pending_payment":
+        try:
+            release_reserved_game_credits(
+                db,
+                booking.id,
+                now=now,
+                release_reason=fallback_code,
+                user_id=booking.buyer_user_id,
+            )
+        except ValueError as exc:
+            mark_event_failed(event, str(exc))
+            return
 
     fail_pending_booking_hold(
         db,

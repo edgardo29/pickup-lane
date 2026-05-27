@@ -116,6 +116,11 @@ export function useGameCheckoutActions({ navigate }) {
           returnUrl,
         })
 
+        if (!paymentIntent.payment_required) {
+          navigate(`/games/${game.id}`, { replace: true })
+          return paymentIntent
+        }
+
         if (paymentMethodId) {
           if (paymentIntent.stripe_status === 'requires_action') {
             const stripe = await stripePromise

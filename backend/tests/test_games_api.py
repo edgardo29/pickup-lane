@@ -3,6 +3,28 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
+
+from backend.database import SessionLocal
+from backend.models import (
+    Booking,
+    GameCredit,
+    GameCreditUsage,
+    GameParticipant,
+    Payment,
+)
+from backend.services.game_credit_service import (
+    REDEEMED_USAGE_STATUS,
+    RELEASED_USAGE_STATUS,
+    RESTORED_USAGE_STATUS,
+    redeem_reserved_game_credits,
+    reserve_game_credits,
+)
+from backend.services.stripe_service import (
+    StripeConfigError,
+    StripePaymentIntentResult,
+    StripeRefundResult,
+)
 from backend.tests.helpers import (
     authenticate_as,
     create_booking,
@@ -10,11 +32,13 @@ from backend.tests.helpers import (
     create_game_participant,
     create_payment,
     create_user,
+    create_user_payment_method,
     create_venue,
     mark_user_email_verified,
+    mock_checkout_payment_method_verification,
     set_user_role,
+    unique_suffix,
 )
-from backend.services.stripe_service import StripeConfigError, StripeRefundResult
 
 
 def set_game_times(game_id: str, starts_at: datetime, ends_at: datetime | None = None) -> None:
@@ -70,6 +94,29 @@ def first_sunday_of_november(year: int) -> int:
 
 def local_date_string(starts_at: datetime, timezone_name: str) -> str:
     return starts_at.astimezone(ZoneInfo(timezone_name)).date().isoformat()
+
+
+def issue_game_credit(
+    client: TestClient,
+    *,
+    admin_id: str,
+    user_id: str,
+    game_id: str,
+    amount_cents: int,
+) -> dict:
+    authenticate_as(admin_id)
+    response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": user_id,
+            "amount_cents": amount_cents,
+            "credit_reason": "admin_credit",
+            "source_game_id": game_id,
+            "idempotency_key": f"game-cancel-credit-{unique_suffix()}",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 def test_games_create_get_list_update_and_soft_delete(client: TestClient):
@@ -443,6 +490,243 @@ def test_cancel_official_game_refunds_paid_payment_and_writes_audit_rows(
     assert history[0]["change_source"] == "admin"
 
 
+def test_cancel_official_game_restores_full_credit_booking_without_stripe_refund(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue, price_per_player_cents=1500)
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=1500,
+    )
+
+    def fail_create_stripe_refund(**kwargs):
+        raise AssertionError("Stripe refund should not run for credit-only booking.")
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_stripe_refund",
+        fail_create_stripe_refund,
+    )
+
+    authenticate_as(player["id"])
+    checkout_response = client.post(
+        f"/checkout/games/{game['id']}/payment-intent",
+        json={"guest_count": 0},
+    )
+    assert checkout_response.status_code == 201, checkout_response.text
+    checkout = checkout_response.json()
+    assert checkout["payment_required"] is False
+    assert checkout["payment_id"] is None
+
+    authenticate_as(admin["id"])
+    cancel_response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Weather closure"},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    booking_response = client.get(f"/bookings/{checkout['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "cancelled"
+    assert booking["payment_status"] == "credit_restored"
+
+    refunds_response = client.get(f"/refunds?booking_id={checkout['booking_id']}")
+    assert refunds_response.status_code == 200, refunds_response.text
+    assert refunds_response.json() == []
+
+    with SessionLocal() as db:
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+        usages = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(checkout["booking_id"])
+            )
+        ).all()
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 1500
+    assert refreshed_credit.credit_status == "active"
+    assert {usage.usage_status for usage in usages} == {
+        REDEEMED_USAGE_STATUS,
+        RESTORED_USAGE_STATUS,
+    }
+    assert sum(
+        usage.amount_cents
+        for usage in usages
+        if usage.usage_status == RESTORED_USAGE_STATUS
+    ) == 1500
+
+    admin_actions_response = client.get(
+        f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
+    )
+    assert admin_actions_response.status_code == 200, admin_actions_response.text
+    metadata = admin_actions_response.json()[0]["metadata"]
+    assert metadata["credit_restored_count"] == 1
+    assert metadata["credit_restored_cents"] == 1500
+    assert metadata["payment_refund_created"] is False
+    assert metadata["refund_followup_required"] is False
+
+
+def test_cancel_official_game_restores_credit_and_refunds_stripe_remainder(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue, price_per_player_cents=1500)
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
+    payment_method = create_user_payment_method(
+        client,
+        player["id"],
+        stripe_customer_id="cus_credit_cancel",
+        stripe_payment_method_id="pm_credit_cancel",
+    )
+    mock_checkout_payment_method_verification(monkeypatch, payment_method)
+
+    def fake_create_payment_intent(**kwargs):
+        return StripePaymentIntentResult(
+            id="pi_credit_cancel",
+            client_secret="pi_credit_cancel_secret",
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret="pi_credit_cancel_secret",
+            status="processing",
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
+    authenticate_as(player["id"])
+    checkout_response = client.post(
+        f"/checkout/games/{game['id']}/payment-intent",
+        json={"guest_count": 0, "payment_method_id": payment_method["id"]},
+    )
+    assert checkout_response.status_code == 201, checkout_response.text
+    checkout = checkout_response.json()
+    assert checkout["credit_applied_cents"] == 500
+    assert checkout["stripe_amount_cents"] == 1000
+
+    with SessionLocal() as db:
+        now = datetime.now(UTC)
+        booking = db.get(Booking, UUID(checkout["booking_id"]))
+        payment = db.get(Payment, UUID(checkout["payment_id"]))
+        assert booking is not None
+        assert payment is not None
+        booking.booking_status = "confirmed"
+        booking.payment_status = "paid"
+        booking.booked_at = now
+        booking.updated_at = now
+        payment.payment_status = "succeeded"
+        payment.provider_charge_id = "ch_credit_cancel"
+        payment.paid_at = now
+        payment.updated_at = now
+        participants = db.scalars(
+            select(GameParticipant).where(
+                GameParticipant.booking_id == UUID(checkout["booking_id"])
+            )
+        ).all()
+        for roster_order, participant in enumerate(participants, start=1):
+            participant.participant_status = "confirmed"
+            participant.confirmed_at = now
+            participant.roster_order = roster_order
+            participant.updated_at = now
+            db.add(participant)
+        redeem_reserved_game_credits(
+            db,
+            UUID(checkout["booking_id"]),
+            now=now,
+            user_id=UUID(player["id"]),
+        )
+        db.add(booking)
+        db.add(payment)
+        db.commit()
+
+    refund_calls: list[dict[str, object]] = []
+
+    def fake_create_stripe_refund(**kwargs):
+        refund_calls.append(kwargs)
+        return StripeRefundResult(
+            id="re_credit_cancel_success",
+            status="succeeded",
+            amount_cents=int(kwargs["amount_cents"]),
+            currency=str(kwargs["currency"]),
+            charge_id=str(kwargs["charge_id"]),
+            payment_intent_id=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_stripe_refund",
+        fake_create_stripe_refund,
+    )
+
+    authenticate_as(admin["id"])
+    cancel_response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Venue closure"},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    booking_response = client.get(f"/bookings/{checkout['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    assert booking_response.json()["payment_status"] == "refunded"
+
+    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    assert payment_response.json()["payment_status"] == "refunded"
+    assert refund_calls[0]["amount_cents"] == 1000
+
+    with SessionLocal() as db:
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+        usages = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(checkout["booking_id"])
+            )
+        ).all()
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.credit_status == "active"
+    assert {usage.usage_status for usage in usages} == {
+        REDEEMED_USAGE_STATUS,
+        RESTORED_USAGE_STATUS,
+    }
+
+    admin_actions_response = client.get(
+        f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
+    )
+    assert admin_actions_response.status_code == 200, admin_actions_response.text
+    metadata = admin_actions_response.json()[0]["metadata"]
+    assert metadata["credit_restored_cents"] == 500
+    assert metadata["refund_created_count"] == 1
+    assert metadata["payment_refund_created"] is True
+    assert metadata["refund_followup_required"] is False
+
+
 def test_cancel_official_game_preserves_payment_when_refund_fails(
     client: TestClient,
     monkeypatch,
@@ -665,6 +949,13 @@ def test_cancel_official_game_releases_uncharged_pending_checkout_hold(
     venue = create_venue(client, admin["id"])
     game = create_game(client, admin["id"], venue)
     player = create_user(client)
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
     booking = create_booking(
         client,
         player["id"],
@@ -686,6 +977,17 @@ def test_cancel_official_game_releases_uncharged_pending_checkout_hold(
         amount_cents=booking["total_cents"],
         payment_status="requires_payment_method",
     )
+    with SessionLocal() as db:
+        reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=500,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"test-pending-cancel:{booking['id']}",
+        )
+        db.commit()
 
     authenticate_as(admin["id"])
     cancel_response = client.post(
@@ -718,6 +1020,20 @@ def test_cancel_official_game_releases_uncharged_pending_checkout_hold(
     assert refunds_response.status_code == 200, refunds_response.text
     assert refunds_response.json() == []
 
+    with SessionLocal() as db:
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(booking["id"])
+            )
+        ).one()
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.credit_status == "active"
+    assert usage.usage_status == RELEASED_USAGE_STATUS
+    assert usage.release_reason == "game_cancelled"
+
     admin_actions_response = client.get(
         f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
     )
@@ -725,6 +1041,7 @@ def test_cancel_official_game_releases_uncharged_pending_checkout_hold(
     admin_actions = admin_actions_response.json()
     assert len(admin_actions) == 1
     assert admin_actions[0]["metadata"]["uncharged_pending_booking_count"] == 1
+    assert admin_actions[0]["metadata"]["credit_released_cents"] == 500
     assert admin_actions[0]["metadata"]["refund_followup_required"] is False
     assert admin_actions[0]["metadata"]["payment_refund_created"] is False
 

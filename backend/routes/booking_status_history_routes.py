@@ -33,6 +33,7 @@ VALID_PAYMENT_STATUSES = {
     "failed",
     "partially_refunded",
     "refunded",
+    "credit_restored",
     "disputed",
 }
 VALID_CHANGE_SOURCES = {
