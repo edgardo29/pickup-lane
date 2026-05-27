@@ -57,11 +57,19 @@ class GameCreditUsageRead(BaseModel):
     game_credit_id: UUID
     user_id: UUID
     booking_id: UUID | None
+    game_id: UUID | None
+    payment_id: UUID | None
     amount_cents: int
     currency: str
     usage_type: str
+    usage_status: str
     idempotency_key: str
+    release_reason: str | None
+    reserved_at: datetime | None
+    redeemed_at: datetime | None
+    released_at: datetime | None
     created_at: datetime
+    updated_at: datetime
 
 
 class GameCreditBalanceRead(BaseModel):

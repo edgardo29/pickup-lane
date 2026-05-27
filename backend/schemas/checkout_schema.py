@@ -14,12 +14,24 @@ class GameCheckoutPaymentIntentCreate(BaseModel):
 
 
 class GameCheckoutPaymentIntentRead(BaseModel):
-    client_secret: str
+    client_secret: str | None
     booking_id: UUID
-    payment_id: UUID
+    payment_id: UUID | None
     amount_cents: int
     currency: str
-    stripe_status: str
+    stripe_status: str | None
+    subtotal_cents: int
+    platform_fee_cents: int
+    checkout_total_cents: int
+    available_credit_cents: int
+    credit_applied_cents: int
+    minimum_charge_adjustment_cents: int
+    final_amount_due_cents: int
+    stripe_amount_cents: int
+    payment_required: bool
+    booking_status: str
+    booking_payment_status: str
+    payment_status: str | None = None
 
 
 class GameCheckoutStatusRead(BaseModel):
@@ -30,3 +42,12 @@ class GameCheckoutStatusRead(BaseModel):
     payment_status: str | None = None
     amount_cents: int
     currency: str
+    subtotal_cents: int
+    platform_fee_cents: int
+    checkout_total_cents: int
+    available_credit_cents: int
+    credit_applied_cents: int
+    minimum_charge_adjustment_cents: int
+    final_amount_due_cents: int
+    stripe_amount_cents: int
+    payment_required: bool

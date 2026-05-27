@@ -28,6 +28,10 @@ from backend.services.stripe_service import (
     StripeConfigError,
     create_refund as create_stripe_refund,
 )
+from backend.services.game_credit_service import (
+    release_reserved_game_credits,
+    restore_redeemed_game_credits,
+)
 from backend.schemas import (
     GameCancelCreate,
     GameCreate,
@@ -839,6 +843,10 @@ def cancel_game_bookings(
         "refund_failed_count": 0,
         "refund_processing_count": 0,
         "refund_missing_charge_count": 0,
+        "credit_restored_count": 0,
+        "credit_restored_cents": 0,
+        "credit_released_count": 0,
+        "credit_released_cents": 0,
     }
 
     for booking in bookings:
@@ -864,6 +872,24 @@ def cancel_game_bookings(
                 payment_summary["paid_booking_count"] = (
                     int(payment_summary["paid_booking_count"]) + 1
                 )
+                restored_credit_usages = restore_redeemed_game_credits(
+                    db,
+                    booking.id,
+                    now=now,
+                    restore_reason="game_cancelled",
+                    user_id=booking.buyer_user_id,
+                )
+                restored_credit_cents = sum(
+                    usage.amount_cents for usage in restored_credit_usages
+                )
+                payment_summary["credit_restored_count"] = (
+                    int(payment_summary["credit_restored_count"])
+                    + len(restored_credit_usages)
+                )
+                payment_summary["credit_restored_cents"] = (
+                    int(payment_summary["credit_restored_cents"])
+                    + restored_credit_cents
+                )
                 refund_summary = create_official_cancellation_refunds(
                     db,
                     db_game,
@@ -884,6 +910,15 @@ def cancel_game_bookings(
                     and all_booking_refundable_payments_refunded(payments)
                 ):
                     booking.payment_status = "refunded"
+                    booking_refund_followup_required = False
+                elif (
+                    restored_credit_cents > 0
+                    and refund_summary["refund_failed_count"] == 0
+                    and refund_summary["refund_processing_count"] == 0
+                    and refund_summary["refund_missing_charge_count"] == 0
+                    and not booking_has_refundable_payments(payments)
+                ):
+                    booking.payment_status = "credit_restored"
                     booking_refund_followup_required = False
                 if booking_refund_followup_required:
                     payment_summary["refund_followup_required"] = True
@@ -906,6 +941,22 @@ def cancel_game_bookings(
                         payment.failure_reason = "game_cancelled"
                         payment.updated_at = now
                         db.add(payment)
+
+                released_credit_usages = release_reserved_game_credits(
+                    db,
+                    booking.id,
+                    now=now,
+                    release_reason="game_cancelled",
+                    user_id=booking.buyer_user_id,
+                )
+                payment_summary["credit_released_count"] = (
+                    int(payment_summary["credit_released_count"])
+                    + len(released_credit_usages)
+                )
+                payment_summary["credit_released_cents"] = (
+                    int(payment_summary["credit_released_cents"])
+                    + sum(usage.amount_cents for usage in released_credit_usages)
+                )
 
                 booking.payment_status = "failed"
                 payment_summary["uncharged_pending_booking_count"] = (
@@ -948,6 +999,13 @@ def all_booking_refundable_payments_refunded(payments: list[Payment]) -> bool:
     ]
     return bool(refundable_payments) and all(
         payment.payment_status == "refunded" for payment in refundable_payments
+    )
+
+
+def booking_has_refundable_payments(payments: list[Payment]) -> bool:
+    return any(
+        payment.payment_status in CANCELLATION_REFUND_FOLLOWUP_PAYMENT_STATUSES
+        for payment in payments
     )
 
 

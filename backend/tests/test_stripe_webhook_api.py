@@ -6,7 +6,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from backend.database import SessionLocal
-from backend.models import Booking, GameParticipant
+from backend.models import Booking, GameCredit, GameCreditUsage, GameParticipant
+from backend.services.game_credit_service import (
+    REDEEMED_USAGE_STATUS,
+    RELEASED_USAGE_STATUS,
+    RESERVED_USAGE_STATUS,
+)
 from backend.services.stripe_service import StripePaymentIntentResult
 from backend.tests.helpers import (
     authenticate_as,
@@ -18,6 +23,7 @@ from backend.tests.helpers import (
     create_user_payment_method,
     create_venue,
     mock_checkout_payment_method_verification,
+    set_user_role,
     unique_suffix,
 )
 
@@ -28,6 +34,7 @@ def create_pending_checkout(
     *,
     guest_count: int = 1,
     price_per_player_cents: int = 1500,
+    credit_amount_cents: int = 0,
 ) -> dict:
     user = create_user(client)
     venue = create_venue(client, user["id"])
@@ -37,6 +44,24 @@ def create_pending_checkout(
         venue,
         price_per_player_cents=price_per_player_cents,
     )
+    credit: dict | None = None
+    if credit_amount_cents > 0:
+        admin = create_user(client)
+        set_user_role(admin["id"], "admin")
+        authenticate_as(admin["id"])
+        credit_response = client.post(
+            "/admin/game-credits/issue",
+            json={
+                "user_id": user["id"],
+                "amount_cents": credit_amount_cents,
+                "credit_reason": "admin_credit",
+                "source_game_id": game["id"],
+                "idempotency_key": f"webhook-credit-{unique_suffix()}",
+            },
+        )
+        assert credit_response.status_code == 201, credit_response.text
+        credit = credit_response.json()
+
     payment_intent_id = f"pi_{unique_suffix()}"
     payment_method = create_user_payment_method(
         client,
@@ -87,6 +112,8 @@ def create_pending_checkout(
         "payment_id": body["payment_id"],
         "amount_cents": body["amount_cents"],
         "currency": body["currency"],
+        "credit": credit,
+        "credit_applied_cents": body["credit_applied_cents"],
     }
 
 
@@ -327,6 +354,57 @@ def test_stripe_webhook_duplicate_event_is_idempotent(
     assert sorted(participant["roster_order"] for participant in participants) == [1, 2]
 
 
+def test_stripe_webhook_succeeded_redeems_reserved_game_credit(
+    client: TestClient, monkeypatch
+):
+    checkout = create_pending_checkout(
+        client,
+        monkeypatch,
+        guest_count=0,
+        price_per_player_cents=1500,
+        credit_amount_cents=500,
+    )
+    assert checkout["amount_cents"] == 1000
+    assert checkout["credit_applied_cents"] == 500
+
+    with SessionLocal() as db:
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(checkout["booking_id"])
+            )
+        ).one()
+        credit = db.get(GameCredit, UUID(checkout["credit"]["id"]))
+        assert usage.usage_status == RESERVED_USAGE_STATUS
+        assert credit is not None
+        assert credit.remaining_cents == 0
+        assert credit.credit_status == "active"
+
+    event = build_payment_intent_event(
+        checkout,
+        event_type="payment_intent.succeeded",
+        status="succeeded",
+    )
+
+    response = post_stripe_event(client, monkeypatch, event)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["processing_status"] == "processed"
+
+    with SessionLocal() as db:
+        redeemed_usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(checkout["booking_id"])
+            )
+        ).one()
+        redeemed_credit = db.get(GameCredit, UUID(checkout["credit"]["id"]))
+
+    assert redeemed_usage.usage_status == REDEEMED_USAGE_STATUS
+    assert redeemed_usage.redeemed_at is not None
+    assert redeemed_credit is not None
+    assert redeemed_credit.remaining_cents == 0
+    assert redeemed_credit.credit_status == "used"
+
+
 def test_stripe_webhook_succeeded_amount_mismatch_does_not_confirm_booking(
     client: TestClient, monkeypatch
 ):
@@ -486,6 +564,47 @@ def test_stripe_webhook_failed_payment_marks_booking_failed_and_clears_hold(
     }
 
 
+def test_stripe_webhook_failed_payment_releases_reserved_game_credit(
+    client: TestClient, monkeypatch
+):
+    checkout = create_pending_checkout(
+        client,
+        monkeypatch,
+        guest_count=0,
+        price_per_player_cents=1500,
+        credit_amount_cents=500,
+    )
+    event = build_payment_intent_event(
+        checkout,
+        event_type="payment_intent.payment_failed",
+        status="requires_payment_method",
+        last_payment_error={
+            "code": "card_declined",
+            "message": "Your card was declined.",
+        },
+    )
+
+    response = post_stripe_event(client, monkeypatch, event)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["processing_status"] == "processed"
+
+    with SessionLocal() as db:
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(checkout["booking_id"])
+            )
+        ).one()
+        credit = db.get(GameCredit, UUID(checkout["credit"]["id"]))
+
+    assert usage.usage_status == RELEASED_USAGE_STATUS
+    assert usage.released_at is not None
+    assert usage.release_reason == "payment_intent_payment_failed"
+    assert credit is not None
+    assert credit.remaining_cents == 500
+    assert credit.credit_status == "active"
+
+
 def test_stripe_webhook_canceled_payment_expires_booking_hold(
     client: TestClient, monkeypatch
 ):
@@ -510,6 +629,43 @@ def test_stripe_webhook_canceled_payment_expires_booking_hold(
     booking = booking_response.json()
     assert booking["booking_status"] == "expired"
     assert booking["payment_status"] == "failed"
+
+
+def test_stripe_webhook_canceled_payment_releases_reserved_game_credit(
+    client: TestClient, monkeypatch
+):
+    checkout = create_pending_checkout(
+        client,
+        monkeypatch,
+        guest_count=0,
+        price_per_player_cents=1500,
+        credit_amount_cents=500,
+    )
+    event = build_payment_intent_event(
+        checkout,
+        event_type="payment_intent.canceled",
+        status="canceled",
+    )
+
+    response = post_stripe_event(client, monkeypatch, event)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["processing_status"] == "processed"
+
+    with SessionLocal() as db:
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(checkout["booking_id"])
+            )
+        ).one()
+        credit = db.get(GameCredit, UUID(checkout["credit"]["id"]))
+
+    assert usage.usage_status == RELEASED_USAGE_STATUS
+    assert usage.released_at is not None
+    assert usage.release_reason == "payment_intent_canceled"
+    assert credit is not None
+    assert credit.remaining_cents == 500
+    assert credit.credit_status == "active"
 
 
 def test_stripe_webhook_refund_updated_succeeded_marks_payment_refunded(

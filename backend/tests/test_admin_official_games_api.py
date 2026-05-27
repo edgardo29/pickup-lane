@@ -2,7 +2,11 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
+from backend.database import SessionLocal
+from backend.models import GameCredit, GameCreditUsage
+from backend.services.game_credit_service import RELEASED_USAGE_STATUS
 from backend.services.stripe_service import StripePaymentIntentResult
 from backend.tests.helpers import (
     authenticate_as,
@@ -14,6 +18,7 @@ from backend.tests.helpers import (
     create_venue,
     mock_checkout_payment_method_verification,
     set_user_role,
+    unique_suffix,
 )
 
 
@@ -42,6 +47,29 @@ def build_official_game_payload(**overrides: object) -> dict:
     }
     payload.update(overrides)
     return payload
+
+
+def issue_game_credit(
+    client: TestClient,
+    *,
+    admin_id: str,
+    user_id: str,
+    game_id: str,
+    amount_cents: int,
+) -> dict:
+    authenticate_as(admin_id)
+    response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": user_id,
+            "amount_cents": amount_cents,
+            "credit_reason": "admin_credit",
+            "source_game_id": game_id,
+            "idempotency_key": f"admin-official-credit-{unique_suffix()}",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 def set_game_status(game_id: str, game_status: str) -> None:
@@ -313,6 +341,13 @@ def test_admin_official_game_update_invalidates_pending_checkout(
     )
     assert create_response.status_code == 201, create_response.text
     game = create_response.json()["game"]
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
 
     authenticate_as(player["id"])
     payment_method = create_user_payment_method(
@@ -331,6 +366,7 @@ def test_admin_official_game_update_invalidates_pending_checkout(
     )
     assert checkout_response.status_code == 201, checkout_response.text
     checkout = checkout_response.json()
+    assert checkout["credit_applied_cents"] == 500
 
     authenticate_as(admin["id"])
     update_response = client.patch(
@@ -362,6 +398,20 @@ def test_admin_official_game_update_invalidates_pending_checkout(
         participant["participant_status"]
         for participant in participants_response.json()
     } == {"cancelled"}
+
+    with SessionLocal() as db:
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(checkout["booking_id"])
+            )
+        ).one()
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.credit_status == "active"
+    assert usage.usage_status == RELEASED_USAGE_STATUS
+    assert usage.release_reason == "admin_game_updated"
 
     audit_response = client.get(
         f"/admin/actions?action_type=update_official_game&target_game_id={game['id']}"
@@ -632,6 +682,13 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
     )
     assert create_response.status_code == 201, create_response.text
     game = create_response.json()["game"]
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
 
     authenticate_as(player["id"])
     payment_method = create_user_payment_method(
@@ -650,6 +707,7 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
     )
     assert checkout_response.status_code == 201, checkout_response.text
     checkout = checkout_response.json()
+    assert checkout["credit_applied_cents"] == 500
     participants_response = client.get(
         f"/game-participants?booking_id={checkout['booking_id']}"
     )
@@ -687,6 +745,20 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
         participant["participant_status"]
         for participant in removed_participants_response.json()
     } == {"removed"}
+
+    with SessionLocal() as db:
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(checkout["booking_id"])
+            )
+        ).one()
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.credit_status == "active"
+    assert usage.usage_status == RELEASED_USAGE_STATUS
+    assert usage.release_reason == "admin_player_removed"
 
 
 def test_admin_can_assign_replace_and_remove_official_game_host_designation(

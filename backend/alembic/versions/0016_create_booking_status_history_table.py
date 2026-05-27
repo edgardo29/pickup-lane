@@ -57,7 +57,8 @@ def upgrade() -> None:
             (
                 "(old_payment_status IS NULL OR old_payment_status IN ("
                 "'not_required', 'unpaid', 'requires_action', 'processing', "
-                "'paid', 'failed', 'partially_refunded', 'refunded', 'disputed'))"
+                "'paid', 'failed', 'partially_refunded', 'refunded', "
+                "'credit_restored', 'disputed'))"
             ),
             name="ck_booking_status_history_old_payment_status",
         ),
@@ -65,7 +66,8 @@ def upgrade() -> None:
             (
                 "(new_payment_status IS NULL OR new_payment_status IN ("
                 "'not_required', 'unpaid', 'requires_action', 'processing', "
-                "'paid', 'failed', 'partially_refunded', 'refunded', 'disputed'))"
+                "'paid', 'failed', 'partially_refunded', 'refunded', "
+                "'credit_restored', 'disputed'))"
             ),
             name="ck_booking_status_history_new_payment_status",
         ),

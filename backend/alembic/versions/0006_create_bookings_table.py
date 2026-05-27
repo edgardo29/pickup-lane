@@ -89,7 +89,8 @@ def upgrade() -> None:
             (
                 "payment_status IN ("
                 "'not_required', 'unpaid', 'requires_action', 'processing', "
-                "'paid', 'failed', 'partially_refunded', 'refunded', 'disputed'"
+                "'paid', 'failed', 'partially_refunded', 'refunded', "
+                "'credit_restored', 'disputed'"
                 ")"
             ),
             name="ck_bookings_payment_status",

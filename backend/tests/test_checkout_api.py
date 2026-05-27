@@ -4,7 +4,17 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from backend.database import SessionLocal
-from backend.models import Booking, GameParticipant, Payment
+from backend.models import (
+    Booking,
+    GameCredit,
+    GameCreditUsage,
+    GameParticipant,
+    Payment,
+)
+from backend.services.game_credit_service import (
+    REDEEMED_USAGE_STATUS,
+    RESERVED_USAGE_STATUS,
+)
 from backend.services.stripe_service import StripePaymentIntentResult
 from backend.tests.helpers import (
     authenticate_as,
@@ -14,7 +24,32 @@ from backend.tests.helpers import (
     create_user_payment_method,
     create_venue,
     mock_checkout_payment_method_verification,
+    set_user_role,
+    unique_suffix,
 )
+
+
+def issue_game_credit(
+    client: TestClient,
+    *,
+    admin_id: str,
+    user_id: str,
+    game_id: str,
+    amount_cents: int,
+) -> dict:
+    authenticate_as(admin_id)
+    response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": user_id,
+            "amount_cents": amount_cents,
+            "credit_reason": "admin_credit",
+            "source_game_id": game_id,
+            "idempotency_key": f"checkout-credit-{unique_suffix()}",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 def test_checkout_payment_intent_requires_saved_payment_method(client: TestClient):
@@ -259,6 +294,300 @@ def test_checkout_payment_intent_can_use_saved_payment_method(
     assert payment["booking_id"] == body["booking_id"]
     assert payment["payment_status"] == "processing"
     assert payment["provider_payment_intent_id"] == "pi_checkout_saved_card"
+
+
+def test_checkout_payment_intent_with_partial_credit_charges_stripe_remainder(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    user = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue, price_per_player_cents=1500)
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=user["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
+    payment_method = create_user_payment_method(
+        client,
+        user["id"],
+        stripe_customer_id="cus_checkout_partial_credit",
+        stripe_payment_method_id="pm_checkout_partial_credit",
+    )
+    mock_checkout_payment_method_verification(monkeypatch, payment_method)
+    captured_create: dict[str, object] = {}
+
+    def fake_create_payment_intent(**kwargs):
+        captured_create.update(kwargs)
+        return StripePaymentIntentResult(
+            id="pi_checkout_partial_credit",
+            client_secret="pi_checkout_partial_credit_secret",
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret="pi_checkout_partial_credit_secret",
+            status="processing",
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+    authenticate_as(user["id"])
+
+    response = client.post(
+        f"/checkout/games/{game['id']}/payment-intent",
+        json={"guest_count": 0, "payment_method_id": payment_method["id"]},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["client_secret"] == "pi_checkout_partial_credit_secret"
+    assert body["payment_required"] is True
+    assert body["checkout_total_cents"] == 1500
+    assert body["available_credit_cents"] == 500
+    assert body["credit_applied_cents"] == 500
+    assert body["minimum_charge_adjustment_cents"] == 0
+    assert body["final_amount_due_cents"] == 1000
+    assert body["stripe_amount_cents"] == 1000
+    assert body["amount_cents"] == 1000
+    assert captured_create["amount_cents"] == 1000
+
+    with SessionLocal() as db:
+        booking = db.get(Booking, UUID(body["booking_id"]))
+        payment = db.get(Payment, UUID(body["payment_id"]))
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(body["booking_id"])
+            )
+        ).one()
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+
+    assert booking is not None
+    assert booking.subtotal_cents == 1500
+    assert booking.discount_cents == 500
+    assert booking.total_cents == 1000
+    assert payment is not None
+    assert payment.amount_cents == 1000
+    assert usage.amount_cents == 500
+    assert usage.usage_status == RESERVED_USAGE_STATUS
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 0
+    assert refreshed_credit.credit_status == "active"
+
+
+def test_checkout_status_admin_view_uses_buyer_credit_balance(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    user = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue, price_per_player_cents=1500)
+    issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=admin["id"],
+        game_id=game["id"],
+        amount_cents=3000,
+    )
+    issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=user["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
+    payment_method = create_user_payment_method(
+        client,
+        user["id"],
+        stripe_customer_id="cus_checkout_admin_status",
+        stripe_payment_method_id="pm_checkout_admin_status",
+    )
+    mock_checkout_payment_method_verification(monkeypatch, payment_method)
+
+    def fake_create_payment_intent(**kwargs):
+        return StripePaymentIntentResult(
+            id="pi_checkout_admin_status",
+            client_secret="pi_checkout_admin_status_secret",
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret="pi_checkout_admin_status_secret",
+            status="processing",
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
+    authenticate_as(user["id"])
+    checkout_response = client.post(
+        f"/checkout/games/{game['id']}/payment-intent",
+        json={"guest_count": 0, "payment_method_id": payment_method["id"]},
+    )
+    assert checkout_response.status_code == 201, checkout_response.text
+    checkout = checkout_response.json()
+    assert checkout["available_credit_cents"] == 500
+    assert checkout["credit_applied_cents"] == 500
+
+    authenticate_as(admin["id"])
+    status_response = client.get(
+        f"/checkout/bookings/{checkout['booking_id']}/status"
+    )
+
+    assert status_response.status_code == 200, status_response.text
+    status_body = status_response.json()
+    assert status_body["available_credit_cents"] == 500
+    assert status_body["credit_applied_cents"] == 500
+    assert status_body["final_amount_due_cents"] == 1000
+
+
+def test_checkout_full_credit_confirms_without_stripe_or_saved_card(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    user = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue, price_per_player_cents=1500)
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=user["id"],
+        game_id=game["id"],
+        amount_cents=1500,
+    )
+
+    def fail_create_payment_intent(**kwargs):
+        raise AssertionError("Stripe should not be called for full-credit checkout.")
+
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.create_payment_intent",
+        fail_create_payment_intent,
+    )
+    authenticate_as(user["id"])
+
+    response = client.post(
+        f"/checkout/games/{game['id']}/payment-intent",
+        json={"guest_count": 0},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["client_secret"] is None
+    assert body["payment_id"] is None
+    assert body["payment_required"] is False
+    assert body["checkout_total_cents"] == 1500
+    assert body["credit_applied_cents"] == 1500
+    assert body["minimum_charge_adjustment_cents"] == 0
+    assert body["final_amount_due_cents"] == 0
+    assert body["stripe_amount_cents"] == 0
+    assert body["booking_status"] == "confirmed"
+    assert body["booking_payment_status"] == "paid"
+
+    with SessionLocal() as db:
+        booking = db.get(Booking, UUID(body["booking_id"]))
+        payments = db.scalars(
+            select(Payment).where(Payment.booking_id == UUID(body["booking_id"]))
+        ).all()
+        participants = db.scalars(
+            select(GameParticipant).where(
+                GameParticipant.booking_id == UUID(body["booking_id"])
+            )
+        ).all()
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(body["booking_id"])
+            )
+        ).one()
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+
+    assert booking is not None
+    assert booking.booking_status == "confirmed"
+    assert booking.payment_status == "paid"
+    assert booking.subtotal_cents == 1500
+    assert booking.discount_cents == 1500
+    assert booking.total_cents == 0
+    assert payments == []
+    assert len(participants) == 1
+    assert participants[0].participant_status == "confirmed"
+    assert participants[0].roster_order == 1
+    assert usage.amount_cents == 1500
+    assert usage.usage_status == REDEEMED_USAGE_STATUS
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 0
+    assert refreshed_credit.credit_status == "used"
+
+
+def test_checkout_tiny_remainder_uses_minimum_charge_adjustment_without_stripe(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    user = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue, price_per_player_cents=1500)
+    issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=user["id"],
+        game_id=game["id"],
+        amount_cents=1475,
+    )
+
+    def fail_create_payment_intent(**kwargs):
+        raise AssertionError("Stripe should not be called for tiny remainder.")
+
+    monkeypatch.setattr(
+        "backend.routes.checkout_routes.create_payment_intent",
+        fail_create_payment_intent,
+    )
+    authenticate_as(user["id"])
+
+    response = client.post(
+        f"/checkout/games/{game['id']}/payment-intent",
+        json={"guest_count": 0},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["payment_required"] is False
+    assert body["credit_applied_cents"] == 1475
+    assert body["minimum_charge_adjustment_cents"] == 25
+    assert body["final_amount_due_cents"] == 0
+    assert body["stripe_amount_cents"] == 0
+
+    booking_response = client.get(f"/checkout/bookings/{body['booking_id']}/status")
+    assert booking_response.status_code == 200, booking_response.text
+    status_body = booking_response.json()
+    assert status_body["booking_status"] == "confirmed"
+    assert status_body["booking_payment_status"] == "paid"
+    assert status_body["credit_applied_cents"] == 1475
+    assert status_body["minimum_charge_adjustment_cents"] == 25
+    assert status_body["payment_required"] is False
 
 
 def test_checkout_payment_intent_rejects_frontend_amount(

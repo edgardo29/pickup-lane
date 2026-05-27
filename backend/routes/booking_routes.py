@@ -30,6 +30,7 @@ VALID_PAYMENT_STATUSES = {
     "failed",
     "partially_refunded",
     "refunded",
+    "credit_restored",
     "disputed",
 }
 VALID_CURRENCY = "USD"
@@ -85,7 +86,8 @@ def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
             detail=(
                 "payment_status must be 'unpaid', 'requires_action', "
                 "'not_required', 'processing', 'paid', 'failed', "
-                "'partially_refunded', 'refunded', or 'disputed'."
+                "'partially_refunded', 'refunded', 'credit_restored', "
+                "or 'disputed'."
             ),
         )
 
@@ -148,13 +150,14 @@ def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
         )
 
     if (
-        booking_data["payment_status"] in {"refunded", "partially_refunded"}
+        booking_data["payment_status"]
+        in {"refunded", "partially_refunded", "credit_restored"}
         and booking_data["booking_status"] not in CANCELLED_BOOKING_STATUSES
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Refunded or partially_refunded bookings must have "
+                "Refunded, partially_refunded, or credit_restored bookings must have "
                 "booking_status 'cancelled' or 'partially_cancelled'."
             ),
         )
@@ -292,7 +295,8 @@ def list_bookings(
                 detail=(
                     "payment_status must be 'unpaid', 'requires_action', "
                     "'not_required', 'processing', 'paid', 'failed', "
-                    "'partially_refunded', 'refunded', or 'disputed'."
+                    "'partially_refunded', 'refunded', 'credit_restored', "
+                    "or 'disputed'."
                 ),
             )
         statement = statement.where(Booking.payment_status == payment_status)

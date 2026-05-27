@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,11 @@ from backend.schemas import (
     GameCreditIssueCreate,
     GameCreditRead,
     GameCreditReverseCreate,
+)
+from backend.services.game_credit_service import (
+    REVERSED_USAGE_STATUS,
+    REVERSE_USAGE_TYPE,
+    get_available_game_credit_balance,
 )
 
 router = APIRouter(prefix="/game-credits", tags=["game_credits"])
@@ -64,7 +69,11 @@ def validate_official_source_game(db: Session, source_game_id: uuid.UUID | None)
         )
 
 
-@router.get("/balance", response_model=GameCreditBalanceRead, status_code=status.HTTP_200_OK)
+@router.get(
+    "/balance",
+    response_model=GameCreditBalanceRead,
+    status_code=status.HTTP_200_OK,
+)
 def get_game_credit_balance(
     user_id: uuid.UUID | None = None,
     current_user: User = Depends(get_current_app_user),
@@ -75,16 +84,15 @@ def get_game_credit_balance(
     if effective_user_id != current_user.id:
         require_admin(current_user)
 
-    balance = db.scalar(
-        select(func.coalesce(func.sum(GameCredit.remaining_cents), 0)).where(
-            GameCredit.user_id == effective_user_id,
-            GameCredit.credit_status == "active",
-        )
+    balance = get_available_game_credit_balance(
+        db,
+        effective_user_id,
+        now=datetime.now(timezone.utc),
     )
 
     return GameCreditBalanceRead(
         user_id=effective_user_id,
-        available_credit_cents=int(balance or 0),
+        available_credit_cents=balance,
     )
 
 
@@ -189,7 +197,11 @@ def reverse_game_credit(
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ) -> GameCredit:
-    game_credit = db.get(GameCredit, game_credit_id)
+    game_credit = db.scalars(
+        select(GameCredit)
+        .where(GameCredit.id == game_credit_id)
+        .with_for_update()
+    ).first()
 
     if game_credit is None:
         raise HTTPException(
@@ -197,23 +209,36 @@ def reverse_game_credit(
             detail="Game credit not found.",
         )
 
-    if game_credit.credit_status != "active" or game_credit.remaining_cents <= 0:
+    now = datetime.now(timezone.utc)
+    is_expired = game_credit.expires_at is not None and game_credit.expires_at <= now
+    if (
+        game_credit.credit_status != "active"
+        or game_credit.remaining_cents <= 0
+        or game_credit.remaining_cents != game_credit.amount_cents
+        or is_expired
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only active unused credit can be reversed.",
         )
 
-    now = datetime.now(timezone.utc)
-    idempotency_key = payload.idempotency_key or f"reverse-credit:{game_credit.id}:{uuid.uuid4()}"
+    idempotency_key = payload.idempotency_key or (
+        f"reverse-credit:{game_credit.id}:{uuid.uuid4()}"
+    )
     usage = GameCreditUsage(
         id=uuid.uuid4(),
         game_credit_id=game_credit.id,
         user_id=game_credit.user_id,
+        booking_id=game_credit.source_booking_id,
+        game_id=game_credit.source_game_id,
+        payment_id=game_credit.source_payment_id,
         amount_cents=game_credit.remaining_cents,
         currency="USD",
-        usage_type="reverse",
+        usage_type=REVERSE_USAGE_TYPE,
+        usage_status=REVERSED_USAGE_STATUS,
         idempotency_key=idempotency_key,
         created_at=now,
+        updated_at=now,
     )
     game_credit.remaining_cents = 0
     game_credit.credit_status = "reversed"

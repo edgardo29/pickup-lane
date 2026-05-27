@@ -40,6 +40,7 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameUpdate,
     AdminOfficialGameVenuePayload,
 )
+from backend.services.game_credit_service import release_reserved_game_credits
 
 PENDING_ADMIN_INVALIDATED_PAYMENT_STATUSES = {
     "requires_payment_method",
@@ -712,6 +713,13 @@ def expire_pending_checkouts_for_admin_edit(
     )
 
     for booking in pending_bookings:
+        release_reserved_game_credits(
+            db,
+            booking.id,
+            now=now,
+            release_reason="admin_game_updated",
+            user_id=booking.buyer_user_id,
+        )
         booking.booking_status = "expired"
         booking.payment_status = "failed"
         booking.cancel_reason = reason or "Official game details changed by admin."
@@ -1061,6 +1069,14 @@ def cancel_pending_booking_payments_for_admin_removal(
     reason: str | None,
     now: datetime,
 ) -> None:
+    release_reserved_game_credits(
+        db,
+        booking.id,
+        now=now,
+        release_reason="admin_player_removed",
+        user_id=booking.buyer_user_id,
+    )
+
     pending_payments = db.scalars(
         select(Payment).where(
             Payment.booking_id == booking.id,
