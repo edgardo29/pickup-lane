@@ -36,7 +36,7 @@ export function PaymentMethodSetupDialog({
 
 export function PaymentMethodSetupForm({
   cancelButtonClassName = '',
-  cancelLabel = 'Cancel',
+  cancelLabel = 'Back',
   defaultOption = null,
   firebaseUser,
   onCancel,

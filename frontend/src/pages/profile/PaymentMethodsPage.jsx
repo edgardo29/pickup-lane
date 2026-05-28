@@ -21,6 +21,7 @@ import {
 import { useAuth } from '../../hooks/useAuth.js'
 import { capitalize } from './profileFormatters.js'
 import { ProfileShell } from './ProfileShell.jsx'
+import { dismissOnBackdropMouseDown, useDismissibleModal } from './useModalBodyLock.js'
 
 const MAX_SAVED_PAYMENT_METHODS = 5
 
@@ -37,8 +38,8 @@ export function PaymentMethodsPage() {
   const location = useLocation()
   const searchParams = new URLSearchParams(location.search)
   const returnTo = getSafeReturnPath(searchParams.get('returnTo'))
-  const backTo = returnTo || '/settings'
-  const backLabel = returnTo ? 'Back to checkout' : 'Back to settings'
+  const backTo = returnTo || '/profile'
+  const backLabel = returnTo ? 'Back to checkout' : 'Back to profile'
   const [paymentMethods, setPaymentMethods] = useState([])
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
@@ -300,6 +301,7 @@ export function PaymentMethodsPage() {
                   setupError={setupError}
                   setupStatus={setupStatus}
                   cancelButtonClassName="profile-edit-cancel"
+                  cancelLabel="Back"
                   primaryButtonClassName="profile-primary-action"
                 />
               </Elements>
@@ -393,6 +395,13 @@ function RemovePaymentMethodModal({
 }) {
   const label = `${capitalize(method.card_brand || 'card')} ending ${method.card_last4}`
   const isRemoving = removeStatus === 'removing'
+  const handleCancel = () => {
+    if (!isRemoving) {
+      onCancel()
+    }
+  }
+
+  useDismissibleModal(handleCancel)
 
   return (
     <div
@@ -400,6 +409,7 @@ function RemovePaymentMethodModal({
       aria-modal="true"
       className="settings-modal"
       role="dialog"
+      onMouseDown={(event) => dismissOnBackdropMouseDown(event, handleCancel)}
     >
       <div className="settings-modal__card">
         <div>
@@ -410,10 +420,10 @@ function RemovePaymentMethodModal({
           <button
             className="profile-edit-cancel"
             disabled={isRemoving}
-            onClick={onCancel}
+            onClick={handleCancel}
             type="button"
           >
-            Cancel
+            Back
           </button>
           <button
             className="profile-primary-action profile-primary-action--danger"

@@ -16,8 +16,21 @@ export function useSettingsPageModel() {
     deleteAccount,
     logout,
   } = useAuth()
-  const { currentUser, settings, paymentMethods, status, error } = useProfileContext()
+  const {
+    currentUser,
+    gameCreditBalance,
+    paymentMethods,
+    settings,
+    stats,
+    status,
+    error,
+  } = useProfileContext()
+  const [currentUserOverride, setCurrentUserOverride] = useState(null)
   const [settingsOverride, setSettingsOverride] = useState(null)
+  const effectiveCurrentUser = useMemo(
+    () => (currentUser ? { ...currentUser, ...(currentUserOverride || {}) } : currentUser),
+    [currentUser, currentUserOverride],
+  )
   const effectiveSettings = useMemo(
     () => ({ ...settings, ...(settingsOverride || {}) }),
     [settings, settingsOverride],
@@ -38,7 +51,6 @@ export function useSettingsPageModel() {
     !providerIds.includes('password')
   const rows = buildSettingsRows({
     canAddPassword,
-    currentUser,
     defaultPaymentMethod,
     logout,
     navigate,
@@ -48,16 +60,28 @@ export function useSettingsPageModel() {
     onOpenPassword: passwordSettings.openPasswordModal,
   })
 
+  const handleProfileSaved = ({ currentUser: savedUser, settings: savedSettings }) => {
+    if (savedUser) {
+      setCurrentUserOverride(savedUser)
+    }
+    if (savedSettings) {
+      setSettingsOverride(savedSettings)
+    }
+  }
+
   return {
     ...rows,
     confirmPassword: passwordSettings.confirmPassword,
+    currentUser: effectiveCurrentUser,
     deleteConfirmation: deleteSettings.deleteConfirmation,
     deleteError: deleteSettings.deleteError,
     deleteStatus: deleteSettings.deleteStatus,
     emailNotificationsEnabled: notificationSettings.emailNotificationsEnabled,
     error,
+    gameCreditBalance,
     handleAddPassword: passwordSettings.handleAddPassword,
     handleDeleteAccount: deleteSettings.handleDeleteAccount,
+    handleProfileSaved,
     handleSaveNotifications: notificationSettings.handleSaveNotifications,
     isDeleteOpen: deleteSettings.isDeleteOpen,
     isNotificationOpen: notificationSettings.isNotificationOpen,
@@ -77,6 +101,8 @@ export function useSettingsPageModel() {
     setNewPassword: passwordSettings.setNewPassword,
     setShowNewPassword: passwordSettings.setShowNewPassword,
     showNewPassword: passwordSettings.showNewPassword,
+    settings: effectiveSettings,
     status,
+    stats,
   }
 }

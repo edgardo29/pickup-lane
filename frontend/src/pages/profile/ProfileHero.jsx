@@ -1,10 +1,19 @@
-import { Link } from 'react-router-dom'
 import { CalendarIcon, MapPinIcon } from '../../components/BrowseIcons.jsx'
 import { InitialsAvatar } from './ProfileAvatar.jsx'
-import { GearIcon, PencilIcon } from './ProfileIcons.jsx'
-import { formatLocation, formatMemberSince, getFullName } from './profileFormatters.js'
+import { GameCreditIcon, PencilIcon } from './ProfileIcons.jsx'
+import {
+  formatCreditAmount,
+  formatLocation,
+  formatMemberSince,
+  getFullName,
+} from './profileFormatters.js'
 
-export function ProfileHero({ currentUser, settings }) {
+export function ProfileHero({
+  currentUser,
+  gameCreditBalance,
+  onEditProfile,
+  settings,
+}) {
   return (
     <section className="profile-hero-card">
       <InitialsAvatar user={currentUser} size="large" />
@@ -15,10 +24,6 @@ export function ProfileHero({ currentUser, settings }) {
             <p className="profile-kicker">Player Profile</p>
             <h1>{getFullName(currentUser)}</h1>
           </div>
-
-          <Link className="profile-icon-button" to="/settings" aria-label="Open settings">
-            <GearIcon />
-          </Link>
         </div>
 
         <div className="profile-meta">
@@ -32,14 +37,26 @@ export function ProfileHero({ currentUser, settings }) {
           </span>
         </div>
 
-        <Link
-          className="profile-secondary-action"
-          state={{ from: '/profile', fromLabel: 'Back to profile' }}
-          to="/profile/edit"
-        >
-          <PencilIcon />
-          Edit profile
-        </Link>
+        <div className="profile-hero-actions">
+          <button
+            className="profile-secondary-action"
+            onClick={onEditProfile}
+            type="button"
+          >
+            <PencilIcon />
+            Edit profile
+          </button>
+          <div className="profile-credit-pill" aria-label="Available game credits">
+            <GameCreditIcon />
+            <span>Credits</span>
+            <strong>
+              {formatCreditAmount(
+                gameCreditBalance?.available_credit_cents,
+                gameCreditBalance?.currency,
+              )}
+            </strong>
+          </div>
+        </div>
       </div>
     </section>
   )
