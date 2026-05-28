@@ -31,6 +31,18 @@ export function getNotificationSummary(settings) {
     : 'Email notifications off'
 }
 
+export function formatCreditAmount(cents = 0, currency = 'USD') {
+  const amount = Math.max(0, cents) / 100
+  const hasCents = cents % 100 !== 0
+
+  return new Intl.NumberFormat('en-US', {
+    currency,
+    maximumFractionDigits: 2,
+    minimumFractionDigits: hasCents ? 2 : 0,
+    style: 'currency',
+  }).format(amount)
+}
+
 export function capitalize(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : ''
 }

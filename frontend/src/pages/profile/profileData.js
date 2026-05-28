@@ -6,6 +6,11 @@ export const emptyStats = {
   host_cancel_count: 0,
 }
 
+export const emptyGameCreditBalance = {
+  available_credit_cents: 0,
+  currency: 'USD',
+}
+
 export const emptySettings = {
   push_notifications_enabled: false,
   email_notifications_enabled: false,

@@ -1,12 +1,3 @@
-export function GearIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.2a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4A2 2 0 0 0 4 9.8l.2.1a2 2 0 0 1 1 1.7v.8a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.2a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.2a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.8a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.2a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  )
-}
-
 export function PencilIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -31,6 +22,42 @@ export function PaymentCardIcon() {
       <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
       <path d="M3.5 9h17" />
       <path d="M7 15h3" />
+    </svg>
+  )
+}
+
+export function GameCreditIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 7.5h15v9h-15Z" />
+      <path d="M7.5 7.5v9" />
+      <path d="M16.5 7.5v9" />
+      <path d="m12 10 1 1.7 1.9.4-1.3 1.4.2 1.9-1.8-.8-1.8.8.2-1.9-1.3-1.4 1.9-.4Z" />
+    </svg>
+  )
+}
+
+export function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 8.2a3.8 3.8 0 1 1 0 7.6 3.8 3.8 0 0 1 0-7.6Z" />
+      <path d="m4.8 13.5-.9-1.5.9-1.5 1.9-.4c.2-.6.5-1.1.9-1.6L7 6.7l1.5-.9 1.5 1.2c.6-.1 1.2-.1 1.8 0l1.5-1.2 1.5.9-.5 1.8c.4.5.7 1 .9 1.6l1.9.4.9 1.5-.9 1.5-1.9.4c-.2.6-.5 1.1-.9 1.6l.5 1.8-1.5.9-1.5-1.2c-.6.1-1.2.1-1.8 0l-1.5 1.2-1.5-.9.5-1.8c-.4-.5-.7-1-.9-1.6Z" />
+    </svg>
+  )
+}
+
+export function ControlsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 7h4" />
+      <circle cx="12" cy="7" r="2.2" />
+      <path d="M15 7h4" />
+      <path d="M5 12h9" />
+      <circle cx="17" cy="12" r="2.2" />
+      <path d="M20 12h-1" />
+      <path d="M5 17h7" />
+      <circle cx="15" cy="17" r="2.2" />
+      <path d="M18 17h1" />
     </svg>
   )
 }
@@ -105,6 +132,15 @@ export function EyeOffIcon() {
       <path d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2" />
       <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6 0 9.5 7 9.5 7a14.2 14.2 0 0 1-2.7 3.4" />
       <path d="M6.6 6.6C3.9 8.2 2.5 12 2.5 12s3.5 7 9.5 7c1.6 0 3-.4 4.2-1" />
+    </svg>
+  )
+}
+
+export function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m6 6 12 12" />
+      <path d="M18 6 6 18" />
     </svg>
   )
 }

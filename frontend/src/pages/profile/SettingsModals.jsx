@@ -1,4 +1,5 @@
 import { PasswordField } from './ProfileFields.jsx'
+import { dismissOnBackdropMouseDown, useDismissibleModal } from './useModalBodyLock.js'
 
 export function DeleteAccountModal({
   deleteConfirmation,
@@ -8,8 +9,22 @@ export function DeleteAccountModal({
   onConfirmationChange,
   onSubmit,
 }) {
+  const handleCancel = () => {
+    if (deleteStatus !== 'deleting' && deleteStatus !== 'success') {
+      onCancel()
+    }
+  }
+
+  useDismissibleModal(handleCancel)
+
   return (
-    <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+    <div
+      className="settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-account-title"
+      onMouseDown={(event) => dismissOnBackdropMouseDown(event, handleCancel)}
+    >
       <form className="settings-modal__card" onSubmit={onSubmit}>
         {deleteStatus === 'success' && (
           <p className="settings-modal__success" role="status">
@@ -41,10 +56,10 @@ export function DeleteAccountModal({
           <button
             className="profile-edit-cancel"
             disabled={deleteStatus === 'deleting' || deleteStatus === 'success'}
-            onClick={onCancel}
+            onClick={handleCancel}
             type="button"
           >
-            Cancel
+            Back
           </button>
           <button
             className="profile-primary-action profile-primary-action--danger"
@@ -71,8 +86,22 @@ export function NotificationSettingsModal({
   onEmailNotificationsChange,
   onSubmit,
 }) {
+  const handleCancel = () => {
+    if (notificationStatus !== 'saving') {
+      onCancel()
+    }
+  }
+
+  useDismissibleModal(handleCancel)
+
   return (
-    <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="notification-settings-title">
+    <div
+      className="settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="notification-settings-title"
+      onMouseDown={(event) => dismissOnBackdropMouseDown(event, handleCancel)}
+    >
       <form className="settings-modal__card settings-modal__card--neutral" onSubmit={onSubmit}>
         <div>
           <p className="profile-kicker">Preferences</p>
@@ -98,10 +127,10 @@ export function NotificationSettingsModal({
           <button
             className="profile-edit-cancel"
             disabled={notificationStatus === 'saving'}
-            onClick={onCancel}
+            onClick={handleCancel}
             type="button"
           >
-            Cancel
+            Back
           </button>
           <button
             className="profile-primary-action"
@@ -129,8 +158,22 @@ export function AddPasswordModal({
   passwordSuccess,
   showNewPassword,
 }) {
+  const handleClose = () => {
+    if (passwordStatus !== 'saving') {
+      onClose()
+    }
+  }
+
+  useDismissibleModal(handleClose)
+
   return (
-    <div className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="add-password-title">
+    <div
+      className="settings-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-password-title"
+      onMouseDown={(event) => dismissOnBackdropMouseDown(event, handleClose)}
+    >
       <form className="settings-modal__card settings-modal__card--neutral" onSubmit={onSubmit}>
         <div>
           <p className="profile-kicker">Account Access</p>
@@ -164,7 +207,7 @@ export function AddPasswordModal({
           <button
             className="profile-edit-cancel"
             disabled={passwordStatus === 'saving'}
-            onClick={onClose}
+            onClick={handleClose}
             type="button"
           >
             Close

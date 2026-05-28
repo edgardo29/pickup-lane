@@ -1,16 +1,13 @@
-import { Link } from 'react-router-dom'
-import { AppPageHeader } from '../../components/app/index.js'
 import {
   AddPasswordModal,
   DeleteAccountModal,
   NotificationSettingsModal,
 } from './SettingsModals.jsx'
-import { SettingsGroup } from './SettingsGroup.jsx'
-import { ProfileShell } from './ProfileShell.jsx'
+import { SettingsRow } from './SettingsGroup.jsx'
+import { ControlsIcon } from './ProfileIcons.jsx'
 
 function SettingsContent({
   accountAccessRows,
-  accountDetailRows,
   accountRows,
   confirmPassword,
   deleteConfirmation,
@@ -39,29 +36,44 @@ function SettingsContent({
   setNewPassword,
   setShowNewPassword,
   showNewPassword,
+  supportRows,
 }) {
-  return (
-    <ProfileShell>
-      <section className="settings-layout">
-        <div className="settings-main">
-          <div className="profile-subpage-heading">
-            <Link className="settings-header-back" to="/profile">
-              Back to profile
-            </Link>
-            <AppPageHeader
-              title="Settings"
-              subtitle="Update account preferences and support options."
-            />
-          </div>
+  const logOutRow = accountRows.find((row) => row.title === 'Log Out')
+  const deleteAccountRow = accountRows.find((row) => row.title === 'Delete Account')
+  const settingsRows = [
+    preferenceRows[0],
+    preferenceRows[1],
+    ...accountAccessRows,
+    supportRows[0],
+    supportRows[1],
+    supportRows[2],
+    logOutRow,
+  ].filter(Boolean)
 
-          <SettingsGroup title="Account Details" rows={accountDetailRows} />
-          <SettingsGroup title="Preferences & Account" rows={preferenceRows} />
-          {accountAccessRows.length > 0 && (
-            <SettingsGroup title="Account Access" rows={accountAccessRows} />
-          )}
-          <SettingsGroup title="Account" rows={accountRows} />
+  return (
+    <>
+      <section className="profile-settings-section profile-settings-section--manage" id="profile-settings" aria-labelledby="profile-settings-title">
+        <div className="profile-manage-heading">
+          <span className="profile-manage-heading__icon">
+            <ControlsIcon />
+          </span>
+          <div>
+            <h2 id="profile-settings-title">Manage</h2>
+            <p>Manage your preferences and account settings.</p>
+          </div>
+        </div>
+        <div className="profile-settings-grid">
+          {settingsRows.map((row) => (
+            <SettingsRow key={row.title} row={row} />
+          ))}
         </div>
       </section>
+
+      {deleteAccountRow && (
+        <section className="profile-danger-section" aria-label="Danger zone">
+          <SettingsRow row={deleteAccountRow} />
+        </section>
+      )}
 
       {isDeleteOpen && (
         <DeleteAccountModal
@@ -100,7 +112,7 @@ function SettingsContent({
           showNewPassword={showNewPassword}
         />
       )}
-    </ProfileShell>
+    </>
   )
 }
 

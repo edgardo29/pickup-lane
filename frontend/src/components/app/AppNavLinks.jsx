@@ -61,7 +61,6 @@ export function AppNavLinks({
 }) {
   const { pathname } = useLocation()
   const isAdmin = appUser?.role === 'admin'
-  const isAdminRoute = pathname.startsWith('/admin')
   const appSection = (
     <AppNavMenuSection
       closeMenu={closeMenu}
@@ -100,11 +99,6 @@ export function AppNavLinks({
 
       {isLoading ? (
         <span className="app-nav__loading-text">Loading your account</span>
-      ) : isAdminRoute ? (
-        <>
-          {adminSection}
-          {appSection}
-        </>
       ) : (
         <>
           {appSection}

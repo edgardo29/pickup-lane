@@ -169,6 +169,14 @@ export function AppRoutes() {
         }
       />
       <Route
+        path="/profile/payment-methods"
+        element={
+          <RequireAppUser>
+            <PaymentMethodsPage />
+          </RequireAppUser>
+        }
+      />
+      <Route
         path="/settings"
         element={
           <RequireAppUser>

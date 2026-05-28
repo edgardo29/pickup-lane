@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth.js'
-import { emptySettings, emptyStats } from './profileData.js'
+import { emptyGameCreditBalance, emptySettings, emptyStats } from './profileData.js'
 import { loadProfileData } from './profileApi.js'
 
 export function useProfileContext() {
   const { appUser, currentUser: firebaseUser, isLoading } = useAuth()
   const [currentUser, setCurrentUser] = useState(null)
+  const [gameCreditBalance, setGameCreditBalance] = useState(emptyGameCreditBalance)
   const [settings, setSettings] = useState(emptySettings)
   const [stats, setStats] = useState(emptyStats)
   const [paymentMethods, setPaymentMethods] = useState([])
@@ -32,6 +33,7 @@ export function useProfileContext() {
 
         if (!ignore) {
           setCurrentUser(appUser)
+          setGameCreditBalance(profileData.gameCreditBalance)
           setSettings(profileData.settings)
           setStats(profileData.stats)
           setPaymentMethods(profileData.paymentMethods)
@@ -53,7 +55,15 @@ export function useProfileContext() {
   }, [appUser, firebaseUser, isLoading])
 
   return useMemo(
-    () => ({ currentUser, error, paymentMethods, settings, stats, status }),
-    [currentUser, error, paymentMethods, settings, stats, status],
+    () => ({
+      currentUser,
+      error,
+      gameCreditBalance,
+      paymentMethods,
+      settings,
+      stats,
+      status,
+    }),
+    [currentUser, error, gameCreditBalance, paymentMethods, settings, stats, status],
   )
 }

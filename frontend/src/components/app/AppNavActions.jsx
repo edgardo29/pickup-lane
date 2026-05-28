@@ -1,4 +1,5 @@
 import { Link, NavLink } from 'react-router-dom'
+import { ShieldCheckIcon } from '../BrowseIcons.jsx'
 
 export function AppNavActions({
   appUser,
@@ -13,6 +14,7 @@ export function AppNavActions({
     <div className="app-nav__actions">
       {!isLoading && appUser?.role === 'admin' && (
         <NavLink className="app-nav__admin-link" to="/admin/official-games" onClick={closeMenu}>
+          <ShieldCheckIcon />
           Admin
         </NavLink>
       )}

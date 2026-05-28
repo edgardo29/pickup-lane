@@ -1,7 +1,4 @@
-import {
-  ShieldCheckIcon,
-  UserIcon,
-} from '../../components/BrowseIcons.jsx'
+import { ShieldCheckIcon } from '../../components/BrowseIcons.jsx'
 import {
   BellIcon,
   DocumentIcon,
@@ -13,12 +10,10 @@ import {
 } from './ProfileIcons.jsx'
 import {
   capitalize,
-  getFullName,
 } from './profileFormatters.js'
 
 export function buildSettingsRows({
   canAddPassword,
-  currentUser,
   defaultPaymentMethod,
   navigate,
   notificationSummary,
@@ -29,26 +24,14 @@ export function buildSettingsRows({
 }) {
   return {
     accountAccessRows: buildAccountAccessRows({ canAddPassword, onOpenPassword }),
-    accountDetailRows: buildAccountDetailRows({ currentUser }),
     accountRows: buildAccountRows({ logout, navigate, onOpenDelete }),
     preferenceRows: buildPreferenceRows({
       defaultPaymentMethod,
       notificationSummary,
       onOpenNotifications,
     }),
+    supportRows: buildSupportRows(),
   }
-}
-
-function buildAccountDetailRows({ currentUser }) {
-  return [
-    {
-      icon: <UserIcon />,
-      title: getFullName(currentUser),
-      text: currentUser?.email,
-      state: { from: '/settings', fromLabel: 'Back to settings' },
-      to: '/profile/edit',
-    },
-  ]
 }
 
 function buildPreferenceRows({
@@ -69,8 +52,13 @@ function buildPreferenceRows({
       text: defaultPaymentMethod
         ? `${capitalize(defaultPaymentMethod.card_brand)} ending ${defaultPaymentMethod.card_last4}`
         : 'No card on file',
-      to: '/settings/payment-methods',
+      to: '/profile/payment-methods',
     },
+  ]
+}
+
+function buildSupportRows() {
+  return [
     {
       icon: <HelpIcon />,
       title: 'Help & Support',
@@ -81,14 +69,14 @@ function buildPreferenceRows({
       title: 'Terms & Conditions',
       text: 'Read our terms of service',
       to: '/terms',
-      state: { from: '/settings', fromLabel: 'Back to Settings' },
+      state: { from: '/profile', fromLabel: 'Back to Profile' },
     },
     {
       icon: <ShieldCheckIcon />,
       title: 'Privacy Policy',
       text: 'How we handle your data',
       to: '/privacy',
-      state: { from: '/settings', fromLabel: 'Back to Settings' },
+      state: { from: '/profile', fromLabel: 'Back to Profile' },
     },
   ]
 }
