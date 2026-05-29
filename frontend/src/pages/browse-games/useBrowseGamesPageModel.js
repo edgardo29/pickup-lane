@@ -96,12 +96,8 @@ export function useBrowseGamesPageModel() {
 
   function selectDatePage(nextPageIndex) {
     const safePageIndex = Math.min(Math.max(nextPageIndex, 0), Math.max(datePageCount - 1, 0))
-    const nextDate = dateOptions[safePageIndex * DATE_PAGE_SIZE]
 
     setDatePageIndex(safePageIndex)
-    if (nextDate) {
-      setSelectedDateKey(nextDate.key)
-    }
   }
 
   return {
