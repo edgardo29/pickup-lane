@@ -592,30 +592,29 @@
   }
 
   .app-nav__menu-section-title {
-    min-height: 28px;
-    margin: 8px 0 4px;
-    padding: 0 0 0 16px;
-    border-radius: 0;
-    color: rgba(248, 250, 252, 0.82);
-    background: transparent;
+    width: fit-content;
+    min-height: 34px;
+    margin: 10px 0 6px;
+    padding: 0 12px;
+    border: 1px solid rgba(248, 250, 252, 0.08);
+    border-radius: 999px;
+    color: rgba(248, 250, 252, 0.66);
+    background:
+      linear-gradient(180deg, rgba(248, 250, 252, 0.035), rgba(248, 250, 252, 0.01)),
+      rgba(5, 10, 16, 0.52);
     display: inline-flex;
     align-items: center;
-    font-size: 0.7rem;
+    justify-self: start;
+    font-size: 0.68rem;
     font-weight: 950;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.18em;
     position: relative;
     text-transform: uppercase;
+    box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
   }
 
   .app-nav__menu-section-title::before {
-    content: "";
-    width: 3px;
-    height: 14px;
-    border-radius: 999px;
-    background: var(--lime);
-    box-shadow: 0 0 10px rgba(184, 255, 36, 0.32);
-    position: absolute;
-    left: 0;
+    content: none;
   }
 
   .app-nav__menu-user span {
@@ -665,9 +664,27 @@
     background: rgba(248, 250, 252, 0.026);
   }
 
+  .app-nav__link.active {
+    min-height: 44px;
+    padding-left: 30px;
+    overflow: hidden;
+    background:
+      linear-gradient(115deg, rgba(248, 250, 252, 0.055), rgba(248, 250, 252, 0.018) 55%, rgba(139, 184, 230, 0.028)),
+      linear-gradient(180deg, rgba(248, 250, 252, 0.048), rgba(248, 250, 252, 0.012)),
+      rgba(12, 20, 29, 0.92);
+  }
+
   .app-nav__link.active::after {
-    right: 14px;
-    left: 14px;
+    width: 5px;
+    height: auto;
+    border-radius: 10px 0 0 10px;
+    background: var(--lime);
+    box-shadow: none;
+    pointer-events: none;
+    right: auto;
+    bottom: 0;
+    left: 0;
+    top: 0;
   }
 
   .app-nav__admin-link {

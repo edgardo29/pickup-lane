@@ -76,7 +76,7 @@ export function getDateKey(value) {
 }
 
 export function getVisibleGames(games, nowMs) {
-  const upcomingGames = games
+  return games
     .filter(
       (game) => {
         const browseVisibleUntil =
@@ -84,16 +84,13 @@ export function getVisibleGames(games, nowMs) {
 
         return (
           !game.deleted_at &&
+          game.publish_status === 'published' &&
           game.game_status !== 'cancelled' &&
           browseVisibleUntil > nowMs
         )
       },
     )
     .sort((first, second) => new Date(first.starts_at) - new Date(second.starts_at))
-
-  const publishedGames = upcomingGames.filter((game) => game.publish_status === 'published')
-
-  return publishedGames.length > 0 ? publishedGames : upcomingGames
 }
 
 export function groupGamesByHour(games) {
