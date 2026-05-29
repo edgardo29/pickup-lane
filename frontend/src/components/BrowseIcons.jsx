@@ -51,6 +51,18 @@ export function ChevronDownIcon() {
   )
 }
 
+export function ClipboardListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="4.8" width="14" height="16" rx="2" />
+      <path d="M9 4.8c.2-1.2 1.2-2 3-2s2.8.8 3 2" />
+      <path d="M9 9.2h6" />
+      <path d="M9 13h6" />
+      <path d="M9 16.8h4" />
+    </svg>
+  )
+}
+
 export function FilterIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -170,6 +182,16 @@ export function PriceTagIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4.5 12.8V5.5h7.3l7.7 7.7-7.3 7.3Z" />
       <circle cx="8.4" cy="8.4" r="1.3" />
+    </svg>
+  )
+}
+
+export function DollarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 6.8v10.4" />
+      <path d="M15.2 9.2c-.6-1-1.6-1.5-3-1.5-1.6 0-2.7.8-2.7 2s1 1.7 2.8 2.1c1.9.5 2.9 1.1 2.9 2.4s-1.1 2.1-3 2.1c-1.5 0-2.7-.6-3.4-1.7" />
     </svg>
   )
 }

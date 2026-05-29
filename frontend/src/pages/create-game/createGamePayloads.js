@@ -26,6 +26,7 @@ export function buildCommunityPublishPayload(form, currentUser, paymentMethod) {
     },
     payment_methods_snapshot: serializePaymentMethods(form.paymentMethods),
     payment_instructions_snapshot: null,
+    custom_rules_text: (form.hostRules || '').trim() || null,
     game_notes: form.gameNotes.trim() || null,
     parking_notes: form.parkingNote.trim() || null,
     payment_method_id: paymentMethod?.id || null,
@@ -47,6 +48,7 @@ export function buildHostEditPayload(form, currentUser) {
     state: normalizeUsStateCode(form.state) || form.state.trim().toUpperCase(),
     postal_code: form.zip.trim(),
     neighborhood: form.neighborhood.trim() || null,
+    custom_rules_text: (form.hostRules || '').trim() || null,
     game_notes: form.gameNotes.trim() || null,
     parking_notes: form.parkingNote.trim() || null,
   }

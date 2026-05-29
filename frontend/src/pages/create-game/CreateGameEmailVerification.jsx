@@ -1,3 +1,5 @@
+import { MailIcon, SendIcon } from '../../components/AuthIcons.jsx'
+
 export function EmailVerificationBlocker({ cooldownSeconds, error, notice, onSend, status }) {
   const isSending = status === 'sending'
   const isCoolingDown = cooldownSeconds > 0
@@ -11,7 +13,10 @@ export function EmailVerificationBlocker({ cooldownSeconds, error, notice, onSen
 
   return (
     <section className="create-game-blocker">
-      <div>
+      <span className="create-game-blocker__icon" aria-hidden="true">
+        <MailIcon />
+      </span>
+      <div className="create-game-blocker__copy">
         <p>{status === 'sent' ? 'Email verification sent' : 'Email verification required'}</p>
         <h2>{status === 'sent' ? 'Check your email to continue.' : 'Verify your email to become a host.'}</h2>
         <span>
@@ -27,6 +32,7 @@ export function EmailVerificationBlocker({ cooldownSeconds, error, notice, onSen
           type="button"
           onClick={onSend}
         >
+          <SendIcon />
           {buttonLabel}
         </button>
         {notice && <strong className="create-game-blocker__notice">{notice}</strong>}

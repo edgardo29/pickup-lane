@@ -22,6 +22,7 @@ export function mapGameToForm(game, venue, communityDetails = null) {
     neighborhood: venue?.neighborhood || game.neighborhood_snapshot || '',
     parkingNote: game.parking_notes || '',
     gameNotes: game.game_notes || '',
+    hostRules: game.custom_rules_text || '',
     paymentMethods: normalizePaymentMethods(
       communityDetails?.payment_methods_snapshot,
     ),

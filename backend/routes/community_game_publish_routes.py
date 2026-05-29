@@ -157,7 +157,7 @@ def build_game_data(
         "waitlist_enabled": True,
         "is_chat_enabled": True,
         "policy_mode": "custom_hosted",
-        "custom_rules_text": None,
+        "custom_rules_text": publish_data.custom_rules_text,
         "custom_cancellation_text": None,
         "game_notes": publish_data.game_notes,
         "parking_notes": publish_data.parking_notes,

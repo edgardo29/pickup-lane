@@ -23,11 +23,12 @@ export function FormField({ icon, label, children }) {
   )
 }
 
-export function TextInput({ form, updateField, field, label, placeholder }) {
+export function TextInput({ form, updateField, field, label, maxLength, placeholder }) {
   return (
     <label className="create-game-text-field">
       <span>{label}</span>
       <input
+        maxLength={maxLength}
         placeholder={placeholder}
         value={form[field]}
         onChange={(event) => updateField(field, event.target.value)}
@@ -85,7 +86,6 @@ export function StepperInput({ value, min, max, onChange }) {
 export function CurrencyInput({ value, onChange }) {
   return (
     <div className="create-game-money-input">
-      <span>$</span>
       <input
         inputMode="numeric"
         pattern="[0-9]*"
@@ -96,10 +96,10 @@ export function CurrencyInput({ value, onChange }) {
   )
 }
 
-export function TextareaInput({ form, updateField, field, label, maxLength, placeholder }) {
+export function TextareaInput({ form, updateField, field, hideLabel = false, label, maxLength, placeholder }) {
   return (
     <label className="create-game-textarea-field">
-      <span>{label}</span>
+      <span className={hideLabel ? 'create-game-sr-only' : undefined}>{label}</span>
       <textarea
         maxLength={maxLength}
         placeholder={placeholder}
@@ -111,9 +111,9 @@ export function TextareaInput({ form, updateField, field, label, maxLength, plac
   )
 }
 
-export function ReviewRow({ icon, label, value }) {
+export function ReviewRow({ icon, label, value, wide = false }) {
   return (
-    <div className="create-game-review-row">
+    <div className={`create-game-review-row${wide ? ' create-game-review-row--wide' : ''}`}>
       {icon}
       <span>{label}</span>
       <strong>{value}</strong>

@@ -34,6 +34,7 @@ class CommunityGamePublishCreate(BaseModel):
     venue: CommunityGameVenuePayload
     payment_methods_snapshot: list[dict] = Field(default_factory=list)
     payment_instructions_snapshot: str | None = None
+    custom_rules_text: str | None = None
     game_notes: str | None = None
     parking_notes: str | None = None
     payment_method_id: UUID | None = None

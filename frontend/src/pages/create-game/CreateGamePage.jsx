@@ -6,6 +6,7 @@ import '../../styles/create-game/CreateGamePage.css'
 import { CreateGameLayout } from './CreateGameLayout.jsx'
 import { PublishedState } from './CreateGamePreview.jsx'
 import {
+  createGameFieldLimits,
   steps,
 } from './createGameData.js'
 import { buildReview } from './createGameFormatters.js'
@@ -46,6 +47,7 @@ function CreateGamePage() {
     firstPublishIsFree,
     form,
     formBaseline,
+    isContextLoading,
     loadError,
     paymentMethod,
     setCreatedGameId,
@@ -59,7 +61,14 @@ function CreateGamePage() {
     refreshCurrentUserVerification,
   })
   const visibleUser = currentUser || appUser
-  const isWaitingForUser = isLoading && !visibleUser
+  const isVerifiedContextPending = Boolean(
+    appUser?.id && !currentUser && !loadError && (isEditMode || appUser.email_verified_at),
+  )
+  const isWaitingForUser = (
+    (isLoading && !visibleUser) ||
+    (isContextLoading && !loadError) ||
+    isVerifiedContextPending
+  )
   const isHostEmailVerified = Boolean(visibleUser?.email_verified_at)
   const shouldBlockForEmailVerification = visibleUser && !isEditMode && !isHostEmailVerified
   const {
@@ -89,7 +98,9 @@ function CreateGamePage() {
   )
   function updateField(field, value) {
     clearPublishFeedback()
-    setForm((currentForm) => ({ ...currentForm, [field]: value }))
+    const limit = createGameFieldLimits[field]
+    const nextValue = typeof value === 'string' && limit ? value.slice(0, limit) : value
+    setForm((currentForm) => ({ ...currentForm, [field]: nextValue }))
   }
 
   function goNext() {

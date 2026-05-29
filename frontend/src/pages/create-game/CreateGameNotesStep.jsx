@@ -1,9 +1,9 @@
 import {
   PaymentMethodsEditor,
-  SectionLabel,
   StepHeading,
   TextareaInput,
 } from './CreateGameControls.jsx'
+import { createGameFieldLimits } from './createGameData.js'
 
 export function NotesStep({ form, updateField }) {
   const isFreeGame = Number(form.price) === 0
@@ -15,23 +15,34 @@ export function NotesStep({ form, updateField }) {
         text="Add anything players should know before they join."
       />
 
-      <div className="create-game-section">
-        <SectionLabel>Host Payment</SectionLabel>
-        <PaymentMethodsEditor
-          allowNoPayment={isFreeGame}
-          methods={form.paymentMethods}
-          onChange={(methods) => updateField('paymentMethods', methods)}
-        />
-      </div>
+      <div className="create-game-notes-layout">
+        <section className="create-game-notes-section create-game-notes-fields">
+          <TextareaInput
+            form={form}
+            updateField={updateField}
+            field="gameNotes"
+            label="Game notes (optional)"
+            maxLength={createGameFieldLimits.gameNotes}
+            placeholder="Share any important info with players."
+          />
+          <TextareaInput
+            form={form}
+            updateField={updateField}
+            field="hostRules"
+            label="Host rules (optional)"
+            maxLength={createGameFieldLimits.hostRules}
+            placeholder="Share any attendance, cancellation, or player expectations."
+          />
+        </section>
 
-      <TextareaInput
-        form={form}
-        updateField={updateField}
-        field="gameNotes"
-        label="Game notes"
-        maxLength={200}
-        placeholder="Share any important info with players..."
-      />
+        <section className="create-game-notes-section create-game-notes-section--payment">
+          <PaymentMethodsEditor
+            allowNoPayment={isFreeGame}
+            methods={form.paymentMethods}
+            onChange={(methods) => updateField('paymentMethods', methods)}
+          />
+        </section>
+      </div>
     </>
   )
 }

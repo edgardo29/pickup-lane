@@ -1,4 +1,7 @@
-import { defaultPaymentMethods } from './createGameData.js'
+import {
+  defaultPaymentMethods,
+  MAX_HOST_PAYMENT_METHODS,
+} from './createGameData.js'
 
 export function getPriceCents(form) {
   return Number(form.price) * 100
@@ -11,6 +14,7 @@ export function normalizePaymentMethods(paymentMethods) {
 
   const normalizedMethods = paymentMethods
     .filter((method) => method && typeof method === 'object')
+    .slice(0, MAX_HOST_PAYMENT_METHODS)
     .map((method) => ({
       type: typeof method.type === 'string' ? method.type : 'other',
       value: typeof method.value === 'string' ? method.value : '',
@@ -35,6 +39,7 @@ export function serializePaymentMethods(paymentMethods) {
 
   return paymentMethods
     .filter((method) => method && typeof method === 'object')
+    .slice(0, MAX_HOST_PAYMENT_METHODS)
     .map((method) => ({
       type: typeof method.type === 'string' && method.type ? method.type : 'other',
       value: method.type === 'cash'
