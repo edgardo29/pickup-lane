@@ -5,11 +5,13 @@ export function StepRail({ activeStep }) {
     <ol className="create-game-steps" aria-label="Create game progress">
       {steps.map((step) => (
         <li
-          className={step.id === activeStep ? 'active' : step.id < activeStep ? 'complete' : ''}
+          className={`create-game-step ${step.id === activeStep ? 'active' : step.id < activeStep ? 'complete' : ''}`.trim()}
           key={step.id}
         >
-          <span>{step.id}</span>
-          <strong>{step.label}</strong>
+          <span className="create-game-step__content">
+            <span className="create-game-step__marker">{step.id}</span>
+            <strong>{step.label}</strong>
+          </span>
         </li>
       ))}
     </ol>

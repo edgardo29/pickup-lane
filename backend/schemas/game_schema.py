@@ -172,6 +172,7 @@ class GameHostEdit(BaseModel):
     environment_type: str | None = None
     total_spots: int | None = None
     price_per_player_cents: int | None = None
+    custom_rules_text: str | None = None
     game_notes: str | None = None
     parking_notes: str | None = None
 

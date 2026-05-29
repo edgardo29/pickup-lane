@@ -2,7 +2,7 @@ import {
   BuildingIcon,
   CalendarIcon,
   ClockIcon,
-  SoccerBallIcon,
+  DollarIcon,
   UsersIcon,
 } from '../../components/BrowseIcons.jsx'
 import {
@@ -10,11 +10,11 @@ import {
   FormField,
   SectionLabel,
   StepHeading,
-  StepperInput,
 } from './CreateGameControls.jsx'
 import {
   environmentOptions,
   formatOptions,
+  MAX_TOTAL_SPOTS,
   timeOptions,
 } from './createGameData.js'
 import { clampDate, getTodayDate } from './createGameSchedule.js'
@@ -22,6 +22,10 @@ import { getMinimumSpotsForFormat } from './createGameValidation.js'
 
 export function BasicsStep({ form, updateField }) {
   const minimumSpots = getMinimumSpotsForFormat(form.format)
+  const totalSpotOptions = Array.from(
+    { length: MAX_TOTAL_SPOTS - minimumSpots + 1 },
+    (_, index) => minimumSpots + index,
+  )
 
   function handleFormatChange(nextFormat) {
     updateField('format', nextFormat)
@@ -54,7 +58,7 @@ export function BasicsStep({ form, updateField }) {
 
       <div className="create-game-section">
         <SectionLabel>When</SectionLabel>
-        <div className="create-game-grid">
+        <div className="create-game-grid create-game-grid--when">
           <FormField icon={<CalendarIcon />} label="Date">
             <input
               value={form.date}
@@ -93,8 +97,8 @@ export function BasicsStep({ form, updateField }) {
       </div>
 
       <div className="create-game-section">
-        <SectionLabel>Game Setup</SectionLabel>
-        <div className="create-game-grid">
+        <SectionLabel>Game Details</SectionLabel>
+        <div className="create-game-grid create-game-grid--four">
           <FormField icon={<UsersIcon />} label="Format">
             <select
               aria-label="Format"
@@ -121,21 +125,20 @@ export function BasicsStep({ form, updateField }) {
               ))}
             </select>
           </FormField>
-        </div>
-      </div>
-
-      <div className="create-game-section">
-        <SectionLabel>Spots & Price</SectionLabel>
-        <div className="create-game-grid">
           <FormField icon={<UsersIcon />} label="Total spots">
-            <StepperInput
+            <select
+              aria-label="Total spots"
               value={form.totalSpots}
-              min={minimumSpots}
-              max={99}
-              onChange={(value) => updateField('totalSpots', value)}
-            />
+              onChange={(event) => updateField('totalSpots', Number(event.target.value))}
+            >
+              {totalSpotOptions.map((spots) => (
+                <option key={spots} value={spots}>
+                  {spots}
+                </option>
+              ))}
+            </select>
           </FormField>
-          <FormField icon={<SoccerBallIcon />} label="Price per player">
+          <FormField icon={<DollarIcon />} label="Price per player">
             <CurrencyInput
               value={form.price}
               onChange={handlePriceChange}

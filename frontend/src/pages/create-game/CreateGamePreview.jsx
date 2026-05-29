@@ -1,26 +1,29 @@
 import { Link } from 'react-router-dom'
-import { ShieldCheckIcon } from '../../components/AuthIcons.jsx'
+import { ShieldCheckIcon as SuccessShieldIcon } from '../../components/AuthIcons.jsx'
 import {
   BuildingIcon,
   CalendarIcon,
+  ChatIcon,
+  ClipboardListIcon,
   ClockIcon,
   MapPinIcon,
   UsersIcon,
 } from '../../components/BrowseIcons.jsx'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
-import { COMMUNITY_PUBLISH_FEE_CENTS } from './createGameData.js'
 import {
   buildPreviewLocation,
   capitalize,
   formatMoney,
 } from './createGameFormatters.js'
 
-export function CreateGamePreview({ firstPublishIsFree, form, review }) {
+export function CreateGamePreview({ form, review }) {
+  const previewTitle = form.venueName ? `${form.venueName} ${form.format}` : `Community ${form.format}`
+
   return (
     <aside className="create-game-preview" aria-label="Game preview">
       <div className="create-game-preview__header">
         <span>Live preview</span>
-        <strong>{form.venueName ? `${form.venueName} ${form.format}` : `Community ${form.format}`}</strong>
+        <strong title={previewTitle}>{previewTitle}</strong>
       </div>
 
       <div className="create-game-preview__facts">
@@ -31,23 +34,25 @@ export function CreateGamePreview({ firstPublishIsFree, form, review }) {
         <PreviewFact icon={<BuildingIcon />} label={capitalize(form.environment)} />
       </div>
 
+      <div className="create-game-preview__notes">
+        <PreviewNote
+          icon={<ChatIcon />}
+          label="Game notes"
+          text={form.gameNotes || 'Add a note so players know what to bring.'}
+        />
+        {(form.hostRules || '').trim() && (
+          <PreviewNote
+            icon={<ClipboardListIcon />}
+            label="Host rules"
+            text={form.hostRules}
+          />
+        )}
+      </div>
+
       <div className="create-game-preview__money">
         <span>Player price</span>
         <strong>{formatMoney(Number(form.price) * 100)}</strong>
       </div>
-
-      <div className="create-game-preview__money">
-        <span>Publish fee</span>
-        <strong>{firstPublishIsFree ? 'Free' : formatMoney(COMMUNITY_PUBLISH_FEE_CENTS)}</strong>
-      </div>
-
-      <p className="create-game-preview__note">
-        {form.gameNotes || 'Add a note so players know what to bring.'}
-      </p>
-
-      <p className="create-game-preview__card">
-        {firstPublishIsFree ? 'First community game fee waived' : 'Publish fee charged when published'}
-      </p>
     </aside>
   )
 }
@@ -58,7 +63,7 @@ export function PublishedState({ gameId }) {
       <BrowseAppNav />
       <main className="create-game-success">
         <div className="create-game-success__mark">
-          <ShieldCheckIcon />
+          <SuccessShieldIcon />
         </div>
         <h1>Game Published!</h1>
         <p>Your community game is now live and visible to players.</p>
@@ -71,11 +76,23 @@ export function PublishedState({ gameId }) {
   )
 }
 
+function PreviewNote({ icon, label, text }) {
+  return (
+    <div className="create-game-preview__note">
+      {icon}
+      <div>
+        <strong>{label}</strong>
+        <p>{text}</p>
+      </div>
+    </div>
+  )
+}
+
 function PreviewFact({ icon, label }) {
   return (
-    <span>
+    <span className="create-game-preview__fact">
       {icon}
-      {label}
+      <span className="create-game-preview__fact-label">{label}</span>
     </span>
   )
 }

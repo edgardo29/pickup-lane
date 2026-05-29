@@ -2978,7 +2978,9 @@ def host_edit_game(
         "waitlist_enabled": db_game.waitlist_enabled,
         "is_chat_enabled": db_game.is_chat_enabled,
         "policy_mode": db_game.policy_mode,
-        "custom_rules_text": db_game.custom_rules_text,
+        "custom_rules_text": update_data.get(
+            "custom_rules_text", db_game.custom_rules_text
+        ),
         "custom_cancellation_text": db_game.custom_cancellation_text,
         "game_notes": update_data.get("game_notes", db_game.game_notes),
         "parking_notes": update_data.get("parking_notes", db_game.parking_notes),

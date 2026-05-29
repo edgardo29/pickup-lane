@@ -3,7 +3,20 @@ import { formatTime, getDefaultDate } from './createGameSchedule.js'
 export { US_STATE_OPTIONS } from '../../data/usStates.js'
 
 export const COMMUNITY_PUBLISH_FEE_CENTS = 499
+export const MAX_HOST_PAYMENT_METHODS = 2
+export const MAX_TOTAL_SPOTS = 99
 export const MINIMUM_TOTAL_SPOTS = 6
+
+export const createGameFieldLimits = {
+  venueName: 60,
+  street: 80,
+  city: 50,
+  zip: 10,
+  neighborhood: 40,
+  parkingNote: 120,
+  gameNotes: 200,
+  hostRules: 200,
+}
 
 export const formatOptions = ['3v3', '4v4', '5v5', '6v6', '7v7', '8v8', '9v9', '10v10', '11v11']
 
@@ -60,5 +73,6 @@ export const initialForm = {
   neighborhood: '',
   parkingNote: '',
   gameNotes: '',
+  hostRules: '',
   paymentMethods: defaultPaymentMethods,
 }

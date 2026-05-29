@@ -4,7 +4,7 @@ import {
   TextareaInput,
   TextInput,
 } from './CreateGameControls.jsx'
-import { US_STATE_OPTIONS } from './createGameData.js'
+import { createGameFieldLimits, US_STATE_OPTIONS } from './createGameData.js'
 
 export function LocationStep({ form, updateField }) {
   return (
@@ -14,52 +14,73 @@ export function LocationStep({ form, updateField }) {
         text="Add the venue details players will see on the game page."
       />
 
-      <div className="create-game-grid create-game-grid--single">
-        <TextInput
-          form={form}
-          updateField={updateField}
-          field="venueName"
-          label="Venue name"
-          placeholder="e.g. Brooklyn Sports Hub"
-        />
-        <TextInput
-          form={form}
-          updateField={updateField}
-          field="street"
-          label="Street address"
-          placeholder="160 5th St"
-        />
+      <div className="create-game-location-fields">
+        <div className="create-game-location-field create-game-location-field--venue">
+          <TextInput
+            form={form}
+            updateField={updateField}
+            field="venueName"
+            label="Venue name"
+            maxLength={createGameFieldLimits.venueName}
+          />
+        </div>
+        <div className="create-game-location-field create-game-location-field--street">
+          <TextInput
+            form={form}
+            updateField={updateField}
+            field="street"
+            label="Street address"
+            maxLength={createGameFieldLimits.street}
+          />
+        </div>
+        <div className="create-game-location-field create-game-location-field--city">
+          <TextInput
+            form={form}
+            updateField={updateField}
+            field="city"
+            label="City"
+            maxLength={createGameFieldLimits.city}
+          />
+        </div>
+        <div className="create-game-location-field create-game-location-field--state">
+          <SelectInput
+            field="state"
+            form={form}
+            label="State"
+            options={US_STATE_OPTIONS}
+            updateField={updateField}
+          />
+        </div>
+        <div className="create-game-location-field create-game-location-field--zip">
+          <TextInput
+            form={form}
+            updateField={updateField}
+            field="zip"
+            label="ZIP code"
+            maxLength={createGameFieldLimits.zip}
+          />
+        </div>
+        <div className="create-game-location-field create-game-location-field--neighborhood">
+          <TextInput
+            form={form}
+            updateField={updateField}
+            field="neighborhood"
+            label="Neighborhood (optional)"
+            maxLength={createGameFieldLimits.neighborhood}
+          />
+        </div>
       </div>
 
-      <div className="create-game-grid create-game-grid--two">
-        <TextInput form={form} updateField={updateField} field="city" label="City" placeholder="Brooklyn" />
-        <SelectInput
-          field="state"
-          form={form}
-          label="State"
-          options={US_STATE_OPTIONS}
-          updateField={updateField}
-        />
-        <TextInput form={form} updateField={updateField} field="zip" label="ZIP code" placeholder="11215" />
-        <TextInput
+      <div className="create-game-location-note">
+        <TextareaInput
           form={form}
           updateField={updateField}
-          field="neighborhood"
-          label="Neighborhood (optional)"
-          placeholder="Park Slope"
+          field="parkingNote"
+          label="Parking note (optional)"
+          maxLength={createGameFieldLimits.parkingNote}
+          placeholder="Share parking info or nearby options."
         />
       </div>
-
-      <div className="create-game-divider" />
-
-      <TextareaInput
-        form={form}
-        updateField={updateField}
-        field="parkingNote"
-        label="Parking note (optional)"
-        maxLength={120}
-        placeholder="Share parking info or nearby options."
-      />
     </>
   )
 }

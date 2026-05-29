@@ -1680,6 +1680,7 @@ def test_publish_community_game_endpoint_creates_publish_records_transactionally
                 "neighborhood": "Loop",
             },
             "payment_methods_snapshot": [{"type": "venmo", "value": "@host"}],
+            "custom_rules_text": "Please cancel early if you cannot make it.",
             "game_notes": "Bring a ball.",
         },
     )
@@ -1688,6 +1689,7 @@ def test_publish_community_game_endpoint_creates_publish_records_transactionally
     game = response.json()["game"]
     assert game["game_type"] == "community"
     assert game["host_user_id"] == host["id"]
+    assert game["custom_rules_text"] == "Please cancel early if you cannot make it."
 
     participants_response = client.get(f"/game-participants?game_id={game['id']}")
     assert participants_response.status_code == 200, participants_response.text
@@ -1790,6 +1792,7 @@ def test_host_edit_allows_host_to_update_empty_community_game(client: TestClient
             "state": "IL",
             "postal_code": "60607",
             "neighborhood": "West Loop",
+            "custom_rules_text": "Arrive 10 minutes early.",
             "game_notes": "Bring a light and dark shirt.",
         },
     )
@@ -1799,6 +1802,7 @@ def test_host_edit_allows_host_to_update_empty_community_game(client: TestClient
     assert updated_game["format_label"] == "7v7"
     assert updated_game["price_per_player_cents"] == 2500
     assert updated_game["venue_name_snapshot"] == "New Community Field"
+    assert updated_game["custom_rules_text"] == "Arrive 10 minutes early."
     assert updated_game["game_notes"] == "Bring a light and dark shirt."
 
 
@@ -1894,10 +1898,15 @@ def test_host_edit_blocks_major_changes_after_players_join(client: TestClient):
         f"/games/{game['id']}/host-edit",
         json={
             "acting_user_id": host["id"],
+            "custom_rules_text": "Message the host if you are running late.",
             "game_notes": "Use the north entrance.",
         },
     )
     assert notes_response.status_code == 200, notes_response.text
+    assert (
+        notes_response.json()["custom_rules_text"]
+        == "Message the host if you are running late."
+    )
     assert notes_response.json()["game_notes"] == "Use the north entrance."
 
 

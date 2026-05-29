@@ -23,6 +23,7 @@ export function useCreateGameContext({
   const [communityGameDetailId, setCommunityGameDetailId] = useState('')
   const [createdGameId, setCreatedGameId] = useState('')
   const [loadError, setLoadError] = useState('')
+  const [isContextLoading, setIsContextLoading] = useState(false)
   const blockedVerificationRefreshRef = useRef('')
 
   useEffect(() => {
@@ -105,10 +106,17 @@ export function useCreateGameContext({
         }
 
         blockedVerificationRefreshRef.current = ''
+        if (!ignore) {
+          setIsContextLoading(true)
+        }
         await loadVerifiedContext(appUser)
       } catch (error) {
         if (!ignore) {
           setLoadError(error instanceof Error ? error.message : 'Unable to load create game data.')
+        }
+      } finally {
+        if (!ignore) {
+          setIsContextLoading(false)
         }
       }
     }
@@ -134,6 +142,7 @@ export function useCreateGameContext({
     firstPublishIsFree,
     form,
     formBaseline,
+    isContextLoading,
     loadError,
     paymentMethod,
     setCreatedGameId,
