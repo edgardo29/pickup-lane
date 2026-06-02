@@ -57,6 +57,18 @@ def upgrade() -> None:
             server_default=sa.text("'soccer'"),
         ),
         sa.Column("format_label", sa.String(length=20), nullable=False),
+        sa.Column(
+            "game_player_group",
+            sa.String(length=30),
+            nullable=False,
+            server_default=sa.text("'coed'"),
+        ),
+        sa.Column(
+            "skill_level",
+            sa.String(length=30),
+            nullable=False,
+            server_default=sa.text("'any'"),
+        ),
         sa.Column("environment_type", sa.String(length=20), nullable=False),
         sa.Column("total_spots", sa.Integer(), nullable=False),
         sa.Column("price_per_player_cents", sa.Integer(), nullable=False),
@@ -140,6 +152,17 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "environment_type IN ('indoor', 'outdoor')",
             name="ck_games_environment_type",
+        ),
+        sa.CheckConstraint(
+            "game_player_group IN ('men', 'women', 'coed')",
+            name="ck_games_game_player_group",
+        ),
+        sa.CheckConstraint(
+            (
+                "skill_level IN ('any', 'beginner', 'recreational', "
+                "'intermediate', 'advanced', 'competitive')"
+            ),
+            name="ck_games_skill_level",
         ),
         sa.CheckConstraint(
             "policy_mode IN ('official_standard', 'custom_hosted')",

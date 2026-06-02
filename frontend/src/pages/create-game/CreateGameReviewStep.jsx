@@ -1,22 +1,34 @@
 import {
-  BuildingIcon,
-  CalendarIcon,
-  ChatIcon,
-  ClipboardListIcon,
-  ClockIcon,
-  DollarIcon,
-  MapPinIcon,
-  UsersIcon,
-} from '../../components/BrowseIcons.jsx'
+  AddressIcon,
+  GameDateIcon,
+  GameFormatIcon,
+  GameIndoorIcon,
+  GameNotesIcon,
+  GameOutdoorIcon,
+  GamePlayerGroupIcon,
+  GameSkillIcon,
+  GameSpotsIcon,
+  GameTimeIcon,
+  HostPaymentIcon,
+  HostRulesIcon,
+  NeighborhoodIcon,
+  ParkingIcon,
+  PriceIcon,
+  VenueIcon,
+} from '../../components/GameFactIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import {
   ReviewRow,
   StepHeading,
 } from './CreateGameControls.jsx'
 import { COMMUNITY_PUBLISH_FEE_CENTS } from './createGameData.js'
 import {
+  buildAddress,
   capitalize,
+  formatGamePlayerGroup,
   formatHostPaymentMethods,
   formatMoney,
+  formatSkillLevel,
 } from './createGameFormatters.js'
 
 export function ReviewStep({ form, firstPublishIsFree, isEditMode, publishError, review }) {
@@ -32,34 +44,33 @@ export function ReviewStep({ form, firstPublishIsFree, isEditMode, publishError,
       />
 
       <div className="create-game-review-card">
-        <ReviewSection title="Game details">
-          <ReviewRow icon={<CalendarIcon />} label="Date" value={review.date} />
-          <ReviewRow icon={<ClockIcon />} label="Time" value={review.time} />
-          <ReviewRow icon={<UsersIcon />} label="Format" value={form.format} />
+        <ReviewSection title="Game">
+          <ReviewRow icon={<GameDateIcon />} label="Date" value={review.date} />
+          <ReviewRow icon={<GameTimeIcon />} label="Time" value={review.time} />
+          <ReviewRow icon={<GameFormatIcon />} label="Format" value={form.format} />
+          <ReviewRow icon={<GamePlayerGroupIcon />} label="Player group" value={formatGamePlayerGroup(form.gamePlayerGroup)} />
+          <ReviewRow icon={<GameSkillIcon />} label="Skill level" value={formatSkillLevel(form.skillLevel)} />
           <ReviewRow
-            icon={<BuildingIcon />}
-            label="Indoor / Outdoor"
+            icon={getEnvironmentIcon(form.environment)}
+            label="Indoor/Outdoor"
             value={capitalize(form.environment)}
           />
-          <ReviewRow icon={<UsersIcon />} label="Total spots" value={`${form.totalSpots} players`} />
-          <ReviewRow icon={<DollarIcon />} label="Price per player" value={formatMoney(Number(form.price) * 100)} />
+          <ReviewRow icon={<GameSpotsIcon />} label="Total spots" value={`${form.totalSpots} players`} />
+          <ReviewRow icon={<PriceIcon />} label="Price per player" value={formatMoney(Number(form.price) * 100)} />
         </ReviewSection>
 
         <ReviewSection title="Location">
-          <ReviewRow icon={<BuildingIcon />} label="Venue" value={form.venueName || 'Not added'} />
-          <ReviewRow icon={<MapPinIcon />} label="Street address" value={form.street || 'Not added'} />
-          <ReviewRow icon={<MapPinIcon />} label="City" value={form.city || 'Not added'} />
-          <ReviewRow icon={<MapPinIcon />} label="State" value={form.state || 'Not added'} />
-          <ReviewRow icon={<MapPinIcon />} label="ZIP code" value={form.zip || 'Not added'} />
-          <ReviewRow icon={<MapPinIcon />} label="Neighborhood" value={form.neighborhood || 'Not added'} />
-          <ReviewRow icon={<ChatIcon />} label="Parking note" value={form.parkingNote || 'No parking note added.'} wide />
+          <ReviewRow icon={<VenueIcon />} label="Venue" value={form.venueName || 'Not added'} />
+          <ReviewRow icon={<AddressIcon />} label="Address" value={buildAddress(form) || 'Not added'} />
+          <ReviewRow icon={<NeighborhoodIcon />} label="Neighborhood" value={form.neighborhood || 'Not added'} />
+          <ReviewRow icon={<ParkingIcon />} label="Parking note" value={form.parkingNote || 'No parking note added.'} wide />
         </ReviewSection>
 
         <ReviewSection title="Notes & payment" wide>
-          <ReviewRow icon={<ChatIcon />} label="Game notes" value={form.gameNotes || 'No notes added.'} wide />
-          <ReviewRow icon={<ClipboardListIcon />} label="Host rules" value={form.hostRules || 'No host rules added.'} wide />
+          <ReviewRow icon={<GameNotesIcon />} label="Game notes" value={form.gameNotes || 'No notes added.'} wide />
+          <ReviewRow icon={<HostRulesIcon />} label="Host rules" value={form.hostRules || 'No host rules added.'} wide />
           <ReviewRow
-            icon={<DollarIcon />}
+            icon={<HostPaymentIcon />}
             label="Host payment"
             value={
               Number(form.price) === 0
@@ -84,9 +95,13 @@ export function ReviewStep({ form, firstPublishIsFree, isEditMode, publishError,
         </>
       )}
 
-      {publishError && <p className="create-game-error">{publishError}</p>}
+      <FormErrorMessage>{publishError}</FormErrorMessage>
     </>
   )
+}
+
+function getEnvironmentIcon(environment) {
+  return environment === 'outdoor' ? <GameOutdoorIcon /> : <GameIndoorIcon />
 }
 
 function ReviewSection({ children, title, wide = false }) {

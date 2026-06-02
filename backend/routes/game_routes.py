@@ -55,6 +55,15 @@ VALID_PAYMENT_COLLECTION_TYPES = {"in_app", "external_host", "none"}
 VALID_PUBLISH_STATUSES = {"draft", "published", "archived"}
 VALID_GAME_STATUSES = {"scheduled", "full", "cancelled", "completed", "abandoned"}
 VALID_ENVIRONMENT_TYPES = {"indoor", "outdoor"}
+VALID_GAME_PLAYER_GROUPS = {"men", "women", "coed"}
+VALID_SKILL_LEVELS = {
+    "any",
+    "beginner",
+    "recreational",
+    "intermediate",
+    "advanced",
+    "competitive",
+}
 VALID_POLICY_MODES = {"official_standard", "custom_hosted"}
 VALID_CURRENCY = "USD"
 HOST_EDITABLE_GAME_STATUSES = {"scheduled", "full"}
@@ -119,6 +128,8 @@ MAJOR_HOST_EDIT_FIELDS = {
     "starts_at",
     "ends_at",
     "format_label",
+    "game_player_group",
+    "skill_level",
     "environment_type",
     "price_per_player_cents",
 }
@@ -492,6 +503,21 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="environment_type must be 'indoor' or 'outdoor'.",
+        )
+
+    if game_data["game_player_group"] not in VALID_GAME_PLAYER_GROUPS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="game_player_group must be 'men', 'women', or 'coed'.",
+        )
+
+    if game_data["skill_level"] not in VALID_SKILL_LEVELS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "skill_level must be 'any', 'beginner', 'recreational', "
+                "'intermediate', 'advanced', or 'competitive'."
+            ),
         )
 
     if game_data["policy_mode"] not in VALID_POLICY_MODES:
@@ -2706,6 +2732,10 @@ def update_game(
         "timezone": update_data.get("timezone", db_game.timezone),
         "sport_type": update_data.get("sport_type", db_game.sport_type),
         "format_label": update_data.get("format_label", db_game.format_label),
+        "game_player_group": update_data.get(
+            "game_player_group", db_game.game_player_group
+        ),
+        "skill_level": update_data.get("skill_level", db_game.skill_level),
         "environment_type": update_data.get(
             "environment_type", db_game.environment_type
         ),
@@ -2963,6 +2993,10 @@ def host_edit_game(
         "timezone": db_game.timezone,
         "sport_type": db_game.sport_type,
         "format_label": update_data.get("format_label", db_game.format_label),
+        "game_player_group": update_data.get(
+            "game_player_group", db_game.game_player_group
+        ),
+        "skill_level": update_data.get("skill_level", db_game.skill_level),
         "environment_type": update_data.get(
             "environment_type", db_game.environment_type
         ),

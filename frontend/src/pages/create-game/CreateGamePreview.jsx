@@ -1,23 +1,23 @@
 import { Link } from 'react-router-dom'
 import { ShieldCheckIcon as SuccessShieldIcon } from '../../components/AuthIcons.jsx'
 import {
-  BuildingIcon,
-  CalendarIcon,
-  ChatIcon,
-  ClipboardListIcon,
-  ClockIcon,
-  MapPinIcon,
-  UsersIcon,
-} from '../../components/BrowseIcons.jsx'
+  AddressIcon,
+  GameDateIcon,
+  GameNotesIcon,
+  GameTimeIcon,
+  HostRulesIcon,
+} from '../../components/GameFactIcons.jsx'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
 import {
   buildPreviewLocation,
   capitalize,
+  formatGamePlayerGroup,
   formatMoney,
+  formatSkillLevel,
 } from './createGameFormatters.js'
 
 export function CreateGamePreview({ form, review }) {
-  const previewTitle = form.venueName ? `${form.venueName} ${form.format}` : `Community ${form.format}`
+  const previewTitle = form.venueName ? form.venueName : 'Community Game'
 
   return (
     <aside className="create-game-preview" aria-label="Game preview">
@@ -26,35 +26,40 @@ export function CreateGamePreview({ form, review }) {
         <strong title={previewTitle}>{previewTitle}</strong>
       </div>
 
-      <div className="create-game-preview__facts">
-        <PreviewFact icon={<CalendarIcon />} label={review.date} />
-        <PreviewFact icon={<ClockIcon />} label={review.time} />
-        <PreviewFact icon={<MapPinIcon />} label={buildPreviewLocation(form)} />
-        <PreviewFact icon={<UsersIcon />} label={`${form.totalSpots} spots - ${form.format}`} />
-        <PreviewFact icon={<BuildingIcon />} label={capitalize(form.environment)} />
-      </div>
+      <PreviewSection title="Game">
+        <PreviewFact icon={<GameDateIcon />} label={review.date} />
+        <PreviewFact icon={<GameTimeIcon />} label={review.time} />
+        <PreviewFact label={form.format || '-'} variant="dot" />
+        <PreviewFact label={form.gamePlayerGroup ? formatGamePlayerGroup(form.gamePlayerGroup) : '-'} variant="dot" />
+        <PreviewFact label={form.skillLevel ? formatSkillLevel(form.skillLevel) : '-'} variant="dot" />
+        <PreviewFact label={form.environment ? capitalize(form.environment) : '-'} variant="dot" />
+        <PreviewFact label={form.totalSpots ? `${form.totalSpots} spots` : '-'} variant="dot" />
+      </PreviewSection>
 
-      <div className="create-game-preview__notes">
+      <PreviewSection title="Location">
+        <PreviewFact icon={<AddressIcon />} label={formatPreviewLocation(form)} multiline />
+      </PreviewSection>
+
+      <PreviewSection title="Notes & Payment">
         <PreviewNote
-          icon={<ChatIcon />}
+          icon={<GameNotesIcon />}
           label="Game notes"
           text={form.gameNotes || 'Add a note so players know what to bring.'}
         />
-        {(form.hostRules || '').trim() && (
-          <PreviewNote
-            icon={<ClipboardListIcon />}
-            label="Host rules"
-            text={form.hostRules}
-          />
-        )}
-      </div>
-
-      <div className="create-game-preview__money">
-        <span>Player price</span>
-        <strong>{formatMoney(Number(form.price) * 100)}</strong>
-      </div>
+        <PreviewNote
+          icon={<HostRulesIcon />}
+          label="Host rules"
+          text={form.hostRules || 'Add host rules for players.'}
+        />
+        <PreviewMoney label="Player price" value={formatMoney(Number(form.price) * 100)} />
+      </PreviewSection>
     </aside>
   )
+}
+
+function formatPreviewLocation(form) {
+  const location = buildPreviewLocation(form)
+  return location === 'Address not set' ? '-' : location
 }
 
 export function PublishedState({ gameId }) {
@@ -88,9 +93,33 @@ function PreviewNote({ icon, label, text }) {
   )
 }
 
-function PreviewFact({ icon, label }) {
+function PreviewSection({ children, title }) {
   return (
-    <span className="create-game-preview__fact">
+    <section className="create-game-preview__section">
+      <span className="create-game-preview__section-title">{title}</span>
+      {children}
+    </section>
+  )
+}
+
+function PreviewMoney({ label, value }) {
+  return (
+    <div className="create-game-preview__money">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
+function PreviewFact({ icon = null, label, multiline = false, variant = '' }) {
+  const className = [
+    'create-game-preview__fact',
+    multiline ? 'create-game-preview__fact--multiline' : '',
+    variant ? `create-game-preview__fact--${variant}` : '',
+  ].filter(Boolean).join(' ')
+
+  return (
+    <span className={className}>
       {icon}
       <span className="create-game-preview__fact-label">{label}</span>
     </span>

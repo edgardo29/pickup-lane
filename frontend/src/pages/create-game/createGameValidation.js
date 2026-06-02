@@ -1,4 +1,11 @@
-import { MINIMUM_TOTAL_SPOTS } from './createGameData.js'
+import {
+  environmentOptions,
+  createGameFieldLimits,
+  formatOptions,
+  MINIMUM_TOTAL_SPOTS,
+  playerGroupOptions,
+  skillLevelOptions,
+} from './createGameData.js'
 import { getPriceCents, serializePaymentMethods } from './createGamePayment.js'
 import { buildDateTime, getTodayDate } from './createGameSchedule.js'
 
@@ -14,6 +21,34 @@ export function getMinimumSpotsForFormat(format) {
 
 export function validateStep(step, form) {
   if (step === 1) {
+    const missingGameFields = [
+      [!form.date, 'date', 'Choose a date.'],
+      [!form.startTime, 'start time', 'Choose a start time.'],
+      [!form.endTime, 'end time', 'Choose an end time.'],
+      [!formatOptions.includes(form.format), 'format', 'Choose a game format.'],
+      [
+        !playerGroupOptions.some((option) => option.value === form.gamePlayerGroup),
+        'player group',
+        'Choose a player group.',
+      ],
+      [
+        !skillLevelOptions.some((option) => option.value === form.skillLevel),
+        'skill level',
+        'Choose a skill level.',
+      ],
+      [
+        !environmentOptions.some((option) => option.value === form.environment),
+        'indoor/outdoor',
+        'Choose indoor or outdoor.',
+      ],
+      [form.totalSpots === '' || form.totalSpots == null, 'total spots', 'Choose total spots.'],
+    ].filter(([isMissing]) => isMissing)
+
+    const missingMessage = getRequiredFieldsMessage(missingGameFields)
+    if (missingMessage) {
+      return missingMessage
+    }
+
     if (form.date < getTodayDate()) {
       return 'Choose today or a future date.'
     }
@@ -30,20 +65,78 @@ export function validateStep(step, form) {
     if (Number(form.totalSpots) < minimumSpots) {
       return `${form.format} games need at least ${minimumSpots} total spots.`
     }
+
+    if (!Number.isFinite(Number(form.price)) || Number(form.price) < 0) {
+      return 'Price per player must be 0 or more.'
+    }
   }
 
   if (step === 2) {
-    const requiredFields = [
-      ['venueName', 'venue name'],
-      ['street', 'street address'],
-      ['city', 'city'],
-      ['state', 'state'],
-      ['zip', 'ZIP code'],
-    ]
-    const missingField = requiredFields.find(([field]) => !form[field].trim())
+    const locationLengthError = validateFieldLengths([
+      ['Venue name', form.venueName, createGameFieldLimits.venueName],
+      ['Street address', form.street, createGameFieldLimits.street],
+      ['City', form.city, createGameFieldLimits.city],
+      ['ZIP code', form.zip, createGameFieldLimits.zip],
+      ['Neighborhood', form.neighborhood, createGameFieldLimits.neighborhood],
+      ['Parking note', form.parkingNote, createGameFieldLimits.parkingNote],
+    ])
+    if (locationLengthError) {
+      return locationLengthError
+    }
 
-    if (missingField) {
-      return `Add a ${missingField[1]} before continuing.`
+    const missingLocationFields = [
+      [!form.venueName.trim(), 'venue name', 'Add venue name.'],
+      [!form.street.trim(), 'street address', 'Add street address.'],
+      [!form.city.trim(), 'city', 'Add city.'],
+      [!form.state.trim(), 'state', 'Add state.'],
+      [!form.zip.trim(), 'ZIP code', 'Add ZIP code.'],
+    ].filter(([isMissing]) => isMissing)
+
+    const missingMessage = getRequiredFieldsMessage(missingLocationFields)
+    if (missingMessage) {
+      return missingMessage
+    }
+  }
+
+  if (step === 3) {
+    return validateFieldLengths([
+      ['Game notes', form.gameNotes, createGameFieldLimits.gameNotes],
+      ['Host rules', form.hostRules, createGameFieldLimits.hostRules],
+    ])
+  }
+
+  return ''
+}
+
+function getRequiredFieldsMessage(missingFields) {
+  if (missingFields.length === 0) {
+    return ''
+  }
+
+  if (missingFields.length === 1) {
+    return missingFields[0][2]
+  }
+
+  const labels = missingFields.map(([, label]) => label)
+  return `Add ${formatList(labels)}.`
+}
+
+function formatList(labels) {
+  if (labels.length === 1) {
+    return labels[0]
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`
+  }
+
+  return `${labels.slice(0, -1).join(', ')}, and ${labels.at(-1)}`
+}
+
+function validateFieldLengths(fields) {
+  for (const [label, value, maxLength] of fields) {
+    if (String(value || '').length > maxLength) {
+      return `${label} must be ${maxLength} characters or fewer.`
     }
   }
 

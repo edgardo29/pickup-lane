@@ -7,11 +7,8 @@ import { validateNeedASubForm } from './needASubValidation.js'
 export function useNeedASubCreateForm({
   currentUser,
   navigate,
-  refreshNeedASub,
-  setActivePanel,
   setError,
   setNotice,
-  setPostView,
 }) {
   const [form, setForm] = useState(() => buildInitialNeedASubForm())
   const [isCreating, setIsCreating] = useState(false)
@@ -77,7 +74,7 @@ export function useNeedASubCreateForm({
   }
 
   async function submitPost(event) {
-    event.preventDefault()
+    event?.preventDefault?.()
 
     if (!currentUser) {
       navigate('/sign-in', { state: { from: '/need-a-sub' } })
@@ -96,14 +93,19 @@ export function useNeedASubCreateForm({
 
     try {
       const payload = buildNeedASubPayload(form, totalSpotsNeeded)
-      await createNeedASubPost(currentUser, payload)
-      setPostView('mine')
+      const createdPost = await createNeedASubPost(currentUser, payload)
+      const createdPostId = createdPost?.id
+
+      if (!createdPostId) {
+        throw new Error('Post published, but the new post could not be opened.')
+      }
+
       setForm(buildInitialNeedASubForm())
-      setActivePanel('browse')
-      setNotice('Post published.')
-      await refreshNeedASub({ showLoading: true })
+      navigate(`/need-a-sub/posts/${createdPostId}/published`, {
+        state: { post: createdPost },
+      })
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Unable to create post.')
+      setFormError(submitError instanceof Error ? submitError.message : 'Unable to create post.')
     } finally {
       setIsCreating(false)
     }

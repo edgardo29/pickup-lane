@@ -48,6 +48,17 @@ class Game(Base):
             name="ck_games_environment_type",
         ),
         CheckConstraint(
+            "game_player_group IN ('men', 'women', 'coed')",
+            name="ck_games_game_player_group",
+        ),
+        CheckConstraint(
+            (
+                "skill_level IN ('any', 'beginner', 'recreational', "
+                "'intermediate', 'advanced', 'competitive')"
+            ),
+            name="ck_games_skill_level",
+        ),
+        CheckConstraint(
             "policy_mode IN ('official_standard', 'custom_hosted')",
             name="ck_games_policy_mode",
         ),
@@ -205,6 +216,12 @@ class Game(Base):
         String(50), nullable=False, server_default=text("'soccer'")
     )
     format_label: Mapped[str] = mapped_column(String(20), nullable=False)
+    game_player_group: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'coed'")
+    )
+    skill_level: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'any'")
+    )
     environment_type: Mapped[str] = mapped_column(String(20), nullable=False)
     total_spots: Mapped[int] = mapped_column(Integer, nullable=False)
     price_per_player_cents: Mapped[int] = mapped_column(Integer, nullable=False)

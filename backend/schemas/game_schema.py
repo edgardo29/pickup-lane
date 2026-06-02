@@ -31,6 +31,8 @@ class GameCreate(BaseModel):
     timezone: str = "America/Chicago"
     sport_type: str = "soccer"
     format_label: str
+    game_player_group: str = "coed"
+    skill_level: str = "any"
     environment_type: str
     total_spots: int
     price_per_player_cents: int
@@ -80,6 +82,8 @@ class GameRead(BaseModel):
     timezone: str
     sport_type: str
     format_label: str
+    game_player_group: str
+    skill_level: str
     environment_type: str
     total_spots: int
     price_per_player_cents: int
@@ -131,6 +135,8 @@ class GameUpdate(BaseModel):
     timezone: str | None = None
     sport_type: str | None = None
     format_label: str | None = None
+    game_player_group: str | None = None
+    skill_level: str | None = None
     environment_type: str | None = None
     total_spots: int | None = None
     price_per_player_cents: int | None = None
@@ -169,6 +175,8 @@ class GameHostEdit(BaseModel):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     format_label: str | None = None
+    game_player_group: str | None = None
+    skill_level: str | None = None
     environment_type: str | None = None
     total_spots: int | None = None
     price_per_player_cents: int | None = None

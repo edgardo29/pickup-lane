@@ -6,6 +6,29 @@ export function formatEnvironment(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1).replaceAll('_', ' ') : 'Pickup'
 }
 
+export function formatGamePlayerGroup(value) {
+  const labels = {
+    coed: 'Coed',
+    men: 'Men',
+    women: 'Women',
+  }
+
+  return labels[value] || (value ? formatEnvironment(value) : '')
+}
+
+export function formatSkillLevel(value) {
+  const labels = {
+    any: 'Any Skill',
+    beginner: 'Beginner',
+    recreational: 'Recreational',
+    intermediate: 'Intermediate',
+    advanced: 'Advanced',
+    competitive: 'Competitive',
+  }
+
+  return labels[value] || (value ? formatEnvironment(value) : '')
+}
+
 export function formatPrice(cents, currency) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

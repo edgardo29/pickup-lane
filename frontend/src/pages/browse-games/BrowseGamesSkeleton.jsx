@@ -5,7 +5,7 @@ import {
 } from '../../components/skeleton/index.js'
 
 const skeletonDates = ['fri', 'sat', 'sun', 'mon', 'tue', 'wed', 'thu']
-const skeletonCards = ['one', 'two', 'three', 'four']
+const skeletonCards = ['one', 'two', 'three', 'four', 'five', 'six']
 
 export function BrowseGamesSkeleton() {
   return (

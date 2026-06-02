@@ -28,6 +28,8 @@ class CommunityGamePublishCreate(BaseModel):
     ends_at: datetime
     timezone: str = "America/Chicago"
     format_label: str
+    game_player_group: str = "coed"
+    skill_level: str = "any"
     environment_type: str
     total_spots: int
     price_per_player_cents: int

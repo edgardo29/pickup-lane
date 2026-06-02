@@ -20,9 +20,7 @@
 }
 
 .inbox-shell {
-  width: min(1640px, calc(100% - 56px));
-  margin: 0 auto;
-  padding: 24px 0 64px;
+  --app-page-shell-width: min(1640px, calc(100% - 56px));
 }
 
 .inbox-section__heading p,
@@ -284,10 +282,15 @@
   font-weight: 950;
 }
 
+@media (max-width: 760px) {
+  .inbox-shell {
+    --app-page-shell-width: calc(100% - 28px);
+  }
+}
+
 @media (max-width: 700px) {
   .inbox-shell {
-    width: calc(100% - 28px);
-    padding: 18px 0 44px;
+    --app-page-shell-padding-bottom: 44px;
   }
 
   .inbox-row {

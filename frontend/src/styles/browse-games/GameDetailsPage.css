@@ -255,13 +255,7 @@
   border-radius: 8px;
   background: var(--surface);
   display: grid;
-  grid-template-columns:
-    minmax(120px, 1fr)
-    minmax(160px, 1.25fr)
-    minmax(105px, 0.85fr)
-    minmax(110px, 0.85fr)
-    minmax(80px, 0.7fr)
-    minmax(145px, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
 }
 
@@ -2013,7 +2007,7 @@
   }
 
   .details-facts {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .details-mobile-host-actions {
