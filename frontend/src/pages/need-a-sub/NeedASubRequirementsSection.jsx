@@ -9,6 +9,8 @@ import { NeedASubFormField } from './NeedASubFormField.jsx'
 
 export function NeedASubRequirementsSection({
   form,
+  hideTitle = false,
+  iconActions = false,
   onAddPosition,
   onRemovePosition,
   onUpdatePosition,
@@ -20,36 +22,60 @@ export function NeedASubRequirementsSection({
   const isOverSpotLimit = totalSpotsNeeded > MAX_TOTAL_SUBS
   const isAtRowLimit = form.positions.length >= maxPositionRows
   const canAddSub = !isAtRowLimit && !isAtSpotLimit
+  const remainingSpots = Math.max(0, MAX_TOTAL_SUBS - totalSpotsNeeded)
+  const requestedLabel = `${totalSpotsNeeded} of ${MAX_TOTAL_SUBS} sub ${totalSpotsNeeded === 1 ? 'spot' : 'spots'} requested`
+  const remainingLabel = `${remainingSpots} remaining`
+  const isRowOptionLimit = isAtRowLimit && !isAtSpotLimit
   const subLimitMessage = isOverSpotLimit
     ? `Reduce the total to ${MAX_TOTAL_SUBS} Subs before publishing.`
     : isAtSpotLimit
       ? `Sub limit reached at ${MAX_TOTAL_SUBS}.`
-      : isAtRowLimit
-        ? 'All player type and position options are added.'
-        : ''
+      : ''
 
   return (
     <section className="need-sub-form-section">
       <div className="need-sub-card-heading need-sub-card-heading--split">
         <div>
-          <p>Sub Requirements <span>(limit {MAX_TOTAL_SUBS})</span></p>
+          {!hideTitle && <p>Sub Requirements <span>(limit {MAX_TOTAL_SUBS})</span></p>}
           <small className={isOverSpotLimit ? 'need-sub-subtotal need-sub-subtotal--error' : 'need-sub-subtotal'}>
-            {totalSpotsNeeded} / {MAX_TOTAL_SUBS} {totalSpotsNeeded === 1 ? 'Sub' : 'Subs'} added
+            {requestedLabel} · {remainingLabel}
           </small>
           {subLimitMessage && (
-            <small className={isOverSpotLimit ? 'need-sub-subtotal need-sub-subtotal--error' : 'need-sub-subtotal'}>
+            <small className="need-sub-subtotal need-sub-subtotal--error">
               {subLimitMessage}
             </small>
           )}
+          {isRowOptionLimit && (
+            <small className="need-sub-subtotal need-sub-subtotal--note">
+              <span>Note:</span> All position/player type combinations have been added. Increase "Spots" on an existing row to request more subs.
+            </small>
+          )}
         </div>
-        <button disabled={!canAddSub} type="button" onClick={onAddPosition}>Add Sub</button>
+        <button
+          aria-label="Add sub requirement"
+          className={iconActions ? 'need-sub-sub-add' : undefined}
+          disabled={!canAddSub}
+          title="Add sub requirement"
+          type="button"
+          onClick={onAddPosition}
+        >
+          {iconActions ? '+ Add Sub' : 'Add Sub'}
+        </button>
       </div>
 
-      <div className="need-sub-position-list">
+      <div className={`need-sub-position-list${iconActions ? ' need-sub-position-list--compact' : ''}`}>
+        {iconActions && (
+          <div className="need-sub-position-list__header" aria-hidden="true">
+            <span>Position</span>
+            <span>Player Type</span>
+            <span>Spots</span>
+            <span />
+          </div>
+        )}
         {form.positions.map((position, index) => (
           <div className="need-sub-position-card" key={`${position.sort_order}-${index}`}>
-            <div className="need-sub-position-card__fields">
-              <NeedASubFormField label="Position">
+            <div className={`need-sub-position-card__fields${iconActions ? ' need-sub-position-card__fields--compact' : ''}`}>
+              <NeedASubFormField className={iconActions ? 'need-sub-field--compact' : ''} label="Position">
                 <select
                   value={position.position_label}
                   onChange={(event) => onUpdatePosition(index, 'position_label', event.target.value)}
@@ -59,7 +85,7 @@ export function NeedASubRequirementsSection({
                   ))}
                 </select>
               </NeedASubFormField>
-              <NeedASubFormField label="Player Type">
+              <NeedASubFormField className={iconActions ? 'need-sub-field--compact' : ''} label="Player Type">
                 <select
                   value={position.player_group}
                   onChange={(event) => onUpdatePosition(index, 'player_group', event.target.value)}
@@ -69,7 +95,7 @@ export function NeedASubRequirementsSection({
                   ))}
                 </select>
               </NeedASubFormField>
-              <NeedASubFormField label="Spots">
+              <NeedASubFormField className={iconActions ? 'need-sub-field--compact' : ''} label="Spots">
                 <select
                   value={position.spots_needed}
                   onChange={(event) => onUpdatePosition(index, 'spots_needed', event.target.value)}
@@ -80,12 +106,16 @@ export function NeedASubRequirementsSection({
                 </select>
               </NeedASubFormField>
               <button
-                className="need-sub-row-remove"
+                aria-hidden={iconActions && form.positions.length === 1 ? 'true' : undefined}
+                aria-label={`Remove sub requirement ${index + 1}`}
+                className={`need-sub-row-remove${iconActions ? ' need-sub-row-remove--icon' : ''}${iconActions && form.positions.length === 1 ? ' need-sub-row-remove--placeholder' : ''}`}
                 disabled={form.positions.length === 1}
+                tabIndex={iconActions && form.positions.length === 1 ? -1 : undefined}
+                title="Remove sub requirement"
                 type="button"
                 onClick={() => onRemovePosition(index)}
               >
-                Remove
+                {iconActions ? <span aria-hidden="true" /> : 'Remove'}
               </button>
             </div>
           </div>

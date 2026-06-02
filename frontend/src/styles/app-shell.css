@@ -23,14 +23,54 @@
   stroke-linejoin: round;
 }
 
+.form-error-message {
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #ff7f78;
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+.form-error-message.form-error-message > svg {
+  width: 13px;
+  height: 13px;
+  margin-top: 0.11em;
+  flex: 0 0 auto;
+  color: #ff6b62;
+}
+
+.form-error-message span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .app-page-shell {
-  width: min(1640px, calc(100% - 56px));
+  --app-page-shell-width: min(1640px, calc(100% - 56px));
+  --app-page-shell-padding-top: 24px;
+  --app-page-shell-padding-bottom: 64px;
+  --app-page-header-title-size: clamp(2.15rem, 2.75vw, 3rem);
+  --app-page-header-title-mobile-size: 1.9rem;
+  --app-page-header-subtitle-size: 0.96rem;
+  --app-page-header-subtitle-mobile-size: 0.92rem;
+
+  width: var(--app-page-shell-width);
   margin: 0 auto;
-  padding: 24px 0 64px;
+  padding: var(--app-page-shell-padding-top) 0 var(--app-page-shell-padding-bottom);
 }
 
 .app-page-shell--narrow {
-  width: min(1180px, calc(100% - 56px));
+  --app-page-shell-width: min(1180px, calc(100% - 56px));
 }
 
 .app-page-header {
@@ -82,7 +122,7 @@
   max-width: 34rem;
   margin: 9px 0 0;
   color: var(--lime);
-  font-size: 0.96rem;
+  font-size: var(--app-page-header-subtitle-size);
   font-weight: 800;
   letter-spacing: 0;
   line-height: 1.35;
@@ -90,9 +130,10 @@
 
 .app-page-header h1 {
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
   color: #ffffff;
-  font-size: clamp(2.15rem, 2.75vw, 3rem);
+  font-size: var(--app-page-header-title-size);
   line-height: 0.96;
   font-weight: 950;
   text-transform: uppercase;
@@ -139,6 +180,11 @@
   border-color: rgba(184, 255, 36, 0.38);
   color: var(--lime);
   background: rgba(184, 255, 36, 0.08);
+}
+
+.app-tabs button:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
 }
 
 .app-card-grid {
@@ -699,8 +745,9 @@
 @media (max-width: 760px) {
   .app-page-shell,
   .app-page-shell--narrow {
-    width: calc(100% - 28px);
-    padding: 18px 0 48px;
+    --app-page-shell-width: calc(100% - 28px);
+    --app-page-shell-padding-top: 18px;
+    --app-page-shell-padding-bottom: 48px;
   }
 
   .app-page-header {
@@ -722,7 +769,11 @@
   }
 
   .app-page-header h1 {
-    font-size: 1.9rem;
+    font-size: var(--app-page-header-title-mobile-size);
+  }
+
+  .app-page-header__subtitle {
+    font-size: var(--app-page-header-subtitle-mobile-size);
   }
 
   .app-page-header__tabs {

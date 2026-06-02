@@ -7,12 +7,17 @@ import {
   UsersIcon,
 } from '../../components/BrowseIcons.jsx'
 import {
+  NeedSubFieldPlayersIcon,
+  NeedSubGoalkeeperIcon,
+} from '../../components/GameFactIcons.jsx'
+import {
   buildPostSubtitle,
   formatDateWithYear,
   formatStatus,
   formatTimeRangeOnly,
 } from './needASubFormatters.js'
 import { countHeldSpots } from './needASubSelectors.js'
+import { NeedASubPostListSkeleton } from './NeedASubSkeleton.jsx'
 
 function NeedASubPostList({
   isLoading,
@@ -30,7 +35,7 @@ function NeedASubPostList({
           action={<Link to="/sign-in" state={{ from: '/need-a-sub' }}>Sign In</Link>}
         />
       ) : isLoading ? (
-        <NeedASubState title="Loading Need a Sub posts" />
+        <NeedASubPostListSkeleton />
       ) : !posts.length ? (
         <NeedASubState
           title={postView === 'mine' ? 'No posts created yet' : 'No Need a Sub posts yet'}
@@ -52,9 +57,7 @@ function NeedASubPostList({
 }
 
 function NeedASubPostCard({ onOpenPost, post }) {
-  const playerTypeSummaries = buildPlayerTypeSummaries(post).filter(
-    (summary) => summary.spotsLeft > 0,
-  )
+  const needGroups = buildNeedGroups(post)
   const cityState = [post.city, post.state].filter(Boolean).join(', ')
   const environmentLabel = post.environment_type ? formatStatus(post.environment_type) : ''
 
@@ -91,15 +94,21 @@ function NeedASubPostCard({ onOpenPost, post }) {
       </div>
 
       <div className="need-sub-post__needs">
-        {playerTypeSummaries.map((summary) => (
-          <span
-            className="need-sub-post__need-row"
-            key={summary.key}
-          >
-            <small>{summary.label}</small>
-            <strong>{formatOpenCount(summary.spotsLeft)}</strong>
-          </span>
-        ))}
+        <span className="need-sub-post__needs-title">Open Spots</span>
+        {needGroups.map((group) => {
+          const GroupIcon = group.icon
+
+          return (
+            <div className="need-sub-post__needs-group" key={group.key}>
+              <div className="need-sub-post__need-summary">
+                <GroupIcon />
+                <h4>{group.label}</h4>
+                <strong>{formatOpenCount(group.spotsLeft)}</strong>
+              </div>
+              <p title={formatPlayerLabels(group.rows)}>{formatPlayerLabels(group.rows)}</p>
+            </div>
+          )
+        })}
       </div>
 
       <div className="need-sub-post__footer">
@@ -124,35 +133,66 @@ export function NeedASubState({ action = null, message = '', title }) {
   )
 }
 
-const PLAYER_TYPE_SUMMARY_ORDER = [
-  { key: 'men', label: 'Men' },
-  { key: 'women', label: 'Women' },
-  { key: 'open', label: 'Any Player' },
+const NEED_GROUP_ORDER = [
+  { key: 'field_player', label: 'Field Players', icon: NeedSubFieldPlayersIcon },
+  { key: 'goalkeeper', label: 'Goalkeepers', icon: NeedSubGoalkeeperIcon },
 ]
 
-function buildPlayerTypeSummaries(post) {
-  const spotsByGroup = new Map(PLAYER_TYPE_SUMMARY_ORDER.map((group) => [group.key, 0]))
+const PLAYER_GROUP_ORDER = [
+  { key: 'open', label: 'Any' },
+  { key: 'men', label: 'Men' },
+  { key: 'women', label: 'Women' },
+]
 
-  ;(post.positions || []).forEach((position) => {
-    const spotsLeft = Math.max(0, Number(position.spots_needed || 0) - countHeldSpots(position))
-    spotsByGroup.set(position.player_group, (spotsByGroup.get(position.player_group) || 0) + spotsLeft)
+function buildNeedGroups(post) {
+  const positions = post.positions?.length
+    ? post.positions
+    : [{
+        player_group: 'open',
+        position_label: 'field_player',
+        spots_needed: Math.max(0, Number(post.subs_needed || 0) - Number(post.confirmed_count || 0)),
+      }]
+
+  return NEED_GROUP_ORDER.map((group) => {
+    const positionsForGroup = positions.filter((position) => position.position_label === group.key)
+    const rows = PLAYER_GROUP_ORDER.map((playerGroup) => {
+      const spotsLeft = positionsForGroup.reduce((sum, position) => {
+        if (position.player_group !== playerGroup.key) {
+          return sum
+        }
+
+        return sum + Math.max(0, Number(position.spots_needed || 0) - countHeldSpots(position))
+      }, 0)
+
+      return {
+        key: `${group.key}:${playerGroup.key}`,
+        label: playerGroup.label,
+        spotsLeft,
+      }
+    }).filter((row) => row.spotsLeft > 0)
+
+    return {
+      ...group,
+      spotsLeft: rows.reduce((sum, row) => sum + row.spotsLeft, 0),
+      rows,
+    }
   })
-
-  return PLAYER_TYPE_SUMMARY_ORDER.map((group) => ({
-    ...group,
-    spotsLeft: spotsByGroup.get(group.key) || 0,
-  }))
+    .filter((group) => group.rows.length > 0)
 }
 
 function formatOpenCount(spotsLeft) {
   return `${spotsLeft} open`
 }
 
+function formatPlayerLabels(rows) {
+  return rows.map((row) => row.label).join(' · ')
+}
+
 function Fact({ icon, text }) {
   return (
     <span>
       {icon}
-      {text}
+      <span className="need-sub-post__fact-text" title={text}>{text}</span>
     </span>
   )
 }

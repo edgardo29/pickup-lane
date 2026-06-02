@@ -3,6 +3,7 @@ import { AppPageShell } from '../../components/app/index.js'
 import { useAuth } from '../../hooks/useAuth.js'
 import NeedASubForm from './NeedASubForm.jsx'
 import NeedASubManageReview from './NeedASubManageReview.jsx'
+import { NeedASubManageSkeleton } from './NeedASubSkeleton.jsx'
 import { useNeedASubEditForm } from './useNeedASubEditForm.js'
 import { useNeedASubManageActions } from './useNeedASubManageActions.js'
 import { useNeedASubManageData } from './useNeedASubManageData.js'
@@ -96,7 +97,7 @@ function NeedASubManagePage() {
         )}
 
         {isLoading ? (
-          <div className="need-sub-empty">Loading post...</div>
+          <NeedASubManageSkeleton />
         ) : !post ? (
           <div className="need-sub-empty">
             <strong>Post not found.</strong>

@@ -30,6 +30,15 @@ export const POSITION_OPTIONS = [
 export const MAX_SUB_ROWS = 6
 export const MAX_TOTAL_SUBS = 11
 export const MAX_WAITLIST_REQUESTS_PER_POST = 25
+export const needASubFieldLimits = {
+  locationName: 60,
+  addressLine1: 80,
+  city: 50,
+  postalCode: 10,
+  neighborhood: 40,
+  priceDue: 8,
+  notes: 500,
+}
 
 export const POST_TABS = [
   { key: 'all', label: 'All Posts' },
@@ -41,10 +50,10 @@ export function buildInitialNeedASubForm() {
     date: getDefaultDate(),
     startTime: '19:00',
     endTime: '21:00',
-    formatLabel: '7v7',
+    formatLabel: '',
     environment: '',
-    skillLevel: 'intermediate',
-    gamePlayerGroup: 'coed',
+    skillLevel: '',
+    gamePlayerGroup: '',
     locationName: '',
     addressLine1: '',
     city: '',

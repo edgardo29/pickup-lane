@@ -9,6 +9,7 @@ import {
 import NeedASubDetailContent from './NeedASubDetailContent.jsx'
 import { MAX_WAITLIST_REQUESTS_PER_POST } from './needASubData.js'
 import { countHeldSpots } from './needASubSelectors.js'
+import { NeedASubDetailSkeleton } from './NeedASubSkeleton.jsx'
 import { useNeedASubDetailData } from './useNeedASubDetailData.js'
 import '../../styles/need-a-sub/NeedASub.css'
 
@@ -95,7 +96,7 @@ function NeedASubDetailPage() {
         )}
 
         {isLoading ? (
-          <div className="need-sub-empty">Loading post...</div>
+          <NeedASubDetailSkeleton />
         ) : !post ? (
           <div className="need-sub-empty">
             <strong>Post not found.</strong>

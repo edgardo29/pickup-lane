@@ -5,10 +5,13 @@ import {
 import { getPaymentMethodLabel } from './createGameFormatters.js'
 
 export function PaymentMethodsEditor({ allowNoPayment = false, methods, onChange }) {
+  const fallbackMethods = allowNoPayment
+    ? [{ type: 'none', value: '' }]
+    : [{ type: 'venmo', value: '' }]
   const safeMethods = (
     Array.isArray(methods) && methods.length > 0
       ? methods
-      : [{ type: 'venmo', value: '' }]
+      : fallbackMethods
   ).slice(0, MAX_HOST_PAYMENT_METHODS)
   const selectedTypes = new Set(safeMethods.map((method) => method.type))
   const canAddMethod = safeMethods.length < MAX_HOST_PAYMENT_METHODS && safeMethods[0]?.type !== 'none'
@@ -46,15 +49,14 @@ export function PaymentMethodsEditor({ allowNoPayment = false, methods, onChange
       <div className="create-game-payment-methods__header">
         <h3>Payment methods <span>(how players pay you directly)</span></h3>
         <button
-          className={`create-game-method-add${canAddMethod ? '' : ' create-game-method-add--placeholder'}`}
+          className="create-game-method-add"
+          disabled={!canAddMethod}
           type="button"
-          aria-hidden={canAddMethod ? undefined : 'true'}
-          aria-label={canAddMethod ? 'Add payment method' : undefined}
-          tabIndex={canAddMethod ? undefined : -1}
-          title={canAddMethod ? 'Add payment method' : undefined}
-          onClick={canAddMethod ? addMethod : undefined}
+          aria-label="Add payment method"
+          title="Add payment method"
+          onClick={addMethod}
         >
-          <span aria-hidden="true" />
+          + Add Method
         </button>
       </div>
 

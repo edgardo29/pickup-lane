@@ -2,11 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AppPageHeader, AppPageShell, AppTabs } from '../../components/app/index.js'
 import {
-  ArrowLeftIcon,
   PlusCircleIcon,
 } from '../../components/BrowseIcons.jsx'
 import { useAuth } from '../../hooks/useAuth.js'
-import NeedASubForm from './NeedASubForm.jsx'
+import NeedASubCreateFlow from './NeedASubCreateFlow.jsx'
 import NeedASubPostList, { NeedASubState } from './NeedASubPostList.jsx'
 import { POST_TABS } from './needASubData.js'
 import { useNeedASubCreateForm } from './useNeedASubCreateForm.js'
@@ -46,11 +45,8 @@ function NeedASubPage() {
   } = useNeedASubCreateForm({
     currentUser,
     navigate,
-    refreshNeedASub,
-    setActivePanel,
     setError,
     setNotice,
-    setPostView,
   })
 
   useEffect(() => {
@@ -90,23 +86,11 @@ function NeedASubPage() {
       mainClassName={`need-sub-shell ${activePanel === 'create' ? 'need-sub-shell--form' : ''}`}
     >
       <AppPageHeader
-        title={activePanel === 'create' ? 'Post Details' : 'Need a Sub'}
+        title={activePanel === 'create' ? 'Create Sub Post' : 'Need a Sub'}
         subtitle={
           activePanel === 'create'
             ? 'Post a substitute request for an outside game.'
             : 'Post or request substitute spots for outside games.'
-        }
-        actions={
-          activePanel === 'create' ? (
-            <button
-              className="need-sub-header-action need-sub-header-action--secondary"
-              type="button"
-              onClick={showBrowsePanel}
-            >
-              <ArrowLeftIcon />
-              Back to Posts
-            </button>
-          ) : null
         }
       />
 
@@ -138,11 +122,12 @@ function NeedASubPage() {
       {activePanel === 'create' ? (
         currentUser ? (
           <section className="need-sub-panel need-sub-create-panel">
-            <NeedASubForm
+            <NeedASubCreateFlow
               formError={formError}
               form={form}
-              isSaving={isCreating}
+              isCreating={isCreating}
               totalSpotsNeeded={totalSpotsNeeded}
+              onCancel={showBrowsePanel}
               onAddPosition={addPosition}
               onRemovePosition={removePosition}
               onSubmit={submitPost}

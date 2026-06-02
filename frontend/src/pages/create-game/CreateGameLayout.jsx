@@ -1,5 +1,6 @@
 import { ArrowLeftIcon } from '../../components/AuthIcons.jsx'
-import BrowseAppNav from '../../components/BrowseAppNav.jsx'
+import { AppPageHeader, AppPageShell } from '../../components/app/index.js'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import { DiscardModal } from './CreateGameControls.jsx'
 import { EmailVerificationBlocker } from './CreateGameEmailVerification.jsx'
 import { CreateGamePreview } from './CreateGamePreview.jsx'
@@ -36,33 +37,30 @@ export function CreateGameLayout({
   visibleUser,
 }) {
   return (
-    <div className="create-game-page">
-      <BrowseAppNav />
-
-      <main className="create-game-shell">
+    <AppPageShell className="create-game-page" mainClassName="create-game-shell">
         {isWaitingForUser ? (
           <CreateGameSkeleton isEditMode={isEditMode} />
         ) : (
           <>
-            <header className={`create-game-topbar ${isEditMode ? '' : 'create-game-topbar--main'}`.trim()}>
-              {isEditMode && (
-                <button type="button" onClick={onBack} aria-label="Go back">
-                  <ArrowLeftIcon />
-                </button>
-              )}
-              <div>
-                <h1>{isEditMode ? 'Edit Game' : 'Create Game'}</h1>
-                <p>
-                  {isEditMode
-                    ? 'Update your community game details.'
-                    : 'Post a community game for players to join.'}
-                </p>
-              </div>
-            </header>
+            <AppPageHeader
+              title={isEditMode ? 'Edit Game' : 'Create Game'}
+              subtitle={
+                isEditMode
+                  ? 'Update your community game details.'
+                  : 'Post a community game for players to join.'
+              }
+              actions={
+                isEditMode ? (
+                  <button className="create-game-header-back" type="button" onClick={onBack} aria-label="Go back">
+                    <ArrowLeftIcon />
+                  </button>
+                ) : null
+              }
+            />
 
             <StepRail activeStep={activeStep} />
 
-            {loadError && <p className="create-game-error">{loadError}</p>}
+            <FormErrorMessage>{loadError}</FormErrorMessage>
 
             {shouldBlockForEmailVerification ? (
               <EmailVerificationBlocker
@@ -88,7 +86,7 @@ export function CreateGameLayout({
                     />
                   )}
 
-                  {stepError && <p className="create-game-error">{stepError}</p>}
+                  <FormErrorMessage>{stepError}</FormErrorMessage>
 
                   <div className="create-game-actions">
                     <button className="create-game-cancel" type="button" onClick={onCancel}>
@@ -136,11 +134,10 @@ export function CreateGameLayout({
             ) : null}
           </>
         )}
-      </main>
 
       {showDiscardModal && (
         <DiscardModal onClose={onCloseDiscard} onDiscard={onDiscard} />
       )}
-    </div>
+    </AppPageShell>
   )
 }

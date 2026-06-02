@@ -146,6 +146,8 @@ def build_game_data(
         "timezone": publish_data.timezone,
         "sport_type": "soccer",
         "format_label": publish_data.format_label,
+        "game_player_group": publish_data.game_player_group,
+        "skill_level": publish_data.skill_level,
         "environment_type": publish_data.environment_type,
         "total_spots": publish_data.total_spots,
         "price_per_player_cents": publish_data.price_per_player_cents,

@@ -20,6 +20,21 @@ export const createGameFieldLimits = {
 
 export const formatOptions = ['3v3', '4v4', '5v5', '6v6', '7v7', '8v8', '9v9', '10v10', '11v11']
 
+export const playerGroupOptions = [
+  { label: 'Coed', value: 'coed' },
+  { label: 'Men', value: 'men' },
+  { label: 'Women', value: 'women' },
+]
+
+export const skillLevelOptions = [
+  { label: 'Any Skill', value: 'any' },
+  { label: 'Beginner', value: 'beginner' },
+  { label: 'Recreational', value: 'recreational' },
+  { label: 'Intermediate', value: 'intermediate' },
+  { label: 'Advanced', value: 'advanced' },
+  { label: 'Competitive', value: 'competitive' },
+]
+
 export const environmentOptions = [
   { label: 'Indoor', value: 'indoor' },
   { label: 'Outdoor', value: 'outdoor' },
@@ -38,7 +53,7 @@ export const timeOptions = Array.from({ length: 24 * 12 }, (_, index) => {
 })
 
 export const steps = [
-  { id: 1, label: 'Basics' },
+  { id: 1, label: 'Game' },
   { id: 2, label: 'Location' },
   { id: 3, label: 'Notes' },
   { id: 4, label: 'Review & Publish' },
@@ -61,10 +76,12 @@ export const initialForm = {
   date: getDefaultDate(),
   startTime: '18:00',
   endTime: '20:00',
-  format: '7v7',
-  environment: 'outdoor',
-  totalSpots: 14,
-  price: 25,
+  format: '',
+  gamePlayerGroup: '',
+  skillLevel: '',
+  environment: '',
+  totalSpots: '',
+  price: 0,
   venueName: '',
   street: '',
   city: '',
@@ -74,5 +91,5 @@ export const initialForm = {
   parkingNote: '',
   gameNotes: '',
   hostRules: '',
-  paymentMethods: defaultPaymentMethods,
+  paymentMethods: [{ type: 'none', value: '' }],
 }

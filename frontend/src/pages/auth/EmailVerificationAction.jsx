@@ -67,7 +67,7 @@ function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
   }, [code, refreshCurrentUserVerification])
 
   return (
-    <AuthShell backLabel="Back to create game" backTo="/create-game" variant="reset-password">
+    <AuthShell showBack={false} variant="reset-password">
       <AuthPanel>
         <div className="auth-action-result">
           <AuthHalo icon={<ShieldCheckIcon />} />

@@ -110,11 +110,13 @@ function CreateGamePage() {
       return
     }
 
+    clearPublishFeedback()
     setActiveStep((step) => Math.min(step + 1, steps.length))
   }
 
   function goBack() {
     if (activeStep > 1) {
+      clearPublishFeedback()
       setActiveStep((step) => step - 1)
       return
     }

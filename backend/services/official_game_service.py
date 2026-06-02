@@ -56,6 +56,8 @@ ADMIN_EDIT_NON_NULL_FIELDS = {
     "ends_at",
     "timezone",
     "format_label",
+    "game_player_group",
+    "skill_level",
     "environment_type",
     "total_spots",
     "price_per_player_cents",
@@ -70,6 +72,8 @@ ADMIN_EDIT_CHECKOUT_SENSITIVE_FIELDS = {
     "ends_at",
     "timezone",
     "format_label",
+    "game_player_group",
+    "skill_level",
     "environment_type",
     "total_spots",
     "price_per_player_cents",
@@ -283,6 +287,8 @@ def build_official_game_data(
         "timezone": create_request.timezone,
         "sport_type": "soccer",
         "format_label": create_request.format_label,
+        "game_player_group": create_request.game_player_group,
+        "skill_level": create_request.skill_level,
         "environment_type": create_request.environment_type,
         "total_spots": create_request.total_spots,
         "price_per_player_cents": create_request.price_per_player_cents,
@@ -613,6 +619,10 @@ def build_effective_official_game_data(
         "timezone": update_data.get("timezone", game.timezone),
         "sport_type": game.sport_type,
         "format_label": update_data.get("format_label", game.format_label),
+        "game_player_group": update_data.get(
+            "game_player_group", game.game_player_group
+        ),
+        "skill_level": update_data.get("skill_level", game.skill_level),
         "environment_type": update_data.get(
             "environment_type", game.environment_type
         ),
@@ -796,7 +806,13 @@ def update_official_game(
 
     if "title" in request_data:
         request_data["title"] = clean_required_text(request_data["title"], "title")
-    for text_field in ("timezone", "format_label", "environment_type"):
+    for text_field in (
+        "timezone",
+        "format_label",
+        "game_player_group",
+        "skill_level",
+        "environment_type",
+    ):
         if text_field in request_data:
             request_data[text_field] = clean_required_text(
                 request_data[text_field],

@@ -34,9 +34,8 @@
 }
 
 .profile-shell {
-  width: min(1640px, calc(100% - 56px));
-  margin: 0 auto;
-  padding: 24px 0 68px;
+  --app-page-shell-width: min(1640px, calc(100% - 56px));
+  --app-page-shell-padding-bottom: 68px;
 }
 
 .profile-overview-card,
@@ -1611,10 +1610,15 @@
   }
 }
 
+@media (max-width: 760px) {
+  .profile-shell {
+    --app-page-shell-width: calc(100% - 28px);
+  }
+}
+
 @media (max-width: 700px) {
   .profile-shell {
-    width: calc(100% - 28px);
-    padding: 18px 0 56px;
+    --app-page-shell-padding-bottom: 56px;
   }
 
   .profile-hub {

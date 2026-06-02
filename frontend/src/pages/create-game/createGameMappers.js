@@ -11,6 +11,8 @@ export function mapGameToForm(game, venue, communityDetails = null) {
     startTime: toTimeInputValue(startsAt),
     endTime: toTimeInputValue(endsAt),
     format: game.format_label || '7v7',
+    gamePlayerGroup: game.game_player_group || 'coed',
+    skillLevel: game.skill_level || 'any',
     environment: game.environment_type || 'outdoor',
     totalSpots: game.total_spots || 14,
     price: Math.round((game.price_per_player_cents || 0) / 100),

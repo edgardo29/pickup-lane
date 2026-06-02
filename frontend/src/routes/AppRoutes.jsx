@@ -27,6 +27,7 @@ import {
   NeedASubDetailPage,
   NeedASubManagePage,
   NeedASubPage,
+  NeedASubPublishSuccessPage,
 } from '../pages/need-a-sub/index.js'
 import {
   EditProfilePage,
@@ -135,6 +136,14 @@ export function AppRoutes() {
       />
       <Route path="/need-a-sub" element={<NeedASubPage />} />
       <Route path="/need-a-sub/posts/:postId" element={<NeedASubDetailPage />} />
+      <Route
+        path="/need-a-sub/posts/:postId/published"
+        element={
+          <RequireAppUser>
+            <NeedASubPublishSuccessPage />
+          </RequireAppUser>
+        }
+      />
       <Route
         path="/need-a-sub/posts/:postId/manage"
         element={

@@ -1,4 +1,4 @@
-import { PriceTagIcon, ShieldCheckIcon } from '../../components/BrowseIcons.jsx'
+import { GameStatusIcon, PriceIcon } from '../../components/GameFactIcons.jsx'
 import { Fact } from './GameDetailsPrimitives.jsx'
 
 export function QuickFacts({ facts, price, variant }) {
@@ -7,12 +7,12 @@ export function QuickFacts({ facts, price, variant }) {
 
   return (
     <section className={className} aria-label="Game facts">
-      {facts.map((fact) => (
-        <Fact icon={fact.icon} label={fact.label} key={fact.label} />
+      {facts.map((fact, index) => (
+        <Fact icon={fact.icon} label={fact.label} key={`${fact.label}-${index}`} />
       ))}
 
       <Fact
-        icon={<PriceTagIcon />}
+        icon={<PriceIcon />}
         label={(
           <>
             <strong>{price}</strong> per player
@@ -27,10 +27,10 @@ export function SidebarQuickFacts({ facts, gameToneLabel }) {
   return (
     <div className="details-sidebar-section">
       <h2>Quick Facts</h2>
-      {facts.map((fact) => (
-        <Fact icon={fact.icon} label={fact.label} key={fact.label} />
+      {facts.map((fact, index) => (
+        <Fact icon={fact.icon} label={fact.label} key={`${fact.label}-${index}`} />
       ))}
-      <Fact icon={<ShieldCheckIcon />} label={gameToneLabel} />
+      <Fact icon={<GameStatusIcon />} label={gameToneLabel} />
     </div>
   )
 }

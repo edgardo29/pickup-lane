@@ -1,16 +1,20 @@
 import {
-  BuildingIcon,
-  CalendarIcon,
-  ClockIcon,
-  StopwatchIcon,
-  UsersIcon,
-} from '../../components/BrowseIcons.jsx'
+  GameDateIcon,
+  GameDurationIcon,
+  GameEnvironmentIcon,
+  GameFormatIcon,
+  GamePlayerGroupIcon,
+  GameSkillIcon,
+  GameTimeIcon,
+} from '../../components/GameFactIcons.jsx'
 import {
   buildMapsUrl,
   formatDate,
   formatEnvironment,
+  formatGamePlayerGroup,
   formatHeroLocation,
   formatPrice,
+  formatSkillLevel,
   formatTimeRange,
   formatVenueAddress,
   getDurationLabel,
@@ -56,13 +60,17 @@ export function buildGameDetailsViewModel({
   const timeLabel = formatTimeRange(game.starts_at, game.ends_at)
   const durationLabel = getDurationLabel(game.starts_at, game.ends_at)
   const environmentLabel = formatEnvironment(game.environment_type)
+  const playerGroupLabel = formatGamePlayerGroup(game.game_player_group)
+  const skillLevelLabel = formatSkillLevel(game.skill_level)
   const price = formatPrice(game.price_per_player_cents, game.currency)
   const facts = [
-    { icon: <CalendarIcon />, label: dateLabel },
-    { icon: <ClockIcon />, label: timeLabel },
-    { icon: <StopwatchIcon />, label: durationLabel },
-    { icon: <BuildingIcon />, label: environmentLabel },
-    { icon: <UsersIcon />, label: game.format_label || 'Pickup' },
+    { icon: <GameDateIcon />, label: dateLabel },
+    { icon: <GameTimeIcon />, label: timeLabel },
+    { icon: <GameDurationIcon />, label: durationLabel },
+    { icon: <GameEnvironmentIcon />, label: environmentLabel },
+    { icon: <GameFormatIcon />, label: game.format_label || 'Pickup' },
+    { icon: <GamePlayerGroupIcon />, label: playerGroupLabel || 'Coed' },
+    { icon: <GameSkillIcon />, label: skillLevelLabel || 'Any Skill' },
   ]
   const venueAddress = formatVenueAddress(game, venue)
   const mapsUrl = buildMapsUrl(venue, venueAddress)

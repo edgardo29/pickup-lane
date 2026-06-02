@@ -2,6 +2,7 @@ import { AppPageHeader, AppPageShell, AppTabs } from '../../components/app/index
 import '../../styles/browse-games/BrowseGamesPage.css'
 import '../../styles/my-games/MyGamesPage.css'
 import HistoryGamesTab from './HistoryGamesTab.jsx'
+import { MyGamesSkeleton } from './MyGamesSkeleton.jsx'
 import { MyGamesState } from './MyGamesState.jsx'
 import UpcomingGamesTab from './UpcomingGamesTab.jsx'
 import { myGamesTabs } from './myGamesData.js'
@@ -26,7 +27,7 @@ function MyGamesPage() {
       />
 
       <section className="browse-panel my-games-panel" aria-label="My games">
-        {page.status === 'loading' && <MyGamesState title="Loading your games" />}
+        {page.status === 'loading' && <MyGamesSkeleton />}
         {page.status === 'error' && <MyGamesState title="Could not load games" message={page.error} />}
         {page.status === 'success' && page.activeItems.length === 0 && (
           <MyGamesState

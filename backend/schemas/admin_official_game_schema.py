@@ -30,6 +30,8 @@ class AdminOfficialGameCreate(BaseModel):
     ends_at: datetime
     timezone: str = "America/Chicago"
     format_label: str
+    game_player_group: str = "coed"
+    skill_level: str = "any"
     environment_type: str
     total_spots: int
     price_per_player_cents: int
@@ -50,6 +52,8 @@ class AdminOfficialGameUpdate(BaseModel):
     ends_at: datetime | None = None
     timezone: str | None = None
     format_label: str | None = None
+    game_player_group: str | None = None
+    skill_level: str | None = None
     environment_type: str | None = None
     total_spots: int | None = None
     price_per_player_cents: int | None = None

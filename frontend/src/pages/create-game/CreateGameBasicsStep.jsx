@@ -1,27 +1,23 @@
 import {
-  BuildingIcon,
-  CalendarIcon,
-  ClockIcon,
-  DollarIcon,
-  UsersIcon,
-} from '../../components/BrowseIcons.jsx'
-import {
   CurrencyInput,
   FormField,
-  SectionLabel,
   StepHeading,
 } from './CreateGameControls.jsx'
 import {
   environmentOptions,
   formatOptions,
   MAX_TOTAL_SPOTS,
+  MINIMUM_TOTAL_SPOTS,
+  playerGroupOptions,
+  skillLevelOptions,
   timeOptions,
 } from './createGameData.js'
 import { clampDate, getTodayDate } from './createGameSchedule.js'
 import { getMinimumSpotsForFormat } from './createGameValidation.js'
 
 export function BasicsStep({ form, updateField }) {
-  const minimumSpots = getMinimumSpotsForFormat(form.format)
+  const hasSelectedFormat = Boolean(form.format)
+  const minimumSpots = hasSelectedFormat ? getMinimumSpotsForFormat(form.format) : MINIMUM_TOTAL_SPOTS
   const totalSpotOptions = Array.from(
     { length: MAX_TOTAL_SPOTS - minimumSpots + 1 },
     (_, index) => minimumSpots + index,
@@ -30,8 +26,12 @@ export function BasicsStep({ form, updateField }) {
   function handleFormatChange(nextFormat) {
     updateField('format', nextFormat)
 
+    if (!nextFormat) {
+      return
+    }
+
     const nextMinimumSpots = getMinimumSpotsForFormat(nextFormat)
-    if (Number(form.totalSpots) < nextMinimumSpots) {
+    if (!form.totalSpots || Number(form.totalSpots) < nextMinimumSpots) {
       updateField('totalSpots', nextMinimumSpots)
     }
   }
@@ -52,14 +52,13 @@ export function BasicsStep({ form, updateField }) {
   return (
     <>
       <StepHeading
-        title="Let's start with the basics"
-        text="Community hosts can create one game per day."
+        title="Let's start with the game"
+        text="Set the schedule, player group, skill level, and price."
       />
 
       <div className="create-game-section">
-        <SectionLabel>When</SectionLabel>
-        <div className="create-game-grid create-game-grid--when">
-          <FormField icon={<CalendarIcon />} label="Date">
+        <div className="create-game-grid create-game-grid--basics">
+          <FormField label="Date">
             <input
               value={form.date}
               min={getTodayDate()}
@@ -67,7 +66,7 @@ export function BasicsStep({ form, updateField }) {
               onChange={(event) => updateField('date', clampDate(event.target.value))}
             />
           </FormField>
-          <FormField icon={<ClockIcon />} label="Start time">
+          <FormField label="Start time">
             <select
               aria-label="Start time"
               value={form.startTime}
@@ -80,7 +79,7 @@ export function BasicsStep({ form, updateField }) {
               ))}
             </select>
           </FormField>
-          <FormField icon={<ClockIcon />} label="End time">
+          <FormField label="End time">
             <select
               aria-label="End time"
               value={form.endTime}
@@ -93,18 +92,13 @@ export function BasicsStep({ form, updateField }) {
               ))}
             </select>
           </FormField>
-        </div>
-      </div>
-
-      <div className="create-game-section">
-        <SectionLabel>Game Details</SectionLabel>
-        <div className="create-game-grid create-game-grid--four">
-          <FormField icon={<UsersIcon />} label="Format">
+          <FormField label="Format">
             <select
               aria-label="Format"
               value={form.format}
               onChange={(event) => handleFormatChange(event.target.value)}
             >
+              <option value="">Select</option>
               {formatOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -112,12 +106,41 @@ export function BasicsStep({ form, updateField }) {
               ))}
             </select>
           </FormField>
-          <FormField icon={<BuildingIcon />} label="Indoor / Outdoor">
+          <FormField label="Player group">
+            <select
+              aria-label="Player group"
+              value={form.gamePlayerGroup}
+              onChange={(event) => updateField('gamePlayerGroup', event.target.value)}
+            >
+              <option value="">Select</option>
+              {playerGroupOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Skill level">
+            <select
+              aria-label="Skill level"
+              value={form.skillLevel}
+              onChange={(event) => updateField('skillLevel', event.target.value)}
+            >
+              <option value="">Select</option>
+              {skillLevelOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Indoor/Outdoor">
             <select
               aria-label="Indoor or outdoor"
               value={form.environment}
               onChange={(event) => updateField('environment', event.target.value)}
             >
+              <option value="">Select</option>
               {environmentOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -125,12 +148,13 @@ export function BasicsStep({ form, updateField }) {
               ))}
             </select>
           </FormField>
-          <FormField icon={<UsersIcon />} label="Total spots">
+          <FormField label="Total spots">
             <select
               aria-label="Total spots"
-              value={form.totalSpots}
-              onChange={(event) => updateField('totalSpots', Number(event.target.value))}
+              value={form.totalSpots || ''}
+              onChange={(event) => updateField('totalSpots', event.target.value ? Number(event.target.value) : '')}
             >
+              <option value="">Select</option>
               {totalSpotOptions.map((spots) => (
                 <option key={spots} value={spots}>
                   {spots}
@@ -138,7 +162,7 @@ export function BasicsStep({ form, updateField }) {
               ))}
             </select>
           </FormField>
-          <FormField icon={<DollarIcon />} label="Price per player">
+          <FormField label="Price per player">
             <CurrencyInput
               value={form.price}
               onChange={handlePriceChange}

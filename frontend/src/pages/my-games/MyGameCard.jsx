@@ -1,13 +1,17 @@
 import { Link } from 'react-router-dom'
 import defaultCommunityVenueImage from '../../assets/community-default/default-venue-wide.png'
 import {
-  ClockIcon,
-  MapPinIcon,
   ShieldCheckIcon,
   SoccerBallIcon,
-  UsersIcon,
 } from '../../components/BrowseIcons.jsx'
-import { formatEnvironment, formatPrice, formatTimeRange } from './myGamesFormatters.js'
+import { AddressIcon, GameFormatIcon, GameSpotsIcon, GameTimeIcon } from '../../components/GameFactIcons.jsx'
+import {
+  formatEnvironment,
+  formatGamePlayerGroup,
+  formatPrice,
+  formatSkillLevel,
+  formatTimeRange,
+} from './myGamesFormatters.js'
 
 function MyGameCard({ imageUrl, item, participantCount }) {
   const { bucket, game, statusLabel, statusTone } = item
@@ -16,6 +20,12 @@ function MyGameCard({ imageUrl, item, participantCount }) {
   const cardImageUrl = imageUrl || (tone === 'community' ? defaultCommunityVenueImage : '')
   const isFull = participantCount >= game.total_spots
   const isHistory = bucket === 'history'
+  const gameSpec = [
+    formatEnvironment(game.environment_type),
+    game.format_label,
+    formatGamePlayerGroup(game.game_player_group),
+    formatSkillLevel(game.skill_level),
+  ].filter(Boolean).join(' · ')
 
   return (
     <Link
@@ -44,26 +54,24 @@ function MyGameCard({ imageUrl, item, participantCount }) {
         </div>
 
         <p className="game-card__location">
-          <MapPinIcon />
+          <AddressIcon />
           {game.city_snapshot}
         </p>
 
         <p className="game-card__meta">
-          <ClockIcon />
+          <GameTimeIcon />
           {formatTimeRange(game.starts_at, game.ends_at)}
         </p>
 
         <p className="game-card__meta">
-          <SoccerBallIcon />
-          {formatEnvironment(game.environment_type)}
-          <span aria-hidden="true">•</span>
-          {game.format_label}
+          <GameFormatIcon />
+          <span className="game-card__meta-text">{gameSpec}</span>
         </p>
       </div>
 
       <div className="game-card__footer">
         <span>
-          <UsersIcon />
+          <GameSpotsIcon />
           <strong>
             {participantCount}/{game.total_spots}
           </strong>{' '}
