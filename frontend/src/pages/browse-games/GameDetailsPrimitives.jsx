@@ -40,7 +40,6 @@ export function InfoCard({
           >
             {ctaIcon && <span className="details-action-icon">{ctaIcon}</span>}
             <span>{cta}</span>
-            <span className="details-action-chevron" aria-hidden="true">›</span>
           </button>
         )}
       </div>

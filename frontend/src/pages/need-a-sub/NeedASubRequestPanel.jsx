@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
+import { SinglePlayerIcon } from '../../components/GameFactIcons.jsx'
 import {
-  formatNeedLabel,
+  formatNeedType,
   formatStatus,
 } from './needASubFormatters.js'
 import { countHeldSpots } from './needASubSelectors.js'
@@ -10,6 +11,7 @@ export function NeedASubRequestPanel({
   activeRequest,
   canRequest,
   canSubmitRequest,
+  canSelectSpot,
   currentUser,
   isActing,
   isPostWaitlistFull,
@@ -24,7 +26,10 @@ export function NeedASubRequestPanel({
   return (
     <section className="need-sub-manage-card need-sub-detail-card need-sub-detail-card--request">
       <div className="need-sub-action-card-header">
-        <p>{activeRequest ? getRequestHeader(activeRequest) : 'Request a Spot'}</p>
+        <span className="need-sub-action-card-heading">
+          <SinglePlayerIcon aria-hidden="true" />
+          <span>{activeRequest ? getRequestHeader(activeRequest) : 'Request a Spot'}</span>
+        </span>
         {requestNotice && (
           <NeedASubStatusChip>
             {requestNotice}
@@ -39,18 +44,23 @@ export function NeedASubRequestPanel({
           onCancel={onCancelRequest}
         />
       ) : (
-        <select
-          className="need-sub-detail-choice"
-          disabled={!canRequest}
-          value={selectedPositionId}
-          onChange={(event) => onSelectPosition(event.target.value)}
-        >
-          {(post.positions || []).map((position) => (
-            <option key={position.id} value={position.id}>
-              {formatSpotOption(position)}
-            </option>
-          ))}
-        </select>
+        <div className="need-sub-detail-choice-group">
+          <AvailabilityValue post={post} isPostWaitlistFull={isPostWaitlistFull} />
+          <label htmlFor="need-sub-position-choice">Choose spot</label>
+          <select
+            className="need-sub-detail-choice"
+            disabled={!canSelectSpot}
+            id="need-sub-position-choice"
+            value={selectedPositionId}
+            onChange={(event) => onSelectPosition(event.target.value)}
+          >
+            {(post.positions || []).map((position) => (
+              <option key={position.id} value={position.id}>
+                {formatSpotOption(position, isPostWaitlistFull)}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
       {!currentUser && (
@@ -58,6 +68,7 @@ export function NeedASubRequestPanel({
           <Link to="/sign-in" state={{ from: `/need-a-sub/posts/${post.id}` }}>
             Sign In to Request
           </Link>
+          <span>Choose a spot type, then sign in to send your request.</span>
         </div>
       )}
 
@@ -77,8 +88,8 @@ export function NeedASubRequestPanel({
           <span>
             {selectedPositionNeedsWaitlist
               ? isPostWaitlistFull
-                ? 'This post has reached the waitlist limit.'
-                : 'You will be added behind current waitlisted players.'
+                ? "This post's waitlist is full."
+                : "You'll be notified if a spot opens."
               : 'The owner will review your request.'}
           </span>
         </div>
@@ -87,16 +98,53 @@ export function NeedASubRequestPanel({
   )
 }
 
-function formatPositionAvailability(position) {
-  const spotsLeft = Math.max(0, Number(position.spots_needed || 0) - countHeldSpots(position))
-  if (spotsLeft === 0) {
-    return 'Join Waitlist'
-  }
-  return `${spotsLeft} ${spotsLeft === 1 ? 'Spot' : 'Spots'} Available`
+function AvailabilityValue({ post, isPostWaitlistFull }) {
+  const spotsLeft = getPostSpotsLeft(post)
+  const isFull = spotsLeft === 0
+
+  return (
+    <div className="need-sub-detail-availability">
+      <span>Availability</span>
+      <strong className={isFull ? 'need-sub-detail-availability__full' : ''}>
+        {formatPostAvailability(post, isPostWaitlistFull)}
+      </strong>
+    </div>
+  )
 }
 
-function formatSpotOption(position) {
-  return `${formatNeedLabel(position)} · ${formatPositionAvailability(position)}`
+function formatPostAvailability(post, isPostWaitlistFull) {
+  const spotsLeft = getPostSpotsLeft(post)
+
+  if (spotsLeft > 0) {
+    return `${spotsLeft} ${spotsLeft === 1 ? 'spot' : 'spots'} available`
+  }
+
+  return isPostWaitlistFull ? 'FULL · Waitlist full' : 'FULL · Waitlist open'
+}
+
+function formatPositionAvailability(position, isPostWaitlistFull) {
+  const spotsLeft = getSpotsLeft(position)
+
+  if (spotsLeft === 0) {
+    return isPostWaitlistFull ? 'Waitlist full' : 'Join waitlist'
+  }
+
+  return `${spotsLeft} ${spotsLeft === 1 ? 'spot' : 'spots'} left`
+}
+
+function formatSpotOption(position, isPostWaitlistFull) {
+  return `${formatNeedType(position)} · ${formatPositionAvailability(position, isPostWaitlistFull)}`
+}
+
+function getSpotsLeft(position) {
+  return Math.max(0, Number(position.spots_needed || 0) - countHeldSpots(position))
+}
+
+function getPostSpotsLeft(post) {
+  return (post.positions || []).reduce(
+    (sum, position) => sum + getSpotsLeft(position),
+    0,
+  )
 }
 
 function getRequestHeader(request) {

@@ -1,4 +1,4 @@
-import { PencilIcon } from '../../components/BrowseIcons.jsx'
+import { CircleHelp, Info } from 'lucide-react'
 import { HostPaymentSection } from './GameDetailsHostPayment.jsx'
 
 export function SidebarAboutSection({ aboutText, hostPaymentMethods }) {
@@ -6,7 +6,7 @@ export function SidebarAboutSection({ aboutText, hostPaymentMethods }) {
     <div className="details-sidebar-section">
       <h2 className="details-section-heading">
         <span className="details-section-icon">
-          <PencilIcon />
+          <Info />
         </span>
         About This Game
       </h2>
@@ -22,7 +22,12 @@ export function SidebarAboutSection({ aboutText, hostPaymentMethods }) {
 export function SidebarQuestionsSection() {
   return (
     <div className="details-sidebar-section">
-      <h2>Questions?</h2>
+      <h2 className="details-section-heading">
+        <span className="details-section-icon">
+          <CircleHelp />
+        </span>
+        Questions?
+      </h2>
       <p>Check out our Help Center or contact our support team.</p>
 
       <a className="details-help-button" href="mailto:support@pickuplane.local">

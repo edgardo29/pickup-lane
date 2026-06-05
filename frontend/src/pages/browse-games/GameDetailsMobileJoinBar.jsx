@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import {
-  CalendarIcon,
-  ClockIcon,
-  PlusCircleIcon,
-  ShieldCheckIcon,
-  TrashIcon,
-} from '../../components/BrowseIcons.jsx'
+  CalendarDays as CalendarIcon,
+  CirclePlus as PlusCircleIcon,
+  Clock3 as ClockIcon,
+  ShieldCheck as ShieldCheckIcon,
+  Trash2 as TrashIcon,
+} from 'lucide-react'
 
 function GameDetailsMobileJoinBar({
   currentParticipant,

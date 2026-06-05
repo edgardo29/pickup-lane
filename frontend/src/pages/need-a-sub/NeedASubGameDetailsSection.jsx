@@ -12,6 +12,7 @@ export function NeedASubGameDetailsSection({
   form,
   hideHeading = false,
   isDateLocked,
+  isGamePlayerGroupOptionDisabled = () => false,
   onUpdateField,
   onUpdateGamePlayerGroup,
   splitTimeFields = false,
@@ -127,7 +128,13 @@ export function NeedASubGameDetailsSection({
           >
             <option value="">Select</option>
             {GROUP_OPTIONS.map((group) => (
-              <option key={group.value} value={group.value}>{group.label}</option>
+              <option
+                disabled={isGamePlayerGroupOptionDisabled(group.value)}
+                key={group.value}
+                value={group.value}
+              >
+                {group.label}
+              </option>
             ))}
           </select>
         </NeedASubFormField>

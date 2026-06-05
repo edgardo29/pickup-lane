@@ -1,8 +1,5 @@
-import {
-  formatNeedLabel,
-  getRequesterInitials,
-  getRequesterName,
-} from './needASubFormatters.js'
+import { CheckCircle2, ClipboardList, Clock3, UsersRound } from 'lucide-react'
+import { getRequesterInitials, getRequesterName } from './needASubFormatters.js'
 
 export function NeedASubPlayerPanel({
   activeStatus,
@@ -13,11 +10,10 @@ export function NeedASubPlayerPanel({
   onStatusChange,
   onViewWaitlist,
 }) {
-  const selectedLabel = formatNeedLabel(group.position).replace(/^\d+\s+Subs?\s+·\s+/, '')
   const statusTabs = [
-    { id: 'pending', label: 'Pending', count: group.pending.length },
-    { id: 'confirmed', label: 'Confirmed', count: group.confirmed.length },
-    { id: 'waitlist', label: 'Waitlist', count: group.waitlisted.length },
+    { id: 'pending', label: 'Pending', count: group.pending.length, Icon: Clock3 },
+    { id: 'confirmed', label: 'Confirmed', count: group.confirmed.length, Icon: CheckCircle2 },
+    { id: 'waitlist', label: 'Waitlist', count: group.waitlisted.length, Icon: UsersRound },
   ]
   const activeRequests = {
     pending: group.pending,
@@ -28,26 +24,31 @@ export function NeedASubPlayerPanel({
   return (
     <section className="need-sub-manage-card need-sub-player-panel">
       <header className="need-sub-player-panel__header">
-        <div>
-          <h2>Requests</h2>
-          <strong>{selectedLabel}</strong>
-        </div>
+        <h2>
+          <ClipboardList aria-hidden="true" />
+          Requests
+        </h2>
       </header>
 
       <div className="need-sub-request-tabs" role="tablist" aria-label="Request status">
-        {statusTabs.map((tab) => (
-          <button
-            aria-selected={activeStatus === tab.id}
-            className={activeStatus === tab.id ? 'need-sub-request-tabs__tab--active' : ''}
-            key={tab.id}
-            role="tab"
-            type="button"
-            onClick={() => onStatusChange(tab.id)}
-          >
-            <span>{tab.label}</span>
-            <strong>{tab.count}</strong>
-          </button>
-        ))}
+        {statusTabs.map((tab) => {
+          const TabIcon = tab.Icon
+
+          return (
+            <button
+              aria-selected={activeStatus === tab.id}
+              className={activeStatus === tab.id ? 'need-sub-request-tabs__tab--active' : ''}
+              key={tab.id}
+              role="tab"
+              type="button"
+              onClick={() => onStatusChange(tab.id)}
+            >
+              <TabIcon aria-hidden="true" />
+              <span>{tab.label}</span>
+              <strong>{tab.count}</strong>
+            </button>
+          )
+        })}
       </div>
 
       <PlayerSection
@@ -59,11 +60,15 @@ export function NeedASubPlayerPanel({
           if (activeStatus === 'pending') {
             return (
               <>
-                <button type="button" onClick={() => onAccept(request)}>
+                <button
+                  className="need-sub-manage-request__action need-sub-manage-request__action--primary"
+                  type="button"
+                  onClick={() => onAccept(request)}
+                >
                   Accept
                 </button>
                 <button
-                  className="need-sub-secondary-action"
+                  className="need-sub-manage-request__action need-sub-secondary-action"
                   type="button"
                   onClick={() => onDecline(request)}
                 >
@@ -76,11 +81,23 @@ export function NeedASubPlayerPanel({
           if (activeStatus === 'confirmed') {
             return (
               <button
-                className="need-sub-secondary-action"
+                className="need-sub-manage-request__action need-sub-secondary-action"
                 type="button"
                 onClick={() => onRemove(request)}
               >
                 Remove
+              </button>
+            )
+          }
+
+          if (activeStatus === 'waitlist') {
+            return (
+              <button
+                className="need-sub-manage-request__action need-sub-secondary-action"
+                type="button"
+                onClick={() => onDecline(request)}
+              >
+                Decline
               </button>
             )
           }
@@ -119,16 +136,19 @@ function PlayerSection({
   return (
     <section className="need-sub-player-section">
       <div className="need-sub-manage-request-list">
-        {requests.map((request, index) => (
+        {requests.map((request) => (
           <PlayerRow
             key={request.id}
             request={request}
-            status={status}
-            waitlistPosition={isWaitlist ? index + 1 : null}
             renderActions={renderActions}
           />
         ))}
       </div>
+      {requests.length > 1 && (
+        <p className="need-sub-player-section__count">
+          {buildRequestCountText(status, requests.length)}
+        </p>
+      )}
       {isWaitlist && waitlistTotal > requests.length && (
         <button className="need-sub-waitlist-link" type="button" onClick={onViewWaitlist}>
           View all {waitlistTotal} waitlisted
@@ -138,10 +158,7 @@ function PlayerSection({
   )
 }
 
-function PlayerRow({ renderActions, request, status, waitlistPosition = null }) {
-  const detailText = status === 'waitlist' && waitlistPosition
-    ? `#${waitlistPosition} on waitlist`
-    : ''
+function PlayerRow({ renderActions, request }) {
   const actions = renderActions?.(request)
 
   return (
@@ -151,7 +168,6 @@ function PlayerRow({ renderActions, request, status, waitlistPosition = null }) 
       </span>
       <div>
         <strong>{getRequesterName(request)}</strong>
-        {detailText && <span>{detailText}</span>}
       </div>
       {actions && (
         <div className="need-sub-manage-request__actions">
@@ -160,4 +176,14 @@ function PlayerRow({ renderActions, request, status, waitlistPosition = null }) 
       )}
     </div>
   )
+}
+
+function buildRequestCountText(status, count) {
+  const labels = {
+    pending: count === 1 ? 'pending request' : 'pending requests',
+    confirmed: count === 1 ? 'confirmed player' : 'confirmed players',
+    waitlist: count === 1 ? 'waitlisted player' : 'waitlisted players',
+  }
+
+  return `Showing ${count} ${labels[status] || 'requests'}`
 }

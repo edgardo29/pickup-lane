@@ -6,7 +6,10 @@ import {
   MAX_TOTAL_SUBS,
   needASubFieldLimits,
   SKILL_OPTIONS,
+  getAnyExclusivePositionConflict,
+  positionsAreCompatibleWithPostGroup,
 } from './needASubData.js'
+import { formatPositionLabel } from './needASubFormatters.js'
 
 export function validateNeedASubForm(form) {
   const gameError = validateNeedASubCreateStep('game', form)
@@ -139,6 +142,14 @@ function validateSubsStep(form) {
     return `Need a Sub posts can include up to ${MAX_TOTAL_SUBS} total Subs.`
   }
 
+  if (form.positions.some((position) => !position.position_label || !position.player_group)) {
+    return 'Choose a Player Type for each Sub requirement.'
+  }
+
+  if (!positionsAreCompatibleWithPostGroup(form.positions, form.gamePlayerGroup)) {
+    return 'Sub requirements must match the selected player group.'
+  }
+
   const positionKeys = new Set()
   for (const position of form.positions) {
     const key = `${position.position_label}:${position.player_group}`
@@ -146,6 +157,11 @@ function validateSubsStep(form) {
       return 'Each position and player group row must be unique.'
     }
     positionKeys.add(key)
+  }
+
+  const anyConflict = getAnyExclusivePositionConflict(form.positions)
+  if (anyConflict) {
+    return `Any ${formatPositionLabel(anyConflict)} cannot be combined with Men or Women rows.`
   }
 
   return ''

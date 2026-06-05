@@ -1,8 +1,5 @@
 import { Link } from 'react-router-dom'
-import {
-  MapPinIcon,
-  PencilIcon,
-} from '../../components/BrowseIcons.jsx'
+import { ArrowLeft, CircleDollarSign, CircleHelp, ClipboardList, Info, MapPin } from 'lucide-react'
 import { GameChatCard } from './GameDetailsChat.jsx'
 import { GameGallery } from './GameDetailsGallery.jsx'
 import { HostPaymentSection } from './GameDetailsHostPayment.jsx'
@@ -33,6 +30,7 @@ export function GameDetailsMainColumn({
   heroLocation,
   hostGuestMax,
   hostPaymentMethods,
+  hostRulesText,
   images,
   isAddingHostGuest,
   isCancelledGame,
@@ -61,11 +59,23 @@ export function GameDetailsMainColumn({
   venueAddress,
   venueName,
 }) {
+  const hasAboutText = Boolean(aboutText)
+  const hasHostRulesText = Boolean(hostRulesText)
+  const hasHostPaymentMethods = hostPaymentMethods.length > 0
+  const showStandaloneHostPayment = !hasAboutText && hasHostPaymentMethods
+  const optionalInfoCardCount = [
+    hasAboutText,
+    hasHostRulesText,
+    showStandaloneHostPayment,
+  ].filter(Boolean).length
+  const shouldShowOptionalInfo = optionalInfoCardCount > 0
+
   return (
     <div className="details-main">
       <div className="details-titlebar">
         <Link className="details-back-to-browse" to="/games">
-          ← Back
+          <ArrowLeft aria-hidden="true" />
+          <span>Back</span>
         </Link>
 
         <StatusPill label={gameToneLabel} />
@@ -73,8 +83,9 @@ export function GameDetailsMainColumn({
 
       <div className="details-heading">
         <h1>{title}</h1>
+
         <p>
-          <MapPinIcon />
+          <MapPin />
           {heroLocation}
         </p>
       </div>
@@ -90,17 +101,6 @@ export function GameDetailsMainColumn({
       <QuickFacts facts={facts} price={price} variant="desktop" />
 
       <section className="details-mobile-summary">
-        <div className="details-mobile-summary__meta">
-          <StatusPill label={gameToneLabel} />
-        </div>
-
-        <h1>{title}</h1>
-
-        <p>
-          <MapPinIcon />
-          {heroLocation}
-        </p>
-
         <QuickFacts facts={facts} price={price} variant="mobile" />
       </section>
 
@@ -142,20 +142,6 @@ export function GameDetailsMainColumn({
         </section>
       )}
 
-      <section className="details-card details-mobile-info-section details-mobile-about-section">
-        <h2 className="details-section-heading">
-          <span className="details-section-icon">
-            <PencilIcon />
-          </span>
-          About This Game
-        </h2>
-        <p>{aboutText}</p>
-
-        {hostPaymentMethods.length > 0 && (
-          <HostPaymentSection methods={hostPaymentMethods} />
-        )}
-      </section>
-
       <section className="details-card-grid">
         <PlayersCard
           cta="View player list"
@@ -174,23 +160,74 @@ export function GameDetailsMainColumn({
         />
       </section>
 
+      {shouldShowOptionalInfo && (
+        <section
+          className={[
+            'details-optional-info',
+            optionalInfoCardCount === 1 ? 'details-optional-info--single' : '',
+          ].filter(Boolean).join(' ')}
+        >
+          {hasAboutText && (
+            <OptionalInfoCard icon={<Info />} title="About This Game">
+              <p>{aboutText}</p>
+              <HostPaymentSection methods={hostPaymentMethods} />
+            </OptionalInfoCard>
+          )}
+
+          {hasHostRulesText && (
+            <OptionalInfoCard icon={<ClipboardList />} title="Host Rules">
+              <p>{hostRulesText}</p>
+            </OptionalInfoCard>
+          )}
+
+          {showStandaloneHostPayment && (
+            <OptionalInfoCard
+              className="details-optional-info__card--payment"
+              icon={<CircleDollarSign />}
+              title="Host Payment"
+            >
+              <HostPaymentSection methods={hostPaymentMethods} />
+            </OptionalInfoCard>
+          )}
+        </section>
+      )}
+
       <BookingRulesCard policyUrl="/policies/cancellation-refunds" rules={ruleItems} />
 
       <WhereToGoCard
         address={venueAddress}
-        mapIcon={<MapPinIcon />}
+        mapIcon={<MapPin />}
         mapsUrl={mapsUrl}
         parkingNote={parkingNote}
         venueName={venueName}
       />
 
       <section className="details-card details-mobile-info-section">
-        <h2>Questions?</h2>
+        <h2 className="details-section-heading">
+          <span className="details-section-icon">
+            <CircleHelp />
+          </span>
+          Questions?
+        </h2>
         <p>Check out our Help Center or contact our support team.</p>
         <a className="details-help-button" href="mailto:support@pickuplane.local">
           Visit Help Center
         </a>
       </section>
     </div>
+  )
+}
+
+function OptionalInfoCard({ children, className = '', icon, title }) {
+  return (
+    <article className={`details-card details-optional-info__card ${className}`.trim()}>
+      <h2 className="details-section-heading">
+        <span className="details-section-icon">
+          {icon}
+        </span>
+        {title}
+      </h2>
+      {children}
+    </article>
   )
 }

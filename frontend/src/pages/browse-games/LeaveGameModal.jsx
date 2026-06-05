@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { UsersIcon } from '../../components/BrowseIcons.jsx'
+import { UsersRound } from 'lucide-react'
 
 export function LeaveGameModal({
   addableGuestCount = 0,
@@ -59,7 +59,7 @@ export function LeaveGameModal({
       >
         <h2 id="details-leave-title" className="details-confirm-modal__title">
           <span className="details-confirm-modal__title-icon">
-            <UsersIcon />
+            <UsersRound />
           </span>
           {title}
         </h2>

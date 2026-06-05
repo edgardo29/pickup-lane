@@ -1,4 +1,4 @@
-import { UsersIcon } from '../../components/BrowseIcons.jsx'
+import { PlayersIcon } from '../../components/GameFactIcons.jsx'
 import { getInitials } from './gameDetailsFormatters.js'
 import { InfoCard } from './GameDetailsPrimitives.jsx'
 
@@ -15,17 +15,17 @@ export function PlayersCard({
   return (
     <InfoCard
       className="details-info-card--players"
-      icon={<UsersIcon />}
+      icon={<PlayersIcon />}
       title="Players"
       badge={isFull ? (
         <>
-          <UsersIcon />
+          <PlayersIcon />
           Full
         </>
       ) : ''}
       cta={cta}
       ctaDisabled={ctaDisabled}
-      ctaIcon={<UsersIcon />}
+      ctaIcon={<PlayersIcon />}
       eyebrow={disabledReason}
       onCtaClick={onOpenPlayerList}
     >
@@ -80,7 +80,12 @@ export function PlayersListModal({ activeTab, onClose, onSelectTab, participantS
       >
         <div className="details-player-modal__header">
           <div>
-            <h2 id="details-player-modal-title">Players</h2>
+            <h2 className="details-player-modal__title" id="details-player-modal-title">
+              <span>
+                <PlayersIcon />
+              </span>
+              Players
+            </h2>
             <p>
               {participantSummary.signedUpCount}/{participantSummary.totalSpots} joined ·{' '}
               {participantSummary.spotsLeft} spots left

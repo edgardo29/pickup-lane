@@ -2,35 +2,46 @@ import {
   MAX_SUB_ROWS,
   MAX_TOTAL_SUBS,
   POSITION_OPTIONS,
-  getMaxPositionRows,
+  getNextPosition,
   getPositionGroupOptions,
+  positionGroupCreatesAnyConflict,
+  positionLabelCreatesAnyConflict,
 } from './needASubData.js'
+import {
+  getMinimumEditableSpots,
+  hasActivePositionRequests,
+} from './needASubSelectors.js'
 import { NeedASubFormField } from './NeedASubFormField.jsx'
 
 export function NeedASubRequirementsSection({
   form,
   hideTitle = false,
   iconActions = false,
+  isEditMode = false,
   onAddPosition,
   onRemovePosition,
   onUpdatePosition,
   totalSpotsNeeded,
 }) {
   const playerGroupOptions = getPositionGroupOptions(form.gamePlayerGroup)
-  const maxPositionRows = Math.min(MAX_SUB_ROWS, getMaxPositionRows(form.gamePlayerGroup))
+  const nextPosition = getNextPosition(form.positions, form.gamePlayerGroup)
   const isAtSpotLimit = totalSpotsNeeded >= MAX_TOTAL_SUBS
   const isOverSpotLimit = totalSpotsNeeded > MAX_TOTAL_SUBS
-  const isAtRowLimit = form.positions.length >= maxPositionRows
-  const canAddSub = !isAtRowLimit && !isAtSpotLimit
+  const isAtRowLimit = form.positions.length >= MAX_SUB_ROWS || !nextPosition
   const remainingSpots = Math.max(0, MAX_TOTAL_SUBS - totalSpotsNeeded)
   const requestedLabel = `${totalSpotsNeeded} of ${MAX_TOTAL_SUBS} sub ${totalSpotsNeeded === 1 ? 'spot' : 'spots'} requested`
   const remainingLabel = `${remainingSpots} remaining`
-  const isRowOptionLimit = isAtRowLimit && !isAtSpotLimit
+  const hasIncompletePlayerType = form.positions.some((position) => !position.player_group)
+  const hasAnyPlayerRow = form.positions.some((position) => position.player_group === 'open')
+  const hasLockedRows = form.positions.some((position) => isEditMode && hasActivePositionRequests(position))
+  const isRowOptionLimit = (isAtRowLimit || hasIncompletePlayerType) && !isAtSpotLimit
+  const canAddSub = !hasIncompletePlayerType && !isAtRowLimit && !isAtSpotLimit
   const subLimitMessage = isOverSpotLimit
     ? `Reduce the total to ${MAX_TOTAL_SUBS} Subs before publishing.`
     : isAtSpotLimit
       ? `Sub limit reached at ${MAX_TOTAL_SUBS}.`
       : ''
+  const rowOptionMessage = getRowOptionMessage(hasIncompletePlayerType, hasAnyPlayerRow)
 
   return (
     <section className="need-sub-form-section">
@@ -47,7 +58,12 @@ export function NeedASubRequirementsSection({
           )}
           {isRowOptionLimit && (
             <small className="need-sub-subtotal need-sub-subtotal--note">
-              <span>Note:</span> All position/player type combinations have been added. Increase "Spots" on an existing row to request more subs.
+              <span>Note:</span> {rowOptionMessage}
+            </small>
+          )}
+          {hasLockedRows && (
+            <small className="need-sub-subtotal need-sub-subtotal--note">
+              <span>Note:</span> Rows with active requests keep their position and player type.
             </small>
           )}
         </div>
@@ -77,21 +93,46 @@ export function NeedASubRequirementsSection({
             <div className={`need-sub-position-card__fields${iconActions ? ' need-sub-position-card__fields--compact' : ''}`}>
               <NeedASubFormField className={iconActions ? 'need-sub-field--compact' : ''} label="Position">
                 <select
+                  disabled={isPositionTypeLocked(position, isEditMode)}
                   value={position.position_label}
                   onChange={(event) => onUpdatePosition(index, 'position_label', event.target.value)}
                 >
                   {POSITION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
+                    <option
+                      disabled={positionLabelCreatesAnyConflict(
+                        option.value,
+                        form.positions,
+                        index,
+                        position.player_group,
+                      )}
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </option>
                   ))}
                 </select>
               </NeedASubFormField>
               <NeedASubFormField className={iconActions ? 'need-sub-field--compact' : ''} label="Player Type">
                 <select
+                  disabled={isPositionTypeLocked(position, isEditMode)}
                   value={position.player_group}
                   onChange={(event) => onUpdatePosition(index, 'player_group', event.target.value)}
                 >
+                  <option value="">Select</option>
                   {playerGroupOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
+                    <option
+                      disabled={positionGroupCreatesAnyConflict(
+                        option.value,
+                        form.positions,
+                        index,
+                        position.position_label,
+                      )}
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </option>
                   ))}
                 </select>
               </NeedASubFormField>
@@ -100,7 +141,11 @@ export function NeedASubRequirementsSection({
                   value={position.spots_needed}
                   onChange={(event) => onUpdatePosition(index, 'spots_needed', event.target.value)}
                 >
-                  {getSpotOptions(position.spots_needed, totalSpotsNeeded).map((spotCount) => (
+                  {getSpotOptions(
+                    position.spots_needed,
+                    totalSpotsNeeded,
+                    isEditMode ? getMinimumEditableSpots(position) : 1,
+                  ).map((spotCount) => (
                     <option key={spotCount} value={spotCount}>{spotCount}</option>
                   ))}
                 </select>
@@ -109,7 +154,7 @@ export function NeedASubRequirementsSection({
                 aria-hidden={iconActions && form.positions.length === 1 ? 'true' : undefined}
                 aria-label={`Remove sub requirement ${index + 1}`}
                 className={`need-sub-row-remove${iconActions ? ' need-sub-row-remove--icon' : ''}${iconActions && form.positions.length === 1 ? ' need-sub-row-remove--placeholder' : ''}`}
-                disabled={form.positions.length === 1}
+                disabled={form.positions.length === 1 || isPositionTypeLocked(position, isEditMode)}
                 tabIndex={iconActions && form.positions.length === 1 ? -1 : undefined}
                 title="Remove sub requirement"
                 type="button"
@@ -125,10 +170,28 @@ export function NeedASubRequirementsSection({
   )
 }
 
-function getSpotOptions(currentSpots, totalSpotsNeeded) {
+function getSpotOptions(currentSpots, totalSpotsNeeded, minimumSpots = 1) {
   const current = Math.max(1, Number(currentSpots || 1))
   const remaining = Math.max(0, MAX_TOTAL_SUBS - Number(totalSpotsNeeded || 0))
-  const maxForRow = Math.min(MAX_TOTAL_SUBS, Math.max(current, current + remaining))
+  const minimum = Math.max(1, Number(minimumSpots || 1))
+  const maxForRow = Math.min(MAX_TOTAL_SUBS, Math.max(minimum, current, current + remaining))
+  const start = Math.min(minimum, maxForRow)
 
-  return Array.from({ length: maxForRow }, (_, index) => index + 1)
+  return Array.from({ length: maxForRow - start + 1 }, (_, index) => start + index)
+}
+
+function isPositionTypeLocked(position, isEditMode) {
+  return Boolean(isEditMode && hasActivePositionRequests(position))
+}
+
+function getRowOptionMessage(hasIncompletePlayerType, hasAnyPlayerRow) {
+  if (hasIncompletePlayerType) {
+    return 'Choose Player Type on an existing row before adding more rows for that position.'
+  }
+
+  if (hasAnyPlayerRow) {
+    return 'Any Player covers that whole position. Change Any to Men or Women to split that position into more rows.'
+  }
+
+  return 'All valid position/player type combinations have been added. Increase "Spots" on an existing row to request more subs.'
 }

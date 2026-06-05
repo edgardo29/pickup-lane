@@ -1,7 +1,4 @@
-import {
-  BuildingIcon,
-  MapPinIcon,
-} from '../../components/BrowseIcons.jsx'
+import { AddressIcon, ParkingIcon, VenueIcon } from '../../components/GameFactIcons.jsx'
 import darkMapPreview from '../../assets/maps/dark-map-preview.png'
 
 export function WhereToGoCard({
@@ -29,10 +26,9 @@ export function WhereToGoCard({
             rel="noreferrer"
           >
             <span className="details-action-icon">
-              <MapPinIcon />
+              <AddressIcon />
             </span>
             <span>Open in Maps</span>
-            <span className="details-action-chevron" aria-hidden="true">›</span>
           </a>
         )}
       </div>
@@ -40,14 +36,25 @@ export function WhereToGoCard({
       <div className="details-location__rows">
         <div className="details-location__row details-location__row--venue">
           <span className="details-location__note-icon">
-            <BuildingIcon />
+            <VenueIcon />
           </span>
           <div>
             <strong>Venue</strong>
             <h3>{venueName}</h3>
-            <p>{address}</p>
           </div>
         </div>
+
+        {address && (
+          <div className="details-location__row details-location__row--address">
+            <span className="details-location__note-icon">
+              <AddressIcon />
+            </span>
+            <div>
+              <strong>Address</strong>
+              <p>{address}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="details-location__map-preview" role="img" aria-label={`Map preview for ${venueName}`}>
@@ -68,18 +75,5 @@ export function WhereToGoCard({
         </div>
       )}
     </section>
-  )
-}
-
-function ParkingIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m5.2 11 1.7-4.2A2 2 0 0 1 8.8 5.5h6.4a2 2 0 0 1 1.9 1.3L18.8 11" />
-      <rect x="4" y="10" width="16" height="7" rx="2" />
-      <path d="M6.5 17v1.5" />
-      <path d="M17.5 17v1.5" />
-      <path d="M7.5 13.5h.1" />
-      <path d="M16.5 13.5h.1" />
-    </svg>
   )
 }

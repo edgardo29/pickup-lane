@@ -1,4 +1,4 @@
-import { ChatIcon } from '../../components/BrowseIcons.jsx'
+import { MessageSquare } from 'lucide-react'
 import { getInitials } from './gameDetailsFormatters.js'
 import { InfoCard } from './GameDetailsPrimitives.jsx'
 
@@ -26,7 +26,7 @@ export function GameChatCard({
       eyebrow=""
       cta="Open chat"
       ctaDisabled={!canOpenChat}
-      ctaIcon={<ChatIcon />}
+      ctaIcon={<MessageSquare />}
       onCtaClick={onOpenChat}
     >
       <div className="details-chat-card__pills">
@@ -77,7 +77,7 @@ export function ChatPanel({
           <div>
             <h2 className="details-chat-title" id="details-chat-panel-title">
               <span>
-                <ChatIcon />
+                <MessageSquare />
               </span>
               Game Chat
             </h2>
@@ -139,7 +139,7 @@ export function ChatPanel({
 function ChatIconWithDot({ active }) {
   return (
     <span className="details-chat-icon">
-      <ChatIcon />
+      <MessageSquare />
       {active && <i aria-hidden="true" />}
     </span>
   )

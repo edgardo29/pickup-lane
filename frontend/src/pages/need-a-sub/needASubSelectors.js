@@ -4,6 +4,18 @@ export function countHeldSpots(position) {
   return Number(position.pending_count || 0) + Number(position.confirmed_count || 0)
 }
 
+export function countActivePositionRequests(position) {
+  return countHeldSpots(position) + Number(position.sub_waitlist_count || 0)
+}
+
+export function hasActivePositionRequests(position) {
+  return countActivePositionRequests(position) > 0
+}
+
+export function getMinimumEditableSpots(position) {
+  return Math.max(1, countHeldSpots(position))
+}
+
 export function getSpotsLeft(post) {
   const positionTotal = (post.positions || []).reduce((sum, position) => {
     const spotsLeft = Number(position.spots_needed || 0) - countHeldSpots(position)

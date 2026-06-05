@@ -1,5 +1,5 @@
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
-import { ShieldCheckIcon } from '../../components/BrowseIcons.jsx'
+import { ShieldCheck } from 'lucide-react'
 
 export function DetailsScaffold({ state }) {
   return (
@@ -22,7 +22,7 @@ export function DetailsState({ title, message }) {
 export function StatusPill({ label }) {
   return (
     <div className="details-kicker">
-      <ShieldCheckIcon />
+      <ShieldCheck />
       {label}
     </div>
   )

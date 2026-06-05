@@ -1,16 +1,14 @@
 import { Link } from 'react-router-dom'
 import {
-  CalendarIcon,
-  CheckIcon,
-  ClockIcon,
-  CopyIcon,
-  PencilIcon,
-  PlusCircleIcon,
-  ShareIcon,
-  ShieldCheckIcon,
-  TrashIcon,
-  UsersIcon,
-} from '../../components/BrowseIcons.jsx'
+  CalendarDays as CalendarIcon,
+  CirclePlus as PlusCircleIcon,
+  Clock3 as ClockIcon,
+  Pencil as PencilIcon,
+  Share2 as ShareIcon,
+  ShieldCheck as ShieldCheckIcon,
+  Trash2 as TrashIcon,
+  UsersRound as UsersIcon,
+} from 'lucide-react'
 
 export function JoinActionStack({
   cancelGameDisabled = false,
@@ -79,7 +77,6 @@ export function JoinActionStack({
               <PencilIcon />
             </span>
             <span>Edit Game</span>
-            <span className="details-action-chevron" aria-hidden="true">›</span>
           </button>
         ) : (
           <Link className="details-secondary-action details-host-edit-action" to={editGameUrl}>
@@ -87,7 +84,6 @@ export function JoinActionStack({
               <PencilIcon />
             </span>
             <span>Edit Game</span>
-            <span className="details-action-chevron" aria-hidden="true">›</span>
           </Link>
         )
       )}
@@ -96,6 +92,7 @@ export function JoinActionStack({
         <button
           className="details-secondary-action details-host-guest-action"
           type="button"
+          aria-label={`Manage Guests ${hostGuestCount}/${hostGuestMax}`}
           disabled={manageHostGuestsDisabled || isAddingHostGuest || isUpdatingHostGuests}
           onClick={onManageHostGuests}
         >
@@ -103,8 +100,6 @@ export function JoinActionStack({
             <UsersIcon />
           </span>
           <span>Manage Guests</span>
-          <strong className="details-action-count">{hostGuestCount}/{hostGuestMax}</strong>
-          <span className="details-action-chevron" aria-hidden="true">›</span>
         </button>
       )}
 
@@ -114,7 +109,6 @@ export function JoinActionStack({
             <PencilIcon />
           </span>
           <span>{leaveLabel || 'Leave Game'}</span>
-          <span className="details-action-chevron" aria-hidden="true">›</span>
         </button>
       )}
 
@@ -129,7 +123,6 @@ export function JoinActionStack({
             <TrashIcon />
           </span>
           <span>{isCancellingGame ? 'Cancelling...' : 'Cancel Game'}</span>
-          <span className="details-action-chevron" aria-hidden="true">›</span>
         </button>
       )}
 
@@ -142,17 +135,7 @@ export function JoinActionStack({
         <span className="details-action-icon">
           <ShareIcon />
         </span>
-        <span>Share Game</span>
-        <span
-          className={[
-            'details-action-chevron',
-            'details-share-indicator',
-            shareCopied ? 'details-share-indicator--copied' : '',
-          ].filter(Boolean).join(' ')}
-          aria-hidden="true"
-        >
-          {shareCopied ? <CheckIcon /> : <CopyIcon />}
-        </span>
+        <span>{shareCopied ? 'Copied' : 'Share Game'}</span>
       </button>
     </>
   )

@@ -62,7 +62,7 @@ export function buildInitialNeedASubForm() {
     neighborhood: '',
     priceDue: '',
     notes: '',
-    positions: getDefaultPositions('coed'),
+    positions: getDefaultPositions(),
   }
 }
 
@@ -100,21 +100,11 @@ function buildTimeOptions() {
   return options
 }
 
-export function getDefaultPositionGroup(postGroup) {
-  if (postGroup === 'men') {
-    return 'men'
-  }
-  if (postGroup === 'women') {
-    return 'women'
-  }
-  return 'open'
-}
-
-export function getDefaultPositions(postGroup) {
+export function getDefaultPositions() {
   return [
     {
       position_label: 'field_player',
-      player_group: getDefaultPositionGroup(postGroup),
+      player_group: '',
       spots_needed: 1,
       sort_order: 0,
     },
@@ -137,29 +127,111 @@ export function getPositionGroupOptions(postGroup) {
   ]
 }
 
-export function getMaxPositionRows(postGroup) {
-  return POSITION_OPTIONS.length * getPositionGroupOptions(postGroup).length
+export function getAllowedPositionGroups(postGroup) {
+  return getPositionGroupOptions(postGroup).map((option) => option.value)
+}
+
+export function positionsAreCompatibleWithPostGroup(positions, postGroup) {
+  if (!postGroup) {
+    return true
+  }
+
+  const allowedGroups = new Set(getAllowedPositionGroups(postGroup))
+
+  return positions.every((position) =>
+    !position.player_group || allowedGroups.has(position.player_group)
+  )
+}
+
+export function gamePlayerGroupCreatesPositionConflict(postGroup, positions) {
+  return !positionsAreCompatibleWithPostGroup(positions, postGroup)
 }
 
 export function getNextPosition(positions, postGroup) {
-  const usedPairs = new Set(
-    positions.map((position) => `${position.position_label}:${position.player_group}`),
-  )
   const groups = getPositionGroupOptions(postGroup).map((option) => option.value)
 
   for (const position of POSITION_OPTIONS) {
-    for (const group of groups) {
-      if (!usedPairs.has(`${position.value}:${group}`)) {
-        return {
-          position_label: position.value,
-          player_group: group,
-        }
+    const hasDraftRow = positions.some((currentPosition) =>
+      currentPosition.position_label === position.value && !currentPosition.player_group
+    )
+    const hasAvailableGroup = groups.some((group) =>
+      !positionGroupCreatesAnyConflict(group, positions, null, position.value)
+    )
+
+    if (!hasDraftRow && hasAvailableGroup) {
+      return {
+        position_label: position.value,
+        player_group: '',
       }
     }
   }
 
-  return {
-    position_label: 'field_player',
-    player_group: getDefaultPositionGroup(postGroup),
+  return null
+}
+
+export function buildAddedPositions(currentForm) {
+  const nextPosition = getNextPosition(currentForm.positions, currentForm.gamePlayerGroup)
+
+  if (!nextPosition) {
+    return currentForm.positions
   }
+
+  return [
+    ...currentForm.positions,
+    {
+      ...nextPosition,
+      spots_needed: 1,
+      sort_order: currentForm.positions.length,
+    },
+  ]
+}
+
+export function positionGroupCreatesAnyConflict(group, positions, rowIndex, positionLabel) {
+  const otherRows = positions.filter((position, index) =>
+    index !== rowIndex && position.position_label === positionLabel
+  )
+
+  if (otherRows.some((position) => position.player_group === group)) {
+    return true
+  }
+
+  if (group === 'open') {
+    return otherRows.some((position) => ['men', 'women'].includes(position.player_group))
+  }
+
+  return ['men', 'women'].includes(group)
+    && otherRows.some((position) => position.player_group === 'open')
+}
+
+export function positionLabelCreatesAnyConflict(positionLabel, positions, rowIndex, group) {
+  const otherRows = positions.filter((position, index) =>
+    index !== rowIndex && position.position_label === positionLabel
+  )
+
+  if (otherRows.some((position) => position.player_group === group)) {
+    return true
+  }
+
+  if (group === 'open') {
+    return otherRows.some((position) => ['men', 'women'].includes(position.player_group))
+  }
+
+  return ['men', 'women'].includes(group)
+    && otherRows.some((position) => position.player_group === 'open')
+}
+
+export function getAnyExclusivePositionConflict(positions) {
+  for (const option of POSITION_OPTIONS) {
+    const groups = new Set(
+      positions
+        .filter((position) => position.position_label === option.value)
+        .map((position) => position.player_group),
+    )
+
+    if (groups.has('open') && (groups.has('men') || groups.has('women'))) {
+      return option.value
+    }
+  }
+
+  return ''
 }

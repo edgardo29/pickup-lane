@@ -133,13 +133,5 @@ export function buildRuleItems(game) {
     },
   ]
 
-  if (game.custom_rules_text) {
-    rules.unshift({
-      title: 'Host Rules',
-      kind: 'rules',
-      text: game.custom_rules_text,
-    })
-  }
-
   return rules
 }

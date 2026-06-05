@@ -1,83 +1,113 @@
+import { useEffect, useRef, useState } from 'react'
+import { Share2 as ShareIcon } from 'lucide-react'
 import {
-  CalendarIcon,
-  ClockIcon,
-  MapPinIcon,
-  UsersIcon,
-} from '../../components/BrowseIcons.jsx'
+  GameEnvironmentIcon,
+  GameFormatIcon,
+  GamePlayerGroupIcon,
+  GameSkillIcon,
+  GameTraitIcon,
+} from '../../components/GameFactIcons.jsx'
 import {
-  buildPostSubtitle,
-  formatDateWithYear,
-  formatLocation,
-  formatPrice,
+  buildPostHeadline,
+  formatSkillLabel,
   formatStatus,
-  formatTimeRangeOnly,
 } from './needASubFormatters.js'
 
 export function NeedASubDetailHero({ post }) {
+  const [shareCopied, setShareCopied] = useState(false)
+  const shareCopiedTimeoutRef = useRef(null)
+
+  useEffect(() => () => {
+    if (shareCopiedTimeoutRef.current) {
+      window.clearTimeout(shareCopiedTimeoutRef.current)
+    }
+  }, [])
+
+  function showShareCopied() {
+    setShareCopied(true)
+
+    if (shareCopiedTimeoutRef.current) {
+      window.clearTimeout(shareCopiedTimeoutRef.current)
+    }
+
+    shareCopiedTimeoutRef.current = window.setTimeout(() => {
+      setShareCopied(false)
+      shareCopiedTimeoutRef.current = null
+    }, 1800)
+  }
+
+  async function handleSharePost() {
+    const shareUrl = `${window.location.origin}/need-a-sub/posts/${post.id}`
+    const shareData = {
+      title: buildPostHeadline(post),
+      text: 'Check out this Need a Sub post on Pickup Lane.',
+      url: shareUrl,
+    }
+
+    try {
+      setShareCopied(false)
+
+      if (navigator.share) {
+        await navigator.share(shareData)
+        showShareCopied()
+        return
+      }
+
+      await navigator.clipboard?.writeText(shareUrl)
+      showShareCopied()
+    } catch (shareError) {
+      if (shareError?.name === 'AbortError') {
+        return
+      }
+    }
+  }
+
   return (
-    <section className="need-sub-detail-hero need-sub-detail-card--summary">
-      <div className="need-sub-detail-hero__copy">
-        <div className="need-sub-detail-hero__title-row">
-          <h1><HighlightedPostHeadline post={post} /></h1>
-          {post.environment_type && (
-            <span className="need-sub-detail-environment">
-              {formatStatus(post.environment_type)}
-            </span>
-          )}
+    <section className="need-sub-detail-hero" aria-labelledby="need-sub-detail-title">
+      <div className="need-sub-detail-hero__header">
+        <div className="need-sub-detail-hero__copy">
+          <div className="need-sub-detail-hero__title-row">
+            <h1 id="need-sub-detail-title">
+              <HighlightedPostHeadline post={post} />
+            </h1>
+          </div>
+          <p>Review the game info and request an open substitute spot.</p>
         </div>
-        <strong>{buildPostSubtitle(post)}</strong>
-        <div className="need-sub-manage-facts">
-          <Fact icon={<CalendarIcon />} text={formatDateWithYear(post.starts_at)} />
-          <Fact icon={<ClockIcon />} text={formatTimeRangeOnly(post)} />
-          <Fact icon={<MapPinIcon />} text={formatLocation(post)} />
-        </div>
+        <button className="need-sub-detail-share" type="button" onClick={handleSharePost}>
+          <span className="need-sub-detail-share__icon" aria-hidden="true">
+            <ShareIcon />
+          </span>
+          <span>{shareCopied ? 'Copied' : 'Share Post'}</span>
+        </button>
       </div>
 
-      <div className="need-sub-detail-divider" />
-
-      <div className="need-sub-detail-summary-block">
-        <p>Post Details</p>
-        <div className="need-sub-detail-summary">
-          <DetailSummaryItem icon={<MapPinIcon />} label="Address">
-            {post.address_line_1 || 'Sign in to view exact street details'}
-          </DetailSummaryItem>
-          <DetailSummaryItem icon={<UsersIcon />} label="Neighborhood">
-            {post.neighborhood || 'Not listed'}
-          </DetailSummaryItem>
-          <DetailSummaryItem icon={<PriceIcon />} label="Price due at venue">
-            {formatPrice(post.price_due_at_venue_cents)}
-          </DetailSummaryItem>
-          {post.notes && (
-            <DetailSummaryItem className="need-sub-detail-summary-item--notes" icon={<NoteIcon />} label="Notes">
-              {post.notes}
-            </DetailSummaryItem>
-          )}
+      <div className="need-sub-detail-game-setup" aria-label="Game setup">
+        <span className="need-sub-detail-game-setup__label">
+          <GameTraitIcon aria-hidden="true" />
+          <span>Game Setup</span>
+        </span>
+        <div className="need-sub-detail-game-setup__facts">
+          <GameSetupFact icon={<GamePlayerGroupIcon />} label="Player group">
+            {formatStatus(post.game_player_group)}
+          </GameSetupFact>
+          <GameSetupFact icon={<GameFormatIcon />} label="Format">
+            {post.format_label || 'Format not listed'}
+          </GameSetupFact>
+          <GameSetupFact icon={<GameSkillIcon />} label="Skill level">
+            {formatSkillLabel(post.skill_level)}
+          </GameSetupFact>
+          <GameSetupFact icon={<GameEnvironmentIcon />} label="Environment">
+            {post.environment_type ? formatStatus(post.environment_type) : 'Environment not listed'}
+          </GameSetupFact>
         </div>
       </div>
     </section>
   )
 }
 
-function HighlightedPostHeadline({ post }) {
+function GameSetupFact({ children, icon, label }) {
   return (
-    <>
-      Need <span>{post.subs_needed}</span> {post.subs_needed === 1 ? 'Sub' : 'Subs'}
-    </>
-  )
-}
-
-function Fact({ icon, text }) {
-  return (
-    <span>
-      {icon}
-      {text}
-    </span>
-  )
-}
-
-function DetailSummaryItem({ children, className = '', icon, label }) {
-  return (
-    <div className={`need-sub-detail-summary-item ${className}`.trim()}>
+    <div className="need-sub-detail-game-setup__fact">
       <span aria-hidden="true">{icon}</span>
       <div>
         <small>{label}</small>
@@ -87,23 +117,14 @@ function DetailSummaryItem({ children, className = '', icon, label }) {
   )
 }
 
-function PriceIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 7.5v9" />
-      <path d="M9.3 9.3c.7-1 2-1.3 3.3-1 1 .2 1.8.8 1.8 1.8 0 1.2-1 1.7-2.5 2-1.6.3-2.7.8-2.7 2 0 1 .9 1.7 2 1.9 1.4.3 2.8-.1 3.5-1.2" />
-    </svg>
-  )
-}
+function HighlightedPostHeadline({ post }) {
+  const headline = buildPostHeadline(post)
+  const count = String(post.subs_needed)
+  const [beforeCount, afterCount = ''] = headline.split(count)
 
-function NoteIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6 4.5h9l3 3v12H6Z" />
-      <path d="M15 4.5v3h3" />
-      <path d="M9 11h6" />
-      <path d="M9 15h5" />
-    </svg>
+    <>
+      {beforeCount}<span>{count}</span>{afterCount}
+    </>
   )
 }

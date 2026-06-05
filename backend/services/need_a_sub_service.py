@@ -1,5 +1,6 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -81,6 +82,15 @@ def ensure_aware(value: datetime) -> datetime:
 
 def now_utc() -> datetime:
     return datetime.now(UTC)
+
+
+def get_local_date(value: datetime, timezone: str | None) -> date:
+    try:
+        local_timezone = ZoneInfo(timezone or "UTC")
+    except ZoneInfoNotFoundError:
+        local_timezone = UTC
+
+    return ensure_aware(value).astimezone(local_timezone).date()
 
 
 def get_sub_post_or_404(db: Session, sub_post_id: uuid.UUID) -> SubPost:
@@ -333,6 +343,7 @@ def validate_post_creation(post_create: SubPostCreate) -> None:
         )
 
     seen_position_keys = set()
+    groups_by_position_label: dict[str, set[str]] = {}
     for position in post_create.positions:
         if position.position_label not in VALID_POSITION_LABELS:
             raise HTTPException(
@@ -347,6 +358,17 @@ def validate_post_creation(post_create: SubPostCreate) -> None:
                 detail="Each position and player group row must be unique.",
             )
         seen_position_keys.add(position_key)
+        groups_by_position_label.setdefault(position.position_label, set()).add(position.player_group)
+
+    for position_label, groups in groups_by_position_label.items():
+        if "open" in groups and ({"men", "women"} & groups):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Any player rows cannot be combined with Men or Women rows "
+                    "for the same position."
+                ),
+            )
 
     allowed_groups = VALID_POSITION_GROUPS_BY_POST_GROUP[post_create.game_player_group]
     invalid_groups = {
@@ -526,6 +548,24 @@ def validate_position_update_safety(
             )
 
 
+def validate_edit_keeps_post_date(
+    sub_post: SubPost,
+    post_update: SubPostUpdate,
+) -> None:
+    existing_date = get_local_date(sub_post.starts_at, sub_post.timezone)
+
+    for field_name in ("starts_at", "ends_at"):
+        if field_name not in post_update.model_fields_set:
+            continue
+
+        field_value = getattr(post_update, field_name)
+        if field_value and get_local_date(field_value, sub_post.timezone) != existing_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Post date cannot be changed.",
+            )
+
+
 def apply_position_updates(
     db: Session,
     sub_post: SubPost,
@@ -591,6 +631,7 @@ def update_sub_post(
         )
 
     require_before_post_start(sub_post, "Posts cannot be edited after the game starts.")
+    validate_edit_keeps_post_date(sub_post, post_update)
 
     effective_post = build_effective_post_create(db, sub_post, post_update)
     validate_post_creation(effective_post)
