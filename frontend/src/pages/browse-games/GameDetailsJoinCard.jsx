@@ -1,15 +1,11 @@
 import { JoinActionStack } from './GameDetailsJoinActions.jsx'
-import { SidebarQuickFacts } from './GameDetailsQuickFacts.jsx'
-import { SidebarAboutSection, SidebarQuestionsSection } from './GameDetailsSidebarInfo.jsx'
+import { SidebarQuestionsSection } from './GameDetailsSidebarInfo.jsx'
+import { PlayersIcon } from '../../components/GameFactIcons.jsx'
 
 export function JoinCard({
-  aboutText,
   cancelGameDisabled = false,
   editGameUrl,
   editGameDisabled = false,
-  facts,
-  gameToneLabel,
-  hostPaymentMethods = [],
   hostGuestCount,
   hostGuestMax,
   isAddingHostGuest,
@@ -63,8 +59,23 @@ export function JoinCard({
         shareDisabled={shareDisabled}
       />
 
-      <SidebarQuickFacts facts={facts} gameToneLabel={gameToneLabel} />
-      <SidebarAboutSection aboutText={aboutText} hostPaymentMethods={hostPaymentMethods} />
+      {onManageHostGuests && hostGuestMax > 0 && (
+        <section
+          className="details-sidebar-section details-host-guest-summary"
+          aria-label={`${hostGuestCount} of ${hostGuestMax} host guests added`}
+        >
+          <h2 className="details-section-heading">
+            <span className="details-section-icon">
+              <PlayersIcon />
+            </span>
+            Host Guests
+          </h2>
+          <p>
+            <strong>{hostGuestCount}/{hostGuestMax}</strong> added
+          </p>
+        </section>
+      )}
+
       <SidebarQuestionsSection />
     </div>
   )

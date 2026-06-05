@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { UsersIcon } from '../../components/BrowseIcons.jsx'
+import { UsersRound } from 'lucide-react'
 
 export function HostGuestModal({
   addableCount,
@@ -27,7 +27,6 @@ export function HostGuestModal({
     event.preventDefault()
 
     if (!hasChanges) {
-      onClose()
       return
     }
 
@@ -46,7 +45,7 @@ export function HostGuestModal({
       >
         <h2 id="host-guest-modal-title" className="details-confirm-modal__title">
           <span className="details-confirm-modal__title-icon">
-            <UsersIcon />
+            <UsersRound />
           </span>
           Manage Guests
         </h2>
@@ -76,9 +75,6 @@ export function HostGuestModal({
                 +
               </button>
             </div>
-            <button type="submit" disabled={!hasChanges || isSaving}>
-              {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'No Changes'}
-            </button>
           </div>
         </div>
 
@@ -96,8 +92,8 @@ export function HostGuestModal({
           >
             Cancel
           </button>
-          <button className="primary" type="submit" disabled={isSaving}>
-            {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Done'}
+          <button className="primary" type="submit" disabled={!hasChanges || isSaving}>
+            {isSaving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </form>

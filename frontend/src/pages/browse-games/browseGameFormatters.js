@@ -3,6 +3,7 @@ export function formatDate(value) {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    year: 'numeric',
   }).format(new Date(value))
 }
 
@@ -93,7 +94,7 @@ export function formatVenueAddress(game, venue, { avoidDuplicateLocality = false
   return [street, [city, state, postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ')
 }
 
-export function formatHeroLocation(venueName, neighborhood, city, state) {
+export function formatHeroLocation(venueName, neighborhood, city, state, { includeVenue = true } = {}) {
   const placeParts = []
 
   if (neighborhood && neighborhood !== city) {
@@ -104,7 +105,7 @@ export function formatHeroLocation(venueName, neighborhood, city, state) {
     placeParts.push(state ? `${city}, ${state}` : city)
   }
 
-  return [venueName, placeParts.join(', ')].filter(Boolean).join(' – ')
+  return [includeVenue ? venueName : '', placeParts.join(', ')].filter(Boolean).join(' – ')
 }
 
 export function buildMapsUrl(venue, address) {

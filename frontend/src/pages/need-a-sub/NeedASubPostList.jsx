@@ -16,7 +16,6 @@ import {
   formatStatus,
   formatTimeRangeOnly,
 } from './needASubFormatters.js'
-import { countHeldSpots } from './needASubSelectors.js'
 import { NeedASubPostListSkeleton } from './NeedASubSkeleton.jsx'
 
 function NeedASubPostList({
@@ -155,21 +154,32 @@ function buildNeedGroups(post) {
 
   return NEED_GROUP_ORDER.map((group) => {
     const positionsForGroup = positions.filter((position) => position.position_label === group.key)
-    const rows = PLAYER_GROUP_ORDER.map((playerGroup) => {
+    const rows = PLAYER_GROUP_ORDER.flatMap((playerGroup) => {
+      const matchingPositions = positionsForGroup.filter(
+        (position) => position.player_group === playerGroup.key,
+      )
+
+      if (!matchingPositions.length) {
+        return []
+      }
+
       const spotsLeft = positionsForGroup.reduce((sum, position) => {
         if (position.player_group !== playerGroup.key) {
           return sum
         }
 
-        return sum + Math.max(0, Number(position.spots_needed || 0) - countHeldSpots(position))
+        return sum + Math.max(
+          0,
+          Number(position.spots_needed || 0) - Number(position.confirmed_count || 0),
+        )
       }, 0)
 
-      return {
+      return [{
         key: `${group.key}:${playerGroup.key}`,
         label: playerGroup.label,
         spotsLeft,
-      }
-    }).filter((row) => row.spotsLeft > 0)
+      }]
+    })
 
     return {
       ...group,

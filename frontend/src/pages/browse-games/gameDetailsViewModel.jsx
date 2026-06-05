@@ -3,6 +3,8 @@ import {
   GameDurationIcon,
   GameEnvironmentIcon,
   GameFormatIcon,
+  GameIndoorIcon,
+  GameOutdoorIcon,
   GamePlayerGroupIcon,
   GameSkillIcon,
   GameTimeIcon,
@@ -49,6 +51,7 @@ export function buildGameDetailsViewModel({
     game.neighborhood_snapshot || venue?.neighborhood,
     city,
     state,
+    { includeVenue: false },
   )
   const isCancelledGame = game.game_status === 'cancelled'
   const gameToneLabel = isCancelledGame
@@ -60,6 +63,12 @@ export function buildGameDetailsViewModel({
   const timeLabel = formatTimeRange(game.starts_at, game.ends_at)
   const durationLabel = getDurationLabel(game.starts_at, game.ends_at)
   const environmentLabel = formatEnvironment(game.environment_type)
+  const EnvironmentIcon =
+    game.environment_type === 'outdoor'
+      ? GameOutdoorIcon
+      : game.environment_type === 'indoor'
+        ? GameIndoorIcon
+        : GameEnvironmentIcon
   const playerGroupLabel = formatGamePlayerGroup(game.game_player_group)
   const skillLevelLabel = formatSkillLevel(game.skill_level)
   const price = formatPrice(game.price_per_player_cents, game.currency)
@@ -67,16 +76,15 @@ export function buildGameDetailsViewModel({
     { icon: <GameDateIcon />, label: dateLabel },
     { icon: <GameTimeIcon />, label: timeLabel },
     { icon: <GameDurationIcon />, label: durationLabel },
-    { icon: <GameEnvironmentIcon />, label: environmentLabel },
+    { icon: <EnvironmentIcon />, label: environmentLabel },
     { icon: <GameFormatIcon />, label: game.format_label || 'Pickup' },
     { icon: <GamePlayerGroupIcon />, label: playerGroupLabel || 'Coed' },
     { icon: <GameSkillIcon />, label: skillLevelLabel || 'Any Skill' },
   ]
-  const venueAddress = formatVenueAddress(game, venue)
+  const venueAddress = formatVenueAddress(game, venue, { avoidDuplicateLocality: true })
   const mapsUrl = buildMapsUrl(venue, venueAddress)
-  const aboutText =
-    game.description ||
-    'Fast-paced pickup soccer. All skill levels welcome. Show up ready to play and have fun.'
+  const aboutText = typeof game.description === 'string' ? game.description.trim() : ''
+  const hostRulesText = typeof game.custom_rules_text === 'string' ? game.custom_rules_text.trim() : ''
   const hostPaymentMethods = getVisibleHostPaymentMethods(game, communityGameDetails)
   const parkingNote = game.parking_notes || ''
   const ruleItems = buildRuleItems(game)
@@ -158,6 +166,7 @@ export function buildGameDetailsViewModel({
     hostGuestAddSlots,
     hostGuestMax,
     hostPaymentMethods,
+    hostRulesText,
     isCancelledGame,
     isClosedJoinStatus,
     isGameClosed,

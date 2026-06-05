@@ -1,19 +1,15 @@
 import { JoinCard } from './GameDetailsJoinCard.jsx'
 
 export function GameDetailsSidebar({
-  aboutText,
   canCancelGame,
   canEditGame,
   canShowCancelGame,
   canShowEditGame,
   currentGuestCount,
   currentParticipant,
-  facts,
   game,
-  gameToneLabel,
   guestJoinMessage,
   hostGuestMax,
-  hostPaymentMethods,
   isAddingHostGuest,
   isCancelledGame,
   isCancellingGame,
@@ -34,10 +30,6 @@ export function GameDetailsSidebar({
   return (
     <aside className="details-sidebar" aria-label="Join game">
       <JoinCard
-        aboutText={aboutText}
-        facts={facts}
-        gameToneLabel={gameToneLabel}
-        hostPaymentMethods={hostPaymentMethods}
         joinMessage={guestJoinMessage}
         joinNotice={joinNotice}
         joinLabel={joinLabel}

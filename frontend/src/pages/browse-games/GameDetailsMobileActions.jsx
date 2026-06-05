@@ -1,12 +1,10 @@
 import { Link } from 'react-router-dom'
 import {
-  CheckIcon,
-  CopyIcon,
-  PencilIcon,
-  ShareIcon,
-  TrashIcon,
-  UsersIcon,
-} from '../../components/BrowseIcons.jsx'
+  Pencil as PencilIcon,
+  Share2 as ShareIcon,
+  Trash2 as TrashIcon,
+  UsersRound as UsersIcon,
+} from 'lucide-react'
 
 function GameDetailsMobileActions({
   canCancelGame,
@@ -45,7 +43,6 @@ function GameDetailsMobileActions({
               <PencilIcon />
             </span>
             <span>Edit Game</span>
-            <span className="details-action-chevron" aria-hidden="true">›</span>
           </Link>
         ) : (
           <button
@@ -57,7 +54,6 @@ function GameDetailsMobileActions({
               <PencilIcon />
             </span>
             <span>Edit Game</span>
-            <span className="details-action-chevron" aria-hidden="true">›</span>
           </button>
         )
       )}
@@ -66,6 +62,7 @@ function GameDetailsMobileActions({
         <button
           className="details-secondary-action details-host-guest-action"
           type="button"
+          aria-label={`Manage Guests ${currentGuestCount}/${hostGuestMax}`}
           disabled={isJoinWindowClosed || isAddingHostGuest || isUpdatingGuests}
           onClick={onOpenHostGuestModal}
         >
@@ -73,8 +70,6 @@ function GameDetailsMobileActions({
             <UsersIcon />
           </span>
           <span>Manage Guests</span>
-          <strong className="details-action-count">{currentGuestCount}/{hostGuestMax}</strong>
-          <span className="details-action-chevron" aria-hidden="true">›</span>
         </button>
       )}
 
@@ -92,7 +87,6 @@ function GameDetailsMobileActions({
               ? 'Leave Waitlist'
               : 'Edit Attendance'}
           </span>
-          <span className="details-action-chevron" aria-hidden="true">›</span>
         </button>
       )}
 
@@ -107,7 +101,6 @@ function GameDetailsMobileActions({
             <TrashIcon />
           </span>
           <span>{isCancellingGame ? 'Cancelling...' : 'Cancel Game'}</span>
-          <span className="details-action-chevron" aria-hidden="true">›</span>
         </button>
       )}
 
@@ -120,17 +113,7 @@ function GameDetailsMobileActions({
         <span className="details-action-icon">
           <ShareIcon />
         </span>
-        <span>Share Game</span>
-        <span
-          className={[
-            'details-action-chevron',
-            'details-share-indicator',
-            shareCopied ? 'details-share-indicator--copied' : '',
-          ].filter(Boolean).join(' ')}
-          aria-hidden="true"
-        >
-          {shareCopied ? <CheckIcon /> : <CopyIcon />}
-        </span>
+        <span>{shareCopied ? 'Copied' : 'Share Game'}</span>
       </button>
     </section>
   )

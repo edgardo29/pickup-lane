@@ -27,6 +27,7 @@ html {
   min-height: 100%;
   background: var(--app-bg);
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -36,6 +37,7 @@ body {
   margin: 0;
   background: var(--app-bg);
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 a {

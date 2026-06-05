@@ -1,16 +1,10 @@
 import {
   AddressIcon,
   GameDateIcon,
-  GameFormatIcon,
-  GameIndoorIcon,
   GameNotesIcon,
-  GameOutdoorIcon,
-  GameSkillIcon,
-  GameTimeIcon,
-  NeighborhoodIcon,
+  GameTraitIcon,
   PriceIcon,
   SinglePlayerIcon,
-  VenueIcon,
 } from '../../components/GameFactIcons.jsx'
 import {
   formatSkillLabel,
@@ -20,48 +14,55 @@ import {
 export function NeedASubCreateReview({ form, totalSpotsNeeded }) {
   return (
     <div className="need-sub-create-review">
-      <ReviewSection title="Game" variant="game">
-        <ReviewItem icon={<GameDateIcon />} label="Date" value={formatFormDate(form.date)} />
-        <ReviewItem icon={<GameTimeIcon />} label="Time" value={formatFormTimeRange(form)} />
-        <ReviewItem icon={<GameFormatIcon />} label="Format" value={`${form.formatLabel} · ${formatStatus(form.gamePlayerGroup)}`} />
-        <ReviewItem icon={getEnvironmentIcon(form.environment)} label="Environment" value={form.environment ? formatStatus(form.environment) : 'Not selected'} />
-        <ReviewItem icon={<GameSkillIcon />} label="Skill level" value={formatSkillLabel(form.skillLevel)} />
+      <ReviewSection icon={<GameTraitIcon />} title="Game Setup" variant="setup">
+        <div className="need-sub-create-review-setup">
+          <ReviewFact label="Player group" value={formatStatus(form.gamePlayerGroup) || 'Not selected'} />
+          <ReviewFact label="Format" value={form.formatLabel || 'Not selected'} />
+          <ReviewFact label="Skill level" value={formatSkillLabel(form.skillLevel)} />
+          <ReviewFact label="Environment" value={form.environment ? formatStatus(form.environment) : 'Not selected'} />
+        </div>
       </ReviewSection>
 
-      <ReviewSection title="Subs" variant="subs">
-        <ReviewSubNeeds positions={form.positions || []} totalSpotsNeeded={totalSpotsNeeded} />
+      <ReviewSection icon={<GameDateIcon />} title="When" variant="when">
+        <ReviewItem label="Date" value={formatFormDate(form.date)} />
+        <ReviewItem label="Time" value={formatFormTimeRange(form)} />
       </ReviewSection>
 
-      <ReviewSection title="Location" variant="location">
-        <ReviewItem icon={<VenueIcon />} label="Venue" value={form.locationName || 'Not set'} wide />
-        <ReviewItem icon={<AddressIcon />} label="Address" value={formatAddress(form)} wide />
+      <ReviewSection icon={<AddressIcon />} title="Where" variant="where">
+        <ReviewItem label="Venue" value={form.locationName || 'Not set'} />
+        <ReviewItem label="Address" value={formatAddress(form)} />
         {form.neighborhood && (
-          <ReviewItem icon={<NeighborhoodIcon />} label="Neighborhood" value={form.neighborhood} wide />
+          <ReviewItem label="Neighborhood" value={form.neighborhood} />
         )}
       </ReviewSection>
 
-      <ReviewSection title="Notes & Payment" variant="notes">
-        <ReviewItem icon={<PriceIcon />} label="Price due at venue" value={formatFormPrice(form.priceDue)} />
-        <ReviewItem icon={<GameNotesIcon />} label="Notes" value={form.notes?.trim() || 'No notes added.'} variant="notes" wide />
+      <ReviewSection icon={<SinglePlayerIcon />} title="Subs" variant="subs">
+        <ReviewSubNeeds positions={form.positions || []} totalSpotsNeeded={totalSpotsNeeded} />
+      </ReviewSection>
+
+      <ReviewSection icon={<PriceIcon />} title="Payment" variant="payment">
+        <ReviewItem label="Price due at venue" value={formatFormPrice(form.priceDue)} valueVariant="price" />
+      </ReviewSection>
+
+      <ReviewSection icon={<GameNotesIcon />} title="Notes" variant="notes">
+        <ReviewItem label="Notes" value={form.notes?.trim() || 'No notes added.'} valueVariant="body" />
       </ReviewSection>
     </div>
   )
 }
 
-function getEnvironmentIcon(environment) {
-  return environment === 'outdoor' ? <GameOutdoorIcon /> : <GameIndoorIcon />
-}
-
-function ReviewSection({ children, title, variant = '', wide = false }) {
+function ReviewSection({ children, icon, title, variant = '' }) {
   const className = [
     'need-sub-create-review-section',
-    wide ? 'need-sub-create-review-section--wide' : '',
     variant ? `need-sub-create-review-section--${variant}` : '',
   ].filter(Boolean).join(' ')
 
   return (
     <section className={className}>
-      <h3>{title}</h3>
+      <header className="need-sub-create-review-section__heading">
+        <span aria-hidden="true">{icon}</span>
+        <h3>{title}</h3>
+      </header>
       <div className="need-sub-create-review-section__rows">
         {children}
       </div>
@@ -80,7 +81,8 @@ function ReviewSubNeeds({ positions, totalSpotsNeeded }) {
   return (
     <div className="need-sub-create-review-subs">
       <p className="need-sub-create-review-subs__total">
-        Total needed: <strong>{totalSpotsNeeded} {totalSpotsNeeded === 1 ? 'sub' : 'subs'}</strong>
+        <span>Total needed</span>
+        <strong>{totalSpotsNeeded} {totalSpotsNeeded === 1 ? 'sub' : 'subs'}</strong>
       </p>
       <div className={`need-sub-create-review-subs__groups${groups.length === 1 ? ' need-sub-create-review-subs__groups--single' : ''}`}>
         {groups.map((group) => (
@@ -88,9 +90,7 @@ function ReviewSubNeeds({ positions, totalSpotsNeeded }) {
             <h4>{group.label}</h4>
             {group.positions.map((position, index) => (
               <div className="need-sub-create-review-subs__row" key={`${position.sort_order}-${index}`}>
-                <SinglePlayerIcon />
                 <span>{formatNeed(position)}</span>
-                <span className="need-sub-create-review-subs__dot" aria-hidden="true">·</span>
                 <strong>{formatSubCount(position.spots_needed)}</strong>
               </div>
             ))}
@@ -101,16 +101,24 @@ function ReviewSubNeeds({ positions, totalSpotsNeeded }) {
   )
 }
 
-function ReviewItem({ icon, label, value, variant = '', wide = false }) {
+function ReviewFact({ label, value }) {
+  return (
+    <div className="need-sub-create-review-fact">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
+function ReviewItem({ label, value, valueVariant = '', variant = '' }) {
   const className = [
     'need-sub-create-review-item',
-    wide ? 'need-sub-create-review-item--wide' : '',
     variant ? `need-sub-create-review-item--${variant}` : '',
+    valueVariant ? `need-sub-create-review-item--${valueVariant}` : '',
   ].filter(Boolean).join(' ')
 
   return (
     <div className={className}>
-      {icon}
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
@@ -118,6 +126,10 @@ function ReviewItem({ icon, label, value, variant = '', wide = false }) {
 }
 
 function formatNeed(position) {
+  if (!position.player_group) {
+    return 'Select player type'
+  }
+
   if (position.player_group === 'open') {
     return 'Any'
   }

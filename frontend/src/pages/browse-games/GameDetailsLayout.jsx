@@ -10,10 +10,6 @@ function GameDetailsLayout(props) {
       <BrowseAppNav />
 
       <main className="details-shell">
-        <button className="details-mobile-back" type="button" onClick={props.onBackToGames}>
-          ←
-        </button>
-
         <section className="details-layout">
           <GameDetailsMainColumn {...props} />
           <GameDetailsSidebar {...props} />

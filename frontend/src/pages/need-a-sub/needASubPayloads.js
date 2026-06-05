@@ -50,10 +50,14 @@ export function hydrateNeedASubForm(post) {
     priceDue: formatHydratedPrice(post.price_due_at_venue_cents),
     notes: post.notes || '',
     positions: (post.positions || []).map((position, index) => ({
+      id: position.id,
+      pending_count: Number(position.pending_count || 0),
       position_label: position.position_label,
+      confirmed_count: Number(position.confirmed_count || 0),
       player_group: position.player_group,
       spots_needed: position.spots_needed,
       sort_order: index,
+      sub_waitlist_count: Number(position.sub_waitlist_count || 0),
     })),
   }
 }

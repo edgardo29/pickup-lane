@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import {
   CheckEmailPage,
   CreateAccountPage,
@@ -25,7 +25,7 @@ import { CancellationRefundPolicyPage, PrivacyPage, TermsPage } from '../pages/L
 import { MyGamesPage } from '../pages/my-games/index.js'
 import {
   NeedASubDetailPage,
-  NeedASubManagePage,
+  NeedASubEditPage,
   NeedASubPage,
   NeedASubPublishSuccessPage,
 } from '../pages/need-a-sub/index.js'
@@ -137,6 +137,14 @@ export function AppRoutes() {
       <Route path="/need-a-sub" element={<NeedASubPage />} />
       <Route path="/need-a-sub/posts/:postId" element={<NeedASubDetailPage />} />
       <Route
+        path="/need-a-sub/posts/:postId/edit"
+        element={
+          <RequireAppUser>
+            <NeedASubEditPage />
+          </RequireAppUser>
+        }
+      />
+      <Route
         path="/need-a-sub/posts/:postId/published"
         element={
           <RequireAppUser>
@@ -146,11 +154,7 @@ export function AppRoutes() {
       />
       <Route
         path="/need-a-sub/posts/:postId/manage"
-        element={
-          <RequireAppUser>
-            <NeedASubManagePage />
-          </RequireAppUser>
-        }
+        element={<NeedASubManageRedirect />}
       />
       <Route path="/player-hub" element={<Navigate to="/need-a-sub" replace />} />
       <Route
@@ -203,4 +207,10 @@ export function AppRoutes() {
       />
     </Routes>
   )
+}
+
+function NeedASubManageRedirect() {
+  const { postId } = useParams()
+
+  return <Navigate to={`/need-a-sub/posts/${postId}`} replace />
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { createNeedASubPost } from './needASubApi.js'
-import { buildInitialNeedASubForm, getDefaultPositions, getNextPosition } from './needASubData.js'
+import { buildAddedPositions, buildInitialNeedASubForm, getDefaultPositions } from './needASubData.js'
 import { buildNeedASubPayload } from './needASubPayloads.js'
 import { validateNeedASubForm } from './needASubValidation.js'
 
@@ -34,7 +34,7 @@ export function useNeedASubCreateForm({
     setForm((currentForm) => ({
       ...currentForm,
       gamePlayerGroup: value,
-      positions: getDefaultPositions(value),
+      positions: getDefaultPositions(),
     }))
   }
 
@@ -53,14 +53,7 @@ export function useNeedASubCreateForm({
   function addPosition() {
     setForm((currentForm) => ({
       ...currentForm,
-      positions: [
-        ...currentForm.positions,
-        {
-          ...getNextPosition(currentForm.positions, currentForm.gamePlayerGroup),
-          spots_needed: 1,
-          sort_order: currentForm.positions.length,
-        },
-      ],
+      positions: buildAddedPositions(currentForm),
     }))
   }
 

@@ -43,6 +43,10 @@ def request_sub_spot(
     return response.json()
 
 
+def parse_iso_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 def test_sub_posts_create_get_list_cancel_and_remove(client: TestClient):
     owner = create_user(client)
     admin = create_user(client)
@@ -366,6 +370,120 @@ def test_sub_posts_reject_duplicate_position_group_rows_cleanly(client: TestClie
     assert "unique" in response.text
 
 
+def test_sub_posts_allow_gendered_rows_for_same_position(client: TestClient):
+    owner = create_user(client)
+    authenticate_as(owner["id"])
+
+    payload = build_sub_post_payload(
+        subs_needed=2,
+        positions=[
+            {
+                "position_label": "field_player",
+                "player_group": "men",
+                "spots_needed": 1,
+                "sort_order": 0,
+            },
+            {
+                "position_label": "field_player",
+                "player_group": "women",
+                "spots_needed": 1,
+                "sort_order": 1,
+            },
+        ],
+    )
+    response = client.post("/need-a-sub/posts", json=payload)
+
+    assert response.status_code == 201, response.text
+    assert {
+        (position["position_label"], position["player_group"])
+        for position in response.json()["positions"]
+    } == {("field_player", "men"), ("field_player", "women")}
+
+
+def test_sub_posts_allow_any_and_gendered_rows_across_positions(client: TestClient):
+    owner = create_user(client)
+    authenticate_as(owner["id"])
+
+    payload = build_sub_post_payload(
+        subs_needed=2,
+        positions=[
+            {
+                "position_label": "field_player",
+                "player_group": "open",
+                "spots_needed": 1,
+                "sort_order": 0,
+            },
+            {
+                "position_label": "goalkeeper",
+                "player_group": "men",
+                "spots_needed": 1,
+                "sort_order": 1,
+            },
+        ],
+    )
+    response = client.post("/need-a-sub/posts", json=payload)
+
+    assert response.status_code == 201, response.text
+    assert {
+        (position["position_label"], position["player_group"])
+        for position in response.json()["positions"]
+    } == {("field_player", "open"), ("goalkeeper", "men")}
+
+
+def test_sub_posts_reject_any_combined_with_gendered_rows(client: TestClient):
+    owner = create_user(client)
+    authenticate_as(owner["id"])
+
+    payload = build_sub_post_payload(
+        subs_needed=2,
+        positions=[
+            {
+                "position_label": "field_player",
+                "player_group": "open",
+                "spots_needed": 1,
+                "sort_order": 0,
+            },
+            {
+                "position_label": "field_player",
+                "player_group": "men",
+                "spots_needed": 1,
+                "sort_order": 1,
+            },
+        ],
+    )
+    response = client.post("/need-a-sub/posts", json=payload)
+
+    assert response.status_code == 400, response.text
+    assert "Any player rows cannot be combined" in response.text
+
+
+def test_sub_posts_reject_any_combined_with_gendered_goalkeeper_rows(client: TestClient):
+    owner = create_user(client)
+    authenticate_as(owner["id"])
+
+    payload = build_sub_post_payload(
+        subs_needed=2,
+        positions=[
+            {
+                "position_label": "goalkeeper",
+                "player_group": "open",
+                "spots_needed": 1,
+                "sort_order": 0,
+            },
+            {
+                "position_label": "goalkeeper",
+                "player_group": "women",
+                "spots_needed": 1,
+                "sort_order": 1,
+            },
+        ],
+    )
+    response = client.post("/need-a-sub/posts", json=payload)
+
+    assert response.status_code == 400, response.text
+    assert "Any player rows cannot be combined" in response.text
+
+
 def test_sub_posts_reject_invalid_group_position_combination(client: TestClient):
     owner = create_user(client)
     authenticate_as(owner["id"])
@@ -431,6 +549,186 @@ def test_sub_posts_owner_can_edit_post_without_requests(client: TestClient):
     assert response.json()["skill_level"] == "advanced"
     assert response.json()["subs_needed"] == 1
     assert response.json()["positions"][0]["position_label"] == "goalkeeper"
+
+
+def test_sub_posts_edit_rejects_changing_post_date(client: TestClient):
+    owner = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    authenticate_as(owner["id"])
+    starts_at = parse_iso_datetime(post["starts_at"])
+    ends_at = parse_iso_datetime(post["ends_at"])
+
+    response = client.patch(
+        f"/need-a-sub/posts/{post['id']}",
+        json=build_sub_post_payload(
+            starts_at=(starts_at + timedelta(days=1)).isoformat(),
+            ends_at=(ends_at + timedelta(days=1)).isoformat(),
+        ),
+    )
+
+    assert response.status_code == 400, response.text
+    assert "Post date cannot be changed" in response.text
+
+
+def test_sub_posts_edit_allows_same_date_time_change(client: TestClient):
+    owner = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    authenticate_as(owner["id"])
+    starts_at = parse_iso_datetime(post["starts_at"])
+    ends_at = parse_iso_datetime(post["ends_at"])
+    updated_starts_at = starts_at + timedelta(minutes=30)
+    updated_ends_at = ends_at + timedelta(minutes=30)
+
+    response = client.patch(
+        f"/need-a-sub/posts/{post['id']}",
+        json=build_sub_post_payload(
+            starts_at=updated_starts_at.isoformat(),
+            ends_at=updated_ends_at.isoformat(),
+        ),
+    )
+
+    assert response.status_code == 200, response.text
+    assert parse_iso_datetime(response.json()["starts_at"]) == updated_starts_at
+    assert parse_iso_datetime(response.json()["ends_at"]) == updated_ends_at
+
+
+def test_sub_posts_edit_allows_safe_player_group_change(client: TestClient):
+    owner = create_user(client)
+    post = create_sub_post(
+        client,
+        owner["id"],
+        game_player_group="women",
+        subs_needed=1,
+        positions=[
+            {
+                "position_label": "field_player",
+                "player_group": "women",
+                "spots_needed": 1,
+                "sort_order": 0,
+            }
+        ],
+    )
+    authenticate_as(owner["id"])
+
+    response = client.patch(
+        f"/need-a-sub/posts/{post['id']}",
+        json=build_sub_post_payload(
+            game_player_group="coed",
+            starts_at=post["starts_at"],
+            ends_at=post["ends_at"],
+            subs_needed=1,
+            positions=[
+                {
+                    "position_label": "field_player",
+                    "player_group": "women",
+                    "spots_needed": 1,
+                    "sort_order": 0,
+                }
+            ],
+        ),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["game_player_group"] == "coed"
+
+
+def test_sub_posts_edit_rejects_incompatible_player_group_change(client: TestClient):
+    owner = create_user(client)
+    post = create_sub_post(
+        client,
+        owner["id"],
+        game_player_group="women",
+        subs_needed=1,
+        positions=[
+            {
+                "position_label": "field_player",
+                "player_group": "women",
+                "spots_needed": 1,
+                "sort_order": 0,
+            }
+        ],
+    )
+    authenticate_as(owner["id"])
+
+    response = client.patch(
+        f"/need-a-sub/posts/{post['id']}",
+        json=build_sub_post_payload(
+            game_player_group="men",
+            starts_at=post["starts_at"],
+            ends_at=post["ends_at"],
+            subs_needed=1,
+            positions=[
+                {
+                    "position_label": "field_player",
+                    "player_group": "women",
+                    "spots_needed": 1,
+                    "sort_order": 0,
+                }
+            ],
+        ),
+    )
+
+    assert response.status_code == 400, response.text
+    assert "not compatible" in response.text
+
+
+def test_sub_posts_edit_rejects_any_combined_with_gendered_rows(client: TestClient):
+    owner = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    authenticate_as(owner["id"])
+
+    payload = build_sub_post_payload(
+        subs_needed=2,
+        positions=[
+            {
+                "position_label": "goalkeeper",
+                "player_group": "open",
+                "spots_needed": 1,
+                "sort_order": 0,
+            },
+            {
+                "position_label": "goalkeeper",
+                "player_group": "women",
+                "spots_needed": 1,
+                "sort_order": 1,
+            },
+        ],
+    )
+    response = client.patch(f"/need-a-sub/posts/{post['id']}", json=payload)
+
+    assert response.status_code == 400, response.text
+    assert "Any player rows cannot be combined" in response.text
+
+
+def test_sub_posts_edit_allows_any_and_gendered_rows_across_positions(client: TestClient):
+    owner = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    authenticate_as(owner["id"])
+
+    payload = build_sub_post_payload(
+        subs_needed=2,
+        positions=[
+            {
+                "position_label": "field_player",
+                "player_group": "open",
+                "spots_needed": 1,
+                "sort_order": 0,
+            },
+            {
+                "position_label": "goalkeeper",
+                "player_group": "men",
+                "spots_needed": 1,
+                "sort_order": 1,
+            },
+        ],
+    )
+    response = client.patch(f"/need-a-sub/posts/{post['id']}", json=payload)
+
+    assert response.status_code == 200, response.text
+    assert {
+        (position["position_label"], position["player_group"])
+        for position in response.json()["positions"]
+    } == {("field_player", "open"), ("goalkeeper", "men")}
 
 
 def test_sub_posts_edit_blocks_removing_requirement_with_active_requests(client: TestClient):

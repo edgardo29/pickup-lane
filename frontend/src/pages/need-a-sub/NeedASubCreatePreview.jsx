@@ -3,6 +3,8 @@ import {
   GameDateIcon,
   GameNotesIcon,
   GameTimeIcon,
+  NeedSubFieldPlayersIcon,
+  NeedSubGoalkeeperIcon,
   PriceIcon,
 } from '../../components/GameFactIcons.jsx'
 import {
@@ -58,24 +60,31 @@ function PreviewSubNeeds({ positions }) {
   const fieldPlayers = positions.filter((position) => position.position_label === 'field_player')
   const goalkeepers = positions.filter((position) => position.position_label === 'goalkeeper')
   const groups = [
-    { id: 'field', label: 'Field Players', positions: fieldPlayers },
-    { id: 'goalkeeper', label: 'Goalkeepers', positions: goalkeepers },
+    { id: 'field', icon: NeedSubFieldPlayersIcon, label: 'Field Players', positions: fieldPlayers },
+    { id: 'goalkeeper', icon: NeedSubGoalkeeperIcon, label: 'Goalkeepers', positions: goalkeepers },
   ].filter((group) => group.positions.length > 0)
 
   return (
     <div className="need-sub-create-preview__subs">
       <div className={`need-sub-create-preview__subs-groups${groups.length === 1 ? ' need-sub-create-preview__subs-groups--single' : ''}`}>
-        {groups.map((group) => (
-          <div className="need-sub-create-preview__subs-group" key={group.id}>
-            <h4>{group.label}</h4>
-            {group.positions.map((position, index) => (
-              <div className="need-sub-create-preview__need" key={`${position.sort_order}-${index}`}>
-                <span>{formatNeed(position)}</span>
-                <strong>{formatOpenCount(position.spots_needed)}</strong>
-              </div>
-            ))}
-          </div>
-        ))}
+        {groups.map((group) => {
+          const GroupIcon = group.icon
+
+          return (
+            <div className="need-sub-create-preview__subs-group" key={group.id}>
+              <h4>
+                <GroupIcon />
+                <span>{group.label}</span>
+              </h4>
+              {group.positions.map((position, index) => (
+                <div className="need-sub-create-preview__need" key={`${position.sort_order}-${index}`}>
+                  <span>{formatNeed(position)}</span>
+                <strong>{formatSubCount(position.spots_needed)}</strong>
+                </div>
+              ))}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -134,6 +143,10 @@ function buildPreviewLocation(form) {
 }
 
 function formatNeed(position) {
+  if (!position.player_group) {
+    return 'Select player type'
+  }
+
   if (position.player_group === 'open') {
     return 'Any'
   }
@@ -149,9 +162,9 @@ function formatNeed(position) {
   return formatStatus(position.player_group)
 }
 
-function formatOpenCount(value) {
+function formatSubCount(value) {
   const count = Number(value || 0)
-  return `${count} open`
+  return `${count} ${count === 1 ? 'sub' : 'subs'}`
 }
 
 function formatPreviewDate(value) {

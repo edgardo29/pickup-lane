@@ -7,13 +7,13 @@ import { NeedASubCreateStepRail } from './NeedASubCreateStepRail.jsx'
 import { NeedASubGameDetailsSection } from './NeedASubGameDetailsSection.jsx'
 import { NeedASubLocationSection } from './NeedASubLocationSection.jsx'
 import { NeedASubRequirementsSection } from './NeedASubRequirementsSection.jsx'
-import { createSubPostSteps } from './needASubCreateSteps.js'
+import { getSubPostFlowSteps } from './needASubCreateSteps.js'
 import {
   getFirstInvalidNeedASubCreateStep,
   validateNeedASubCreateStep,
 } from './needASubValidation.js'
 
-const stepHeadings = {
+const createStepHeadings = {
   game: {
     title: "Let's start with the game",
     text: 'Add the outside game details subs need to understand the spot.',
@@ -36,10 +36,36 @@ const stepHeadings = {
   },
 }
 
+const editStepHeadings = {
+  game: {
+    title: 'Update the game',
+    text: 'Adjust the outside game details subs need to understand the spot.',
+  },
+  subs: {
+    title: 'Update the sub needs',
+    text: 'Keep requested rows intact while changing open spots where allowed.',
+  },
+  location: {
+    title: 'Update the location',
+    text: 'Edit the venue details subs will use to find the game.',
+  },
+  notes: {
+    title: 'Update notes and payment',
+    text: 'Revise price or context that helps subs show up prepared.',
+  },
+  review: {
+    title: 'Review your changes',
+    text: 'Confirm the details before saving.',
+  },
+}
+
 function NeedASubCreateFlow({
   form,
   formError,
   isCreating,
+  isDateLocked = false,
+  isGamePlayerGroupOptionDisabled = () => false,
+  mode = 'create',
   onCancel,
   onAddPosition,
   onRemovePosition,
@@ -47,16 +73,22 @@ function NeedASubCreateFlow({
   onUpdateField,
   onUpdateGamePlayerGroup,
   onUpdatePosition,
+  submitLabel,
+  submittingLabel,
   totalSpotsNeeded,
 }) {
   const [activeStep, setActiveStep] = useState(0)
   const [stepError, setStepError] = useState('')
+  const steps = getSubPostFlowSteps(mode)
+  const isEditMode = mode === 'edit'
   const isFirstStep = activeStep === 0
-  const isPublishStep = activeStep === createSubPostSteps.length - 1
-  const activeStepConfig = createSubPostSteps[activeStep]
-  const nextStep = createSubPostSteps[activeStep + 1]
-  const activeHeading = stepHeadings[activeStepConfig.key]
+  const isPublishStep = activeStep === steps.length - 1
+  const activeStepConfig = steps[activeStep]
+  const nextStep = steps[activeStep + 1]
+  const activeHeading = (isEditMode ? editStepHeadings : createStepHeadings)[activeStepConfig.key]
   const visibleError = stepError || formError
+  const finalSubmitLabel = submitLabel || (isEditMode ? 'Save Changes' : 'Publish Post')
+  const finalSubmittingLabel = submittingLabel || (isEditMode ? 'Saving...' : 'Publishing...')
 
   function goBack() {
     setStepError('')
@@ -71,7 +103,7 @@ function NeedASubCreateFlow({
     }
 
     setStepError('')
-    setActiveStep((currentStep) => Math.min(createSubPostSteps.length - 1, currentStep + 1))
+    setActiveStep((currentStep) => Math.min(steps.length - 1, currentStep + 1))
   }
 
   function preventSubmit(event) {
@@ -79,7 +111,7 @@ function NeedASubCreateFlow({
   }
 
   function handlePublish() {
-    const invalidStep = getFirstInvalidNeedASubCreateStep(createSubPostSteps, form)
+    const invalidStep = getFirstInvalidNeedASubCreateStep(steps, form)
     if (invalidStep.error) {
       setActiveStep(invalidStep.index)
       setStepError(invalidStep.error)
@@ -128,7 +160,11 @@ function NeedASubCreateFlow({
 
   return (
     <form className="need-sub-create-flow" onSubmit={preventSubmit}>
-      <NeedASubCreateStepRail activeStep={activeStep} />
+      <NeedASubCreateStepRail
+        activeStep={activeStep}
+        ariaLabel={isEditMode ? 'Edit Sub Post progress' : 'Create Sub Post progress'}
+        steps={steps}
+      />
 
       <section className="need-sub-create-layout">
         <div className="need-sub-create-card">
@@ -141,7 +177,8 @@ function NeedASubCreateFlow({
             <NeedASubGameDetailsSection
               form={form}
               hideHeading
-              isDateLocked={false}
+              isDateLocked={isDateLocked}
+              isGamePlayerGroupOptionDisabled={isGamePlayerGroupOptionDisabled}
               splitTimeFields
               onUpdateField={handleUpdateField}
               onUpdateGamePlayerGroup={handleUpdateGamePlayerGroup}
@@ -153,6 +190,7 @@ function NeedASubCreateFlow({
               form={form}
               hideTitle
               iconActions
+              isEditMode={isEditMode}
               totalSpotsNeeded={totalSpotsNeeded}
               onAddPosition={handleAddPosition}
               onRemovePosition={handleRemovePosition}
@@ -199,7 +237,7 @@ function NeedASubCreateFlow({
                   type="button"
                   onClick={handlePublish}
                 >
-                  {isCreating ? 'Publishing...' : 'Publish Post'}
+                  {isCreating ? finalSubmittingLabel : finalSubmitLabel}
                   <span aria-hidden="true">→</span>
                 </button>
               ) : (

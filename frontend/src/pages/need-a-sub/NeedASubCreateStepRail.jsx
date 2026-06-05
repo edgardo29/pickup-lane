@@ -1,9 +1,13 @@
 import { createSubPostSteps } from './needASubCreateSteps.js'
 
-export function NeedASubCreateStepRail({ activeStep }) {
+export function NeedASubCreateStepRail({
+  activeStep,
+  ariaLabel = 'Create Sub Post progress',
+  steps = createSubPostSteps,
+}) {
   return (
-    <ol className="need-sub-create-steps" aria-label="Create Sub Post progress">
-      {createSubPostSteps.map((step, index) => {
+    <ol className="need-sub-create-steps" aria-label={ariaLabel}>
+      {steps.map((step, index) => {
         const stepNumber = index + 1
         const isActive = index === activeStep
         const isComplete = index < activeStep
