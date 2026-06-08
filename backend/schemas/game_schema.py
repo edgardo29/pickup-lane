@@ -190,6 +190,9 @@ class GameJoinCreate(BaseModel):
 
     acting_user_id: UUID
     guest_count: int = 0
+    payment_method_id: UUID | None = None
+    auto_charge_consent_accepted: bool = False
+    auto_charge_consent_version: str | None = None
 
 
 class GameJoinRead(BaseModel):

@@ -206,6 +206,65 @@ def test_sub_posts_canceled_post_cannot_be_edited(client: TestClient):
     assert "Only active or filled posts can be edited" in edit_response.text
 
 
+def test_sub_posts_cancel_notifies_active_requesters_and_resolves_owner_row(
+    client: TestClient,
+):
+    owner = create_user(client)
+    pending_player = create_user(client)
+    waitlisted_player = create_user(client)
+    confirmed_player = create_user(client)
+    declined_player = create_user(client)
+    post = create_sub_post(client, owner["id"])
+
+    pending_request = request_sub_spot(client, pending_player["id"], post, 0)
+    waitlisted_request = request_sub_spot(client, waitlisted_player["id"], post, 0)
+    confirmed_request = request_sub_spot(client, confirmed_player["id"], post, 1)
+    declined_request = request_sub_spot(client, declined_player["id"], post, 1)
+    assert pending_request["request_status"] == "pending"
+    assert waitlisted_request["request_status"] == "sub_waitlist"
+
+    authenticate_as(owner["id"])
+    accept_response = client.patch(
+        f"/need-a-sub/requests/{confirmed_request['id']}/accept"
+    )
+    assert accept_response.status_code == 200, accept_response.text
+    decline_response = client.patch(
+        f"/need-a-sub/requests/{declined_request['id']}/decline",
+        json={},
+    )
+    assert decline_response.status_code == 200, decline_response.text
+
+    cancel_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/cancel",
+        json={"cancel_reason": "Weather issue."},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    pending_owner_row = next(
+        notification
+        for notification in owner_notifications
+        if notification["related_sub_post_request_id"] == pending_request["id"]
+    )
+    assert pending_owner_row["notification_type"] == "sub_request_received"
+    assert pending_owner_row["is_read"] is True
+    assert pending_owner_row["title"] == "Request handled"
+
+    for player in (pending_player, waitlisted_player, confirmed_player):
+        notifications = list_need_a_sub_notifications(client, player["id"])
+        cancel_notifications = [
+            notification
+            for notification in notifications
+            if notification["notification_type"] == "sub_post_canceled"
+        ]
+        assert len(cancel_notifications) == 1
+        assert cancel_notifications[0]["action_key"] is None
+        assert cancel_notifications[0]["action"] is None
+
+    declined_notifications = list_need_a_sub_notifications(client, declined_player["id"])
+    assert "sub_post_canceled" not in notification_types(declined_notifications)
+
+
 def test_sub_posts_public_reads_hide_private_location_and_owner_fields(client: TestClient):
     owner = create_user(client)
     post = create_sub_post(client, owner["id"])
@@ -672,6 +731,154 @@ def test_sub_posts_edit_allows_same_date_time_change(client: TestClient):
     assert parse_iso_datetime(response.json()["ends_at"]) == updated_ends_at
 
 
+def test_sub_posts_structural_edit_notifies_active_requesters(client: TestClient):
+    owner = create_user(client)
+    pending_player = create_user(client)
+    waitlisted_player = create_user(client)
+    confirmed_player = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    pending_request = request_sub_spot(client, pending_player["id"], post, 0)
+    waitlisted_request = request_sub_spot(client, waitlisted_player["id"], post, 0)
+    confirmed_request = request_sub_spot(client, confirmed_player["id"], post, 1)
+
+    assert pending_request["request_status"] == "pending"
+    assert waitlisted_request["request_status"] == "sub_waitlist"
+    authenticate_as(owner["id"])
+    accept_response = client.patch(
+        f"/need-a-sub/requests/{confirmed_request['id']}/accept"
+    )
+    assert accept_response.status_code == 200, accept_response.text
+
+    starts_at = parse_iso_datetime(post["starts_at"])
+    ends_at = parse_iso_datetime(post["ends_at"])
+    response = client.patch(
+        f"/need-a-sub/posts/{post['id']}",
+        json=build_sub_post_payload(
+            starts_at=(starts_at + timedelta(minutes=30)).isoformat(),
+            ends_at=(ends_at + timedelta(minutes=30)).isoformat(),
+        ),
+    )
+    assert response.status_code == 200, response.text
+
+    for user, sub_request in (
+        (pending_player, pending_request),
+        (waitlisted_player, waitlisted_request),
+        (confirmed_player, confirmed_request),
+    ):
+        notifications = list_need_a_sub_notifications(client, user["id"])
+        update_notifications = [
+            notification
+            for notification in notifications
+            if notification["notification_type"] == "sub_post_updated"
+        ]
+        assert len(update_notifications) == 1
+        notification = update_notifications[0]
+        assert notification["actor_user_id"] == owner["id"]
+        assert notification["related_sub_post_id"] == post["id"]
+        assert notification["related_sub_post_request_id"] == sub_request["id"]
+        assert (
+            notification["related_sub_post_position_id"]
+            == sub_request["sub_post_position_id"]
+        )
+        assert notification["aggregation_key"] == (
+            f"need_a_sub:post:{post['id']}:user:{user['id']}:sub_post_updated"
+        )
+        assert notification["aggregate_count"] is None
+        assert notification["action_key"] == "view_sub_post"
+
+
+def test_sub_posts_structural_edit_reuses_requester_update_notification(
+    client: TestClient,
+):
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    sub_request = request_sub_spot(client, requester["id"], post, 0)
+
+    authenticate_as(owner["id"])
+    first_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}",
+        json=build_sub_post_payload(location_name="First Update Field"),
+    )
+    assert first_response.status_code == 200, first_response.text
+
+    notifications = list_need_a_sub_notifications(client, requester["id"])
+    first_notification = next(
+        notification
+        for notification in notifications
+        if notification["notification_type"] == "sub_post_updated"
+    )
+    assert first_notification["related_sub_post_request_id"] == sub_request["id"]
+
+    read_response = client.patch(
+        f"/notifications/{first_notification['id']}/read",
+        json={},
+    )
+    assert read_response.status_code == 200, read_response.text
+
+    authenticate_as(owner["id"])
+    second_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}",
+        json=build_sub_post_payload(location_name="Second Update Field"),
+    )
+    assert second_response.status_code == 200, second_response.text
+
+    notifications = list_need_a_sub_notifications(client, requester["id"])
+    update_notifications = [
+        notification
+        for notification in notifications
+        if notification["notification_type"] == "sub_post_updated"
+    ]
+    assert len(update_notifications) == 1
+    assert update_notifications[0]["id"] == first_notification["id"]
+    assert update_notifications[0]["is_read"] is False
+    assert update_notifications[0]["read_at"] is None
+    assert update_notifications[0]["aggregate_count"] is None
+
+
+def test_sub_posts_text_and_capacity_only_edits_do_not_notify_requesters(
+    client: TestClient,
+):
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    request_sub_spot(client, requester["id"], post, 0)
+
+    authenticate_as(owner["id"])
+    text_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}",
+        json=build_sub_post_payload(notes="Typo cleanup only."),
+    )
+    assert text_response.status_code == 200, text_response.text
+    requester_notifications = list_need_a_sub_notifications(client, requester["id"])
+    assert "sub_post_updated" not in notification_types(requester_notifications)
+
+    authenticate_as(owner["id"])
+    capacity_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}",
+        json=build_sub_post_payload(
+            subs_needed=3,
+            positions=[
+                {
+                    "position_label": "field_player",
+                    "player_group": "men",
+                    "spots_needed": 2,
+                    "sort_order": 0,
+                },
+                {
+                    "position_label": "field_player",
+                    "player_group": "women",
+                    "spots_needed": 1,
+                    "sort_order": 1,
+                },
+            ],
+        ),
+    )
+    assert capacity_response.status_code == 200, capacity_response.text
+    requester_notifications = list_need_a_sub_notifications(client, requester["id"])
+    assert "sub_post_updated" not in notification_types(requester_notifications)
+
+
 def test_sub_posts_edit_allows_safe_player_group_change(client: TestClient):
     owner = create_user(client)
     post = create_sub_post(
@@ -956,6 +1163,15 @@ def test_sub_posts_admin_remove_cancels_active_requests(client: TestClient):
         json={"remove_reason": "Moderation cleanup."},
     )
     assert remove_response.status_code == 200, remove_response.text
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    pending_owner_row = next(
+        notification
+        for notification in owner_notifications
+        if notification["related_sub_post_request_id"] == pending_request["id"]
+    )
+    assert pending_owner_row["notification_type"] == "sub_request_received"
+    assert pending_owner_row["is_read"] is True
+    assert pending_owner_row["title"] == "Request handled"
 
     for player, sub_request in (
         (pending_player, pending_request),
@@ -968,6 +1184,13 @@ def test_sub_posts_admin_remove_cancels_active_requests(client: TestClient):
         assert requests_by_id[sub_request["id"]]["request_status"] == "canceled_by_owner"
         player_notifications = list_need_a_sub_notifications(client, player["id"])
         assert "sub_post_removed" in notification_types(player_notifications)
+        remove_notification = next(
+            notification
+            for notification in player_notifications
+            if notification["notification_type"] == "sub_post_removed"
+        )
+        assert remove_notification["action_key"] is None
+        assert remove_notification["action"] is None
 
 
 def test_sub_posts_expiration_service_expires_posts_and_open_requests(client: TestClient):

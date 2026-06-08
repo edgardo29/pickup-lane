@@ -22,7 +22,11 @@ from backend.schemas import (
     SubPostCreate,
     SubPostUpdate,
 )
-from backend.services.notification_service import build_need_a_sub_notification_fields
+from backend.services.notification_service import (
+    build_need_a_sub_notification_fields,
+    reopen_aggregated_notification,
+    resolve_aggregated_notification,
+)
 
 POST_STATUSES = {"active", "filled", "expired", "canceled", "removed"}
 REQUEST_STATUSES = {
@@ -68,6 +72,22 @@ TERMINAL_REQUEST_STATUSES = {
     "no_show_reported",
     "expired",
 }
+SUB_POST_UPDATED_RECIPIENT_STATUSES = {"pending", "confirmed", "sub_waitlist"}
+SUB_POST_UPDATED_STRUCTURAL_FIELDS = (
+    "starts_at",
+    "ends_at",
+    "location_name",
+    "address_line_1",
+    "city",
+    "state",
+    "postal_code",
+    "neighborhood",
+    "format_label",
+    "environment_type",
+    "skill_level",
+    "game_player_group",
+    "price_due_at_venue_cents",
+)
 ADMIN_ROLES = {"admin", "moderator"}
 POST_STATUS_CHANGE_SOURCES = {"owner", "admin", "system", "scheduled_job"}
 VALID_POSITION_GROUPS_BY_POST_GROUP = {
@@ -713,6 +733,7 @@ def update_sub_post(
     new_positions = post_update.positions if "positions" in post_update.model_fields_set else None
 
     current_time = now_utc()
+    structural_snapshot_before = capture_sub_post_structural_snapshot(sub_post)
     for field_name, field_value in update_data.items():
         setattr(sub_post, field_name, field_value)
 
@@ -727,6 +748,13 @@ def update_sub_post(
     sub_post.updated_at = current_time
     db.add(sub_post)
     recalculate_filled_status(db, sub_post, owner.id, "owner")
+    if sub_post_structural_snapshot_changed(structural_snapshot_before, sub_post):
+        notify_active_requesters_sub_post_updated(
+            db,
+            sub_post=sub_post,
+            actor_user_id=owner.id,
+            event_at=current_time,
+        )
 
     try:
         db.commit()
@@ -936,20 +964,166 @@ def add_need_a_sub_notification(
     )
 
 
+def owner_request_activity_aggregation_key(
+    sub_post_id: uuid.UUID,
+    requester_user_id: uuid.UUID,
+    owner_user_id: uuid.UUID,
+) -> str:
+    return (
+        f"need_a_sub:post:{sub_post_id}:requester:{requester_user_id}:"
+        f"owner:{owner_user_id}:request_activity"
+    )
+
+
+def sub_post_updated_aggregation_key(
+    sub_post_id: uuid.UUID,
+    recipient_user_id: uuid.UUID,
+) -> str:
+    return f"need_a_sub:post:{sub_post_id}:user:{recipient_user_id}:sub_post_updated"
+
+
+def capture_sub_post_structural_snapshot(sub_post: SubPost) -> dict[str, object]:
+    snapshot = {
+        field_name: getattr(sub_post, field_name)
+        for field_name in SUB_POST_UPDATED_STRUCTURAL_FIELDS
+    }
+
+    for field_name in ("starts_at", "ends_at"):
+        value = snapshot[field_name]
+        if isinstance(value, datetime):
+            snapshot[field_name] = ensure_aware(value)
+
+    return snapshot
+
+
+def sub_post_structural_snapshot_changed(
+    before: dict[str, object],
+    sub_post: SubPost,
+) -> bool:
+    after = capture_sub_post_structural_snapshot(sub_post)
+    return any(before[field_name] != after[field_name] for field_name in before)
+
+
+def notify_active_requesters_sub_post_updated(
+    db: Session,
+    *,
+    sub_post: SubPost,
+    actor_user_id: uuid.UUID,
+    event_at: datetime,
+) -> None:
+    active_requests = db.scalars(
+        select(SubPostRequest).where(
+            SubPostRequest.sub_post_id == sub_post.id,
+            SubPostRequest.request_status.in_(SUB_POST_UPDATED_RECIPIENT_STATUSES),
+        )
+    ).all()
+
+    notified_user_ids: set[uuid.UUID] = set()
+    for sub_request in active_requests:
+        recipient_user_id = sub_request.requester_user_id
+        if recipient_user_id == actor_user_id or recipient_user_id in notified_user_ids:
+            continue
+
+        notified_user_ids.add(recipient_user_id)
+        aggregation_key = sub_post_updated_aggregation_key(
+            sub_post.id,
+            recipient_user_id,
+        )
+        notification_fields = build_need_a_sub_notification_fields(
+            sub_post,
+            "sub_post_updated",
+            event_at=event_at,
+        )
+        notification_fields.update(
+            {
+                "actor_user_id": actor_user_id,
+                "related_sub_post_id": sub_post.id,
+                "related_sub_post_request_id": sub_request.id,
+                "related_sub_post_position_id": sub_request.sub_post_position_id,
+            }
+        )
+        reopen_aggregated_notification(
+            db,
+            user_id=recipient_user_id,
+            notification_type="sub_post_updated",
+            notification_category="game_activity",
+            notification_domain="need_a_sub",
+            aggregation_key=aggregation_key,
+            values=notification_fields,
+            aggregate_count_mode="clear",
+        )
+
+
+def resolve_owner_request_activity_notification(
+    db: Session,
+    *,
+    sub_post: SubPost,
+    sub_request: SubPostRequest,
+    resolution: str = "handled",
+    read_at: datetime | None = None,
+) -> None:
+    if resolution == "canceled":
+        values = {
+            "title": "Request canceled",
+            "summary": "A pending request was canceled.",
+            "body": "A player canceled their pending request before it was reviewed.",
+        }
+    else:
+        values = {
+            "title": "Request handled",
+            "summary": "This request was handled.",
+            "body": "This pending request no longer needs review.",
+        }
+
+    resolve_aggregated_notification(
+        db,
+        user_id=sub_post.owner_user_id,
+        aggregation_key=owner_request_activity_aggregation_key(
+            sub_post.id,
+            sub_request.requester_user_id,
+            sub_post.owner_user_id,
+        ),
+        values=values,
+        read_at=read_at,
+    )
+
+
 def notify_owner_sub_request_received(
     db: Session,
     sub_post: SubPost,
     position: SubPostPosition,
     sub_request: SubPostRequest,
-    requester: User,
+    requester_user_id: uuid.UUID,
+    event_at: datetime | None = None,
 ) -> None:
-    add_need_a_sub_notification(
+    effective_event_at = event_at or now_utc()
+    aggregation_key = owner_request_activity_aggregation_key(
+        sub_post.id,
+        requester_user_id,
+        sub_post.owner_user_id,
+    )
+    notification_fields = build_need_a_sub_notification_fields(
+        sub_post,
+        "sub_request_received",
+        event_at=effective_event_at,
+    )
+    notification_fields.update(
+        {
+            "actor_user_id": requester_user_id,
+            "related_sub_post_id": sub_post.id,
+            "related_sub_post_request_id": sub_request.id,
+            "related_sub_post_position_id": position.id,
+        }
+    )
+    reopen_aggregated_notification(
         db,
-        recipient_user_id=sub_post.owner_user_id,
+        user_id=sub_post.owner_user_id,
         notification_type="sub_request_received",
-        sub_post=sub_post,
-        sub_request=sub_request,
-        actor_user_id=requester.id,
+        notification_category="game_activity",
+        notification_domain="need_a_sub",
+        aggregation_key=aggregation_key,
+        values=notification_fields,
+        aggregate_count_mode="clear",
     )
 
 
@@ -962,6 +1136,7 @@ def notify_requester_sub_status(
     title: str | None,
     body: str | None,
     actor_user_id: uuid.UUID | None,
+    event_at: datetime | None = None,
 ) -> None:
     add_need_a_sub_notification(
         db,
@@ -972,6 +1147,7 @@ def notify_requester_sub_status(
         actor_user_id=actor_user_id,
         title=title,
         body=body,
+        event_at=event_at,
     )
 
 
@@ -980,6 +1156,7 @@ def notify_requester_waitlist_promoted(
     sub_post: SubPost,
     sub_request: SubPostRequest | None,
     actor_user_id: uuid.UUID | None,
+    event_at: datetime | None = None,
 ) -> None:
     if sub_request is None:
         return
@@ -992,6 +1169,35 @@ def notify_requester_waitlist_promoted(
         title=None,
         body=None,
         actor_user_id=actor_user_id,
+        event_at=event_at,
+    )
+
+
+def notify_waitlist_promoted(
+    db: Session,
+    sub_post: SubPost,
+    sub_request: SubPostRequest | None,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    if sub_request is None:
+        return
+
+    promotion_time = ensure_aware(sub_request.updated_at)
+    notify_requester_waitlist_promoted(
+        db,
+        sub_post,
+        sub_request,
+        actor_user_id,
+        event_at=promotion_time,
+    )
+    position = get_position_or_404(db, sub_request.sub_post_position_id)
+    notify_owner_sub_request_received(
+        db,
+        sub_post,
+        position,
+        sub_request,
+        sub_request.requester_user_id,
+        event_at=promotion_time,
     )
 
 
@@ -1162,7 +1368,7 @@ def create_request(
             sub_post,
             position,
             new_request,
-            requester,
+            requester.id,
         )
 
     try:
@@ -1355,6 +1561,12 @@ def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> Sub
         )
 
     change_request_status(db, sub_request, "confirmed", owner.id, "owner", current_time=current_time)
+    resolve_owner_request_activity_notification(
+        db,
+        sub_post=sub_post,
+        sub_request=sub_request,
+        read_at=current_time,
+    )
     recalculate_filled_status(db, sub_post, owner.id, "owner")
     notify_requester_sub_status(
         db,
@@ -1387,7 +1599,23 @@ def owner_decline_request(
 
     was_pending = sub_request.request_status == "pending"
     position_id = sub_request.sub_post_position_id
-    change_request_status(db, sub_request, "declined", owner.id, "owner", reason)
+    current_time = now_utc()
+    change_request_status(
+        db,
+        sub_request,
+        "declined",
+        owner.id,
+        "owner",
+        reason,
+        current_time=current_time,
+    )
+    if was_pending:
+        resolve_owner_request_activity_notification(
+            db,
+            sub_post=sub_post,
+            sub_request=sub_request,
+            read_at=current_time,
+        )
     notify_requester_sub_status(
         db,
         sub_post=sub_post,
@@ -1405,7 +1633,7 @@ def owner_decline_request(
             owner.id,
             "owner",
         )
-        notify_requester_waitlist_promoted(
+        notify_waitlist_promoted(
             db,
             sub_post,
             promoted_request,
@@ -1441,8 +1669,24 @@ def requester_cancel_request(
     should_promote = previous_status in {"pending", "confirmed"}
     was_confirmed = sub_request.request_status == "confirmed"
     position_id = sub_request.sub_post_position_id
-    change_request_status(db, sub_request, "canceled_by_player", requester.id, "requester")
-    if previous_status in {"pending", "confirmed"}:
+    current_time = now_utc()
+    change_request_status(
+        db,
+        sub_request,
+        "canceled_by_player",
+        requester.id,
+        "requester",
+        current_time=current_time,
+    )
+    if previous_status == "pending":
+        resolve_owner_request_activity_notification(
+            db,
+            sub_post=sub_post,
+            sub_request=sub_request,
+            resolution="canceled",
+            read_at=current_time,
+        )
+    elif previous_status == "confirmed":
         add_need_a_sub_notification(
             db,
             recipient_user_id=sub_post.owner_user_id,
@@ -1461,7 +1705,7 @@ def requester_cancel_request(
             requester.id,
             "requester",
         )
-        notify_requester_waitlist_promoted(
+        notify_waitlist_promoted(
             db,
             sub_post,
             promoted_request,
@@ -1505,7 +1749,7 @@ def owner_cancel_request(
 
     recalculate_filled_status(db, sub_post, owner.id, "owner")
     promoted_request = promote_next_waitlisted_request(db, position_id, owner.id, "owner")
-    notify_requester_waitlist_promoted(
+    notify_waitlist_promoted(
         db,
         sub_post,
         promoted_request,
@@ -1579,6 +1823,7 @@ def cancel_sub_post(
         )
     ).all()
     for sub_request in active_requests:
+        previous_status = sub_request.request_status
         change_request_status(
             db,
             sub_request,
@@ -1588,6 +1833,13 @@ def cancel_sub_post(
             "Post canceled by owner.",
             current_time,
         )
+        if previous_status == "pending":
+            resolve_owner_request_activity_notification(
+                db,
+                sub_post=sub_post,
+                sub_request=sub_request,
+                read_at=current_time,
+            )
         notify_requester_sub_status(
             db,
             sub_post=sub_post,
@@ -1643,6 +1895,7 @@ def remove_sub_post(
         )
     ).all()
     for sub_request in active_requests:
+        previous_status = sub_request.request_status
         change_request_status(
             db,
             sub_request,
@@ -1652,6 +1905,13 @@ def remove_sub_post(
             reason or "Post removed by admin.",
             current_time,
         )
+        if previous_status == "pending":
+            resolve_owner_request_activity_notification(
+                db,
+                sub_post=sub_post,
+                sub_request=sub_request,
+                read_at=current_time,
+            )
         notify_requester_sub_status(
             db,
             sub_post=sub_post,
@@ -1704,6 +1964,7 @@ def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
     ).all()
 
     for sub_request in requests:
+        previous_status = sub_request.request_status
         change_request_status(
             db,
             sub_request,
@@ -1712,6 +1973,15 @@ def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
             "scheduled_job",
             current_time=current_time,
         )
+        if previous_status == "pending":
+            sub_post = db.get(SubPost, sub_request.sub_post_id)
+            if sub_post is not None:
+                resolve_owner_request_activity_notification(
+                    db,
+                    sub_post=sub_post,
+                    sub_request=sub_request,
+                    read_at=current_time,
+                )
         expired_requests_count += 1
 
     db.commit()

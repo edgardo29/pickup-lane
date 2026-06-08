@@ -3,7 +3,10 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
-from backend.services.need_a_sub_service import MAX_WAITLIST_REQUESTS_PER_POST
+from backend.services.need_a_sub_service import (
+    MAX_WAITLIST_REQUESTS_PER_POST,
+    expire_due_posts_and_requests,
+)
 from backend.tests.helpers import authenticate_as, create_sub_post, create_user
 
 
@@ -42,6 +45,13 @@ def test_sub_post_request_owner_accept_marks_confirmed_and_filled(client: TestCl
     assert owner_notifications[0]["actor_user_id"] == requester_one["id"]
     assert owner_notifications[0]["related_sub_post_id"] == post["id"]
     assert owner_notifications[0]["related_sub_post_request_id"] == first_request["id"]
+    assert owner_notifications[0]["related_sub_post_position_id"] == post["positions"][0]["id"]
+    assert (
+        owner_notifications[0]["aggregation_key"]
+        == f"need_a_sub:post:{post['id']}:requester:{requester_one['id']}:"
+        f"owner:{owner['id']}:request_activity"
+    )
+    assert owner_notifications[0]["aggregate_count"] is None
 
     second_response = request_spot(client, requester_two["id"], post, 1)
     assert second_response.status_code == 201, second_response.text
@@ -52,6 +62,21 @@ def test_sub_post_request_owner_accept_marks_confirmed_and_filled(client: TestCl
     assert first_accept.status_code == 200, first_accept.text
     assert first_accept.json()["request_status"] == "confirmed"
     assert first_accept.json()["confirmed_at"] is not None
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    first_request_notification = next(
+        notification
+        for notification in owner_notifications
+        if notification["related_sub_post_request_id"] == first_request["id"]
+    )
+    second_request_notification = next(
+        notification
+        for notification in owner_notifications
+        if notification["related_sub_post_request_id"] == second_request["id"]
+    )
+    assert first_request_notification["is_read"] is True
+    assert first_request_notification["title"] == "Request handled"
+    assert second_request_notification["is_read"] is False
+    assert second_request_notification["title"] == "New request"
     requester_notifications = list_need_a_sub_notifications(
         client,
         requester_one["id"],
@@ -93,16 +118,85 @@ def test_sub_post_request_allows_new_request_after_player_cancel(client: TestCli
     requester = create_user(client)
     post = create_sub_post(client, owner["id"])
     first_request = request_spot(client, requester["id"], post).json()
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    request_notification = next(
+        notification
+        for notification in owner_notifications
+        if notification["notification_type"] == "sub_request_received"
+    )
 
+    authenticate_as(requester["id"])
     cancel_response = client.patch(f"/need-a-sub/requests/{first_request['id']}/cancel")
     assert cancel_response.status_code == 200, cancel_response.text
     assert cancel_response.json()["request_status"] == "canceled_by_player"
     owner_notifications = list_need_a_sub_notifications(client, owner["id"])
-    assert "sub_request_canceled_by_player" in notification_types(owner_notifications)
+    assert "sub_request_canceled_by_player" not in notification_types(owner_notifications)
+    resolved_notification = next(
+        notification
+        for notification in owner_notifications
+        if notification["id"] == request_notification["id"]
+    )
+    assert resolved_notification["is_read"] is True
+    assert resolved_notification["title"] == "Request canceled"
+    assert resolved_notification["summary"] == "A pending request was canceled."
 
     new_response = request_spot(client, requester["id"], post, 1)
     assert new_response.status_code == 201, new_response.text
     assert new_response.json()["id"] != first_request["id"]
+
+
+def test_sub_post_request_rerequest_reuses_owner_request_activity_notification(
+    client: TestClient,
+):
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    aggregation_key = (
+        f"need_a_sub:post:{post['id']}:requester:{requester['id']}:"
+        f"owner:{owner['id']}:request_activity"
+    )
+
+    first_request = request_spot(client, requester["id"], post, 0).json()
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    first_owner_request_notification = next(
+        notification
+        for notification in owner_notifications
+        if notification["notification_type"] == "sub_request_received"
+    )
+    assert first_owner_request_notification["aggregation_key"] == aggregation_key
+
+    read_response = client.patch(
+        f"/notifications/{first_owner_request_notification['id']}/read",
+        json={},
+    )
+    assert read_response.status_code == 200, read_response.text
+    assert read_response.json()["is_read"] is True
+
+    authenticate_as(requester["id"])
+    cancel_response = client.patch(f"/need-a-sub/requests/{first_request['id']}/cancel")
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    new_response = request_spot(client, requester["id"], post, 1)
+    assert new_response.status_code == 201, new_response.text
+    new_request = new_response.json()
+
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    request_notifications = [
+        notification
+        for notification in owner_notifications
+        if notification["notification_type"] == "sub_request_received"
+    ]
+    assert len(request_notifications) == 1
+    request_notification = request_notifications[0]
+    assert request_notification["id"] == first_owner_request_notification["id"]
+    assert request_notification["aggregation_key"] == aggregation_key
+    assert request_notification["is_read"] is False
+    assert request_notification["read_at"] is None
+    assert request_notification["aggregate_count"] is None
+    assert request_notification["actor_user_id"] == requester["id"]
+    assert request_notification["related_sub_post_id"] == post["id"]
+    assert request_notification["related_sub_post_request_id"] == new_request["id"]
+    assert request_notification["related_sub_post_position_id"] == post["positions"][1]["id"]
 
 
 def test_sub_post_request_allows_new_request_after_owner_cancel(client: TestClient):
@@ -157,6 +251,14 @@ def test_sub_post_request_auto_waitlists_when_position_queue_is_full(client: Tes
     decline_response = client.patch(f"/need-a-sub/requests/{first_request['id']}/decline", json={})
     assert decline_response.status_code == 200, decline_response.text
     assert decline_response.json()["request_status"] == "declined"
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    first_request_notification = next(
+        notification
+        for notification in owner_notifications
+        if notification["related_sub_post_request_id"] == first_request["id"]
+    )
+    assert first_request_notification["is_read"] is True
+    assert first_request_notification["title"] == "Request handled"
 
     waitlist_after_decline = client.get(f"/need-a-sub/posts/{post['id']}/requests")
     promoted_request = next(
@@ -170,6 +272,24 @@ def test_sub_post_request_auto_waitlists_when_position_queue_is_full(client: Tes
         requester_one["id"],
     )
     assert "sub_request_declined" in notification_types(requester_one_notifications)
+    owner_notifications_after_promotion = list_need_a_sub_notifications(
+        client,
+        owner["id"],
+    )
+    promoted_owner_notification = next(
+        notification
+        for notification in owner_notifications_after_promotion
+        if notification["related_sub_post_request_id"] == second_request["id"]
+    )
+    assert promoted_owner_notification["notification_type"] == "sub_request_received"
+    assert promoted_owner_notification["actor_user_id"] == requester_two["id"]
+    assert promoted_owner_notification["is_read"] is False
+    assert promoted_owner_notification["aggregate_count"] is None
+    assert (
+        promoted_owner_notification["aggregation_key"]
+        == f"need_a_sub:post:{post['id']}:requester:{requester_two['id']}:"
+        f"owner:{owner['id']}:request_activity"
+    )
     requester_two_notifications = list_need_a_sub_notifications(
         client,
         requester_two["id"],
@@ -337,6 +457,40 @@ def test_sub_post_request_cancel_reopens_filled_post(client: TestClient):
     assert cancel_response.status_code == 200, cancel_response.text
     assert cancel_response.json()["request_status"] == "canceled_by_player"
     assert client.get(f"/need-a-sub/posts/{post['id']}").json()["post_status"] == "active"
+
+
+def test_sub_post_request_expiration_resolves_owner_request_activity(
+    client: TestClient,
+):
+    from backend.database import SessionLocal
+    from backend.models import SubPost
+
+    owner = create_user(client)
+    requester = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    sub_request = request_spot(client, requester["id"], post, 0).json()
+
+    with SessionLocal() as db:
+        db_post = db.get(SubPost, UUID(post["id"]))
+        assert db_post is not None
+        db_post.starts_at = datetime.now(UTC) - timedelta(minutes=10)
+        db_post.ends_at = datetime.now(UTC) + timedelta(minutes=50)
+        db_post.expires_at = db_post.starts_at
+        db.commit()
+
+    with SessionLocal() as db:
+        result = expire_due_posts_and_requests(db)
+    assert result["requests_expired"] == 1
+
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    request_notification = next(
+        notification
+        for notification in owner_notifications
+        if notification["related_sub_post_request_id"] == sub_request["id"]
+    )
+    assert request_notification["is_read"] is True
+    assert request_notification["title"] == "Request handled"
+    assert "sub_request_canceled_by_player" not in notification_types(owner_notifications)
 
 
 def test_sub_post_request_create_after_start_expires_and_blocks_post(client: TestClient):

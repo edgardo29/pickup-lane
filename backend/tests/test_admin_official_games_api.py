@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from backend.database import SessionLocal
-from backend.models import GameCredit, GameCreditUsage
+from backend.models import GameCredit, GameCreditUsage, Notification
 from backend.services.game_credit_service import RELEASED_USAGE_STATUS
 from backend.services.stripe_service import StripePaymentIntentResult
 from backend.tests.helpers import (
@@ -109,6 +109,18 @@ def set_user_account_status(user_id: str, account_status: str) -> None:
         assert db_user is not None
         db_user.account_status = account_status
         db.commit()
+
+
+def list_user_notifications(
+    client: TestClient,
+    user_id: str,
+    notification_type: str,
+) -> list[dict]:
+    authenticate_as(user_id)
+    response = client.get(f"/notifications/me?notification_type={notification_type}")
+
+    assert response.status_code == 200, response.text
+    return response.json()
 
 
 def test_admin_can_create_official_game_without_initial_host(client: TestClient):
@@ -480,6 +492,27 @@ def test_admin_can_add_player_with_waived_payment(client: TestClient):
     assert participant["user_id"] == player["id"]
     assert participant["price_cents"] == 0
 
+    added_notifications = list_user_notifications(
+        client,
+        player["id"],
+        "game_player_added_by_admin",
+    )
+    assert len(added_notifications) == 1
+    added_notification = added_notifications[0]
+    assert added_notification["is_read"] is False
+    assert added_notification["source_type"] == "official_game"
+    assert added_notification["source_label"] == "Official Game"
+    assert added_notification["action_key"] == "view_game"
+    assert added_notification["action"] is not None
+    assert added_notification["related_game_id"] == game["id"]
+    assert added_notification["related_participant_id"] == participant["id"]
+    assert added_notification["related_booking_id"] == participant["booking_id"]
+    assert added_notification["actor_user_id"] == admin["id"]
+    assert "No payment was charged" in added_notification["body"]
+    assert list_user_notifications(client, player["id"], "game_roster_update") == []
+    assert list_user_notifications(client, player["id"], "booking_confirmed") == []
+
+    authenticate_as(admin["id"])
     booking_response = client.get(f"/bookings/{participant['booking_id']}")
     assert booking_response.status_code == 200, booking_response.text
     booking = booking_response.json()
@@ -568,7 +601,14 @@ def test_admin_can_remove_admin_added_player(client: TestClient):
     )
     assert add_response.status_code == 201, add_response.text
     participant = add_response.json()
+    added_notification = list_user_notifications(
+        client,
+        player["id"],
+        "game_player_added_by_admin",
+    )[0]
+    added_event_at = added_notification["event_at"]
 
+    authenticate_as(admin["id"])
     remove_response = client.request(
         "DELETE",
         f"/admin/official-games/{game['id']}/participants/{participant['id']}",
@@ -588,6 +628,33 @@ def test_admin_can_remove_admin_added_player(client: TestClient):
     assert booking["payment_status"] == "not_required"
     assert booking["cancelled_by_user_id"] == admin["id"]
 
+    resolved_added_notification = list_user_notifications(
+        client,
+        player["id"],
+        "game_player_added_by_admin",
+    )[0]
+    assert resolved_added_notification["is_read"] is True
+    assert resolved_added_notification["read_at"] is not None
+    assert resolved_added_notification["event_at"] == added_event_at
+    removed_notifications = list_user_notifications(
+        client,
+        player["id"],
+        "game_player_removed_by_admin",
+    )
+    assert len(removed_notifications) == 1
+    removed_notification = removed_notifications[0]
+    assert removed_notification["is_read"] is False
+    assert removed_notification["source_type"] == "official_game"
+    assert removed_notification["action_key"] == "view_game"
+    assert removed_notification["action"] is not None
+    assert removed_notification["related_game_id"] == game["id"]
+    assert removed_notification["related_participant_id"] == participant["id"]
+    assert removed_notification["related_booking_id"] == participant["booking_id"]
+    assert removed_notification["actor_user_id"] == admin["id"]
+    assert "Any payment or credit updates" in removed_notification["body"]
+    assert list_user_notifications(client, player["id"], "game_roster_update") == []
+
+    authenticate_as(admin["id"])
     audit_response = client.get(
         f"/admin/actions?action_type=admin_remove_player&target_game_id={game['id']}"
     )
@@ -642,6 +709,78 @@ def test_admin_remove_paid_player_does_not_refund_payment(client: TestClient):
     updated_booking = booking_response.json()
     assert updated_booking["booking_status"] == "cancelled"
     assert updated_booking["payment_status"] == "paid"
+    removed_notifications = list_user_notifications(
+        client,
+        player["id"],
+        "game_player_removed_by_admin",
+    )
+    assert len(removed_notifications) == 1
+    assert "Any payment or credit updates" in removed_notifications[0]["body"]
+
+
+def test_admin_remove_guest_notifies_booking_owner_with_guest_copy(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"], participant_count=2)
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+        roster_order=1,
+    )
+    guest = create_game_participant(
+        client,
+        None,
+        game["id"],
+        booking_id=booking["id"],
+        participant_type="guest",
+        guest_of_user_id=player["id"],
+        guest_name="Guest Player",
+        display_name_snapshot="Guest Player",
+        price_cents=1500,
+        roster_order=2,
+    )
+
+    authenticate_as(admin["id"])
+    remove_response = client.request(
+        "DELETE",
+        f"/admin/official-games/{game['id']}/participants/{guest['id']}",
+        json={"reason": "Guest removed by support."},
+    )
+
+    assert remove_response.status_code == 200, remove_response.text
+    removed_guest = remove_response.json()
+    assert removed_guest["participant_status"] == "removed"
+    booking_response = client.get(f"/bookings/{booking['id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    updated_booking = booking_response.json()
+    assert updated_booking["booking_status"] == "partially_cancelled"
+    assert updated_booking["participant_count"] == 1
+    removed_notifications = list_user_notifications(
+        client,
+        player["id"],
+        "game_player_removed_by_admin",
+    )
+    assert len(removed_notifications) == 1
+    removed_notification = removed_notifications[0]
+    assert removed_notification["title"] == "Guest removed"
+    assert "guest was removed" in removed_notification["body"]
+    assert removed_notification["related_participant_id"] == guest["id"]
+    assert removed_notification["related_booking_id"] == booking["id"]
+    assert list_user_notifications(client, player["id"], "game_roster_update") == []
 
 
 def test_admin_remove_pending_checkout_party_invalidates_payment(
@@ -745,6 +884,14 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
         participant["participant_status"]
         for participant in removed_participants_response.json()
     } == {"removed"}
+    assert (
+        list_user_notifications(
+            client,
+            player["id"],
+            "game_player_removed_by_admin",
+        )
+        == []
+    )
 
     with SessionLocal() as db:
         refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
@@ -823,13 +970,53 @@ def test_admin_can_assign_replace_and_remove_official_game_host_designation(
     assert assign_response.status_code == 200, assign_response.text
     assert assign_response.json()["game"]["host_user_id"] == first_host["id"]
 
+    first_host_assigned_notifications = list_user_notifications(
+        client,
+        first_host["id"],
+        "game_host_assigned",
+    )
+    assert len(first_host_assigned_notifications) == 1
+    first_host_assigned = first_host_assigned_notifications[0]
+    first_host_assigned_event_at = first_host_assigned["event_at"]
+    assert first_host_assigned["is_read"] is False
+    assert first_host_assigned["read_at"] is None
+    assert first_host_assigned["source_type"] == "official_game"
+    assert first_host_assigned["source_label"] == "Official Game"
+    assert first_host_assigned["action_key"] == "view_game"
+    assert first_host_assigned["action"] is not None
+    assert first_host_assigned["related_game_id"] == game["id"]
+    assert first_host_assigned["related_participant_id"] == first_participant["id"]
+    assert first_host_assigned["related_booking_id"] == booking["id"]
+    assert first_host_assigned["actor_user_id"] == admin["id"]
+    assert "assigned you as host" in first_host_assigned["body"]
+    assert (
+        list_user_notifications(client, first_host["id"], "game_host_removed")
+        == []
+    )
+
+    authenticate_as(admin["id"])
     same_host_response = client.post(
         f"/admin/official-games/{game['id']}/host",
         json={"host_user_id": first_host["id"], "reason": "No-op reassignment."},
     )
     assert same_host_response.status_code == 200, same_host_response.text
     assert same_host_response.json()["game"]["host_user_id"] == first_host["id"]
+    assert (
+        len(
+            list_user_notifications(
+                client,
+                first_host["id"],
+                "game_host_assigned",
+            )
+        )
+        == 1
+    )
+    assert (
+        list_user_notifications(client, first_host["id"], "game_host_removed")
+        == []
+    )
 
+    authenticate_as(admin["id"])
     change_response = client.post(
         f"/admin/official-games/{game['id']}/host",
         json={
@@ -840,6 +1027,47 @@ def test_admin_can_assign_replace_and_remove_official_game_host_designation(
     assert change_response.status_code == 200, change_response.text
     assert change_response.json()["game"]["host_user_id"] == second_host["id"]
 
+    first_host_assigned_after_change = list_user_notifications(
+        client,
+        first_host["id"],
+        "game_host_assigned",
+    )[0]
+    assert first_host_assigned_after_change["is_read"] is True
+    assert first_host_assigned_after_change["read_at"] is not None
+    assert first_host_assigned_after_change["event_at"] == first_host_assigned_event_at
+    first_host_removed_notifications = list_user_notifications(
+        client,
+        first_host["id"],
+        "game_host_removed",
+    )
+    assert len(first_host_removed_notifications) == 1
+    first_host_removed = first_host_removed_notifications[0]
+    assert first_host_removed["is_read"] is False
+    assert first_host_removed["source_type"] == "official_game"
+    assert first_host_removed["action_key"] == "view_game"
+    assert first_host_removed["action"] is not None
+    assert first_host_removed["related_game_id"] == game["id"]
+    assert first_host_removed["related_participant_id"] == first_participant["id"]
+    assert first_host_removed["related_booking_id"] == booking["id"]
+    assert first_host_removed["actor_user_id"] == admin["id"]
+    assert "removed you as host" in first_host_removed["body"]
+    second_host_assigned_notifications = list_user_notifications(
+        client,
+        second_host["id"],
+        "game_host_assigned",
+    )
+    assert len(second_host_assigned_notifications) == 1
+    second_host_assigned = second_host_assigned_notifications[0]
+    second_host_assigned_event_at = second_host_assigned["event_at"]
+    assert second_host_assigned["is_read"] is False
+    assert second_host_assigned["related_participant_id"] == second_participant["id"]
+    assert second_host_assigned["related_booking_id"] == second_participant["booking_id"]
+    assert (
+        list_user_notifications(client, second_host["id"], "game_host_removed")
+        == []
+    )
+
+    authenticate_as(admin["id"])
     first_participant_response = client.get(
         f"/game-participants/{first_participant['id']}"
     )
@@ -869,6 +1097,7 @@ def test_admin_can_assign_replace_and_remove_official_game_host_designation(
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "succeeded"
 
+    authenticate_as(admin["id"])
     remove_response = client.request(
         "DELETE",
         f"/admin/official-games/{game['id']}/host",
@@ -884,6 +1113,32 @@ def test_admin_can_assign_replace_and_remove_official_game_host_designation(
     assert second_after_remove_response.json()["participant_type"] == "admin_added"
     assert second_after_remove_response.json()["participant_status"] == "confirmed"
 
+    second_host_assigned_after_remove = list_user_notifications(
+        client,
+        second_host["id"],
+        "game_host_assigned",
+    )[0]
+    assert second_host_assigned_after_remove["is_read"] is True
+    assert second_host_assigned_after_remove["read_at"] is not None
+    assert second_host_assigned_after_remove["event_at"] == second_host_assigned_event_at
+    second_host_removed_notifications = list_user_notifications(
+        client,
+        second_host["id"],
+        "game_host_removed",
+    )
+    assert len(second_host_removed_notifications) == 1
+    assert second_host_removed_notifications[0]["is_read"] is False
+    assert second_host_removed_notifications[0]["related_game_id"] == game["id"]
+    assert (
+        second_host_removed_notifications[0]["related_participant_id"]
+        == second_participant["id"]
+    )
+    assert (
+        second_host_removed_notifications[0]["related_booking_id"]
+        == second_participant["booking_id"]
+    )
+
+    authenticate_as(admin["id"])
     assign_audit_response = client.get(
         f"/admin/actions?action_type=assign_official_host&target_game_id={game['id']}"
     )
@@ -900,6 +1155,45 @@ def test_admin_can_assign_replace_and_remove_official_game_host_designation(
     )
     assert remove_audit_response.status_code == 200, remove_audit_response.text
     assert len(remove_audit_response.json()) == 1
+
+
+def test_admin_official_game_host_self_actions_emit_no_notifications(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    create_game_participant(
+        client,
+        admin["id"],
+        game["id"],
+        price_cents=1500,
+    )
+
+    assign_response = client.post(
+        f"/admin/official-games/{game['id']}/host",
+        json={"host_user_id": admin["id"], "reason": "Self host assignment."},
+    )
+    assert assign_response.status_code == 200, assign_response.text
+    assert assign_response.json()["game"]["host_user_id"] == admin["id"]
+    assert list_user_notifications(client, admin["id"], "game_host_assigned") == []
+
+    authenticate_as(admin["id"])
+    remove_response = client.request(
+        "DELETE",
+        f"/admin/official-games/{game['id']}/host",
+        json={"reason": "Self host removal."},
+    )
+    assert remove_response.status_code == 200, remove_response.text
+    assert remove_response.json()["game"]["host_user_id"] is None
+    assert list_user_notifications(client, admin["id"], "game_host_removed") == []
 
 
 def test_admin_official_game_host_rejects_off_roster_user(client: TestClient):
@@ -1145,6 +1439,14 @@ def test_account_delete_clears_future_official_host_without_cancelling_game(
         json={"host_user_id": host["id"]},
     )
     assert assign_response.status_code == 200, assign_response.text
+    assigned_host_notifications = list_user_notifications(
+        client,
+        host["id"],
+        "game_host_assigned",
+    )
+    assert len(assigned_host_notifications) == 1
+    assigned_host_event_at = assigned_host_notifications[0]["event_at"]
+    assert assigned_host_notifications[0]["is_read"] is False
 
     monkeypatch.setattr(
         "backend.routes.auth_routes.verify_firebase_token",
@@ -1164,6 +1466,7 @@ def test_account_delete_clears_future_official_host_without_cancelling_game(
 
     assert delete_response.status_code == 200, delete_response.text
     assert delete_response.json()["deleted_at"] is not None
+    authenticate_as(admin["id"])
     game_response = client.get(f"/admin/official-games/{game['id']}")
     assert game_response.status_code == 200
     updated_game = game_response.json()["game"]
@@ -1174,6 +1477,26 @@ def test_account_delete_clears_future_official_host_without_cancelling_game(
     updated_participant = participant_response.json()
     assert updated_participant["participant_status"] == "cancelled"
     assert updated_participant["display_name_snapshot"] == "Deleted User"
+    with SessionLocal() as db:
+        assigned_notification = db.scalars(
+            select(Notification).where(
+                Notification.user_id == UUID(host["id"]),
+                Notification.related_game_id == UUID(game["id"]),
+                Notification.notification_type == "game_host_assigned",
+            )
+        ).one()
+        removed_notifications = db.scalars(
+            select(Notification).where(
+                Notification.user_id == UUID(host["id"]),
+                Notification.related_game_id == UUID(game["id"]),
+                Notification.notification_type == "game_host_removed",
+            )
+        ).all()
+
+    assert assigned_notification.is_read is True
+    assert assigned_notification.read_at is not None
+    assert assigned_notification.event_at.isoformat() == assigned_host_event_at
+    assert removed_notifications == []
 
 
 def test_admin_can_remove_official_game_host_without_body(client: TestClient):

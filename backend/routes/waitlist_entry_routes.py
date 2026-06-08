@@ -20,8 +20,22 @@ VALID_WAITLIST_STATUSES = {
     "expired",
     "cancelled",
     "removed",
+    "payment_processing",
+    "payment_failed",
 }
-PROMOTION_HISTORY_WAITLIST_STATUSES = {"promoted", "accepted", "declined", "expired"}
+PROMOTION_HISTORY_WAITLIST_STATUSES = {
+    "promoted",
+    "accepted",
+    "declined",
+    "expired",
+    "payment_processing",
+    "payment_failed",
+}
+BOOKING_TIED_WAITLIST_STATUSES = {
+    "accepted",
+    "payment_processing",
+    "payment_failed",
+}
 JOIN_WINDOW_MINUTES = 5
 
 
@@ -101,7 +115,8 @@ def validate_waitlist_entry_business_rules(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "waitlist_status must be 'active', 'promoted', 'accepted', "
-                "'declined', 'expired', 'cancelled', or 'removed'."
+                "'declined', 'expired', 'cancelled', 'removed', "
+                "'payment_processing', or 'payment_failed'."
             ),
         )
 
@@ -136,19 +151,32 @@ def validate_waitlist_entry_business_rules(
         )
 
     if (
-        waitlist_entry_data["waitlist_status"] == "accepted"
+        waitlist_entry_data["waitlist_status"] in BOOKING_TIED_WAITLIST_STATUSES
         and waitlist_entry_data["promoted_booking_id"] is None
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Accepted waitlist entries require promoted_booking_id.",
+            detail=(
+                f"{waitlist_entry_data['waitlist_status']} waitlist entries "
+                "require promoted_booking_id."
+            ),
+        )
+
+    authorized_amount_cents = waitlist_entry_data.get("authorized_amount_cents")
+    if authorized_amount_cents is not None and authorized_amount_cents < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="authorized_amount_cents must be greater than or equal to 0.",
         )
 
 
 def validate_game_accepts_waitlist_status(
     db_game: Game, waitlist_status: str | None
 ) -> None:
-    if waitlist_status in {"active", "promoted"} and not db_game.waitlist_enabled:
+    if (
+        waitlist_status in {"active", "promoted", "payment_processing"}
+        and not db_game.waitlist_enabled
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This game does not have waitlist enabled.",
@@ -158,7 +186,7 @@ def validate_game_accepts_waitlist_status(
         minutes=JOIN_WINDOW_MINUTES
     )
     if (
-        waitlist_status in {"active", "promoted"}
+        waitlist_status in {"active", "promoted", "payment_processing"}
         and datetime.now(timezone.utc) >= join_window_closes_at
     ):
         raise HTTPException(
@@ -199,7 +227,7 @@ def normalize_waitlist_entry_lifecycle_fields(
     else:
         normalized_data["promoted_at"] = None
 
-    if normalized_data["waitlist_status"] == "cancelled":
+    if normalized_data["waitlist_status"] in {"cancelled", "payment_failed"}:
         normalized_data["cancelled_at"] = (
             normalized_data.get("cancelled_at")
             or (

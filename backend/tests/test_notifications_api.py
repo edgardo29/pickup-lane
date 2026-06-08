@@ -1,7 +1,19 @@
 from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
+from backend.services.notification_service import (
+    NOTIFICATION_IMPLEMENTATION_STATUS_BY_TYPE,
+    NOTIFICATION_PREFERENCE_CLASS_BY_TYPE,
+    NOTIFICATION_TYPE_CONFIG,
+    VALID_NOTIFICATION_PREFERENCE_CLASSES,
+    build_game_notification_fields,
+    reopen_aggregated_notification,
+    resolve_aggregated_notification,
+)
 from backend.tests.helpers import (
     authenticate_as,
     create_booking,
@@ -69,11 +81,12 @@ def need_a_sub_notification_contract_fields(
     sub_post: dict,
     *,
     action_key: str | None = "view_sub_post",
+    summary: str = "A player requested a sub spot.",
 ) -> dict[str, object]:
     return notification_contract_fields(
         source_type="need_a_sub",
         subject_label=f"{sub_post['team_name']} {sub_post['format_label']}",
-        summary="A player requested a sub spot.",
+        summary=summary,
         action_key=action_key,
         subject_starts_at=sub_post["starts_at"],
         subject_ends_at=sub_post["ends_at"],
@@ -108,6 +121,72 @@ def create_sub_request(
 
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def create_payment_record(
+    *,
+    user_id: str,
+    game_id: str,
+    booking_id: str,
+    payment_status: str = "succeeded",
+) -> str:
+    from backend.database import SessionLocal
+    from backend.models import Payment
+
+    payment_id = uuid4()
+    paid_at = datetime.now(UTC) if payment_status == "succeeded" else None
+
+    with SessionLocal() as db:
+        db.add(
+            Payment(
+                id=payment_id,
+                payer_user_id=UUID(user_id),
+                booking_id=UUID(booking_id),
+                game_id=UUID(game_id),
+                payment_type="booking",
+                provider="stripe",
+                provider_payment_intent_id=f"pi_{uuid4().hex}",
+                idempotency_key=f"idem_{uuid4().hex}",
+                amount_cents=1300,
+                currency="USD",
+                payment_status=payment_status,
+                paid_at=paid_at,
+            )
+        )
+        db.commit()
+
+    return str(payment_id)
+
+
+def create_refund_record(
+    *,
+    payment_id: str,
+    booking_id: str,
+    refund_status: str = "succeeded",
+) -> str:
+    from backend.database import SessionLocal
+    from backend.models import Refund
+
+    refund_id = uuid4()
+    refunded_at = datetime.now(UTC) if refund_status == "succeeded" else None
+
+    with SessionLocal() as db:
+        db.add(
+            Refund(
+                id=refund_id,
+                payment_id=UUID(payment_id),
+                booking_id=UUID(booking_id),
+                amount_cents=1300,
+                currency="USD",
+                refund_reason="game_cancelled",
+                refund_status=refund_status,
+                provider_refund_id=f"re_{uuid4().hex}",
+                refunded_at=refunded_at,
+            )
+        )
+        db.commit()
+
+    return str(refund_id)
 
 
 def test_notifications_create_get_list_and_mark_read(client: TestClient):
@@ -152,6 +231,301 @@ def test_notifications_create_get_list_and_mark_read(client: TestClient):
     assert patch_response.status_code == 200, patch_response.text
     assert patch_response.json()["is_read"] is True
     assert patch_response.json()["read_at"] is not None
+
+
+def test_notification_type_config_has_preference_classes():
+    assert "sub_post_updated" in NOTIFICATION_TYPE_CONFIG
+    assert NOTIFICATION_PREFERENCE_CLASS_BY_TYPE["sub_post_updated"] == "mandatory"
+    assert NOTIFICATION_IMPLEMENTATION_STATUS_BY_TYPE["booking_cancelled"] == "valid_only"
+
+    for notification_type, config in NOTIFICATION_TYPE_CONFIG.items():
+        assert config.preference_class in VALID_NOTIFICATION_PREFERENCE_CLASSES, (
+            f"{notification_type} has invalid preference_class "
+            f"{config.preference_class}"
+        )
+
+
+def test_notification_builders_can_force_null_action(client: TestClient):
+    user = create_user(client)
+    venue = create_venue(client, user["id"])
+    game = create_game(client, user["id"], venue)
+
+    from backend.database import SessionLocal
+    from backend.models import Game
+
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game["id"]))
+        assert db_game is not None
+        fields = build_game_notification_fields(
+            db_game,
+            "game_cancelled",
+            event_at=datetime.now(UTC),
+            force_action_null=True,
+        )
+
+    assert fields["action_key"] is None
+
+
+def test_notifications_hide_game_action_when_game_not_available(
+    client: TestClient,
+):
+    user, game, _booking, _participant, _game_chat, _chat_message = (
+        create_notification_setup(client)
+    )
+    notification = create_notification(
+        client,
+        user["id"],
+        notification_type="game_cancelled",
+        notification_category="game_activity",
+        notification_domain="game",
+        title="Game canceled",
+        body="This game was canceled.",
+        **game_notification_contract_fields(
+            game,
+            summary="This game was canceled.",
+        ),
+        related_game_id=game["id"],
+        is_read=False,
+    )
+
+    from backend.database import SessionLocal
+    from backend.models import Game
+
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game["id"]))
+        assert db_game is not None
+        db_game.publish_status = "draft"
+        db.commit()
+
+    response = client.get(f"/notifications/{notification['id']}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["action_key"] == "view_game"
+    assert body["action"] is None
+
+
+def test_notifications_hide_sub_post_action_when_post_not_available(
+    client: TestClient,
+):
+    owner = create_user(client)
+    requester = create_user(client)
+    sub_post = create_sub_post(client, owner["id"])
+    notification = create_notification(
+        client,
+        requester["id"],
+        notification_type="sub_post_updated",
+        notification_category="game_activity",
+        notification_domain="need_a_sub",
+        title="Post updated",
+        body="Review the latest details before the game.",
+        **need_a_sub_notification_contract_fields(
+            sub_post,
+            summary="Important details were updated.",
+        ),
+        related_sub_post_id=sub_post["id"],
+        is_read=False,
+    )
+
+    authenticate_as(owner["id"])
+    cancel_response = client.patch(
+        f"/need-a-sub/posts/{sub_post['id']}/cancel",
+        json={"cancel_reason": "Test cancellation."},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    authenticate_as(requester["id"])
+    response = client.get(f"/notifications/{notification['id']}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["action_key"] == "view_sub_post"
+    assert body["action"] is None
+
+
+def test_reopen_aggregated_notification_reuses_read_row(
+    client: TestClient,
+):
+    user, game, _booking, _participant, _game_chat, _chat_message = (
+        create_notification_setup(client)
+    )
+    aggregation_key = f"game:{game['id']}:user:{user['id']}:game_updated"
+    notification = create_notification(
+        client,
+        user["id"],
+        notification_type="game_updated",
+        notification_category="game_activity",
+        notification_domain="game",
+        title="Game updated",
+        body="Review the latest game details before you go.",
+        **game_notification_contract_fields(
+            game,
+            summary="Important game details were updated.",
+        ),
+        related_game_id=game["id"],
+        aggregation_key=aggregation_key,
+        is_read=False,
+    )
+    read_response = client.patch(
+        f"/notifications/{notification['id']}/read",
+        json={},
+    )
+    assert read_response.status_code == 200, read_response.text
+    assert read_response.json()["is_read"] is True
+
+    from backend.database import SessionLocal
+    from backend.models import Game
+
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game["id"]))
+        assert db_game is not None
+        values = build_game_notification_fields(
+            db_game,
+            "game_updated",
+            event_at=datetime.now(UTC),
+            summary="Important venue details were updated.",
+            aggregate_count=4,
+        )
+        values["related_game_id"] = db_game.id
+        reopened = reopen_aggregated_notification(
+            db,
+            user_id=UUID(user["id"]),
+            notification_type="game_updated",
+            notification_category="game_activity",
+            notification_domain="game",
+            aggregation_key=aggregation_key,
+            values=values,
+            aggregate_count_mode="clear",
+        )
+        reopened_id = str(reopened.id)
+        db.commit()
+
+    response = client.get(f"/notifications/{notification['id']}")
+
+    assert reopened_id == notification["id"]
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["id"] == notification["id"]
+    assert body["is_read"] is False
+    assert body["read_at"] is None
+    assert body["summary"] == "Important venue details were updated."
+    assert body["aggregate_count"] is None
+
+
+def test_resolve_aggregated_notification_marks_read_without_event_bump(
+    client: TestClient,
+):
+    user, game, _booking, _participant, _game_chat, _chat_message = (
+        create_notification_setup(client)
+    )
+    aggregation_key = f"game:{game['id']}:user:{user['id']}:request_activity"
+    notification = create_notification(
+        client,
+        user["id"],
+        notification_type="game_updated",
+        notification_category="game_activity",
+        notification_domain="game",
+        title="Game updated",
+        body="Review the latest game details before you go.",
+        **game_notification_contract_fields(
+            game,
+            summary="Important game details were updated.",
+        ),
+        related_game_id=game["id"],
+        aggregation_key=aggregation_key,
+        is_read=False,
+    )
+    before_response = client.get(f"/notifications/{notification['id']}")
+    assert before_response.status_code == 200, before_response.text
+    before_event_at = before_response.json()["event_at"]
+
+    from backend.database import SessionLocal
+
+    with SessionLocal() as db:
+        resolved = resolve_aggregated_notification(
+            db,
+            user_id=UUID(user["id"]),
+            aggregation_key=aggregation_key,
+            values={
+                "title": "Request handled",
+                "summary": "This request was handled.",
+                "body": "This pending request no longer needs review.",
+                "action_key": None,
+            },
+        )
+        assert resolved is not None
+        db.commit()
+
+    response = client.get(f"/notifications/{notification['id']}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["is_read"] is True
+    assert body["read_at"] is not None
+    assert body["event_at"] == before_event_at
+    assert body["title"] == "Request handled"
+    assert body["summary"] == "This request was handled."
+    assert body["action_key"] is None
+    assert body["action"] is None
+
+
+def test_notifications_enforce_unique_aggregation_key_per_user(
+    client: TestClient,
+):
+    user, game, _booking, _participant, _game_chat, _chat_message = (
+        create_notification_setup(client)
+    )
+    aggregation_key = f"game:{game['id']}:user:{user['id']}:game_updated"
+    create_notification(
+        client,
+        user["id"],
+        notification_type="game_updated",
+        notification_category="game_activity",
+        notification_domain="game",
+        title="Game updated",
+        body="Review the latest game details before you go.",
+        **game_notification_contract_fields(
+            game,
+            summary="Important game details were updated.",
+        ),
+        related_game_id=game["id"],
+        aggregation_key=aggregation_key,
+        is_read=False,
+    )
+
+    from backend.database import SessionLocal
+    from backend.models import Notification
+
+    with SessionLocal() as db:
+        db.add(
+            Notification(
+                id=uuid4(),
+                user_id=UUID(user["id"]),
+                notification_type="game_updated",
+                notification_category="game_activity",
+                notification_domain="game",
+                source_type=(
+                    "official_game"
+                    if game["game_type"] == "official"
+                    else "community_game"
+                ),
+                title="Duplicate game updated",
+                subject_label=game["title"],
+                summary="Important game details were updated.",
+                body="Review the latest game details before you go.",
+                action_key="view_game",
+                subject_starts_at=datetime.fromisoformat(game["starts_at"]),
+                subject_ends_at=datetime.fromisoformat(game["ends_at"]),
+                subject_timezone=game["timezone"],
+                event_at=datetime.now(UTC),
+                aggregation_key=aggregation_key,
+                related_game_id=UUID(game["id"]),
+                is_read=False,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
 
 
 def test_notifications_reject_empty_title(client: TestClient):
@@ -309,6 +683,139 @@ def test_notifications_reject_booking_mismatched_game(client: TestClient):
     assert "related_booking_id must belong to related_game_id" in response.text
 
 
+def test_notifications_support_payment_and_refund_relations(client: TestClient):
+    user, game, booking, _participant, _game_chat, _chat_message = (
+        create_notification_setup(client)
+    )
+    payment_id = create_payment_record(
+        user_id=user["id"],
+        game_id=game["id"],
+        booking_id=booking["id"],
+    )
+    refund_id = create_refund_record(
+        payment_id=payment_id,
+        booking_id=booking["id"],
+    )
+
+    authenticate_as(user["id"])
+    response = client.post(
+        "/notifications",
+        json={
+            "user_id": user["id"],
+            "notification_type": "booking_refunded",
+            "notification_category": "game_activity",
+            "notification_domain": "game",
+            "title": "Refund processed",
+            **game_notification_contract_fields(
+                game,
+                summary="Your refund was processed.",
+            ),
+            "body": "Your refund for this official game was processed.",
+            "related_game_id": game["id"],
+            "related_booking_id": booking["id"],
+            "related_payment_id": payment_id,
+            "related_refund_id": refund_id,
+            "is_read": False,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["related_payment_id"] == payment_id
+    assert body["related_refund_id"] == refund_id
+
+    list_response = client.get(f"/notifications/me?related_payment_id={payment_id}")
+    assert list_response.status_code == 200, list_response.text
+    assert [item["id"] for item in list_response.json()] == [body["id"]]
+
+    refund_list_response = client.get(f"/notifications/me?related_refund_id={refund_id}")
+    assert refund_list_response.status_code == 200, refund_list_response.text
+    assert [item["id"] for item in refund_list_response.json()] == [body["id"]]
+
+
+def test_notifications_reject_payment_mismatched_booking(client: TestClient):
+    user = create_user(client)
+    venue = create_venue(client, user["id"])
+    first_game = create_game(client, user["id"], venue)
+    second_game = create_game(client, user["id"], venue)
+    first_booking = create_booking(client, user["id"], first_game["id"])
+    second_booking = create_booking(client, user["id"], second_game["id"])
+    payment_id = create_payment_record(
+        user_id=user["id"],
+        game_id=first_game["id"],
+        booking_id=first_booking["id"],
+    )
+
+    authenticate_as(user["id"])
+    response = client.post(
+        "/notifications",
+        json={
+            "user_id": user["id"],
+            "notification_type": "payment_failed",
+            "notification_category": "game_activity",
+            "notification_domain": "game",
+            "title": "Payment failed",
+            **game_notification_contract_fields(
+                second_game,
+                summary="Your payment could not be completed.",
+            ),
+            "body": "Your payment for this game could not be completed.",
+            "related_game_id": second_game["id"],
+            "related_booking_id": second_booking["id"],
+            "related_payment_id": payment_id,
+            "is_read": False,
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "related_payment_id must belong to related_booking_id" in response.text
+
+
+def test_notifications_reject_refund_mismatched_payment(client: TestClient):
+    user, game, booking, _participant, _game_chat, _chat_message = (
+        create_notification_setup(client)
+    )
+    first_payment_id = create_payment_record(
+        user_id=user["id"],
+        game_id=game["id"],
+        booking_id=booking["id"],
+    )
+    second_payment_id = create_payment_record(
+        user_id=user["id"],
+        game_id=game["id"],
+        booking_id=booking["id"],
+    )
+    refund_id = create_refund_record(
+        payment_id=first_payment_id,
+        booking_id=booking["id"],
+    )
+
+    authenticate_as(user["id"])
+    response = client.post(
+        "/notifications",
+        json={
+            "user_id": user["id"],
+            "notification_type": "booking_refunded",
+            "notification_category": "game_activity",
+            "notification_domain": "game",
+            "title": "Refund processed",
+            **game_notification_contract_fields(
+                game,
+                summary="Your refund was processed.",
+            ),
+            "body": "Your refund for this official game was processed.",
+            "related_game_id": game["id"],
+            "related_booking_id": booking["id"],
+            "related_payment_id": second_payment_id,
+            "related_refund_id": refund_id,
+            "is_read": False,
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "related_refund_id must belong to related_payment_id" in response.text
+
+
 def test_notifications_unread_clears_read_at(client: TestClient):
     user = create_user(client)
     notification = create_notification(client, user["id"], is_read=True)
@@ -437,6 +944,40 @@ def test_notifications_support_need_a_sub_relations(client: TestClient):
     assert body["related_sub_post_id"] == sub_post["id"]
     assert body["related_sub_post_request_id"] == sub_request["id"]
     assert body["related_sub_post_position_id"] == sub_post["positions"][0]["id"]
+
+
+def test_notifications_support_sub_post_updated_type(client: TestClient):
+    owner = create_user(client)
+    requester = create_user(client)
+    sub_post = create_sub_post(client, owner["id"])
+
+    authenticate_as(requester["id"])
+    response = client.post(
+        "/notifications",
+        json={
+            "user_id": requester["id"],
+            "notification_type": "sub_post_updated",
+            "notification_category": "game_activity",
+            "notification_domain": "need_a_sub",
+            "title": "Post updated",
+            **need_a_sub_notification_contract_fields(
+                sub_post,
+                summary="Important details were updated.",
+            ),
+            "body": "Review the latest details before the game.",
+            "related_sub_post_id": sub_post["id"],
+            "is_read": False,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["notification_type"] == "sub_post_updated"
+    assert body["notification_domain"] == "need_a_sub"
+    assert body["related_sub_post_id"] == sub_post["id"]
+    assert body["icon"] == "CalendarDays"
+    assert body["severity"] == "default"
+    assert body["action"]["key"] == "view_sub_post"
 
 
 def test_notifications_reject_mismatched_need_a_sub_relations(client: TestClient):

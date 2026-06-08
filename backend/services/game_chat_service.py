@@ -11,10 +11,13 @@ from backend.models import (
     GameChat,
     GameChatRead,
     GameParticipant,
-    Notification,
     User,
 )
-from backend.services.notification_service import build_game_notification_fields
+from backend.services.notification_service import (
+    build_game_notification_fields,
+    reopen_aggregated_notification,
+    resolve_aggregated_notification,
+)
 
 CHAT_MEMBER_STATUSES = {"confirmed"}
 CHAT_MEMBER_TYPES = {"host", "registered_user", "admin_added"}
@@ -145,6 +148,14 @@ def list_chat_member_user_ids(
         user_ids.discard(exclude_user_id)
 
     return list(user_ids)
+
+
+def chat_message_aggregation_key(
+    game_id: uuid.UUID,
+    chat_id: uuid.UUID,
+    recipient_user_id: uuid.UUID,
+) -> str:
+    return f"game:{game_id}:chat:{chat_id}:user:{recipient_user_id}:chat_message"
 
 
 def normalize_message_body(message_body: str) -> str:
@@ -297,21 +308,17 @@ def mark_chat_notifications_read(
     user_id: uuid.UUID,
     now: datetime,
 ) -> None:
-    notifications = db.scalars(
-        select(Notification).where(
-            Notification.user_id == user_id,
-            Notification.notification_type == "chat_message",
-            Notification.related_game_id == game_chat.game_id,
-            Notification.related_chat_id == game_chat.id,
-            Notification.is_read.is_(False),
-        )
-    ).all()
-
-    for notification in notifications:
-        notification.is_read = True
-        notification.read_at = now
-        notification.updated_at = now
-        db.add(notification)
+    resolve_aggregated_notification(
+        db,
+        user_id=user_id,
+        aggregation_key=chat_message_aggregation_key(
+            game_chat.game_id,
+            game_chat.id,
+            user_id,
+        ),
+        values={"aggregate_count": None},
+        read_at=now,
+    )
 
 
 def create_or_update_chat_notifications(
@@ -322,63 +329,41 @@ def create_or_update_chat_notifications(
     sender_user: User,
     now: datetime,
 ) -> None:
-    recipient_user_ids = list_chat_member_user_ids(db, db_game, exclude_user_id=sender_user.id)
+    recipient_user_ids = list_chat_member_user_ids(
+        db,
+        db_game,
+        exclude_user_id=sender_user.id,
+    )
 
     for recipient_user_id in recipient_user_ids:
-        aggregation_key = f"chat:{game_chat.id}"
-        existing_notification = db.scalar(
-            select(Notification)
-            .where(
-                Notification.user_id == recipient_user_id,
-                Notification.notification_type == "chat_message",
-                Notification.related_game_id == db_game.id,
-                Notification.related_chat_id == game_chat.id,
-                Notification.is_read.is_(False),
-            )
-            .order_by(Notification.created_at.desc())
-            .limit(1)
+        aggregation_key = chat_message_aggregation_key(
+            db_game.id,
+            game_chat.id,
+            recipient_user_id,
         )
-
-        if existing_notification is not None:
-            aggregate_count = (existing_notification.aggregate_count or 1) + 1
-            aggregate_fields = build_game_notification_fields(
-                db_game,
-                "chat_message",
-                event_at=now,
-                aggregation_key=aggregation_key,
-                aggregate_count=aggregate_count,
-            )
-            for field_name, field_value in aggregate_fields.items():
-                setattr(existing_notification, field_name, field_value)
-            existing_notification.actor_user_id = sender_user.id
-            existing_notification.related_message_id = chat_message.id
-            existing_notification.updated_at = now
-            db.add(existing_notification)
-            continue
-
-        db.add(
-            Notification(
-                id=uuid.uuid4(),
-                user_id=recipient_user_id,
-                notification_type="chat_message",
-                notification_category="game_activity",
-                notification_domain="game",
-                **build_game_notification_fields(
-                    db_game,
-                    "chat_message",
-                    event_at=now,
-                    aggregation_key=aggregation_key,
-                    aggregate_count=1,
-                ),
-                actor_user_id=sender_user.id,
-                related_game_id=db_game.id,
-                related_chat_id=game_chat.id,
-                related_message_id=chat_message.id,
-                is_read=False,
-                read_at=None,
-                created_at=now,
-                updated_at=now,
-            )
+        notification_fields = build_game_notification_fields(
+            db_game,
+            "chat_message",
+            event_at=now,
+            aggregation_key=aggregation_key,
+        )
+        notification_fields.update(
+            {
+                "actor_user_id": sender_user.id,
+                "related_game_id": db_game.id,
+                "related_chat_id": game_chat.id,
+                "related_message_id": chat_message.id,
+            }
+        )
+        reopen_aggregated_notification(
+            db,
+            user_id=recipient_user_id,
+            notification_type="chat_message",
+            notification_category="game_activity",
+            notification_domain="game",
+            aggregation_key=aggregation_key,
+            values=notification_fields,
+            aggregate_count_mode="increment",
         )
 
 

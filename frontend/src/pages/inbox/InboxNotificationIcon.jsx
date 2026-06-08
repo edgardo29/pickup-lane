@@ -36,6 +36,7 @@ const ICON_BY_NOTIFICATION_TYPE = {
   refund_processed: CircleDollarSign,
   sub_post_canceled: MapPin,
   sub_post_removed: MapPin,
+  sub_post_updated: CalendarDays,
   sub_request_canceled_by_owner: ClipboardList,
   sub_request_canceled_by_player: ClipboardList,
   sub_request_confirmed: ClipboardList,

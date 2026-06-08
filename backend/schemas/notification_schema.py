@@ -38,6 +38,8 @@ class NotificationCreate(BaseModel):
     related_game_id: UUID | None = None
     related_chat_id: UUID | None = None
     related_booking_id: UUID | None = None
+    related_payment_id: UUID | None = None
+    related_refund_id: UUID | None = None
     related_participant_id: UUID | None = None
     related_message_id: UUID | None = None
     related_sub_post_id: UUID | None = None
@@ -77,6 +79,8 @@ class NotificationRead(BaseModel):
     related_game_id: UUID | None
     related_chat_id: UUID | None
     related_booking_id: UUID | None
+    related_payment_id: UUID | None
+    related_refund_id: UUID | None
     related_participant_id: UUID | None
     related_message_id: UUID | None
     related_sub_post_id: UUID | None
@@ -113,6 +117,8 @@ class NotificationUpdate(BaseModel):
     related_game_id: UUID | None = None
     related_chat_id: UUID | None = None
     related_booking_id: UUID | None = None
+    related_payment_id: UUID | None = None
+    related_refund_id: UUID | None = None
     related_participant_id: UUID | None = None
     related_message_id: UUID | None = None
     related_sub_post_id: UUID | None = None

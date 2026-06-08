@@ -16,6 +16,7 @@ from backend.firebase_admin_client import (
 from backend.models import (
     Game,
     GameParticipant,
+    Notification,
     User,
     UserPaymentMethod,
     UserSettings,
@@ -206,6 +207,21 @@ def cancel_future_user_activity(user: User, db: Session, now: datetime) -> None:
     ).all()
 
     for game in official_hosted_games:
+        assigned_host_notifications = db.scalars(
+            select(Notification).where(
+                Notification.user_id == user.id,
+                Notification.related_game_id == game.id,
+                Notification.notification_type == "game_host_assigned",
+                Notification.is_read.is_(False),
+            )
+        ).all()
+        for notification in assigned_host_notifications:
+            notification.is_read = True
+            if notification.read_at is None:
+                notification.read_at = now
+            notification.updated_at = now
+            db.add(notification)
+
         game.host_user_id = None
         game.updated_at = now
         db.add(game)
@@ -241,7 +257,9 @@ def cancel_future_user_activity(user: User, db: Session, now: datetime) -> None:
     waitlist_entries = db.scalars(
         select(WaitlistEntry).where(
             WaitlistEntry.user_id == user.id,
-            WaitlistEntry.waitlist_status.in_(["active", "promoted", "accepted"]),
+            WaitlistEntry.waitlist_status.in_(
+                ["active", "promoted", "payment_processing", "accepted"]
+            ),
         )
     ).all()
 

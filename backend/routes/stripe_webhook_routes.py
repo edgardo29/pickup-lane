@@ -12,23 +12,34 @@ from backend.models import (
     Booking,
     BookingStatusHistory,
     Game,
+    GameCreditUsage,
     GameParticipant,
+    Notification,
     ParticipantStatusHistory,
     Payment,
     PaymentEvent,
     Refund,
     User,
+    WaitlistEntry,
 )
 from backend.routes.game_routes import (
     count_roster_players,
+    create_or_reopen_booking_refunded_notification,
+    create_waitlist_payment_failed_notification,
+    create_waitlist_promotion_notification,
     game_requires_app_player_payment,
     get_next_roster_order,
     sync_game_capacity_status,
 )
 from backend.routes.payment_event_routes import build_payment_event_conflict_detail
 from backend.services.game_credit_service import (
+    RESTORED_USAGE_STATUS,
     redeem_reserved_game_credits,
     release_reserved_game_credits,
+)
+from backend.services.notification_service import (
+    build_game_notification_fields,
+    reopen_aggregated_notification,
 )
 from backend.services.stripe_service import StripeConfigError, construct_webhook_event
 
@@ -370,6 +381,152 @@ def validate_payment_intent_references(
     return None
 
 
+def get_waitlist_auto_promote_entry(
+    db: Session,
+    payment: Payment,
+) -> WaitlistEntry | None:
+    metadata = payment.payment_metadata or {}
+    if metadata.get("source") != "waitlist_auto_promote":
+        return None
+
+    waitlist_entry_id = metadata.get("waitlist_entry_id")
+    if not waitlist_entry_id:
+        return None
+
+    try:
+        parsed_waitlist_entry_id = uuid.UUID(str(waitlist_entry_id))
+    except ValueError:
+        return None
+
+    return db.get(WaitlistEntry, parsed_waitlist_entry_id)
+
+
+def booking_confirmed_aggregation_key(game_id: uuid.UUID, booking_id: uuid.UUID) -> str:
+    return f"game:{game_id}:booking:{booking_id}:booking_confirmed"
+
+
+def payment_failed_aggregation_key(
+    game_id: uuid.UUID,
+    booking_id: uuid.UUID,
+    payment_id: uuid.UUID,
+) -> str:
+    return f"game:{game_id}:booking:{booking_id}:payment:{payment_id}:payment_failed"
+
+
+def resolve_unread_payment_failed_notifications(
+    db: Session,
+    *,
+    game: Game,
+    booking: Booking,
+    read_at: datetime,
+) -> None:
+    notifications = db.scalars(
+        select(Notification).where(
+            Notification.user_id == booking.buyer_user_id,
+            Notification.notification_type == "payment_failed",
+            Notification.notification_domain == "game",
+            Notification.is_read.is_(False),
+            (
+                (Notification.related_booking_id == booking.id)
+                | (Notification.related_game_id == game.id)
+            ),
+        )
+    ).all()
+
+    for notification in notifications:
+        notification.is_read = True
+        if notification.read_at is None:
+            notification.read_at = read_at
+        notification.updated_at = read_at
+        db.add(notification)
+
+
+def create_booking_confirmed_notification(
+    db: Session,
+    *,
+    game: Game,
+    booking: Booking,
+    payment: Payment,
+    now: datetime,
+) -> None:
+    resolve_unread_payment_failed_notifications(
+        db,
+        game=game,
+        booking=booking,
+        read_at=now,
+    )
+    aggregation_key = booking_confirmed_aggregation_key(game.id, booking.id)
+    reopen_aggregated_notification(
+        db,
+        user_id=booking.buyer_user_id,
+        notification_type="booking_confirmed",
+        notification_category="game_activity",
+        notification_domain="game",
+        aggregation_key=aggregation_key,
+        values={
+            **build_game_notification_fields(
+                game,
+                "booking_confirmed",
+                event_at=now,
+                body="Your booking for this official game was confirmed.",
+                aggregation_key=aggregation_key,
+            ),
+            "actor_user_id": None,
+            "related_game_id": game.id,
+            "related_booking_id": booking.id,
+            "related_payment_id": payment.id,
+            "related_participant_id": None,
+            "related_refund_id": None,
+        },
+        aggregate_count_mode="clear",
+    )
+
+
+def create_checkout_payment_failed_notification(
+    db: Session,
+    *,
+    game: Game,
+    booking: Booking,
+    payment: Payment,
+    now: datetime,
+    restored_credit: bool,
+) -> None:
+    body = (
+        "Your payment could not be completed, so your checkout hold was released "
+        "and your reserved credit was restored. You were not added to the game."
+        if restored_credit
+        else (
+            "Your payment could not be completed, so your checkout hold was "
+            "released. You were not added to the game."
+        )
+    )
+    aggregation_key = payment_failed_aggregation_key(game.id, booking.id, payment.id)
+    reopen_aggregated_notification(
+        db,
+        user_id=booking.buyer_user_id,
+        notification_type="payment_failed",
+        notification_category="game_activity",
+        notification_domain="game",
+        aggregation_key=aggregation_key,
+        values={
+            **build_game_notification_fields(
+                game,
+                "payment_failed",
+                event_at=now,
+                body=body,
+                aggregation_key=aggregation_key,
+            ),
+            "actor_user_id": None,
+            "related_game_id": game.id,
+            "related_booking_id": booking.id,
+            "related_payment_id": payment.id,
+            "related_participant_id": None,
+            "related_refund_id": None,
+        },
+        aggregate_count_mode="clear",
+    )
+
+
 def apply_payment_intent_succeeded(
     db: Session,
     event: PaymentEvent,
@@ -476,6 +633,29 @@ def apply_payment_intent_succeeded(
     sync_game_capacity_status(db, game)
     game.updated_at = now
     db.add(game)
+    waitlist_entry = get_waitlist_auto_promote_entry(db, payment)
+    if waitlist_entry is not None:
+        waitlist_entry.waitlist_status = "accepted"
+        waitlist_entry.promoted_booking_id = booking.id
+        waitlist_entry.promoted_at = waitlist_entry.promoted_at or now
+        waitlist_entry.updated_at = now
+        db.add(waitlist_entry)
+        create_waitlist_promotion_notification(
+            db,
+            game,
+            waitlist_entry,
+            pending_participants[0],
+            now,
+            payment,
+        )
+    else:
+        create_booking_confirmed_notification(
+            db,
+            game=game,
+            booking=booking,
+            payment=payment,
+            now=now,
+        )
     mark_event_processed(event, now)
 
 
@@ -537,6 +717,8 @@ def fail_pending_booking_hold(
     fallback_code: str,
     fallback_message: str,
     history_reason: str,
+    restored_credit: bool = False,
+    emit_checkout_failure_notification: bool = False,
 ) -> None:
     failure_code, failure_message, failure_reason = get_payment_failure_fields(
         payment_intent,
@@ -575,13 +757,15 @@ def fail_pending_booking_hold(
         reason=history_reason,
     )
 
+    waitlist_entry = get_waitlist_auto_promote_entry(db, payment)
     pending_participants = get_locked_booking_participants(
         db, booking.id, {"pending_payment"}
     )
+    participant_failure_status = "removed" if waitlist_entry is not None else "cancelled"
     for participant in pending_participants:
         old_participant_status = participant.participant_status
         old_attendance_status = participant.attendance_status
-        participant.participant_status = "cancelled"
+        participant.participant_status = participant_failure_status
         participant.attendance_status = "not_applicable"
         participant.cancellation_type = "payment_failed"
         participant.cancelled_at = participant.cancelled_at or now
@@ -596,6 +780,28 @@ def fail_pending_booking_hold(
         )
 
     if game is not None:
+        if waitlist_entry is not None and booking is not None:
+            waitlist_entry.waitlist_status = "payment_failed"
+            waitlist_entry.promoted_booking_id = booking.id
+            waitlist_entry.cancelled_at = waitlist_entry.cancelled_at or now
+            waitlist_entry.updated_at = now
+            db.add(waitlist_entry)
+            create_waitlist_payment_failed_notification(
+                db,
+                game,
+                booking,
+                payment,
+                now,
+            )
+        elif emit_checkout_failure_notification:
+            create_checkout_payment_failed_notification(
+                db,
+                game=game,
+                booking=booking,
+                payment=payment,
+                now=now,
+                restored_credit=restored_credit,
+            )
         sync_game_capacity_status(db, game)
         game.updated_at = now
         db.add(game)
@@ -625,12 +831,17 @@ def apply_payment_intent_failed_or_canceled(
         mark_event_ignored(event, "Failure or cancel event arrived after payment success.")
         return
 
+    waitlist_entry = get_waitlist_auto_promote_entry(db, payment)
     if is_canceled:
         terminal_payment_status = "canceled"
-        terminal_booking_status = "expired"
+        terminal_booking_status = "failed" if waitlist_entry is not None else "expired"
         fallback_code = "payment_intent_canceled"
         fallback_message = "Stripe payment intent was canceled."
-        history_reason = "Stripe payment_intent.canceled released checkout hold."
+        history_reason = (
+            "Stripe payment_intent.canceled failed waitlist auto-promotion."
+            if waitlist_entry is not None
+            else "Stripe payment_intent.canceled released checkout hold."
+        )
     else:
         terminal_payment_status = "failed"
         terminal_booking_status = "failed"
@@ -644,7 +855,7 @@ def apply_payment_intent_failed_or_canceled(
 
     if booking.booking_status == "pending_payment":
         try:
-            release_reserved_game_credits(
+            released_credit_usages = release_reserved_game_credits(
                 db,
                 booking.id,
                 now=now,
@@ -654,6 +865,8 @@ def apply_payment_intent_failed_or_canceled(
         except ValueError as exc:
             mark_event_failed(event, str(exc))
             return
+    else:
+        released_credit_usages = []
 
     fail_pending_booking_hold(
         db,
@@ -665,6 +878,8 @@ def apply_payment_intent_failed_or_canceled(
         fallback_code=fallback_code,
         fallback_message=fallback_message,
         history_reason=history_reason,
+        restored_credit=bool(released_credit_usages),
+        emit_checkout_failure_notification=not is_canceled,
     )
     mark_event_processed(event, now)
 
@@ -798,6 +1013,21 @@ def sync_refunded_payment_and_booking(
         db.add(booking)
 
 
+def booking_has_restored_game_credit(db: Session, booking_id: uuid.UUID) -> bool:
+    restored_credit_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(GameCreditUsage)
+            .where(
+                GameCreditUsage.booking_id == booking_id,
+                GameCreditUsage.usage_status == RESTORED_USAGE_STATUS,
+            )
+        )
+        or 0
+    )
+    return int(restored_credit_count) > 0
+
+
 def validate_refund_event_references(
     refund: Refund,
     refund_payload: dict[str, Any],
@@ -865,6 +1095,19 @@ def process_refund_event(
     if refund_status == "succeeded":
         db.flush()
         sync_refunded_payment_and_booking(db, payment, booking, now)
+        if booking is not None:
+            game = get_locked_game(db, booking.game_id)
+            if game is not None:
+                create_or_reopen_booking_refunded_notification(
+                    db,
+                    db_game=game,
+                    booking=booking,
+                    payment=payment,
+                    refund=refund,
+                    now=now,
+                    stripe_refund_processed=True,
+                    credit_restored=booking_has_restored_game_credit(db, booking.id),
+                )
 
     mark_event_processed(event, now)
 

@@ -20,19 +20,28 @@ from backend.models import (
     Payment,
     Refund,
     User,
+    UserPaymentMethod,
     Venue,
     WaitlistEntry,
 )
 from backend.routes.venue_routes import find_matching_active_venue
 from backend.services.stripe_service import (
     StripeConfigError,
+    StripePaymentIntentResult,
+    confirm_payment_intent,
+    create_payment_intent,
     create_refund as create_stripe_refund,
+    map_payment_intent_status,
 )
 from backend.services.game_credit_service import (
     release_reserved_game_credits,
     restore_redeemed_game_credits,
 )
-from backend.services.notification_service import build_game_notification_fields
+from backend.services.notification_service import (
+    build_game_notification_fields,
+    reopen_aggregated_notification,
+    resolve_aggregated_notification,
+)
 from backend.schemas import (
     GameCancelCreate,
     GameCreate,
@@ -73,7 +82,8 @@ ACTIVE_PLAYER_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
 RESERVED_PLAYER_STATUSES = {"pending_payment", "confirmed"}
 ROSTER_PLAYER_STATUSES = {"pending_payment", "confirmed"}
 ACTIVE_JOIN_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
-ACTIVE_WAITLIST_STATUSES = {"active", "promoted"}
+ACTIVE_WAITLIST_STATUSES = {"active", "promoted", "payment_processing"}
+WAITLIST_PROMOTION_CANDIDATE_STATUSES = {"active"}
 ACTIVE_BOOKING_STATUSES = {
     "pending_payment",
     "confirmed",
@@ -117,6 +127,7 @@ MAXIMUM_TOTAL_SPOTS = 99
 MAX_CANCEL_REASON_LENGTH = 500
 REFUND_CUTOFF_HOURS = 24
 JOIN_WINDOW_MINUTES = 5
+AUTO_CHARGE_CONSENT_VERSION_MAX_LENGTH = 50
 LOCATION_FIELDS = {
     "venue_name",
     "address_line_1",
@@ -142,6 +153,23 @@ NON_NULL_HOST_EDIT_FIELDS = MAJOR_HOST_EDIT_FIELDS | {
     "state",
     "postal_code",
 }
+GAME_UPDATED_GAME_STATUSES = {"scheduled", "full"}
+GAME_UPDATED_PARTICIPANT_STATUSES = {"confirmed", "waitlisted"}
+GAME_UPDATED_PARTICIPANT_TYPES = {"registered_user", "admin_added"}
+GAME_UPDATED_STRUCTURAL_FIELDS = (
+    "starts_at",
+    "ends_at",
+    "venue_id",
+    "venue_name_snapshot",
+    "address_snapshot",
+    "city_snapshot",
+    "state_snapshot",
+    "neighborhood_snapshot",
+    "environment_type",
+    "format_label",
+    "game_player_group",
+    "skill_level",
+)
 
 
 def build_game_conflict_detail(exc: IntegrityError) -> str:
@@ -827,6 +855,17 @@ def cancel_game_participants(
     return list(notified_user_ids)
 
 
+def add_game_cancellation_host_recipient(
+    db_game: Game,
+    notified_user_ids: list[uuid.UUID],
+    actor_user_id: uuid.UUID,
+) -> list[uuid.UUID]:
+    if db_game.host_user_id is None or db_game.host_user_id == actor_user_id:
+        return notified_user_ids
+
+    return [*notified_user_ids, db_game.host_user_id]
+
+
 def cancel_game_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
     waitlist_entries = db.scalars(
         select(WaitlistEntry).where(
@@ -909,6 +948,7 @@ def cancel_game_bookings(
                 restored_credit_cents = sum(
                     usage.amount_cents for usage in restored_credit_usages
                 )
+                credit_restored = restored_credit_cents > 0
                 payment_summary["credit_restored_count"] = (
                     int(payment_summary["credit_restored_count"])
                     + len(restored_credit_usages)
@@ -925,6 +965,7 @@ def cancel_game_bookings(
                     current_user,
                     now,
                 )
+                successful_refunds = refund_summary.pop("successful_refunds", [])
                 for key, value in refund_summary.items():
                     payment_summary[key] = int(payment_summary[key]) + value
                 if refund_summary["refund_created_count"] > 0:
@@ -949,6 +990,32 @@ def cancel_game_bookings(
                     booking_refund_followup_required = False
                 if booking_refund_followup_required:
                     payment_summary["refund_followup_required"] = True
+                if successful_refunds:
+                    # Notifications store related_refund_id, so persist refund rows
+                    # before the notification helper can create/update its row.
+                    db.flush()
+                for payment, refund in successful_refunds:
+                    create_or_reopen_booking_refunded_notification(
+                        db,
+                        db_game=db_game,
+                        booking=booking,
+                        payment=payment,
+                        refund=refund,
+                        now=now,
+                        stripe_refund_processed=True,
+                        credit_restored=credit_restored,
+                    )
+                if credit_restored and not successful_refunds:
+                    create_or_reopen_booking_refunded_notification(
+                        db,
+                        db_game=db_game,
+                        booking=booking,
+                        payment=None,
+                        refund=None,
+                        now=now,
+                        stripe_refund_processed=False,
+                        credit_restored=True,
+                    )
             elif has_processing_payment:
                 payment_summary["processing_payment_booking_count"] = (
                     int(payment_summary["processing_payment_booking_count"]) + 1
@@ -1003,6 +1070,85 @@ def cancel_game_bookings(
     return payment_summary
 
 
+def booking_refunded_aggregation_key(game_id: uuid.UUID, booking_id: uuid.UUID) -> str:
+    return f"game:{game_id}:booking:{booking_id}:booking_refunded"
+
+
+def booking_refunded_copy(
+    *,
+    stripe_refund_processed: bool,
+    credit_restored: bool,
+) -> dict[str, str]:
+    if stripe_refund_processed and credit_restored:
+        return {
+            "title": "Refund and credit processed",
+            "summary": "Your refund was processed and your game credit was restored.",
+            "body": (
+                "Your Stripe refund was processed and your Pickup Lane game credit "
+                "was restored for this canceled official game."
+            ),
+        }
+
+    if credit_restored:
+        return {
+            "title": "Credit restored",
+            "summary": "Your Pickup Lane game credit was restored.",
+            "body": (
+                "Your Pickup Lane game credit was restored for this canceled "
+                "official game."
+            ),
+        }
+
+    return {
+        "title": "Refund processed",
+        "summary": "Your refund was processed.",
+        "body": "Your refund for this official game was processed.",
+    }
+
+
+def create_or_reopen_booking_refunded_notification(
+    db: Session,
+    *,
+    db_game: Game,
+    booking: Booking,
+    now: datetime,
+    payment: Payment | None = None,
+    refund: Refund | None = None,
+    stripe_refund_processed: bool,
+    credit_restored: bool,
+) -> None:
+    aggregation_key = booking_refunded_aggregation_key(db_game.id, booking.id)
+    copy = booking_refunded_copy(
+        stripe_refund_processed=stripe_refund_processed,
+        credit_restored=credit_restored,
+    )
+    reopen_aggregated_notification(
+        db,
+        user_id=booking.buyer_user_id,
+        notification_type="booking_refunded",
+        notification_category="game_activity",
+        notification_domain="game",
+        aggregation_key=aggregation_key,
+        values={
+            **build_game_notification_fields(
+                db_game,
+                "booking_refunded",
+                event_at=now,
+                force_action_null=True,
+                aggregation_key=aggregation_key,
+                **copy,
+            ),
+            "actor_user_id": None,
+            "related_game_id": db_game.id,
+            "related_booking_id": booking.id,
+            "related_payment_id": payment.id if payment is not None else None,
+            "related_refund_id": refund.id if refund is not None else None,
+            "related_participant_id": None,
+        },
+        aggregate_count_mode="clear",
+    )
+
+
 def map_stripe_refund_status(stripe_status: str) -> str:
     normalized_status = stripe_status.strip().lower()
     if normalized_status == "succeeded":
@@ -1036,12 +1182,13 @@ def booking_has_refundable_payments(payments: list[Payment]) -> bool:
     )
 
 
-def build_cancellation_refund_summary() -> dict[str, int]:
+def build_cancellation_refund_summary() -> dict[str, object]:
     return {
         "refund_created_count": 0,
         "refund_failed_count": 0,
         "refund_processing_count": 0,
         "refund_missing_charge_count": 0,
+        "successful_refunds": [],
     }
 
 
@@ -1052,7 +1199,7 @@ def create_official_cancellation_refunds(
     payments: list[Payment],
     current_user: User,
     now: datetime,
-) -> dict[str, int]:
+) -> dict[str, object]:
     summary = build_cancellation_refund_summary()
 
     for payment in payments:
@@ -1131,7 +1278,7 @@ def create_official_cancellation_refunds(
             continue
 
         refund_status = map_stripe_refund_status(stripe_refund.status)
-        create_cancellation_refund_record(
+        refund = create_cancellation_refund_record(
             db,
             payment,
             booking,
@@ -1146,6 +1293,7 @@ def create_official_cancellation_refunds(
             payment.payment_status = "refunded"
             payment.updated_at = now
             db.add(payment)
+            summary["successful_refunds"].append((payment, refund))
         elif refund_status == "failed":
             summary["refund_failed_count"] += 1
         else:
@@ -1214,7 +1362,34 @@ def create_game_cancelled_notifications(
     if not recipient_user_ids:
         return
 
-    for recipient_user_id in sorted(set(recipient_user_ids)):
+    for recipient_user_id in sorted(set(recipient_user_ids), key=str):
+        resolve_aggregated_notification(
+            db,
+            user_id=recipient_user_id,
+            aggregation_key=game_updated_aggregation_key(db_game.id, recipient_user_id),
+            read_at=now,
+        )
+        resolve_unread_game_notification_rows(
+            db,
+            db_game=db_game,
+            recipient_user_id=recipient_user_id,
+            notification_type="waitlist_promoted",
+            read_at=now,
+        )
+        resolve_unread_game_notification_rows(
+            db,
+            db_game=db_game,
+            recipient_user_id=recipient_user_id,
+            notification_type="game_host_assigned",
+            read_at=now,
+        )
+        resolve_unread_game_notification_rows(
+            db,
+            db_game=db_game,
+            recipient_user_id=recipient_user_id,
+            notification_type="game_player_added_by_admin",
+            read_at=now,
+        )
         db.add(
             Notification(
                 id=uuid.uuid4(),
@@ -1226,6 +1401,7 @@ def create_game_cancelled_notifications(
                     db_game,
                     "game_cancelled",
                     event_at=now,
+                    force_action_null=True,
                 ),
                 actor_user_id=actor_user_id,
                 related_game_id=db_game.id,
@@ -1234,6 +1410,134 @@ def create_game_cancelled_notifications(
                 created_at=now,
                 updated_at=now,
             )
+        )
+
+
+def resolve_unread_game_notification_rows(
+    db: Session,
+    *,
+    db_game: Game,
+    recipient_user_id: uuid.UUID,
+    notification_type: str,
+    read_at: datetime,
+) -> None:
+    notifications = db.scalars(
+        select(Notification).where(
+            Notification.user_id == recipient_user_id,
+            Notification.related_game_id == db_game.id,
+            Notification.notification_type == notification_type,
+            Notification.is_read.is_(False),
+        )
+    ).all()
+
+    for notification in notifications:
+        notification.is_read = True
+        if notification.read_at is None:
+            notification.read_at = read_at
+        notification.updated_at = read_at
+        db.add(notification)
+
+
+def game_updated_aggregation_key(
+    game_id: uuid.UUID,
+    recipient_user_id: uuid.UUID,
+) -> str:
+    return f"game:{game_id}:user:{recipient_user_id}:game_updated"
+
+
+def capture_game_updated_structural_snapshot(db_game: Game) -> dict[str, object]:
+    snapshot = {
+        field_name: getattr(db_game, field_name)
+        for field_name in GAME_UPDATED_STRUCTURAL_FIELDS
+    }
+
+    for field_name in ("starts_at", "ends_at"):
+        value = snapshot[field_name]
+        if isinstance(value, datetime):
+            snapshot[field_name] = ensure_timezone(value)
+
+    return snapshot
+
+
+def game_updated_structural_snapshot_changed(
+    before: dict[str, object],
+    db_game: Game,
+) -> bool:
+    after = capture_game_updated_structural_snapshot(db_game)
+    return any(before[field_name] != after[field_name] for field_name in before)
+
+
+def list_game_updated_recipient_user_ids(
+    db: Session,
+    db_game: Game,
+    actor_user_id: uuid.UUID | None,
+) -> list[uuid.UUID]:
+    user_ids: set[uuid.UUID] = set()
+
+    if db_game.host_user_id is not None:
+        user_ids.add(db_game.host_user_id)
+
+    participant_user_ids = db.scalars(
+        select(GameParticipant.user_id).where(
+            GameParticipant.game_id == db_game.id,
+            GameParticipant.user_id.is_not(None),
+            GameParticipant.participant_type.in_(GAME_UPDATED_PARTICIPANT_TYPES),
+            GameParticipant.participant_status.in_(GAME_UPDATED_PARTICIPANT_STATUSES),
+        )
+    ).all()
+    user_ids.update(user_id for user_id in participant_user_ids if user_id is not None)
+
+    if actor_user_id is not None:
+        user_ids.discard(actor_user_id)
+
+    return sorted(user_ids, key=str)
+
+
+def notify_connected_users_game_updated(
+    db: Session,
+    *,
+    db_game: Game,
+    actor_user_id: uuid.UUID | None,
+    event_at: datetime,
+) -> None:
+    if (
+        db_game.publish_status != "published"
+        or db_game.game_status not in GAME_UPDATED_GAME_STATUSES
+        or db_game.deleted_at is not None
+    ):
+        return
+
+    recipient_user_ids = list_game_updated_recipient_user_ids(
+        db,
+        db_game,
+        actor_user_id,
+    )
+    if not recipient_user_ids:
+        return
+
+    for recipient_user_id in recipient_user_ids:
+        aggregation_key = game_updated_aggregation_key(db_game.id, recipient_user_id)
+        notification_fields = build_game_notification_fields(
+            db_game,
+            "game_updated",
+            event_at=event_at,
+            aggregation_key=aggregation_key,
+        )
+        notification_fields.update(
+            {
+                "actor_user_id": actor_user_id,
+                "related_game_id": db_game.id,
+            }
+        )
+        reopen_aggregated_notification(
+            db,
+            user_id=recipient_user_id,
+            notification_type="game_updated",
+            notification_category="game_activity",
+            notification_domain="game",
+            aggregation_key=aggregation_key,
+            values=notification_fields,
+            aggregate_count_mode="clear",
         )
 
 
@@ -1375,6 +1679,78 @@ def validate_guest_count(db_game: Game, guest_count: int) -> int:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
     return guest_count
+
+
+def is_saved_payment_method_expired(
+    payment_method: UserPaymentMethod,
+    now: datetime,
+) -> bool:
+    return payment_method.exp_year < now.year or (
+        payment_method.exp_year == now.year and payment_method.exp_month < now.month
+    )
+
+
+def get_authorized_waitlist_payment_method(
+    db: Session,
+    joining_user: User,
+    payment_method_id: uuid.UUID | None,
+    now: datetime,
+) -> UserPaymentMethod:
+    if payment_method_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Choose a saved card before joining this waitlist.",
+        )
+
+    payment_method = db.get(UserPaymentMethod, payment_method_id)
+    if payment_method is None or payment_method.user_id != joining_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment method not found.",
+        )
+
+    if payment_method.method_status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only active payment methods can be used for waitlist auto-charge.",
+        )
+
+    if is_saved_payment_method_expired(payment_method, now):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This saved card is expired. Choose another card.",
+        )
+
+    if (
+        not joining_user.stripe_customer_id
+        or payment_method.stripe_customer_id != joining_user.stripe_customer_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This payment method is not linked to your Stripe customer.",
+        )
+
+    return payment_method
+
+
+def normalize_auto_charge_consent_version(version: str | None) -> str:
+    normalized_version = " ".join((version or "").strip().split())
+    if not normalized_version:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="auto_charge_consent_version is required for this waitlist.",
+        )
+
+    if len(normalized_version) > AUTO_CHARGE_CONSENT_VERSION_MAX_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "auto_charge_consent_version must be "
+                f"{AUTO_CHARGE_CONSENT_VERSION_MAX_LENGTH} characters or fewer."
+            ),
+        )
+
+    return normalized_version
 
 
 def get_next_waitlist_position(db: Session, game_id: uuid.UUID) -> int:
@@ -1689,6 +2065,7 @@ def create_waitlist_promotion_notification(
     waitlist_entry: WaitlistEntry,
     participant: GameParticipant,
     now: datetime,
+    payment: Payment | None = None,
 ) -> None:
     if game_requires_app_player_payment(db_game):
         body = "Enough spots opened. You were charged and moved to the player list."
@@ -1711,9 +2088,373 @@ def create_waitlist_promotion_notification(
             related_game_id=db_game.id,
             related_booking_id=participant.booking_id,
             related_participant_id=participant.id,
+            related_payment_id=payment.id if payment is not None else None,
             is_read=False,
         )
     )
+
+
+WAITLIST_PAYMENT_FAILED_BODY = (
+    "A spot opened, but your payment did not go through, so you were removed "
+    "from the waitlist. Update your payment method and try joining again if a "
+    "spot is still available."
+)
+
+
+def create_waitlist_payment_failed_notification(
+    db: Session,
+    db_game: Game,
+    booking: Booking,
+    payment: Payment | None,
+    now: datetime,
+) -> None:
+    db.add(
+        Notification(
+            id=uuid.uuid4(),
+            user_id=booking.buyer_user_id,
+            notification_type="payment_failed",
+            notification_category="game_activity",
+            notification_domain="game",
+            **build_game_notification_fields(
+                db_game,
+                "payment_failed",
+                event_at=now,
+                summary="Your waitlist payment did not go through.",
+                body=WAITLIST_PAYMENT_FAILED_BODY,
+            ),
+            related_game_id=db_game.id,
+            related_booking_id=booking.id,
+            related_payment_id=payment.id if payment is not None else None,
+            is_read=False,
+            read_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+
+def create_waitlist_auto_charge_payment(
+    db_game: Game,
+    booking: Booking,
+    waitlist_entry: WaitlistEntry,
+    now: datetime,
+) -> Payment:
+    payment_id = uuid.uuid4()
+    return Payment(
+        id=payment_id,
+        payer_user_id=booking.buyer_user_id,
+        booking_id=booking.id,
+        game_id=None,
+        payment_type="booking",
+        provider="stripe",
+        provider_payment_intent_id=None,
+        provider_charge_id=None,
+        idempotency_key=(
+            f"waitlist:{waitlist_entry.id}:booking:{booking.id}:auto_charge"
+        ),
+        amount_cents=booking.total_cents,
+        currency=booking.currency,
+        payment_status="requires_payment_method",
+        paid_at=None,
+        failure_code=None,
+        failure_message=None,
+        failure_reason=None,
+        payment_metadata={
+            "source": "waitlist_auto_promote",
+            "game_id": str(db_game.id),
+            "booking_id": str(booking.id),
+            "waitlist_entry_id": str(waitlist_entry.id),
+            "user_id": str(booking.buyer_user_id),
+            "authorized_amount_cents": waitlist_entry.authorized_amount_cents,
+            "auto_charge_consent_version": (
+                waitlist_entry.auto_charge_consent_version
+            ),
+            "auto_charge_consent_at": (
+                waitlist_entry.auto_charge_consent_at.isoformat()
+                if waitlist_entry.auto_charge_consent_at is not None
+                else None
+            ),
+        },
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def mark_paid_waitlist_auto_promotion_processing(
+    db: Session,
+    waitlist_entry: WaitlistEntry,
+    booking: Booking,
+    booking_participants: list[GameParticipant],
+    now: datetime,
+) -> None:
+    waitlist_entry.waitlist_status = "payment_processing"
+    waitlist_entry.promoted_booking_id = booking.id
+    waitlist_entry.promoted_at = waitlist_entry.promoted_at or now
+    waitlist_entry.updated_at = now
+    db.add(waitlist_entry)
+
+    booking.booking_status = "pending_payment"
+    booking.payment_status = "processing"
+    booking.expires_at = None
+    booking.updated_at = now
+    db.add(booking)
+
+    for booking_participant in booking_participants:
+        booking_participant.participant_status = "pending_payment"
+        booking_participant.attendance_status = "not_applicable"
+        booking_participant.roster_order = None
+        booking_participant.updated_at = now
+        db.add(booking_participant)
+
+
+def mark_paid_waitlist_auto_promotion_failed(
+    db: Session,
+    db_game: Game,
+    waitlist_entry: WaitlistEntry,
+    booking: Booking,
+    booking_participants: list[GameParticipant],
+    payment: Payment | None,
+    now: datetime,
+    *,
+    payment_status: str | None,
+    failure_code: str,
+    failure_message: str,
+) -> None:
+    if payment is not None:
+        payment.payment_status = payment_status or "failed"
+        payment.failure_code = failure_code
+        payment.failure_message = failure_message
+        payment.failure_reason = failure_code
+        payment.updated_at = now
+        db.add(payment)
+
+    waitlist_entry.waitlist_status = "payment_failed"
+    waitlist_entry.promoted_booking_id = booking.id
+    waitlist_entry.promoted_at = waitlist_entry.promoted_at or now
+    waitlist_entry.cancelled_at = now
+    waitlist_entry.updated_at = now
+    db.add(waitlist_entry)
+
+    booking.booking_status = "failed"
+    booking.payment_status = "failed"
+    booking.expires_at = None
+    booking.updated_at = now
+    db.add(booking)
+
+    for booking_participant in booking_participants:
+        booking_participant.participant_status = "removed"
+        booking_participant.attendance_status = "not_applicable"
+        booking_participant.cancellation_type = "payment_failed"
+        booking_participant.cancelled_at = now
+        booking_participant.roster_order = None
+        booking_participant.updated_at = now
+        db.add(booking_participant)
+
+    create_waitlist_payment_failed_notification(
+        db,
+        db_game,
+        booking,
+        payment,
+        now,
+    )
+
+
+def confirm_paid_waitlist_auto_promotion(
+    db: Session,
+    db_game: Game,
+    waitlist_entry: WaitlistEntry,
+    booking: Booking,
+    booking_participants: list[GameParticipant],
+    payment: Payment,
+    payment_intent: StripePaymentIntentResult,
+    now: datetime,
+) -> None:
+    next_roster_order = get_next_roster_order(db, db_game.id)
+    for index, booking_participant in enumerate(booking_participants):
+        booking_participant.participant_status = "confirmed"
+        booking_participant.attendance_status = "unknown"
+        booking_participant.confirmed_at = now
+        booking_participant.roster_order = next_roster_order + index
+        booking_participant.updated_at = now
+        db.add(booking_participant)
+
+    booking.booking_status = "confirmed"
+    booking.payment_status = "paid"
+    booking.booked_at = now
+    booking.expires_at = None
+    booking.updated_at = now
+    db.add(booking)
+
+    payment.payment_status = "succeeded"
+    payment.provider_charge_id = payment_intent.latest_charge_id
+    payment.paid_at = now
+    payment.failure_code = None
+    payment.failure_message = None
+    payment.failure_reason = None
+    payment.updated_at = now
+    db.add(payment)
+
+    waitlist_entry.waitlist_status = "accepted"
+    waitlist_entry.promoted_booking_id = booking.id
+    waitlist_entry.promoted_at = waitlist_entry.promoted_at or now
+    waitlist_entry.updated_at = now
+    db.add(waitlist_entry)
+
+    create_waitlist_promotion_notification(
+        db,
+        db_game,
+        waitlist_entry,
+        booking_participants[0],
+        now,
+        payment,
+    )
+
+
+def paid_waitlist_prerequisites_missing(
+    waitlist_entry: WaitlistEntry,
+    booking: Booking,
+) -> bool:
+    return (
+        waitlist_entry.auto_charge_consent_at is None
+        or not waitlist_entry.auto_charge_consent_version
+        or not waitlist_entry.authorized_stripe_payment_method_id
+        or waitlist_entry.authorized_amount_cents is None
+        or waitlist_entry.authorized_amount_cents < booking.total_cents
+    )
+
+
+def attempt_paid_waitlist_auto_promotion(
+    db: Session,
+    db_game: Game,
+    waitlist_entry: WaitlistEntry,
+    booking: Booking,
+    booking_participants: list[GameParticipant],
+    now: datetime,
+) -> tuple[str, int]:
+    if paid_waitlist_prerequisites_missing(waitlist_entry, booking):
+        mark_paid_waitlist_auto_promotion_failed(
+            db,
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            None,
+            now,
+            payment_status=None,
+            failure_code="waitlist_auto_charge_missing_prerequisite",
+            failure_message="Waitlist auto-charge prerequisites were missing.",
+        )
+        return "failed", 0
+
+    mark_paid_waitlist_auto_promotion_processing(
+        db,
+        waitlist_entry,
+        booking,
+        booking_participants,
+        now,
+    )
+    payment = create_waitlist_auto_charge_payment(
+        db_game,
+        booking,
+        waitlist_entry,
+        now,
+    )
+    db.add(payment)
+    db.flush()
+
+    try:
+        buyer_user = db.get(User, booking.buyer_user_id)
+        payment_intent = create_payment_intent(
+            amount_cents=payment.amount_cents,
+            currency=payment.currency,
+            idempotency_key=payment.idempotency_key,
+            metadata={
+                "source": "waitlist_auto_promote",
+                "user_id": str(booking.buyer_user_id),
+                "game_id": str(db_game.id),
+                "booking_id": str(booking.id),
+                "payment_id": str(payment.id),
+                "waitlist_entry_id": str(waitlist_entry.id),
+                "authorized_amount_cents": str(waitlist_entry.authorized_amount_cents),
+            },
+            customer_id=buyer_user.stripe_customer_id if buyer_user is not None else None,
+        )
+        payment.provider_payment_intent_id = payment_intent.id
+        payment.payment_status = "processing"
+        payment.updated_at = now
+        db.add(payment)
+
+        payment_intent = confirm_payment_intent(
+            payment_intent.id,
+            payment_method_id=waitlist_entry.authorized_stripe_payment_method_id,
+            off_session=True,
+        )
+        payment.provider_payment_intent_id = payment_intent.id
+        payment.provider_charge_id = payment_intent.latest_charge_id
+        payment.updated_at = now
+        db.add(payment)
+    except StripeConfigError as exc:
+        mark_paid_waitlist_auto_promotion_failed(
+            db,
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+            now,
+            payment_status="failed",
+            failure_code="waitlist_auto_charge_stripe_config_error",
+            failure_message=str(exc),
+        )
+        return "failed", 0
+    except Exception as exc:
+        mark_paid_waitlist_auto_promotion_failed(
+            db,
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+            now,
+            payment_status="failed",
+            failure_code="waitlist_auto_charge_stripe_error",
+            failure_message=str(exc) or "Stripe could not complete auto-charge.",
+        )
+        return "failed", 0
+
+    payment_status = map_payment_intent_status(payment_intent.status)
+    if payment_status == "succeeded":
+        confirm_paid_waitlist_auto_promotion(
+            db,
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+            payment_intent,
+            now,
+        )
+        return "succeeded", len(booking_participants)
+
+    if payment_status == "processing":
+        payment.payment_status = "processing"
+        payment.updated_at = now
+        db.add(payment)
+        return "processing", len(booking_participants)
+
+    mark_paid_waitlist_auto_promotion_failed(
+        db,
+        db_game,
+        waitlist_entry,
+        booking,
+        booking_participants,
+        payment,
+        now,
+        payment_status=payment_status,
+        failure_code=f"waitlist_auto_charge_{payment_status}",
+        failure_message="Waitlist auto-charge could not be completed.",
+    )
+    return "failed", 0
 
 
 def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
@@ -1729,13 +2470,14 @@ def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
     if available_spots <= 0:
         sync_game_capacity_status(db, db_game)
         return
+    app_payment_required = game_requires_app_player_payment(db_game)
 
     waitlist_entries = list(
         db.scalars(
             select(WaitlistEntry)
             .where(
                 WaitlistEntry.game_id == db_game.id,
-                WaitlistEntry.waitlist_status == "active",
+                WaitlistEntry.waitlist_status.in_(WAITLIST_PROMOTION_CANDIDATE_STATUSES),
             )
             .order_by(WaitlistEntry.position.asc(), WaitlistEntry.joined_at.asc())
         ).all()
@@ -1771,6 +2513,21 @@ def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
             db.add(waitlist_entry)
             continue
 
+        if app_payment_required:
+            promotion_status, held_spots = attempt_paid_waitlist_auto_promotion(
+                db,
+                db_game,
+                waitlist_entry,
+                booking,
+                booking_participants,
+                now,
+            )
+            if promotion_status in {"succeeded", "processing"}:
+                available_spots -= held_spots
+                if available_spots <= 0:
+                    break
+            continue
+
         next_roster_order = get_next_roster_order(db, db_game.id)
         for index, booking_participant in enumerate(booking_participants):
             booking_participant.participant_status = "confirmed"
@@ -1781,22 +2538,10 @@ def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
             db.add(booking_participant)
 
         booking.booking_status = "confirmed"
-        booking.payment_status = (
-            "paid" if game_requires_app_player_payment(db_game) else "not_required"
-        )
+        booking.payment_status = "not_required"
         booking.booked_at = now
         booking.updated_at = now
         db.add(booking)
-        if game_requires_app_player_payment(db_game):
-            db.add(
-                create_booking_payment(
-                    db_game,
-                    booking,
-                    booking.buyer_user_id,
-                    now,
-                    source="waitlist_auto_promote",
-                )
-            )
 
         waitlist_entry.waitlist_status = "accepted"
         waitlist_entry.promoted_booking_id = booking.id
@@ -1986,6 +2731,27 @@ def join_game(
         now,
         is_confirmed=False,
     )
+    authorized_payment_method: UserPaymentMethod | None = None
+    auto_charge_consent_version: str | None = None
+    if game_requires_app_player_payment(db_game):
+        if not join_request.auto_charge_consent_accepted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "You must authorize Pickup Lane to charge your saved card "
+                    "if a spot opens before joining this waitlist."
+                ),
+            )
+        auto_charge_consent_version = normalize_auto_charge_consent_version(
+            join_request.auto_charge_consent_version
+        )
+        authorized_payment_method = get_authorized_waitlist_payment_method(
+            db,
+            joining_user,
+            join_request.payment_method_id,
+            now,
+        )
+
     waitlist_entry = WaitlistEntry(
         id=uuid.uuid4(),
         game_id=db_game.id,
@@ -1993,6 +2759,29 @@ def join_game(
         party_size=party_size,
         position=get_next_waitlist_position(db, db_game.id),
         waitlist_status="active",
+        auto_charge_consent_at=now if authorized_payment_method is not None else None,
+        auto_charge_consent_version=auto_charge_consent_version,
+        authorized_payment_method_id=(
+            authorized_payment_method.id if authorized_payment_method is not None else None
+        ),
+        authorized_stripe_payment_method_id=(
+            authorized_payment_method.stripe_payment_method_id
+            if authorized_payment_method is not None
+            else None
+        ),
+        authorized_payment_method_brand=(
+            authorized_payment_method.card_brand
+            if authorized_payment_method is not None
+            else None
+        ),
+        authorized_payment_method_last4=(
+            authorized_payment_method.card_last4
+            if authorized_payment_method is not None
+            else None
+        ),
+        authorized_amount_cents=(
+            booking.total_cents if authorized_payment_method is not None else None
+        ),
         joined_at=now,
     )
     participants = build_booking_participants(
@@ -2589,13 +3378,12 @@ def cancel_game(
         now,
         cancellation_type,
     )
-    if (
-        cancellation_type == "admin_cancelled"
-        and db_game.game_type == "community"
-        and db_game.host_user_id is not None
-        and db_game.host_user_id != current_user.id
-    ):
-        notified_user_ids.append(db_game.host_user_id)
+    if cancellation_type == "admin_cancelled":
+        notified_user_ids = add_game_cancellation_host_recipient(
+            db_game,
+            notified_user_ids,
+            current_user.id,
+        )
     cancel_game_waitlist_entries(db, db_game, now)
     payment_summary = cancel_game_bookings(
         db, db_game, current_user, now, cancellation_type
@@ -2722,6 +3510,7 @@ def update_game(
 
     now = datetime.now(timezone.utc)
     require_game_not_started(db_game, now, "Games cannot be edited after start time.")
+    structural_snapshot_before = capture_game_updated_structural_snapshot(db_game)
 
     if "format_label" in update_data and "host_guest_max" not in update_data:
         update_data["host_guest_max"] = get_default_host_guest_max(
@@ -2835,7 +3624,14 @@ def update_game(
 
     # Keep updated_at aligned with the latest game change so downstream clients
     # can reliably track when the record was last modified.
-    db_game.updated_at = datetime.now(timezone.utc)
+    db_game.updated_at = now
+    if game_updated_structural_snapshot_changed(structural_snapshot_before, db_game):
+        notify_connected_users_game_updated(
+            db,
+            db_game=db_game,
+            actor_user_id=None,
+            event_at=now,
+        )
 
     try:
         db.add(db_game)
@@ -2890,6 +3686,7 @@ def host_edit_game(
 
     now = datetime.now(timezone.utc)
     require_game_not_started(db_game, now, "Games cannot be edited after start time.")
+    structural_snapshot_before = capture_game_updated_structural_snapshot(db_game)
 
     update_data = game_update.model_dump(exclude_unset=True)
     update_data.pop("acting_user_id", None)
@@ -3063,7 +3860,14 @@ def host_edit_game(
 
         setattr(db_game, field_name, field_value)
 
-    db_game.updated_at = datetime.now(timezone.utc)
+    db_game.updated_at = now
+    if game_updated_structural_snapshot_changed(structural_snapshot_before, db_game):
+        notify_connected_users_game_updated(
+            db,
+            db_game=db_game,
+            actor_user_id=game_update.acting_user_id,
+            event_at=now,
+        )
 
     try:
         db.add(db_game)
