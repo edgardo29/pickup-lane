@@ -177,8 +177,9 @@ def test_chat_messages_notify_other_confirmed_members_and_mark_read(client: Test
 
     chat_message = create_chat_message(client, game_chat["id"], host["id"])
 
+    authenticate_as(player["id"])
     notifications_response = client.get(
-        f"/notifications?user_id={player['id']}&notification_type=chat_message"
+        "/notifications/me?notification_type=chat_message"
     )
     assert notifications_response.status_code == 200, notifications_response.text
     notifications = notifications_response.json()
@@ -188,13 +189,12 @@ def test_chat_messages_notify_other_confirmed_members_and_mark_read(client: Test
     assert notifications[0]["related_message_id"] == chat_message["id"]
     assert notifications[0]["is_read"] is False
 
-    authenticate_as(player["id"])
     read_response = client.post(f"/game-chats/{game_chat['id']}/read", json={})
     assert read_response.status_code == 200, read_response.text
     assert read_response.json()["unread_count"] == 0
 
     notifications_response = client.get(
-        f"/notifications?user_id={player['id']}&notification_type=chat_message"
+        "/notifications/me?notification_type=chat_message"
     )
     assert notifications_response.status_code == 200, notifications_response.text
     notifications = notifications_response.json()

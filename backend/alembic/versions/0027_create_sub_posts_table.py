@@ -31,6 +31,7 @@ def upgrade() -> None:
         sa.Column("team_name", sa.String(length=120), nullable=True),
         sa.Column("starts_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("ends_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("starts_on_local", sa.Date(), nullable=False),
         sa.Column(
             "timezone",
             sa.String(length=60),
@@ -149,6 +150,11 @@ def upgrade() -> None:
     )
     op.create_index("ix_sub_posts_owner_user_id", "sub_posts", ["owner_user_id"])
     op.create_index("ix_sub_posts_post_status", "sub_posts", ["post_status"])
+    op.create_index(
+        "ix_sub_posts_starts_on_local",
+        "sub_posts",
+        ["starts_on_local"],
+    )
     op.create_index("ix_sub_posts_starts_at", "sub_posts", ["starts_at"])
     op.create_index("ix_sub_posts_expires_at", "sub_posts", ["expires_at"])
     op.create_index(
@@ -167,18 +173,44 @@ def upgrade() -> None:
         ["starts_at"],
         postgresql_where=sa.text("post_status IN ('active', 'filled')"),
     )
+    op.create_index(
+        "ux_sub_posts_owner_live_starts_on_local",
+        "sub_posts",
+        ["owner_user_id", "starts_on_local"],
+        unique=True,
+        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+    )
 
 
 def downgrade() -> None:
     op.drop_index(
+        "ux_sub_posts_owner_live_starts_on_local",
+        table_name="sub_posts",
+        if_exists=True,
+    )
+    op.drop_index(
         "ix_sub_posts_browse_active_filled_starts_at",
         table_name="sub_posts",
         postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        if_exists=True,
     )
-    op.drop_index("ix_sub_posts_post_status_starts_at", table_name="sub_posts")
-    op.drop_index("ix_sub_posts_city_state_starts_at", table_name="sub_posts")
-    op.drop_index("ix_sub_posts_expires_at", table_name="sub_posts")
-    op.drop_index("ix_sub_posts_starts_at", table_name="sub_posts")
-    op.drop_index("ix_sub_posts_post_status", table_name="sub_posts")
-    op.drop_index("ix_sub_posts_owner_user_id", table_name="sub_posts")
+    op.drop_index(
+        "ix_sub_posts_post_status_starts_at",
+        table_name="sub_posts",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_sub_posts_city_state_starts_at",
+        table_name="sub_posts",
+        if_exists=True,
+    )
+    op.drop_index("ix_sub_posts_expires_at", table_name="sub_posts", if_exists=True)
+    op.drop_index("ix_sub_posts_starts_at", table_name="sub_posts", if_exists=True)
+    op.drop_index(
+        "ix_sub_posts_starts_on_local",
+        table_name="sub_posts",
+        if_exists=True,
+    )
+    op.drop_index("ix_sub_posts_post_status", table_name="sub_posts", if_exists=True)
+    op.drop_index("ix_sub_posts_owner_user_id", table_name="sub_posts", if_exists=True)
     op.drop_table("sub_posts")

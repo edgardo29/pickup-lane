@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import CHAR, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import CHAR, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -56,6 +56,7 @@ class SubPost(Base):
         ),
         Index("ix_sub_posts_owner_user_id", "owner_user_id"),
         Index("ix_sub_posts_post_status", "post_status"),
+        Index("ix_sub_posts_starts_on_local", "starts_on_local"),
         Index("ix_sub_posts_starts_at", "starts_at"),
         Index("ix_sub_posts_expires_at", "expires_at"),
         Index("ix_sub_posts_city_state_starts_at", "city", "state", "starts_at"),
@@ -63,6 +64,13 @@ class SubPost(Base):
         Index(
             "ix_sub_posts_browse_active_filled_starts_at",
             "starts_at",
+            postgresql_where=text("post_status IN ('active', 'filled')"),
+        ),
+        Index(
+            "ux_sub_posts_owner_live_starts_on_local",
+            "owner_user_id",
+            "starts_on_local",
+            unique=True,
             postgresql_where=text("post_status IN ('active', 'filled')"),
         ),
     )
@@ -84,6 +92,7 @@ class SubPost(Base):
     team_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    starts_on_local: Mapped[date] = mapped_column(Date, nullable=False)
     timezone: Mapped[str] = mapped_column(
         String(60), nullable=False, server_default=text("'America/Chicago'")
     )

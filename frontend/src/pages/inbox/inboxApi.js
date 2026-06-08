@@ -1,18 +1,25 @@
 import { apiRequest } from '../../lib/apiClient.js'
 
-export async function loadInboxData(userId) {
-  const [notifications, games] = await Promise.all([
-    apiRequest(`/notifications?user_id=${userId}`),
-    apiRequest('/games'),
-  ])
+export async function loadInboxData(firebaseUser) {
+  const authHeaders = await getInboxAuthHeaders(firebaseUser)
+  const notifications = await apiRequest('/notifications/me', { headers: authHeaders })
 
-  return { games, notifications }
+  return { notifications }
 }
 
-export function saveNotificationRead(notificationId) {
-  return apiRequest(`/notifications/${notificationId}`, {
+export async function saveNotificationRead(firebaseUser, notificationId) {
+  return apiRequest(`/notifications/${notificationId}/read`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ is_read: true }),
+    headers: await getInboxAuthHeaders(firebaseUser),
   })
+}
+
+async function getInboxAuthHeaders(firebaseUser) {
+  if (!firebaseUser) {
+    throw new Error('Sign in to view your inbox.')
+  }
+
+  return {
+    Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+  }
 }

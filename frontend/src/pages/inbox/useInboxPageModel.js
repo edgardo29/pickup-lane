@@ -1,17 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
-import { GAME_ACTIVITY_TYPES } from './inboxData.js'
+import { isAppNotification, isGameActivityNotification } from './inboxData.js'
 import { loadInboxData, saveNotificationRead } from './inboxApi.js'
-import { getFilteredSections } from './inboxSelectors.js'
+import { getFilteredSections, getInboxSections } from './inboxSelectors.js'
 
 export function useInboxPageModel() {
   const navigate = useNavigate()
-  const { appUser, isLoading } = useAuth()
+  const { appUser, currentUser: firebaseUser, isLoading } = useAuth()
   const [activeFilter, setActiveFilter] = useState('app')
-  const [games, setGames] = useState([])
   const [notifications, setNotifications] = useState([])
   const [activeNotification, setActiveNotification] = useState(null)
+  const [sourceFilters, setSourceFilters] = useState({ app: 'all', game: 'all' })
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
 
@@ -27,15 +27,14 @@ export function useInboxPageModel() {
           return
         }
 
-        if (!appUser?.id) {
+        if (!appUser?.id || !firebaseUser) {
           throw new Error('Sign in to view your inbox.')
         }
 
-        const pageData = await loadInboxData(appUser.id)
+        const pageData = await loadInboxData(firebaseUser)
 
         if (!ignore) {
           setNotifications(pageData.notifications)
-          setGames(pageData.games)
           setStatus('success')
         }
       } catch (requestError) {
@@ -53,37 +52,37 @@ export function useInboxPageModel() {
     return () => {
       ignore = true
     }
-  }, [appUser, isLoading])
+  }, [appUser?.id, firebaseUser, isLoading])
 
-  const gamesById = useMemo(() => new Map(games.map((game) => [game.id, game])), [games])
-  const appNotifications = notifications.filter(
-    (notification) => !GAME_ACTIVITY_TYPES.has(notification.notification_type),
+  const appNotifications = notifications.filter(isAppNotification)
+  const gameNotifications = notifications.filter(isGameActivityNotification)
+  const inboxSections = getInboxSections(appNotifications, gameNotifications, sourceFilters)
+  const filteredSections = getFilteredSections(
+    activeFilter,
+    appNotifications,
+    gameNotifications,
+    sourceFilters,
   )
-  const gameNotifications = notifications.filter((notification) =>
-    GAME_ACTIVITY_TYPES.has(notification.notification_type),
-  )
-  const filteredSections = getFilteredSections(activeFilter, appNotifications, gameNotifications)
-  const hasNoMatchingUpdates =
-    status === 'success' &&
-    notifications.length > 0 &&
-    filteredSections.every((section) => section.items.length === 0)
+
+  function handleSourceFilterChange(sectionKey, sourceFilter) {
+    setSourceFilters((currentFilters) => ({
+      ...currentFilters,
+      [sectionKey]: sourceFilter,
+    }))
+  }
 
   async function handleOpenNotification(notification) {
     const markedNotification = await markNotificationRead(notification)
-
-    if (GAME_ACTIVITY_TYPES.has(notification.notification_type)) {
-      if (notification.related_game_id) {
-        navigate(`/games/${notification.related_game_id}`)
-      }
-      return
-    }
-
     setActiveNotification(markedNotification)
   }
 
-  function handleViewGame(gameId) {
+  function handleNotificationAction(action) {
+    if (!action?.path) {
+      return
+    }
+
     setActiveNotification(null)
-    navigate(`/games/${gameId}`)
+    navigate(action.path, action.state ? { state: action.state } : undefined)
   }
 
   async function markNotificationRead(notification) {
@@ -104,7 +103,7 @@ export function useInboxPageModel() {
     )
 
     try {
-      return await saveNotificationRead(notification.id)
+      return await saveNotificationRead(firebaseUser, notification.id)
     } catch {
       setNotifications((currentNotifications) =>
         currentNotifications.map((currentNotification) =>
@@ -120,11 +119,10 @@ export function useInboxPageModel() {
     activeNotification,
     error,
     filteredSections,
-    gamesById,
+    handleNotificationAction,
     handleOpenNotification,
-    handleViewGame,
-    hasNoMatchingUpdates,
-    notifications,
+    handleSourceFilterChange,
+    inboxSections,
     setActiveFilter,
     setActiveNotification,
     status,

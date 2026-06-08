@@ -32,6 +32,7 @@ from backend.services.game_credit_service import (
     release_reserved_game_credits,
     restore_redeemed_game_credits,
 )
+from backend.services.notification_service import build_game_notification_fields
 from backend.schemas import (
     GameCancelCreate,
     GameCreate,
@@ -1208,19 +1209,25 @@ def create_game_cancelled_notifications(
     db_game: Game,
     recipient_user_ids: list[uuid.UUID],
     now: datetime,
+    actor_user_id: uuid.UUID | None = None,
 ) -> None:
     if not recipient_user_ids:
         return
 
-    game_title = db_game.title or db_game.venue_name_snapshot or "Your game"
     for recipient_user_id in sorted(set(recipient_user_ids)):
         db.add(
             Notification(
                 id=uuid.uuid4(),
                 user_id=recipient_user_id,
                 notification_type="game_cancelled",
-                title="Game cancelled",
-                body=f"{game_title} was cancelled.",
+                notification_category="game_activity",
+                notification_domain="game",
+                **build_game_notification_fields(
+                    db_game,
+                    "game_cancelled",
+                    event_at=now,
+                ),
+                actor_user_id=actor_user_id,
                 related_game_id=db_game.id,
                 is_read=False,
                 read_at=None,
@@ -1681,6 +1688,7 @@ def create_waitlist_promotion_notification(
     db_game: Game,
     waitlist_entry: WaitlistEntry,
     participant: GameParticipant,
+    now: datetime,
 ) -> None:
     if game_requires_app_player_payment(db_game):
         body = "Enough spots opened. You were charged and moved to the player list."
@@ -1692,8 +1700,14 @@ def create_waitlist_promotion_notification(
             id=uuid.uuid4(),
             user_id=waitlist_entry.user_id,
             notification_type="waitlist_promoted",
-            title="Moved into the game",
-            body=body,
+            notification_category="game_activity",
+            notification_domain="game",
+            **build_game_notification_fields(
+                db_game,
+                "waitlist_promoted",
+                event_at=now,
+                body=body,
+            ),
             related_game_id=db_game.id,
             related_booking_id=participant.booking_id,
             related_participant_id=participant.id,
@@ -1789,7 +1803,13 @@ def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
         waitlist_entry.promoted_at = now
         waitlist_entry.updated_at = now
         db.add(waitlist_entry)
-        create_waitlist_promotion_notification(db, db_game, waitlist_entry, participant)
+        create_waitlist_promotion_notification(
+            db,
+            db_game,
+            waitlist_entry,
+            participant,
+            now,
+        )
 
         available_spots -= len(booking_participants)
         if available_spots <= 0:
@@ -2581,7 +2601,13 @@ def cancel_game(
         db, db_game, current_user, now, cancellation_type
     )
     archive_game_chats(db, db_game, now)
-    create_game_cancelled_notifications(db, db_game, notified_user_ids, now)
+    create_game_cancelled_notifications(
+        db,
+        db_game,
+        notified_user_ids,
+        now,
+        actor_user_id=current_user.id,
+    )
     create_game_cancellation_history(
         db,
         db_game,

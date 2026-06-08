@@ -1,31 +1,69 @@
 import { ChatIcon } from '../../components/BrowseIcons.jsx'
+import { InboxState } from './InboxState.jsx'
 import InboxRow from './InboxRow.jsx'
 
-function InboxSection({ gamesById, items, onOpenNotification, section }) {
-  if (items.length === 0) {
-    return null
-  }
+function InboxSection({
+  emptyMessage = 'Your updates will show up here.',
+  emptyTitle = 'Nothing here yet',
+  items,
+  onOpenNotification,
+  onSourceFilterChange,
+  section,
+  showHeader = true,
+}) {
+  const isFilteredEmpty = section.totalItems > 0 && items.length === 0
+  const countLabel = items.length === section.totalItems
+    ? String(items.length)
+    : `${items.length}/${section.totalItems}`
 
   return (
     <section className="inbox-section">
-      <div className="inbox-section__heading">
-        {section.key === 'game' ? <ChatIcon /> : <MegaphoneIcon />}
-        <div>
-          <h2>{section.title}</h2>
-          <p>{section.description}</p>
+      {showHeader && (
+        <div className="inbox-section__heading">
+          {section.key === 'game' ? <ChatIcon /> : <MegaphoneIcon />}
+          <div>
+            <h2>{section.title}</h2>
+          </div>
+          <span>{countLabel}</span>
         </div>
-      </div>
+      )}
 
-      <div className="inbox-list">
-        {items.map((notification) => (
-          <InboxRow
-            game={gamesById.get(notification.related_game_id)}
-            key={notification.id}
-            notification={notification}
-            onOpenNotification={onOpenNotification}
-          />
-        ))}
-      </div>
+      {section.sourceFilterOptions?.length > 0 && (
+        <div className="inbox-section__filter">
+          <span className="inbox-section__select-control">
+            <select
+              aria-label={`Filter ${section.title}`}
+              value={section.sourceFilterValue}
+              onChange={(event) => onSourceFilterChange(section.key, event.target.value)}
+            >
+              {section.sourceFilterOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span className="inbox-section__select-chevron" aria-hidden="true" />
+          </span>
+        </div>
+      )}
+
+      {items.length === 0 ? (
+        <InboxState
+          compact
+          title={isFilteredEmpty ? 'No matching notifications' : emptyTitle}
+          message={isFilteredEmpty ? 'Try another source filter.' : emptyMessage}
+        />
+      ) : (
+        <div className="inbox-list">
+          {items.map((notification) => (
+            <InboxRow
+              key={notification.id}
+              notification={notification}
+              onOpenNotification={onOpenNotification}
+            />
+          ))}
+        </div>
+      )}
     </section>
   )
 }

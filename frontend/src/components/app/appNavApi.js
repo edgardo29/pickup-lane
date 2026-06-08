@@ -1,8 +1,17 @@
 import { apiRequest } from '../../lib/apiClient.js'
 
-export async function fetchUnreadNotificationCount(userId) {
+export async function fetchUnreadNotificationCount(firebaseUser) {
+  if (!firebaseUser) {
+    return 0
+  }
+
   const unreadNotifications = await apiRequest(
-    `/notifications?user_id=${userId}&is_read=false`,
+    '/notifications/me?is_read=false',
+    {
+      headers: {
+        Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+      },
+    },
   )
 
   return unreadNotifications.length

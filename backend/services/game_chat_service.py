@@ -14,6 +14,7 @@ from backend.models import (
     Notification,
     User,
 )
+from backend.services.notification_service import build_game_notification_fields
 
 CHAT_MEMBER_STATUSES = {"confirmed"}
 CHAT_MEMBER_TYPES = {"host", "registered_user", "admin_added"}
@@ -321,10 +322,10 @@ def create_or_update_chat_notifications(
     sender_user: User,
     now: datetime,
 ) -> None:
-    game_title = db_game.title or db_game.venue_name_snapshot or "your game"
     recipient_user_ids = list_chat_member_user_ids(db, db_game, exclude_user_id=sender_user.id)
 
     for recipient_user_id in recipient_user_ids:
+        aggregation_key = f"chat:{game_chat.id}"
         existing_notification = db.scalar(
             select(Notification)
             .where(
@@ -339,8 +340,17 @@ def create_or_update_chat_notifications(
         )
 
         if existing_notification is not None:
-            existing_notification.title = "New game chat messages"
-            existing_notification.body = f"New messages in {game_title}."
+            aggregate_count = (existing_notification.aggregate_count or 1) + 1
+            aggregate_fields = build_game_notification_fields(
+                db_game,
+                "chat_message",
+                event_at=now,
+                aggregation_key=aggregation_key,
+                aggregate_count=aggregate_count,
+            )
+            for field_name, field_value in aggregate_fields.items():
+                setattr(existing_notification, field_name, field_value)
+            existing_notification.actor_user_id = sender_user.id
             existing_notification.related_message_id = chat_message.id
             existing_notification.updated_at = now
             db.add(existing_notification)
@@ -351,8 +361,16 @@ def create_or_update_chat_notifications(
                 id=uuid.uuid4(),
                 user_id=recipient_user_id,
                 notification_type="chat_message",
-                title="New game chat message",
-                body=f"New messages in {game_title}.",
+                notification_category="game_activity",
+                notification_domain="game",
+                **build_game_notification_fields(
+                    db_game,
+                    "chat_message",
+                    event_at=now,
+                    aggregation_key=aggregation_key,
+                    aggregate_count=1,
+                ),
+                actor_user_id=sender_user.id,
                 related_game_id=db_game.id,
                 related_chat_id=game_chat.id,
                 related_message_id=chat_message.id,

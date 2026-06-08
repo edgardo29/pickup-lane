@@ -1,9 +1,12 @@
-import { GAME_ACTIVITY_TYPES } from './inboxData.js'
-import { formatRelativeTime } from './inboxFormatters.js'
+import { formatNotificationDate, formatRelativeTime } from './inboxFormatters.js'
+import InboxNotificationIcon from './InboxNotificationIcon.jsx'
 
-function InboxRow({ game, notification, onOpenNotification }) {
-  const isGameActivity = GAME_ACTIVITY_TYPES.has(notification.notification_type)
-  const title = isGameActivity && game ? game.title : notification.title
+function InboxRow({ notification, onOpenNotification }) {
+  const eventAt = notification.event_at || notification.created_at
+  const relativeTime = formatRelativeTime(eventAt)
+  const sourceLabel = notification.source_label || 'Pickup Lane'
+  const title = notification.title || 'Inbox update'
+  const rowSubject = notification.row_subject || notification.subject_label || 'Pickup Lane'
 
   return (
     <button
@@ -11,17 +14,24 @@ function InboxRow({ game, notification, onOpenNotification }) {
       type="button"
       onClick={() => onOpenNotification(notification)}
     >
+      <InboxNotificationIcon
+        className="inbox-row__icon"
+        notification={notification}
+      />
+
       <span className="inbox-row__body">
         <span className="inbox-row__titleline">
+          <span className="inbox-row__source">[{sourceLabel}]</span>
           <strong>{title}</strong>
           {!notification.is_read && <em>New</em>}
         </span>
-        <span>{notification.body}</span>
+        <span className="inbox-row__subject">{rowSubject}</span>
       </span>
 
       <span className="inbox-row__meta">
-        {formatRelativeTime(notification.created_at)}
-        <i aria-hidden="true" />
+        <span className="inbox-row__time">{relativeTime}</span>
+        <span className="inbox-row__date">{formatNotificationDate(eventAt)}</span>
+        <span className="inbox-row__read-indicator" aria-hidden="true" />
       </span>
     </button>
   )
