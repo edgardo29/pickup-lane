@@ -246,7 +246,11 @@ def create_game(
 
 
 def build_sub_post_payload(**overrides: object) -> dict:
-    starts_at = datetime.now(UTC) + timedelta(days=7)
+    starts_at = (
+        datetime.now(UTC)
+        .replace(hour=18, minute=0, second=0, microsecond=0)
+        + timedelta(days=7)
+    )
     ends_at = starts_at + timedelta(hours=2)
     payload = {
         "sport_type": "soccer",
@@ -472,11 +476,19 @@ def create_notification(
     user_id: str,
     **overrides: object,
 ) -> dict:
+    authenticate_as(user_id)
     payload = {
         "user_id": user_id,
         "notification_type": "admin_notice",
+        "notification_category": "app",
+        "notification_domain": "admin",
+        "source_type": "pickup_lane",
         "title": "CI notification",
+        "subject_label": "Pickup Lane",
+        "summary": "Pickup Lane posted an update.",
         "body": "CI notification body",
+        "event_at": datetime.now(UTC).isoformat(),
+        "actor_user_id": None,
         "is_read": False,
     }
     payload.update(overrides)

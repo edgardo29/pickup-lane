@@ -25,7 +25,7 @@ export function useAppNavState({
       }
 
       try {
-        const nextUnreadCount = await fetchUnreadNotificationCount(appUser.id)
+        const nextUnreadCount = await fetchUnreadNotificationCount(currentUser)
 
         if (!ignore) {
           setUnreadCount(nextUnreadCount)
@@ -42,7 +42,7 @@ export function useAppNavState({
     return () => {
       ignore = true
     }
-  }, [appUser?.id])
+  }, [appUser?.id, currentUser])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {

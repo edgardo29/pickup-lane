@@ -1,4 +1,4 @@
-import { CloseIcon } from './ProfileIcons.jsx'
+import { CloseIcon, PencilIcon } from './ProfileIcons.jsx'
 import { ProfileEditForm } from './ProfileEditForm.jsx'
 import { dismissOnBackdropMouseDown, useDismissibleModal } from './useModalBodyLock.js'
 
@@ -20,9 +20,14 @@ export function ProfileEditModal({
     >
       <section className="settings-modal__card settings-modal__card--neutral profile-edit-modal__card">
         <div className="profile-edit-modal__header">
-          <div className="profile-edit-modal__heading">
-            <h2 id="profile-edit-modal-title">Edit profile</h2>
-            <p>Update the details players and hosts see.</p>
+          <div>
+            <h2 className="settings-modal__title" id="profile-edit-modal-title">
+              <span className="settings-modal__title-icon" aria-hidden="true">
+                <PencilIcon />
+              </span>
+              <span>Edit profile</span>
+            </h2>
+            <p className="settings-modal__subtitle">Update the details players and hosts see.</p>
           </div>
           <button
             className="profile-edit-modal__close"

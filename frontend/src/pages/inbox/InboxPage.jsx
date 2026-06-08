@@ -10,7 +10,7 @@ function InboxPage() {
   const page = useInboxPageModel()
 
   return (
-    <AppPageShell className="inbox-page" mainClassName="app-page-shell--narrow inbox-shell">
+    <AppPageShell className="inbox-page" mainClassName="inbox-shell">
       <AppPageHeader
         title="Inbox"
         subtitle="Review notifications and game activity."
@@ -27,34 +27,44 @@ function InboxPage() {
       {page.status === 'loading' && <InboxState title="Loading inbox" />}
       {page.status === 'error' && <InboxState title="Could not load inbox" message={page.error} />}
 
-      {page.status === 'success' && page.notifications.length === 0 && (
-        <InboxState title="Nothing here yet" message="Your updates will show up here." />
-      )}
+      {page.status === 'success' && (
+        <>
+          <div className="inbox-desktop-grid">
+            {page.inboxSections.map((section) => (
+              <InboxSection
+                emptyMessage={section.emptyMessage}
+                emptyTitle={section.emptyTitle}
+                items={section.items}
+                key={section.key}
+                onOpenNotification={page.handleOpenNotification}
+                onSourceFilterChange={page.handleSourceFilterChange}
+                section={section}
+              />
+            ))}
+          </div>
 
-      {page.status === 'success' && page.notifications.length > 0 && (
-        <div className="inbox-section-stack">
-          {page.filteredSections.map((section) => (
-            <InboxSection
-              gamesById={page.gamesById}
-              items={section.items}
-              key={section.title}
-              onOpenNotification={page.handleOpenNotification}
-              section={section}
-            />
-          ))}
-        </div>
-      )}
-
-      {page.hasNoMatchingUpdates && (
-        <InboxState title="No matching updates" message="Try another inbox filter." />
+          <div className="inbox-mobile-stack">
+            {page.filteredSections.map((section) => (
+              <InboxSection
+                emptyMessage={section.emptyMessage}
+                emptyTitle={section.emptyTitle}
+                items={section.items}
+                key={section.key}
+                onOpenNotification={page.handleOpenNotification}
+                onSourceFilterChange={page.handleSourceFilterChange}
+                section={section}
+                showHeader={false}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {page.activeNotification && (
         <NotificationModal
-          game={page.gamesById.get(page.activeNotification.related_game_id)}
           notification={page.activeNotification}
           onClose={() => page.setActiveNotification(null)}
-          onViewGame={page.handleViewGame}
+          onNotificationAction={page.handleNotificationAction}
         />
       )}
     </AppPageShell>

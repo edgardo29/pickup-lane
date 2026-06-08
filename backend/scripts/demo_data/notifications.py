@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 from backend.models import Booking, ChatMessage, Game, GameParticipant, Notification, User
 from backend.scripts.demo_data.helpers import demo_uuid, now_utc, upsert_by_id
 from backend.scripts.demo_data.users import CURRENT_USER_KEY
+from backend.services.notification_service import (
+    build_app_notification_fields,
+    build_game_notification_fields,
+)
 
 
 def seed_notifications(
@@ -24,7 +28,8 @@ def seed_notifications(
         {
             "key": "policy-update",
             "age": timedelta(hours=2),
-            "notification_type": "admin_notice",
+            "notification_type": "policy_update",
+            "notification_domain": "admin",
             "title": "Pickup Lane Updates",
             "body": "New cancellation policy is now live. Tap to learn more.",
             "is_read": False,
@@ -32,7 +37,8 @@ def seed_notifications(
         {
             "key": "support-reply",
             "age": timedelta(hours=5),
-            "notification_type": "admin_notice",
+            "notification_type": "support_reply",
+            "notification_domain": "support",
             "title": "Support",
             "body": "We received your request and will get back to you shortly.",
             "is_read": False,
@@ -51,7 +57,8 @@ def seed_notifications(
         {
             "key": "account-security",
             "age": timedelta(days=2),
-            "notification_type": "admin_notice",
+            "notification_type": "account_security",
+            "notification_domain": "account",
             "title": "Account Security",
             "body": "We noticed a new login to your account from a new device.",
             "is_read": True,
@@ -113,6 +120,31 @@ def seed_notifications(
         booking_key = item.get("related_booking_key")
         participant_key = item.get("related_participant_key")
         message_key = item.get("related_message_key")
+        notification_domain = item.get(
+            "notification_domain",
+            "game" if game_key else "admin",
+        )
+        notification_category = (
+            "game_activity" if notification_domain == "game" else "app"
+        )
+        display_fields = (
+            build_game_notification_fields(
+                games[game_key],
+                item["notification_type"],
+                event_at=created_at,
+                aggregate_count=1 if item["notification_type"] == "chat_message" else None,
+                aggregation_key=(
+                    f"demo-chat:{game_key}" if item["notification_type"] == "chat_message" else None
+                ),
+            )
+            if game_key
+            else build_app_notification_fields(
+                item["notification_type"],
+                event_at=created_at,
+                title=item["title"],
+                body=item["body"],
+            )
+        )
 
         seeded_notifications[item["key"]] = upsert_by_id(
             db,
@@ -121,8 +153,10 @@ def seed_notifications(
             {
                 "user_id": current_user.id,
                 "notification_type": item["notification_type"],
-                "title": item["title"],
-                "body": item["body"],
+                "notification_category": notification_category,
+                "notification_domain": notification_domain,
+                **display_fields,
+                "actor_user_id": None,
                 "related_game_id": games[game_key].id if game_key else None,
                 "related_booking_id": bookings[booking_key].id if booking_key else None,
                 "related_participant_id": (
@@ -133,6 +167,9 @@ def seed_notifications(
                     if message_key
                     else None
                 ),
+                "related_sub_post_id": None,
+                "related_sub_post_request_id": None,
+                "related_sub_post_position_id": None,
                 "is_read": is_read,
                 "read_at": created_at + timedelta(minutes=2) if is_read else None,
                 "created_at": created_at,

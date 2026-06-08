@@ -617,7 +617,7 @@
 
 .need-sub-empty,
 .need-sub-state {
-  min-height: 220px;
+  min-height: 280px;
   padding: 24px;
   place-items: center;
   align-content: center;
@@ -630,8 +630,10 @@
 }
 
 .need-sub-state {
+  border-color: rgba(248, 250, 252, 0.2);
   border-style: dashed;
-  background: rgba(248, 250, 252, 0.03);
+  background: var(--panel-material);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
   display: grid;
 }
 
@@ -962,11 +964,7 @@
 }
 
 .need-sub-field input:focus,
-.need-sub-textarea textarea:focus {
-  border-color: rgba(184, 255, 36, 0.7);
-  box-shadow: 0 0 0 3px rgba(184, 255, 36, 0.1);
-}
-
+.need-sub-textarea textarea:focus,
 .need-sub-field select:focus,
 .need-sub-detail-choice:focus-visible,
 .need-sub-manage-requests-modal__spot-select:focus-visible {
@@ -1052,16 +1050,24 @@
 }
 
 .need-sub-row-remove:not(:disabled) {
-  border-color: rgba(255, 90, 82, 0.34);
+  border-color: rgba(248, 113, 113, 0.48);
   color: #ffe1de;
-  background: var(--button-red);
-  box-shadow: var(--button-inset);
+  background:
+    linear-gradient(180deg, rgba(96, 35, 38, 0.92), rgba(50, 18, 22, 0.98)),
+    #351519;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(37, 11, 14, 0.62),
+    0 1px 0 rgba(1, 4, 9, 0.48),
+    0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .need-sub-row-remove:not(:disabled):hover {
-  border-color: rgba(255, 90, 82, 0.42);
+  border-color: rgba(248, 113, 113, 0.56);
   color: #ffffff;
-  background: linear-gradient(180deg, #662529, #3d181b);
+  background:
+    linear-gradient(180deg, rgba(104, 37, 41, 0.94), rgba(55, 19, 23, 0.99)),
+    #3f171b;
 }
 
 .need-sub-card-heading--split button:disabled,
@@ -1071,10 +1077,15 @@
 }
 
 .need-sub-row-remove:disabled {
-  border-color: rgba(255, 90, 82, 0.26);
+  border-color: rgba(248, 113, 113, 0.34);
   color: rgba(255, 225, 222, 0.72);
-  background: var(--button-red);
-  box-shadow: var(--button-inset);
+  background:
+    linear-gradient(180deg, rgba(96, 35, 38, 0.92), rgba(50, 18, 22, 0.98)),
+    #351519;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(37, 11, 14, 0.58),
+    0 1px 0 rgba(1, 4, 9, 0.42);
 }
 
 .need-sub-position-list {
@@ -1525,34 +1536,42 @@
 }
 
 .need-sub-create-card .need-sub-card-heading--split .need-sub-sub-add {
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid rgba(139, 184, 230, 0.28);
-  border-radius: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(248, 250, 252, 0.16);
+  border-radius: 8px;
   color: #ffffff;
   background:
-    linear-gradient(180deg, rgba(38, 58, 78, 0.92), rgba(18, 31, 45, 0.98)),
-    #132033;
+    linear-gradient(180deg, rgba(248, 250, 252, 0.065), rgba(248, 250, 252, 0.018)),
+    rgba(13, 22, 31, 0.99);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.16);
+    inset 0 1px 0 rgba(248, 250, 252, 0.14),
+    inset 0 -1px 0 rgba(1, 4, 9, 0.62),
+    0 1px 0 rgba(1, 4, 9, 0.48),
+    0 4px 8px rgba(0, 0, 0, 0.2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 950;
+  font-size: 0.84rem;
+  font-weight: 720;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
 .need-sub-create-card .need-sub-card-heading--split .need-sub-sub-add:not(:disabled):hover {
-  border-color: rgba(139, 184, 230, 0.4);
+  border-color: rgba(248, 250, 252, 0.18);
   background:
-    linear-gradient(180deg, rgba(48, 72, 96, 0.94), rgba(22, 38, 55, 0.98)),
-    #17263a;
+    linear-gradient(180deg, rgba(248, 250, 252, 0.076), rgba(248, 250, 252, 0.022)),
+    rgba(14, 24, 34, 1);
+  box-shadow:
+    inset 0 1px 0 rgba(248, 250, 252, 0.15),
+    inset 0 -1px 0 rgba(1, 4, 9, 0.64),
+    0 1px 0 rgba(1, 4, 9, 0.5),
+    0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .need-sub-create-card .need-sub-card-heading--split .need-sub-sub-add:disabled {
@@ -1561,18 +1580,25 @@
 }
 
 .need-sub-create-card .need-sub-position-card__fields .need-sub-row-remove--icon {
-  border: 1px solid rgba(255, 90, 82, 0.32);
+  border: 1px solid rgba(248, 113, 113, 0.48);
   color: #ffe1de;
   background:
-    linear-gradient(180deg, rgba(96, 30, 35, 0.94), rgba(54, 20, 24, 0.98)),
-    #3a1418;
+    linear-gradient(180deg, rgba(96, 35, 38, 0.92), rgba(50, 18, 22, 0.98)),
+    #351519;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(37, 11, 14, 0.62),
+    0 1px 0 rgba(1, 4, 9, 0.48),
+    0 4px 8px rgba(0, 0, 0, 0.2);
   justify-self: center;
 }
 
 .need-sub-create-card .need-sub-position-card__fields .need-sub-row-remove--icon:not(:disabled):hover {
-  border-color: rgba(255, 90, 82, 0.42);
+  border-color: rgba(248, 113, 113, 0.56);
   color: #ffffff;
-  background: linear-gradient(180deg, #662529, #3d181b);
+  background:
+    linear-gradient(180deg, rgba(104, 37, 41, 0.94), rgba(55, 19, 23, 0.99)),
+    #3f171b;
 }
 
 .need-sub-create-card .need-sub-position-card__fields .need-sub-row-remove--placeholder {
@@ -1674,10 +1700,20 @@
     0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
-.need-sub-create-actions .need-sub-primary:not(:disabled):hover,
-.need-sub-create-secondary:not(:disabled):hover,
-.need-sub-create-cancel:not(:disabled):hover {
+.need-sub-create-actions .need-sub-primary:not(:disabled):hover {
   filter: brightness(1.05);
+}
+
+.need-sub-create-secondary:not(:disabled):hover {
+  border-color: rgba(248, 250, 252, 0.18);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.076), rgba(248, 250, 252, 0.022)),
+    rgba(14, 24, 34, 1);
+  box-shadow:
+    inset 0 1px 0 rgba(248, 250, 252, 0.15),
+    inset 0 -1px 0 rgba(1, 4, 9, 0.64),
+    0 1px 0 rgba(1, 4, 9, 0.5),
+    0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .need-sub-create-actions .need-sub-primary:focus-visible,
@@ -1849,9 +1885,9 @@
   min-height: 24px;
   padding-left: 20px;
   display: grid;
-  grid-template-columns: minmax(0, max-content) auto;
+  grid-template-columns: minmax(3.6rem, 3.6rem) max-content;
   align-items: center;
-  gap: 18px;
+  gap: 10px;
 }
 
 .need-sub-create-preview__need span {
@@ -2097,10 +2133,10 @@
   min-width: 0;
   min-height: 28px;
   display: grid;
-  grid-template-columns: minmax(0, max-content) max-content;
+  grid-template-columns: minmax(3.8rem, 3.8rem) max-content;
   align-items: center;
   justify-content: start;
-  gap: 24px;
+  gap: 10px;
 }
 
 .need-sub-create-review-subs__row span {
@@ -2150,7 +2186,7 @@
   color: #ffe1de;
   background:
     linear-gradient(180deg, rgba(96, 35, 38, 0.92), rgba(50, 18, 22, 0.98)),
-    #441a1f;
+    #351519;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -2159,9 +2195,23 @@
   font-size: 0.88rem;
   font-weight: 750;
   box-shadow:
-    inset 0 1px 0 rgba(248, 250, 252, 0.11),
-    inset 0 -1px 0 rgba(1, 4, 9, 0.56),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(37, 11, 14, 0.62),
     0 1px 0 rgba(1, 4, 9, 0.48),
+    0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.need-sub-form-cancel:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.56);
+  color: #ffffff;
+  background:
+    linear-gradient(180deg, rgba(104, 37, 41, 0.94), rgba(55, 19, 23, 0.99)),
+    #3f171b;
+  filter: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    inset 0 -1px 0 rgba(37, 11, 14, 0.66),
+    0 1px 0 rgba(1, 4, 9, 0.5),
     0 4px 8px rgba(0, 0, 0, 0.2);
 }
 

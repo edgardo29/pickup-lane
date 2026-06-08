@@ -15,6 +15,18 @@ def request_spot(client: TestClient, requester_id: str, post: dict, position_ind
     )
 
 
+def list_need_a_sub_notifications(client: TestClient, user_id: str) -> list[dict]:
+    authenticate_as(user_id)
+    response = client.get("/notifications/me?notification_domain=need_a_sub")
+
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def notification_types(notifications: list[dict]) -> set[str]:
+    return {notification["notification_type"] for notification in notifications}
+
+
 def test_sub_post_request_owner_accept_marks_confirmed_and_filled(client: TestClient):
     owner = create_user(client)
     requester_one = create_user(client)
@@ -25,6 +37,11 @@ def test_sub_post_request_owner_accept_marks_confirmed_and_filled(client: TestCl
     assert first_response.status_code == 201, first_response.text
     first_request = first_response.json()
     assert first_request["request_status"] == "pending"
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    assert owner_notifications[0]["notification_type"] == "sub_request_received"
+    assert owner_notifications[0]["actor_user_id"] == requester_one["id"]
+    assert owner_notifications[0]["related_sub_post_id"] == post["id"]
+    assert owner_notifications[0]["related_sub_post_request_id"] == first_request["id"]
 
     second_response = request_spot(client, requester_two["id"], post, 1)
     assert second_response.status_code == 201, second_response.text
@@ -35,11 +52,17 @@ def test_sub_post_request_owner_accept_marks_confirmed_and_filled(client: TestCl
     assert first_accept.status_code == 200, first_accept.text
     assert first_accept.json()["request_status"] == "confirmed"
     assert first_accept.json()["confirmed_at"] is not None
+    requester_notifications = list_need_a_sub_notifications(
+        client,
+        requester_one["id"],
+    )
+    assert "sub_request_confirmed" in notification_types(requester_notifications)
 
     get_post_before_full = client.get(f"/need-a-sub/posts/{post['id']}")
     assert get_post_before_full.status_code == 200
     assert get_post_before_full.json()["post_status"] == "active"
 
+    authenticate_as(owner["id"])
     second_accept = client.patch(f"/need-a-sub/requests/{second_request['id']}/accept")
     assert second_accept.status_code == 200, second_accept.text
 
@@ -74,6 +97,8 @@ def test_sub_post_request_allows_new_request_after_player_cancel(client: TestCli
     cancel_response = client.patch(f"/need-a-sub/requests/{first_request['id']}/cancel")
     assert cancel_response.status_code == 200, cancel_response.text
     assert cancel_response.json()["request_status"] == "canceled_by_player"
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    assert "sub_request_canceled_by_player" in notification_types(owner_notifications)
 
     new_response = request_spot(client, requester["id"], post, 1)
     assert new_response.status_code == 201, new_response.text
@@ -91,6 +116,11 @@ def test_sub_post_request_allows_new_request_after_owner_cancel(client: TestClie
     cancel_response = client.patch(f"/need-a-sub/requests/{first_request['id']}/cancel-by-owner", json={})
     assert cancel_response.status_code == 200, cancel_response.text
     assert cancel_response.json()["request_status"] == "canceled_by_owner"
+    requester_notifications = list_need_a_sub_notifications(client, requester["id"])
+    assert {
+        "sub_request_confirmed",
+        "sub_request_canceled_by_owner",
+    } <= notification_types(requester_notifications)
 
     new_response = request_spot(client, requester["id"], post, 1)
     assert new_response.status_code == 201, new_response.text
@@ -109,6 +139,9 @@ def test_sub_post_request_auto_waitlists_when_position_queue_is_full(client: Tes
 
     assert first_request["request_status"] == "pending"
     assert second_request["request_status"] == "sub_waitlist"
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    assert notification_types(owner_notifications) == {"sub_request_received"}
+
     authenticate_as(requester_two["id"])
     my_requests = client.get("/need-a-sub/my-requests")
     assert my_requests.status_code == 200, my_requests.text
@@ -132,6 +165,18 @@ def test_sub_post_request_auto_waitlists_when_position_queue_is_full(client: Tes
     assert promoted_request["request_status"] == "pending"
     assert promoted_request["requester_display_name"] == "Test User"
     assert promoted_request["requester_initials"] == "TU"
+    requester_one_notifications = list_need_a_sub_notifications(
+        client,
+        requester_one["id"],
+    )
+    assert "sub_request_declined" in notification_types(requester_one_notifications)
+    requester_two_notifications = list_need_a_sub_notifications(
+        client,
+        requester_two["id"],
+    )
+    assert "sub_waitlist_promoted_to_pending" in notification_types(
+        requester_two_notifications
+    )
 
 
 def test_sub_post_request_blocks_when_post_waitlist_is_full(client: TestClient):

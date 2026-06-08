@@ -1,4 +1,5 @@
 import { PasswordField } from './ProfileFields.jsx'
+import { BellIcon, KeyIcon, TrashIcon } from './ProfileIcons.jsx'
 import { dismissOnBackdropMouseDown, useDismissibleModal } from './useModalBodyLock.js'
 
 export function DeleteAccountModal({
@@ -32,9 +33,16 @@ export function DeleteAccountModal({
           </p>
         )}
 
-        <div>
-          <h2 id="delete-account-title">Delete account</h2>
-          <p>This will sign you out and delete your Pickup Lane profile.</p>
+        <div className="settings-modal__header">
+          <div>
+            <h2 className="settings-modal__title" id="delete-account-title">
+              <span className="settings-modal__title-icon settings-modal__title-icon--danger" aria-hidden="true">
+                <TrashIcon />
+              </span>
+              <span>Delete account</span>
+            </h2>
+            <p className="settings-modal__subtitle">This will sign you out and delete your Pickup Lane profile.</p>
+          </div>
         </div>
 
         <label className="profile-edit-field">
@@ -103,10 +111,16 @@ export function NotificationSettingsModal({
       onMouseDown={(event) => dismissOnBackdropMouseDown(event, handleCancel)}
     >
       <form className="settings-modal__card settings-modal__card--neutral" onSubmit={onSubmit}>
-        <div>
-          <p className="profile-kicker">Preferences</p>
-          <h2 id="notification-settings-title">Notifications</h2>
-          <p>Choose how Pickup Lane keeps you updated.</p>
+        <div className="settings-modal__header">
+          <div>
+            <h2 className="settings-modal__title" id="notification-settings-title">
+              <span className="settings-modal__title-icon" aria-hidden="true">
+                <BellIcon />
+              </span>
+              <span>Notifications</span>
+            </h2>
+            <p className="settings-modal__subtitle">Choose how Pickup Lane keeps you updated.</p>
+          </div>
         </div>
 
         <label className="settings-toggle-row">
@@ -175,10 +189,16 @@ export function AddPasswordModal({
       onMouseDown={(event) => dismissOnBackdropMouseDown(event, handleClose)}
     >
       <form className="settings-modal__card settings-modal__card--neutral" onSubmit={onSubmit}>
-        <div>
-          <p className="profile-kicker">Account Access</p>
-          <h2 id="add-password-title">Add password</h2>
-          <p>Keep Google sign-in and add email/password sign-in for this account.</p>
+        <div className="settings-modal__header">
+          <div>
+            <h2 className="settings-modal__title" id="add-password-title">
+              <span className="settings-modal__title-icon" aria-hidden="true">
+                <KeyIcon />
+              </span>
+              <span>Add password</span>
+            </h2>
+            <p className="settings-modal__subtitle">Keep Google sign-in and add email/password sign-in for this account.</p>
+          </div>
         </div>
 
         <PasswordField

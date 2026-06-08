@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException, status
@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
+    Notification,
     SubPost,
     SubPostPosition,
     SubPostRequest,
@@ -21,6 +22,7 @@ from backend.schemas import (
     SubPostCreate,
     SubPostUpdate,
 )
+from backend.services.notification_service import build_need_a_sub_notification_fields
 
 POST_STATUSES = {"active", "filled", "expired", "canceled", "removed"}
 REQUEST_STATUSES = {
@@ -37,6 +39,7 @@ ACTIVE_VISIBLE_POST_STATUSES = {"active", "filled"}
 ACTIVE_REQUEST_STATUSES = {"pending", "confirmed", "sub_waitlist"}
 QUEUE_HOLD_REQUEST_STATUSES = {"pending", "confirmed"}
 MAX_WAITLIST_REQUESTS_PER_POST = 25
+MAX_SUB_POST_SCHEDULE_DAYS_AHEAD = 14
 VALID_FORMAT_LABELS = {
     "3v3",
     "4v4",
@@ -71,6 +74,15 @@ VALID_POSITION_GROUPS_BY_POST_GROUP = {
     "men": {"men"},
     "women": {"women"},
     "coed": {"open", "men", "women"},
+}
+PLAYER_GROUP_DISPLAY_LABELS = {
+    "open": "Any",
+    "men": "Men's",
+    "women": "Women's",
+}
+POSITION_DISPLAY_LABELS = {
+    "field_player": "Field Player",
+    "goalkeeper": "Goalkeeper",
 }
 
 
@@ -242,11 +254,20 @@ def add_request_status_history(
 def validate_post_creation(post_create: SubPostCreate) -> None:
     starts_at = ensure_aware(post_create.starts_at)
     ends_at = ensure_aware(post_create.ends_at)
+    current_time = now_utc()
 
-    if starts_at <= now_utc():
+    if starts_at <= current_time:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="starts_at must be in the future.",
+        )
+
+    if starts_at > current_time + timedelta(days=MAX_SUB_POST_SCHEDULE_DAYS_AHEAD):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Need a Sub posts can be scheduled up to 14 days in advance."
+            ),
         )
 
     if ends_at <= starts_at:
@@ -383,13 +404,48 @@ def validate_post_creation(post_create: SubPostCreate) -> None:
         )
 
 
+def validate_owner_live_post_date_limit(
+    db: Session,
+    owner_user_id: uuid.UUID,
+    starts_on_local: date,
+    exclude_sub_post_id: uuid.UUID | None = None,
+) -> None:
+    statement = select(SubPost).where(
+        SubPost.owner_user_id == owner_user_id,
+        SubPost.starts_on_local == starts_on_local,
+        SubPost.post_status.in_(ACTIVE_VISIBLE_POST_STATUSES),
+    )
+
+    if exclude_sub_post_id is not None:
+        statement = statement.where(SubPost.id != exclude_sub_post_id)
+
+    existing_post = db.scalar(statement.limit(1))
+    if existing_post is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "You already have an active Need a Sub post for this date."
+            ),
+        )
+
+
 def create_sub_post(
     db: Session, owner: User, post_create: SubPostCreate
 ) -> SubPost:
+    expire_due_posts_and_requests(db)
     validate_post_creation(post_create)
     post_data = post_create.model_dump(exclude={"positions"})
     post_data["starts_at"] = ensure_aware(post_create.starts_at)
     post_data["ends_at"] = ensure_aware(post_create.ends_at)
+    post_data["starts_on_local"] = get_local_date(
+        post_data["starts_at"],
+        post_data["timezone"],
+    )
+    validate_owner_live_post_date_limit(
+        db,
+        owner.id,
+        post_data["starts_on_local"],
+    )
     new_post = SubPost(
         id=uuid.uuid4(),
         owner_user_id=owner.id,
@@ -552,18 +608,26 @@ def validate_edit_keeps_post_date(
     sub_post: SubPost,
     post_update: SubPostUpdate,
 ) -> None:
-    existing_date = get_local_date(sub_post.starts_at, sub_post.timezone)
+    existing_date = sub_post.starts_on_local or get_local_date(
+        sub_post.starts_at,
+        sub_post.timezone,
+    )
+    effective_timezone = (
+        post_update.timezone
+        if "timezone" in post_update.model_fields_set and post_update.timezone
+        else sub_post.timezone
+    )
+    effective_starts_at = (
+        post_update.starts_at
+        if "starts_at" in post_update.model_fields_set and post_update.starts_at
+        else sub_post.starts_at
+    )
 
-    for field_name in ("starts_at", "ends_at"):
-        if field_name not in post_update.model_fields_set:
-            continue
-
-        field_value = getattr(post_update, field_name)
-        if field_value and get_local_date(field_value, sub_post.timezone) != existing_date:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Post date cannot be changed.",
-            )
+    if get_local_date(effective_starts_at, effective_timezone) != existing_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Post date cannot be changed.",
+        )
 
 
 def apply_position_updates(
@@ -635,6 +699,16 @@ def update_sub_post(
 
     effective_post = build_effective_post_create(db, sub_post, post_update)
     validate_post_creation(effective_post)
+    next_starts_on_local = get_local_date(
+        effective_post.starts_at,
+        effective_post.timezone,
+    )
+    validate_owner_live_post_date_limit(
+        db,
+        owner.id,
+        next_starts_on_local,
+        exclude_sub_post_id=sub_post.id,
+    )
     update_data = post_update.model_dump(exclude_unset=True, exclude={"positions"})
     new_positions = post_update.positions if "positions" in post_update.model_fields_set else None
 
@@ -648,6 +722,7 @@ def update_sub_post(
 
     sub_post.starts_at = ensure_aware(sub_post.starts_at)
     sub_post.ends_at = ensure_aware(sub_post.ends_at)
+    sub_post.starts_on_local = next_starts_on_local
     sub_post.expires_at = sub_post.starts_at
     sub_post.updated_at = current_time
     db.add(sub_post)
@@ -820,6 +895,106 @@ def build_requester_display(user: User | None) -> tuple[str | None, str | None]:
     return display_name, initials or None
 
 
+def add_need_a_sub_notification(
+    db: Session,
+    *,
+    recipient_user_id: uuid.UUID,
+    notification_type: str,
+    sub_post: SubPost,
+    sub_request: SubPostRequest | None = None,
+    actor_user_id: uuid.UUID | None = None,
+    event_at: datetime | None = None,
+    title: str | None = None,
+    summary: str | None = None,
+    body: str | None = None,
+) -> None:
+    actor_id = actor_user_id if actor_user_id != recipient_user_id else None
+    db.add(
+        Notification(
+            id=uuid.uuid4(),
+            user_id=recipient_user_id,
+            notification_type=notification_type,
+            notification_category="game_activity",
+            notification_domain="need_a_sub",
+            **build_need_a_sub_notification_fields(
+                sub_post,
+                notification_type,
+                event_at=event_at or now_utc(),
+                title=title,
+                summary=summary,
+                body=body,
+            ),
+            actor_user_id=actor_id,
+            related_sub_post_id=sub_post.id,
+            related_sub_post_request_id=sub_request.id if sub_request else None,
+            related_sub_post_position_id=(
+                sub_request.sub_post_position_id if sub_request else None
+            ),
+            is_read=False,
+            read_at=None,
+        )
+    )
+
+
+def notify_owner_sub_request_received(
+    db: Session,
+    sub_post: SubPost,
+    position: SubPostPosition,
+    sub_request: SubPostRequest,
+    requester: User,
+) -> None:
+    add_need_a_sub_notification(
+        db,
+        recipient_user_id=sub_post.owner_user_id,
+        notification_type="sub_request_received",
+        sub_post=sub_post,
+        sub_request=sub_request,
+        actor_user_id=requester.id,
+    )
+
+
+def notify_requester_sub_status(
+    db: Session,
+    *,
+    sub_post: SubPost,
+    sub_request: SubPostRequest,
+    notification_type: str,
+    title: str | None,
+    body: str | None,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    add_need_a_sub_notification(
+        db,
+        recipient_user_id=sub_request.requester_user_id,
+        notification_type=notification_type,
+        sub_post=sub_post,
+        sub_request=sub_request,
+        actor_user_id=actor_user_id,
+        title=title,
+        body=body,
+    )
+
+
+def notify_requester_waitlist_promoted(
+    db: Session,
+    sub_post: SubPost,
+    sub_request: SubPostRequest | None,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    if sub_request is None:
+        return
+
+    notify_requester_sub_status(
+        db,
+        sub_post=sub_post,
+        sub_request=sub_request,
+        notification_type="sub_waitlist_promoted_to_pending",
+        title=None,
+        body=None,
+        actor_user_id=actor_user_id,
+    )
+
+
 def serialize_sub_post_request(
     db: Session,
     sub_request: SubPostRequest,
@@ -981,6 +1156,14 @@ def create_request(
         changed_by_user_id=requester.id,
         change_source="requester",
     )
+    if initial_status == "pending":
+        notify_owner_sub_request_received(
+            db,
+            sub_post,
+            position,
+            new_request,
+            requester,
+        )
 
     try:
         db.commit()
@@ -1173,6 +1356,15 @@ def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> Sub
 
     change_request_status(db, sub_request, "confirmed", owner.id, "owner", current_time=current_time)
     recalculate_filled_status(db, sub_post, owner.id, "owner")
+    notify_requester_sub_status(
+        db,
+        sub_post=sub_post,
+        sub_request=sub_request,
+        notification_type="sub_request_confirmed",
+        title=None,
+        body=None,
+        actor_user_id=owner.id,
+    )
     db.commit()
     db.refresh(sub_request)
     return sub_request
@@ -1196,9 +1388,29 @@ def owner_decline_request(
     was_pending = sub_request.request_status == "pending"
     position_id = sub_request.sub_post_position_id
     change_request_status(db, sub_request, "declined", owner.id, "owner", reason)
+    notify_requester_sub_status(
+        db,
+        sub_post=sub_post,
+        sub_request=sub_request,
+        notification_type="sub_request_declined",
+        title=None,
+        body=None,
+        actor_user_id=owner.id,
+    )
 
     if was_pending:
-        promote_next_waitlisted_request(db, position_id, owner.id, "owner")
+        promoted_request = promote_next_waitlisted_request(
+            db,
+            position_id,
+            owner.id,
+            "owner",
+        )
+        notify_requester_waitlist_promoted(
+            db,
+            sub_post,
+            promoted_request,
+            owner.id,
+        )
 
     db.commit()
     db.refresh(sub_request)
@@ -1225,15 +1437,36 @@ def requester_cancel_request(
             detail="This request cannot be canceled.",
         )
 
-    should_promote = sub_request.request_status in {"pending", "confirmed"}
+    previous_status = sub_request.request_status
+    should_promote = previous_status in {"pending", "confirmed"}
     was_confirmed = sub_request.request_status == "confirmed"
     position_id = sub_request.sub_post_position_id
     change_request_status(db, sub_request, "canceled_by_player", requester.id, "requester")
+    if previous_status in {"pending", "confirmed"}:
+        add_need_a_sub_notification(
+            db,
+            recipient_user_id=sub_post.owner_user_id,
+            notification_type="sub_request_canceled_by_player",
+            sub_post=sub_post,
+            sub_request=sub_request,
+            actor_user_id=requester.id,
+        )
 
     if was_confirmed:
         recalculate_filled_status(db, sub_post, requester.id, "requester")
     if should_promote:
-        promote_next_waitlisted_request(db, position_id, requester.id, "requester")
+        promoted_request = promote_next_waitlisted_request(
+            db,
+            position_id,
+            requester.id,
+            "requester",
+        )
+        notify_requester_waitlist_promoted(
+            db,
+            sub_post,
+            promoted_request,
+            requester.id,
+        )
 
     db.commit()
     db.refresh(sub_request)
@@ -1260,9 +1493,24 @@ def owner_cancel_request(
 
     position_id = sub_request.sub_post_position_id
     change_request_status(db, sub_request, "canceled_by_owner", owner.id, "owner", reason)
+    notify_requester_sub_status(
+        db,
+        sub_post=sub_post,
+        sub_request=sub_request,
+        notification_type="sub_request_canceled_by_owner",
+        title=None,
+        body=None,
+        actor_user_id=owner.id,
+    )
 
     recalculate_filled_status(db, sub_post, owner.id, "owner")
-    promote_next_waitlisted_request(db, position_id, owner.id, "owner")
+    promoted_request = promote_next_waitlisted_request(db, position_id, owner.id, "owner")
+    notify_requester_waitlist_promoted(
+        db,
+        sub_post,
+        promoted_request,
+        owner.id,
+    )
 
     db.commit()
     db.refresh(sub_request)
@@ -1340,6 +1588,15 @@ def cancel_sub_post(
             "Post canceled by owner.",
             current_time,
         )
+        notify_requester_sub_status(
+            db,
+            sub_post=sub_post,
+            sub_request=sub_request,
+            notification_type="sub_post_canceled",
+            title=None,
+            body=None,
+            actor_user_id=owner.id,
+        )
 
     db.commit()
     db.refresh(sub_post)
@@ -1394,6 +1651,15 @@ def remove_sub_post(
             "admin",
             reason or "Post removed by admin.",
             current_time,
+        )
+        notify_requester_sub_status(
+            db,
+            sub_post=sub_post,
+            sub_request=sub_request,
+            notification_type="sub_post_removed",
+            title=None,
+            body=None,
+            actor_user_id=admin_user.id,
         )
 
     db.commit()

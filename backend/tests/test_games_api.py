@@ -257,12 +257,14 @@ def test_admin_can_cancel_community_game_and_notify_host(client: TestClient):
     )
 
     for recipient in [host, player]:
+        authenticate_as(recipient["id"])
         notifications_response = client.get(
-            f"/notifications?user_id={recipient['id']}&notification_type=game_cancelled"
+            "/notifications/me?notification_type=game_cancelled"
         )
         assert notifications_response.status_code == 200, notifications_response.text
         assert len(notifications_response.json()) == 1
 
+    authenticate_as(admin["id"])
     admin_actions_response = client.get(
         f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
     )
@@ -379,14 +381,16 @@ def test_cancel_community_game_cancels_roster_waitlist_and_notifies_members(
     assert waitlist_entries_response.json()[0]["waitlist_status"] == "cancelled"
 
     for player in [*joined_players, waitlisted_player]:
+        authenticate_as(player["id"])
         notifications_response = client.get(
-            f"/notifications?user_id={player['id']}&notification_type=game_cancelled"
+            "/notifications/me?notification_type=game_cancelled"
         )
         assert notifications_response.status_code == 200, notifications_response.text
         assert len(notifications_response.json()) == 1
 
+    authenticate_as(host["id"])
     host_notifications_response = client.get(
-        f"/notifications?user_id={host['id']}&notification_type=game_cancelled"
+        "/notifications/me?notification_type=game_cancelled"
     )
     assert host_notifications_response.status_code == 200, host_notifications_response.text
     assert host_notifications_response.json() == []
@@ -2397,7 +2401,8 @@ def test_community_waitlist_promotion_creates_no_player_payment(
     assert payments_response.status_code == 200, payments_response.text
     assert payments_response.json() == []
 
-    notifications_response = client.get(f"/notifications?user_id={waitlisted_player['id']}")
+    authenticate_as(waitlisted_player["id"])
+    notifications_response = client.get("/notifications/me")
     assert notifications_response.status_code == 200, notifications_response.text
     promotion_notice = next(
         item
@@ -2725,7 +2730,8 @@ def test_leave_game_promotes_waitlist_party_when_enough_spots_open(
     assert payments_response.status_code == 200, payments_response.text
     assert payments_response.json()[0]["payment_status"] == "succeeded"
 
-    notifications_response = client.get(f"/notifications?user_id={waitlisted_player['id']}")
+    authenticate_as(waitlisted_player["id"])
+    notifications_response = client.get("/notifications/me")
     assert notifications_response.status_code == 200, notifications_response.text
     assert any(
         item["notification_type"] == "waitlist_promoted"

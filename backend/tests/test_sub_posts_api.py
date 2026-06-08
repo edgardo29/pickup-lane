@@ -43,6 +43,18 @@ def request_sub_spot(
     return response.json()
 
 
+def list_need_a_sub_notifications(client: TestClient, user_id: str) -> list[dict]:
+    authenticate_as(user_id)
+    response = client.get("/notifications/me?notification_domain=need_a_sub")
+
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def notification_types(notifications: list[dict]) -> set[str]:
+    return {notification["notification_type"] for notification in notifications}
+
+
 def parse_iso_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
@@ -144,6 +156,8 @@ def test_sub_posts_cancel_cancels_active_requests_and_blocks_review(client: Test
             request["id"]: request for request in my_requests_response.json()
         }
         assert requests_by_id[sub_request["id"]]["request_status"] == "canceled_by_owner"
+        player_notifications = list_need_a_sub_notifications(client, player["id"])
+        assert "sub_post_canceled" in notification_types(player_notifications)
 
 
 def test_sub_posts_cancel_rejects_non_owner_and_second_cancel(client: TestClient):
@@ -523,6 +537,72 @@ def test_sub_posts_reject_past_start_time(client: TestClient):
     assert "starts_at must be in the future" in response.text
 
 
+def test_sub_posts_reject_start_more_than_fourteen_days_out(client: TestClient):
+    owner = create_user(client)
+    authenticate_as(owner["id"])
+    starts_at = datetime.now(UTC) + timedelta(days=15)
+    ends_at = starts_at + timedelta(hours=2)
+
+    response = client.post(
+        "/need-a-sub/posts",
+        json=build_sub_post_payload(
+            starts_at=starts_at.isoformat(),
+            ends_at=ends_at.isoformat(),
+        ),
+    )
+
+    assert response.status_code == 400, response.text
+    assert "up to 14 days in advance" in response.text
+
+
+def test_sub_posts_limit_owner_to_one_live_post_per_local_date(
+    client: TestClient,
+):
+    owner = create_user(client)
+    post = create_sub_post(client, owner["id"])
+    starts_at = parse_iso_datetime(post["starts_at"])
+    ends_at = parse_iso_datetime(post["ends_at"])
+
+    authenticate_as(owner["id"])
+    duplicate_response = client.post(
+        "/need-a-sub/posts",
+        json=build_sub_post_payload(
+            starts_at=(starts_at + timedelta(hours=1)).isoformat(),
+            ends_at=(ends_at + timedelta(hours=1)).isoformat(),
+        ),
+    )
+    assert duplicate_response.status_code == 409, duplicate_response.text
+    assert (
+        "already have an active Need a Sub post for this date"
+        in duplicate_response.text
+    )
+
+    next_day_starts_at = starts_at + timedelta(days=1)
+    next_day_response = client.post(
+        "/need-a-sub/posts",
+        json=build_sub_post_payload(
+            starts_at=next_day_starts_at.isoformat(),
+            ends_at=(next_day_starts_at + timedelta(hours=2)).isoformat(),
+        ),
+    )
+    assert next_day_response.status_code == 201, next_day_response.text
+
+    cancel_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/cancel",
+        json={"cancel_reason": "Testing same-day replacement."},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    replacement_response = client.post(
+        "/need-a-sub/posts",
+        json=build_sub_post_payload(
+            starts_at=(starts_at + timedelta(hours=2)).isoformat(),
+            ends_at=(ends_at + timedelta(hours=2)).isoformat(),
+        ),
+    )
+    assert replacement_response.status_code == 201, replacement_response.text
+
+
 def test_sub_posts_owner_can_edit_post_without_requests(client: TestClient):
     owner = create_user(client)
     post = create_sub_post(client, owner["id"])
@@ -886,6 +966,8 @@ def test_sub_posts_admin_remove_cancels_active_requests(client: TestClient):
         assert request_response.status_code == 200, request_response.text
         requests_by_id = {request["id"]: request for request in request_response.json()}
         assert requests_by_id[sub_request["id"]]["request_status"] == "canceled_by_owner"
+        player_notifications = list_need_a_sub_notifications(client, player["id"])
+        assert "sub_post_removed" in notification_types(player_notifications)
 
 
 def test_sub_posts_expiration_service_expires_posts_and_open_requests(client: TestClient):
