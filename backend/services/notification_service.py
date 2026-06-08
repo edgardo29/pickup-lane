@@ -1,44 +1,375 @@
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
 from backend.models import Game, Notification, SubPost
 
-VALID_NOTIFICATION_TYPES = {
-    "booking_confirmed",
-    "booking_cancelled",
-    "booking_refunded",
-    "payment_failed",
-    "game_cancelled",
-    "game_updated",
-    "game_reminder",
-    "waitlist_joined",
-    "waitlist_promoted",
-    "waitlist_expired",
-    "host_update",
-    "chat_message",
-    "deposit_paid",
-    "deposit_released",
-    "deposit_forfeited",
-    "admin_notice",
-    "support_reply",
-    "account_security",
-    "policy_update",
-    "game_player_added_by_admin",
-    "game_player_removed_by_admin",
-    "game_host_assigned",
-    "game_host_removed",
-    "game_roster_update",
-    "sub_request_received",
-    "sub_request_confirmed",
-    "sub_request_declined",
-    "sub_waitlist_promoted_to_pending",
-    "sub_request_canceled_by_player",
-    "sub_request_canceled_by_owner",
-    "sub_post_canceled",
-    "sub_post_removed",
+VALID_NOTIFICATION_PREFERENCE_CLASSES = {
+    "mandatory",
+    "preference_controlled",
+    "conditional",
 }
+
+
+@dataclass(frozen=True)
+class NotificationTypeConfig:
+    notification_category: str
+    notification_domains: frozenset[str]
+    title: str
+    summary: str
+    body: str
+    action_key: str | None
+    icon: str
+    severity: str = "default"
+    preference_class: str = "mandatory"
+    implementation_status: str = "planned"
+
+
+NOTIFICATION_TYPE_CONFIG = {
+    "admin_notice": NotificationTypeConfig(
+        notification_category="app",
+        notification_domains=frozenset({"app", "admin"}),
+        title="Pickup Lane update",
+        summary="Pickup Lane posted an update.",
+        body="Pickup Lane posted an update.",
+        action_key=None,
+        icon="Megaphone",
+        preference_class="conditional",
+        implementation_status="planned_if_tooling",
+    ),
+    "policy_update": NotificationTypeConfig(
+        notification_category="app",
+        notification_domains=frozenset({"app", "admin"}),
+        title="Policy update",
+        summary="A Pickup Lane policy was updated.",
+        body="A Pickup Lane policy was updated.",
+        action_key="view_policy",
+        icon="Megaphone",
+        preference_class="conditional",
+        implementation_status="planned_if_tooling",
+    ),
+    "support_reply": NotificationTypeConfig(
+        notification_category="app",
+        notification_domains=frozenset({"support"}),
+        title="Support reply",
+        summary="Support replied to your request.",
+        body="Support replied to your request.",
+        action_key=None,
+        icon="Headphones",
+        preference_class="preference_controlled",
+        implementation_status="blocked",
+    ),
+    "account_security": NotificationTypeConfig(
+        notification_category="app",
+        notification_domains=frozenset({"account"}),
+        title="Security alert",
+        summary="Account security activity was detected.",
+        body="Account security activity was detected.",
+        action_key="view_profile",
+        icon="ShieldCheck",
+        severity="warning",
+        preference_class="mandatory",
+        implementation_status="blocked",
+    ),
+    "booking_confirmed": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Booking confirmed",
+        summary="Your booking was confirmed.",
+        body="Your booking for this game was confirmed.",
+        action_key="view_game",
+        icon="CalendarDays",
+        severity="success",
+    ),
+    "booking_cancelled": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Booking canceled",
+        summary="Your booking was canceled.",
+        body="Your booking for this game was canceled.",
+        action_key="view_game",
+        icon="CalendarX",
+        severity="danger",
+        preference_class="conditional",
+        implementation_status="valid_only",
+    ),
+    "booking_refunded": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Refund processed",
+        summary="Your refund was processed.",
+        body="Your refund for this game was processed.",
+        action_key="view_game",
+        icon="CircleDollarSign",
+        severity="success",
+    ),
+    "payment_failed": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Payment failed",
+        summary="Your payment could not be completed.",
+        body="Your payment for this game could not be completed.",
+        action_key="view_game",
+        icon="WalletCards",
+        severity="warning",
+    ),
+    "game_cancelled": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Game canceled",
+        summary="This game was canceled.",
+        body="This game was canceled.",
+        action_key="view_game",
+        icon="CalendarX",
+        severity="danger",
+    ),
+    "game_updated": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Game updated",
+        summary="Important game details were updated.",
+        body="Review the latest game details before heading out.",
+        action_key="view_game",
+        icon="CalendarDays",
+    ),
+    "game_reminder": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Game reminder",
+        summary="This game is coming up.",
+        body="This game is coming up.",
+        action_key="view_game",
+        icon="Clock3",
+        implementation_status="valid_only",
+    ),
+    "waitlist_joined": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Waitlist update",
+        summary="You joined the waitlist.",
+        body="You are on the waitlist for this game.",
+        action_key="view_game",
+        icon="Clock3",
+        implementation_status="valid_only",
+    ),
+    "waitlist_promoted": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Moved into game",
+        summary="You were moved into the game.",
+        body="A spot opened and you were moved into this game.",
+        action_key="view_game",
+        icon="Clock3",
+        severity="success",
+    ),
+    "waitlist_expired": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Waitlist expired",
+        summary="Your waitlist spot expired.",
+        body="Your waitlist spot for this game expired.",
+        action_key="view_game",
+        icon="Clock3",
+        severity="warning",
+        preference_class="conditional",
+        implementation_status="valid_only",
+    ),
+    "host_update": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Host update",
+        summary="Host information changed.",
+        body="Host information for this game changed.",
+        action_key="view_game",
+        icon="ShieldCheck",
+        implementation_status="valid_only",
+    ),
+    "chat_message": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="New chat activity",
+        summary="New messages were posted.",
+        body="New messages were posted for this game.",
+        action_key="view_game",
+        icon="MessageSquareText",
+    ),
+    "deposit_paid": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Deposit paid",
+        summary="The host deposit was paid.",
+        body="The host deposit for this game was paid.",
+        action_key="view_game",
+        icon="CircleDollarSign",
+        severity="success",
+        implementation_status="valid_only",
+    ),
+    "deposit_released": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Deposit released",
+        summary="The host deposit was released.",
+        body="The host deposit for this game was released.",
+        action_key="view_game",
+        icon="CircleDollarSign",
+        severity="success",
+        implementation_status="valid_only",
+    ),
+    "deposit_forfeited": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Deposit forfeited",
+        summary="The host deposit was forfeited.",
+        body="The host deposit for this game was forfeited.",
+        action_key="view_game",
+        icon="CircleDollarSign",
+        severity="danger",
+        implementation_status="valid_only",
+    ),
+    "game_player_added_by_admin": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Player added",
+        summary="You were added to this official game.",
+        body="Pickup Lane added you to this official game.",
+        action_key="view_game",
+        icon="UsersRound",
+        severity="success",
+    ),
+    "game_player_removed_by_admin": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Player removed",
+        summary="You were removed from this official game.",
+        body="Pickup Lane removed you from this official game.",
+        action_key="view_game",
+        icon="UsersRound",
+        severity="danger",
+    ),
+    "game_host_assigned": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Host assigned",
+        summary="You were assigned as host.",
+        body="You were assigned as a host for this game.",
+        action_key="view_game",
+        icon="ShieldCheck",
+        severity="success",
+    ),
+    "game_host_removed": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Host removed",
+        summary="You were removed as host.",
+        body="You are no longer listed as host for this game.",
+        action_key="view_game",
+        icon="ShieldCheck",
+        severity="warning",
+    ),
+    "game_roster_update": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"game"}),
+        title="Roster update",
+        summary="The roster changed.",
+        body="The roster for this game changed.",
+        action_key="view_game",
+        icon="UsersRound",
+        preference_class="conditional",
+        implementation_status="valid_only",
+    ),
+    "sub_request_received": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="New request",
+        summary="A player requested a sub spot.",
+        body="A player requested a sub spot for this post.",
+        action_key="view_sub_post",
+        icon="UserPlus",
+    ),
+    "sub_request_confirmed": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="Request approved",
+        summary="Your request was approved.",
+        body="You're confirmed for this sub spot.",
+        action_key="view_sub_post",
+        icon="ClipboardList",
+        severity="success",
+    ),
+    "sub_request_declined": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="Request declined",
+        summary="Your request was declined.",
+        body="Your request for this sub spot was declined.",
+        action_key="view_sub_post",
+        icon="ClipboardList",
+        severity="danger",
+    ),
+    "sub_waitlist_promoted_to_pending": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="Moved to review",
+        summary="A spot opened for review.",
+        body="A spot opened and the host can now review your request.",
+        action_key="view_sub_post",
+        icon="Clock3",
+        severity="success",
+    ),
+    "sub_request_canceled_by_player": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="Request canceled",
+        summary="A player canceled their request.",
+        body="A player canceled their request for this sub spot.",
+        action_key="view_sub_post",
+        icon="ClipboardList",
+        severity="warning",
+    ),
+    "sub_request_canceled_by_owner": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="Sub spot removed",
+        summary="The host removed you from this sub spot.",
+        body="The host removed you from this sub spot.",
+        action_key="view_sub_post",
+        icon="ClipboardList",
+        severity="danger",
+    ),
+    "sub_post_canceled": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="Post canceled",
+        summary="This Need a Sub post was canceled.",
+        body="This Need a Sub post was canceled by the host.",
+        action_key=None,
+        icon="MapPin",
+        severity="danger",
+    ),
+    "sub_post_removed": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="Post removed",
+        summary="This Need a Sub post was removed.",
+        body="This Need a Sub post was removed by Pickup Lane.",
+        action_key=None,
+        icon="MapPin",
+        severity="danger",
+    ),
+    "sub_post_updated": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="Post updated",
+        summary="Important details were updated.",
+        body="Review the latest details before the game.",
+        action_key="view_sub_post",
+        icon="CalendarDays",
+    ),
+}
+VALID_NOTIFICATION_TYPES = set(NOTIFICATION_TYPE_CONFIG)
 VALID_NOTIFICATION_CATEGORIES = {"app", "game_activity"}
 APP_NOTIFICATION_DOMAINS = {"app", "account", "admin", "support"}
 GAME_ACTIVITY_DOMAINS = {"game", "need_a_sub"}
@@ -61,27 +392,52 @@ VALID_ACTION_KEYS = {
     "payment_methods",
     "view_profile",
 }
+GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS = {"cancelled", "abandoned"}
+SUB_POST_STATUSES_WITH_INBOX_ACTIONS = {"active", "filled"}
+AGGREGATE_COUNT_MODES = {"replace", "increment", "clear", "preserve"}
+AGGREGATED_NOTIFICATION_ASSIGNABLE_FIELDS = {
+    "source_type",
+    "title",
+    "subject_label",
+    "summary",
+    "body",
+    "action_key",
+    "subject_starts_at",
+    "subject_ends_at",
+    "subject_timezone",
+    "event_at",
+    "aggregation_key",
+    "aggregate_count",
+    "related_game_id",
+    "related_booking_id",
+    "related_participant_id",
+    "related_chat_id",
+    "related_message_id",
+    "related_sub_post_id",
+    "related_sub_post_request_id",
+    "related_sub_post_position_id",
+    "related_payment_id",
+    "related_refund_id",
+    "actor_user_id",
+}
+RESOLVED_NOTIFICATION_ASSIGNABLE_FIELDS = (
+    AGGREGATED_NOTIFICATION_ASSIGNABLE_FIELDS - {"event_at", "aggregation_key"}
+)
 APP_NOTIFICATION_TYPE_DOMAINS = {
-    "admin_notice": {"app", "admin"},
-    "policy_update": {"app", "admin"},
-    "support_reply": {"support"},
-    "account_security": {"account"},
+    notification_type: set(config.notification_domains)
+    for notification_type, config in NOTIFICATION_TYPE_CONFIG.items()
+    if config.notification_category == "app"
 }
 NEED_A_SUB_NOTIFICATION_TYPES = {
-    "sub_request_received",
-    "sub_request_confirmed",
-    "sub_request_declined",
-    "sub_waitlist_promoted_to_pending",
-    "sub_request_canceled_by_player",
-    "sub_request_canceled_by_owner",
-    "sub_post_canceled",
-    "sub_post_removed",
+    notification_type
+    for notification_type, config in NOTIFICATION_TYPE_CONFIG.items()
+    if config.notification_domains == frozenset({"need_a_sub"})
 }
-GAME_NOTIFICATION_TYPES = (
-    VALID_NOTIFICATION_TYPES
-    - set(APP_NOTIFICATION_TYPE_DOMAINS.keys())
-    - NEED_A_SUB_NOTIFICATION_TYPES
-)
+GAME_NOTIFICATION_TYPES = {
+    notification_type
+    for notification_type, config in NOTIFICATION_TYPE_CONFIG.items()
+    if config.notification_domains == frozenset({"game"})
+}
 
 SOURCE_LABEL_BY_TYPE = {
     "need_a_sub": "Need a Sub",
@@ -102,255 +458,29 @@ ACTION_LABEL_BY_KEY = {
     "view_profile": "View profile",
 }
 ICON_BY_NOTIFICATION_TYPE = {
-    "account_security": "ShieldCheck",
-    "admin_notice": "Megaphone",
-    "booking_cancelled": "CalendarX",
-    "booking_confirmed": "CalendarDays",
-    "booking_refunded": "CircleDollarSign",
-    "chat_message": "MessageSquareText",
-    "deposit_forfeited": "CircleDollarSign",
-    "deposit_paid": "CircleDollarSign",
-    "deposit_released": "CircleDollarSign",
-    "game_cancelled": "CalendarX",
-    "game_host_assigned": "ShieldCheck",
-    "game_host_removed": "ShieldCheck",
-    "game_player_added_by_admin": "UsersRound",
-    "game_player_removed_by_admin": "UsersRound",
-    "game_reminder": "Clock3",
-    "game_roster_update": "UsersRound",
-    "game_updated": "CalendarDays",
-    "host_update": "ShieldCheck",
-    "payment_failed": "WalletCards",
-    "policy_update": "Megaphone",
-    "sub_post_canceled": "MapPin",
-    "sub_post_removed": "MapPin",
-    "sub_request_canceled_by_owner": "ClipboardList",
-    "sub_request_canceled_by_player": "ClipboardList",
-    "sub_request_confirmed": "ClipboardList",
-    "sub_request_declined": "ClipboardList",
-    "sub_request_received": "UserPlus",
-    "sub_waitlist_promoted_to_pending": "Clock3",
-    "support_reply": "Headphones",
-    "waitlist_expired": "Clock3",
-    "waitlist_joined": "Clock3",
-    "waitlist_promoted": "Clock3",
+    notification_type: config.icon
+    for notification_type, config in NOTIFICATION_TYPE_CONFIG.items()
 }
 SEVERITY_BY_NOTIFICATION_TYPE = {
-    "account_security": "warning",
-    "booking_cancelled": "danger",
-    "booking_confirmed": "success",
-    "booking_refunded": "success",
-    "deposit_forfeited": "danger",
-    "deposit_paid": "success",
-    "deposit_released": "success",
-    "game_cancelled": "danger",
-    "game_host_assigned": "success",
-    "game_host_removed": "warning",
-    "game_player_removed_by_admin": "danger",
-    "payment_failed": "warning",
-    "sub_post_canceled": "danger",
-    "sub_post_removed": "danger",
-    "sub_request_canceled_by_owner": "danger",
-    "sub_request_canceled_by_player": "warning",
-    "sub_request_confirmed": "success",
-    "sub_request_declined": "danger",
-    "sub_waitlist_promoted_to_pending": "success",
-    "waitlist_expired": "warning",
-    "waitlist_promoted": "success",
+    notification_type: config.severity
+    for notification_type, config in NOTIFICATION_TYPE_CONFIG.items()
+}
+NOTIFICATION_PREFERENCE_CLASS_BY_TYPE = {
+    notification_type: config.preference_class
+    for notification_type, config in NOTIFICATION_TYPE_CONFIG.items()
+}
+NOTIFICATION_IMPLEMENTATION_STATUS_BY_TYPE = {
+    notification_type: config.implementation_status
+    for notification_type, config in NOTIFICATION_TYPE_CONFIG.items()
 }
 NOTIFICATION_TEMPLATE_BY_TYPE = {
-    "admin_notice": {
-        "title": "Pickup Lane update",
-        "summary": "Pickup Lane posted an update.",
-        "body": "Pickup Lane posted an update.",
-        "action_key": None,
-    },
-    "policy_update": {
-        "title": "Policy update",
-        "summary": "A Pickup Lane policy was updated.",
-        "body": "A Pickup Lane policy was updated.",
-        "action_key": "view_policy",
-    },
-    "support_reply": {
-        "title": "Support reply",
-        "summary": "Support replied to your request.",
-        "body": "Support replied to your request.",
-        "action_key": None,
-    },
-    "account_security": {
-        "title": "Security alert",
-        "summary": "Account security activity was detected.",
-        "body": "Account security activity was detected.",
-        "action_key": "view_profile",
-    },
-    "booking_confirmed": {
-        "title": "Booking confirmed",
-        "summary": "Your booking was confirmed.",
-        "body": "Your booking for this game was confirmed.",
-        "action_key": "view_game",
-    },
-    "booking_cancelled": {
-        "title": "Booking canceled",
-        "summary": "Your booking was canceled.",
-        "body": "Your booking for this game was canceled.",
-        "action_key": "view_game",
-    },
-    "booking_refunded": {
-        "title": "Refund processed",
-        "summary": "Your refund was processed.",
-        "body": "Your refund for this game was processed.",
-        "action_key": "view_game",
-    },
-    "payment_failed": {
-        "title": "Payment issue",
-        "summary": "Your payment needs attention.",
-        "body": "Your payment for this game needs attention.",
-        "action_key": "payment_methods",
-    },
-    "game_cancelled": {
-        "title": "Game canceled",
-        "summary": "This game was canceled.",
-        "body": "This game was canceled.",
-        "action_key": "view_game",
-    },
-    "game_updated": {
-        "title": "Game update",
-        "summary": "Game details were updated.",
-        "body": "Game details were updated.",
-        "action_key": "view_game",
-    },
-    "game_reminder": {
-        "title": "Game reminder",
-        "summary": "This game is coming up.",
-        "body": "This game is coming up.",
-        "action_key": "view_game",
-    },
-    "waitlist_joined": {
-        "title": "Waitlist update",
-        "summary": "You joined the waitlist.",
-        "body": "You are on the waitlist for this game.",
-        "action_key": "view_game",
-    },
-    "waitlist_promoted": {
-        "title": "Moved into game",
-        "summary": "You were moved into the game.",
-        "body": "A spot opened and you were moved into this game.",
-        "action_key": "view_game",
-    },
-    "waitlist_expired": {
-        "title": "Waitlist expired",
-        "summary": "Your waitlist spot expired.",
-        "body": "Your waitlist spot for this game expired.",
-        "action_key": "view_game",
-    },
-    "host_update": {
-        "title": "Host update",
-        "summary": "Host information changed.",
-        "body": "Host information for this game changed.",
-        "action_key": "view_game",
-    },
-    "chat_message": {
-        "title": "New chat activity",
-        "summary": "New messages were posted.",
-        "body": "New messages were posted for this game.",
-        "action_key": "view_game",
-    },
-    "deposit_paid": {
-        "title": "Deposit paid",
-        "summary": "The host deposit was paid.",
-        "body": "The host deposit for this game was paid.",
-        "action_key": "view_game",
-    },
-    "deposit_released": {
-        "title": "Deposit released",
-        "summary": "The host deposit was released.",
-        "body": "The host deposit for this game was released.",
-        "action_key": "view_game",
-    },
-    "deposit_forfeited": {
-        "title": "Deposit forfeited",
-        "summary": "The host deposit was forfeited.",
-        "body": "The host deposit for this game was forfeited.",
-        "action_key": "view_game",
-    },
-    "game_player_added_by_admin": {
-        "title": "Player added",
-        "summary": "A player was added.",
-        "body": "A player was added to this game.",
-        "action_key": "view_game",
-    },
-    "game_player_removed_by_admin": {
-        "title": "Player removed",
-        "summary": "A player was removed.",
-        "body": "A player was removed from this game.",
-        "action_key": "view_game",
-    },
-    "game_host_assigned": {
-        "title": "Host assigned",
-        "summary": "You were assigned as host.",
-        "body": "You were assigned as a host for this game.",
-        "action_key": "view_game",
-    },
-    "game_host_removed": {
-        "title": "Host removed",
-        "summary": "You were removed as host.",
-        "body": "You are no longer listed as host for this game.",
-        "action_key": "view_game",
-    },
-    "game_roster_update": {
-        "title": "Roster update",
-        "summary": "The roster changed.",
-        "body": "The roster for this game changed.",
-        "action_key": "view_game",
-    },
-    "sub_request_received": {
-        "title": "New request",
-        "summary": "A player requested a sub spot.",
-        "body": "A player requested a sub spot for this post.",
-        "action_key": "view_sub_post",
-    },
-    "sub_request_confirmed": {
-        "title": "Request approved",
-        "summary": "Your request was approved.",
-        "body": "You're confirmed for this sub spot.",
-        "action_key": "view_sub_post",
-    },
-    "sub_request_declined": {
-        "title": "Request declined",
-        "summary": "Your request was declined.",
-        "body": "Your request for this sub spot was declined.",
-        "action_key": "view_sub_post",
-    },
-    "sub_waitlist_promoted_to_pending": {
-        "title": "Moved to review",
-        "summary": "A spot opened for review.",
-        "body": "A spot opened and the host can now review your request.",
-        "action_key": "view_sub_post",
-    },
-    "sub_request_canceled_by_player": {
-        "title": "Request canceled",
-        "summary": "A player canceled their request.",
-        "body": "A player canceled their request for this sub spot.",
-        "action_key": "view_sub_post",
-    },
-    "sub_request_canceled_by_owner": {
-        "title": "Sub spot removed",
-        "summary": "The host removed you from this sub spot.",
-        "body": "The host removed you from this sub spot.",
-        "action_key": "view_sub_post",
-    },
-    "sub_post_canceled": {
-        "title": "Post canceled",
-        "summary": "This Need a Sub post was canceled.",
-        "body": "This Need a Sub post was canceled by the host.",
-        "action_key": "view_sub_post",
-    },
-    "sub_post_removed": {
-        "title": "Post removed",
-        "summary": "This Need a Sub post was removed.",
-        "body": "This Need a Sub post was removed by Pickup Lane.",
-        "action_key": None,
-    },
+    notification_type: {
+        "title": config.title,
+        "summary": config.summary,
+        "body": config.body,
+        "action_key": config.action_key,
+    }
+    for notification_type, config in NOTIFICATION_TYPE_CONFIG.items()
 }
 
 
@@ -403,6 +533,17 @@ def get_notification_template(notification_type: str) -> dict[str, str | None]:
     )
 
 
+def resolve_template_action_key(
+    template_action_key: str | None,
+    action_key: str | None,
+    force_action_null: bool,
+) -> str | None:
+    if force_action_null:
+        return None
+
+    return action_key if action_key is not None else template_action_key
+
+
 def build_game_notification_fields(
     game: Game,
     notification_type: str,
@@ -412,6 +553,7 @@ def build_game_notification_fields(
     summary: str | None = None,
     body: str | None = None,
     action_key: str | None = None,
+    force_action_null: bool = False,
     aggregation_key: str | None = None,
     aggregate_count: int | None = None,
 ) -> dict[str, object]:
@@ -423,7 +565,11 @@ def build_game_notification_fields(
         "subject_label": subject_label_for_game(game),
         "summary": summary or template["summary"],
         "body": body or template["body"],
-        "action_key": action_key if action_key is not None else template["action_key"],
+        "action_key": resolve_template_action_key(
+            template["action_key"],
+            action_key,
+            force_action_null,
+        ),
         "subject_starts_at": game.starts_at,
         "subject_ends_at": game.ends_at,
         "subject_timezone": game.timezone or "America/Chicago",
@@ -442,6 +588,7 @@ def build_need_a_sub_notification_fields(
     summary: str | None = None,
     body: str | None = None,
     action_key: str | None = None,
+    force_action_null: bool = False,
 ) -> dict[str, object]:
     template = get_notification_template(notification_type)
 
@@ -451,7 +598,11 @@ def build_need_a_sub_notification_fields(
         "subject_label": subject_label_for_sub_post(sub_post),
         "summary": summary or template["summary"],
         "body": body or template["body"],
-        "action_key": action_key if action_key is not None else template["action_key"],
+        "action_key": resolve_template_action_key(
+            template["action_key"],
+            action_key,
+            force_action_null,
+        ),
         "subject_starts_at": sub_post.starts_at,
         "subject_ends_at": sub_post.ends_at,
         "subject_timezone": sub_post.timezone or "America/Chicago",
@@ -471,6 +622,7 @@ def build_app_notification_fields(
     summary: str | None = None,
     body: str | None = None,
     action_key: str | None = None,
+    force_action_null: bool = False,
 ) -> dict[str, object]:
     template = get_notification_template(notification_type)
     effective_source_type = source_type or source_type_for_app_notification(
@@ -484,7 +636,11 @@ def build_app_notification_fields(
         or subject_label_for_app_notification(notification_type, effective_source_type),
         "summary": summary or template["summary"],
         "body": body or template["body"],
-        "action_key": action_key if action_key is not None else template["action_key"],
+        "action_key": resolve_template_action_key(
+            template["action_key"],
+            action_key,
+            force_action_null,
+        ),
         "subject_starts_at": None,
         "subject_ends_at": None,
         "subject_timezone": None,
@@ -492,6 +648,163 @@ def build_app_notification_fields(
         "aggregation_key": None,
         "aggregate_count": None,
     }
+
+
+def validate_notification_assignment_fields(
+    values: dict[str, object],
+    *,
+    allowed_fields: set[str],
+) -> None:
+    unknown_fields = set(values) - allowed_fields
+    if unknown_fields:
+        unknown_list = ", ".join(sorted(unknown_fields))
+        raise ValueError(f"Unsupported notification assignment fields: {unknown_list}")
+
+
+def assign_notification_values(
+    notification: Notification,
+    values: dict[str, object],
+    *,
+    allowed_fields: set[str],
+) -> None:
+    validate_notification_assignment_fields(values, allowed_fields=allowed_fields)
+
+    for field_name, field_value in values.items():
+        if field_name == "event_at" and isinstance(field_value, datetime):
+            field_value = ensure_aware_utc(field_value)
+        setattr(notification, field_name, field_value)
+
+
+def apply_aggregate_count_mode(
+    notification: Notification,
+    *,
+    aggregate_count_mode: str,
+    was_read: bool,
+    is_new: bool,
+) -> None:
+    if aggregate_count_mode not in AGGREGATE_COUNT_MODES:
+        raise ValueError(f"Unsupported aggregate_count_mode: {aggregate_count_mode}")
+
+    if aggregate_count_mode == "clear":
+        notification.aggregate_count = None
+        return
+
+    if aggregate_count_mode == "preserve":
+        return
+
+    if aggregate_count_mode == "increment":
+        if is_new or was_read:
+            notification.aggregate_count = 1
+            return
+
+        current_count = notification.aggregate_count
+        notification.aggregate_count = (
+            current_count if current_count is not None else 1
+        ) + 1
+
+
+def reopen_aggregated_notification(
+    db: Session,
+    *,
+    user_id: UUID,
+    notification_type: str,
+    notification_category: str,
+    notification_domain: str,
+    aggregation_key: str,
+    values: dict[str, object],
+    aggregate_count_mode: str = "replace",
+) -> Notification:
+    if not aggregation_key.strip():
+        raise ValueError("aggregation_key is required")
+
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == user_id,
+            Notification.aggregation_key == aggregation_key,
+        )
+        .one_or_none()
+    )
+    is_new = notification is None
+    was_read = False if is_new else bool(notification.is_read)
+
+    if notification is None:
+        notification = Notification(
+            id=uuid4(),
+            user_id=user_id,
+            notification_type=notification_type,
+            notification_category=notification_category,
+            notification_domain=notification_domain,
+            aggregation_key=aggregation_key,
+            is_read=False,
+            read_at=None,
+        )
+        db.add(notification)
+    else:
+        notification.notification_type = notification_type
+        notification.notification_category = notification_category
+        notification.notification_domain = notification_domain
+
+    assign_notification_values(
+        notification,
+        values,
+        allowed_fields=AGGREGATED_NOTIFICATION_ASSIGNABLE_FIELDS,
+    )
+    now_value = values.get("event_at")
+    effective_now = (
+        ensure_aware_utc(now_value)
+        if isinstance(now_value, datetime)
+        else datetime.now(timezone.utc)
+    )
+    if is_new:
+        notification.created_at = effective_now
+    notification.updated_at = effective_now
+    notification.aggregation_key = aggregation_key
+    notification.is_read = False
+    notification.read_at = None
+    apply_aggregate_count_mode(
+        notification,
+        aggregate_count_mode=aggregate_count_mode,
+        was_read=was_read,
+        is_new=is_new,
+    )
+
+    return notification
+
+
+def resolve_aggregated_notification(
+    db: Session,
+    *,
+    user_id: UUID,
+    aggregation_key: str,
+    values: dict[str, object] | None = None,
+    read_at: datetime | None = None,
+) -> Notification | None:
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == user_id,
+            Notification.aggregation_key == aggregation_key,
+        )
+        .one_or_none()
+    )
+    if notification is None:
+        return None
+
+    if values:
+        assign_notification_values(
+            notification,
+            values,
+            allowed_fields=RESOLVED_NOTIFICATION_ASSIGNABLE_FIELDS,
+        )
+
+    effective_read_at = ensure_aware_utc(read_at or datetime.now(timezone.utc))
+    notification.is_read = True
+    if notification.read_at is None:
+        notification.read_at = effective_read_at
+    notification.updated_at = effective_read_at
+
+    return notification
 
 
 def source_type_for_app_notification(notification_type: str) -> str:
@@ -589,7 +902,12 @@ def build_notification_action(
             return None
 
         game = db.get(Game, notification.related_game_id)
-        if game is None or game.deleted_at is not None:
+        if (
+            game is None
+            or game.deleted_at is not None
+            or game.publish_status != "published"
+            or game.game_status in GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS
+        ):
             return None
 
         return build_action_payload(action_key, f"/games/{notification.related_game_id}")
@@ -599,7 +917,14 @@ def build_notification_action(
             return None
 
         sub_post = db.get(SubPost, notification.related_sub_post_id)
-        if sub_post is None or sub_post.post_status == "removed":
+        if sub_post is None:
+            return None
+
+        starts_at = ensure_aware_utc(sub_post.starts_at)
+        if (
+            sub_post.post_status not in SUB_POST_STATUSES_WITH_INBOX_ACTIONS
+            or starts_at < datetime.now(timezone.utc)
+        ):
             return None
 
         return build_action_payload(
@@ -681,6 +1006,8 @@ def serialize_notification(
         "related_game_id": notification.related_game_id,
         "related_chat_id": notification.related_chat_id,
         "related_booking_id": notification.related_booking_id,
+        "related_payment_id": notification.related_payment_id,
+        "related_refund_id": notification.related_refund_id,
         "related_participant_id": notification.related_participant_id,
         "related_message_id": notification.related_message_id,
         "related_sub_post_id": notification.related_sub_post_id,

@@ -18,6 +18,13 @@ class WaitlistEntryCreate(BaseModel):
     waitlist_status: str = "active"
     promoted_booking_id: UUID | None = None
     promotion_expires_at: datetime | None = None
+    auto_charge_consent_at: datetime | None = None
+    auto_charge_consent_version: str | None = None
+    authorized_payment_method_id: UUID | None = None
+    authorized_stripe_payment_method_id: str | None = None
+    authorized_payment_method_brand: str | None = None
+    authorized_payment_method_last4: str | None = None
+    authorized_amount_cents: int | None = None
     joined_at: datetime | None = None
     promoted_at: datetime | None = None
     cancelled_at: datetime | None = None
@@ -38,6 +45,13 @@ class WaitlistEntryRead(BaseModel):
     waitlist_status: str
     promoted_booking_id: UUID | None
     promotion_expires_at: datetime | None
+    auto_charge_consent_at: datetime | None
+    auto_charge_consent_version: str | None
+    authorized_payment_method_id: UUID | None
+    authorized_stripe_payment_method_id: str | None
+    authorized_payment_method_brand: str | None
+    authorized_payment_method_last4: str | None
+    authorized_amount_cents: int | None
     joined_at: datetime
     promoted_at: datetime | None
     cancelled_at: datetime | None
@@ -58,6 +72,13 @@ class WaitlistEntryUpdate(BaseModel):
     waitlist_status: str | None = None
     promoted_booking_id: UUID | None = None
     promotion_expires_at: datetime | None = None
+    auto_charge_consent_at: datetime | None = None
+    auto_charge_consent_version: str | None = None
+    authorized_payment_method_id: UUID | None = None
+    authorized_stripe_payment_method_id: str | None = None
+    authorized_payment_method_brand: str | None = None
+    authorized_payment_method_last4: str | None = None
+    authorized_amount_cents: int | None = None
     joined_at: datetime | None = None
     promoted_at: datetime | None = None
     cancelled_at: datetime | None = None

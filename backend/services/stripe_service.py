@@ -270,6 +270,7 @@ def confirm_payment_intent(
     *,
     payment_method_id: str,
     return_url: str | None = None,
+    off_session: bool = False,
 ) -> StripePaymentIntentResult:
     stripe = get_stripe_module()
     confirm_payload: dict[str, object] = {
@@ -277,6 +278,8 @@ def confirm_payment_intent(
     }
     if return_url:
         confirm_payload["return_url"] = return_url
+    if off_session:
+        confirm_payload["off_session"] = True
 
     payment_intent = stripe.PaymentIntent.confirm(
         payment_intent_id,

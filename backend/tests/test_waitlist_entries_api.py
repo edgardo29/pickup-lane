@@ -72,19 +72,20 @@ def test_waitlist_entries_reject_accepted_without_booking(client: TestClient):
     venue = create_venue(client, user["id"])
     game = create_game(client, user["id"], venue)
 
-    response = client.post(
-        "/waitlist-entries",
-        json={
-            "game_id": game["id"],
-            "user_id": user["id"],
-            "party_size": 1,
-            "position": 1,
-            "waitlist_status": "accepted",
-        },
-    )
+    for waitlist_status in ("accepted", "payment_processing", "payment_failed"):
+        response = client.post(
+            "/waitlist-entries",
+            json={
+                "game_id": game["id"],
+                "user_id": user["id"],
+                "party_size": 1,
+                "position": 1,
+                "waitlist_status": waitlist_status,
+            },
+        )
 
-    assert response.status_code == 400, response.text
-    assert "promoted_booking_id" in response.text
+        assert response.status_code == 400, response.text
+        assert "promoted_booking_id" in response.text
 
 
 def test_waitlist_entries_accept_promoted_booking(client: TestClient):
@@ -108,3 +109,33 @@ def test_waitlist_entries_accept_promoted_booking(client: TestClient):
     assert response.status_code == 201, response.text
     assert response.json()["waitlist_status"] == "accepted"
     assert response.json()["promoted_at"] is not None
+
+
+def test_waitlist_entries_payment_processing_blocks_duplicate_active_user(
+    client: TestClient,
+):
+    user = create_user(client)
+    venue = create_venue(client, user["id"])
+    game = create_game(client, user["id"], venue)
+    booking = create_booking(client, user["id"], game["id"])
+    create_waitlist_entry(
+        client,
+        user["id"],
+        game["id"],
+        position=1,
+        waitlist_status="payment_processing",
+        promoted_booking_id=booking["id"],
+    )
+
+    response = client.post(
+        "/waitlist-entries",
+        json={
+            "game_id": game["id"],
+            "user_id": user["id"],
+            "party_size": 1,
+            "position": 2,
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert "already has an active waitlist entry" in response.text

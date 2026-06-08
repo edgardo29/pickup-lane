@@ -14,6 +14,8 @@ from backend.models import (
     GameChat,
     GameParticipant,
     Notification,
+    Payment,
+    Refund,
     SubPost,
     SubPostPosition,
     SubPostRequest,
@@ -43,6 +45,8 @@ GAME_RELATED_FIELDS = {
     "related_game_id",
     "related_chat_id",
     "related_booking_id",
+    "related_payment_id",
+    "related_refund_id",
     "related_participant_id",
     "related_message_id",
 }
@@ -71,6 +75,8 @@ IMMUTABLE_NOTIFICATION_UPDATE_FIELDS = {
     "related_game_id",
     "related_chat_id",
     "related_booking_id",
+    "related_payment_id",
+    "related_refund_id",
     "related_participant_id",
     "related_message_id",
     "related_sub_post_id",
@@ -452,6 +458,7 @@ def validate_notification_references(
                 detail="related_chat_id must belong to related_game_id.",
             )
 
+    db_booking = None
     if notification_data["related_booking_id"] is not None:
         db_booking = db.get(Booking, notification_data["related_booking_id"])
 
@@ -469,6 +476,84 @@ def validate_notification_references(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="related_booking_id must belong to related_game_id.",
             )
+
+    db_payment = None
+    if notification_data["related_payment_id"] is not None:
+        db_payment = db.get(Payment, notification_data["related_payment_id"])
+
+        if db_payment is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Related payment not found.",
+            )
+
+        if (
+            notification_data["related_booking_id"] is not None
+            and db_payment.booking_id != notification_data["related_booking_id"]
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="related_payment_id must belong to related_booking_id.",
+            )
+
+        if notification_data["related_game_id"] is not None:
+            payment_game_matches = db_payment.game_id == notification_data["related_game_id"]
+            payment_booking_game_matches = (
+                db_booking is not None
+                and db_payment.booking_id == db_booking.id
+                and db_booking.game_id == notification_data["related_game_id"]
+            )
+
+            if not payment_game_matches and not payment_booking_game_matches:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="related_payment_id must belong to related_game_id.",
+                )
+
+    if notification_data["related_refund_id"] is not None:
+        db_refund = db.get(Refund, notification_data["related_refund_id"])
+
+        if db_refund is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Related refund not found.",
+            )
+
+        if (
+            notification_data["related_payment_id"] is not None
+            and db_refund.payment_id != notification_data["related_payment_id"]
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="related_refund_id must belong to related_payment_id.",
+            )
+
+        if (
+            notification_data["related_booking_id"] is not None
+            and db_refund.booking_id is not None
+            and db_refund.booking_id != notification_data["related_booking_id"]
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="related_refund_id must belong to related_booking_id.",
+            )
+
+        if (
+            notification_data["related_game_id"] is not None
+            and db_refund.booking_id is not None
+        ):
+            refund_booking = db_booking
+            if refund_booking is None or refund_booking.id != db_refund.booking_id:
+                refund_booking = db.get(Booking, db_refund.booking_id)
+
+            if (
+                refund_booking is None
+                or refund_booking.game_id != notification_data["related_game_id"]
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="related_refund_id must belong to related_game_id.",
+                )
 
     if notification_data["related_participant_id"] is not None:
         db_participant = db.get(
@@ -641,6 +726,8 @@ def query_notifications(
     related_game_id: uuid.UUID | None = None,
     related_chat_id: uuid.UUID | None = None,
     related_booking_id: uuid.UUID | None = None,
+    related_payment_id: uuid.UUID | None = None,
+    related_refund_id: uuid.UUID | None = None,
     related_participant_id: uuid.UUID | None = None,
     related_message_id: uuid.UUID | None = None,
     related_sub_post_id: uuid.UUID | None = None,
@@ -689,6 +776,16 @@ def query_notifications(
     if related_booking_id is not None:
         statement = statement.where(
             Notification.related_booking_id == related_booking_id
+        )
+
+    if related_payment_id is not None:
+        statement = statement.where(
+            Notification.related_payment_id == related_payment_id
+        )
+
+    if related_refund_id is not None:
+        statement = statement.where(
+            Notification.related_refund_id == related_refund_id
         )
 
     if related_participant_id is not None:
@@ -761,6 +858,8 @@ def list_my_notifications(
     related_game_id: uuid.UUID | None = None,
     related_chat_id: uuid.UUID | None = None,
     related_booking_id: uuid.UUID | None = None,
+    related_payment_id: uuid.UUID | None = None,
+    related_refund_id: uuid.UUID | None = None,
     related_participant_id: uuid.UUID | None = None,
     related_message_id: uuid.UUID | None = None,
     related_sub_post_id: uuid.UUID | None = None,
@@ -779,6 +878,8 @@ def list_my_notifications(
         related_game_id=related_game_id,
         related_chat_id=related_chat_id,
         related_booking_id=related_booking_id,
+        related_payment_id=related_payment_id,
+        related_refund_id=related_refund_id,
         related_participant_id=related_participant_id,
         related_message_id=related_message_id,
         related_sub_post_id=related_sub_post_id,
@@ -817,6 +918,8 @@ def list_notifications(
     related_game_id: uuid.UUID | None = None,
     related_chat_id: uuid.UUID | None = None,
     related_booking_id: uuid.UUID | None = None,
+    related_payment_id: uuid.UUID | None = None,
+    related_refund_id: uuid.UUID | None = None,
     related_participant_id: uuid.UUID | None = None,
     related_message_id: uuid.UUID | None = None,
     related_sub_post_id: uuid.UUID | None = None,
@@ -841,6 +944,8 @@ def list_notifications(
         related_game_id=related_game_id,
         related_chat_id=related_chat_id,
         related_booking_id=related_booking_id,
+        related_payment_id=related_payment_id,
+        related_refund_id=related_refund_id,
         related_participant_id=related_participant_id,
         related_message_id=related_message_id,
         related_sub_post_id=related_sub_post_id,
@@ -916,6 +1021,8 @@ def update_notification(
         "related_game_id": db_notification.related_game_id,
         "related_chat_id": db_notification.related_chat_id,
         "related_booking_id": db_notification.related_booking_id,
+        "related_payment_id": db_notification.related_payment_id,
+        "related_refund_id": db_notification.related_refund_id,
         "related_participant_id": db_notification.related_participant_id,
         "related_message_id": db_notification.related_message_id,
         "related_sub_post_id": db_notification.related_sub_post_id,

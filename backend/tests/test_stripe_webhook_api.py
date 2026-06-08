@@ -238,6 +238,126 @@ def post_stripe_event(client: TestClient, monkeypatch, event_payload: dict):
     )
 
 
+def list_user_notifications(
+    client: TestClient,
+    user_id: str,
+    notification_type: str,
+) -> list[dict]:
+    authenticate_as(user_id)
+    response = client.get(f"/notifications/me?notification_type={notification_type}")
+
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def create_paid_waitlist_processing_auto_charge(
+    client: TestClient,
+    monkeypatch,
+) -> dict:
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue, format_label="3v3", total_spots=6)
+    joined_players = []
+
+    for _index in range(6):
+        player = create_user(client)
+        fill_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert fill_response.status_code == 201, fill_response.text
+        joined_players.append(player)
+
+    waitlisted_user = create_user(client)
+    payment_method = create_user_payment_method(client, waitlisted_user["id"])
+    payment_intent_id = f"pi_waitlist_processing_{unique_suffix()}"
+
+    def fake_create_payment_intent(**kwargs):
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret=None,
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret=None,
+            status="processing",
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.game_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
+    waitlist_response = client.post(
+        f"/games/{game['id']}/join",
+        json={
+            "acting_user_id": waitlisted_user["id"],
+            "payment_method_id": payment_method["id"],
+            "auto_charge_consent_accepted": True,
+            "auto_charge_consent_version": "waitlist-auto-charge-v1",
+        },
+    )
+    assert waitlist_response.status_code == 201, waitlist_response.text
+    waitlist_body = waitlist_response.json()
+
+    leave_response = client.post(
+        f"/games/{game['id']}/leave",
+        json={"acting_user_id": joined_players[0]["id"]},
+    )
+    assert leave_response.status_code == 200, leave_response.text
+
+    waitlist_entry_response = client.get(
+        f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
+    )
+    assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
+    waitlist_entry = waitlist_entry_response.json()
+    assert waitlist_entry["waitlist_status"] == "payment_processing"
+
+    booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "pending_payment"
+    assert booking["payment_status"] == "processing"
+
+    participants_response = client.get(
+        f"/game-participants?booking_id={waitlist_body['booking_id']}"
+    )
+    assert participants_response.status_code == 200, participants_response.text
+    participants = participants_response.json()
+    assert {participant["participant_status"] for participant in participants} == {
+        "pending_payment"
+    }
+
+    payments_response = client.get(f"/payments?booking_id={waitlist_body['booking_id']}")
+    assert payments_response.status_code == 200, payments_response.text
+    payments = payments_response.json()
+    assert len(payments) == 1
+    payment = payments[0]
+    assert payment["payment_status"] == "processing"
+    assert payment["provider_payment_intent_id"] == payment_intent_id
+
+    assert list_user_notifications(client, waitlisted_user["id"], "waitlist_promoted") == []
+    assert list_user_notifications(client, waitlisted_user["id"], "payment_failed") == []
+
+    return {
+        "user": waitlisted_user,
+        "game": game,
+        "booking_id": waitlist_body["booking_id"],
+        "waitlist_entry_id": waitlist_body["waitlist_entry_id"],
+        "payment_id": payment["id"],
+        "payment_intent_id": payment_intent_id,
+        "amount_cents": payment["amount_cents"],
+        "currency": payment["currency"],
+    }
+
+
 def test_stripe_webhook_rejects_missing_signature(client: TestClient):
     response = client.post("/stripe/webhook", content=b"{}")
 
@@ -322,6 +442,25 @@ def test_stripe_webhook_succeeded_confirms_booking_and_participants(
     assert len(events) == 1
     assert events[0]["payment_id"] == checkout["payment_id"]
     assert events[0]["processing_status"] == "processed"
+    confirmed_notifications = list_user_notifications(
+        client,
+        checkout["user"]["id"],
+        "booking_confirmed",
+    )
+    assert len(confirmed_notifications) == 1
+    confirmed_notification = confirmed_notifications[0]
+    assert confirmed_notification["source_type"] == "official_game"
+    assert confirmed_notification["source_label"] == "Official Game"
+    assert confirmed_notification["action_key"] == "view_game"
+    assert confirmed_notification["action"] is not None
+    assert confirmed_notification["related_game_id"] == checkout["game"]["id"]
+    assert confirmed_notification["related_booking_id"] == checkout["booking_id"]
+    assert confirmed_notification["related_payment_id"] == checkout["payment_id"]
+    assert "official game was confirmed" in confirmed_notification["body"]
+    assert (
+        list_user_notifications(client, checkout["user"]["id"], "payment_failed")
+        == []
+    )
 
 
 def test_stripe_webhook_duplicate_event_is_idempotent(
@@ -352,6 +491,130 @@ def test_stripe_webhook_duplicate_event_is_idempotent(
     assert participants_response.status_code == 200, participants_response.text
     participants = participants_response.json()
     assert sorted(participant["roster_order"] for participant in participants) == [1, 2]
+    confirmed_notifications = list_user_notifications(
+        client,
+        checkout["user"]["id"],
+        "booking_confirmed",
+    )
+    assert len(confirmed_notifications) == 1
+
+
+def test_stripe_webhook_waitlist_processing_success_confirms_and_notifies(
+    client: TestClient,
+    monkeypatch,
+):
+    checkout = create_paid_waitlist_processing_auto_charge(client, monkeypatch)
+    event = build_payment_intent_event(
+        checkout,
+        event_type="payment_intent.succeeded",
+        status="succeeded",
+    )
+
+    response = post_stripe_event(client, monkeypatch, event)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["processing_status"] == "processed"
+
+    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    payment = payment_response.json()
+    assert payment["payment_status"] == "succeeded"
+    assert payment["provider_charge_id"] == "ch_test_webhook"
+
+    booking_response = client.get(f"/bookings/{checkout['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "confirmed"
+    assert booking["payment_status"] == "paid"
+
+    waitlist_entry_response = client.get(
+        f"/waitlist-entries/{checkout['waitlist_entry_id']}"
+    )
+    assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
+    waitlist_entry = waitlist_entry_response.json()
+    assert waitlist_entry["waitlist_status"] == "accepted"
+    assert waitlist_entry["promoted_booking_id"] == checkout["booking_id"]
+
+    participants_response = client.get(
+        f"/game-participants?booking_id={checkout['booking_id']}"
+    )
+    assert participants_response.status_code == 200, participants_response.text
+    participants = participants_response.json()
+    assert {participant["participant_status"] for participant in participants} == {
+        "confirmed"
+    }
+
+    promoted_notifications = list_user_notifications(
+        client,
+        checkout["user"]["id"],
+        "waitlist_promoted",
+    )
+    assert len(promoted_notifications) == 1
+    assert promoted_notifications[0]["related_payment_id"] == checkout["payment_id"]
+    assert (
+        list_user_notifications(client, checkout["user"]["id"], "booking_confirmed")
+        == []
+    )
+
+
+def test_stripe_webhook_waitlist_processing_canceled_fails_and_notifies(
+    client: TestClient,
+    monkeypatch,
+):
+    checkout = create_paid_waitlist_processing_auto_charge(client, monkeypatch)
+    event = build_payment_intent_event(
+        checkout,
+        event_type="payment_intent.canceled",
+        status="canceled",
+    )
+
+    response = post_stripe_event(client, monkeypatch, event)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["processing_status"] == "processed"
+
+    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    payment = payment_response.json()
+    assert payment["payment_status"] == "canceled"
+
+    booking_response = client.get(f"/bookings/{checkout['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "failed"
+    assert booking["payment_status"] == "failed"
+
+    waitlist_entry_response = client.get(
+        f"/waitlist-entries/{checkout['waitlist_entry_id']}"
+    )
+    assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
+    waitlist_entry = waitlist_entry_response.json()
+    assert waitlist_entry["waitlist_status"] == "payment_failed"
+    assert waitlist_entry["promoted_booking_id"] == checkout["booking_id"]
+
+    participants_response = client.get(
+        f"/game-participants?booking_id={checkout['booking_id']}"
+    )
+    assert participants_response.status_code == 200, participants_response.text
+    participants = participants_response.json()
+    assert {participant["participant_status"] for participant in participants} == {
+        "removed"
+    }
+    assert {participant["cancellation_type"] for participant in participants} == {
+        "payment_failed"
+    }
+    failed_notifications = list_user_notifications(
+        client,
+        checkout["user"]["id"],
+        "payment_failed",
+    )
+    assert len(failed_notifications) == 1
+    assert failed_notifications[0]["related_payment_id"] == checkout["payment_id"]
+    assert "removed from the waitlist" in failed_notifications[0]["body"]
+    assert (
+        list_user_notifications(client, checkout["user"]["id"], "waitlist_promoted")
+        == []
+    )
 
 
 def test_stripe_webhook_succeeded_redeems_reserved_game_credit(
@@ -562,6 +825,26 @@ def test_stripe_webhook_failed_payment_marks_booking_failed_and_clears_hold(
     assert {participant["cancellation_type"] for participant in participants} == {
         "payment_failed"
     }
+    failed_notifications = list_user_notifications(
+        client,
+        checkout["user"]["id"],
+        "payment_failed",
+    )
+    assert len(failed_notifications) == 1
+    failed_notification = failed_notifications[0]
+    assert failed_notification["source_type"] == "official_game"
+    assert failed_notification["source_label"] == "Official Game"
+    assert failed_notification["action_key"] == "view_game"
+    assert failed_notification["action"] is not None
+    assert failed_notification["related_game_id"] == checkout["game"]["id"]
+    assert failed_notification["related_booking_id"] == checkout["booking_id"]
+    assert failed_notification["related_payment_id"] == checkout["payment_id"]
+    assert "checkout hold was released" in failed_notification["body"]
+    assert "reserved credit" not in failed_notification["body"]
+    assert (
+        list_user_notifications(client, checkout["user"]["id"], "booking_cancelled")
+        == []
+    )
 
 
 def test_stripe_webhook_failed_payment_releases_reserved_game_credit(
@@ -603,6 +886,13 @@ def test_stripe_webhook_failed_payment_releases_reserved_game_credit(
     assert credit is not None
     assert credit.remaining_cents == 500
     assert credit.credit_status == "active"
+    failed_notifications = list_user_notifications(
+        client,
+        checkout["user"]["id"],
+        "payment_failed",
+    )
+    assert len(failed_notifications) == 1
+    assert "reserved credit was restored" in failed_notifications[0]["body"]
 
 
 def test_stripe_webhook_canceled_payment_expires_booking_hold(
@@ -629,6 +919,11 @@ def test_stripe_webhook_canceled_payment_expires_booking_hold(
     booking = booking_response.json()
     assert booking["booking_status"] == "expired"
     assert booking["payment_status"] == "failed"
+    assert list_user_notifications(client, checkout["user"]["id"], "payment_failed") == []
+    assert (
+        list_user_notifications(client, checkout["user"]["id"], "booking_cancelled")
+        == []
+    )
 
 
 def test_stripe_webhook_canceled_payment_releases_reserved_game_credit(
@@ -715,6 +1010,20 @@ def test_stripe_webhook_refund_updated_succeeded_marks_payment_refunded(
     event_row = events_response.json()[0]
     assert event_row["payment_id"] == payment["id"]
     assert event_row["processing_status"] == "processed"
+    refunded_notifications = list_user_notifications(
+        client,
+        user["id"],
+        "booking_refunded",
+    )
+    assert len(refunded_notifications) == 1
+    refunded_notification = refunded_notifications[0]
+    assert refunded_notification["title"] == "Refund processed"
+    assert refunded_notification["action_key"] is None
+    assert refunded_notification["action"] is None
+    assert refunded_notification["related_game_id"] == booking["game_id"]
+    assert refunded_notification["related_booking_id"] == booking["id"]
+    assert refunded_notification["related_payment_id"] == payment["id"]
+    assert refunded_notification["related_refund_id"] == refund["id"]
 
 
 def test_stripe_webhook_refund_failed_preserves_paid_payment(
@@ -756,6 +1065,7 @@ def test_stripe_webhook_refund_failed_preserves_paid_payment(
     booking_response = client.get(f"/bookings/{booking['id']}")
     assert booking_response.status_code == 200, booking_response.text
     assert booking_response.json()["payment_status"] == "paid"
+    assert list_user_notifications(client, user["id"], "booking_refunded") == []
 
 
 def test_stripe_webhook_refund_updated_recovers_missing_internal_refund(

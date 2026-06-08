@@ -39,7 +39,7 @@ class Notification(Base):
                 "'sub_request_declined', 'sub_waitlist_promoted_to_pending', "
                 "'sub_request_canceled_by_player', "
                 "'sub_request_canceled_by_owner', 'sub_post_canceled', "
-                "'sub_post_removed'"
+                "'sub_post_removed', 'sub_post_updated'"
                 ")"
             ),
             name="ck_notifications_notification_type",
@@ -114,7 +114,7 @@ class Notification(Base):
                 "'sub_request_declined', 'sub_waitlist_promoted_to_pending', "
                 "'sub_request_canceled_by_player', "
                 "'sub_request_canceled_by_owner', 'sub_post_canceled', "
-                "'sub_post_removed'"
+                "'sub_post_removed', 'sub_post_updated'"
                 ") AND notification_category = 'game_activity' "
                 "AND notification_domain = 'need_a_sub') "
                 "OR (notification_type IN ("
@@ -191,6 +191,13 @@ class Notification(Base):
         Index("ix_notifications_event_at", "event_at"),
         Index("ix_notifications_aggregation_key", "aggregation_key"),
         Index(
+            "ux_notifications_user_aggregation_key",
+            "user_id",
+            "aggregation_key",
+            unique=True,
+            postgresql_where=text("aggregation_key IS NOT NULL"),
+        ),
+        Index(
             "ix_notifications_user_id_is_read_created_at",
             "user_id",
             "is_read",
@@ -217,6 +224,8 @@ class Notification(Base):
         Index("ix_notifications_related_game_id", "related_game_id"),
         Index("ix_notifications_related_chat_id", "related_chat_id"),
         Index("ix_notifications_related_booking_id", "related_booking_id"),
+        Index("ix_notifications_related_payment_id", "related_payment_id"),
+        Index("ix_notifications_related_refund_id", "related_refund_id"),
         Index("ix_notifications_related_participant_id", "related_participant_id"),
         Index("ix_notifications_related_message_id", "related_message_id"),
         Index("ix_notifications_related_sub_post_id", "related_sub_post_id"),
@@ -295,6 +304,18 @@ class Notification(Base):
     related_booking_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("bookings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    related_payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("payments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    related_refund_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("refunds.id", ondelete="SET NULL"),
         nullable=True,
     )
 

@@ -28,8 +28,11 @@ from backend.services.stripe_service import (
 from backend.tests.helpers import (
     authenticate_as,
     create_booking,
+    create_chat_message,
     create_game,
+    create_game_chat,
     create_game_participant,
+    create_notification,
     create_payment,
     create_user,
     create_user_payment_method,
@@ -96,6 +99,18 @@ def local_date_string(starts_at: datetime, timezone_name: str) -> str:
     return starts_at.astimezone(ZoneInfo(timezone_name)).date().isoformat()
 
 
+def list_game_notifications(
+    client: TestClient,
+    user_id: str,
+    notification_type: str,
+) -> list[dict]:
+    authenticate_as(user_id)
+    response = client.get(f"/notifications/me?notification_type={notification_type}")
+
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def issue_game_credit(
     client: TestClient,
     *,
@@ -149,6 +164,270 @@ def test_games_create_get_list_update_and_soft_delete(client: TestClient):
     delete_response = client.delete(f"/games/{game['id']}")
     assert delete_response.status_code == 200, delete_response.text
     assert delete_response.json()["deleted_at"] is not None
+
+
+def test_game_structural_update_notifies_connected_users(client: TestClient):
+    host = create_user(client)
+    confirmed_player = create_user(client)
+    waitlisted_player = create_user(client)
+    pending_payment_player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    create_game_participant(
+        client,
+        confirmed_player["id"],
+        game["id"],
+        roster_order=2,
+    )
+    create_game_participant(
+        client,
+        waitlisted_player["id"],
+        game["id"],
+        participant_status="waitlisted",
+        roster_order=None,
+    )
+    create_game_participant(
+        client,
+        pending_payment_player["id"],
+        game["id"],
+        participant_status="pending_payment",
+        roster_order=None,
+    )
+
+    starts_at = datetime.fromisoformat(game["starts_at"])
+    ends_at = datetime.fromisoformat(game["ends_at"])
+    response = client.patch(
+        f"/games/{game['id']}",
+        json={
+            "starts_at": (starts_at + timedelta(minutes=30)).isoformat(),
+            "ends_at": (ends_at + timedelta(minutes=30)).isoformat(),
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    for user in (host, confirmed_player, waitlisted_player):
+        notifications = list_game_notifications(client, user["id"], "game_updated")
+        assert len(notifications) == 1
+        notification = notifications[0]
+        assert notification["notification_type"] == "game_updated"
+        assert notification["related_game_id"] == game["id"]
+        assert notification["aggregation_key"] == (
+            f"game:{game['id']}:user:{user['id']}:game_updated"
+        )
+        assert notification["aggregate_count"] is None
+        assert notification["action_key"] == "view_game"
+        assert notification["action"]["key"] == "view_game"
+
+    pending_notifications = list_game_notifications(
+        client,
+        pending_payment_player["id"],
+        "game_updated",
+    )
+    assert pending_notifications == []
+
+
+def test_game_text_and_price_updates_do_not_notify_connected_users(
+    client: TestClient,
+):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    create_game_participant(client, player["id"], game["id"])
+
+    response = client.patch(
+        f"/games/{game['id']}",
+        json={
+            "description": "Tiny typo cleanup.",
+            "game_notes": "Use the north entrance.",
+            "parking_notes": "Street parking nearby.",
+            "price_per_player_cents": 1400,
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    assert list_game_notifications(client, host["id"], "game_updated") == []
+    assert list_game_notifications(client, player["id"], "game_updated") == []
+
+
+def test_game_structural_update_reuses_notification_row(client: TestClient):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    create_game_participant(client, player["id"], game["id"])
+
+    first_response = client.patch(
+        f"/games/{game['id']}",
+        json={"venue_name_snapshot": "First Updated Field"},
+    )
+    assert first_response.status_code == 200, first_response.text
+
+    notifications = list_game_notifications(client, player["id"], "game_updated")
+    assert len(notifications) == 1
+    notification_id = notifications[0]["id"]
+
+    read_response = client.patch(f"/notifications/{notification_id}/read", json={})
+    assert read_response.status_code == 200, read_response.text
+
+    second_response = client.patch(
+        f"/games/{game['id']}",
+        json={"venue_name_snapshot": "Second Updated Field"},
+    )
+    assert second_response.status_code == 200, second_response.text
+
+    notifications = list_game_notifications(client, player["id"], "game_updated")
+    assert len(notifications) == 1
+    assert notifications[0]["id"] == notification_id
+    assert notifications[0]["is_read"] is False
+    assert notifications[0]["read_at"] is None
+    assert notifications[0]["aggregate_count"] is None
+
+
+def test_cancel_game_resolves_game_updated_without_reading_chat(
+    client: TestClient,
+):
+    host = create_user(client)
+    player = create_user(client)
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    create_game_participant(client, player["id"], game["id"])
+
+    authenticate_as(host["id"])
+    update_response = client.patch(
+        f"/games/{game['id']}",
+        json={"venue_name_snapshot": "Updated Cancellation Field"},
+    )
+    assert update_response.status_code == 200, update_response.text
+
+    game_updated_notifications = list_game_notifications(
+        client,
+        player["id"],
+        "game_updated",
+    )
+    assert len(game_updated_notifications) == 1
+    game_updated_notification = game_updated_notifications[0]
+    assert game_updated_notification["is_read"] is False
+
+    authenticate_as(host["id"])
+    chat = create_game_chat(client, game["id"])
+    create_chat_message(
+        client,
+        chat["id"],
+        host["id"],
+        message_body="Cancellation test chat message.",
+    )
+
+    chat_notifications = list_game_notifications(client, player["id"], "chat_message")
+    assert len(chat_notifications) == 1
+    assert chat_notifications[0]["is_read"] is False
+
+    waitlist_promoted_notification = create_notification(
+        client,
+        player["id"],
+        notification_type="waitlist_promoted",
+        notification_category="game_activity",
+        notification_domain="game",
+        source_type="community_game",
+        title="Moved into game",
+        subject_label=game["title"],
+        summary="You were moved into the game.",
+        body="A spot opened and you were moved into this game.",
+        action_key="view_game",
+        related_game_id=game["id"],
+        subject_starts_at=game["starts_at"],
+        subject_ends_at=game["ends_at"],
+        subject_timezone=game["timezone"],
+        is_read=False,
+    )
+
+    authenticate_as(admin["id"])
+    cancel_response = client.post(
+        f"/games/{game['id']}/cancel",
+        json={"cancel_reason": "Field closure"},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    updated_game_updated_notifications = list_game_notifications(
+        client,
+        player["id"],
+        "game_updated",
+    )
+    assert len(updated_game_updated_notifications) == 1
+    updated_game_updated_notification = updated_game_updated_notifications[0]
+    assert updated_game_updated_notification["id"] == game_updated_notification["id"]
+    assert updated_game_updated_notification["title"] == "Game updated"
+    assert updated_game_updated_notification["is_read"] is True
+    assert updated_game_updated_notification["read_at"] is not None
+    assert (
+        updated_game_updated_notification["event_at"]
+        == game_updated_notification["event_at"]
+    )
+
+    updated_chat_notifications = list_game_notifications(
+        client,
+        player["id"],
+        "chat_message",
+    )
+    assert len(updated_chat_notifications) == 1
+    assert updated_chat_notifications[0]["is_read"] is False
+
+    waitlist_promoted_notifications = list_game_notifications(
+        client,
+        player["id"],
+        "waitlist_promoted",
+    )
+    assert len(waitlist_promoted_notifications) == 1
+    updated_waitlist_promoted_notification = waitlist_promoted_notifications[0]
+    assert updated_waitlist_promoted_notification["id"] == (
+        waitlist_promoted_notification["id"]
+    )
+    assert updated_waitlist_promoted_notification["title"] == "Moved into game"
+    assert updated_waitlist_promoted_notification["is_read"] is True
+    assert updated_waitlist_promoted_notification["read_at"] is not None
+    assert (
+        updated_waitlist_promoted_notification["event_at"]
+        == waitlist_promoted_notification["event_at"]
+    )
+
+    game_cancelled_notifications = list_game_notifications(
+        client,
+        player["id"],
+        "game_cancelled",
+    )
+    assert len(game_cancelled_notifications) == 1
+    assert game_cancelled_notifications[0]["action_key"] is None
+    assert game_cancelled_notifications[0]["action"] is None
 
 
 def test_host_can_cancel_own_community_game(client: TestClient):
@@ -262,7 +541,10 @@ def test_admin_can_cancel_community_game_and_notify_host(client: TestClient):
             "/notifications/me?notification_type=game_cancelled"
         )
         assert notifications_response.status_code == 200, notifications_response.text
-        assert len(notifications_response.json()) == 1
+        notifications = notifications_response.json()
+        assert len(notifications) == 1
+        assert notifications[0]["action_key"] is None
+        assert notifications[0]["action"] is None
 
     authenticate_as(admin["id"])
     admin_actions_response = client.get(
@@ -277,9 +559,52 @@ def test_admin_can_cancel_community_game_and_notify_host(client: TestClient):
 
 def test_admin_can_cancel_official_game(client: TestClient):
     admin = create_user(client)
+    host = create_user(client)
+    admin_added_player = create_user(client)
     set_user_role(admin["id"], "admin")
     venue = create_venue(client, admin["id"])
-    game = create_game(client, admin["id"], venue)
+    game = create_game(client, admin["id"], venue, host_user_id=host["id"])
+    booking = create_booking(client, host["id"], game["id"])
+    create_game_participant(
+        client,
+        host["id"],
+        game["id"],
+        booking_id=booking["id"],
+    )
+    authenticate_as(admin["id"])
+    assign_host_response = client.post(
+        f"/admin/official-games/{game['id']}/host",
+        json={"host_user_id": host["id"], "reason": "Assign official host."},
+    )
+    assert assign_host_response.status_code == 200, assign_host_response.text
+    assigned_host_notifications = list_game_notifications(
+        client,
+        host["id"],
+        "game_host_assigned",
+    )
+    assert len(assigned_host_notifications) == 1
+    assigned_host_notification = assigned_host_notifications[0]
+    assigned_host_event_at = assigned_host_notification["event_at"]
+    assert assigned_host_notification["is_read"] is False
+
+    authenticate_as(admin["id"])
+    add_player_response = client.post(
+        f"/admin/official-games/{game['id']}/players",
+        json={
+            "user_id": admin_added_player["id"],
+            "reason": "Add support player before cancellation.",
+        },
+    )
+    assert add_player_response.status_code == 201, add_player_response.text
+    added_player_notifications = list_game_notifications(
+        client,
+        admin_added_player["id"],
+        "game_player_added_by_admin",
+    )
+    assert len(added_player_notifications) == 1
+    added_player_notification = added_player_notifications[0]
+    added_player_event_at = added_player_notification["event_at"]
+    assert added_player_notification["is_read"] is False
 
     authenticate_as(admin["id"])
     response = client.post(
@@ -292,6 +617,52 @@ def test_admin_can_cancel_official_game(client: TestClient):
     assert body["game_status"] == "cancelled"
     assert body["cancelled_by_user_id"] == admin["id"]
     assert body["cancel_reason"] == "Field closure"
+
+    host_notifications = list_game_notifications(
+        client,
+        host["id"],
+        "game_cancelled",
+    )
+    assert len(host_notifications) == 1
+    assert host_notifications[0]["action_key"] is None
+    assert host_notifications[0]["action"] is None
+    resolved_assigned_host_notifications = list_game_notifications(
+        client,
+        host["id"],
+        "game_host_assigned",
+    )
+    assert len(resolved_assigned_host_notifications) == 1
+    resolved_assigned_host_notification = resolved_assigned_host_notifications[0]
+    assert resolved_assigned_host_notification["is_read"] is True
+    assert resolved_assigned_host_notification["read_at"] is not None
+    assert resolved_assigned_host_notification["event_at"] == assigned_host_event_at
+    assert list_game_notifications(client, host["id"], "game_host_removed") == []
+    added_player_cancel_notifications = list_game_notifications(
+        client,
+        admin_added_player["id"],
+        "game_cancelled",
+    )
+    assert len(added_player_cancel_notifications) == 1
+    assert added_player_cancel_notifications[0]["action_key"] is None
+    assert added_player_cancel_notifications[0]["action"] is None
+    resolved_player_added_notifications = list_game_notifications(
+        client,
+        admin_added_player["id"],
+        "game_player_added_by_admin",
+    )
+    assert len(resolved_player_added_notifications) == 1
+    resolved_player_added_notification = resolved_player_added_notifications[0]
+    assert resolved_player_added_notification["is_read"] is True
+    assert resolved_player_added_notification["read_at"] is not None
+    assert resolved_player_added_notification["event_at"] == added_player_event_at
+    assert (
+        list_game_notifications(
+            client,
+            admin_added_player["id"],
+            "game_player_removed_by_admin",
+        )
+        == []
+    )
 
 
 def test_non_admin_cannot_cancel_official_game(client: TestClient):
@@ -471,7 +842,22 @@ def test_cancel_official_game_refunds_paid_payment_and_writes_audit_rows(
     assert refunds[0]["provider_refund_id"] == "re_official_cancel_success"
     assert refunds[0]["refund_status"] == "succeeded"
     assert refunds[0]["amount_cents"] == payment["amount_cents"]
+    refunded_notifications = list_game_notifications(
+        client,
+        player["id"],
+        "booking_refunded",
+    )
+    assert len(refunded_notifications) == 1
+    refunded_notification = refunded_notifications[0]
+    assert refunded_notification["title"] == "Refund processed"
+    assert refunded_notification["action_key"] is None
+    assert refunded_notification["action"] is None
+    assert refunded_notification["related_game_id"] == game["id"]
+    assert refunded_notification["related_booking_id"] == booking_id
+    assert refunded_notification["related_payment_id"] == payment["id"]
+    assert refunded_notification["related_refund_id"] == refunds[0]["id"]
 
+    authenticate_as(admin["id"])
     admin_actions_response = client.get(
         f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
     )
@@ -566,7 +952,22 @@ def test_cancel_official_game_restores_full_credit_booking_without_stripe_refund
         for usage in usages
         if usage.usage_status == RESTORED_USAGE_STATUS
     ) == 1500
+    restored_notifications = list_game_notifications(
+        client,
+        player["id"],
+        "booking_refunded",
+    )
+    assert len(restored_notifications) == 1
+    restored_notification = restored_notifications[0]
+    assert restored_notification["title"] == "Credit restored"
+    assert restored_notification["action_key"] is None
+    assert restored_notification["action"] is None
+    assert restored_notification["related_game_id"] == game["id"]
+    assert restored_notification["related_booking_id"] == checkout["booking_id"]
+    assert restored_notification["related_payment_id"] is None
+    assert restored_notification["related_refund_id"] is None
 
+    authenticate_as(admin["id"])
     admin_actions_response = client.get(
         f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
     )
@@ -719,7 +1120,27 @@ def test_cancel_official_game_restores_credit_and_refunds_stripe_remainder(
         REDEEMED_USAGE_STATUS,
         RESTORED_USAGE_STATUS,
     }
+    refunds_response = client.get(f"/refunds?booking_id={checkout['booking_id']}")
+    assert refunds_response.status_code == 200, refunds_response.text
+    refunds = refunds_response.json()
+    assert len(refunds) == 1
+    refunded_notifications = list_game_notifications(
+        client,
+        player["id"],
+        "booking_refunded",
+    )
+    assert len(refunded_notifications) == 1
+    refunded_notification = refunded_notifications[0]
+    assert refunded_notification["title"] == "Refund and credit processed"
+    assert "Stripe refund was processed" in refunded_notification["body"]
+    assert refunded_notification["action_key"] is None
+    assert refunded_notification["action"] is None
+    assert refunded_notification["related_game_id"] == game["id"]
+    assert refunded_notification["related_booking_id"] == checkout["booking_id"]
+    assert refunded_notification["related_payment_id"] == checkout["payment_id"]
+    assert refunded_notification["related_refund_id"] == refunds[0]["id"]
 
+    authenticate_as(admin["id"])
     admin_actions_response = client.get(
         f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
     )
@@ -2116,7 +2537,15 @@ def test_community_player_add_guests_keeps_payment_not_required(client: TestClie
 def test_waitlisted_player_cannot_add_guests_to_booking(client: TestClient):
     host = create_user(client)
     venue = create_venue(client, host["id"])
-    game = create_game(client, host["id"], venue, total_spots=10)
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        total_spots=10,
+    )
 
     for _ in range(10):
         player = create_user(client)
@@ -2189,7 +2618,14 @@ def test_join_game_rejects_too_many_guests(client: TestClient):
 def test_join_game_waitlists_whole_party_when_not_enough_spots(client: TestClient):
     host = create_user(client)
     venue = create_venue(client, host["id"])
-    game = create_game(client, host["id"], venue)
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
 
     for _index in range(8):
         player = create_user(client)
@@ -2220,7 +2656,7 @@ def test_join_game_waitlists_whole_party_when_not_enough_spots(client: TestClien
     booking = booking_response.json()
     assert booking["participant_count"] == 3
     assert booking["booking_status"] == "waitlisted"
-    assert booking["payment_status"] == "unpaid"
+    assert booking["payment_status"] == "not_required"
 
     participants_response = client.get(f"/game-participants?game_id={game['id']}")
     assert participants_response.status_code == 200, participants_response.text
@@ -2232,6 +2668,55 @@ def test_join_game_waitlists_whole_party_when_not_enough_spots(client: TestClien
     assert len(participants) == 3
     assert sum(item["participant_type"] == "guest" for item in participants) == 2
     assert {item["participant_status"] for item in participants} == {"waitlisted"}
+
+
+def test_paid_waitlist_join_requires_auto_charge_consent_and_payment_method(
+    client: TestClient,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue, format_label="3v3", total_spots=6)
+
+    for _index in range(6):
+        player = create_user(client)
+        fill_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert fill_response.status_code == 201, fill_response.text
+
+    waitlisted_player = create_user(client)
+    response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": waitlisted_player["id"]},
+    )
+
+    assert response.status_code == 400, response.text
+    assert "authorize Pickup Lane" in response.text
+
+    payment_method = create_user_payment_method(client, waitlisted_player["id"])
+    missing_method_response = client.post(
+        f"/games/{game['id']}/join",
+        json={
+            "acting_user_id": waitlisted_player["id"],
+            "auto_charge_consent_accepted": True,
+            "auto_charge_consent_version": "waitlist-auto-charge-v1",
+        },
+    )
+    assert missing_method_response.status_code == 400, missing_method_response.text
+    assert "Choose a saved card" in missing_method_response.text
+
+    valid_response = client.post(
+        f"/games/{game['id']}/join",
+        json={
+            "acting_user_id": waitlisted_player["id"],
+            "payment_method_id": payment_method["id"],
+            "auto_charge_consent_accepted": True,
+            "auto_charge_consent_version": "waitlist-auto-charge-v1",
+        },
+    )
+    assert valid_response.status_code == 201, valid_response.text
+    assert valid_response.json()["status"] == "waitlisted"
 
 
 def test_community_external_host_join_creates_no_player_payment(
@@ -2634,10 +3119,17 @@ def test_community_remove_guest_keeps_payment_not_required(client: TestClient):
     assert payments_response.json() == []
 
 
-def test_leave_waitlist_with_guests_keeps_booking_unpaid(client: TestClient):
+def test_leave_waitlist_with_guests_keeps_payment_not_required(client: TestClient):
     host = create_user(client)
     venue = create_venue(client, host["id"])
-    game = create_game(client, host["id"], venue)
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
 
     for _index in range(8):
         player = create_user(client)
@@ -2667,12 +3159,13 @@ def test_leave_waitlist_with_guests_keeps_booking_unpaid(client: TestClient):
     assert booking_response.status_code == 200, booking_response.text
     booking = booking_response.json()
     assert booking["booking_status"] == "cancelled"
-    assert booking["payment_status"] == "unpaid"
+    assert booking["payment_status"] == "not_required"
     assert booking["cancel_reason"] == "waitlist_cancelled"
 
 
-def test_leave_game_promotes_waitlist_party_when_enough_spots_open(
+def test_leave_game_promotes_paid_waitlist_after_successful_auto_charge(
     client: TestClient,
+    monkeypatch,
 ):
     host = create_user(client)
     venue = create_venue(client, host["id"])
@@ -2689,13 +3182,58 @@ def test_leave_game_promotes_waitlist_party_when_enough_spots_open(
         joined_players.append(player)
 
     waitlisted_player = create_user(client)
+    payment_method = create_user_payment_method(client, waitlisted_player["id"])
+    captured_create: dict[str, object] = {}
+    captured_confirm: dict[str, object] = {}
+
+    def fake_create_payment_intent(**kwargs):
+        captured_create.update(kwargs)
+        return StripePaymentIntentResult(
+            id="pi_waitlist_auto_charge_success",
+            client_secret=None,
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        captured_confirm.update({"payment_intent_id": payment_intent_id, **kwargs})
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret=None,
+            status="succeeded",
+            latest_charge_id="ch_waitlist_auto_charge_success",
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.game_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
     waitlist_response = client.post(
         f"/games/{game['id']}/join",
-        json={"acting_user_id": waitlisted_player["id"]},
+        json={
+            "acting_user_id": waitlisted_player["id"],
+            "payment_method_id": payment_method["id"],
+            "auto_charge_consent_accepted": True,
+            "auto_charge_consent_version": "waitlist-auto-charge-v1",
+        },
     )
     assert waitlist_response.status_code == 201, waitlist_response.text
     waitlist_body = waitlist_response.json()
     assert waitlist_body["status"] == "waitlisted"
+
+    waitlist_entry_response = client.get(
+        f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
+    )
+    assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
+    waitlist_entry = waitlist_entry_response.json()
+    assert waitlist_entry["auto_charge_consent_at"] is not None
+    assert waitlist_entry["auto_charge_consent_version"] == "waitlist-auto-charge-v1"
+    assert waitlist_entry["authorized_payment_method_id"] == payment_method["id"]
+    assert waitlist_entry["authorized_amount_cents"] == 1200
 
     leave_response = client.post(
         f"/games/{game['id']}/leave",
@@ -2728,7 +3266,16 @@ def test_leave_game_promotes_waitlist_party_when_enough_spots_open(
 
     payments_response = client.get(f"/payments?booking_id={waitlist_body['booking_id']}")
     assert payments_response.status_code == 200, payments_response.text
-    assert payments_response.json()[0]["payment_status"] == "succeeded"
+    payment = payments_response.json()[0]
+    assert payment["payment_status"] == "succeeded"
+    assert payment["provider_payment_intent_id"] == "pi_waitlist_auto_charge_success"
+    assert payment["provider_charge_id"] == "ch_waitlist_auto_charge_success"
+    assert captured_create["amount_cents"] == 1200
+    assert captured_create["customer_id"] == payment_method["stripe_customer_id"]
+    assert captured_confirm["payment_method_id"] == (
+        payment_method["stripe_payment_method_id"]
+    )
+    assert captured_confirm["off_session"] is True
 
     authenticate_as(waitlisted_player["id"])
     notifications_response = client.get("/notifications/me")
@@ -2737,6 +3284,478 @@ def test_leave_game_promotes_waitlist_party_when_enough_spots_open(
         item["notification_type"] == "waitlist_promoted"
         for item in notifications_response.json()
     )
+
+
+def test_paid_waitlist_requires_action_fails_auto_promotion_and_notifies_buyer(
+    client: TestClient,
+    monkeypatch,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue, format_label="3v3", total_spots=6)
+    joined_players = []
+
+    for _index in range(6):
+        player = create_user(client)
+        fill_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert fill_response.status_code == 201, fill_response.text
+        joined_players.append(player)
+
+    waitlisted_player = create_user(client)
+    payment_method = create_user_payment_method(client, waitlisted_player["id"])
+
+    def fake_create_payment_intent(**kwargs):
+        return StripePaymentIntentResult(
+            id="pi_waitlist_auto_charge_requires_action",
+            client_secret=None,
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret=None,
+            status="requires_action",
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.game_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
+    waitlist_response = client.post(
+        f"/games/{game['id']}/join",
+        json={
+            "acting_user_id": waitlisted_player["id"],
+            "payment_method_id": payment_method["id"],
+            "auto_charge_consent_accepted": True,
+            "auto_charge_consent_version": "waitlist-auto-charge-v1",
+        },
+    )
+    assert waitlist_response.status_code == 201, waitlist_response.text
+    waitlist_body = waitlist_response.json()
+
+    leave_response = client.post(
+        f"/games/{game['id']}/leave",
+        json={"acting_user_id": joined_players[0]["id"]},
+    )
+    assert leave_response.status_code == 200, leave_response.text
+
+    booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "failed"
+    assert booking["payment_status"] == "failed"
+
+    waitlist_entry_response = client.get(
+        f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
+    )
+    assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
+    waitlist_entry = waitlist_entry_response.json()
+    assert waitlist_entry["waitlist_status"] == "payment_failed"
+
+    participants_response = client.get(f"/game-participants?game_id={game['id']}")
+    assert participants_response.status_code == 200, participants_response.text
+    failed_participant = next(
+        item
+        for item in participants_response.json()
+        if item["user_id"] == waitlisted_player["id"]
+    )
+    assert failed_participant["participant_status"] == "removed"
+    assert failed_participant["cancellation_type"] == "payment_failed"
+
+    payments_response = client.get(f"/payments?booking_id={waitlist_body['booking_id']}")
+    assert payments_response.status_code == 200, payments_response.text
+    payment = payments_response.json()[0]
+    assert payment["payment_status"] == "requires_action"
+
+    notifications = list_game_notifications(
+        client,
+        waitlisted_player["id"],
+        "payment_failed",
+    )
+    assert len(notifications) == 1
+    assert "removed from the waitlist" in notifications[0]["body"]
+    assert (
+        list_game_notifications(client, waitlisted_player["id"], "waitlist_promoted")
+        == []
+    )
+
+
+def test_paid_waitlist_processing_holds_capacity_and_blocks_duplicate_join(
+    client: TestClient,
+    monkeypatch,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue, format_label="3v3", total_spots=6)
+    joined_players = []
+
+    for _index in range(6):
+        player = create_user(client)
+        fill_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert fill_response.status_code == 201, fill_response.text
+        joined_players.append(player)
+
+    waitlisted_player = create_user(client)
+    payment_method = create_user_payment_method(client, waitlisted_player["id"])
+
+    def fake_create_payment_intent(**kwargs):
+        return StripePaymentIntentResult(
+            id="pi_waitlist_auto_charge_processing_hold",
+            client_secret=None,
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret=None,
+            status="processing",
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.game_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
+    waitlist_response = client.post(
+        f"/games/{game['id']}/join",
+        json={
+            "acting_user_id": waitlisted_player["id"],
+            "payment_method_id": payment_method["id"],
+            "auto_charge_consent_accepted": True,
+            "auto_charge_consent_version": "waitlist-auto-charge-v1",
+        },
+    )
+    assert waitlist_response.status_code == 201, waitlist_response.text
+    waitlist_body = waitlist_response.json()
+
+    leave_response = client.post(
+        f"/games/{game['id']}/leave",
+        json={"acting_user_id": joined_players[0]["id"]},
+    )
+    assert leave_response.status_code == 200, leave_response.text
+
+    waitlist_entry_response = client.get(
+        f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
+    )
+    assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
+    assert waitlist_entry_response.json()["waitlist_status"] == "payment_processing"
+
+    booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    booking = booking_response.json()
+    assert booking["booking_status"] == "pending_payment"
+    assert booking["payment_status"] == "processing"
+
+    participants_response = client.get(
+        f"/game-participants?booking_id={waitlist_body['booking_id']}"
+    )
+    assert participants_response.status_code == 200, participants_response.text
+    assert {
+        participant["participant_status"]
+        for participant in participants_response.json()
+    } == {"pending_payment"}
+
+    duplicate_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": waitlisted_player["id"]},
+    )
+    assert duplicate_response.status_code == 409, duplicate_response.text
+    assert "already joined" in duplicate_response.text
+
+    next_waitlisted_player = create_user(client)
+    next_payment_method = create_user_payment_method(
+        client,
+        next_waitlisted_player["id"],
+    )
+    next_response = client.post(
+        f"/games/{game['id']}/join",
+        json={
+            "acting_user_id": next_waitlisted_player["id"],
+            "payment_method_id": next_payment_method["id"],
+            "auto_charge_consent_accepted": True,
+            "auto_charge_consent_version": "waitlist-auto-charge-v1",
+        },
+    )
+    assert next_response.status_code == 201, next_response.text
+    assert next_response.json()["status"] == "waitlisted"
+
+    assert list_game_notifications(client, waitlisted_player["id"], "waitlist_promoted") == []
+    assert list_game_notifications(client, waitlisted_player["id"], "payment_failed") == []
+
+
+def test_paid_waitlist_failed_auto_charge_moves_to_next_active_party(
+    client: TestClient,
+    monkeypatch,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue, format_label="3v3", total_spots=6)
+    joined_players = []
+
+    for _index in range(6):
+        player = create_user(client)
+        fill_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert fill_response.status_code == 201, fill_response.text
+        joined_players.append(player)
+
+    first_waitlisted_player = create_user(client)
+    first_payment_method = create_user_payment_method(
+        client,
+        first_waitlisted_player["id"],
+    )
+    second_waitlisted_player = create_user(client)
+    second_payment_method = create_user_payment_method(
+        client,
+        second_waitlisted_player["id"],
+    )
+    created_intent_ids: list[str] = []
+
+    def fake_create_payment_intent(**kwargs):
+        intent_id = f"pi_waitlist_auto_charge_{len(created_intent_ids) + 1}"
+        created_intent_ids.append(intent_id)
+        return StripePaymentIntentResult(
+            id=intent_id,
+            client_secret=None,
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(payment_intent_id, **kwargs):
+        if payment_intent_id == created_intent_ids[0]:
+            return StripePaymentIntentResult(
+                id=payment_intent_id,
+                client_secret=None,
+                status="requires_action",
+            )
+
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret=None,
+            status="succeeded",
+            latest_charge_id="ch_second_waitlist_auto_charge",
+        )
+
+    monkeypatch.setattr(
+        "backend.routes.game_routes.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.routes.game_routes.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
+    first_waitlist_response = client.post(
+        f"/games/{game['id']}/join",
+        json={
+            "acting_user_id": first_waitlisted_player["id"],
+            "payment_method_id": first_payment_method["id"],
+            "auto_charge_consent_accepted": True,
+            "auto_charge_consent_version": "waitlist-auto-charge-v1",
+        },
+    )
+    assert first_waitlist_response.status_code == 201, first_waitlist_response.text
+    first_waitlist_body = first_waitlist_response.json()
+
+    second_waitlist_response = client.post(
+        f"/games/{game['id']}/join",
+        json={
+            "acting_user_id": second_waitlisted_player["id"],
+            "payment_method_id": second_payment_method["id"],
+            "auto_charge_consent_accepted": True,
+            "auto_charge_consent_version": "waitlist-auto-charge-v1",
+        },
+    )
+    assert second_waitlist_response.status_code == 201, second_waitlist_response.text
+    second_waitlist_body = second_waitlist_response.json()
+
+    leave_response = client.post(
+        f"/games/{game['id']}/leave",
+        json={"acting_user_id": joined_players[0]["id"]},
+    )
+    assert leave_response.status_code == 200, leave_response.text
+
+    first_booking_response = client.get(
+        f"/bookings/{first_waitlist_body['booking_id']}"
+    )
+    assert first_booking_response.status_code == 200, first_booking_response.text
+    first_booking = first_booking_response.json()
+    assert first_booking["booking_status"] == "failed"
+    assert first_booking["payment_status"] == "failed"
+
+    first_waitlist_entry_response = client.get(
+        f"/waitlist-entries/{first_waitlist_body['waitlist_entry_id']}"
+    )
+    assert first_waitlist_entry_response.status_code == 200
+    assert first_waitlist_entry_response.json()["waitlist_status"] == "payment_failed"
+
+    second_booking_response = client.get(
+        f"/bookings/{second_waitlist_body['booking_id']}"
+    )
+    assert second_booking_response.status_code == 200, second_booking_response.text
+    second_booking = second_booking_response.json()
+    assert second_booking["booking_status"] == "confirmed"
+    assert second_booking["payment_status"] == "paid"
+
+    second_waitlist_entry_response = client.get(
+        f"/waitlist-entries/{second_waitlist_body['waitlist_entry_id']}"
+    )
+    assert second_waitlist_entry_response.status_code == 200
+    assert second_waitlist_entry_response.json()["waitlist_status"] == "accepted"
+
+    first_payments_response = client.get(
+        f"/payments?booking_id={first_waitlist_body['booking_id']}"
+    )
+    assert first_payments_response.status_code == 200, first_payments_response.text
+    assert first_payments_response.json()[0]["payment_status"] == "requires_action"
+
+    second_payments_response = client.get(
+        f"/payments?booking_id={second_waitlist_body['booking_id']}"
+    )
+    assert second_payments_response.status_code == 200, second_payments_response.text
+    second_payment = second_payments_response.json()[0]
+    assert second_payment["payment_status"] == "succeeded"
+    assert second_payment["provider_charge_id"] == "ch_second_waitlist_auto_charge"
+
+    assert (
+        len(
+            list_game_notifications(
+                client,
+                first_waitlisted_player["id"],
+                "payment_failed",
+            )
+        )
+        == 1
+    )
+    assert (
+        list_game_notifications(
+            client,
+            first_waitlisted_player["id"],
+            "waitlist_promoted",
+        )
+        == []
+    )
+    assert (
+        len(
+            list_game_notifications(
+                client,
+                second_waitlisted_player["id"],
+                "waitlist_promoted",
+            )
+        )
+        == 1
+    )
+    assert (
+        list_game_notifications(
+            client,
+            second_waitlisted_player["id"],
+            "payment_failed",
+        )
+        == []
+    )
+
+
+def test_waitlist_promotion_skips_oversized_party_without_splitting(
+    client: TestClient,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        format_label="3v3",
+        total_spots=6,
+    )
+    joined_players = []
+
+    for _index in range(6):
+        player = create_user(client)
+        fill_response = client.post(
+            f"/games/{game['id']}/join",
+            json={"acting_user_id": player["id"]},
+        )
+        assert fill_response.status_code == 201, fill_response.text
+        joined_players.append(player)
+
+    oversized_player = create_user(client)
+    oversized_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": oversized_player["id"], "guest_count": 1},
+    )
+    assert oversized_response.status_code == 201, oversized_response.text
+    oversized_body = oversized_response.json()
+    assert oversized_body["status"] == "waitlisted"
+
+    fitting_player = create_user(client)
+    fitting_response = client.post(
+        f"/games/{game['id']}/join",
+        json={"acting_user_id": fitting_player["id"]},
+    )
+    assert fitting_response.status_code == 201, fitting_response.text
+    fitting_body = fitting_response.json()
+    assert fitting_body["status"] == "waitlisted"
+
+    leave_response = client.post(
+        f"/games/{game['id']}/leave",
+        json={"acting_user_id": joined_players[0]["id"]},
+    )
+    assert leave_response.status_code == 200, leave_response.text
+
+    oversized_waitlist_response = client.get(
+        f"/waitlist-entries/{oversized_body['waitlist_entry_id']}"
+    )
+    assert oversized_waitlist_response.status_code == 200
+    oversized_waitlist = oversized_waitlist_response.json()
+    assert oversized_waitlist["waitlist_status"] == "active"
+    assert oversized_waitlist["position"] == 1
+
+    oversized_booking_response = client.get(f"/bookings/{oversized_body['booking_id']}")
+    assert oversized_booking_response.status_code == 200, oversized_booking_response.text
+    oversized_booking = oversized_booking_response.json()
+    assert oversized_booking["booking_status"] == "waitlisted"
+    assert oversized_booking["participant_count"] == 2
+
+    fitting_waitlist_response = client.get(
+        f"/waitlist-entries/{fitting_body['waitlist_entry_id']}"
+    )
+    assert fitting_waitlist_response.status_code == 200
+    assert fitting_waitlist_response.json()["waitlist_status"] == "accepted"
+
+    fitting_booking_response = client.get(f"/bookings/{fitting_body['booking_id']}")
+    assert fitting_booking_response.status_code == 200, fitting_booking_response.text
+    fitting_booking = fitting_booking_response.json()
+    assert fitting_booking["booking_status"] == "confirmed"
+
+    participants_response = client.get(
+        f"/game-participants?booking_id={fitting_body['booking_id']}"
+    )
+    assert participants_response.status_code == 200, participants_response.text
+    assert {
+        participant["participant_status"]
+        for participant in participants_response.json()
+    } == {"confirmed"}
 
 
 def test_host_can_add_and_remove_host_guests(client: TestClient):

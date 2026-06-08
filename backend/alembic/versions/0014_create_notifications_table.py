@@ -42,6 +42,8 @@ def upgrade() -> None:
         sa.Column("related_game_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("related_chat_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("related_booking_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("related_payment_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("related_refund_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column(
             "related_participant_id",
             postgresql.UUID(as_uuid=True),
@@ -94,7 +96,7 @@ def upgrade() -> None:
                 "'sub_request_declined', 'sub_waitlist_promoted_to_pending', "
                 "'sub_request_canceled_by_player', "
                 "'sub_request_canceled_by_owner', 'sub_post_canceled', "
-                "'sub_post_removed'"
+                "'sub_post_removed', 'sub_post_updated'"
                 ")"
             ),
             name="ck_notifications_notification_type",
@@ -169,7 +171,7 @@ def upgrade() -> None:
                 "'sub_request_declined', 'sub_waitlist_promoted_to_pending', "
                 "'sub_request_canceled_by_player', "
                 "'sub_request_canceled_by_owner', 'sub_post_canceled', "
-                "'sub_post_removed'"
+                "'sub_post_removed', 'sub_post_updated'"
                 ") AND notification_category = 'game_activity' "
                 "AND notification_domain = 'need_a_sub') "
                 "OR (notification_type IN ("
@@ -260,6 +262,16 @@ def upgrade() -> None:
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
+            ["related_payment_id"],
+            ["payments.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["related_refund_id"],
+            ["refunds.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
             ["related_participant_id"],
             ["game_participants.id"],
             ondelete="SET NULL",
@@ -338,6 +350,13 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
+        "ux_notifications_user_aggregation_key",
+        "notifications",
+        ["user_id", "aggregation_key"],
+        unique=True,
+        postgresql_where=sa.text("aggregation_key IS NOT NULL"),
+    )
+    op.create_index(
         "ix_notifications_user_id_is_read_created_at",
         "notifications",
         ["user_id", "is_read", "created_at"],
@@ -377,6 +396,18 @@ def upgrade() -> None:
         "ix_notifications_related_booking_id",
         "notifications",
         ["related_booking_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_notifications_related_payment_id",
+        "notifications",
+        ["related_payment_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_notifications_related_refund_id",
+        "notifications",
+        ["related_refund_id"],
         unique=False,
     )
     op.create_index(
@@ -486,6 +517,11 @@ def downgrade() -> None:
         if_exists=True,
     )
     op.drop_index(
+        "ux_notifications_user_aggregation_key",
+        table_name="notifications",
+        if_exists=True,
+    )
+    op.drop_index(
         "ix_notifications_event_at",
         table_name="notifications",
         if_exists=True,
@@ -530,4 +566,6 @@ def downgrade() -> None:
         table_name="notifications",
         if_exists=True,
     )
+    op.execute("DROP INDEX IF EXISTS ix_notifications_related_refund_id")
+    op.execute("DROP INDEX IF EXISTS ix_notifications_related_payment_id")
     op.drop_table("notifications")

@@ -25,7 +25,7 @@ class WaitlistEntry(Base):
             (
                 "waitlist_status IN ("
                 "'active', 'promoted', 'accepted', 'declined', 'expired', "
-                "'cancelled', 'removed'"
+                "'cancelled', 'removed', 'payment_processing', 'payment_failed'"
                 ")"
             ),
             name="ck_waitlist_entries_waitlist_status",
@@ -54,6 +54,10 @@ class WaitlistEntry(Base):
             "(waitlist_status <> 'expired' OR expired_at IS NOT NULL)",
             name="ck_waitlist_entries_expired_requires_expired_at",
         ),
+        CheckConstraint(
+            "(authorized_amount_cents IS NULL OR authorized_amount_cents >= 0)",
+            name="ck_waitlist_entries_authorized_amount_non_negative",
+        ),
         Index("ix_waitlist_entries_game_id", "game_id"),
         Index("ix_waitlist_entries_user_id", "user_id"),
         Index("ix_waitlist_entries_waitlist_status", "waitlist_status"),
@@ -73,7 +77,9 @@ class WaitlistEntry(Base):
             "game_id",
             "user_id",
             unique=True,
-            postgresql_where=text("waitlist_status = 'active'"),
+            postgresql_where=text(
+                "waitlist_status IN ('active', 'payment_processing')"
+            ),
         ),
         Index(
             "ux_waitlist_entries_active_position_per_game",
@@ -109,6 +115,29 @@ class WaitlistEntry(Base):
     )
     promotion_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    auto_charge_consent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    auto_charge_consent_version: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+    authorized_payment_method_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("user_payment_methods.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    authorized_stripe_payment_method_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    authorized_payment_method_brand: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+    authorized_payment_method_last4: Mapped[str | None] = mapped_column(
+        String(4), nullable=True
+    )
+    authorized_amount_cents: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
     )
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")

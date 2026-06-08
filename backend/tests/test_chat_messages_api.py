@@ -187,6 +187,11 @@ def test_chat_messages_notify_other_confirmed_members_and_mark_read(client: Test
     assert notifications[0]["related_game_id"] == game["id"]
     assert notifications[0]["related_chat_id"] == game_chat["id"]
     assert notifications[0]["related_message_id"] == chat_message["id"]
+    assert (
+        notifications[0]["aggregation_key"]
+        == f"game:{game['id']}:chat:{game_chat['id']}:user:{player['id']}:chat_message"
+    )
+    assert notifications[0]["aggregate_count"] == 1
     assert notifications[0]["is_read"] is False
 
     read_response = client.post(f"/game-chats/{game_chat['id']}/read", json={})
@@ -200,6 +205,107 @@ def test_chat_messages_notify_other_confirmed_members_and_mark_read(client: Test
     notifications = notifications_response.json()
     assert notifications[0]["is_read"] is True
     assert notifications[0]["read_at"] is not None
+    assert notifications[0]["aggregate_count"] is None
+
+
+def test_chat_messages_reuse_single_notification_per_user_chat(
+    client: TestClient,
+):
+    host = create_user(client)
+    player = create_user(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(client, host["id"], venue, host_user_id=host["id"])
+    create_game_participant(
+        client,
+        host["id"],
+        game["id"],
+        participant_type="host",
+        price_cents=0,
+        roster_order=1,
+    )
+    booking = create_booking(client, player["id"], game["id"])
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking["id"],
+        display_name_snapshot="Chat Player",
+        roster_order=2,
+    )
+    game_chat = create_game_chat(client, game["id"])
+
+    first_message = create_chat_message(
+        client,
+        game_chat["id"],
+        host["id"],
+        message_body="First notification message",
+    )
+
+    from backend.database import SessionLocal
+    from backend.models import ChatMessage
+
+    with SessionLocal() as db:
+        db_first_message = db.get(ChatMessage, UUID(first_message["id"]))
+        assert db_first_message is not None
+        db_first_message.created_at = datetime.now(UTC) - timedelta(seconds=3)
+        db.commit()
+
+    second_message = create_chat_message(
+        client,
+        game_chat["id"],
+        host["id"],
+        message_body="Second notification message",
+    )
+
+    authenticate_as(player["id"])
+    notifications_response = client.get(
+        "/notifications/me?notification_type=chat_message"
+    )
+    assert notifications_response.status_code == 200, notifications_response.text
+    notifications = notifications_response.json()
+    assert len(notifications) == 1
+    notification_id = notifications[0]["id"]
+    assert notifications[0]["related_message_id"] == second_message["id"]
+    assert notifications[0]["aggregate_count"] == 2
+    assert notifications[0]["is_read"] is False
+
+    read_response = client.post(f"/game-chats/{game_chat['id']}/read", json={})
+    assert read_response.status_code == 200, read_response.text
+
+    notifications_response = client.get(
+        "/notifications/me?notification_type=chat_message"
+    )
+    assert notifications_response.status_code == 200, notifications_response.text
+    notifications = notifications_response.json()
+    assert notifications[0]["id"] == notification_id
+    assert notifications[0]["is_read"] is True
+    assert notifications[0]["aggregate_count"] is None
+
+    with SessionLocal() as db:
+        db_second_message = db.get(ChatMessage, UUID(second_message["id"]))
+        assert db_second_message is not None
+        db_second_message.created_at = datetime.now(UTC) - timedelta(seconds=3)
+        db.commit()
+
+    third_message = create_chat_message(
+        client,
+        game_chat["id"],
+        host["id"],
+        message_body="Third notification message",
+    )
+
+    authenticate_as(player["id"])
+    notifications_response = client.get(
+        "/notifications/me?notification_type=chat_message"
+    )
+    assert notifications_response.status_code == 200, notifications_response.text
+    notifications = notifications_response.json()
+    assert len(notifications) == 1
+    assert notifications[0]["id"] == notification_id
+    assert notifications[0]["related_message_id"] == third_message["id"]
+    assert notifications[0]["is_read"] is False
+    assert notifications[0]["read_at"] is None
+    assert notifications[0]["aggregate_count"] == 1
 
 
 def test_chat_messages_hide_requires_admin(client: TestClient):
