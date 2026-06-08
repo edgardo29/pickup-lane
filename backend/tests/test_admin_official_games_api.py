@@ -49,6 +49,10 @@ def build_official_game_payload(**overrides: object) -> dict:
     return payload
 
 
+def parse_response_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 def issue_game_credit(
     client: TestClient,
     *,
@@ -1495,7 +1499,9 @@ def test_account_delete_clears_future_official_host_without_cancelling_game(
 
     assert assigned_notification.is_read is True
     assert assigned_notification.read_at is not None
-    assert assigned_notification.event_at.isoformat() == assigned_host_event_at
+    assert assigned_notification.event_at == parse_response_datetime(
+        assigned_host_event_at
+    )
     assert removed_notifications == []
 
 
