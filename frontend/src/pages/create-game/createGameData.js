@@ -56,7 +56,7 @@ export const steps = [
   { id: 1, label: 'Game' },
   { id: 2, label: 'Location' },
   { id: 3, label: 'Notes' },
-  { id: 4, label: 'Review & Publish' },
+  { id: 4, label: 'Review & Publish', mobileLabel: 'Review' },
 ]
 
 export const paymentMethodOptions = [

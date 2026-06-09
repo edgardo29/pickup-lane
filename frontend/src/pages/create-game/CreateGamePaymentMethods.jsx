@@ -1,10 +1,14 @@
+import { useState } from 'react'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import {
   MAX_HOST_PAYMENT_METHODS,
   paymentMethodOptions,
 } from './createGameData.js'
 import { getPaymentMethodLabel } from './createGameFormatters.js'
+import { getIncompletePaymentMethod } from './createGamePayment.js'
 
 export function PaymentMethodsEditor({ allowNoPayment = false, methods, onChange }) {
+  const [methodError, setMethodError] = useState('')
   const fallbackMethods = allowNoPayment
     ? [{ type: 'none', value: '' }]
     : [{ type: 'venmo', value: '' }]
@@ -17,6 +21,8 @@ export function PaymentMethodsEditor({ allowNoPayment = false, methods, onChange
   const canAddMethod = safeMethods.length < MAX_HOST_PAYMENT_METHODS && safeMethods[0]?.type !== 'none'
 
   function updateMethod(index, field, value) {
+    setMethodError('')
+
     if (field === 'type' && value === 'none') {
       onChange([{ type: 'none', value: '' }])
       return
@@ -32,6 +38,13 @@ export function PaymentMethodsEditor({ allowNoPayment = false, methods, onChange
   }
 
   function addMethod() {
+    const incompleteMethod = getIncompletePaymentMethod(safeMethods)
+
+    if (incompleteMethod) {
+      setMethodError(`Add ${getPaymentMethodLabel(incompleteMethod.type)} details before adding another payment method.`)
+      return
+    }
+
     const nextType = paymentMethodOptions.find((option) => (
       option.value !== 'none' && !selectedTypes.has(option.value)
     ))?.value || 'other'
@@ -40,6 +53,7 @@ export function PaymentMethodsEditor({ allowNoPayment = false, methods, onChange
   }
 
   function removeMethod(index) {
+    setMethodError('')
     const nextMethods = safeMethods.filter((_, methodIndex) => methodIndex !== index)
     onChange(nextMethods.length > 0 ? nextMethods : [{ type: 'venmo', value: '' }])
   }
@@ -59,6 +73,10 @@ export function PaymentMethodsEditor({ allowNoPayment = false, methods, onChange
           + Add Method
         </button>
       </div>
+
+      <FormErrorMessage className="create-game-payment-methods__error">
+        {methodError}
+      </FormErrorMessage>
 
       <div className="create-game-payment-methods__grid">
         {safeMethods.map((method, index) => (
@@ -89,9 +107,12 @@ export function PaymentMethodsEditor({ allowNoPayment = false, methods, onChange
               </span>
             </label>
             {method.type === 'none' ? (
-              <p className="create-game-payment-method-row__note">
-                No player payment needed.
-              </p>
+              <div className="create-game-payment-method-row__details create-game-payment-method-row__details--static">
+                <span>Details</span>
+                <p className="create-game-payment-method-row__note">
+                  No player payment needed.
+                </p>
+              </div>
             ) : (
               <>
                 <label className="create-game-payment-method-row__details">

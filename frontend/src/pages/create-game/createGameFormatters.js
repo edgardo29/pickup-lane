@@ -54,7 +54,7 @@ export function formatHostPaymentMethods(paymentMethods) {
       const label = getPaymentMethodLabel(method.type)
       return `${label}: ${method.value}`
     })
-    .join(', ')
+    .join('\n')
 }
 
 export function formatMoney(cents) {

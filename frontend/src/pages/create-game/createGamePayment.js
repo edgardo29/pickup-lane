@@ -48,3 +48,25 @@ export function serializePaymentMethods(paymentMethods) {
     }))
     .filter((method) => method.type !== 'none' && method.value)
 }
+
+export function getIncompletePaymentMethod(paymentMethods) {
+  if (!Array.isArray(paymentMethods)) {
+    return null
+  }
+
+  const methods = paymentMethods
+    .filter((method) => method && typeof method === 'object')
+    .slice(0, MAX_HOST_PAYMENT_METHODS)
+
+  for (let index = 0; index < methods.length; index += 1) {
+    const method = methods[index]
+    const type = typeof method.type === 'string' && method.type ? method.type : 'other'
+    const value = String(method.value || '').trim()
+
+    if (type !== 'none' && type !== 'cash' && !value) {
+      return { index, type }
+    }
+  }
+
+  return null
+}

@@ -77,11 +77,10 @@ export function CreateGameSkeleton({ isEditMode = false }) {
               <SkeletonCircle size="19px" />
               <SkeletonBlock height="3.8rem" rounded width="100%" />
             </span>
-          </div>
-
-          <div className="create-game-preview__money">
-            <SkeletonBlock height="0.82rem" rounded width="6.4rem" />
-            <SkeletonBlock height="1.2rem" rounded width="4.4rem" />
+            <span className="create-game-skeleton-preview-row">
+              <SkeletonCircle size="19px" />
+              <SkeletonBlock height="2.4rem" rounded width="78%" />
+            </span>
           </div>
         </SkeletonCard>
       </section>

@@ -143,7 +143,7 @@ function validateSubsStep(form) {
   }
 
   if (form.positions.some((position) => !position.position_label || !position.player_group)) {
-    return 'Choose a Player Type for each Sub requirement.'
+    return 'Choose a player group for each sub requirement.'
   }
 
   if (!positionsAreCompatibleWithPostGroup(form.positions, form.gamePlayerGroup)) {
