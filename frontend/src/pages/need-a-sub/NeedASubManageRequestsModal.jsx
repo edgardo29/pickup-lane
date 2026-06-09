@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
 import {
+  CheckCircle2,
   UsersRound,
   X,
 } from 'lucide-react'
@@ -48,13 +49,19 @@ export function NeedASubManageRequestsModal({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="need-sub-manage-requests-modal__header">
-          <div>
+          <div className="need-sub-manage-requests-modal__title-row">
             <h2 id="need-sub-manage-requests-title">
               <span className="need-sub-manage-requests-modal__title-icon" aria-hidden="true">
                 <UsersRound />
               </span>
               <span>Manage Requests</span>
             </h2>
+            {notice && !error && (
+              <span className="need-sub-manage-requests-modal__status" aria-live="polite">
+                <CheckCircle2 aria-hidden="true" />
+                <span>{notice}</span>
+              </span>
+            )}
           </div>
           <button
             aria-label="Close manage requests"
@@ -66,9 +73,9 @@ export function NeedASubManageRequestsModal({
           </button>
         </header>
 
-        {(notice || error) && (
-          <div className={`need-sub-alert need-sub-manage-requests-modal__alert ${error ? 'need-sub-alert--error' : ''}`}>
-            {error || notice}
+        {error && (
+          <div className="need-sub-alert need-sub-alert--error need-sub-manage-requests-modal__alert">
+            {error}
           </div>
         )}
 

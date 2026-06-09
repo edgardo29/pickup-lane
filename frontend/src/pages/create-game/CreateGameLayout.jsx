@@ -126,6 +126,7 @@ export function CreateGameLayout({
                 </div>
 
                 <CreateGamePreview
+                  activeStep={activeStep}
                   firstPublishIsFree={firstPublishIsFree}
                   form={form}
                   review={review}

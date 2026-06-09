@@ -6,15 +6,17 @@ import {
   NeedSubFieldPlayersIcon,
   NeedSubGoalkeeperIcon,
   PriceIcon,
+  VenueIcon,
 } from '../../components/GameFactIcons.jsx'
 import {
   formatSkillLabel,
   formatStatus,
 } from './needASubFormatters.js'
 
-export function NeedASubCreatePreview({ form, totalSpotsNeeded }) {
+export function NeedASubCreatePreview({ activeStepKey = 'game', form, totalSpotsNeeded }) {
   const subCount = Number(totalSpotsNeeded || 0)
   const displaySubCount = subCount || 1
+  const hasPassedNotesStep = getStepOrder(activeStepKey) > getStepOrder('notes')
 
   return (
     <aside className="need-sub-create-preview" aria-label="Sub post preview">
@@ -37,19 +39,20 @@ export function NeedASubCreatePreview({ form, totalSpotsNeeded }) {
       </PreviewSection>
 
       <PreviewSection title="Location">
-        <PreviewFact icon={<AddressIcon />} label={buildPreviewLocation(form)} multiline />
+        <PreviewFact icon={<VenueIcon />} label={buildPreviewVenue(form)} multiline />
+        <PreviewFact icon={<AddressIcon />} label={buildPreviewAddress(form)} multiline />
       </PreviewSection>
 
       <PreviewSection title="Notes & Payment">
         <PreviewNote
           icon={<PriceIcon />}
           label="Price due at venue"
-          text={formatPreviewPrice(form.priceDue)}
+          text={formatPreviewPrice(form.priceDue, hasPassedNotesStep)}
         />
         <PreviewNote
           icon={<GameNotesIcon />}
           label="Notes"
-          text={form.notes?.trim() || 'Add optional notes for subs.'}
+          text={formatPreviewNotes(form.notes, hasPassedNotesStep)}
         />
       </PreviewSection>
     </aside>
@@ -76,12 +79,19 @@ function PreviewSubNeeds({ positions }) {
                 <GroupIcon />
                 <span>{group.label}</span>
               </h4>
-              {group.positions.map((position, index) => (
-                <div className="need-sub-create-preview__need" key={`${position.sort_order}-${index}`}>
-                  <span>{formatNeed(position)}</span>
-                <strong>{formatSubCount(position.spots_needed)}</strong>
-                </div>
-              ))}
+              {group.positions.map((position, index) => {
+                const subCountLabel = position.player_group ? formatSubCount(position.spots_needed) : ''
+
+                return (
+                  <div
+                    className={`need-sub-create-preview__need${subCountLabel ? '' : ' need-sub-create-preview__need--empty'}`}
+                    key={`${position.sort_order}-${index}`}
+                  >
+                    <span>{formatNeed(position)}</span>
+                    {subCountLabel && <strong>{subCountLabel}</strong>}
+                  </div>
+                )
+              })}
             </div>
           )
         })}
@@ -126,8 +136,11 @@ function PreviewNote({ icon, label, text }) {
   )
 }
 
-function buildPreviewLocation(form) {
-  const locationName = form.locationName?.trim()
+function buildPreviewVenue(form) {
+  return form.locationName?.trim() || '-'
+}
+
+function buildPreviewAddress(form) {
   const addressLine = form.addressLine1?.trim()
   const city = form.city?.trim()
   const state = form.state?.trim()
@@ -135,16 +148,13 @@ function buildPreviewLocation(form) {
   const stateLine = [state, postalCode].filter(Boolean).join(' ')
   const cityLine = [city, stateLine].filter(Boolean).join(', ')
   const address = [addressLine, cityLine].filter(Boolean).join(' · ')
-  const venueLine = [locationName, [city, state].filter(Boolean).join(', ')]
-    .filter(Boolean)
-    .join(' · ')
 
-  return address || venueLine || '-'
+  return address || cityLine || '-'
 }
 
 function formatNeed(position) {
   if (!position.player_group) {
-    return 'Select player type'
+    return '-'
   }
 
   if (position.player_group === 'open') {
@@ -195,11 +205,25 @@ function formatPreviewTime(value) {
   }).format(new Date(`2026-01-01T${value}:00`))
 }
 
-function formatPreviewPrice(value) {
+function getStepOrder(stepKey) {
+  return ['game', 'subs', 'location', 'notes', 'review'].indexOf(stepKey)
+}
+
+function formatPreviewNotes(value, hasPassedNotesStep) {
+  const notes = value?.trim()
+
+  if (notes) {
+    return notes
+  }
+
+  return hasPassedNotesStep ? 'No notes added.' : '-'
+}
+
+function formatPreviewPrice(value, hasPassedNotesStep) {
   const amount = Number(String(value || '').trim() || 0)
 
   if (!Number.isFinite(amount) || amount <= 0) {
-    return 'Free'
+    return hasPassedNotesStep ? 'Free' : '-'
   }
 
   return new Intl.NumberFormat('en-US', {

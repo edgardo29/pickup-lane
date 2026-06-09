@@ -17,11 +17,20 @@ export function useNeedASubCreateForm({
     () => form.positions.reduce((sum, position) => sum + Number(position.spots_needed || 0), 0),
     [form.positions],
   )
+  const hasCreateChanges = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(buildInitialNeedASubForm()),
+    [form],
+  )
 
   function clearCreateFeedback() {
     setNotice('')
     setError('')
     setFormError('')
+  }
+
+  function resetCreateForm() {
+    clearCreateFeedback()
+    setForm(buildInitialNeedASubForm())
   }
 
   function updateField(field, value) {
@@ -109,8 +118,10 @@ export function useNeedASubCreateForm({
     clearCreateFeedback,
     form,
     formError,
+    hasCreateChanges,
     isCreating,
     removePosition,
+    resetCreateForm,
     submitPost,
     totalSpotsNeeded,
     updateField,

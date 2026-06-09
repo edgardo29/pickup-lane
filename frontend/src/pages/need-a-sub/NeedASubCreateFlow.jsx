@@ -20,7 +20,7 @@ const createStepHeadings = {
   },
   subs: {
     title: 'Who do you need?',
-    text: 'Set the player types and positions you need covered.',
+    text: 'Set the player groups and positions you need covered.',
   },
   location: {
     title: 'Where is the game?',
@@ -251,7 +251,11 @@ function NeedASubCreateFlow({
           </div>
         </div>
 
-        <NeedASubCreatePreview form={form} totalSpotsNeeded={totalSpotsNeeded} />
+        <NeedASubCreatePreview
+          activeStepKey={activeStepConfig.key}
+          form={form}
+          totalSpotsNeeded={totalSpotsNeeded}
+        />
       </section>
     </form>
   )

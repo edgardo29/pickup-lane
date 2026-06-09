@@ -6,7 +6,11 @@ import {
   playerGroupOptions,
   skillLevelOptions,
 } from './createGameData.js'
-import { getPriceCents, serializePaymentMethods } from './createGamePayment.js'
+import {
+  getIncompletePaymentMethod,
+  getPriceCents,
+  serializePaymentMethods,
+} from './createGamePayment.js'
 import { buildDateTime, getTodayDate } from './createGameSchedule.js'
 
 export function getMinimumSpotsForFormat(format) {
@@ -99,10 +103,17 @@ export function validateStep(step, form) {
   }
 
   if (step === 3) {
-    return validateFieldLengths([
+    const notesLengthError = validateFieldLengths([
       ['Game notes', form.gameNotes, createGameFieldLimits.gameNotes],
       ['Host rules', form.hostRules, createGameFieldLimits.hostRules],
     ])
+    if (notesLengthError) {
+      return notesLengthError
+    }
+
+    if (getIncompletePaymentMethod(form.paymentMethods)) {
+      return 'Add payment method details before continuing.'
+    }
   }
 
   return ''

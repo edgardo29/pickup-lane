@@ -192,18 +192,13 @@
   gap: 0;
 }
 
-.inbox-desktop-grid .inbox-list,
-.inbox-desktop-grid .inbox-state {
-  min-height: 420px;
+.inbox-desktop-grid .inbox-list {
+  min-height: 360px;
   max-height: min(720px, calc(100svh - 280px));
 }
 
 .inbox-desktop-grid .inbox-list {
   overflow: hidden auto;
-}
-
-.inbox-desktop-grid .inbox-state {
-  height: min(720px, calc(100svh - 280px));
 }
 
 .inbox-row {
@@ -412,6 +407,7 @@
   margin: 0;
   padding: 26px;
   border-color: rgba(248, 250, 252, 0.2);
+  border-radius: 14px;
   border-style: dashed;
   display: grid;
   place-items: center;
@@ -425,34 +421,34 @@
 }
 
 .inbox-state--compact {
-  min-height: 220px;
-  padding: 22px;
+  min-height: 280px;
+  padding: 26px;
 }
 
 .inbox-state svg {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   color: var(--lime);
 }
 
 .inbox-state h2 {
   color: var(--text-value);
-  font-size: 1.22rem;
+  font-size: 1.25rem;
   line-height: 1.15;
 }
 
 .inbox-state p {
-  max-width: 28rem;
+  max-width: 36rem;
   line-height: 1.45;
 }
 
 .inbox-state--compact svg {
-  width: 32px;
-  height: 32px;
+  width: 42px;
+  height: 42px;
 }
 
 .inbox-state--compact h2 {
-  font-size: 1.04rem;
+  font-size: 1.25rem;
 }
 
 .inbox-modal-backdrop {
@@ -705,14 +701,9 @@
     gap: 18px;
   }
 
-  .inbox-mobile-stack .inbox-list,
-  .inbox-mobile-stack .inbox-state {
-    min-height: 420px;
+  .inbox-mobile-stack .inbox-list {
+    min-height: 360px;
     max-height: min(840px, 78svh);
-  }
-
-  .inbox-mobile-stack .inbox-state {
-    height: min(840px, 78svh);
   }
 
   .inbox-mobile-stack .inbox-list {
@@ -826,14 +817,14 @@
     width: 100%;
   }
 
-  .inbox-list,
-  .inbox-state {
+  .inbox-list {
     border-radius: 10px;
   }
 
   .inbox-state {
     margin-top: 0;
     padding: 22px 18px;
+    border-radius: 14px;
   }
 
   .inbox-section__select-control {

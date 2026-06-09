@@ -69,7 +69,7 @@ function NeedASubDetailContent({
         </aside>
       </div>
 
-      <NeedASubNextSteps />
+      <NeedASubNextSteps role={isOwner ? 'owner' : 'requester'} />
     </div>
   )
 }

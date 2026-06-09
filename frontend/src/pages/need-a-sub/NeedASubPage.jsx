@@ -5,6 +5,7 @@ import {
   PlusCircleIcon,
 } from '../../components/BrowseIcons.jsx'
 import { useAuth } from '../../hooks/useAuth.js'
+import { NeedASubCreateDiscardModal } from './NeedASubCreateDiscardModal.jsx'
 import NeedASubCreateFlow from './NeedASubCreateFlow.jsx'
 import NeedASubPostList, { NeedASubState } from './NeedASubPostList.jsx'
 import { POST_TABS } from './needASubData.js'
@@ -19,6 +20,7 @@ function NeedASubPage() {
   const [notice, setNotice] = useState('')
   const [activePanel, setActivePanel] = useState('browse')
   const [postView, setPostView] = useState('all')
+  const [showCreateDiscardModal, setShowCreateDiscardModal] = useState(false)
   const {
     error,
     isLoading,
@@ -32,11 +34,12 @@ function NeedASubPage() {
   })
   const {
     addPosition,
-    clearCreateFeedback,
     form,
     formError,
+    hasCreateChanges,
     isCreating,
     removePosition,
+    resetCreateForm,
     submitPost,
     totalSpotsNeeded,
     updateField,
@@ -66,13 +69,24 @@ function NeedASubPage() {
   const visiblePosts = postView === 'mine' ? myPosts : posts
 
   function showBrowsePanel() {
-    clearCreateFeedback()
+    setShowCreateDiscardModal(false)
+    resetCreateForm()
     setActivePanel('browse')
   }
 
   function showCreatePanel() {
-    clearCreateFeedback()
+    setShowCreateDiscardModal(false)
+    resetCreateForm()
     setActivePanel('create')
+  }
+
+  function requestCreateCancel() {
+    if (hasCreateChanges) {
+      setShowCreateDiscardModal(true)
+      return
+    }
+
+    showBrowsePanel()
   }
 
   function switchPostView(nextView) {
@@ -127,7 +141,7 @@ function NeedASubPage() {
               form={form}
               isCreating={isCreating}
               totalSpotsNeeded={totalSpotsNeeded}
-              onCancel={showBrowsePanel}
+              onCancel={requestCreateCancel}
               onAddPosition={addPosition}
               onRemovePosition={removePosition}
               onSubmit={submitPost}
@@ -150,6 +164,13 @@ function NeedASubPage() {
           onOpenPost={(post) => navigate(`/need-a-sub/posts/${post.id}`)}
           posts={visiblePosts}
           postView={postView}
+        />
+      )}
+
+      {showCreateDiscardModal && (
+        <NeedASubCreateDiscardModal
+          onClose={() => setShowCreateDiscardModal(false)}
+          onDiscard={showBrowsePanel}
         />
       )}
     </AppPageShell>

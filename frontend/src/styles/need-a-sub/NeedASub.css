@@ -18,6 +18,10 @@
   --text-value: rgba(248, 250, 252, 0.92);
   --text-helper: rgba(248, 250, 252, 0.64);
   --text-label: rgba(248, 250, 252, 0.38);
+  --flow-control-height: 38px;
+  --flow-control-radius: 10px;
+  --flow-control-font-size: 0.9rem;
+  --flow-control-label-size: 0.82rem;
   --panel-material:
     linear-gradient(115deg, rgba(248, 250, 252, 0.022), rgba(248, 250, 252, 0.006) 42%, rgba(139, 184, 230, 0.018)),
     linear-gradient(180deg, rgba(248, 250, 252, 0.014), transparent 68%),
@@ -27,6 +31,8 @@
   color: var(--text);
   background: #010409;
   box-shadow: 0 100vh 0 100vh #010409;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 .need-sub-page svg {
@@ -920,10 +926,11 @@
 
 .need-sub-field,
 .need-sub-textarea {
+  min-width: 0;
   display: grid;
   gap: 6px;
   color: rgba(248, 250, 252, 0.8);
-  font-size: 0.82rem;
+  font-size: var(--flow-control-label-size);
   font-weight: 800;
 }
 
@@ -931,17 +938,23 @@
 .need-sub-field select,
 .need-sub-textarea textarea {
   width: 100%;
-  min-height: 38px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--flow-control-height);
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--flow-control-radius);
   color: #f8fafc;
   background: var(--surface-soft);
   font: inherit;
+  font-size: var(--flow-control-font-size);
+  font-weight: 850;
+  line-height: 1.2;
   outline: 0;
 }
 
 .need-sub-field input,
 .need-sub-field select {
+  height: var(--flow-control-height);
   padding: 0 11px;
 }
 
@@ -956,7 +969,32 @@
 }
 
 .need-sub-field input[type="date"] {
+  position: relative;
+  padding-right: 32px;
   color-scheme: dark;
+  background:
+    var(--surface-soft)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23d8e0ea' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E")
+    right 11px center / 15px 15px no-repeat;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.need-sub-field input[type="date"]::-webkit-date-and-time-value {
+  margin: 0;
+  text-align: left;
+}
+
+.need-sub-field input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 34px;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+  opacity: 0;
 }
 
 .need-sub-field option {
@@ -1336,42 +1374,6 @@
   min-width: 0;
 }
 
-.need-sub-create-card .need-sub-field select {
-  padding-right: 32px;
-  background:
-    var(--surface-soft)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23d8e0ea' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
-    right 11px center / 13px 13px no-repeat;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.need-sub-create-card .need-sub-field input[type="date"]::-webkit-date-and-time-value {
-  margin: 0;
-  text-align: left;
-}
-
-.need-sub-create-card .need-sub-field input[type="date"] {
-  position: relative;
-  padding-right: 32px;
-  background:
-    var(--surface-soft)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23d8e0ea' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3C/svg%3E")
-    right 11px center / 15px 15px no-repeat;
-}
-
-.need-sub-create-card .need-sub-field input[type="date"]::-webkit-calendar-picker-indicator {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 34px;
-  height: 100%;
-  margin: 0;
-  cursor: pointer;
-  opacity: 0;
-}
-
 .need-sub-create-card .need-sub-field--date,
 .need-sub-create-card .need-sub-field--start-time,
 .need-sub-create-card .need-sub-field--end-time {
@@ -1428,7 +1430,7 @@
 .need-sub-create-card .need-sub-card-heading--split > div {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .need-sub-create-card .need-sub-card-heading--split > button {
@@ -1444,7 +1446,7 @@
 }
 
 .need-sub-create-card .need-sub-position-list--compact {
-  margin-top: 14px;
+  margin-top: 20px;
   padding: 0;
   gap: 8px;
   border: 0;
@@ -1536,10 +1538,10 @@
 }
 
 .need-sub-create-card .need-sub-card-heading--split .need-sub-sub-add {
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 28px;
+  padding: 0 10px;
   border: 1px solid rgba(248, 250, 252, 0.16);
-  border-radius: 8px;
+  border-radius: 7px;
   color: #ffffff;
   background:
     linear-gradient(180deg, rgba(248, 250, 252, 0.065), rgba(248, 250, 252, 0.018)),
@@ -1554,8 +1556,8 @@
   justify-content: center;
   flex: 0 0 auto;
   font: inherit;
-  font-size: 0.84rem;
-  font-weight: 720;
+  font-size: 0.78rem;
+  font-weight: 950;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -1756,12 +1758,10 @@
 
 .need-sub-create-preview__header strong {
   min-width: 0;
-  overflow: hidden;
   color: #ffffff;
   font-size: 1.4rem;
   line-height: 1.05;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .need-sub-create-preview__count {
@@ -1770,12 +1770,10 @@
 
 .need-sub-create-preview__header p {
   margin: 0;
-  overflow: hidden;
   color: rgba(248, 250, 252, 0.72);
   font-size: 0.86rem;
   font-weight: 850;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .need-sub-create-preview__section {
@@ -1888,6 +1886,10 @@
   grid-template-columns: minmax(3.6rem, 3.6rem) max-content;
   align-items: center;
   gap: 10px;
+}
+
+.need-sub-create-preview__need--empty {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .need-sub-create-preview__need span {
@@ -2036,7 +2038,7 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
+  gap: 18px 24px;
 }
 
 .need-sub-create-review-fact {
@@ -2044,13 +2046,10 @@
   display: grid;
   align-content: start;
   gap: 7px;
-  padding: 0 16px;
-  border-left: 1px solid var(--line);
 }
 
 .need-sub-create-review-fact:first-child {
   padding-left: 0;
-  border-left: 0;
 }
 
 .need-sub-create-review-fact span,
@@ -3574,21 +3573,24 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   overflow: visible;
 }
 
 .need-sub-next-step {
   min-width: 0;
-  min-height: 70px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
+  min-height: 76px;
+  padding: 12px 14px;
+  border: 1px solid rgba(248, 250, 252, 0.11);
   border-radius: 8px;
-  background: rgba(248, 250, 252, 0.024);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.04), rgba(248, 250, 252, 0.012)),
+    rgba(5, 10, 16, 0.42);
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.03);
 }
 
 .need-sub-next-step > div {
@@ -3610,17 +3612,17 @@
 .need-sub-next-step strong {
   display: block;
   color: var(--text-value);
-  font-size: 0.86rem;
+  font-size: 0.88rem;
   line-height: 1.15;
-  font-weight: 700;
+  font-weight: 850;
 }
 
 .need-sub-next-step p {
   margin: 5px 0 0;
   color: var(--text-helper);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   line-height: 1.35;
-  font-weight: 400;
+  font-weight: 560;
 }
 
 .need-sub-detail-choice-group {
@@ -4242,6 +4244,13 @@
   gap: 14px;
 }
 
+.need-sub-manage-requests-modal__title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .need-sub-manage-requests-modal__header p,
 .need-sub-manage-requests-modal__header h2,
 .need-sub-cancel-post-modal h2,
@@ -4258,6 +4267,34 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+.need-sub-manage-requests-modal__status {
+  min-width: 0;
+  max-width: min(220px, 44vw);
+  overflow: hidden;
+  color: var(--lime);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.need-sub-manage-requests-modal__status svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  stroke-width: 2.4;
+}
+
+.need-sub-manage-requests-modal__status span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .need-sub-manage-requests-modal__header p {
@@ -4688,10 +4725,14 @@
 }
 
 .need-sub-edit-discard-modal {
-  width: min(430px, 100%);
-  padding: 18px;
+  width: min(440px, 100%);
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: none;
   display: grid;
-  gap: 18px;
+  gap: 0;
 }
 
 .need-sub-edit-discard-modal h2,
@@ -4701,18 +4742,19 @@
 
 .need-sub-edit-discard-modal h2 {
   color: #ffffff;
-  font-size: 1.18rem;
-  line-height: 1.1;
+  font-size: 1.45rem;
+  line-height: 1.15;
 }
 
 .need-sub-edit-discard-modal p {
-  margin-top: 7px;
-  color: rgba(248, 250, 252, 0.7);
-  font-size: 0.92rem;
-  line-height: 1.45;
+  margin-top: 10px;
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .need-sub-edit-discard-modal__actions {
+  margin-top: 22px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -4721,8 +4763,8 @@
 
 .need-sub-edit-discard-modal__actions .need-sub-create-secondary,
 .need-sub-edit-discard-modal__actions .need-sub-form-cancel {
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 13px;
 }
 
 .need-sub-waitlist-modal header {
@@ -4907,54 +4949,14 @@
   }
 
   .need-sub-create-review-setup {
-    position: relative;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-auto-rows: 1fr;
     gap: 22px 26px;
   }
 
-  .need-sub-create-review-setup::before,
-  .need-sub-create-review-setup::after {
-    position: absolute;
-    content: "";
-    pointer-events: none;
-  }
-
-  .need-sub-create-review-setup::before {
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    width: 1px;
-    background:
-      linear-gradient(
-        to bottom,
-        var(--line) 0 calc(50% - 10px),
-        transparent calc(50% - 10px) calc(50% + 10px),
-        var(--line) calc(50% + 10px) 100%
-      );
-    transform: translateX(-0.5px);
-  }
-
-  .need-sub-create-review-setup::after {
-    top: 50%;
-    right: 0;
-    left: 0;
-    height: 1px;
-    background:
-      linear-gradient(
-        to right,
-        var(--line) 0 calc(50% - 10px),
-        transparent calc(50% - 10px) calc(50% + 10px),
-        var(--line) calc(50% + 10px) 100%
-      );
-    transform: translateY(-0.5px);
-  }
-
   .need-sub-create-review-fact {
     padding: 0;
     border-left: 0;
-    position: relative;
-    z-index: 1;
   }
 
   .need-sub-create-review-fact:nth-child(odd) {
@@ -5331,6 +5333,46 @@
     padding: clamp(14px, 4vw, 16px);
   }
 
+  .need-sub-create-card .need-sub-game-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .need-sub-create-card .need-sub-field--date {
+    grid-column: 1 / -1;
+    order: 1;
+  }
+
+  .need-sub-create-card .need-sub-field--start-time {
+    grid-column: span 1;
+    order: 2;
+  }
+
+  .need-sub-create-card .need-sub-field--end-time {
+    grid-column: span 1;
+    order: 3;
+  }
+
+  .need-sub-create-card .need-sub-field--format {
+    grid-column: span 1;
+    order: 4;
+  }
+
+  .need-sub-create-card .need-sub-field--group {
+    grid-column: span 1;
+    order: 5;
+  }
+
+  .need-sub-create-card .need-sub-field--skill {
+    grid-column: span 1;
+    order: 6;
+  }
+
+  .need-sub-create-card .need-sub-field--environment {
+    grid-column: span 1;
+    order: 7;
+  }
+
   .need-sub-create-review-section {
     padding: 14px;
   }
@@ -5440,6 +5482,18 @@
   .need-sub-create-actions .need-sub-create-publish {
     width: 148px;
     min-width: 148px;
+  }
+
+  .need-sub-edit-discard-modal__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .need-sub-edit-discard-modal__actions .need-sub-create-secondary,
+  .need-sub-edit-discard-modal__actions .need-sub-form-cancel {
+    width: 100%;
+    min-width: 0;
   }
 
   .need-sub-create-next-label-full {

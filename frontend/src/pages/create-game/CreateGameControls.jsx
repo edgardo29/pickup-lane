@@ -111,15 +111,5 @@ export function TextareaInput({ form, updateField, field, hideLabel = false, lab
   )
 }
 
-export function ReviewRow({ icon, label, value, wide = false }) {
-  return (
-    <div className={`create-game-review-row${wide ? ' create-game-review-row--wide' : ''}`}>
-      {icon}
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
-}
-
 export { PaymentMethodsEditor } from './CreateGamePaymentMethods.jsx'
 export { DiscardModal } from './CreateGameDiscardModal.jsx'

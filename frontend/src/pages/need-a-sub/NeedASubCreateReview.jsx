@@ -127,7 +127,7 @@ function ReviewItem({ label, value, valueVariant = '', variant = '' }) {
 
 function formatNeed(position) {
   if (!position.player_group) {
-    return 'Select player type'
+    return '-'
   }
 
   if (position.player_group === 'open') {

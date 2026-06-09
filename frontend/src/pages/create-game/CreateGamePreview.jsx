@@ -5,18 +5,22 @@ import {
   GameDateIcon,
   GameNotesIcon,
   GameTimeIcon,
+  HostPaymentIcon,
   HostRulesIcon,
+  PriceIcon,
+  VenueIcon,
 } from '../../components/GameFactIcons.jsx'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
 import {
   buildPreviewLocation,
   capitalize,
   formatGamePlayerGroup,
+  formatHostPaymentMethods,
   formatMoney,
   formatSkillLevel,
 } from './createGameFormatters.js'
 
-export function CreateGamePreview({ form, review }) {
+export function CreateGamePreview({ activeStep = 1, form, review }) {
   const previewTitle = form.venueName ? form.venueName : 'Community Game'
 
   return (
@@ -37,6 +41,7 @@ export function CreateGamePreview({ form, review }) {
       </PreviewSection>
 
       <PreviewSection title="Location">
+        <PreviewFact icon={<VenueIcon />} label={form.venueName || '-'} multiline />
         <PreviewFact icon={<AddressIcon />} label={formatPreviewLocation(form)} multiline />
       </PreviewSection>
 
@@ -44,14 +49,23 @@ export function CreateGamePreview({ form, review }) {
         <PreviewNote
           icon={<GameNotesIcon />}
           label="Game notes"
-          text={form.gameNotes || 'Add a note so players know what to bring.'}
+          text={formatOptionalPreviewText(form.gameNotes, 'No game notes added.', 3, activeStep)}
         />
         <PreviewNote
           icon={<HostRulesIcon />}
           label="Host rules"
-          text={form.hostRules || 'Add host rules for players.'}
+          text={formatOptionalPreviewText(form.hostRules, 'No host rules added.', 3, activeStep)}
         />
-        <PreviewMoney label="Player price" value={formatMoney(Number(form.price) * 100)} />
+        <PreviewNote
+          icon={<PriceIcon />}
+          label="Player price"
+          text={formatMoney(Number(form.price) * 100)}
+        />
+        <PreviewNote
+          icon={<HostPaymentIcon />}
+          label="Host payment"
+          text={formatHostPaymentPreview(form, activeStep)}
+        />
       </PreviewSection>
     </aside>
   )
@@ -102,15 +116,6 @@ function PreviewSection({ children, title }) {
   )
 }
 
-function PreviewMoney({ label, value }) {
-  return (
-    <div className="create-game-preview__money">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
-}
-
 function PreviewFact({ icon = null, label, multiline = false, variant = '' }) {
   const className = [
     'create-game-preview__fact',
@@ -124,4 +129,28 @@ function PreviewFact({ icon = null, label, multiline = false, variant = '' }) {
       <span className="create-game-preview__fact-label">{label}</span>
     </span>
   )
+}
+
+function formatOptionalPreviewText(value, fallbackText, stepNumber, activeStep) {
+  const text = String(value || '').trim()
+
+  if (text) {
+    return text
+  }
+
+  return activeStep > stepNumber ? fallbackText : '-'
+}
+
+function formatHostPaymentPreview(form, activeStep) {
+  const hostPayment = formatHostPaymentMethods(form.paymentMethods)
+
+  if (hostPayment !== 'Not added') {
+    return hostPayment
+  }
+
+  if (Number(form.price) === 0) {
+    return activeStep > 3 ? 'No player payment needed.' : '-'
+  }
+
+  return activeStep > 3 ? hostPayment : '-'
 }

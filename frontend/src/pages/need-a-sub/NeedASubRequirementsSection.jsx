@@ -31,17 +31,17 @@ export function NeedASubRequirementsSection({
   const remainingSpots = Math.max(0, MAX_TOTAL_SUBS - totalSpotsNeeded)
   const requestedLabel = `${totalSpotsNeeded} of ${MAX_TOTAL_SUBS} sub ${totalSpotsNeeded === 1 ? 'spot' : 'spots'} requested`
   const remainingLabel = `${remainingSpots} remaining`
-  const hasIncompletePlayerType = form.positions.some((position) => !position.player_group)
+  const hasIncompletePlayerGroup = form.positions.some((position) => !position.player_group)
   const hasAnyPlayerRow = form.positions.some((position) => position.player_group === 'open')
   const hasLockedRows = form.positions.some((position) => isEditMode && hasActivePositionRequests(position))
-  const isRowOptionLimit = (isAtRowLimit || hasIncompletePlayerType) && !isAtSpotLimit
-  const canAddSub = !hasIncompletePlayerType && !isAtRowLimit && !isAtSpotLimit
+  const isRowOptionLimit = (isAtRowLimit || hasIncompletePlayerGroup) && !isAtSpotLimit
+  const canAddSub = !hasIncompletePlayerGroup && !isAtRowLimit && !isAtSpotLimit
   const subLimitMessage = isOverSpotLimit
     ? `Reduce the total to ${MAX_TOTAL_SUBS} Subs before publishing.`
     : isAtSpotLimit
       ? `Sub limit reached at ${MAX_TOTAL_SUBS}.`
       : ''
-  const rowOptionMessage = getRowOptionMessage(hasIncompletePlayerType, hasAnyPlayerRow)
+  const rowOptionMessage = getRowOptionMessage(hasIncompletePlayerGroup, hasAnyPlayerRow)
 
   return (
     <section className="need-sub-form-section">
@@ -63,7 +63,7 @@ export function NeedASubRequirementsSection({
           )}
           {hasLockedRows && (
             <small className="need-sub-subtotal need-sub-subtotal--note">
-              <span>Note:</span> Rows with active requests keep their position and player type.
+              <span>Note:</span> Rows with active requests keep their position and player group.
             </small>
           )}
         </div>
@@ -83,7 +83,7 @@ export function NeedASubRequirementsSection({
         {iconActions && (
           <div className="need-sub-position-list__header" aria-hidden="true">
             <span>Position</span>
-            <span>Player Type</span>
+            <span>Player Group</span>
             <span>Spots</span>
             <span />
           </div>
@@ -113,7 +113,7 @@ export function NeedASubRequirementsSection({
                   ))}
                 </select>
               </NeedASubFormField>
-              <NeedASubFormField className={iconActions ? 'need-sub-field--compact' : ''} label="Player Type">
+              <NeedASubFormField className={iconActions ? 'need-sub-field--compact' : ''} label="Player group">
                 <select
                   disabled={isPositionTypeLocked(position, isEditMode)}
                   value={position.player_group}
@@ -184,14 +184,14 @@ function isPositionTypeLocked(position, isEditMode) {
   return Boolean(isEditMode && hasActivePositionRequests(position))
 }
 
-function getRowOptionMessage(hasIncompletePlayerType, hasAnyPlayerRow) {
-  if (hasIncompletePlayerType) {
-    return 'Choose Player Type on an existing row before adding more rows for that position.'
+function getRowOptionMessage(hasIncompletePlayerGroup, hasAnyPlayerRow) {
+  if (hasIncompletePlayerGroup) {
+    return 'Choose a player group on an existing row before adding more rows for that position.'
   }
 
   if (hasAnyPlayerRow) {
     return 'Any Player covers that whole position. Change Any to Men or Women to split that position into more rows.'
   }
 
-  return 'All valid position/player type combinations have been added. Increase "Spots" on an existing row to request more subs.'
+  return 'All valid position/player group combinations have been added. Increase "Spots" on an existing row to request more subs.'
 }

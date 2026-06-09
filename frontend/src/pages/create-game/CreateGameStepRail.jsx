@@ -10,7 +10,10 @@ export function StepRail({ activeStep }) {
         >
           <span className="create-game-step__content">
             <span className="create-game-step__marker">{step.id}</span>
-            <strong>{step.label}</strong>
+            <strong>
+              <span className="create-game-step__label-full">{step.label}</span>
+              <span className="create-game-step__label-mobile">{step.mobileLabel || step.label}</span>
+            </strong>
           </span>
         </li>
       ))}
