@@ -1,4 +1,6 @@
+import { ArrowRight } from 'lucide-react'
 import { InfoIcon, UserIcon } from '../../components/AuthIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import { AuthField } from '../../features/auth/AuthFields.jsx'
 import { BirthdayField } from '../../features/auth/BirthdayField.jsx'
 
@@ -58,13 +60,14 @@ export function FinishProfileForm({
         You must be at least 13 years old to use Pickup Lane.
       </p>
 
-      {error && <p className="auth-error">{error}</p>}
+      <FormErrorMessage>{error}</FormErrorMessage>
 
       <button
         className="auth-primary-button"
         disabled={isDisabled}
         type="submit"
       >
+        <ArrowRight aria-hidden="true" />
         {isSubmitting ? 'Saving...' : 'Continue'}
       </button>
     </form>

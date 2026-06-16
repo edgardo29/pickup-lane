@@ -194,6 +194,162 @@
   align-items: start;
 }
 
+.app-root {
+  min-height: 100svh;
+  background: #010409;
+}
+
+.app-footer {
+  --footer-width: min(1640px, calc(100% - 56px));
+  --lime: var(--pl-lime, #b8ff24);
+
+  color: #f8fafc;
+  background:
+    linear-gradient(115deg, rgba(248, 250, 252, 0.025), rgba(248, 250, 252, 0.006) 46%, rgba(139, 184, 230, 0.018)),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.014), transparent 68%),
+    #070d14;
+  border-top: 1px solid rgba(248, 250, 252, 0.11);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
+}
+
+.app-footer__inner {
+  width: var(--footer-width);
+  margin: 0 auto;
+  padding: 42px 0 30px;
+  display: grid;
+  grid-template-columns: minmax(260px, 430px) minmax(0, 1fr);
+  gap: clamp(36px, 6vw, 96px);
+}
+
+.app-footer__brand {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.app-footer__brand-link {
+  width: fit-content;
+  max-width: 100%;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+}
+
+.app-footer__brand-logo {
+  width: 44px;
+  height: 39px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+}
+
+.app-footer__brand-logo img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: contain;
+  filter: brightness(0) saturate(100%) invert(88%) sepia(97%) saturate(1138%)
+    hue-rotate(18deg) brightness(107%) contrast(104%);
+}
+
+.app-footer__brand-wordmark {
+  min-width: 0;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 1.18rem;
+  font-style: italic;
+  font-weight: 950;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-footer__brand-wordmark strong {
+  color: var(--lime);
+}
+
+.app-footer__brand p {
+  max-width: 28rem;
+  margin: 0;
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.app-footer__nav {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(22px, 4vw, 54px);
+}
+
+.app-footer__group {
+  min-width: 0;
+}
+
+.app-footer__group h2 {
+  margin: 0 0 12px;
+  color: var(--lime);
+  font-size: 0.76rem;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.app-footer__group ul {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+
+.app-footer__group a {
+  width: fit-content;
+  max-width: 100%;
+  color: rgba(248, 250, 252, 0.78);
+  display: inline-flex;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.app-footer__brand-link:hover,
+.app-footer__group a:hover {
+  color: var(--lime);
+}
+
+.app-footer__brand-link:focus-visible,
+.app-footer__group a:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 4px;
+}
+
+.app-footer__bottom {
+  min-width: 0;
+  padding-top: 22px;
+  border-top: 1px solid rgba(248, 250, 252, 0.09);
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.app-footer__bottom p {
+  margin: 0;
+  color: rgba(248, 250, 252, 0.56);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .app-nav {
   height: 64px;
   min-height: 64px;
@@ -553,6 +709,15 @@
 }
 
 @media (max-width: 1180px) {
+  .app-footer__inner {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+
+  .app-footer__brand p {
+    max-width: 36rem;
+  }
+
   .app-nav {
     height: 64px;
     min-height: 64px;
@@ -750,6 +915,25 @@
     --app-page-shell-padding-bottom: 48px;
   }
 
+  .app-footer {
+    --footer-width: calc(100% - 28px);
+  }
+
+  .app-footer__inner {
+    padding: 34px 0 24px;
+  }
+
+  .app-footer__nav {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .app-footer__bottom {
+    display: grid;
+    justify-content: stretch;
+    gap: 8px;
+  }
+
   .app-page-header {
     gap: 18px;
   }
@@ -787,6 +971,24 @@
 }
 
 @media (max-width: 560px) {
+  .app-footer__brand-wordmark {
+    font-size: 1.05rem;
+  }
+
+  .app-footer__brand-logo {
+    width: 38px;
+    height: 34px;
+    flex-basis: 38px;
+  }
+
+  .app-footer__brand p {
+    font-size: 0.9rem;
+  }
+
+  .app-footer__group a {
+    font-size: 0.88rem;
+  }
+
   .app-nav {
     padding: 10px 14px;
   }

@@ -1,5 +1,7 @@
+import { LogIn } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { LockIcon, MailIcon } from '../../components/AuthIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import {
   AuthField,
   PasswordVisibilityButton,
@@ -48,16 +50,17 @@ export function SignInForm({
         value={password}
       />
 
-      {error && <p className="auth-error">{error}</p>}
+      <FormErrorMessage>{error}</FormErrorMessage>
       {resetStatus === 'success' && !error && (
         <p className="auth-success">Password changed.</p>
       )}
 
       <button
-        className="auth-primary-button auth-primary-button--muted"
+        className="auth-primary-button"
         disabled={isSubmitting}
         type="submit"
       >
+        <LogIn aria-hidden="true" />
         {isSubmitting ? 'Signing in...' : 'Sign In'}
       </button>
     </form>

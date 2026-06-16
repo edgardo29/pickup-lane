@@ -1,4 +1,6 @@
+import { UserPlus } from 'lucide-react'
 import { LockIcon, MailIcon } from '../../components/AuthIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import {
   AuthField,
   PasswordVisibilityButton,
@@ -46,9 +48,10 @@ export function CreateAccountForm({
         value={password}
       />
 
-      {error && <p className="auth-error">{error}</p>}
+      <FormErrorMessage>{error}</FormErrorMessage>
 
       <button className="auth-primary-button" disabled={isSubmitting} type="submit">
+        <UserPlus aria-hidden="true" />
         {isSubmitting ? 'Checking...' : 'Create Account'}
       </button>
     </form>

@@ -1,4 +1,5 @@
-import { MessageSquare } from 'lucide-react'
+import { useEffect } from 'react'
+import { MessageSquare, Send, X } from 'lucide-react'
 import { getInitials } from './gameDetailsFormatters.js'
 import { InfoCard } from './GameDetailsPrimitives.jsx'
 
@@ -63,6 +64,7 @@ export function ChatPanel({
 }) {
   const pinnedMessage = messages.find((message) => message.is_pinned)
   const remainingCharacters = maxLength - draft.length
+  useDetailsChatModalBodyLock()
 
   return (
     <div className="details-modal-backdrop" role="presentation" onClick={onClose}>
@@ -84,7 +86,7 @@ export function ChatPanel({
           </div>
 
           <button type="button" aria-label="Close chat" onClick={onClose}>
-            ×
+            <X aria-hidden="true" />
           </button>
         </div>
 
@@ -95,7 +97,12 @@ export function ChatPanel({
           </div>
         )}
 
-        <div className="details-chat-thread">
+        <div
+          className={[
+            'details-chat-thread',
+            messages.length === 0 ? 'details-chat-thread--empty' : '',
+          ].filter(Boolean).join(' ')}
+        >
           {messages.length > 0 ? (
             messages.map((message) => (
               <ChatMessageRow
@@ -126,6 +133,7 @@ export function ChatPanel({
               {draft.length}/{maxLength}
             </span>
             <button type="submit" disabled={isSending || !draft.trim()}>
+              <Send aria-hidden="true" />
               {isSending ? 'Sending...' : 'Send'}
             </button>
           </div>
@@ -134,6 +142,17 @@ export function ChatPanel({
       </section>
     </div>
   )
+}
+
+function useDetailsChatModalBodyLock() {
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = originalOverflow
+    }
+  }, [])
 }
 
 function ChatIconWithDot({ active }) {

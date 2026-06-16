@@ -58,12 +58,14 @@ export function AuthShell({
             <span className="auth-back-control__icon">
               <ArrowLeftIcon />
             </span>
+            <span className="auth-back-control__text">Back</span>
           </button>
         ) : (
           <Link className="auth-back-control" to={backTo} aria-label={backLabel}>
             <span className="auth-back-control__icon">
               <ArrowLeftIcon />
             </span>
+            <span className="auth-back-control__text">Back</span>
           </Link>
         )
       )}

@@ -5,6 +5,8 @@ import { appNavItems } from './appNavData.js'
 import { fetchUnreadNotificationCount } from './appNavApi.js'
 import { getDisplayName, getInitials } from './appNavFormatters.js'
 
+const DESKTOP_NAV_MEDIA_QUERY = '(min-width: 1181px)'
+
 export function useAppNavState({
   isForcedLoading = false,
   preferPublicWhileLoading = false,
@@ -62,6 +64,21 @@ export function useAppNavState({
     window.addEventListener('keydown', closeOnEscape)
 
     return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [])
+
+  useEffect(() => {
+    const desktopQuery = window.matchMedia(DESKTOP_NAV_MEDIA_QUERY)
+
+    function closeOnDesktop(event) {
+      if (event.matches) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    closeOnDesktop(desktopQuery)
+    desktopQuery.addEventListener('change', closeOnDesktop)
+
+    return () => desktopQuery.removeEventListener('change', closeOnDesktop)
   }, [])
 
   const displayName = appUser ? getDisplayName(appUser, currentUser) : 'Sign In / Register'

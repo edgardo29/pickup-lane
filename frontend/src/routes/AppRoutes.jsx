@@ -20,7 +20,7 @@ import {
 } from '../pages/browse-games/index.js'
 import { CreateGamePage } from '../pages/create-game/index.js'
 import { InboxPage } from '../pages/inbox/index.js'
-import LandingPage from '../pages/LandingPage.jsx'
+import { LandingPage } from '../pages/landing/index.js'
 import { CancellationRefundPolicyPage, PrivacyPage, TermsPage } from '../pages/LegalPages.jsx'
 import { MyGamesPage } from '../pages/my-games/index.js'
 import {

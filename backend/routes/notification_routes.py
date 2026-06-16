@@ -17,6 +17,8 @@ from backend.models import (
     Payment,
     Refund,
     SubPost,
+    SubPostChat,
+    SubPostChatMessage,
     SubPostPosition,
     SubPostRequest,
     User,
@@ -52,6 +54,8 @@ GAME_RELATED_FIELDS = {
 }
 SUB_RELATED_FIELDS = {
     "related_sub_post_id",
+    "related_sub_post_chat_id",
+    "related_sub_post_chat_message_id",
     "related_sub_post_request_id",
     "related_sub_post_position_id",
 }
@@ -80,6 +84,8 @@ IMMUTABLE_NOTIFICATION_UPDATE_FIELDS = {
     "related_participant_id",
     "related_message_id",
     "related_sub_post_id",
+    "related_sub_post_chat_id",
+    "related_sub_post_chat_message_id",
     "related_sub_post_request_id",
     "related_sub_post_position_id",
 }
@@ -628,6 +634,67 @@ def validate_notification_references(
                 detail="Related Need a Sub post not found.",
             )
 
+    db_sub_post_chat = None
+    if notification_data["related_sub_post_chat_id"] is not None:
+        db_sub_post_chat = db.get(
+            SubPostChat,
+            notification_data["related_sub_post_chat_id"],
+        )
+
+        if db_sub_post_chat is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Related Need a Sub chat not found.",
+            )
+
+        if (
+            db_sub_post is not None
+            and db_sub_post_chat.sub_post_id != db_sub_post.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="related_sub_post_chat_id must belong to related_sub_post_id.",
+            )
+
+    if notification_data["related_sub_post_chat_message_id"] is not None:
+        db_sub_chat_message = db.get(
+            SubPostChatMessage,
+            notification_data["related_sub_post_chat_message_id"],
+        )
+
+        if db_sub_chat_message is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Related Need a Sub chat message not found.",
+            )
+
+        if (
+            db_sub_post_chat is not None
+            and db_sub_chat_message.chat_id != db_sub_post_chat.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "related_sub_post_chat_message_id must belong to "
+                    "related_sub_post_chat_id."
+                ),
+            )
+
+        if db_sub_post_chat is None and db_sub_post is not None:
+            db_sub_message_chat = db.get(SubPostChat, db_sub_chat_message.chat_id)
+
+            if (
+                db_sub_message_chat is None
+                or db_sub_message_chat.sub_post_id != db_sub_post.id
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "related_sub_post_chat_message_id must belong to "
+                        "related_sub_post_id."
+                    ),
+                )
+
     db_sub_position = None
     if notification_data["related_sub_post_position_id"] is not None:
         db_sub_position = db.get(
@@ -731,6 +798,8 @@ def query_notifications(
     related_participant_id: uuid.UUID | None = None,
     related_message_id: uuid.UUID | None = None,
     related_sub_post_id: uuid.UUID | None = None,
+    related_sub_post_chat_id: uuid.UUID | None = None,
+    related_sub_post_chat_message_id: uuid.UUID | None = None,
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
 ) -> list[Notification]:
@@ -803,6 +872,17 @@ def query_notifications(
             Notification.related_sub_post_id == related_sub_post_id
         )
 
+    if related_sub_post_chat_id is not None:
+        statement = statement.where(
+            Notification.related_sub_post_chat_id == related_sub_post_chat_id
+        )
+
+    if related_sub_post_chat_message_id is not None:
+        statement = statement.where(
+            Notification.related_sub_post_chat_message_id
+            == related_sub_post_chat_message_id
+        )
+
     if related_sub_post_request_id is not None:
         statement = statement.where(
             Notification.related_sub_post_request_id == related_sub_post_request_id
@@ -863,6 +943,8 @@ def list_my_notifications(
     related_participant_id: uuid.UUID | None = None,
     related_message_id: uuid.UUID | None = None,
     related_sub_post_id: uuid.UUID | None = None,
+    related_sub_post_chat_id: uuid.UUID | None = None,
+    related_sub_post_chat_message_id: uuid.UUID | None = None,
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
     current_user: User = Depends(get_current_app_user),
@@ -883,6 +965,8 @@ def list_my_notifications(
         related_participant_id=related_participant_id,
         related_message_id=related_message_id,
         related_sub_post_id=related_sub_post_id,
+        related_sub_post_chat_id=related_sub_post_chat_id,
+        related_sub_post_chat_message_id=related_sub_post_chat_message_id,
         related_sub_post_request_id=related_sub_post_request_id,
         related_sub_post_position_id=related_sub_post_position_id,
     )
@@ -923,6 +1007,8 @@ def list_notifications(
     related_participant_id: uuid.UUID | None = None,
     related_message_id: uuid.UUID | None = None,
     related_sub_post_id: uuid.UUID | None = None,
+    related_sub_post_chat_id: uuid.UUID | None = None,
+    related_sub_post_chat_message_id: uuid.UUID | None = None,
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
     current_user: User = Depends(get_current_app_user),
@@ -949,6 +1035,8 @@ def list_notifications(
         related_participant_id=related_participant_id,
         related_message_id=related_message_id,
         related_sub_post_id=related_sub_post_id,
+        related_sub_post_chat_id=related_sub_post_chat_id,
+        related_sub_post_chat_message_id=related_sub_post_chat_message_id,
         related_sub_post_request_id=related_sub_post_request_id,
         related_sub_post_position_id=related_sub_post_position_id,
     )
@@ -1026,6 +1114,10 @@ def update_notification(
         "related_participant_id": db_notification.related_participant_id,
         "related_message_id": db_notification.related_message_id,
         "related_sub_post_id": db_notification.related_sub_post_id,
+        "related_sub_post_chat_id": db_notification.related_sub_post_chat_id,
+        "related_sub_post_chat_message_id": (
+            db_notification.related_sub_post_chat_message_id
+        ),
         "related_sub_post_request_id": db_notification.related_sub_post_request_id,
         "related_sub_post_position_id": db_notification.related_sub_post_position_id,
         "is_read": update_data.get("is_read", db_notification.is_read),

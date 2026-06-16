@@ -6,12 +6,17 @@ import {
   cancelNeedASubRequest,
   requestNeedASubSpot,
 } from './needASubApi.js'
+import {
+  NeedASubChatModal,
+  NeedASubChatSection,
+} from './NeedASubChat.jsx'
 import { NeedASubCancelPostModal } from './NeedASubCancelPostModal.jsx'
 import NeedASubDetailContent from './NeedASubDetailContent.jsx'
 import { NeedASubManageRequestsModal } from './NeedASubManageRequestsModal.jsx'
 import { MAX_WAITLIST_REQUESTS_PER_POST } from './needASubData.js'
 import { countHeldSpots } from './needASubSelectors.js'
 import { NeedASubDetailSkeleton } from './NeedASubSkeleton.jsx'
+import { useNeedASubChat } from './useNeedASubChat.js'
 import { useNeedASubManageActions } from './useNeedASubManageActions.js'
 import { useNeedASubDetailData } from './useNeedASubDetailData.js'
 import '../../styles/need-a-sub/NeedASub.css'
@@ -53,6 +58,22 @@ function NeedASubDetailPage() {
     [postRequests],
   )
   const isOwner = Boolean(appUser?.id && post?.owner_user_id === appUser.id)
+  const chatAccess = useMemo(
+    () => getNeedASubChatAccessState({
+      activeRequest,
+      currentUser,
+      isOwner,
+      post,
+    }),
+    [activeRequest, currentUser, isOwner, post],
+  )
+  const subChat = useNeedASubChat({
+    appUser,
+    canOpenSubChat: chatAccess.canOpen,
+    firebaseUser: currentUser,
+    onError: setError,
+    postId,
+  })
   const isUpcomingPost = post?.starts_at
     ? new Date(post.starts_at) > new Date()
     : false
@@ -106,6 +127,15 @@ function NeedASubDetailPage() {
     setError,
     setNotice,
   })
+  const chatSection = post ? (
+    <NeedASubChatSection
+      canOpen={chatAccess.canOpen}
+      disabledReason={chatAccess.disabledReason}
+      isOpening={subChat.isOpening}
+      unreadCount={subChat.unreadCount}
+      onOpen={subChat.openChat}
+    />
+  ) : null
 
   useEffect(() => {
     const routedNotice = location.state?.needASubNotice
@@ -185,6 +215,7 @@ function NeedASubDetailPage() {
             canCancelPost={canCancelPost}
             canEditPost={canEditPost}
             canManageRequests={canManageRequests}
+            chatSection={chatSection}
             currentUser={currentUser}
             isActing={isActing}
             isOwner={isOwner}
@@ -215,6 +246,22 @@ function NeedASubDetailPage() {
             selectedPositionNeedsWaitlist={selectedPositionNeedsWaitlist}
           />
         )}
+        {subChat.isOpen && (
+          <NeedASubChatModal
+            currentUserId={appUser?.id}
+            draft={subChat.draft}
+            error={subChat.error}
+            hasMoreMessages={subChat.hasMoreMessages}
+            isLoadingOlder={subChat.isLoadingOlder}
+            isSending={subChat.isSending}
+            maxLength={subChat.maxLength}
+            messages={subChat.messages}
+            onChangeDraft={subChat.setDraft}
+            onClose={subChat.closeChat}
+            onLoadOlder={subChat.loadOlderMessages}
+            onSend={subChat.sendMessage}
+          />
+        )}
         {isManageRequestsOpen && post && (
           <NeedASubManageRequestsModal
             error={error}
@@ -239,3 +286,52 @@ function NeedASubDetailPage() {
 }
 
 export default NeedASubDetailPage
+
+function getNeedASubChatAccessState({
+  activeRequest,
+  currentUser,
+  isOwner,
+  post,
+}) {
+  if (!post || !currentUser) {
+    return {
+      canOpen: false,
+      disabledReason: 'Chat available for confirmed players only.',
+    }
+  }
+
+  if (!isNeedASubChatWindowOpen(post)) {
+    return {
+      canOpen: false,
+      disabledReason: 'Chat closed.',
+    }
+  }
+
+  if (isOwner || activeRequest?.request_status === 'confirmed') {
+    return {
+      canOpen: true,
+      disabledReason: '',
+    }
+  }
+
+  return {
+    canOpen: false,
+    disabledReason: 'Chat available for confirmed players only.',
+  }
+}
+
+function isNeedASubChatWindowOpen(post) {
+  if (!post || ['canceled', 'removed'].includes(post.post_status)) {
+    return false
+  }
+
+  const endTime = post.ends_at || post.starts_at
+  if (!endTime) {
+    return false
+  }
+
+  const closesAt = new Date(endTime)
+  closesAt.setHours(closesAt.getHours() + 24)
+
+  return Date.now() <= closesAt.getTime()
+}

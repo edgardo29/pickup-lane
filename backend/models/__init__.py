@@ -23,6 +23,9 @@ from backend.models.policy_acceptance_model import PolicyAcceptance
 from backend.models.policy_document_model import PolicyDocument
 from backend.models.refund_model import Refund
 from backend.models.sub_post_model import SubPost
+from backend.models.sub_post_chat_message_model import SubPostChatMessage
+from backend.models.sub_post_chat_model import SubPostChat
+from backend.models.sub_post_chat_read_model import SubPostChatRead
 from backend.models.sub_post_position_model import SubPostPosition
 from backend.models.sub_post_request_model import SubPostRequest
 from backend.models.sub_post_request_status_history_model import (
@@ -70,6 +73,9 @@ __all__ = [
     "PolicyAcceptance",
     "Refund",
     "SubPost",
+    "SubPostChat",
+    "SubPostChatMessage",
+    "SubPostChatRead",
     "SubPostPosition",
     "SubPostRequest",
     "SubPostRequestStatusHistory",

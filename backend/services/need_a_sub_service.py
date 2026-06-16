@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from backend.models import (
     Notification,
     SubPost,
+    SubPostChat,
     SubPostPosition,
     SubPostRequest,
     SubPostRequestStatusHistory,
@@ -885,11 +886,37 @@ def is_publicly_visible_sub_post(sub_post: SubPost) -> bool:
     )
 
 
-def user_can_view_private_sub_post(sub_post: SubPost, user: User | None) -> bool:
+def user_can_view_private_sub_post(
+    db: Session,
+    sub_post: SubPost,
+    user: User | None,
+) -> bool:
     if user is None:
         return False
 
-    return is_publicly_visible_sub_post(sub_post)
+    if is_publicly_visible_sub_post(sub_post):
+        return True
+
+    if sub_post.post_status not in {"active", "filled", "expired"}:
+        return False
+
+    chat_access_closes_at = ensure_aware(sub_post.ends_at) + timedelta(hours=24)
+    if now_utc() > chat_access_closes_at:
+        return False
+
+    if sub_post.owner_user_id == user.id:
+        return True
+
+    return (
+        db.scalar(
+            select(SubPostRequest.id).where(
+                SubPostRequest.sub_post_id == sub_post.id,
+                SubPostRequest.requester_user_id == user.id,
+                SubPostRequest.request_status == "confirmed",
+            )
+        )
+        is not None
+    )
 
 
 def count_waitlist_ahead(db: Session, sub_request: SubPostRequest) -> int:
@@ -980,6 +1007,71 @@ def sub_post_updated_aggregation_key(
     recipient_user_id: uuid.UUID,
 ) -> str:
     return f"need_a_sub:post:{sub_post_id}:user:{recipient_user_id}:sub_post_updated"
+
+
+def sub_chat_message_aggregation_key(
+    sub_post_id: uuid.UUID,
+    chat_id: uuid.UUID,
+    recipient_user_id: uuid.UUID,
+) -> str:
+    return (
+        f"need_a_sub:post:{sub_post_id}:chat:{chat_id}:"
+        f"user:{recipient_user_id}:sub_chat_message"
+    )
+
+
+def resolve_sub_chat_notification_for_user(
+    db: Session,
+    *,
+    sub_post_id: uuid.UUID,
+    user_id: uuid.UUID,
+    read_at: datetime | None = None,
+) -> None:
+    chat_id = db.scalar(
+        select(SubPostChat.id).where(SubPostChat.sub_post_id == sub_post_id)
+    )
+    if chat_id is None:
+        return
+
+    resolve_aggregated_notification(
+        db,
+        user_id=user_id,
+        aggregation_key=sub_chat_message_aggregation_key(
+            sub_post_id,
+            chat_id,
+            user_id,
+        ),
+        values={"aggregate_count": None},
+        read_at=read_at,
+    )
+
+
+def resolve_sub_chat_notifications_for_post(
+    db: Session,
+    *,
+    sub_post_id: uuid.UUID,
+    read_at: datetime | None = None,
+) -> None:
+    chat_id = db.scalar(
+        select(SubPostChat.id).where(SubPostChat.sub_post_id == sub_post_id)
+    )
+    if chat_id is None:
+        return
+
+    effective_read_at = read_at or now_utc()
+    notifications = db.scalars(
+        select(Notification).where(
+            Notification.related_sub_post_chat_id == chat_id,
+            Notification.notification_type == "sub_chat_message",
+        )
+    ).all()
+    for notification in notifications:
+        notification.is_read = True
+        if notification.read_at is None:
+            notification.read_at = effective_read_at
+        notification.aggregate_count = None
+        notification.updated_at = effective_read_at
+        db.add(notification)
 
 
 def capture_sub_post_structural_snapshot(sub_post: SubPost) -> dict[str, object]:
@@ -1697,6 +1789,12 @@ def requester_cancel_request(
         )
 
     if was_confirmed:
+        resolve_sub_chat_notification_for_user(
+            db,
+            sub_post_id=sub_post.id,
+            user_id=requester.id,
+            read_at=current_time,
+        )
         recalculate_filled_status(db, sub_post, requester.id, "requester")
     if should_promote:
         promoted_request = promote_next_waitlisted_request(
@@ -1736,7 +1834,22 @@ def owner_cancel_request(
         )
 
     position_id = sub_request.sub_post_position_id
-    change_request_status(db, sub_request, "canceled_by_owner", owner.id, "owner", reason)
+    current_time = now_utc()
+    change_request_status(
+        db,
+        sub_request,
+        "canceled_by_owner",
+        owner.id,
+        "owner",
+        reason,
+        current_time=current_time,
+    )
+    resolve_sub_chat_notification_for_user(
+        db,
+        sub_post_id=sub_post.id,
+        user_id=sub_request.requester_user_id,
+        read_at=current_time,
+    )
     notify_requester_sub_status(
         db,
         sub_post=sub_post,
@@ -1784,6 +1897,11 @@ def owner_report_no_show(
         )
 
     change_request_status(db, sub_request, "no_show_reported", owner.id, "owner", reason)
+    resolve_sub_chat_notification_for_user(
+        db,
+        sub_post_id=sub_post.id,
+        user_id=sub_request.requester_user_id,
+    )
     db.commit()
     db.refresh(sub_request)
     return sub_request
@@ -1815,6 +1933,11 @@ def cancel_sub_post(
     sub_post.updated_at = current_time
     db.add(sub_post)
     add_post_status_history(db, sub_post, old_status, "canceled", owner.id, "owner", reason)
+    resolve_sub_chat_notifications_for_post(
+        db,
+        sub_post_id=sub_post.id,
+        read_at=current_time,
+    )
 
     active_requests = db.scalars(
         select(SubPostRequest).where(
@@ -1886,6 +2009,11 @@ def remove_sub_post(
         admin_user.id,
         "admin",
         reason,
+    )
+    resolve_sub_chat_notifications_for_post(
+        db,
+        sub_post_id=sub_post.id,
+        read_at=current_time,
     )
 
     active_requests = db.scalars(

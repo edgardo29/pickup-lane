@@ -128,6 +128,18 @@ from backend.schemas.policy_document_schema import (
     PolicyDocumentUpdate,
 )
 from backend.schemas.refund_schema import RefundCreate, RefundRead, RefundUpdate
+from backend.schemas.sub_post_chat_message_schema import (
+    SubPostChatMessageCreate,
+    SubPostChatMessageRead,
+    SubPostChatMessageUpdate,
+)
+from backend.schemas.sub_post_chat_read_schema import SubPostChatReadStateRead
+from backend.schemas.sub_post_chat_schema import (
+    SubPostChatCreate,
+    SubPostChatEnsureCreate,
+    SubPostChatRead,
+    SubPostChatUpdate,
+)
 from backend.schemas.sub_post_position_schema import (
     SubPostPositionCreate,
     SubPostPositionRead,
@@ -301,6 +313,14 @@ __all__ = [
     "SubPostRemove",
     "MAX_SUB_POST_TOTAL_SUBS",
     "MAX_SUB_POST_POSITION_ROWS",
+    "SubPostChatCreate",
+    "SubPostChatEnsureCreate",
+    "SubPostChatRead",
+    "SubPostChatUpdate",
+    "SubPostChatMessageCreate",
+    "SubPostChatMessageRead",
+    "SubPostChatMessageUpdate",
+    "SubPostChatReadStateRead",
     "SubPostPositionCreate",
     "SubPostPositionRead",
     "SubPostRequestCreate",

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -189,6 +189,54 @@ def create_refund_record(
     return str(refund_id)
 
 
+def create_sub_post_chat_record(*, sub_post_id: str) -> str:
+    from backend.database import SessionLocal
+    from backend.models import SubPostChat
+
+    chat_id = uuid4()
+
+    with SessionLocal() as db:
+        db.add(
+            SubPostChat(
+                id=chat_id,
+                sub_post_id=UUID(sub_post_id),
+                chat_status="active",
+            )
+        )
+        db.commit()
+
+    return str(chat_id)
+
+
+def create_sub_post_chat_message_record(
+    *,
+    chat_id: str,
+    sender_user_id: str,
+    message_body: str = "CI Need a Sub chat message",
+) -> str:
+    from backend.database import SessionLocal
+    from backend.models import SubPostChatMessage
+
+    message_id = uuid4()
+
+    with SessionLocal() as db:
+        db.add(
+            SubPostChatMessage(
+                id=message_id,
+                chat_id=UUID(chat_id),
+                sender_user_id=UUID(sender_user_id),
+                sender_display_name_snapshot="Test User",
+                sender_initials_snapshot="TU",
+                message_type="text",
+                message_body=message_body,
+                moderation_status="visible",
+            )
+        )
+        db.commit()
+
+    return str(message_id)
+
+
 def test_notifications_create_get_list_and_mark_read(client: TestClient):
     user, game, _booking, _participant, game_chat, chat_message = (
         create_notification_setup(client)
@@ -236,6 +284,11 @@ def test_notifications_create_get_list_and_mark_read(client: TestClient):
 def test_notification_type_config_has_preference_classes():
     assert "sub_post_updated" in NOTIFICATION_TYPE_CONFIG
     assert NOTIFICATION_PREFERENCE_CLASS_BY_TYPE["sub_post_updated"] == "mandatory"
+    assert "sub_chat_message" in NOTIFICATION_TYPE_CONFIG
+    assert (
+        NOTIFICATION_PREFERENCE_CLASS_BY_TYPE["sub_chat_message"]
+        == "preference_controlled"
+    )
     assert NOTIFICATION_IMPLEMENTATION_STATUS_BY_TYPE["booking_cancelled"] == "valid_only"
 
     for notification_type, config in NOTIFICATION_TYPE_CONFIG.items():
@@ -978,6 +1031,117 @@ def test_notifications_support_sub_post_updated_type(client: TestClient):
     assert body["icon"] == "CalendarDays"
     assert body["severity"] == "default"
     assert body["action"]["key"] == "view_sub_post"
+
+
+def test_notifications_support_sub_chat_message_relations(client: TestClient):
+    owner = create_user(client)
+    requester = create_user(client)
+    sub_post = create_sub_post(client, owner["id"])
+    sub_request = create_sub_request(client, requester["id"], sub_post)
+    authenticate_as(owner["id"])
+    accept_response = client.patch(f"/need-a-sub/requests/{sub_request['id']}/accept")
+    assert accept_response.status_code == 200, accept_response.text
+    chat_id = create_sub_post_chat_record(sub_post_id=sub_post["id"])
+    message_id = create_sub_post_chat_message_record(
+        chat_id=chat_id,
+        sender_user_id=owner["id"],
+    )
+
+    authenticate_as(requester["id"])
+    response = client.post(
+        "/notifications",
+        json={
+            "user_id": requester["id"],
+            "notification_type": "sub_chat_message",
+            "notification_category": "game_activity",
+            "notification_domain": "need_a_sub",
+            "title": "New chat message",
+            **need_a_sub_notification_contract_fields(
+                sub_post,
+                summary="New messages were posted.",
+            ),
+            "body": "New messages were posted in the Need a Sub chat.",
+            "related_sub_post_id": sub_post["id"],
+            "related_sub_post_chat_id": chat_id,
+            "related_sub_post_chat_message_id": message_id,
+            "aggregation_key": (
+                f"need_a_sub:post:{sub_post['id']}:chat:{chat_id}:"
+                f"user:{requester['id']}:sub_chat_message"
+            ),
+            "aggregate_count": 1,
+            "is_read": False,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["notification_type"] == "sub_chat_message"
+    assert body["notification_domain"] == "need_a_sub"
+    assert body["source_type"] == "need_a_sub"
+    assert body["source_label"] == "Need a Sub"
+    assert body["related_sub_post_id"] == sub_post["id"]
+    assert body["related_sub_post_chat_id"] == chat_id
+    assert body["related_sub_post_chat_message_id"] == message_id
+    assert body["icon"] == "MessageSquareText"
+    assert body["action"]["key"] == "view_sub_post"
+    assert body["action"]["disabled"] is False
+
+    chat_list_response = client.get(
+        f"/notifications/me?related_sub_post_chat_id={chat_id}"
+    )
+    assert chat_list_response.status_code == 200, chat_list_response.text
+    assert [item["id"] for item in chat_list_response.json()] == [body["id"]]
+
+    message_list_response = client.get(
+        f"/notifications/me?related_sub_post_chat_message_id={message_id}"
+    )
+    assert message_list_response.status_code == 200, message_list_response.text
+    assert [item["id"] for item in message_list_response.json()] == [body["id"]]
+
+
+def test_notifications_reject_sub_chat_message_mismatched_post(
+    client: TestClient,
+):
+    owner = create_user(client)
+    requester = create_user(client)
+    first_sub_post = create_sub_post(client, owner["id"])
+    first_start = datetime.fromisoformat(first_sub_post["starts_at"])
+    first_end = datetime.fromisoformat(first_sub_post["ends_at"])
+    second_sub_post = create_sub_post(
+        client,
+        owner["id"],
+        starts_at=(first_start + timedelta(days=1)).isoformat(),
+        ends_at=(first_end + timedelta(days=1)).isoformat(),
+    )
+    first_chat_id = create_sub_post_chat_record(sub_post_id=first_sub_post["id"])
+    first_message_id = create_sub_post_chat_message_record(
+        chat_id=first_chat_id,
+        sender_user_id=owner["id"],
+    )
+
+    authenticate_as(requester["id"])
+    response = client.post(
+        "/notifications",
+        json={
+            "user_id": requester["id"],
+            "notification_type": "sub_chat_message",
+            "notification_category": "game_activity",
+            "notification_domain": "need_a_sub",
+            "title": "New chat message",
+            **need_a_sub_notification_contract_fields(
+                second_sub_post,
+                summary="New messages were posted.",
+            ),
+            "body": "New messages were posted in the Need a Sub chat.",
+            "related_sub_post_id": second_sub_post["id"],
+            "related_sub_post_chat_id": first_chat_id,
+            "related_sub_post_chat_message_id": first_message_id,
+            "is_read": False,
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "related_sub_post_chat_id must belong" in response.text
 
 
 def test_notifications_reject_mismatched_need_a_sub_relations(client: TestClient):

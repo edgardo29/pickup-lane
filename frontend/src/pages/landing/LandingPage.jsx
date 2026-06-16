@@ -1,12 +1,15 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import BrowseAppNav from '../components/BrowseAppNav.jsx'
-import LandingAuthCard from '../components/LandingAuthCard.jsx'
-import LandingFeatureBar from '../components/LandingFeatureBar.jsx'
-import { ArrowRightIcon } from '../components/LandingIcons.jsx'
-import { useAuth } from '../hooks/useAuth.js'
-import '../styles/browse-games/BrowseGamesPage.css'
-import '../styles/landing/LandingPage.css'
+import BrowseAppNav from '../../components/BrowseAppNav.jsx'
+import LandingAuthCard from '../../components/LandingAuthCard.jsx'
+import LandingFeatureBar from '../../components/LandingFeatureBar.jsx'
+import { ArrowRightIcon } from '../../components/LandingIcons.jsx'
+import { useAuth } from '../../hooks/useAuth.js'
+import LandingFaq from './LandingFaq.jsx'
+import LandingHowItWorks from './LandingHowItWorks.jsx'
+import { LandingHostAndSub, LandingWaysToPlay } from './LandingProductSections.jsx'
+import '../../styles/browse-games/BrowseGamesPage.css'
+import '../../styles/landing/LandingPage.css'
 
 function LandingPage() {
   const { appUser, currentUser, isLoading } = useAuth()
@@ -41,34 +44,40 @@ function LandingPage() {
 
   return (
     <div className="landing-page">
-      <BrowseAppNav isLoading={shouldShowNavLoading} preferPublicWhileLoading={showPublicFallback} />
+      <div className="landing-top">
+        <BrowseAppNav isLoading={shouldShowNavLoading} preferPublicWhileLoading={showPublicFallback} />
 
-      <main className={heroClassName}>
-        <section className="landing-hero__copy">
-          {showSignedInHome && (
-            <p className="landing-hero__eyebrow">Welcome back{firstName ? `, ${firstName}` : ''}</p>
-          )}
+        <main className={heroClassName}>
+          <section className="landing-hero__copy">
+            {showSignedInHome && (
+              <p className="landing-hero__eyebrow">Welcome back{firstName ? `, ${firstName}` : ''}</p>
+            )}
 
-          <h1>
-            Find and join pickup soccer games <span>near you.</span>
-          </h1>
+            <h1>
+              Find and join pickup soccer games <span>near you.</span>
+            </h1>
 
-          <p>Book real games, meet real players, and play at approved venues near you.</p>
+            <p>Book real games, meet real players, and play at approved venues near you.</p>
 
-          {showGuestActions && (
-            <Link className="landing-hero__cta" to="/games">
-              Browse Games
-              <ArrowRightIcon />
-            </Link>
-          )}
-        </section>
+            {showGuestActions && (
+              <Link className="landing-hero__cta" to="/games">
+                Browse Games
+                <ArrowRightIcon />
+              </Link>
+            )}
+          </section>
 
-        {showGuestActions && <LandingAuthCard showWhileLoading={showPublicFallback} variant="hero" />}
-        {showSignedInHome && <SignedInHeroPanel />}
-      </main>
+          {showGuestActions && <LandingAuthCard showWhileLoading={showPublicFallback} variant="hero" />}
+          {showSignedInHome && <SignedInHeroPanel />}
+        </main>
 
-      <LandingFeatureBar />
-      {showGuestActions && <LandingAuthCard showWhileLoading={showPublicFallback} variant="mobile" />}
+        <LandingFeatureBar />
+      </div>
+
+      <LandingHowItWorks />
+      <LandingWaysToPlay />
+      <LandingHostAndSub />
+      <LandingFaq />
     </div>
   )
 }
@@ -86,6 +95,7 @@ function SignedInHeroPanel() {
         </Link>
         <Link className="signed-home-panel__secondary" to="/create-game">
           Create Game
+          <ArrowRightIcon />
         </Link>
       </div>
     </section>

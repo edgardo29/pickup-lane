@@ -11,6 +11,9 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 # Keep this list in dependency order for cleanup: child tables first, then the
 # parent tables they reference.
 TEST_TABLES = (
+    "sub_post_chat_reads",
+    "sub_post_chat_messages",
+    "sub_post_chats",
     "sub_post_status_history",
     "sub_post_request_status_history",
     "sub_post_requests",
