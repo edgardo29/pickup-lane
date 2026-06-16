@@ -169,7 +169,7 @@ def test_checkout_payment_intent_rejects_stale_stripe_payment_method(
         raise RuntimeError("No such payment_method")
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.retrieve_payment_method",
+        "backend.services.payment_method_service.retrieve_payment_method",
         fake_retrieve_payment_method,
     )
     authenticate_as(user["id"])
@@ -251,11 +251,11 @@ def test_checkout_payment_intent_can_use_saved_payment_method(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.confirm_payment_intent",
+        "backend.services.checkout_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
     authenticate_as(user["id"])
@@ -337,11 +337,11 @@ def test_checkout_payment_intent_with_partial_credit_charges_stripe_remainder(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.confirm_payment_intent",
+        "backend.services.checkout_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
     authenticate_as(user["id"])
@@ -433,11 +433,11 @@ def test_checkout_status_admin_view_uses_buyer_credit_balance(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.confirm_payment_intent",
+        "backend.services.checkout_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
 
@@ -484,7 +484,7 @@ def test_checkout_full_credit_confirms_without_stripe_or_saved_card(
         raise AssertionError("Stripe should not be called for full-credit checkout.")
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fail_create_payment_intent,
     )
     authenticate_as(user["id"])
@@ -562,7 +562,7 @@ def test_checkout_tiny_remainder_uses_minimum_charge_adjustment_without_stripe(
         raise AssertionError("Stripe should not be called for tiny remainder.")
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fail_create_payment_intent,
     )
     authenticate_as(user["id"])
@@ -657,11 +657,11 @@ def test_checkout_payment_intent_recalculates_guest_total_server_side(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.confirm_payment_intent",
+        "backend.services.checkout_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
     authenticate_as(user["id"])
@@ -725,7 +725,7 @@ def test_checkout_payment_intent_rejects_when_not_enough_spots_before_stripe(
         raise AssertionError("Stripe should not be called when the game is full.")
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fail_create_payment_intent,
     )
     authenticate_as(buyer_user["id"])
@@ -796,15 +796,15 @@ def test_checkout_payment_intent_reuses_pending_checkout_without_reconfirming(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.confirm_payment_intent",
+        "backend.services.checkout_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.retrieve_payment_intent",
+        "backend.services.checkout_service.retrieve_payment_intent",
         fake_retrieve_payment_intent,
     )
     authenticate_as(user["id"])

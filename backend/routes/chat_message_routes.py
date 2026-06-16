@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import ChatMessage, GameChat, User
-from backend.routes.auth_routes import get_current_app_user, is_admin
+from backend.services.auth_service import get_current_app_user, is_admin
 from backend.schemas import ChatMessageCreate, ChatMessageRead, ChatMessageUpdate
 from backend.services.game_chat_service import (
     create_or_update_chat_notifications,

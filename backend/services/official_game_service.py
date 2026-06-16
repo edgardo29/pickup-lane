@@ -19,7 +19,7 @@ from backend.models import (
     User,
     Venue,
 )
-from backend.routes.game_routes import (
+from backend.services.game_service import (
     ACTIVE_JOIN_STATUSES,
     OFFICIAL_FORCED_FIELDS,
     build_game_conflict_detail,
@@ -31,7 +31,7 @@ from backend.routes.game_routes import (
     sync_game_capacity_status,
     validate_game_business_rules,
 )
-from backend.routes.venue_routes import find_matching_active_venue
+from backend.services.venue_service import find_matching_active_venue
 from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCreate,
     AdminOfficialGameHostAssign,

@@ -796,7 +796,7 @@ def test_cancel_official_game_refunds_paid_payment_and_writes_audit_rows(
         )
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_stripe_refund",
+        "backend.services.game_cancellation_service.create_stripe_refund",
         fake_create_stripe_refund,
     )
 
@@ -901,7 +901,7 @@ def test_cancel_official_game_restores_full_credit_booking_without_stripe_refund
         raise AssertionError("Stripe refund should not run for credit-only booking.")
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_stripe_refund",
+        "backend.services.game_cancellation_service.create_stripe_refund",
         fail_create_stripe_refund,
     )
 
@@ -1018,11 +1018,11 @@ def test_cancel_official_game_restores_credit_and_refunds_stripe_remainder(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.confirm_payment_intent",
+        "backend.services.checkout_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
 
@@ -1085,7 +1085,7 @@ def test_cancel_official_game_restores_credit_and_refunds_stripe_remainder(
         )
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_stripe_refund",
+        "backend.services.game_cancellation_service.create_stripe_refund",
         fake_create_stripe_refund,
     )
 
@@ -1172,7 +1172,7 @@ def test_cancel_official_game_preserves_payment_when_refund_fails(
         raise StripeConfigError("Stripe is not configured.")
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_stripe_refund",
+        "backend.services.game_cancellation_service.create_stripe_refund",
         fake_create_stripe_refund,
     )
     authenticate_as(admin["id"])
@@ -1328,7 +1328,7 @@ def test_cancel_official_game_keeps_refund_followup_when_one_refund_fails(
         )
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_stripe_refund",
+        "backend.services.game_cancellation_service.create_stripe_refund",
         fake_create_stripe_refund,
     )
     authenticate_as(admin["id"])
@@ -3204,11 +3204,11 @@ def test_leave_game_promotes_paid_waitlist_after_successful_auto_charge(
         )
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_payment_intent",
+        "backend.services.game_waitlist_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.game_routes.confirm_payment_intent",
+        "backend.services.game_waitlist_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
 
@@ -3322,11 +3322,11 @@ def test_paid_waitlist_requires_action_fails_auto_promotion_and_notifies_buyer(
         )
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_payment_intent",
+        "backend.services.game_waitlist_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.game_routes.confirm_payment_intent",
+        "backend.services.game_waitlist_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
 
@@ -3425,11 +3425,11 @@ def test_paid_waitlist_processing_holds_capacity_and_blocks_duplicate_join(
         )
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_payment_intent",
+        "backend.services.game_waitlist_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.game_routes.confirm_payment_intent",
+        "backend.services.game_waitlist_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
 
@@ -3555,11 +3555,11 @@ def test_paid_waitlist_failed_auto_charge_moves_to_next_active_party(
         )
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_payment_intent",
+        "backend.services.game_waitlist_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.game_routes.confirm_payment_intent",
+        "backend.services.game_waitlist_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
 

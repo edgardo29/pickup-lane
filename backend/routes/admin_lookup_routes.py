@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User, Venue
-from backend.routes.auth_routes import get_current_admin_user
+from backend.services.auth_service import get_current_admin_user
 from backend.schemas import UserRead, VenueRead
 
 router = APIRouter(prefix="/admin/lookups", tags=["admin_lookups"])

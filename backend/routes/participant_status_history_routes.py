@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameParticipant, ParticipantStatusHistory, User
-from backend.routes.auth_routes import is_admin
+from backend.services.auth_service import is_admin
 from backend.schemas import (
     ParticipantStatusHistoryCreate,
     ParticipantStatusHistoryRead,

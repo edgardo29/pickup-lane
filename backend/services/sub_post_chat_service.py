@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
@@ -14,9 +15,12 @@ from backend.models import (
     SubPostRequest,
     User,
 )
-from backend.services.need_a_sub_service import (
-    build_requester_display,
-    get_sub_post_or_404,
+from backend.schemas import (
+    SubPostChatEnsureCreate,
+    SubPostChatMessageCreate,
+    SubPostChatMessageUpdate,
+    SubPostChatRead as SubPostChatReadSchema,
+    SubPostChatReadStateRead as SubPostChatReadStateReadSchema,
 )
 from backend.services.notification_service import (
     build_need_a_sub_notification_fields,
@@ -58,6 +62,18 @@ def get_sub_post_chat_or_404(db: Session, chat_id: uuid.UUID) -> SubPostChat:
         )
 
     return db_chat
+
+
+def get_sub_post_or_404(db: Session, sub_post_id: uuid.UUID) -> SubPost:
+    sub_post = db.get(SubPost, sub_post_id)
+
+    if sub_post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub post not found.",
+        )
+
+    return sub_post
 
 
 def get_sub_post_chat_for_post(
@@ -193,7 +209,15 @@ def list_sub_post_chat_member_user_ids(
 
 
 def build_sender_snapshot(user: User) -> tuple[str, str]:
-    display_name, initials = build_requester_display(user)
+    name_parts = [
+        value.strip()
+        for value in [user.first_name or "", user.last_name or ""]
+        if value and value.strip()
+    ]
+    display_name = " ".join(name_parts) if name_parts else "Pickup Lane Player"
+    initials_source = name_parts if name_parts else ["Pickup", "Lane"]
+    initials = "".join(part[:1].upper() for part in initials_source if part)[:2]
+
     return display_name or "Pickup Lane Player", initials or "PL"
 
 
@@ -546,3 +570,307 @@ def serialize_sub_chat_message(
         "deleted_at": message.deleted_at,
         "deleted_by_user_id": message.deleted_by_user_id,
     }
+
+
+def serialize_sub_post_chat(
+    db_chat: SubPostChat,
+    unread_count: int = 0,
+    last_read_at: datetime | None = None,
+) -> SubPostChatReadSchema:
+    return SubPostChatReadSchema(
+        id=db_chat.id,
+        sub_post_id=db_chat.sub_post_id,
+        chat_status=db_chat.chat_status,
+        created_at=db_chat.created_at,
+        updated_at=db_chat.updated_at,
+        closed_at=db_chat.closed_at,
+        unread_count=unread_count,
+        last_read_at=last_read_at,
+    )
+
+
+def validate_optional_acting_user(
+    acting_user_id: uuid.UUID | None,
+    current_user: User,
+) -> None:
+    if acting_user_id is not None and acting_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="acting_user_id must match the authenticated user.",
+        )
+
+
+def get_accessible_sub_post_chat_or_404(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    current_user: User,
+) -> tuple[SubPost, SubPostChat]:
+    sub_post = get_sub_post_or_404(db, sub_post_id)
+    validate_sub_post_chat_access(db, sub_post, current_user)
+    db_chat = get_sub_post_chat_for_post(db, sub_post.id)
+    if db_chat is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub chat not found.",
+        )
+
+    return sub_post, db_chat
+
+
+def ensure_sub_post_chat_workflow(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    payload: SubPostChatEnsureCreate,
+    current_user: User,
+) -> SubPostChatReadSchema:
+    validate_optional_acting_user(payload.acting_user_id, current_user)
+    sub_post = get_sub_post_or_404(db, sub_post_id)
+    validate_sub_post_chat_access(db, sub_post, current_user)
+    db_chat = get_or_create_active_sub_post_chat(db, sub_post)
+
+    try:
+        db.commit()
+        db.refresh(db_chat)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc.orig),
+        ) from exc
+
+    read_state, unread_count = get_sub_chat_read_state(db, db_chat, current_user)
+    return serialize_sub_post_chat(
+        db_chat,
+        unread_count=unread_count,
+        last_read_at=read_state.last_read_at if read_state else None,
+    )
+
+
+def get_sub_post_chat_workflow(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    current_user: User,
+) -> SubPostChatReadSchema:
+    _, db_chat = get_accessible_sub_post_chat_or_404(db, sub_post_id, current_user)
+    read_state, unread_count = get_sub_chat_read_state(db, db_chat, current_user)
+    return serialize_sub_post_chat(
+        db_chat,
+        unread_count=unread_count,
+        last_read_at=read_state.last_read_at if read_state else None,
+    )
+
+
+def get_sub_post_chat_read_state_workflow(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    current_user: User,
+) -> SubPostChatReadStateReadSchema:
+    _, db_chat = get_accessible_sub_post_chat_or_404(db, sub_post_id, current_user)
+    read_state, unread_count = get_sub_chat_read_state(db, db_chat, current_user)
+    return SubPostChatReadStateReadSchema(
+        chat_id=db_chat.id,
+        user_id=current_user.id,
+        last_read_at=read_state.last_read_at if read_state else None,
+        last_read_message_id=read_state.last_read_message_id if read_state else None,
+        unread_count=unread_count,
+    )
+
+
+def mark_sub_post_chat_read_workflow(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    payload: SubPostChatEnsureCreate,
+    current_user: User,
+) -> SubPostChatReadStateReadSchema:
+    validate_optional_acting_user(payload.acting_user_id, current_user)
+    _, db_chat = get_accessible_sub_post_chat_or_404(db, sub_post_id, current_user)
+    read_state = mark_sub_chat_read(db, db_chat, current_user)
+
+    try:
+        db.commit()
+        db.refresh(read_state)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc.orig),
+        ) from exc
+
+    return SubPostChatReadStateReadSchema(
+        chat_id=db_chat.id,
+        user_id=current_user.id,
+        last_read_at=read_state.last_read_at,
+        last_read_message_id=read_state.last_read_message_id,
+        unread_count=0,
+    )
+
+
+def list_sub_post_chat_messages_workflow(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    current_user: User,
+    *,
+    before_created_at: datetime | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    sub_post, db_chat = get_accessible_sub_post_chat_or_404(
+        db,
+        sub_post_id,
+        current_user,
+    )
+    messages = get_latest_visible_sub_chat_messages(
+        db,
+        db_chat.id,
+        limit=limit,
+        before_created_at=before_created_at,
+    )
+    return [serialize_sub_chat_message(db, message, sub_post) for message in messages]
+
+
+def create_sub_post_chat_message_workflow(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    payload: SubPostChatMessageCreate,
+    current_user: User,
+) -> dict:
+    current_time = now_utc()
+    sub_post, db_chat = get_accessible_sub_post_chat_or_404(
+        db,
+        sub_post_id,
+        current_user,
+    )
+    require_sub_post_chat_can_write(db, db_chat, current_user)
+
+    if payload.chat_id != db_chat.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="chat_id must match this post's Need a Sub chat.",
+        )
+
+    if payload.sender_user_id is not None and payload.sender_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="sender_user_id must match the authenticated user.",
+        )
+
+    message_body = normalize_message_body(payload.message_body)
+    validate_sender_rate_limit(db, db_chat.id, current_user.id, current_time)
+    validate_total_message_limit(db, db_chat.id)
+    sender_display_name, sender_initials = build_sender_snapshot(current_user)
+    new_message = SubPostChatMessage(
+        id=uuid.uuid4(),
+        chat_id=db_chat.id,
+        sender_user_id=current_user.id,
+        sender_display_name_snapshot=sender_display_name,
+        sender_initials_snapshot=sender_initials,
+        message_type="text",
+        message_body=message_body,
+        moderation_status="visible",
+    )
+
+    try:
+        db.add(new_message)
+        db.flush()
+        create_or_update_sub_chat_notifications(
+            db,
+            sub_post=sub_post,
+            db_chat=db_chat,
+            message=new_message,
+            sender=current_user,
+            event_at=current_time,
+        )
+        mark_sub_chat_read(db, db_chat, current_user, current_time)
+        db.commit()
+        db.refresh(new_message)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc.orig),
+        ) from exc
+
+    return serialize_sub_chat_message(db, new_message, sub_post)
+
+
+def update_sub_post_chat_message_workflow(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    message_id: uuid.UUID,
+    payload: SubPostChatMessageUpdate,
+    current_user: User,
+) -> dict:
+    sub_post = get_sub_post_or_404(db, sub_post_id)
+    db_chat = get_sub_post_chat_for_post(db, sub_post.id)
+    if db_chat is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub chat not found.",
+        )
+
+    require_sub_post_chat_member(db, db_chat, current_user)
+    db_message = db.get(SubPostChatMessage, message_id)
+    if db_message is None or db_message.chat_id != db_chat.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub chat message not found.",
+        )
+
+    if db_message.sender_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the sender can update this Need a Sub chat message.",
+        )
+
+    if db_message.moderation_status in {"hidden_by_admin", "deleted_by_sender"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Hidden or deleted Need a Sub chat messages cannot be updated.",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    if "chat_id" in update_data and update_data["chat_id"] != db_chat.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="chat_id cannot be changed for an existing Need a Sub chat message.",
+        )
+
+    forbidden_fields = {
+        "sender_user_id",
+        "sender_display_name_snapshot",
+        "sender_initials_snapshot",
+        "message_type",
+    }
+    if forbidden_fields & set(update_data):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sender and message type fields cannot be changed.",
+        )
+
+    if "message_body" in update_data:
+        db_message.message_body = normalize_message_body(update_data["message_body"])
+        db_message.edited_at = now_utc()
+
+    if "moderation_status" in update_data:
+        if update_data["moderation_status"] != "deleted_by_sender":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only sender deletion is supported for this message.",
+            )
+        db_message.moderation_status = "deleted_by_sender"
+        db_message.deleted_at = now_utc()
+        db_message.deleted_by_user_id = current_user.id
+
+    db_message.updated_at = now_utc()
+
+    try:
+        db.add(db_message)
+        db.commit()
+        db.refresh(db_message)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc.orig),
+        ) from exc
+
+    return serialize_sub_chat_message(db, db_message, sub_post)

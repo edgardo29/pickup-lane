@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameParticipant, User
-from backend.routes.auth_routes import get_current_admin_user
+from backend.services.auth_service import get_current_admin_user
 from backend.schemas import (
     AdminOfficialGameCreate,
     AdminOfficialGameHostAssign,

@@ -13,7 +13,7 @@ def authenticate_optional_as(user_id: str) -> None:
     from backend.database import SessionLocal
     from backend.main import app
     from backend.models import User
-    from backend.routes.auth_routes import get_optional_current_app_user
+    from backend.services.auth_service import get_optional_current_app_user
 
     def override_current_user() -> User:
         with SessionLocal() as db:

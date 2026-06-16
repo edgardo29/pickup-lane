@@ -8,12 +8,11 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import AdminAction, Game, GameCredit, GameCreditUsage, User
-from backend.routes.auth_routes import (
+from backend.services.auth_service import (
     get_current_admin_user,
     get_current_app_user,
     require_admin,
 )
-from backend.routes.user_routes import build_conflict_detail
 from backend.schemas import (
     GameCreditBalanceRead,
     GameCreditIssueCreate,
@@ -25,6 +24,7 @@ from backend.services.game_credit_service import (
     REVERSE_USAGE_TYPE,
     get_available_game_credit_balance,
 )
+from backend.services.user_service import build_user_conflict_detail
 
 router = APIRouter(prefix="/game-credits", tags=["game_credits"])
 admin_router = APIRouter(prefix="/admin/game-credits", tags=["admin_game_credits"])
@@ -180,7 +180,7 @@ def issue_game_credit(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_conflict_detail(exc),
+            detail=build_user_conflict_detail(exc),
         ) from exc
 
     return game_credit
@@ -267,7 +267,7 @@ def reverse_game_credit(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_conflict_detail(exc),
+            detail=build_user_conflict_detail(exc),
         ) from exc
 
     return game_credit

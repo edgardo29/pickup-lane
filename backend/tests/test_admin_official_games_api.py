@@ -342,11 +342,11 @@ def test_admin_official_game_update_invalidates_pending_checkout(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.confirm_payment_intent",
+        "backend.services.checkout_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
 
@@ -810,11 +810,11 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.confirm_payment_intent",
+        "backend.services.checkout_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
 
@@ -1453,11 +1453,11 @@ def test_account_delete_clears_future_official_host_without_cancelling_game(
     assert assigned_host_notifications[0]["is_read"] is False
 
     monkeypatch.setattr(
-        "backend.routes.auth_routes.verify_firebase_token",
+        "backend.services.auth_service.verify_firebase_token",
         lambda token: {"uid": host["auth_user_id"], "email_verified": True},
     )
     monkeypatch.setattr(
-        "backend.routes.auth_routes.delete_firebase_user",
+        "backend.services.auth_service.delete_firebase_user",
         lambda auth_user_id: None,
     )
 

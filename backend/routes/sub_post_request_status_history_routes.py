@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import SubPostRequestStatusHistory, User
-from backend.routes.auth_routes import get_current_app_user, is_admin_or_moderator
+from backend.services.auth_service import get_current_app_user, is_admin_or_moderator
 from backend.schemas import SubPostRequestStatusHistoryRead
 from backend.services.need_a_sub_service import (
     get_sub_post_or_404,

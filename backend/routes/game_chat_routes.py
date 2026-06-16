@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Game, GameChat, User
-from backend.routes.auth_routes import get_current_app_user
+from backend.services.auth_service import get_current_app_user
 from backend.schemas import (
     GameChatCreate,
     GameChatEnsureCreate,

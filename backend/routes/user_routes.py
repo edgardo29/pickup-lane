@@ -9,29 +9,9 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Game, User
 from backend.schemas import UserCreate, UserRead, UserUpdate
+from backend.services.user_service import build_user_conflict_detail
 
 router = APIRouter(prefix="/users", tags=["users"])
-
-
-def build_conflict_detail(exc: IntegrityError) -> str:
-    # Map known unique-constraint failures to clearer API messages so Postman
-    # responses are easier to understand during development.
-    error_text = str(exc.orig)
-
-    constraint_messages = {
-        "uq_users_auth_user_id": "A user with this auth_user_id already exists.",
-        "uq_users_email": "A user with this email already exists.",
-        "uq_users_phone": "A user with this phone already exists.",
-        "uq_users_stripe_customer_id": (
-            "A user with this stripe_customer_id already exists."
-        ),
-    }
-
-    for constraint_name, message in constraint_messages.items():
-        if constraint_name in error_text:
-            return message
-
-    return error_text
 
 
 def require_no_future_official_host_assignment(
@@ -96,7 +76,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)) -> User:
         # easier to debug while the error handling layer is still minimal.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_conflict_detail(exc),
+            detail=build_user_conflict_detail(exc),
         ) from exc
 
     return new_user
@@ -152,7 +132,7 @@ def update_user(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_conflict_detail(exc),
+            detail=build_user_conflict_detail(exc),
         ) from exc
 
     return db_user
@@ -185,7 +165,7 @@ def delete_user(user_id: uuid.UUID, db: Session = Depends(get_db)) -> User:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_conflict_detail(exc),
+            detail=build_user_conflict_detail(exc),
         ) from exc
 
     return db_user
