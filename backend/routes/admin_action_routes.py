@@ -17,7 +17,7 @@ from backend.models import (
     User,
     Venue,
 )
-from backend.routes.auth_routes import get_current_admin_user
+from backend.services.auth_service import get_current_admin_user
 from backend.schemas import AdminActionCreate, AdminActionRead, AdminActionUpdate
 
 router = APIRouter(prefix="/admin/actions", tags=["admin_actions"])

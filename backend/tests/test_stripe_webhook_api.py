@@ -86,11 +86,11 @@ def create_pending_checkout(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.create_payment_intent",
+        "backend.services.checkout_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.confirm_payment_intent",
+        "backend.services.checkout_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
     authenticate_as(user["id"])
@@ -287,11 +287,11 @@ def create_paid_waitlist_processing_auto_charge(
         )
 
     monkeypatch.setattr(
-        "backend.routes.game_routes.create_payment_intent",
+        "backend.services.game_waitlist_service.create_payment_intent",
         fake_create_payment_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.game_routes.confirm_payment_intent",
+        "backend.services.game_waitlist_service.confirm_payment_intent",
         fake_confirm_payment_intent,
     )
 

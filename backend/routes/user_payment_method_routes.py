@@ -8,14 +8,13 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User, UserPaymentMethod
-from backend.routes.auth_routes import get_current_app_user
-from backend.routes.user_routes import build_conflict_detail
 from backend.schemas import (
     UserPaymentMethodRead,
     UserPaymentMethodSetupIntentCreate,
     UserPaymentMethodSetupIntentRead,
     UserPaymentMethodSyncCreate,
 )
+from backend.services.auth_service import get_current_app_user
 from backend.services.stripe_service import (
     StripeConfigError,
     clear_customer_default_payment_method,
@@ -26,6 +25,7 @@ from backend.services.stripe_service import (
     retrieve_setup_intent,
     set_customer_default_payment_method,
 )
+from backend.services.user_service import build_user_conflict_detail
 
 router = APIRouter(prefix="/user-payment-methods", tags=["user-payment-methods"])
 
@@ -87,7 +87,7 @@ def ensure_stripe_customer_id(db: Session, current_user: User) -> str:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_conflict_detail(exc),
+            detail=build_user_conflict_detail(exc),
         ) from exc
 
     return current_user.stripe_customer_id

@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from backend.models import (
     Notification,
     SubPost,
-    SubPostChat,
     SubPostPosition,
     SubPostRequest,
     SubPostRequestStatusHistory,
@@ -27,6 +26,10 @@ from backend.services.notification_service import (
     build_need_a_sub_notification_fields,
     reopen_aggregated_notification,
     resolve_aggregated_notification,
+)
+from backend.services.sub_post_chat_service import (
+    resolve_sub_chat_notifications_for_post,
+    resolve_sub_chat_notifications_for_user as resolve_sub_chat_notification_for_user,
 )
 
 POST_STATUSES = {"active", "filled", "expired", "canceled", "removed"}
@@ -1009,71 +1012,6 @@ def sub_post_updated_aggregation_key(
     return f"need_a_sub:post:{sub_post_id}:user:{recipient_user_id}:sub_post_updated"
 
 
-def sub_chat_message_aggregation_key(
-    sub_post_id: uuid.UUID,
-    chat_id: uuid.UUID,
-    recipient_user_id: uuid.UUID,
-) -> str:
-    return (
-        f"need_a_sub:post:{sub_post_id}:chat:{chat_id}:"
-        f"user:{recipient_user_id}:sub_chat_message"
-    )
-
-
-def resolve_sub_chat_notification_for_user(
-    db: Session,
-    *,
-    sub_post_id: uuid.UUID,
-    user_id: uuid.UUID,
-    read_at: datetime | None = None,
-) -> None:
-    chat_id = db.scalar(
-        select(SubPostChat.id).where(SubPostChat.sub_post_id == sub_post_id)
-    )
-    if chat_id is None:
-        return
-
-    resolve_aggregated_notification(
-        db,
-        user_id=user_id,
-        aggregation_key=sub_chat_message_aggregation_key(
-            sub_post_id,
-            chat_id,
-            user_id,
-        ),
-        values={"aggregate_count": None},
-        read_at=read_at,
-    )
-
-
-def resolve_sub_chat_notifications_for_post(
-    db: Session,
-    *,
-    sub_post_id: uuid.UUID,
-    read_at: datetime | None = None,
-) -> None:
-    chat_id = db.scalar(
-        select(SubPostChat.id).where(SubPostChat.sub_post_id == sub_post_id)
-    )
-    if chat_id is None:
-        return
-
-    effective_read_at = read_at or now_utc()
-    notifications = db.scalars(
-        select(Notification).where(
-            Notification.related_sub_post_chat_id == chat_id,
-            Notification.notification_type == "sub_chat_message",
-        )
-    ).all()
-    for notification in notifications:
-        notification.is_read = True
-        if notification.read_at is None:
-            notification.read_at = effective_read_at
-        notification.aggregate_count = None
-        notification.updated_at = effective_read_at
-        db.add(notification)
-
-
 def capture_sub_post_structural_snapshot(sub_post: SubPost) -> dict[str, object]:
     snapshot = {
         field_name: getattr(sub_post, field_name)
@@ -1321,6 +1259,46 @@ def serialize_sub_post_request(
         "created_at": sub_request.created_at,
         "updated_at": sub_request.updated_at,
     }
+
+
+def list_owner_sub_post_requests(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    owner: User,
+) -> list[dict]:
+    expire_due_posts_and_requests(db)
+    sub_post = get_sub_post_or_404(db, sub_post_id)
+    require_owner(sub_post, owner)
+    require_live_sub_post(sub_post, "Only active or filled posts can be reviewed.")
+    requests = list(
+        db.scalars(
+            select(SubPostRequest)
+            .where(SubPostRequest.sub_post_id == sub_post_id)
+            .order_by(SubPostRequest.created_at.asc())
+        ).all()
+    )
+    return [
+        serialize_sub_post_request(db, sub_request, include_waitlist_ahead=True)
+        for sub_request in requests
+    ]
+
+
+def list_requester_sub_post_requests(
+    db: Session,
+    requester: User,
+) -> list[dict]:
+    expire_due_posts_and_requests(db)
+    requests = list(
+        db.scalars(
+            select(SubPostRequest)
+            .where(SubPostRequest.requester_user_id == requester.id)
+            .order_by(SubPostRequest.created_at.desc())
+        ).all()
+    )
+    return [
+        serialize_sub_post_request(db, sub_request, include_waitlist_ahead=True)
+        for sub_request in requests
+    ]
 
 
 def query_visible_posts(

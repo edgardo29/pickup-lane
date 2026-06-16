@@ -1,12 +1,11 @@
 import uuid
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import SubPostRequest, User
-from backend.routes.auth_routes import get_current_app_user
+from backend.services.auth_service import get_current_app_user
 from backend.schemas import (
     SubPostRequestAction,
     SubPostRequestCreate,
@@ -15,15 +14,13 @@ from backend.schemas import (
 from backend.services.need_a_sub_service import (
     create_request,
     expire_due_posts_and_requests,
-    get_sub_post_or_404,
+    list_owner_sub_post_requests,
+    list_requester_sub_post_requests,
     owner_accept_request,
     owner_cancel_request,
     owner_decline_request,
     owner_report_no_show,
     requester_cancel_request,
-    require_live_sub_post,
-    require_owner,
-    serialize_sub_post_request,
 )
 
 router = APIRouter(prefix="/need-a-sub", tags=["need_a_sub_requests"])
@@ -54,21 +51,7 @@ def list_need_a_sub_post_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
 ) -> list[dict]:
-    expire_due_posts_and_requests(db)
-    sub_post = get_sub_post_or_404(db, sub_post_id)
-    require_owner(sub_post, current_user)
-    require_live_sub_post(sub_post, "Only active or filled posts can be reviewed.")
-    requests = list(
-        db.scalars(
-            select(SubPostRequest)
-            .where(SubPostRequest.sub_post_id == sub_post_id)
-            .order_by(SubPostRequest.created_at.asc())
-        ).all()
-    )
-    return [
-        serialize_sub_post_request(db, sub_request, include_waitlist_ahead=True)
-        for sub_request in requests
-    ]
+    return list_owner_sub_post_requests(db, sub_post_id, current_user)
 
 
 @router.get(
@@ -80,18 +63,7 @@ def list_my_need_a_sub_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
 ) -> list[dict]:
-    expire_due_posts_and_requests(db)
-    requests = list(
-        db.scalars(
-            select(SubPostRequest)
-            .where(SubPostRequest.requester_user_id == current_user.id)
-            .order_by(SubPostRequest.created_at.desc())
-        ).all()
-    )
-    return [
-        serialize_sub_post_request(db, sub_request, include_waitlist_ahead=True)
-        for sub_request in requests
-    ]
+    return list_requester_sub_post_requests(db, current_user)
 
 
 @router.patch(

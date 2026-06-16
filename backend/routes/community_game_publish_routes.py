@@ -16,13 +16,13 @@ from backend.models import (
     User,
     Venue,
 )
-from backend.routes.game_routes import (
+from backend.services.game_service import (
     build_game_conflict_detail,
     get_default_host_guest_max,
     normalize_game_lifecycle_fields,
     validate_game_business_rules,
 )
-from backend.routes.venue_routes import find_matching_active_venue
+from backend.services.venue_service import find_matching_active_venue
 from backend.schemas import CommunityGamePublishCreate, CommunityGamePublishRead
 
 router = APIRouter(prefix="/community-games", tags=["community_games"])

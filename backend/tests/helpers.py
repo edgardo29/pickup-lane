@@ -64,7 +64,7 @@ def authenticate_as(user_id: str) -> None:
     from backend.database import SessionLocal
     from backend.main import app
     from backend.models import User
-    from backend.routes.auth_routes import get_current_app_user
+    from backend.services.auth_service import get_current_app_user
 
     def override_current_user() -> User:
         with SessionLocal() as db:
@@ -174,7 +174,7 @@ def mock_checkout_payment_method_verification(
         )
 
     monkeypatch.setattr(
-        "backend.routes.checkout_routes.retrieve_payment_method",
+        "backend.services.payment_method_service.retrieve_payment_method",
         fake_retrieve_payment_method,
     )
 
