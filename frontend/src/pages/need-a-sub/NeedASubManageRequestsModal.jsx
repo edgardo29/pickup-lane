@@ -65,7 +65,7 @@ export function NeedASubManageRequestsModal({
           </div>
           <button
             aria-label="Close manage requests"
-            className="need-sub-manage-requests-modal__close"
+            className="need-sub-modal-close need-sub-manage-requests-modal__close"
             type="button"
             onClick={onClose}
           >

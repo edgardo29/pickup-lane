@@ -39,7 +39,7 @@ class Notification(Base):
                 "'sub_request_declined', 'sub_waitlist_promoted_to_pending', "
                 "'sub_request_canceled_by_player', "
                 "'sub_request_canceled_by_owner', 'sub_post_canceled', "
-                "'sub_post_removed', 'sub_post_updated'"
+                "'sub_post_removed', 'sub_post_updated', 'sub_chat_message'"
                 ")"
             ),
             name="ck_notifications_notification_type",
@@ -114,7 +114,7 @@ class Notification(Base):
                 "'sub_request_declined', 'sub_waitlist_promoted_to_pending', "
                 "'sub_request_canceled_by_player', "
                 "'sub_request_canceled_by_owner', 'sub_post_canceled', "
-                "'sub_post_removed', 'sub_post_updated'"
+                "'sub_post_removed', 'sub_post_updated', 'sub_chat_message'"
                 ") AND notification_category = 'game_activity' "
                 "AND notification_domain = 'need_a_sub') "
                 "OR (notification_type IN ("
@@ -229,6 +229,11 @@ class Notification(Base):
         Index("ix_notifications_related_participant_id", "related_participant_id"),
         Index("ix_notifications_related_message_id", "related_message_id"),
         Index("ix_notifications_related_sub_post_id", "related_sub_post_id"),
+        Index("ix_notifications_related_sub_post_chat_id", "related_sub_post_chat_id"),
+        Index(
+            "ix_notifications_related_sub_post_chat_message_id",
+            "related_sub_post_chat_message_id",
+        ),
         Index(
             "ix_notifications_related_sub_post_request_id",
             "related_sub_post_request_id",
@@ -333,6 +338,18 @@ class Notification(Base):
 
     related_sub_post_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
+    )
+
+    related_sub_post_chat_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sub_post_chats.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    related_sub_post_chat_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("sub_post_chat_messages.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     related_sub_post_request_id: Mapped[uuid.UUID | None] = mapped_column(

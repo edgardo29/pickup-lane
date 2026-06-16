@@ -12,6 +12,7 @@ function NeedASubDetailContent({
   canCancelPost,
   canEditPost,
   canManageRequests,
+  chatSection,
   currentUser,
   isActing,
   isOwner,
@@ -32,6 +33,7 @@ function NeedASubDetailContent({
       canCancelPost={canCancelPost}
       canEditPost={canEditPost}
       canManageRequests={canManageRequests}
+      chatSection={chatSection}
       post={post}
       postId={post.id}
       requests={ownerRequests}
@@ -44,6 +46,7 @@ function NeedASubDetailContent({
       canRequest={canRequest}
       canSubmitRequest={canSubmitRequest}
       canSelectSpot={canSelectSpot}
+      chatSection={chatSection}
       currentUser={currentUser}
       isActing={isActing}
       isPostWaitlistFull={isPostWaitlistFull}

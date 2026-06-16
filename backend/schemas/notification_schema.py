@@ -9,7 +9,9 @@ REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 class NotificationActionRead(BaseModel):
     key: str
     label: str
-    path: str
+    path: str | None
+    disabled: bool = False
+    disabled_reason: str | None = None
     state: dict[str, str] | None = None
 
 
@@ -43,6 +45,8 @@ class NotificationCreate(BaseModel):
     related_participant_id: UUID | None = None
     related_message_id: UUID | None = None
     related_sub_post_id: UUID | None = None
+    related_sub_post_chat_id: UUID | None = None
+    related_sub_post_chat_message_id: UUID | None = None
     related_sub_post_request_id: UUID | None = None
     related_sub_post_position_id: UUID | None = None
     is_read: bool = False
@@ -84,6 +88,8 @@ class NotificationRead(BaseModel):
     related_participant_id: UUID | None
     related_message_id: UUID | None
     related_sub_post_id: UUID | None
+    related_sub_post_chat_id: UUID | None
+    related_sub_post_chat_message_id: UUID | None
     related_sub_post_request_id: UUID | None
     related_sub_post_position_id: UUID | None
     is_read: bool
@@ -122,6 +128,8 @@ class NotificationUpdate(BaseModel):
     related_participant_id: UUID | None = None
     related_message_id: UUID | None = None
     related_sub_post_id: UUID | None = None
+    related_sub_post_chat_id: UUID | None = None
+    related_sub_post_chat_message_id: UUID | None = None
     related_sub_post_request_id: UUID | None = None
     related_sub_post_position_id: UUID | None = None
     is_read: bool | None = None

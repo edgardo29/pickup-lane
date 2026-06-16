@@ -6,6 +6,7 @@ import {
   SendIcon,
   ShieldCheckIcon,
 } from '../../components/AuthIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import { useAuth } from '../../hooks/useAuth.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import {
@@ -75,7 +76,7 @@ export function ForgotPasswordPage() {
             value={email}
           />
 
-          {error && <p className="auth-error">{error}</p>}
+          <FormErrorMessage>{error}</FormErrorMessage>
 
           <button className="auth-primary-button" disabled={status === 'submitting'} type="submit">
             <SendIcon />

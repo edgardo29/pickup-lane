@@ -1,6 +1,8 @@
+import { LogIn } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import { CheckEmailIcon, MailIcon } from '../../components/AuthIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import { useAuth } from '../../hooks/useAuth.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import {
@@ -83,13 +85,14 @@ export function CheckEmailPage() {
         </button>
 
         {message && <p className="auth-success">{message}</p>}
-        {error && <p className="auth-error">{error}</p>}
+        <FormErrorMessage>{error}</FormErrorMessage>
 
         <Link className="auth-text-link" to="/forgot-password">
           Didn’t receive the email?
         </Link>
 
         <Link className="auth-primary-button" to="/sign-in">
+          <LogIn aria-hidden="true" />
           Back to Sign In
         </Link>
       </AuthPanel>

@@ -23,8 +23,8 @@ function LandingAuthCard({ showWhileLoading = false, variant = 'hero' }) {
         <p className="auth-card__subtitle">Create your account in seconds.</p>
 
         <Link className="auth-card__create" to="/create-account">
+          <UserPlusIcon />
           Create Account
-          <span aria-hidden="true">→</span>
         </Link>
 
         <p className="auth-card__signin-copy">
@@ -36,7 +36,9 @@ function LandingAuthCard({ showWhileLoading = false, variant = 'hero' }) {
 
   return (
     <section className="auth-card auth-card--hero" aria-label="Get started">
-      <BrandMark className="auth-card__brand" />
+      <BrandMark className="auth-card__brand" croppedMark />
+
+      <span className="auth-card__brand-divider" aria-hidden="true" />
 
       <p className="auth-card__subtitle">Get started in seconds</p>
 

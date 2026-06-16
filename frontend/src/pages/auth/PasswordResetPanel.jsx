@@ -1,5 +1,7 @@
+import { Check, LogIn } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { LockIcon, ShieldCheckIcon } from '../../components/AuthIcons.jsx'
+import { LockIcon, SendIcon, ShieldCheckIcon } from '../../components/AuthIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import {
   AuthHalo,
   AuthHeader,
@@ -39,8 +41,9 @@ function PasswordResetPanel({
               title="Reset link expired"
               subtitle="This password reset link is invalid or has already been used."
             />
-            {error && <p className="auth-error">{error}</p>}
+            <FormErrorMessage>{error}</FormErrorMessage>
             <Link className="auth-primary-button" to="/forgot-password">
+              <SendIcon />
               Send New Link
             </Link>
           </>
@@ -53,6 +56,7 @@ function PasswordResetPanel({
               subtitle="You can now sign in with your new password."
             />
             <Link className="auth-primary-button" to="/sign-in">
+              <LogIn aria-hidden="true" />
               Back to Sign In
             </Link>
           </>
@@ -92,13 +96,14 @@ function PasswordResetPanel({
                 value={password}
               />
 
-              {error && <p className="auth-error">{error}</p>}
+              <FormErrorMessage>{error}</FormErrorMessage>
 
               <button
                 className="auth-primary-button"
                 disabled={status === 'submitting'}
                 type="submit"
               >
+                <Check aria-hidden="true" />
                 {status === 'submitting' ? 'Saving...' : 'Save Password'}
               </button>
             </form>

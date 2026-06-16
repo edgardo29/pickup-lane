@@ -5,8 +5,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision = "0033_game_chat_reads"
-down_revision = "0032_community_hosting_model"
+revision = "0034_game_chat_reads"
+down_revision = "0033_host_publish_fees"
 branch_labels = None
 depends_on = None
 

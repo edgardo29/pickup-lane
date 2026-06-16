@@ -11,6 +11,7 @@ export function NeedASubOwnerPanel({
   canCancelPost,
   canEditPost,
   canManageRequests,
+  chatSection,
   onCancelPost,
   onManageRequests,
   post,
@@ -97,6 +98,15 @@ export function NeedASubOwnerPanel({
         )}
 
       </div>
+
+      {chatSection && (
+        <>
+          <div className="need-sub-action-card-divider" />
+          <div className="need-sub-action-card-chat">
+            {chatSection}
+          </div>
+        </>
+      )}
     </section>
   )
 }

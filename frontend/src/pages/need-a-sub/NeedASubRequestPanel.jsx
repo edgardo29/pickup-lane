@@ -12,6 +12,7 @@ export function NeedASubRequestPanel({
   canRequest,
   canSubmitRequest,
   canSelectSpot,
+  chatSection,
   currentUser,
   isActing,
   isPostWaitlistFull,
@@ -85,14 +86,25 @@ export function NeedASubRequestPanel({
                 : 'Join Waitlist'
               : 'Request Spot'}
           </button>
-          <span>
-            {selectedPositionNeedsWaitlist
-              ? isPostWaitlistFull
-                ? "This post's waitlist is full."
-                : "You'll be notified if a spot opens."
-              : 'The owner will review your request.'}
-          </span>
+          {!chatSection && (
+            <span>
+              {selectedPositionNeedsWaitlist
+                ? isPostWaitlistFull
+                  ? "This post's waitlist is full."
+                  : "You'll be notified if a spot opens."
+                : 'The owner will review your request.'}
+            </span>
+          )}
         </div>
+      )}
+
+      {chatSection && (
+        <>
+          <div className="need-sub-action-card-divider" />
+          <div className="need-sub-action-card-chat">
+            {chatSection}
+          </div>
+        </>
       )}
     </section>
   )

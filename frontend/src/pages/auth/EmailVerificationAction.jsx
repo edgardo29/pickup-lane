@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { applyActionCode } from 'firebase/auth'
 import { ShieldCheckIcon } from '../../components/AuthIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import {
   AuthHalo,
   AuthHeader,
@@ -85,8 +87,9 @@ function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
                 title="Verification link unavailable"
                 subtitle="Send a new verification email from Create Game."
               />
-              {error && <p className="auth-error">{error}</p>}
+              <FormErrorMessage>{error}</FormErrorMessage>
               <Link className="auth-primary-button" to="/create-game">
+                <ArrowRight aria-hidden="true" />
                 Back to Create Game
               </Link>
             </>
@@ -99,6 +102,7 @@ function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
                 subtitle="Return to Create Game. If hosting is still locked, request a fresh verification email."
               />
               <Link className="auth-primary-button" to="/create-game">
+                <ArrowRight aria-hidden="true" />
                 Back to Create Game
               </Link>
             </>
@@ -111,6 +115,7 @@ function EmailVerificationAction({ code, refreshCurrentUserVerification }) {
                 subtitle="You can now publish a community game."
               />
               <Link className="auth-primary-button" to="/create-game">
+                <ArrowRight aria-hidden="true" />
                 Continue
               </Link>
             </>

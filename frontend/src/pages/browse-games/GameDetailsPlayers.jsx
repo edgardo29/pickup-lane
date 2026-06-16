@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import { PlayersIcon } from '../../components/GameFactIcons.jsx'
 import { getInitials } from './gameDetailsFormatters.js'
 import { InfoCard } from './GameDetailsPrimitives.jsx'
@@ -93,7 +94,7 @@ export function PlayersListModal({ activeTab, onClose, onSelectTab, participantS
           </div>
 
           <button type="button" aria-label="Close player list" onClick={onClose}>
-            ×
+            <X aria-hidden="true" />
           </button>
         </div>
 

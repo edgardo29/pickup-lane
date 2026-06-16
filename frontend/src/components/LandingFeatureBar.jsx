@@ -20,7 +20,7 @@ const features = [
 
 function LandingFeatureBar() {
   return (
-    <section className="feature-bar" id="how-it-works" aria-label="Pickup Lane benefits">
+    <section className="feature-bar" id="pickup-lane-benefits" aria-label="Pickup Lane benefits">
       <h2 className="feature-bar__heading">
         Why <span>Pickup</span> Lane?
       </h2>

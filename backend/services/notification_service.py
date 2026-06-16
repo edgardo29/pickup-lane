@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
-from backend.models import Game, Notification, SubPost
+from backend.models import Game, Notification, SubPost, SubPostRequest
 
 VALID_NOTIFICATION_PREFERENCE_CLASSES = {
     "mandatory",
@@ -368,6 +368,16 @@ NOTIFICATION_TYPE_CONFIG = {
         action_key="view_sub_post",
         icon="CalendarDays",
     ),
+    "sub_chat_message": NotificationTypeConfig(
+        notification_category="game_activity",
+        notification_domains=frozenset({"need_a_sub"}),
+        title="New chat message",
+        summary="New messages were posted.",
+        body="New messages were posted in the Need a Sub chat.",
+        action_key="view_sub_post",
+        icon="MessageSquareText",
+        preference_class="preference_controlled",
+    ),
 }
 VALID_NOTIFICATION_TYPES = set(NOTIFICATION_TYPE_CONFIG)
 VALID_NOTIFICATION_CATEGORIES = {"app", "game_activity"}
@@ -394,6 +404,8 @@ VALID_ACTION_KEYS = {
 }
 GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS = {"cancelled", "abandoned"}
 SUB_POST_STATUSES_WITH_INBOX_ACTIONS = {"active", "filled"}
+SUB_CHAT_MESSAGE_ACTION_POST_STATUSES = {"active", "filled", "expired"}
+SUB_CHAT_MESSAGE_ACTION_GRACE_HOURS = 24
 AGGREGATE_COUNT_MODES = {"replace", "increment", "clear", "preserve"}
 AGGREGATED_NOTIFICATION_ASSIGNABLE_FIELDS = {
     "source_type",
@@ -414,6 +426,8 @@ AGGREGATED_NOTIFICATION_ASSIGNABLE_FIELDS = {
     "related_chat_id",
     "related_message_id",
     "related_sub_post_id",
+    "related_sub_post_chat_id",
+    "related_sub_post_chat_message_id",
     "related_sub_post_request_id",
     "related_sub_post_position_id",
     "related_payment_id",
@@ -589,6 +603,8 @@ def build_need_a_sub_notification_fields(
     body: str | None = None,
     action_key: str | None = None,
     force_action_null: bool = False,
+    aggregation_key: str | None = None,
+    aggregate_count: int | None = None,
 ) -> dict[str, object]:
     template = get_notification_template(notification_type)
 
@@ -607,8 +623,8 @@ def build_need_a_sub_notification_fields(
         "subject_ends_at": sub_post.ends_at,
         "subject_timezone": sub_post.timezone or "America/Chicago",
         "event_at": ensure_aware_utc(event_at),
-        "aggregation_key": None,
-        "aggregate_count": None,
+        "aggregation_key": aggregation_key,
+        "aggregate_count": aggregate_count,
     }
 
 
@@ -888,6 +904,71 @@ def to_local_datetime(value: datetime, timezone_name: str) -> datetime:
     return aware_value.astimezone(local_timezone)
 
 
+def user_has_current_sub_chat_access(
+    db: Session,
+    notification: Notification,
+    sub_post: SubPost,
+) -> bool:
+    if notification.user_id == sub_post.owner_user_id:
+        return True
+
+    return (
+        db.query(SubPostRequest.id)
+        .filter(
+            SubPostRequest.sub_post_id == sub_post.id,
+            SubPostRequest.requester_user_id == notification.user_id,
+            SubPostRequest.request_status == "confirmed",
+        )
+        .one_or_none()
+        is not None
+    )
+
+
+def build_sub_chat_message_action(
+    db: Session,
+    notification: Notification,
+    sub_post: SubPost,
+) -> dict[str, object] | None:
+    action_key = notification.action_key
+    if action_key != "view_sub_post":
+        return None
+
+    if notification.related_sub_post_chat_id is None:
+        return None
+
+    if sub_post.post_status in {"canceled", "removed"}:
+        return build_disabled_action_payload(
+            action_key,
+            "This Need a Sub post is no longer available.",
+        )
+
+    if sub_post.post_status not in SUB_CHAT_MESSAGE_ACTION_POST_STATUSES:
+        return build_disabled_action_payload(
+            action_key,
+            "This Need a Sub chat is no longer available.",
+        )
+
+    closes_at = ensure_aware_utc(sub_post.ends_at) + timedelta(
+        hours=SUB_CHAT_MESSAGE_ACTION_GRACE_HOURS
+    )
+    if datetime.now(timezone.utc) > closes_at:
+        return build_disabled_action_payload(
+            action_key,
+            "This Need a Sub chat is closed.",
+        )
+
+    if not user_has_current_sub_chat_access(db, notification, sub_post):
+        return build_disabled_action_payload(
+            action_key,
+            "You no longer have access to this chat.",
+        )
+
+    return build_action_payload(
+        action_key,
+        f"/need-a-sub/posts/{notification.related_sub_post_id}",
+    )
+
+
 def build_notification_action(
     db: Session,
     notification: Notification,
@@ -920,6 +1001,9 @@ def build_notification_action(
         if sub_post is None:
             return None
 
+        if notification.notification_type == "sub_chat_message":
+            return build_sub_chat_message_action(db, notification, sub_post)
+
         starts_at = ensure_aware_utc(sub_post.starts_at)
         if (
             sub_post.post_status not in SUB_POST_STATUSES_WITH_INBOX_ACTIONS
@@ -950,11 +1034,26 @@ def build_notification_action(
     return None
 
 
-def build_action_payload(action_key: str, path: str) -> dict[str, str]:
+def build_action_payload(action_key: str, path: str) -> dict[str, object]:
     return {
         "key": action_key,
         "label": ACTION_LABEL_BY_KEY[action_key],
         "path": path,
+        "disabled": False,
+        "disabled_reason": None,
+    }
+
+
+def build_disabled_action_payload(
+    action_key: str,
+    disabled_reason: str,
+) -> dict[str, object]:
+    return {
+        "key": action_key,
+        "label": ACTION_LABEL_BY_KEY[action_key],
+        "path": None,
+        "disabled": True,
+        "disabled_reason": disabled_reason,
     }
 
 
@@ -1011,6 +1110,10 @@ def serialize_notification(
         "related_participant_id": notification.related_participant_id,
         "related_message_id": notification.related_message_id,
         "related_sub_post_id": notification.related_sub_post_id,
+        "related_sub_post_chat_id": notification.related_sub_post_chat_id,
+        "related_sub_post_chat_message_id": (
+            notification.related_sub_post_chat_message_id
+        ),
         "related_sub_post_request_id": notification.related_sub_post_request_id,
         "related_sub_post_position_id": notification.related_sub_post_position_id,
         "is_read": notification.is_read,

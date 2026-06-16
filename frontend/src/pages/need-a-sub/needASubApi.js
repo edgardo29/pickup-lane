@@ -87,6 +87,63 @@ export async function cancelNeedASubPost(firebaseUser, postId, reason = '') {
   })
 }
 
+export async function getNeedASubChat(firebaseUser, postId) {
+  return authenticatedRequest(firebaseUser, `/need-a-sub/posts/${postId}/chat`)
+}
+
+export async function ensureNeedASubChat(firebaseUser, postId, actingUserId = null) {
+  return authenticatedRequest(firebaseUser, `/need-a-sub/posts/${postId}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({ acting_user_id: actingUserId || null }),
+  })
+}
+
+export async function listNeedASubChatMessages(
+  firebaseUser,
+  postId,
+  { beforeCreatedAt = '', limit = 50 } = {},
+) {
+  const params = new URLSearchParams()
+
+  if (beforeCreatedAt) {
+    params.set('before_created_at', beforeCreatedAt)
+  }
+  if (limit) {
+    params.set('limit', String(limit))
+  }
+
+  const queryString = params.toString()
+
+  return authenticatedRequest(
+    firebaseUser,
+    `/need-a-sub/posts/${postId}/chat/messages${queryString ? `?${queryString}` : ''}`,
+  )
+}
+
+export async function markNeedASubChatRead(firebaseUser, postId, actingUserId = null) {
+  return authenticatedRequest(firebaseUser, `/need-a-sub/posts/${postId}/chat/read`, {
+    method: 'POST',
+    body: JSON.stringify({ acting_user_id: actingUserId || null }),
+  })
+}
+
+export async function sendNeedASubChatMessage(
+  firebaseUser,
+  postId,
+  chatId,
+  messageBody,
+  senderUserId = null,
+) {
+  return authenticatedRequest(firebaseUser, `/need-a-sub/posts/${postId}/chat/messages`, {
+    method: 'POST',
+    body: JSON.stringify({
+      chat_id: chatId,
+      sender_user_id: senderUserId || null,
+      message_body: messageBody,
+    }),
+  })
+}
+
 async function authenticatedRequest(firebaseUser, path, options = {}) {
   if (!firebaseUser) {
     throw new Error('Sign in to use Need a Sub.')
