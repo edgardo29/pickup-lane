@@ -11,7 +11,6 @@ const SUB_CHAT_MESSAGE_MAX_LENGTH = 300
 const SUB_CHAT_MESSAGE_PAGE_SIZE = 50
 
 export function useNeedASubChat({
-  appUser,
   canOpenSubChat,
   firebaseUser,
   onError,
@@ -29,33 +28,37 @@ export function useNeedASubChat({
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
-    if (!canOpenSubChat || !firebaseUser || !postId) {
-      setActiveChat(null)
-      setMessages([])
-      setDraft('')
-      setError('')
-      setIsOpen(false)
-      setUnreadCount(0)
-      return undefined
-    }
-
     let isCancelled = false
 
-    getNeedASubChat(firebaseUser, postId)
-      .then((chat) => {
+    async function loadExistingChat() {
+      if (!canOpenSubChat || !firebaseUser || !postId) {
+        setActiveChat(null)
+        setMessages([])
+        setDraft('')
+        setError('')
+        setIsOpen(false)
+        setUnreadCount(0)
+        return
+      }
+
+      try {
+        const chat = await getNeedASubChat(firebaseUser, postId)
+
         if (isCancelled) {
           return
         }
 
         setActiveChat(chat)
         setUnreadCount(Number(chat?.unread_count || 0))
-      })
-      .catch(() => {
+      } catch {
         if (!isCancelled) {
           setActiveChat(null)
           setUnreadCount(0)
         }
-      })
+      }
+    }
+
+    loadExistingChat()
 
     return () => {
       isCancelled = true
@@ -93,7 +96,7 @@ export function useNeedASubChat({
     } finally {
       setIsOpening(false)
     }
-  }, [activeChat, appUser?.id, canOpenSubChat, firebaseUser, onError, postId])
+  }, [activeChat, canOpenSubChat, firebaseUser, onError, postId])
 
   async function loadOlderMessages() {
     if (!firebaseUser || !postId || messages.length === 0 || isLoadingOlder) {

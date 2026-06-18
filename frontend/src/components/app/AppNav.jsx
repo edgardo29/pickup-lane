@@ -14,17 +14,21 @@ function AppNav({ isLoading: isForcedLoading = false, preferPublicWhileLoading =
         appUser={navState.appUser}
         closeMenu={navState.closeMenu}
         displayName={navState.displayName}
+        hasAdminWorkspaceAccess={navState.hasAdminWorkspaceAccess}
         initials={navState.initials}
         isLoading={navState.isLoading}
         isMenuOpen={navState.isMenuOpen}
         unreadCount={navState.unreadCount}
+        visibleAdminNavItems={navState.visibleAdminNavItems}
         visibleNavItems={navState.visibleNavItems}
       />
 
       <AppNavActions
+        adminEntryPath={navState.adminEntryPath}
         appUser={navState.appUser}
         closeMenu={navState.closeMenu}
         displayName={navState.displayName}
+        hasAdminWorkspaceAccess={navState.hasAdminWorkspaceAccess}
         initials={navState.initials}
         isLoading={navState.isLoading}
         isMenuOpen={navState.isMenuOpen}

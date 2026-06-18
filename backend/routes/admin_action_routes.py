@@ -92,6 +92,7 @@ def list_admin_actions_route(
     target_notification_id: uuid.UUID | None = None,
     target_platform_notice_campaign_id: uuid.UUID | None = None,
     target_admin_action_id: uuid.UUID | None = None,
+    target_support_flag_id: uuid.UUID | None = None,
     limit: int = Query(default=100, ge=1, le=200),
     current_user: User = Depends(
         require_any_admin_permission(
@@ -119,6 +120,7 @@ def list_admin_actions_route(
         "target_notification_id": target_notification_id,
         "target_platform_notice_campaign_id": target_platform_notice_campaign_id,
         "target_admin_action_id": target_admin_action_id,
+        "target_support_flag_id": target_support_flag_id,
     }
     target_filters = {
         field_name: target_filter_values[field_name]

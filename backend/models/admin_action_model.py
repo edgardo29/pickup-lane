@@ -31,7 +31,8 @@ class AdminAction(Base):
                 "'admin_add_player', 'admin_remove_player', 'waive_payment', "
                 "'remove_sub_post', 'hide_unsafe_community_payment_text', "
                 "'create_notification', 'update_notification', "
-                "'change_staff_role', 'append_audit_note'"
+                "'change_staff_role', 'append_audit_note', "
+                "'resolve_support_flag'"
                 ")"
             ),
             name="ck_admin_actions_action_type",
@@ -54,7 +55,8 @@ class AdminAction(Base):
                 "OR target_sub_chat_message_id IS NOT NULL "
                 "OR target_notification_id IS NOT NULL "
                 "OR target_platform_notice_campaign_id IS NOT NULL "
-                "OR target_admin_action_id IS NOT NULL"
+                "OR target_admin_action_id IS NOT NULL "
+                "OR target_support_flag_id IS NOT NULL"
             ),
             name="ck_admin_actions_target_required",
         ),
@@ -90,6 +92,7 @@ class AdminAction(Base):
             "target_platform_notice_campaign_id",
         ),
         Index("ix_admin_actions_target_admin_action_id", "target_admin_action_id"),
+        Index("ix_admin_actions_target_support_flag_id", "target_support_flag_id"),
         Index("ix_admin_actions_idempotency_key", "idempotency_key"),
         Index(
             "uq_admin_actions_audit_note_idempotency",
@@ -221,6 +224,12 @@ class AdminAction(Base):
     target_admin_action_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("admin_actions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+
+    target_support_flag_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("support_flags.id", ondelete="SET NULL"),
         nullable=True,
     )
 

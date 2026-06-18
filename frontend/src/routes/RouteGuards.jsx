@@ -1,5 +1,30 @@
+import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
+import {
+  ADMIN_PERMISSIONS,
+  hasAnyAdminPermission,
+} from '../pages/admin/shared/adminWorkspaceData.js'
+import { useAdminAccess } from '../pages/admin/shared/useAdminAccess.js'
+import '../styles/admin/AdminWorkspace.css'
+
+function isAdminAccessDeniedError(error) {
+  return error?.status === 401 || error?.status === 403
+}
+
+function AdminAccessRetryState({ onRetry }) {
+  return (
+    <main className="admin-guard-state" role="alert">
+      <section className="admin-guard-state__panel">
+        <h1>Could not verify staff access</h1>
+        <p>Check your connection and try again.</p>
+        <button type="button" onClick={onRetry}>
+          Try again
+        </button>
+      </section>
+    </main>
+  )
+}
 
 export function RequireAppUser({ children }) {
   const { appUser, isLoading } = useAuth()
@@ -22,8 +47,18 @@ export function RequireAppUser({ children }) {
   return children
 }
 
-export function RequireAdmin({ children }) {
+export function RequireAdmin({
+  children,
+  permission = ADMIN_PERMISSIONS.ACTION_CENTER_VIEW,
+  permissions = null,
+}) {
   const { appUser, isLoading } = useAuth()
+  const [reloadKey, setReloadKey] = useState(0)
+  const {
+    adminAccess,
+    error,
+    isLoading: isAdminAccessLoading,
+  } = useAdminAccess({ enabled: Boolean(appUser), reloadKey })
   const location = useLocation()
 
   if (isLoading) {
@@ -40,7 +75,30 @@ export function RequireAdmin({ children }) {
     )
   }
 
-  if (appUser.role !== 'admin') {
+  if (isAdminAccessLoading) {
+    return null
+  }
+
+  const requiredPermissions = permissions || [permission]
+
+  if (error) {
+    if (!isAdminAccessDeniedError(error)) {
+      return <AdminAccessRetryState onRetry={() => setReloadKey((current) => current + 1)} />
+    }
+
+    return (
+      <Navigate
+        to="/admin/sign-in"
+        replace
+        state={{
+          adminDenied: true,
+          from: `${location.pathname}${location.search}`,
+        }}
+      />
+    )
+  }
+
+  if (!hasAnyAdminPermission(adminAccess, requiredPermissions)) {
     return (
       <Navigate
         to="/admin/sign-in"

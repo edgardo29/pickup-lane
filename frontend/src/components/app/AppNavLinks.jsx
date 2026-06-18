@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { adminWorkspaceNavItems } from '../../pages/admin/shared/adminWorkspaceData.js'
+import { isAdminWorkspaceItemActive } from '../../pages/admin/shared/adminWorkspaceData.js'
 
 function AppNavMenuSection({
   closeMenu,
@@ -10,14 +10,7 @@ function AppNavMenuSection({
   unreadCount,
 }) {
   function isMenuItemActive(item, isActive) {
-    if (item.to === '/admin/official-games') {
-      return (
-        pathname === item.to
-        || (pathname.startsWith('/admin/official-games/') && pathname !== '/admin/official-games/new')
-      )
-    }
-
-    return isActive
+    return isAdminWorkspaceItemActive(item, pathname) || isActive
   }
 
   return (
@@ -53,27 +46,28 @@ export function AppNavLinks({
   appUser,
   closeMenu,
   displayName,
+  hasAdminWorkspaceAccess,
   initials,
   isLoading,
   isMenuOpen,
   unreadCount,
+  visibleAdminNavItems,
   visibleNavItems,
 }) {
   const { pathname } = useLocation()
-  const isAdmin = appUser?.role === 'admin'
   const appSection = (
     <AppNavMenuSection
       closeMenu={closeMenu}
       items={visibleNavItems}
-      label={isAdmin ? 'App' : ''}
+      label={hasAdminWorkspaceAccess ? 'App' : ''}
       pathname={pathname}
       unreadCount={unreadCount}
     />
   )
-  const adminSection = isAdmin ? (
+  const adminSection = hasAdminWorkspaceAccess ? (
     <AppNavMenuSection
       closeMenu={closeMenu}
-      items={adminWorkspaceNavItems}
+      items={visibleAdminNavItems}
       label="Admin"
       menuOnly
       pathname={pathname}

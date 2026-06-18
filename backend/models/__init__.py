@@ -1,6 +1,7 @@
 # Re-export models here so Alembic and the rest of the backend can import from
 # one place as the models package grows.
 from backend.models.admin_action_model import AdminAction
+from backend.models.admin_rejected_attempt_model import AdminRejectedAttempt
 from backend.models.booking_model import Booking
 from backend.models.booking_policy_acceptance_model import BookingPolicyAcceptance
 from backend.models.booking_status_history_model import BookingStatusHistory
@@ -32,6 +33,7 @@ from backend.models.sub_post_request_status_history_model import (
     SubPostRequestStatusHistory,
 )
 from backend.models.sub_post_status_history_model import SubPostStatusHistory
+from backend.models.support_flag_model import SupportFlag
 from backend.models.user_model import User
 from backend.models.user_payment_method_model import UserPaymentMethod
 from backend.models.user_settings_model import UserSettings
@@ -66,6 +68,7 @@ __all__ = [
     "HostPublishFee",
     "Notification",
     "AdminAction",
+    "AdminRejectedAttempt",
     "WaitlistEntry",
     "Payment",
     "PaymentEvent",
@@ -80,4 +83,5 @@ __all__ = [
     "SubPostRequest",
     "SubPostRequestStatusHistory",
     "SubPostStatusHistory",
+    "SupportFlag",
 ]
