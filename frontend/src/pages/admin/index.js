@@ -1,3 +1,5 @@
+export { default as AdminActionCenterPage } from './action-center/AdminActionCenterPage.jsx'
+export { default as AdminAuditLogPage } from './audit/AdminAuditLogPage.jsx'
 export { default as AdminCreateOfficialGamePage } from './official-games/create/AdminCreateOfficialGamePage.jsx'
 export { default as AdminOfficialGamePage } from './official-games/manage/AdminOfficialGamePage.jsx'
 export { default as AdminOfficialGamesPage } from './official-games/list/AdminOfficialGamesPage.jsx'

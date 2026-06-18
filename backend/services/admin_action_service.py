@@ -24,6 +24,7 @@ from backend.models import (
     SubPostChatMessage,
     SubPostPosition,
     SubPostRequest,
+    SupportFlag,
     User,
     Venue,
     VenueImage,
@@ -47,6 +48,7 @@ from backend.services.admin_action_policy import (
     TARGET_USER_ID,
     TARGET_VENUE_ID,
     TARGET_VENUE_IMAGE_ID,
+    TARGET_SUPPORT_FLAG_ID,
     AdminActionPolicy,
     TargetRule,
     get_admin_action_policy,
@@ -207,6 +209,7 @@ TARGET_MODEL_BY_FIELD = {
     TARGET_SUB_CHAT_MESSAGE_ID: SubPostChatMessage,
     TARGET_NOTIFICATION_ID: Notification,
     TARGET_ADMIN_ACTION_ID: AdminAction,
+    TARGET_SUPPORT_FLAG_ID: SupportFlag,
 }
 
 TARGET_NOT_FOUND_DETAIL = {
@@ -226,6 +229,7 @@ TARGET_NOT_FOUND_DETAIL = {
     TARGET_SUB_CHAT_MESSAGE_ID: "Target Need a Sub chat message not found.",
     TARGET_NOTIFICATION_ID: "Target notification not found.",
     TARGET_ADMIN_ACTION_ID: "Target admin action not found.",
+    TARGET_SUPPORT_FLAG_ID: "Target support flag not found.",
 }
 
 

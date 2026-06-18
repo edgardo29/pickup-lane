@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
+import {
+  getDefaultAdminPath,
+  getVisibleAdminWorkspaceNavItems,
+} from '../../pages/admin/shared/adminWorkspaceData.js'
+import { useAdminAccess } from '../../pages/admin/shared/useAdminAccess.js'
 import { appNavItems } from './appNavData.js'
 import { fetchUnreadNotificationCount } from './appNavApi.js'
 import { getDisplayName, getInitials } from './appNavFormatters.js'
@@ -12,6 +17,11 @@ export function useAppNavState({
   preferPublicWhileLoading = false,
 }) {
   const { appUser, currentUser, isLoading: isAuthLoading } = useAuth()
+  const shouldLoadAdminAccess = ['admin', 'moderator'].includes(appUser?.role)
+  const {
+    adminAccess,
+    isLoading: isAdminAccessLoading,
+  } = useAdminAccess({ enabled: shouldLoadAdminAccess })
   const location = useLocation()
   const isLoading = (isForcedLoading || isAuthLoading) && !preferPublicWhileLoading
   const [unreadCount, setUnreadCount] = useState(0)
@@ -83,6 +93,13 @@ export function useAppNavState({
 
   const displayName = appUser ? getDisplayName(appUser, currentUser) : 'Sign In / Register'
   const initials = getInitials(appUser, currentUser)
+  const visibleAdminNavItems = isAdminAccessLoading
+    ? []
+    : getVisibleAdminWorkspaceNavItems(adminAccess)
+  const hasAdminWorkspaceAccess = visibleAdminNavItems.length > 0
+  const adminEntryPath = hasAdminWorkspaceAccess
+    ? getDefaultAdminPath(adminAccess)
+    : '/admin/sign-in'
   const visibleNavItems = appNavItems.filter((item) => {
     if (item.auth === 'public') {
       return true
@@ -93,7 +110,7 @@ export function useAppNavState({
     }
 
     if (item.auth === 'admin') {
-      return appUser?.role === 'admin'
+      return hasAdminWorkspaceAccess
     }
 
     return Boolean(appUser)
@@ -109,13 +126,16 @@ export function useAppNavState({
 
   return {
     appUser,
+    adminEntryPath,
     closeMenu,
     displayName,
+    hasAdminWorkspaceAccess,
     initials,
     isLoading,
     isMenuOpen,
     toggleMenu,
     unreadCount,
+    visibleAdminNavItems,
     visibleNavItems,
   }
 }

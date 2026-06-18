@@ -164,7 +164,7 @@ export function useGameCheckoutActions({ navigate }) {
         finishSubmission()
       }
     },
-    [finishSubmission, pollCheckoutStatus, startSubmission],
+    [finishSubmission, navigate, pollCheckoutStatus, startSubmission],
   )
 
   const confirmBooking = useCallback(

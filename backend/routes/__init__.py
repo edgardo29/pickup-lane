@@ -1,6 +1,12 @@
 # Re-export routers here so the main FastAPI app can include feature routes
 # from one place as the API grows.
 from backend.routes.admin_action_routes import router as admin_actions_router
+from backend.routes.admin_action_center_routes import (
+    router as admin_action_center_router,
+)
+from backend.routes.admin_rejected_attempt_routes import (
+    router as admin_rejected_attempts_router,
+)
 from backend.routes.admin_lookup_routes import router as admin_lookups_router
 from backend.routes.admin_official_game_routes import (
     router as admin_official_games_router,
@@ -50,6 +56,7 @@ from backend.routes.sub_post_routes import router as sub_posts_router
 from backend.routes.sub_post_status_history_routes import (
     router as sub_post_status_history_router,
 )
+from backend.routes.support_flag_routes import router as support_flags_router
 from backend.routes.user_payment_method_routes import (
     router as user_payment_method_router,
 )
@@ -66,6 +73,8 @@ from backend.routes.waitlist_entry_routes import router as waitlist_entries_rout
 
 __all__ = [
     "admin_actions_router",
+    "admin_action_center_router",
+    "admin_rejected_attempts_router",
     "admin_game_credits_router",
     "admin_game_images_router",
     "admin_lookups_router",
@@ -108,4 +117,5 @@ __all__ = [
     "sub_post_requests_router",
     "sub_post_request_status_history_router",
     "sub_post_status_history_router",
+    "support_flags_router",
 ]

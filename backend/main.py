@@ -7,7 +7,9 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.database import check_database_connection
 from backend.routes import (
+    admin_action_center_router,
     admin_actions_router,
+    admin_rejected_attempts_router,
     admin_game_credits_router,
     admin_game_images_router,
     admin_lookups_router,
@@ -42,6 +44,7 @@ from backend.routes import (
     sub_post_requests_router,
     sub_post_status_history_router,
     sub_posts_router,
+    support_flags_router,
     user_payment_method_router,
     user_settings_router,
     user_stats_router,
@@ -104,6 +107,8 @@ app.include_router(venue_images_router)
 app.include_router(game_chats_router)
 app.include_router(game_credits_router)
 app.include_router(admin_router)
+app.include_router(admin_action_center_router)
+app.include_router(admin_rejected_attempts_router)
 app.include_router(admin_game_credits_router)
 app.include_router(admin_game_images_router)
 app.include_router(admin_lookups_router)
@@ -136,3 +141,4 @@ app.include_router(sub_post_positions_router)
 app.include_router(sub_post_requests_router)
 app.include_router(sub_post_request_status_history_router)
 app.include_router(sub_post_status_history_router)
+app.include_router(support_flags_router)

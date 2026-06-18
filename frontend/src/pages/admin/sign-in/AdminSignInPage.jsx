@@ -13,8 +13,8 @@ function AdminSignInPage() {
     <AuthShell backLabel="Back" backTo="/" variant="sign-in auth-page--wide">
       <AuthPanel>
         <AuthHeader
-          title="Admin sign in"
-          subtitle="Use an authorized Pickup Lane admin account."
+          title="Staff sign in"
+          subtitle="Use an authorized Pickup Lane staff account."
         />
 
         <SignInForm

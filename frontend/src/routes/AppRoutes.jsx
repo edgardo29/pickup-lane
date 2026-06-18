@@ -8,11 +8,14 @@ import {
   SignInPage,
 } from '../pages/auth/index.js'
 import {
+  AdminActionCenterPage,
+  AdminAuditLogPage,
   AdminCreateOfficialGamePage,
   AdminOfficialGamePage,
   AdminOfficialGamesPage,
   AdminSignInPage,
 } from '../pages/admin/index.js'
+import { ADMIN_PERMISSIONS } from '../pages/admin/shared/adminWorkspaceData.js'
 import {
   BrowseGamesPage,
   GameCheckoutPage,
@@ -106,14 +109,35 @@ export function AppRoutes() {
         path="/admin"
         element={
           <RequireAdmin>
-            <Navigate to="/admin/official-games" replace />
+            <Navigate to="/admin/action-center" replace />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/action-center"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.ACTION_CENTER_VIEW}>
+            <AdminActionCenterPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/audit"
+        element={
+          <RequireAdmin
+            permissions={[
+              ADMIN_PERMISSIONS.AUDIT_READ,
+              ADMIN_PERMISSIONS.AUDIT_SUPPORT_READ,
+            ]}
+          >
+            <AdminAuditLogPage />
           </RequireAdmin>
         }
       />
       <Route
         path="/admin/official-games"
         element={
-          <RequireAdmin>
+          <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ}>
             <AdminOfficialGamesPage />
           </RequireAdmin>
         }
@@ -121,7 +145,7 @@ export function AppRoutes() {
       <Route
         path="/admin/official-games/new"
         element={
-          <RequireAdmin>
+          <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE}>
             <AdminCreateOfficialGamePage />
           </RequireAdmin>
         }
@@ -129,7 +153,7 @@ export function AppRoutes() {
       <Route
         path="/admin/official-games/:gameId"
         element={
-          <RequireAdmin>
+          <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ}>
             <AdminOfficialGamePage />
           </RequireAdmin>
         }

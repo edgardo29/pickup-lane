@@ -30,6 +30,7 @@ class AdminActionCreate(BaseModel):
     target_notification_id: UUID | None = None
     target_platform_notice_campaign_id: UUID | None = None
     target_admin_action_id: UUID | None = None
+    target_support_flag_id: UUID | None = None
     reason: str | None = None
     metadata: dict[str, Any] | None = None
     idempotency_key: str | None = None
@@ -59,6 +60,7 @@ class AdminActionRead(BaseModel):
     target_notification_id: UUID | None
     target_platform_notice_campaign_id: UUID | None
     target_admin_action_id: UUID | None
+    target_support_flag_id: UUID | None
     reason: str | None
     metadata: dict[str, Any] | None = Field(
         validation_alias="metadata_",

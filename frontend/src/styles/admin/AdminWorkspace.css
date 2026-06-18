@@ -10,6 +10,64 @@
   min-width: 0;
 }
 
+.admin-workspace-layout--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.admin-guard-state {
+  min-height: calc(100vh - 88px);
+  padding: 96px 20px;
+  display: grid;
+  place-items: start center;
+}
+
+.admin-guard-state__panel {
+  width: min(460px, 100%);
+  padding: 22px;
+  border: 1px solid rgba(248, 250, 252, 0.12);
+  border-radius: 8px;
+  background: #0c141d;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+}
+
+.admin-guard-state__panel h1,
+.admin-guard-state__panel p {
+  margin: 0;
+}
+
+.admin-guard-state__panel h1 {
+  color: #ffffff;
+  font-size: 1.12rem;
+  line-height: 1.2;
+  font-weight: 950;
+}
+
+.admin-guard-state__panel p {
+  margin-top: 8px;
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 0.9rem;
+  font-weight: 820;
+}
+
+.admin-guard-state__panel button {
+  min-height: 42px;
+  margin-top: 18px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 6px;
+  color: #061006;
+  background: var(--lime);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.admin-guard-state__panel button:hover,
+.admin-guard-state__panel button:focus-visible {
+  filter: brightness(1.05);
+}
+
 .admin-workspace-nav {
   min-width: 0;
   padding: 8px;

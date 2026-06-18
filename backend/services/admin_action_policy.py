@@ -43,6 +43,7 @@ TARGET_SUB_CHAT_MESSAGE_ID = "target_sub_chat_message_id"
 TARGET_NOTIFICATION_ID = "target_notification_id"
 TARGET_PLATFORM_NOTICE_CAMPAIGN_ID = "target_platform_notice_campaign_id"
 TARGET_ADMIN_ACTION_ID = "target_admin_action_id"
+TARGET_SUPPORT_FLAG_ID = "target_support_flag_id"
 
 ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_USER_ID,
@@ -62,6 +63,7 @@ ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_NOTIFICATION_ID,
     TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,
     TARGET_ADMIN_ACTION_ID,
+    TARGET_SUPPORT_FLAG_ID,
 )
 
 @dataclass(frozen=True)
@@ -570,6 +572,28 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         server_copied_target_fields=target_set(*ADMIN_ACTION_TARGET_FIELDS),
         metadata_builder_key="audit_note",
         allows_audit_note=False,
+        requires_reason=True,
+    ),
+    "resolve_support_flag": AdminActionPolicy(
+        action_type="resolve_support_flag",
+        sensitivity_scope=DATA_SCOPE_ADMIN_ONLY,
+        read_permission=PERMISSION_AUDIT_READ,
+        mutation_permission=PERMISSION_AUDIT_READ,
+        required_target_rules=(TargetRule(all_of=(TARGET_SUPPORT_FLAG_ID,)),),
+        allowed_target_fields=target_set(
+            TARGET_SUPPORT_FLAG_ID,
+            TARGET_USER_ID,
+            TARGET_GAME_ID,
+            TARGET_BOOKING_ID,
+            TARGET_PAYMENT_ID,
+            TARGET_REFUND_ID,
+            TARGET_GAME_CREDIT_ID,
+            TARGET_VENUE_ID,
+            TARGET_VENUE_IMAGE_ID,
+            TARGET_NOTIFICATION_ID,
+        ),
+        client_allowed_target_fields=target_set(),
+        metadata_builder_key="support",
         requires_reason=True,
     ),
 }
