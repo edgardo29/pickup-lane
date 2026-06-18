@@ -129,9 +129,21 @@ def upgrade() -> None:
         "game_credits",
         ["user_id", "credit_status"],
     )
+    op.create_foreign_key(
+        "fk_admin_actions_target_game_credit_id",
+        "admin_actions",
+        "game_credits",
+        ["target_game_credit_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
 
 
 def downgrade() -> None:
+    op.execute(
+        "ALTER TABLE admin_actions "
+        "DROP CONSTRAINT IF EXISTS fk_admin_actions_target_game_credit_id"
+    )
     op.drop_index("ix_game_credits_user_id_credit_status", table_name="game_credits")
     op.drop_index("ix_game_credits_user_id", table_name="game_credits")
     op.drop_index("ix_game_credits_source_game_id", table_name="game_credits")

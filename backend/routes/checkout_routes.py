@@ -10,7 +10,7 @@ from backend.schemas import (
     GameCheckoutPaymentIntentRead,
     GameCheckoutStatusRead,
 )
-from backend.services.auth_service import get_current_app_user
+from backend.services.auth_service import require_active_user
 from backend.services.checkout_service import (
     create_game_checkout_payment_intent_workflow,
     get_game_checkout_status_workflow,
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/checkout", tags=["checkout"])
 def create_game_checkout_payment_intent(
     game_id: uuid.UUID,
     checkout_request: GameCheckoutPaymentIntentCreate,
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ) -> GameCheckoutPaymentIntentRead:
     return create_game_checkout_payment_intent_workflow(
@@ -45,7 +45,7 @@ def create_game_checkout_payment_intent(
 )
 def get_game_checkout_status(
     booking_id: uuid.UUID,
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ) -> GameCheckoutStatusRead:
     return get_game_checkout_status_workflow(db, booking_id, current_user)

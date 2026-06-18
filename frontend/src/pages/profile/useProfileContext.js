@@ -29,10 +29,10 @@ export function useProfileContext() {
           throw new Error('Sign in to view your profile.')
         }
 
-        const profileData = await loadProfileData(appUser.id, firebaseUser)
+        const profileData = await loadProfileData(firebaseUser)
 
         if (!ignore) {
-          setCurrentUser(appUser)
+          setCurrentUser(profileData.user || appUser)
           setGameCreditBalance(profileData.gameCreditBalance)
           setSettings(profileData.settings)
           setStats(profileData.stats)

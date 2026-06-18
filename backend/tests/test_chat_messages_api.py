@@ -12,6 +12,8 @@ from backend.tests.helpers import (
     create_game_participant,
     create_user,
     create_venue,
+    run_as_temporary_admin,
+    set_user_account_status,
     set_user_role,
 )
 
@@ -29,6 +31,34 @@ def create_chat_message_setup(client: TestClient) -> tuple[dict, dict, dict, dic
     )
     game_chat = create_game_chat(client, game["id"])
     return user, venue, game, game_chat
+
+
+def test_chat_message_routes_reject_suspended_user(client: TestClient):
+    user = create_user(client)
+    set_user_account_status(user["id"], "suspended")
+    authenticate_as(user["id"])
+    chat_id = "00000000-0000-4000-8000-000000000001"
+    message_id = "00000000-0000-4000-8000-000000000002"
+
+    responses = [
+        client.post(
+            "/chat-messages",
+            json={
+                "chat_id": chat_id,
+                "message_body": "Suspended user should not send.",
+            },
+        ),
+        client.get(f"/chat-messages/{message_id}"),
+        client.get(f"/chat-messages?chat_id={chat_id}"),
+        client.patch(
+            f"/chat-messages/{message_id}",
+            json={"message_body": "Suspended user should not edit."},
+        ),
+    ]
+
+    for response in responses:
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"] == "Active account required."
 
 
 def test_chat_messages_create_get_list_and_update(client: TestClient):
@@ -89,9 +119,12 @@ def test_chat_messages_list_after_created_at_returns_newer_messages(client: Test
 def test_chat_messages_reject_message_to_locked_chat(client: TestClient):
     user, _venue, _game, game_chat = create_chat_message_setup(client)
     authenticate_as(user["id"])
-    lock_response = client.patch(
-        f"/game-chats/{game_chat['id']}",
-        json={"chat_status": "locked"},
+    lock_response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/game-chats/{game_chat['id']}",
+            json={"chat_status": "locked"},
+        ),
     )
     assert lock_response.status_code == 200, lock_response.text
 
@@ -99,11 +132,7 @@ def test_chat_messages_reject_message_to_locked_chat(client: TestClient):
         "/chat-messages",
         json={
             "chat_id": game_chat["id"],
-            "sender_user_id": user["id"],
-            "message_type": "text",
             "message_body": "This should not send",
-            "is_pinned": False,
-            "moderation_status": "visible",
         },
     )
 
@@ -119,10 +148,7 @@ def test_chat_messages_reject_long_message(client: TestClient):
         "/chat-messages",
         json={
             "chat_id": game_chat["id"],
-            "message_type": "text",
             "message_body": "x" * 301,
-            "is_pinned": False,
-            "moderation_status": "visible",
         },
     )
 
@@ -139,16 +165,82 @@ def test_chat_messages_reject_non_member_sender(client: TestClient):
         "/chat-messages",
         json={
             "chat_id": game_chat["id"],
-            "sender_user_id": non_member["id"],
-            "message_type": "text",
             "message_body": "Trying to sneak into chat",
-            "is_pinned": False,
-            "moderation_status": "visible",
         },
     )
 
     assert response.status_code == 403, response.text
     assert "confirmed players and the host" in response.text
+
+
+def test_chat_messages_reject_player_system_and_pinned_fields(client: TestClient):
+    user, _venue, _game, game_chat = create_chat_message_setup(client)
+    authenticate_as(user["id"])
+
+    system_response = client.post(
+        "/chat-messages",
+        json={
+            "chat_id": game_chat["id"],
+            "message_type": "system",
+            "message_body": "Forged system message",
+            "is_pinned": False,
+            "moderation_status": "visible",
+        },
+    )
+    pinned_response = client.post(
+        "/chat-messages",
+        json={
+            "chat_id": game_chat["id"],
+            "message_type": "text",
+            "message_body": "Forged pinned message",
+            "is_pinned": True,
+            "pinned_by_user_id": user["id"],
+            "moderation_status": "visible",
+        },
+    )
+
+    assert system_response.status_code == 422, system_response.text
+    assert pinned_response.status_code == 422, pinned_response.text
+
+
+def test_chat_message_sender_can_delete_own_message(client: TestClient):
+    user, _venue, _game, game_chat = create_chat_message_setup(client)
+    chat_message = create_chat_message(client, game_chat["id"], user["id"])
+    authenticate_as(user["id"])
+
+    delete_response = client.patch(
+        f"/chat-messages/{chat_message['id']}",
+        json={"moderation_status": "deleted_by_sender"},
+    )
+    assert delete_response.status_code == 200, delete_response.text
+    assert delete_response.json()["moderation_status"] == "deleted_by_sender"
+    assert delete_response.json()["deleted_by_user_id"] == user["id"]
+    assert delete_response.json()["deleted_at"] is not None
+
+    get_response = client.get(f"/chat-messages/{chat_message['id']}")
+    assert get_response.status_code == 404, get_response.text
+
+    list_response = client.get(f"/chat-messages?chat_id={game_chat['id']}")
+    assert list_response.status_code == 200, list_response.text
+    assert chat_message["id"] not in {
+        item["id"] for item in list_response.json()
+    }
+
+
+def test_chat_message_sender_cannot_set_moderation_actor_fields(client: TestClient):
+    user, _venue, _game, game_chat = create_chat_message_setup(client)
+    chat_message = create_chat_message(client, game_chat["id"], user["id"])
+    authenticate_as(user["id"])
+
+    response = client.patch(
+        f"/chat-messages/{chat_message['id']}",
+        json={
+            "moderation_status": "deleted_by_sender",
+            "deleted_by_user_id": user["id"],
+        },
+    )
+
+    assert response.status_code == 422, response.text
 
 
 def test_chat_messages_notify_other_confirmed_members_and_mark_read(client: TestClient):
@@ -316,30 +408,61 @@ def test_chat_messages_hide_requires_admin(client: TestClient):
         f"/chat-messages/{chat_message['id']}",
         json={
             "moderation_status": "hidden_by_admin",
-            "deleted_by_user_id": user["id"],
+            "reason": "Player attempted a moderation action.",
         },
     )
 
-    assert response.status_code == 400, response.text
-    assert "admin deleted_by_user_id" in response.text
+    assert response.status_code == 403, response.text
+    assert "Content moderation permission required" in response.text
 
 
-def test_chat_messages_hide_by_admin_is_terminal(client: TestClient):
+def test_chat_messages_hide_by_moderator_is_audited_and_terminal(
+    client: TestClient,
+):
     user, _venue, _game, game_chat = create_chat_message_setup(client)
-    admin = create_user(client)
-    set_user_role(admin["id"], "admin")
+    moderator = create_user(client)
+    set_user_role(moderator["id"], "moderator")
     chat_message = create_chat_message(client, game_chat["id"], user["id"])
-    authenticate_as(admin["id"])
+    authenticate_as(moderator["id"])
 
     hide_response = client.patch(
         f"/chat-messages/{chat_message['id']}",
         json={
             "moderation_status": "hidden_by_admin",
-            "deleted_by_user_id": admin["id"],
+            "reason": "Message violated the chat rules.",
         },
     )
     assert hide_response.status_code == 200, hide_response.text
+    assert hide_response.json()["deleted_by_user_id"] == moderator["id"]
     assert hide_response.json()["deleted_at"] is not None
+
+    hidden_list_response = client.get(
+        f"/chat-messages?chat_id={game_chat['id']}"
+        "&moderation_status=hidden_by_admin"
+    )
+    assert hidden_list_response.status_code == 200, hidden_list_response.text
+    assert [item["id"] for item in hidden_list_response.json()] == [
+        chat_message["id"]
+    ]
+
+    from sqlalchemy import select
+
+    from backend.database import SessionLocal
+    from backend.models import AdminAction
+
+    with SessionLocal() as db:
+        audit_action = db.scalar(
+            select(AdminAction).where(
+                AdminAction.action_type == "hide_chat_message",
+                AdminAction.target_message_id == UUID(chat_message["id"]),
+            )
+        )
+        assert audit_action is not None
+        assert audit_action.admin_user_id == UUID(moderator["id"])
+        assert audit_action.target_game_id == UUID(_game["id"])
+        assert audit_action.target_user_id == UUID(user["id"])
+        assert audit_action.reason == "Message violated the chat rules."
+        assert "message_body" not in (audit_action.metadata_ or {})
 
     response = client.patch(
         f"/chat-messages/{chat_message['id']}",
@@ -348,3 +471,28 @@ def test_chat_messages_hide_by_admin_is_terminal(client: TestClient):
 
     assert response.status_code == 400, response.text
     assert "cannot be updated" in response.text
+
+    authenticate_as(user["id"])
+    member_get_response = client.get(f"/chat-messages/{chat_message['id']}")
+    member_list_response = client.get(
+        f"/chat-messages?chat_id={game_chat['id']}"
+        "&moderation_status=hidden_by_admin"
+    )
+    assert member_get_response.status_code == 404, member_get_response.text
+    assert member_list_response.status_code == 403, member_list_response.text
+
+
+def test_chat_message_moderation_requires_reason(client: TestClient):
+    user, _venue, _game, game_chat = create_chat_message_setup(client)
+    moderator = create_user(client)
+    set_user_role(moderator["id"], "moderator")
+    chat_message = create_chat_message(client, game_chat["id"], user["id"])
+    authenticate_as(moderator["id"])
+
+    response = client.patch(
+        f"/chat-messages/{chat_message['id']}",
+        json={"moderation_status": "hidden_by_admin"},
+    )
+
+    assert response.status_code == 400, response.text
+    assert "reason is required" in response.text

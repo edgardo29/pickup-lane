@@ -5,6 +5,7 @@ import { saveUserSettings, updateProfileUser } from './profileApi.js'
 
 export function ProfileEditForm({
   currentUser,
+  firebaseUser,
   onCancel,
   onSaved,
   settings,
@@ -57,14 +58,14 @@ export function ProfileEditForm({
         phone: trimmedForm.phone,
       }
 
-      const savedUser = await updateProfileUser(currentUser.id, profilePayload)
+      const savedUser = await updateProfileUser(firebaseUser, profilePayload)
 
       const settingsPayload = {
         selected_city: trimmedForm.home_city || null,
         selected_state: trimmedForm.home_state || null,
       }
 
-      const savedSettings = await saveUserSettings(currentUser.id, settings, settingsPayload)
+      const savedSettings = await saveUserSettings(firebaseUser, settingsPayload)
 
       onSaved({
         currentUser: {

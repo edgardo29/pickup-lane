@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from backend.tests.helpers import (
+    authenticate_as,
     create_booking,
     create_game,
     create_game_participant,
@@ -8,8 +9,15 @@ from backend.tests.helpers import (
     create_refund,
     create_user,
     create_venue,
+    set_user_role,
     unique_suffix,
 )
+
+
+def create_money_admin(client: TestClient) -> dict:
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    return admin
 
 
 def create_paid_booking_setup(client: TestClient) -> tuple[dict, dict, dict, dict, dict]:
@@ -28,6 +36,7 @@ def create_paid_booking_setup(client: TestClient) -> tuple[dict, dict, dict, dic
 
 def test_refunds_create_get_list_and_update(client: TestClient):
     user, _venue, _game, booking, payment = create_paid_booking_setup(client)
+    admin = create_money_admin(client)
     refund = create_refund(
         client,
         payment["id"],
@@ -35,6 +44,7 @@ def test_refunds_create_get_list_and_update(client: TestClient):
         requested_by_user_id=user["id"],
     )
 
+    authenticate_as(user["id"])
     get_response = client.get(f"/refunds/{refund['id']}")
     assert get_response.status_code == 200, get_response.text
     assert get_response.json()["id"] == refund["id"]
@@ -43,6 +53,7 @@ def test_refunds_create_get_list_and_update(client: TestClient):
     assert list_response.status_code == 200, list_response.text
     assert any(item["id"] == refund["id"] for item in list_response.json())
 
+    authenticate_as(admin["id"])
     patch_response = client.patch(
         f"/refunds/{refund['id']}",
         json={"refund_status": "approved", "approved_by_user_id": user["id"]},
@@ -50,6 +61,48 @@ def test_refunds_create_get_list_and_update(client: TestClient):
     assert patch_response.status_code == 200, patch_response.text
     assert patch_response.json()["refund_status"] == "approved"
     assert patch_response.json()["approved_at"] is not None
+
+    audit_response = client.get(f"/admin/actions?target_refund_id={refund['id']}")
+    assert audit_response.status_code == 200, audit_response.text
+    actions_by_type = {
+        action["action_type"]: action for action in audit_response.json()
+    }
+    assert actions_by_type["create_refund"]["target_user_id"] == user["id"]
+    assert actions_by_type["create_refund"]["target_booking_id"] == booking["id"]
+    assert actions_by_type["create_refund"]["target_payment_id"] == payment["id"]
+    assert actions_by_type["create_refund"]["target_refund_id"] == refund["id"]
+    assert actions_by_type["create_refund"]["metadata"] == {
+        "source": "refund_route_create",
+        "refund_status": "pending",
+        "refund_reason": "player_cancelled",
+        "amount_cents": 500,
+        "currency": "USD",
+    }
+    assert actions_by_type["update_refund"]["target_user_id"] == user["id"]
+    assert actions_by_type["update_refund"]["target_booking_id"] == booking["id"]
+    assert actions_by_type["update_refund"]["target_payment_id"] == payment["id"]
+    assert actions_by_type["update_refund"]["target_refund_id"] == refund["id"]
+    assert actions_by_type["update_refund"]["metadata"] == {
+        "source": "refund_route_update",
+        "refund_status": "approved",
+        "refund_reason": "player_cancelled",
+        "amount_cents": 500,
+        "currency": "USD",
+        "old_refund_status": "pending",
+        "new_refund_status": "approved",
+        "before": {
+            "refund_status": "pending",
+            "refund_reason": "player_cancelled",
+            "amount_cents": 500,
+            "currency": "USD",
+        },
+        "after": {
+            "refund_status": "approved",
+            "refund_reason": "player_cancelled",
+            "amount_cents": 500,
+            "currency": "USD",
+        },
+    }
 
 
 def test_refunds_can_scope_to_participant(client: TestClient):
@@ -74,11 +127,13 @@ def test_refunds_can_scope_to_participant(client: TestClient):
 
 def test_refunds_reject_unsucceeded_payment(client: TestClient):
     user = create_user(client)
+    admin = create_money_admin(client)
     venue = create_venue(client, user["id"])
     game = create_game(client, user["id"], venue)
     booking = create_booking(client, user["id"], game["id"])
     payment = create_payment(client, user["id"], booking_id=booking["id"])
 
+    authenticate_as(admin["id"])
     response = client.post(
         "/refunds",
         json={
@@ -98,6 +153,7 @@ def test_refunds_reject_unsucceeded_payment(client: TestClient):
 
 def test_refunds_reject_duplicate_provider_refund_id(client: TestClient):
     _user, _venue, _game, booking, payment = create_paid_booking_setup(client)
+    admin = create_money_admin(client)
     provider_refund_id = f"re_{unique_suffix()}"
 
     create_refund(
@@ -106,6 +162,7 @@ def test_refunds_reject_duplicate_provider_refund_id(client: TestClient):
         booking_id=booking["id"],
         provider_refund_id=provider_refund_id,
     )
+    authenticate_as(admin["id"])
     response = client.post(
         "/refunds",
         json={
@@ -125,8 +182,10 @@ def test_refunds_reject_duplicate_provider_refund_id(client: TestClient):
 
 def test_refunds_reject_amount_over_remaining_payment(client: TestClient):
     _user, _venue, _game, booking, payment = create_paid_booking_setup(client)
+    admin = create_money_admin(client)
 
     create_refund(client, payment["id"], booking_id=booking["id"], amount_cents=900)
+    authenticate_as(admin["id"])
     response = client.post(
         "/refunds",
         json={
@@ -146,6 +205,7 @@ def test_refunds_reject_amount_over_remaining_payment(client: TestClient):
 
 def test_refunds_reject_updates_after_terminal_status(client: TestClient):
     _user, _venue, _game, booking, payment = create_paid_booking_setup(client)
+    admin = create_money_admin(client)
     refund = create_refund(
         client,
         payment["id"],
@@ -154,6 +214,7 @@ def test_refunds_reject_updates_after_terminal_status(client: TestClient):
         amount_cents=300,
     )
 
+    authenticate_as(admin["id"])
     response = client.patch(
         f"/refunds/{refund['id']}",
         json={"amount_cents": 200},
@@ -161,3 +222,51 @@ def test_refunds_reject_updates_after_terminal_status(client: TestClient):
 
     assert response.status_code == 400, response.text
     assert "cannot be updated" in response.text
+
+
+def test_refunds_reject_regular_user_mutation(client: TestClient):
+    user, _venue, _game, booking, payment = create_paid_booking_setup(client)
+
+    authenticate_as(user["id"])
+    response = client.post(
+        "/refunds",
+        json={
+            "payment_id": payment["id"],
+            "booking_id": booking["id"],
+            "provider_refund_id": f"re_{unique_suffix()}",
+            "amount_cents": 500,
+            "currency": "USD",
+            "refund_reason": "player_cancelled",
+            "refund_status": "pending",
+        },
+    )
+
+    assert response.status_code == 403, response.text
+    assert "Admin access required" in response.text
+
+
+def test_refunds_reject_regular_user_reading_other_user_refund(client: TestClient):
+    user, _venue, _game, booking, payment = create_paid_booking_setup(client)
+    other_user = create_user(client)
+    other_booking = create_booking(client, other_user["id"], _game["id"])
+    other_payment = create_payment(
+        client,
+        other_user["id"],
+        booking_id=other_booking["id"],
+        payment_status="succeeded",
+    )
+    create_refund(client, payment["id"], booking_id=booking["id"])
+    other_refund = create_refund(
+        client,
+        other_payment["id"],
+        booking_id=other_booking["id"],
+    )
+
+    authenticate_as(user["id"])
+    get_response = client.get(f"/refunds/{other_refund['id']}")
+    list_response = client.get(f"/refunds?payment_id={other_payment['id']}")
+
+    assert get_response.status_code == 403, get_response.text
+    assert "Admin access required" in get_response.text
+    assert list_response.status_code == 200, list_response.text
+    assert list_response.json() == []

@@ -25,8 +25,14 @@ from backend.models import (
     SubPostRequest,
     User,
 )
-from backend.schemas import NotificationCreate, NotificationUpdate
-from backend.services.auth_service import is_admin
+from backend.schemas.notification_schema import NotificationCreate, NotificationUpdate
+from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_permission_service import (
+    PERMISSION_NOTIFICATIONS_MANAGE,
+    PERMISSION_NOTIFICATIONS_READ,
+    user_has_admin_permission,
+)
+from backend.services.auth_service import require_user_admin_permission
 
 VALID_NOTIFICATION_PREFERENCE_CLASSES = {
     "mandatory",
@@ -1160,20 +1166,12 @@ def get_active_user_or_404(
     return db_user
 
 
-def require_admin_user(current_user: User) -> None:
-    if not is_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required.",
-        )
-
-
 def get_visible_notification_or_404(
     db: Session,
     notification_id: uuid.UUID,
     current_user: User,
     *,
-    allow_admin: bool,
+    allow_admin_read: bool,
 ) -> Notification:
     db_notification = db.get(Notification, notification_id)
 
@@ -1186,7 +1184,11 @@ def get_visible_notification_or_404(
     if db_notification.user_id == current_user.id:
         return db_notification
 
-    if allow_admin and is_admin(current_user):
+    if allow_admin_read and user_has_admin_permission(
+        current_user,
+        PERMISSION_NOTIFICATIONS_READ,
+    ):
+        require_user_admin_permission(current_user, PERMISSION_NOTIFICATIONS_READ)
         return db_notification
 
     raise HTTPException(
@@ -1797,25 +1799,8 @@ def validate_notification_references(
             )
 
 
-def validate_notification_create_access(
-    notification_data: dict[str, object],
-    current_user: User,
-) -> None:
-    if notification_data["user_id"] != current_user.id and not is_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot create notifications for another user.",
-        )
-
-    if (
-        notification_data["actor_user_id"] is not None
-        and notification_data["actor_user_id"] != current_user.id
-        and not is_admin(current_user)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="actor_user_id must be the current user.",
-        )
+def require_notification_create_access(current_user: User) -> None:
+    require_user_admin_permission(current_user, PERMISSION_NOTIFICATIONS_MANAGE)
 
 
 def validate_notification_update_fields(update_data: dict[str, object]) -> None:
@@ -1955,7 +1940,7 @@ def create_notification_workflow(
         notification.model_dump()
     )
     validate_notification_business_rules(notification_data)
-    validate_notification_create_access(notification_data, current_user)
+    require_notification_create_access(current_user)
     validate_notification_references(db, notification_data)
 
     new_notification = Notification(
@@ -1965,6 +1950,22 @@ def create_notification_workflow(
 
     try:
         db.add(new_notification)
+        db.flush()
+        record_admin_action(
+            db,
+            admin_user_id=current_user.id,
+            action_type="create_notification",
+            target_notification_id=new_notification.id,
+            target_user_id=new_notification.user_id,
+            metadata={
+                "after": {
+                    "notification_type": new_notification.notification_type,
+                    "notification_category": new_notification.notification_category,
+                    "notification_domain": new_notification.notification_domain,
+                    "is_read": new_notification.is_read,
+                }
+            },
+        )
         db.commit()
         db.refresh(new_notification)
     except IntegrityError as exc:
@@ -2046,10 +2047,9 @@ def list_notifications_workflow(
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
 ) -> list[dict[str, object]]:
+    require_user_admin_permission(current_user, PERMISSION_NOTIFICATIONS_READ)
     effective_user_id = current_user.id
     if user_id is not None:
-        if user_id != current_user.id:
-            require_admin_user(current_user)
         effective_user_id = user_id
 
     return list_user_notifications_workflow(
@@ -2080,7 +2080,10 @@ def get_notification_workflow(
     current_user: User,
 ) -> dict[str, object]:
     notification = get_visible_notification_or_404(
-        db, notification_id, current_user, allow_admin=True
+        db,
+        notification_id,
+        current_user,
+        allow_admin_read=True,
     )
     return serialize_notification(db, notification)
 
@@ -2090,23 +2093,26 @@ def mark_notification_read_workflow(
     notification_id: uuid.UUID,
     current_user: User,
 ) -> dict[str, object]:
-    return update_notification_workflow(
+    db_notification = get_visible_notification_or_404(
         db,
         notification_id,
-        NotificationUpdate(is_read=True),
         current_user,
+        allow_admin_read=False,
+    )
+    return apply_notification_update(
+        db,
+        db_notification,
+        NotificationUpdate(is_read=True),
     )
 
 
-def update_notification_workflow(
+def apply_notification_update(
     db: Session,
-    notification_id: uuid.UUID,
+    db_notification: Notification,
     notification_update: NotificationUpdate,
-    current_user: User,
+    *,
+    admin_user_id: uuid.UUID | None = None,
 ) -> dict[str, object]:
-    db_notification = get_visible_notification_or_404(
-        db, notification_id, current_user, allow_admin=False
-    )
     update_data = notification_update.model_dump(exclude_unset=True)
 
     if "user_id" in update_data and update_data["user_id"] != db_notification.user_id:
@@ -2161,6 +2167,15 @@ def update_notification_workflow(
 
     update_data["read_at"] = effective_notification_data["read_at"]
 
+    before_read_state = {
+        "is_read": db_notification.is_read,
+        "read_at": (
+            db_notification.read_at.isoformat()
+            if db_notification.read_at is not None
+            else None
+        ),
+    }
+
     for field_name, field_value in update_data.items():
         setattr(db_notification, field_name, field_value)
 
@@ -2168,6 +2183,25 @@ def update_notification_workflow(
 
     try:
         db.add(db_notification)
+        if admin_user_id is not None:
+            record_admin_action(
+                db,
+                admin_user_id=admin_user_id,
+                action_type="update_notification",
+                target_notification_id=db_notification.id,
+                target_user_id=db_notification.user_id,
+                metadata={
+                    "before": before_read_state,
+                    "after": {
+                        "is_read": db_notification.is_read,
+                        "read_at": (
+                            db_notification.read_at.isoformat()
+                            if db_notification.read_at is not None
+                            else None
+                        ),
+                    },
+                },
+            )
         db.commit()
         db.refresh(db_notification)
     except IntegrityError as exc:
@@ -2178,6 +2212,27 @@ def update_notification_workflow(
         ) from exc
 
     return serialize_notification(db, db_notification)
+
+
+def update_notification_workflow(
+    db: Session,
+    notification_id: uuid.UUID,
+    notification_update: NotificationUpdate,
+    current_user: User,
+) -> dict[str, object]:
+    require_user_admin_permission(current_user, PERMISSION_NOTIFICATIONS_MANAGE)
+    db_notification = get_visible_notification_or_404(
+        db,
+        notification_id,
+        current_user,
+        allow_admin_read=True,
+    )
+    return apply_notification_update(
+        db,
+        db_notification,
+        notification_update,
+        admin_user_id=current_user.id,
+    )
 
 
 def serialize_notification(

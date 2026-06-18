@@ -294,6 +294,7 @@ function GameCheckoutPage() {
       appUser,
       effectiveGuestCount: checkout.effectiveGuestCount,
       existingParticipant: checkout.existingParticipant,
+      firebaseUser,
       game: checkoutData.game,
       isAddGuestsCheckout,
       isJoinWindowClosed: checkout.isJoinWindowClosed,

@@ -1,13 +1,22 @@
 from fastapi.testclient import TestClient
 
 from backend.tests.helpers import (
+    authenticate_as,
     create_booking,
     create_game,
     create_payment,
     create_payment_event,
     create_user,
     create_venue,
+    set_user_role,
 )
+
+
+def authenticate_payment_event_admin(client: TestClient) -> dict:
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+    return admin
 
 
 def create_payment_event_setup(client: TestClient) -> tuple[dict, dict, dict, dict]:
@@ -24,6 +33,7 @@ def create_payment_event_setup(client: TestClient) -> tuple[dict, dict, dict, di
 
 
 def test_payment_event_create_get_list_and_mark_processed(client: TestClient):
+    authenticate_payment_event_admin(client)
     _user, _game, _booking, payment = create_payment_event_setup(client)
     payment_event = create_payment_event(
         client,
@@ -60,6 +70,7 @@ def test_payment_event_create_get_list_and_mark_processed(client: TestClient):
 
 
 def test_payment_event_can_be_created_without_payment_match(client: TestClient):
+    authenticate_payment_event_admin(client)
     payment_event = create_payment_event(
         client,
         payment_id=None,
@@ -71,6 +82,7 @@ def test_payment_event_can_be_created_without_payment_match(client: TestClient):
 
 
 def test_payment_event_reject_duplicate_provider_event_id(client: TestClient):
+    authenticate_payment_event_admin(client)
     create_payment_event(client, provider_event_id="evt_ci_duplicate")
 
     response = client.post(
@@ -93,6 +105,7 @@ def test_payment_event_reject_duplicate_provider_event_id(client: TestClient):
 
 
 def test_payment_event_reject_invalid_processing_status(client: TestClient):
+    authenticate_payment_event_admin(client)
     response = client.post(
         "/payment-events",
         json={
@@ -113,6 +126,7 @@ def test_payment_event_reject_invalid_processing_status(client: TestClient):
 
 
 def test_payment_event_reject_failed_without_processing_error(client: TestClient):
+    authenticate_payment_event_admin(client)
     response = client.post(
         "/payment-events",
         json={
@@ -133,6 +147,7 @@ def test_payment_event_reject_failed_without_processing_error(client: TestClient
 
 
 def test_payment_event_reject_empty_event_type(client: TestClient):
+    authenticate_payment_event_admin(client)
     response = client.post(
         "/payment-events",
         json={
@@ -152,6 +167,7 @@ def test_payment_event_reject_empty_event_type(client: TestClient):
 
 
 def test_payment_event_reject_immutable_provider_field_update(client: TestClient):
+    authenticate_payment_event_admin(client)
     payment_event = create_payment_event(
         client,
         provider_event_id="evt_ci_immutable_update",
@@ -167,6 +183,7 @@ def test_payment_event_reject_immutable_provider_field_update(client: TestClient
 
 
 def test_payment_event_reject_missing_payment_reference(client: TestClient):
+    authenticate_payment_event_admin(client)
     payment_event = create_payment_event(
         client,
         payment_id=None,
@@ -180,3 +197,63 @@ def test_payment_event_reject_missing_payment_reference(client: TestClient):
 
     assert response.status_code == 404, response.text
     assert "Payment not found" in response.text
+
+
+def test_payment_event_scaffold_routes_reject_regular_user(client: TestClient):
+    user = create_user(client)
+    payment_event = create_payment_event(
+        client,
+        provider_event_id="evt_ci_regular_user_denied",
+    )
+    authenticate_as(user["id"])
+
+    get_response = client.get(f"/payment-events/{payment_event['id']}")
+    assert get_response.status_code == 403, get_response.text
+
+    list_response = client.get("/payment-events")
+    assert list_response.status_code == 403, list_response.text
+
+    create_response = client.post(
+        "/payment-events",
+        json={
+            "payment_id": None,
+            "provider": "stripe",
+            "provider_event_id": "evt_ci_regular_user_create_denied",
+            "event_type": "payment_intent.succeeded",
+            "raw_payload": {"id": "evt_ci_regular_user_create_denied"},
+            "processing_status": "pending",
+        },
+    )
+    assert create_response.status_code == 403, create_response.text
+
+    patch_response = client.patch(
+        f"/payment-events/{payment_event['id']}",
+        json={"processing_status": "processed"},
+    )
+    assert patch_response.status_code == 403, patch_response.text
+
+
+def test_payment_event_scaffold_routes_reject_moderator(client: TestClient):
+    moderator = create_user(client)
+    payment_event = create_payment_event(
+        client,
+        provider_event_id="evt_ci_moderator_denied",
+    )
+    set_user_role(moderator["id"], "moderator")
+    authenticate_as(moderator["id"])
+
+    get_response = client.get(f"/payment-events/{payment_event['id']}")
+    assert get_response.status_code == 403, get_response.text
+
+    create_response = client.post(
+        "/payment-events",
+        json={
+            "payment_id": None,
+            "provider": "stripe",
+            "provider_event_id": "evt_ci_moderator_create_denied",
+            "event_type": "payment_intent.succeeded",
+            "raw_payload": {"id": "evt_ci_moderator_create_denied"},
+            "processing_status": "pending",
+        },
+    )
+    assert create_response.status_code == 403, create_response.text

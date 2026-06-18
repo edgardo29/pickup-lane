@@ -74,12 +74,12 @@ export function useNeedASubChat({
     try {
       const chat = activeChat?.id
         ? activeChat
-        : await ensureNeedASubChat(firebaseUser, postId, appUser?.id)
+        : await ensureNeedASubChat(firebaseUser, postId)
       const latestMessages = await listNeedASubChatMessages(firebaseUser, postId, {
         limit: SUB_CHAT_MESSAGE_PAGE_SIZE,
       }).catch(() => [])
 
-      await markNeedASubChatRead(firebaseUser, postId, appUser?.id)
+      await markNeedASubChatRead(firebaseUser, postId)
 
       setActiveChat(chat)
       setMessages(latestMessages)
@@ -153,7 +153,6 @@ export function useNeedASubChat({
         postId,
         activeChat.id,
         trimmedMessage,
-        appUser?.id,
       )
 
       setMessages((currentMessages) =>

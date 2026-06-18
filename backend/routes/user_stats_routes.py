@@ -9,6 +9,12 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User, UserStats
 from backend.schemas import UserStatsCreate, UserStatsRead, UserStatsUpdate
+from backend.services.admin_permission_service import (
+    PERMISSION_USERS_MANAGE,
+    PERMISSION_USERS_READ,
+)
+from backend.services.auth_service import get_current_app_user, require_admin_permission
+from backend.services.user_service import get_current_user_stats
 
 router = APIRouter(prefix="/user-stats", tags=["user_stats"])
 
@@ -104,7 +110,9 @@ def validate_user_stats_references(db: Session, stats_data: dict[str, object]) -
 def create_user_stats(
     user_stats: UserStatsCreate,
     db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
 ) -> UserStats:
+    del current_admin
     stats_data = normalize_user_stats_fields(user_stats.model_dump())
     validate_user_stats_business_rules(stats_data)
     validate_user_stats_references(db, stats_data)
@@ -125,12 +133,22 @@ def create_user_stats(
     return new_user_stats
 
 
+@router.get("/me", response_model=UserStatsRead, status_code=status.HTTP_200_OK)
+def get_my_user_stats(
+    current_user: User = Depends(get_current_app_user),
+    db: Session = Depends(get_db),
+) -> UserStats:
+    return get_current_user_stats(db, current_user)
+
+
 # This route fetches the cached stats row for one user.
 @router.get("/{user_id}", response_model=UserStatsRead, status_code=status.HTTP_200_OK)
 def get_user_stats(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
 ) -> UserStats:
+    del current_admin
     db_user_stats = db.get(UserStats, user_id)
 
     if db_user_stats is None:
@@ -149,7 +167,9 @@ def get_user_stats(
 def list_user_stats(
     user_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
 ) -> list[UserStats]:
+    del current_admin
     statement = select(UserStats).join(User, UserStats.user_id == User.id).where(
         User.deleted_at.is_(None)
     )
@@ -169,7 +189,9 @@ def update_user_stats(
     user_id: uuid.UUID,
     user_stats_update: UserStatsUpdate,
     db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
 ) -> UserStats:
+    del current_admin
     db_user_stats = db.get(UserStats, user_id)
 
     if db_user_stats is None:

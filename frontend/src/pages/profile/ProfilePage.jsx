@@ -61,6 +61,7 @@ export function ProfilePage({ isEditProfileOpen = false }) {
       {isEditOpen && (
         <ProfileEditModal
           currentUser={profilePage.currentUser}
+          firebaseUser={profilePage.firebaseUser}
           onClose={closeEditProfile}
           onSaved={handleEditProfileSaved}
           settings={profilePage.settings}

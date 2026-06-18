@@ -14,7 +14,10 @@ from backend.schemas import (
     GameCheckoutPaymentIntentRead,
     GameCheckoutStatusRead,
 )
-from backend.services.auth_service import is_admin
+from backend.services.admin_permission_service import (
+    PERMISSION_MONEY_READ,
+    user_has_admin_permission,
+)
 from backend.services.game_credit_service import (
     CONSUMING_REDEEM_STATUSES,
     GameCreditApplication,
@@ -787,7 +790,10 @@ def get_game_checkout_status_workflow(
             detail="Booking not found.",
         )
 
-    if booking.buyer_user_id != current_user.id and not is_admin(current_user):
+    if booking.buyer_user_id != current_user.id and not user_has_admin_permission(
+        current_user,
+        PERMISSION_MONEY_READ,
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You cannot view this checkout status.",

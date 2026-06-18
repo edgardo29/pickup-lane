@@ -78,6 +78,7 @@ export function useGameDetailsActions({
     currentGuestCount,
     currentParticipant,
     currentUser,
+    firebaseUser,
     game,
     isHost,
     navigate,

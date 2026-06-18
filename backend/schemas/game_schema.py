@@ -165,7 +165,6 @@ class GameUpdate(BaseModel):
 class GameHostEdit(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    acting_user_id: UUID
     venue_name: str | None = None
     address_line_1: str | None = None
     city: str | None = None
@@ -188,7 +187,6 @@ class GameHostEdit(BaseModel):
 class GameJoinCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    acting_user_id: UUID
     guest_count: int = 0
     payment_method_id: UUID | None = None
     auto_charge_consent_accepted: bool = False
@@ -206,8 +204,6 @@ class GameJoinRead(BaseModel):
 class GameLeaveCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    acting_user_id: UUID
-
 
 class GameLeaveRead(BaseModel):
     status: str
@@ -220,7 +216,6 @@ class GameLeaveRead(BaseModel):
 class GameGuestAddCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    acting_user_id: UUID
     guest_count: int = 1
 
 
@@ -234,7 +229,6 @@ class GameGuestAddRead(BaseModel):
 class GameGuestRemoveCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    acting_user_id: UUID
     remove_count: int
 
 

@@ -4,6 +4,7 @@ import { dismissOnBackdropMouseDown, useDismissibleModal } from './useModalBodyL
 
 export function ProfileEditModal({
   currentUser,
+  firebaseUser,
   onClose,
   onSaved,
   settings,
@@ -41,6 +42,7 @@ export function ProfileEditModal({
 
         <ProfileEditForm
           currentUser={currentUser}
+          firebaseUser={firebaseUser}
           onCancel={onClose}
           onSaved={onSaved}
           settings={settings}

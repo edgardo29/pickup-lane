@@ -8,6 +8,7 @@ import {
   splitDisplayName,
   splitIsoDate,
 } from '../../features/auth/authHelpers.js'
+import { waitForCurrentFirebaseUser } from '../../context/authProviderHelpers.js'
 import { updateSignupProfile } from './finishProfileApi.js'
 
 export function useFinishProfileForm() {
@@ -108,12 +109,15 @@ export function useFinishProfileForm() {
 
     try {
       let userToUpdate = appUser
+      let firebaseUserToUpdate = currentUser
 
       if (!userToUpdate?.id) {
         if (pendingSignup) {
           userToUpdate = await signUpWithEmail(pendingSignup.email, pendingSignup.password)
+          firebaseUserToUpdate = await waitForCurrentFirebaseUser()
         } else if (currentUser) {
           userToUpdate = await syncCurrentFirebaseUser()
+          firebaseUserToUpdate = currentUser
         } else {
           navigate('/create-account', { replace: true, state: { from: returnPath } })
           return
@@ -124,7 +128,7 @@ export function useFinishProfileForm() {
         throw new Error('Profile sync did not finish.')
       }
 
-      const updatedUser = await updateSignupProfile(userToUpdate.id, {
+      const updatedUser = await updateSignupProfile(firebaseUserToUpdate, {
         dateOfBirth: birthdayValidation.value,
         firstName: trimmedFirstName,
         lastName: trimmedLastName,

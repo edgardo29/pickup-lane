@@ -22,6 +22,8 @@ from backend.tests.helpers import (
     create_user,
     create_user_payment_method,
     create_venue,
+    get_money_as_admin,
+    get_roster_as_admin,
     mock_checkout_payment_method_verification,
     set_user_role,
     unique_suffix,
@@ -56,6 +58,7 @@ def create_pending_checkout(
                 "amount_cents": credit_amount_cents,
                 "credit_reason": "admin_credit",
                 "source_game_id": game["id"],
+                "note": "Webhook credit test.",
                 "idempotency_key": f"webhook-credit-{unique_suffix()}",
             },
         )
@@ -261,9 +264,10 @@ def create_paid_waitlist_processing_auto_charge(
 
     for _index in range(6):
         player = create_user(client)
+        authenticate_as(player["id"])
         fill_response = client.post(
             f"/games/{game['id']}/join",
-            json={"acting_user_id": player["id"]},
+            json={},
         )
         assert fill_response.status_code == 201, fill_response.text
         joined_players.append(player)
@@ -295,10 +299,10 @@ def create_paid_waitlist_processing_auto_charge(
         fake_confirm_payment_intent,
     )
 
+    authenticate_as(waitlisted_user["id"])
     waitlist_response = client.post(
         f"/games/{game['id']}/join",
         json={
-            "acting_user_id": waitlisted_user["id"],
             "payment_method_id": payment_method["id"],
             "auto_charge_consent_accepted": True,
             "auto_charge_consent_version": "waitlist-auto-charge-v1",
@@ -307,12 +311,14 @@ def create_paid_waitlist_processing_auto_charge(
     assert waitlist_response.status_code == 201, waitlist_response.text
     waitlist_body = waitlist_response.json()
 
+    authenticate_as(joined_players[0]["id"])
     leave_response = client.post(
         f"/games/{game['id']}/leave",
-        json={"acting_user_id": joined_players[0]["id"]},
+        json={},
     )
     assert leave_response.status_code == 200, leave_response.text
 
+    authenticate_as(waitlisted_user["id"])
     waitlist_entry_response = client.get(
         f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
     )
@@ -326,8 +332,9 @@ def create_paid_waitlist_processing_auto_charge(
     assert booking["booking_status"] == "pending_payment"
     assert booking["payment_status"] == "processing"
 
-    participants_response = client.get(
-        f"/game-participants?booking_id={waitlist_body['booking_id']}"
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={waitlist_body['booking_id']}",
     )
     assert participants_response.status_code == 200, participants_response.text
     participants = participants_response.json()
@@ -335,7 +342,7 @@ def create_paid_waitlist_processing_auto_charge(
         "pending_payment"
     }
 
-    payments_response = client.get(f"/payments?booking_id={waitlist_body['booking_id']}")
+    payments_response = get_money_as_admin(client, f"/payments?booking_id={waitlist_body['booking_id']}")
     assert payments_response.status_code == 200, payments_response.text
     payments = payments_response.json()
     assert len(payments) == 1
@@ -401,7 +408,7 @@ def test_stripe_webhook_succeeded_confirms_booking_and_participants(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "processed"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     payment = payment_response.json()
     assert payment["payment_status"] == "succeeded"
@@ -416,8 +423,9 @@ def test_stripe_webhook_succeeded_confirms_booking_and_participants(
     assert booking["booked_at"] is not None
     assert booking["expires_at"] is None
 
-    participants_response = client.get(
-        f"/game-participants?booking_id={checkout['booking_id']}"
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={checkout['booking_id']}",
     )
     assert participants_response.status_code == 200, participants_response.text
     participants = participants_response.json()
@@ -436,7 +444,10 @@ def test_stripe_webhook_succeeded_confirms_booking_and_participants(
     assert checkout_status["booking_payment_status"] == "paid"
     assert checkout_status["payment_status"] == "succeeded"
 
-    events_response = client.get(f"/payment-events?provider_event_id={event['id']}")
+    events_response = get_money_as_admin(
+        client,
+        f"/payment-events?provider_event_id={event['id']}",
+    )
     assert events_response.status_code == 200, events_response.text
     events = events_response.json()
     assert len(events) == 1
@@ -481,12 +492,16 @@ def test_stripe_webhook_duplicate_event_is_idempotent(
     assert second_response.status_code == 200, second_response.text
     assert second_response.json()["duplicate"] is True
 
-    events_response = client.get("/payment-events?provider_event_id=evt_duplicate_success")
+    events_response = get_money_as_admin(
+        client,
+        "/payment-events?provider_event_id=evt_duplicate_success",
+    )
     assert events_response.status_code == 200, events_response.text
     assert len(events_response.json()) == 1
 
-    participants_response = client.get(
-        f"/game-participants?booking_id={checkout['booking_id']}"
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={checkout['booking_id']}",
     )
     assert participants_response.status_code == 200, participants_response.text
     participants = participants_response.json()
@@ -515,7 +530,7 @@ def test_stripe_webhook_waitlist_processing_success_confirms_and_notifies(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "processed"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     payment = payment_response.json()
     assert payment["payment_status"] == "succeeded"
@@ -535,8 +550,9 @@ def test_stripe_webhook_waitlist_processing_success_confirms_and_notifies(
     assert waitlist_entry["waitlist_status"] == "accepted"
     assert waitlist_entry["promoted_booking_id"] == checkout["booking_id"]
 
-    participants_response = client.get(
-        f"/game-participants?booking_id={checkout['booking_id']}"
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={checkout['booking_id']}",
     )
     assert participants_response.status_code == 200, participants_response.text
     participants = participants_response.json()
@@ -573,7 +589,7 @@ def test_stripe_webhook_waitlist_processing_canceled_fails_and_notifies(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "processed"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     payment = payment_response.json()
     assert payment["payment_status"] == "canceled"
@@ -592,8 +608,9 @@ def test_stripe_webhook_waitlist_processing_canceled_fails_and_notifies(
     assert waitlist_entry["waitlist_status"] == "payment_failed"
     assert waitlist_entry["promoted_booking_id"] == checkout["booking_id"]
 
-    participants_response = client.get(
-        f"/game-participants?booking_id={checkout['booking_id']}"
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={checkout['booking_id']}",
     )
     assert participants_response.status_code == 200, participants_response.text
     participants = participants_response.json()
@@ -690,11 +707,14 @@ def test_stripe_webhook_succeeded_amount_mismatch_does_not_confirm_booking(
     assert booking["booking_status"] == "pending_payment"
     assert booking["payment_status"] == "processing"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "processing"
 
-    events_response = client.get(f"/payment-events?provider_event_id={event['id']}")
+    events_response = get_money_as_admin(
+        client,
+        f"/payment-events?provider_event_id={event['id']}",
+    )
     assert events_response.status_code == 200, events_response.text
     event_row = events_response.json()[0]
     assert event_row["processing_status"] == "failed"
@@ -723,11 +743,14 @@ def test_stripe_webhook_succeeded_missing_metadata_does_not_confirm_booking(
     assert booking["booking_status"] == "pending_payment"
     assert booking["payment_status"] == "processing"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "processing"
 
-    events_response = client.get(f"/payment-events?provider_event_id={event['id']}")
+    events_response = get_money_as_admin(
+        client,
+        f"/payment-events?provider_event_id={event['id']}",
+    )
     assert events_response.status_code == 200, events_response.text
     event_row = events_response.json()[0]
     assert event_row["processing_status"] == "failed"
@@ -771,11 +794,14 @@ def test_stripe_webhook_succeeded_participant_mismatch_does_not_mark_payment_suc
     assert booking["booking_status"] == "pending_payment"
     assert booking["payment_status"] == "processing"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "processing"
 
-    events_response = client.get(f"/payment-events?provider_event_id={event['id']}")
+    events_response = get_money_as_admin(
+        client,
+        f"/payment-events?provider_event_id={event['id']}",
+    )
     assert events_response.status_code == 200, events_response.text
     event_row = events_response.json()[0]
     assert event_row["processing_status"] == "failed"
@@ -801,7 +827,7 @@ def test_stripe_webhook_failed_payment_marks_booking_failed_and_clears_hold(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "processed"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     payment = payment_response.json()
     assert payment["payment_status"] == "failed"
@@ -814,8 +840,9 @@ def test_stripe_webhook_failed_payment_marks_booking_failed_and_clears_hold(
     assert booking["booking_status"] == "failed"
     assert booking["payment_status"] == "failed"
 
-    participants_response = client.get(
-        f"/game-participants?booking_id={checkout['booking_id']}"
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={checkout['booking_id']}",
     )
     assert participants_response.status_code == 200, participants_response.text
     participants = participants_response.json()
@@ -910,7 +937,7 @@ def test_stripe_webhook_canceled_payment_expires_booking_hold(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "processed"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "canceled"
 
@@ -991,21 +1018,25 @@ def test_stripe_webhook_refund_updated_succeeded_marks_payment_refunded(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "processed"
 
-    refund_response = client.get(f"/refunds/{refund['id']}")
+    refund_response = get_money_as_admin(client, f"/refunds/{refund['id']}")
     assert refund_response.status_code == 200, refund_response.text
     updated_refund = refund_response.json()
     assert updated_refund["refund_status"] == "succeeded"
     assert updated_refund["refunded_at"] is not None
 
-    payment_response = client.get(f"/payments/{payment['id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "refunded"
 
+    authenticate_as(user["id"])
     booking_response = client.get(f"/bookings/{booking['id']}")
     assert booking_response.status_code == 200, booking_response.text
     assert booking_response.json()["payment_status"] == "refunded"
 
-    events_response = client.get(f"/payment-events?provider_event_id={event['id']}")
+    events_response = get_money_as_admin(
+        client,
+        f"/payment-events?provider_event_id={event['id']}",
+    )
     assert events_response.status_code == 200, events_response.text
     event_row = events_response.json()[0]
     assert event_row["payment_id"] == payment["id"]
@@ -1054,14 +1085,15 @@ def test_stripe_webhook_refund_failed_preserves_paid_payment(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "processed"
 
-    refund_response = client.get(f"/refunds/{refund['id']}")
+    refund_response = get_money_as_admin(client, f"/refunds/{refund['id']}")
     assert refund_response.status_code == 200, refund_response.text
     assert refund_response.json()["refund_status"] == "failed"
 
-    payment_response = client.get(f"/payments/{payment['id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "succeeded"
 
+    authenticate_as(user["id"])
     booking_response = client.get(f"/bookings/{booking['id']}")
     assert booking_response.status_code == 200, booking_response.text
     assert booking_response.json()["payment_status"] == "paid"
@@ -1096,7 +1128,7 @@ def test_stripe_webhook_refund_updated_recovers_missing_internal_refund(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "processed"
 
-    refunds_response = client.get(f"/refunds?payment_id={payment['id']}")
+    refunds_response = get_money_as_admin(client, f"/refunds?payment_id={payment['id']}")
     assert refunds_response.status_code == 200, refunds_response.text
     refunds = [
         item
@@ -1107,7 +1139,7 @@ def test_stripe_webhook_refund_updated_recovers_missing_internal_refund(
     assert refunds[0]["refund_status"] == "succeeded"
     assert refunds[0]["booking_id"] == booking["id"]
 
-    payment_response = client.get(f"/payments/{payment['id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "refunded"
 
@@ -1135,7 +1167,8 @@ def test_stripe_webhook_unmatched_refund_is_saved_and_ignored(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "ignored"
 
-    events_response = client.get(
+    events_response = get_money_as_admin(
+        client,
         "/payment-events?provider_event_id=evt_unmatched_refund"
     )
     assert events_response.status_code == 200, events_response.text
@@ -1159,7 +1192,10 @@ def test_stripe_webhook_unknown_event_is_saved_and_ignored(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "ignored"
 
-    events_response = client.get("/payment-events?provider_event_id=evt_unknown_webhook")
+    events_response = get_money_as_admin(
+        client,
+        "/payment-events?provider_event_id=evt_unknown_webhook",
+    )
     assert events_response.status_code == 200, events_response.text
     event_row = events_response.json()[0]
     assert event_row["processing_status"] == "ignored"
@@ -1190,7 +1226,10 @@ def test_stripe_webhook_unmatched_payment_intent_is_saved_and_ignored(
     assert response.status_code == 200, response.text
     assert response.json()["processing_status"] == "ignored"
 
-    events_response = client.get("/payment-events?provider_event_id=evt_unmatched_intent")
+    events_response = get_money_as_admin(
+        client,
+        "/payment-events?provider_event_id=evt_unmatched_intent",
+    )
     assert events_response.status_code == 200, events_response.text
     event_row = events_response.json()[0]
     assert event_row["processing_status"] == "ignored"

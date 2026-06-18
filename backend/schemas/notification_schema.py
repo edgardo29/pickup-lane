@@ -15,8 +15,8 @@ class NotificationActionRead(BaseModel):
     state: dict[str, str] | None = None
 
 
-# NotificationCreate defines the fields allowed when creating a user inbox
-# notification and optional links back to the related domain record.
+# NotificationCreate defines the admin/internal scaffold for creating a user
+# inbox notification and linking it to related domain records.
 class NotificationCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
@@ -98,8 +98,8 @@ class NotificationRead(BaseModel):
     updated_at: datetime
 
 
-# NotificationUpdate supports partial notification updates, so every field is
-# optional and only provided values should be applied by the route.
+# NotificationUpdate supports admin read-state corrections. Content and domain
+# relation fields remain present for explicit immutable-field rejection.
 class NotificationUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 

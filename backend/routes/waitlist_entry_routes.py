@@ -8,7 +8,21 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Booking, Game, User, WaitlistEntry
-from backend.schemas import WaitlistEntryCreate, WaitlistEntryRead, WaitlistEntryUpdate
+from backend.schemas import (
+    CurrentUserWaitlistEntryRead,
+    WaitlistEntryCreate,
+    WaitlistEntryRead,
+    WaitlistEntryUpdate,
+)
+from backend.services.admin_permission_service import (
+    PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
+)
+from backend.services.auth_service import (
+    get_current_app_user,
+    require_admin_permission,
+    require_user_admin_permission,
+)
+from backend.services.game_waitlist_service import list_current_user_waitlist_entries
 
 router = APIRouter(prefix="/waitlist-entries", tags=["waitlist_entries"])
 
@@ -263,8 +277,13 @@ def normalize_waitlist_entry_lifecycle_fields(
 # and optional promoted booking references.
 @router.post("", response_model=WaitlistEntryRead, status_code=status.HTTP_201_CREATED)
 def create_waitlist_entry(
-    waitlist_entry: WaitlistEntryCreate, db: Session = Depends(get_db)
+    waitlist_entry: WaitlistEntryCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
+    ),
 ) -> WaitlistEntry:
+    del current_admin
     db_game = get_active_game_or_404(db, waitlist_entry.game_id)
     get_active_user_or_404(db, waitlist_entry.user_id)
 
@@ -304,6 +323,18 @@ def create_waitlist_entry(
     return new_waitlist_entry
 
 
+@router.get(
+    "/me",
+    response_model=list[CurrentUserWaitlistEntryRead],
+    status_code=status.HTTP_200_OK,
+)
+def list_my_waitlist_entries(
+    current_user: User = Depends(get_current_app_user),
+    db: Session = Depends(get_db),
+) -> list[WaitlistEntry]:
+    return list_current_user_waitlist_entries(db, current_user)
+
+
 # This route fetches a single waitlist entry by its internal UUID.
 @router.get(
     "/{waitlist_entry_id}",
@@ -311,7 +342,9 @@ def create_waitlist_entry(
     status_code=status.HTTP_200_OK,
 )
 def get_waitlist_entry(
-    waitlist_entry_id: uuid.UUID, db: Session = Depends(get_db)
+    waitlist_entry_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_app_user),
 ) -> WaitlistEntry:
     db_waitlist_entry = db.get(WaitlistEntry, waitlist_entry_id)
 
@@ -319,6 +352,12 @@ def get_waitlist_entry(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Waitlist entry not found.",
+        )
+
+    if db_waitlist_entry.user_id != current_user.id:
+        require_user_admin_permission(
+            current_user,
+            PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
         )
 
     return db_waitlist_entry
@@ -331,7 +370,11 @@ def list_waitlist_entries(
     user_id: uuid.UUID | None = None,
     waitlist_status: str | None = None,
     db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
+    ),
 ) -> list[WaitlistEntry]:
+    del current_admin
     statement = select(WaitlistEntry)
 
     if game_id is not None:
@@ -371,7 +414,11 @@ def update_waitlist_entry(
     waitlist_entry_id: uuid.UUID,
     waitlist_entry_update: WaitlistEntryUpdate,
     db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
+    ),
 ) -> WaitlistEntry:
+    del current_admin
     db_waitlist_entry = db.get(WaitlistEntry, waitlist_entry_id)
 
     if db_waitlist_entry is None:

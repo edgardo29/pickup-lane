@@ -16,6 +16,9 @@ from backend.tests.helpers import (
     create_user,
     create_user_payment_method,
     create_venue,
+    create_waitlist_entry,
+    get_money_as_admin,
+    get_roster_as_admin,
     mock_checkout_payment_method_verification,
     set_user_role,
     unique_suffix,
@@ -70,6 +73,7 @@ def issue_game_credit(
             "credit_reason": "admin_credit",
             "source_game_id": game_id,
             "idempotency_key": f"admin-official-credit-{unique_suffix()}",
+            "note": "Admin official game credit test.",
         },
     )
     assert response.status_code == 201, response.text
@@ -217,6 +221,94 @@ def test_admin_can_list_official_game_participants_from_admin_route(
 
     assert response.status_code == 200, response.text
     assert any(item["id"] == participant["id"] for item in response.json())
+
+
+def test_admin_can_list_official_game_bookings_from_admin_route(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    other_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    other_game_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(title="Other Admin Official Match"),
+    )
+    assert other_game_response.status_code == 201, other_game_response.text
+    other_game = other_game_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    other_booking = create_booking(client, other_player["id"], other_game["id"])
+
+    response = client.get(f"/admin/official-games/{game['id']}/bookings")
+
+    assert response.status_code == 200, response.text
+    bookings = response.json()
+    booking_ids = {item["id"] for item in bookings}
+    assert booking["id"] in booking_ids
+    assert other_booking["id"] not in booking_ids
+    assert all(item["game_id"] == game["id"] for item in bookings)
+
+
+def test_admin_can_list_official_game_waitlist_from_admin_route(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    other_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    payment_method = create_user_payment_method(client, player["id"])
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    other_game_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(title="Other Admin Official Match"),
+    )
+    assert other_game_response.status_code == 201, other_game_response.text
+    other_game = other_game_response.json()["game"]
+    waitlist_entry = create_waitlist_entry(
+        client,
+        player["id"],
+        game["id"],
+        authorized_payment_method_id=payment_method["id"],
+        authorized_stripe_payment_method_id=payment_method[
+            "stripe_payment_method_id"
+        ],
+        authorized_payment_method_brand="visa",
+        authorized_payment_method_last4="4242",
+        authorized_amount_cents=1500,
+    )
+    other_waitlist_entry = create_waitlist_entry(
+        client,
+        other_player["id"],
+        other_game["id"],
+    )
+
+    response = client.get(f"/admin/official-games/{game['id']}/waitlist")
+
+    assert response.status_code == 200, response.text
+    waitlist_entries = response.json()
+    waitlist_entry_ids = {item["id"] for item in waitlist_entries}
+    assert waitlist_entry["id"] in waitlist_entry_ids
+    assert other_waitlist_entry["id"] not in waitlist_entry_ids
+    assert all(item["game_id"] == game["id"] for item in waitlist_entries)
+    assert waitlist_entries[0]["authorized_payment_method_brand"] == "visa"
+    assert waitlist_entries[0]["authorized_payment_method_last4"] == "4242"
+    assert "authorized_payment_method_id" not in waitlist_entries[0]
+    assert "authorized_stripe_payment_method_id" not in waitlist_entries[0]
 
 
 def test_admin_lookup_routes_return_users_and_venues(client: TestClient):
@@ -400,14 +492,15 @@ def test_admin_official_game_update_invalidates_pending_checkout(
     assert booking["booking_status"] == "expired"
     assert booking["payment_status"] == "failed"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     payment = payment_response.json()
     assert payment["payment_status"] == "canceled"
     assert payment["failure_code"] == "admin_game_updated"
 
-    participants_response = client.get(
-        f"/game-participants?booking_id={checkout['booking_id']}"
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={checkout['booking_id']}",
     )
     assert participants_response.status_code == 200, participants_response.text
     assert {
@@ -526,7 +619,7 @@ def test_admin_can_add_player_with_waived_payment(client: TestClient):
     assert booking["discount_cents"] == game["price_per_player_cents"]
     assert booking["total_cents"] == 0
 
-    payments_response = client.get(f"/payments?booking_id={participant['booking_id']}")
+    payments_response = get_money_as_admin(client, f"/payments?booking_id={participant['booking_id']}")
     assert payments_response.status_code == 200, payments_response.text
     assert payments_response.json() == []
 
@@ -704,7 +797,7 @@ def test_admin_remove_paid_player_does_not_refund_payment(client: TestClient):
     )
 
     assert remove_response.status_code == 200, remove_response.text
-    payment_response = client.get(f"/payments/{payment['id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "succeeded"
 
@@ -851,8 +944,9 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
     assert checkout_response.status_code == 201, checkout_response.text
     checkout = checkout_response.json()
     assert checkout["credit_applied_cents"] == 500
-    participants_response = client.get(
-        f"/game-participants?booking_id={checkout['booking_id']}"
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={checkout['booking_id']}",
     )
     assert participants_response.status_code == 200, participants_response.text
     pending_participants = participants_response.json()
@@ -875,13 +969,14 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
     assert booking_response.json()["booking_status"] == "cancelled"
     assert booking_response.json()["payment_status"] == "failed"
 
-    payment_response = client.get(f"/payments/{checkout['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "canceled"
     assert payment_response.json()["failure_code"] == "admin_player_removed"
 
-    removed_participants_response = client.get(
-        f"/game-participants?booking_id={checkout['booking_id']}"
+    removed_participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={checkout['booking_id']}",
     )
     assert removed_participants_response.status_code == 200
     assert {
@@ -1097,7 +1192,7 @@ def test_admin_can_assign_replace_and_remove_official_game_host_designation(
     assert updated_guest["participant_status"] == "confirmed"
     assert updated_guest["guest_of_user_id"] == first_host["id"]
 
-    payment_response = client.get(f"/payments/{payment['id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "succeeded"
 
@@ -1365,7 +1460,9 @@ def test_admin_remove_player_rejects_current_official_host(client: TestClient):
     assert participant_response.json()["participant_status"] == "confirmed"
 
 
-def test_user_delete_rejects_current_future_official_host(client: TestClient):
+def test_generic_user_delete_disabled_for_current_future_official_host(
+    client: TestClient,
+):
     admin = create_user(client)
     host = create_user(client)
     set_user_role(admin["id"], "admin")
@@ -1386,8 +1483,8 @@ def test_user_delete_rejects_current_future_official_host(client: TestClient):
 
     delete_response = client.delete(f"/users/{host['id']}")
 
-    assert delete_response.status_code == 400, delete_response.text
-    assert "Remove official host designation" in delete_response.text
+    assert delete_response.status_code == 403, delete_response.text
+    assert "Generic user mutations are disabled" in delete_response.text
     user_response = client.get(f"/users/{host['id']}")
     assert user_response.status_code == 200
     assert user_response.json()["deleted_at"] is None
@@ -1589,6 +1686,16 @@ def test_admin_official_game_routes_reject_non_admin(client: TestClient):
         "/admin/official-games/00000000-0000-0000-0000-000000000000/participants"
     )
     assert participants_response.status_code == 403, participants_response.text
+
+    bookings_response = client.get(
+        "/admin/official-games/00000000-0000-0000-0000-000000000000/bookings"
+    )
+    assert bookings_response.status_code == 403, bookings_response.text
+
+    waitlist_response = client.get(
+        "/admin/official-games/00000000-0000-0000-0000-000000000000/waitlist"
+    )
+    assert waitlist_response.status_code == 403, waitlist_response.text
 
     lookup_users_response = client.get("/admin/lookups/users")
     assert lookup_users_response.status_code == 403, lookup_users_response.text

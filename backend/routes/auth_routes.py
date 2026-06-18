@@ -6,7 +6,6 @@ from backend.models import User
 from backend.schemas import (
     AuthDeleteAccountRequest,
     AuthEmailAvailabilityRead,
-    AuthSyncUserRequest,
     UserRead,
 )
 from backend.services.auth_service import (
@@ -43,8 +42,11 @@ def read_current_app_user(
     response_model=UserRead,
     status_code=status.HTTP_200_OK,
 )
-def sync_user(payload: AuthSyncUserRequest, db: Session = Depends(get_db)) -> User:
-    return sync_user_workflow(payload, db)
+def sync_user(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    return sync_user_workflow(authorization, db)
 
 
 @router.delete("/unfinished-account", status_code=status.HTTP_204_NO_CONTENT)

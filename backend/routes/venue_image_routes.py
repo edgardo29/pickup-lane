@@ -1,15 +1,10 @@
 import uuid
-from datetime import datetime, timezone
 
-from azure.core.exceptions import AzureError, ResourceNotFoundError
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError, ProgrammingError
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import User, Venue, VenueImage
-from backend.services.auth_service import get_current_admin_user
+from backend.models import User
 from backend.schemas import (
     VenueImageCompleteUpload,
     VenueImageRead,
@@ -17,225 +12,19 @@ from backend.schemas import (
     VenueImageUploadCreate,
     VenueImageUploadRead,
 )
-from backend.services.azure_blob_service import (
-    AzureStorageConfigError,
-    create_blob_read_sas_url,
-    create_blob_upload_sas_url,
-    get_azure_blob_storage_config,
-    get_blob_properties,
-    get_content_type_extension,
+from backend.services.admin_permission_service import PERMISSION_VENUE_IMAGES_MANAGE
+from backend.services.auth_service import require_admin_permission
+from backend.services.venue_image_service import (
+    check_venue_image_upload_readiness,
+    complete_venue_image_upload,
+    create_venue_image_upload,
+    list_admin_venue_images as list_admin_venue_images_workflow,
+    list_public_venue_images,
+    update_venue_image,
 )
 
 public_router = APIRouter(prefix="/venue-images", tags=["venue_images"])
 admin_router = APIRouter(tags=["admin_venue_images"])
-
-VALID_IMAGE_ROLES = {"card", "gallery"}
-VALID_IMAGE_STATUSES = {"pending_upload", "active", "hidden", "removed"}
-PUBLIC_IMAGE_STATUSES = {"active"}
-
-
-def build_venue_image_conflict_detail(exc: IntegrityError) -> str:
-    error_text = str(exc.orig)
-
-    if "uq_venue_images_one_active_primary_per_venue" in error_text:
-        return "This venue already has an active primary image."
-
-    if "uq_venue_images_blob_name" in error_text:
-        return "This venue image blob already exists."
-
-    if "ck_venue_images_image_role" in error_text:
-        return "image_role is not supported."
-
-    if "ck_venue_images_image_status" in error_text:
-        return "image_status is not supported."
-
-    if "ck_venue_images_size_bytes_positive" in error_text:
-        return "size_bytes must be greater than 0."
-
-    if "ck_venue_images_sort_order_non_negative" in error_text:
-        return "sort_order must be greater than or equal to 0."
-
-    return error_text
-
-
-def storage_config_error_response(exc: AzureStorageConfigError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail=str(exc),
-    )
-
-
-def venue_image_storage_not_ready_response(exc: ProgrammingError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Venue image storage is not ready. Run the latest database migrations before uploading photos.",
-    )
-
-
-def clean_optional_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-
-    cleaned_value = value.strip()
-    return cleaned_value or None
-
-
-def get_active_venue_or_404(db: Session, venue_id: uuid.UUID) -> Venue:
-    venue = db.get(Venue, venue_id)
-
-    if venue is None or venue.deleted_at is not None or not venue.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Venue not found.",
-        )
-
-    return venue
-
-
-def get_venue_image_or_404(db: Session, venue_image_id: uuid.UUID) -> VenueImage:
-    venue_image = db.get(VenueImage, venue_image_id)
-
-    if venue_image is None or venue_image.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Venue image not found.",
-        )
-
-    return venue_image
-
-
-def validate_image_role(image_role: str) -> str:
-    if image_role not in VALID_IMAGE_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="image_role is not supported.",
-        )
-
-    return image_role
-
-
-def validate_image_status(image_status: str) -> str:
-    if image_status not in VALID_IMAGE_STATUSES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="image_status is not supported.",
-        )
-
-    return image_status
-
-
-def validate_upload_request(upload_request: VenueImageUploadCreate) -> None:
-    validate_image_role(upload_request.image_role)
-
-    try:
-        config = get_azure_blob_storage_config()
-    except AzureStorageConfigError as exc:
-        raise storage_config_error_response(exc) from exc
-
-    normalized_content_type = upload_request.content_type.strip().lower()
-    if normalized_content_type not in config.allowed_image_types:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Image content type is not supported.",
-        )
-
-    if upload_request.size_bytes > config.max_image_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Image is larger than the configured upload limit.",
-        )
-
-
-def build_venue_image_blob_name(
-    *,
-    venue_id: uuid.UUID,
-    venue_image_id: uuid.UUID,
-    file_name: str,
-    content_type: str,
-    is_primary: bool,
-    sort_order: int,
-) -> str:
-    extension = get_content_type_extension(content_type, file_name)
-    slot_name = "primary" if is_primary else f"gallery-{max(sort_order, 1)}"
-    return f"venues/{venue_id}/{slot_name}-{venue_image_id}.{extension}"
-
-
-def clear_other_primary_venue_images(
-    db: Session,
-    *,
-    venue_id: uuid.UUID,
-    excluding_image_id: uuid.UUID,
-) -> None:
-    existing_primary_images = db.scalars(
-        select(VenueImage).where(
-            VenueImage.venue_id == venue_id,
-            VenueImage.id != excluding_image_id,
-            VenueImage.is_primary.is_(True),
-            VenueImage.image_status == "active",
-            VenueImage.deleted_at.is_(None),
-        )
-    ).all()
-
-    now = datetime.now(timezone.utc)
-    for image in existing_primary_images:
-        image.is_primary = False
-        image.updated_at = now
-        db.add(image)
-
-
-def build_venue_image_read(venue_image: VenueImage) -> VenueImageRead:
-    try:
-        image_url = create_blob_read_sas_url(venue_image.blob_name)
-    except AzureStorageConfigError as exc:
-        raise storage_config_error_response(exc) from exc
-
-    return VenueImageRead(
-        id=venue_image.id,
-        venue_id=venue_image.venue_id,
-        uploaded_by_user_id=venue_image.uploaded_by_user_id,
-        image_url=image_url,
-        blob_name=venue_image.blob_name,
-        container_name=venue_image.container_name,
-        storage_account_name=venue_image.storage_account_name,
-        content_type=venue_image.content_type,
-        size_bytes=venue_image.size_bytes,
-        etag=venue_image.etag,
-        image_role=venue_image.image_role,
-        image_status=venue_image.image_status,
-        is_primary=venue_image.is_primary,
-        sort_order=venue_image.sort_order,
-        alt_text=venue_image.alt_text,
-        caption=venue_image.caption,
-        upload_requested_at=venue_image.upload_requested_at,
-        upload_completed_at=venue_image.upload_completed_at,
-        created_at=venue_image.created_at,
-        updated_at=venue_image.updated_at,
-        deleted_at=venue_image.deleted_at,
-    )
-
-
-def list_venue_images_statement(
-    *,
-    venue_id: uuid.UUID | None,
-    image_status: str | None,
-    public_only: bool,
-):
-    statement = select(VenueImage).where(VenueImage.deleted_at.is_(None))
-
-    if venue_id is not None:
-        statement = statement.where(VenueImage.venue_id == venue_id)
-
-    if public_only:
-        statement = statement.where(VenueImage.image_status.in_(PUBLIC_IMAGE_STATUSES))
-    elif image_status is not None:
-        validate_image_status(image_status)
-        statement = statement.where(VenueImage.image_status == image_status)
-
-    return statement.order_by(
-        VenueImage.is_primary.desc(),
-        VenueImage.sort_order.asc(),
-        VenueImage.created_at.asc(),
-    )
 
 
 @public_router.get("", response_model=list[VenueImageRead])
@@ -243,32 +32,18 @@ def list_venue_images(
     venue_id: uuid.UUID | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[VenueImageRead]:
-    venue_images = db.scalars(
-        list_venue_images_statement(
-            venue_id=venue_id,
-            image_status="active",
-            public_only=True,
-        )
-    ).all()
-    return [build_venue_image_read(venue_image) for venue_image in venue_images]
+    return list_public_venue_images(db, venue_id=venue_id)
 
 
 @admin_router.get("/admin/venue-images/upload-readiness")
 def check_admin_venue_image_upload_readiness(
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
+    ),
 ) -> dict[str, bool]:
     del current_admin
-    try:
-        get_azure_blob_storage_config()
-        db.scalars(select(VenueImage.id).limit(1)).first()
-    except AzureStorageConfigError as exc:
-        raise storage_config_error_response(exc) from exc
-    except ProgrammingError as exc:
-        db.rollback()
-        raise venue_image_storage_not_ready_response(exc) from exc
-
-    return {"ready": True}
+    return check_venue_image_upload_readiness(db)
 
 
 @admin_router.get(
@@ -279,18 +54,16 @@ def list_admin_venue_images(
     venue_id: uuid.UUID,
     image_status: str | None = Query(default=None),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
+    ),
 ) -> list[VenueImageRead]:
     del current_admin
-    get_active_venue_or_404(db, venue_id)
-    venue_images = db.scalars(
-        list_venue_images_statement(
-            venue_id=venue_id,
-            image_status=image_status,
-            public_only=False,
-        )
-    ).all()
-    return [build_venue_image_read(venue_image) for venue_image in venue_images]
+    return list_admin_venue_images_workflow(
+        db,
+        venue_id=venue_id,
+        image_status=image_status,
+    )
 
 
 @admin_router.post(
@@ -302,70 +75,15 @@ def create_admin_venue_image_upload_url(
     venue_id: uuid.UUID,
     upload_request: VenueImageUploadCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
+    ),
 ) -> VenueImageUploadRead:
-    get_active_venue_or_404(db, venue_id)
-    validate_upload_request(upload_request)
-
-    try:
-        storage_config = get_azure_blob_storage_config()
-    except AzureStorageConfigError as exc:
-        raise storage_config_error_response(exc) from exc
-
-    venue_image_id = uuid.uuid4()
-    content_type = upload_request.content_type.strip().lower()
-    blob_name = build_venue_image_blob_name(
+    return create_venue_image_upload(
+        db,
         venue_id=venue_id,
-        venue_image_id=venue_image_id,
-        file_name=upload_request.file_name,
-        content_type=content_type,
-        is_primary=upload_request.is_primary,
-        sort_order=upload_request.sort_order,
-    )
-    venue_image = VenueImage(
-        id=venue_image_id,
-        venue_id=venue_id,
-        uploaded_by_user_id=current_admin.id,
-        blob_name=blob_name,
-        container_name=storage_config.venue_images_container,
-        storage_account_name=storage_config.account_name,
-        content_type=content_type,
-        size_bytes=upload_request.size_bytes,
-        image_role=upload_request.image_role,
-        image_status="pending_upload",
-        is_primary=upload_request.is_primary,
-        sort_order=upload_request.sort_order,
-        alt_text=clean_optional_text(upload_request.alt_text),
-        caption=clean_optional_text(upload_request.caption),
-    )
-
-    try:
-        upload_ticket = create_blob_upload_sas_url(
-            blob_name=blob_name,
-            content_type=content_type,
-        )
-    except AzureStorageConfigError as exc:
-        raise storage_config_error_response(exc) from exc
-
-    try:
-        db.add(venue_image)
-        db.commit()
-        db.refresh(venue_image)
-    except ProgrammingError as exc:
-        db.rollback()
-        raise venue_image_storage_not_ready_response(exc) from exc
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_venue_image_conflict_detail(exc),
-        ) from exc
-
-    return VenueImageUploadRead(
-        image=build_venue_image_read(venue_image),
-        upload_url=upload_ticket.upload_url,
-        upload_headers=upload_ticket.upload_headers,
-        expires_at=upload_ticket.expires_at,
+        upload_request=upload_request,
+        current_admin=current_admin,
     )
 
 
@@ -377,81 +95,16 @@ def complete_admin_venue_image_upload(
     venue_image_id: uuid.UUID,
     complete_request: VenueImageCompleteUpload | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
+    ),
 ) -> VenueImageRead:
-    del current_admin
-    venue_image = get_venue_image_or_404(db, venue_image_id)
-    if venue_image.image_status == "removed":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Removed venue images cannot be completed.",
-        )
-
-    try:
-        blob_properties = get_blob_properties(venue_image.blob_name)
-    except AzureStorageConfigError as exc:
-        raise storage_config_error_response(exc) from exc
-    except ResourceNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded blob was not found for this venue image.",
-        ) from exc
-    except AzureError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Azure Blob Storage could not verify the uploaded image.",
-        ) from exc
-
-    if blob_properties.size_bytes != venue_image.size_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded image size does not match the requested size.",
-        )
-
-    blob_content_type = (blob_properties.content_type or "").lower()
-    if blob_content_type and blob_content_type != venue_image.content_type:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded image content type does not match the requested type.",
-        )
-
-    try:
-        now = datetime.now(timezone.utc)
-        should_mark_primary = bool(venue_image.is_primary)
-        if should_mark_primary:
-            venue_image.is_primary = False
-
-        venue_image.image_status = "active"
-        venue_image.upload_completed_at = venue_image.upload_completed_at or now
-        venue_image.etag = (
-            (complete_request.etag if complete_request else None)
-            or blob_properties.etag
-            or venue_image.etag
-        )
-        venue_image.updated_at = now
-        db.add(venue_image)
-
-        if should_mark_primary:
-            clear_other_primary_venue_images(
-                db,
-                venue_id=venue_image.venue_id,
-                excluding_image_id=venue_image.id,
-            )
-            db.flush()
-            venue_image.is_primary = True
-            venue_image.updated_at = now
-            db.add(venue_image)
-
-        db.commit()
-        db.refresh(venue_image)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_venue_image_conflict_detail(exc),
-        ) from exc
-
-    return build_venue_image_read(venue_image)
+    return complete_venue_image_upload(
+        db,
+        venue_image_id=venue_image_id,
+        complete_request=complete_request,
+        current_admin=current_admin,
+    )
 
 
 @admin_router.patch(
@@ -462,50 +115,13 @@ def update_admin_venue_image(
     venue_image_id: uuid.UUID,
     image_update: VenueImageUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
+    ),
 ) -> VenueImageRead:
-    del current_admin
-    venue_image = get_venue_image_or_404(db, venue_image_id)
-    update_data = image_update.model_dump(exclude_unset=True)
-
-    if "image_role" in update_data and update_data["image_role"] is not None:
-        update_data["image_role"] = validate_image_role(update_data["image_role"])
-
-    if "image_status" in update_data and update_data["image_status"] is not None:
-        update_data["image_status"] = validate_image_status(update_data["image_status"])
-
-    if update_data.get("image_status") == "removed":
-        update_data["deleted_at"] = datetime.now(timezone.utc)
-        update_data["is_primary"] = False
-
-    for text_field in ("alt_text", "caption"):
-        if text_field in update_data:
-            update_data[text_field] = clean_optional_text(update_data[text_field])
-
-    for field_name, field_value in update_data.items():
-        setattr(venue_image, field_name, field_value)
-
-    if venue_image.image_status != "active" and venue_image.is_primary:
-        venue_image.is_primary = False
-
-    venue_image.updated_at = datetime.now(timezone.utc)
-
-    if venue_image.image_status == "active" and venue_image.is_primary:
-        clear_other_primary_venue_images(
-            db,
-            venue_id=venue_image.venue_id,
-            excluding_image_id=venue_image.id,
-        )
-
-    try:
-        db.add(venue_image)
-        db.commit()
-        db.refresh(venue_image)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_venue_image_conflict_detail(exc),
-        ) from exc
-
-    return build_venue_image_read(venue_image)
+    return update_venue_image(
+        db,
+        venue_image_id=venue_image_id,
+        image_update=image_update,
+        current_admin=current_admin,
+    )

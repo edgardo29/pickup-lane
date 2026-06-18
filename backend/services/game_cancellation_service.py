@@ -9,7 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
-    AdminAction,
     Booking,
     Game,
     GameChat,
@@ -22,7 +21,12 @@ from backend.models import (
     WaitlistEntry,
 )
 from backend.schemas import GameCancelCreate
-from backend.services.auth_service import is_admin
+from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_permission_service import (
+    PERMISSION_COMMUNITY_GAMES_CANCEL,
+    PERMISSION_OFFICIAL_GAMES_CANCEL,
+    user_has_admin_permission,
+)
 from backend.services.game_service import (
     ACTIVE_BOOKING_STATUSES,
     ACTIVE_JOIN_STATUSES,
@@ -76,10 +80,10 @@ def require_cancel_permission(db_game: Game, current_user: User) -> str:
             detail="Your account cannot cancel games right now.",
         )
 
-    if is_admin(current_user):
-        return "admin_cancelled"
-
     if db_game.game_type == "community":
+        if user_has_admin_permission(current_user, PERMISSION_COMMUNITY_GAMES_CANCEL):
+            return "admin_cancelled"
+
         if db_game.host_user_id == current_user.id:
             return "host_cancelled"
 
@@ -89,6 +93,9 @@ def require_cancel_permission(db_game: Game, current_user: User) -> str:
         )
 
     if db_game.game_type == "official":
+        if user_has_admin_permission(current_user, PERMISSION_OFFICIAL_GAMES_CANCEL):
+            return "admin_cancelled"
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only an admin can cancel official games.",
@@ -745,22 +752,20 @@ def create_game_cancellation_admin_action(
     if cancellation_type != "admin_cancelled":
         return
 
-    db.add(
-        AdminAction(
-            id=uuid.uuid4(),
-            admin_user_id=current_user.id,
-            action_type="cancel_game",
-            target_game_id=db_game.id,
-            reason=cancel_reason,
-            metadata_={
-                "old_game_status": old_game_status,
-                "new_game_status": "cancelled",
-                "notified_user_count": len(set(notified_user_ids)),
-                "cancelled_at": now.isoformat(),
-                **payment_summary,
-            },
-            created_at=now,
-        )
+    record_admin_action(
+        db,
+        admin_user_id=current_user.id,
+        action_type="cancel_game",
+        target_game_id=db_game.id,
+        reason=cancel_reason,
+        metadata={
+            "old_game_status": old_game_status,
+            "new_game_status": "cancelled",
+            "notified_user_count": len(set(notified_user_ids)),
+            "cancelled_at": now,
+            **payment_summary,
+        },
+        created_at=now,
     )
 
 

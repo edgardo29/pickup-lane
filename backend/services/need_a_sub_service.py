@@ -22,6 +22,9 @@ from backend.schemas import (
     SubPostCreate,
     SubPostUpdate,
 )
+from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_permission_service import PERMISSION_NEED_A_SUB_MODERATE
+from backend.services.auth_service import require_user_admin_permission
 from backend.services.notification_service import (
     build_need_a_sub_notification_fields,
     reopen_aggregated_notification,
@@ -92,7 +95,6 @@ SUB_POST_UPDATED_STRUCTURAL_FIELDS = (
     "game_player_group",
     "price_due_at_venue_cents",
 )
-ADMIN_ROLES = {"admin", "moderator"}
 POST_STATUS_CHANGE_SOURCES = {"owner", "admin", "system", "scheduled_job"}
 VALID_POSITION_GROUPS_BY_POST_GROUP = {
     "men": {"men"},
@@ -197,14 +199,6 @@ def require_owner(sub_post: SubPost, user: User) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the post owner can perform this action.",
-        )
-
-
-def require_admin(user: User) -> None:
-    if user.role not in ADMIN_ROLES:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only an admin or moderator can perform this action.",
         )
 
 
@@ -1962,7 +1956,7 @@ def remove_sub_post(
     sub_post_id: uuid.UUID,
     reason: str | None = None,
 ) -> SubPost:
-    require_admin(admin_user)
+    require_user_admin_permission(admin_user, PERMISSION_NEED_A_SUB_MODERATE)
     sub_post = get_sub_post_for_update_or_404(db, sub_post_id)
 
     if sub_post.post_status == "removed":
@@ -1972,6 +1966,22 @@ def remove_sub_post(
         )
 
     old_status = sub_post.post_status
+    actor_role = "moderator" if admin_user.role == "moderator" else "admin"
+    record_admin_action(
+        db,
+        admin_user_id=admin_user.id,
+        action_type="remove_sub_post",
+        target_user_id=sub_post.owner_user_id,
+        target_sub_post_id=sub_post.id,
+        reason=reason,
+        metadata={
+            "source": "need_a_sub",
+            "old_status": old_status,
+            "new_status": "removed",
+            "removed_by": actor_role,
+        },
+    )
+
     current_time = now_utc()
     sub_post.post_status = "removed"
     sub_post.removed_at = current_time

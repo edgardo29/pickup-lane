@@ -14,7 +14,7 @@ export function useBrowseGamesPageModel() {
   const [games, setGames] = useState([])
   const [gameImages, setGameImages] = useState([])
   const [venueImages, setVenueImages] = useState([])
-  const [participants, setParticipants] = useState([])
+  const [participantCounts, setParticipantCounts] = useState([])
   const [selectedDateKey, setSelectedDateKey] = useState('')
   const [datePageIndex, setDatePageIndex] = useState(0)
   const [status, setStatus] = useState('loading')
@@ -46,7 +46,7 @@ export function useBrowseGamesPageModel() {
           setGames(pageData.games)
           setGameImages(pageData.gameImages)
           setVenueImages(pageData.venueImages || [])
-          setParticipants(pageData.participants)
+          setParticipantCounts(pageData.participantCounts)
           setStatus('success')
         }
       } catch (requestError) {
@@ -89,8 +89,8 @@ export function useBrowseGamesPageModel() {
     [gameImages, games, venueImages],
   )
   const participantCountsByGameId = useMemo(
-    () => buildParticipantCountsByGameId(participants),
-    [participants],
+    () => buildParticipantCountsByGameId(participantCounts),
+    [participantCounts],
   )
   const timeGroups = useMemo(() => groupGamesByHour(gamesForSelectedDate), [gamesForSelectedDate])
 

@@ -12,8 +12,14 @@ def unique_suffix() -> str:
 
 
 def create_user(client: TestClient, **overrides: object) -> dict:
-    # Helpers create real rows through the API instead of inserting directly,
-    # so setup data exercises the same validation as normal requests.
+    # User scaffolding routes are admin-only. This helper creates setup rows
+    # directly so tests for auth/admin routes do not need to bootstrap through
+    # the route they are validating.
+    del client
+    from backend.database import SessionLocal
+    from backend.models import User
+    from backend.schemas import UserCreate, UserRead
+
     suffix = unique_suffix()
     payload = {
         "auth_user_id": f"firebase-{suffix}",
@@ -26,11 +32,15 @@ def create_user(client: TestClient, **overrides: object) -> dict:
         "home_state": "IL",
     }
     payload.update(overrides)
+    user_payload = UserCreate.model_validate(payload)
 
-    response = client.post("/users", json=payload)
+    with SessionLocal() as db:
+        db_user = User(id=uuid4(), **user_payload.model_dump())
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
 
-    assert response.status_code == 201, response.text
-    return response.json()
+        return UserRead.model_validate(db_user).model_dump(mode="json")
 
 
 def set_user_role(user_id: str, role: str) -> None:
@@ -44,6 +54,30 @@ def set_user_role(user_id: str, role: str) -> None:
         db_user = db.get(User, UUID(user_id))
         assert db_user is not None
         db_user.role = role
+        db.commit()
+
+
+def set_user_account_status(user_id: str, account_status: str) -> None:
+    from backend.database import SessionLocal
+    from backend.models import User
+
+    with SessionLocal() as db:
+        db_user = db.get(User, UUID(user_id))
+        assert db_user is not None
+        db_user.account_status = account_status
+        db.commit()
+
+
+def soft_delete_user(user_id: str) -> None:
+    from datetime import UTC, datetime
+
+    from backend.database import SessionLocal
+    from backend.models import User
+
+    with SessionLocal() as db:
+        db_user = db.get(User, UUID(user_id))
+        assert db_user is not None
+        db_user.deleted_at = datetime.now(UTC)
         db.commit()
 
 
@@ -75,6 +109,33 @@ def authenticate_as(user_id: str) -> None:
     app.dependency_overrides[get_current_app_user] = override_current_user
 
 
+def run_as_temporary_admin(client: TestClient, request_fn):
+    from backend.main import app
+    from backend.services.auth_service import get_current_app_user
+
+    had_previous_override = get_current_app_user in app.dependency_overrides
+    previous_override = app.dependency_overrides.get(get_current_app_user)
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+
+    try:
+        return request_fn()
+    finally:
+        if had_previous_override and previous_override is not None:
+            app.dependency_overrides[get_current_app_user] = previous_override
+        else:
+            app.dependency_overrides.pop(get_current_app_user, None)
+
+
+def get_money_as_admin(client: TestClient, path: str):
+    return run_as_temporary_admin(client, lambda: client.get(path))
+
+
+def get_roster_as_admin(client: TestClient, path: str):
+    return run_as_temporary_admin(client, lambda: client.get(path))
+
+
 def create_user_settings(client: TestClient, user_id: str, **overrides: object) -> dict:
     payload = {
         "user_id": user_id,
@@ -83,7 +144,10 @@ def create_user_settings(client: TestClient, user_id: str, **overrides: object) 
     }
     payload.update(overrides)
 
-    response = client.post("/user-settings", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/user-settings", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -194,7 +258,10 @@ def create_venue(client: TestClient, user_id: str, **overrides: object) -> dict:
     }
     payload.update(overrides)
 
-    response = client.post("/venues", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/venues", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -239,7 +306,10 @@ def create_game(
     ):
         payload["payment_collection_type"] = "external_host"
 
-    response = client.post("/games", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/games", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -320,9 +390,12 @@ def create_booking(
     }
     payload.update(overrides)
 
-    response = client.post(
-        "/bookings",
-        json=payload,
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/bookings",
+            json=payload,
+        ),
     )
 
     assert response.status_code == 201, response.text
@@ -331,7 +404,7 @@ def create_booking(
 
 def create_game_participant(
     client: TestClient,
-    user_id: str,
+    user_id: str | None,
     game_id: str,
     booking_id: str | None = None,
     **overrides: object,
@@ -351,7 +424,10 @@ def create_game_participant(
     }
     payload.update(overrides)
 
-    response = client.post("/game-participants", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/game-participants", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -368,7 +444,10 @@ def create_waitlist_entry(
     }
     payload.update(overrides)
 
-    response = client.post("/waitlist-entries", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/waitlist-entries", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -401,7 +480,10 @@ def create_payment(
     }
     payload.update(overrides)
 
-    response = client.post("/payments", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/payments", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -426,7 +508,10 @@ def create_refund(
     }
     payload.update(overrides)
 
-    response = client.post("/refunds", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/refunds", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -439,7 +524,10 @@ def create_game_chat(client: TestClient, game_id: str, **overrides: object) -> d
     }
     payload.update(overrides)
 
-    response = client.post("/game-chats", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/game-chats", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -456,13 +544,8 @@ def create_chat_message(
 
     payload = {
         "chat_id": chat_id,
-        "message_type": "text",
         "message_body": "CI chat message",
-        "is_pinned": False,
-        "moderation_status": "visible",
     }
-    if sender_user_id is not None:
-        payload["sender_user_id"] = sender_user_id
     payload.update(overrides)
 
     response = client.post("/chat-messages", json=payload)
@@ -493,7 +576,10 @@ def create_notification(
     }
     payload.update(overrides)
 
-    response = client.post("/notifications", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/notifications", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -515,7 +601,10 @@ def create_game_status_history(
     }
     payload.update(overrides)
 
-    response = client.post("/game-status-history", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/game-status-history", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -537,7 +626,10 @@ def create_booking_status_history(
     }
     payload.update(overrides)
 
-    response = client.post("/booking-status-history", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/booking-status-history", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -559,7 +651,10 @@ def create_participant_status_history(
     }
     payload.update(overrides)
 
-    response = client.post("/participant-status-history", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/participant-status-history", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -580,7 +675,10 @@ def create_user_stats(
     }
     payload.update(overrides)
 
-    response = client.post("/user-stats", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/user-stats", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -622,7 +720,10 @@ def create_payment_event(
     }
     payload.update(overrides)
 
-    response = client.post("/payment-events", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/payment-events", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -643,7 +744,10 @@ def create_policy_document(
     }
     payload.update(overrides)
 
-    response = client.post("/policy-documents", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/policy-documents", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -663,7 +767,10 @@ def create_policy_acceptance(
     }
     payload.update(overrides)
 
-    response = client.post("/policy-acceptances", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/policy-acceptances", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -681,7 +788,10 @@ def create_booking_policy_acceptance(
     }
     payload.update(overrides)
 
-    response = client.post("/booking-policy-acceptances", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/booking-policy-acceptances", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -703,7 +813,10 @@ def create_venue_approval_request(
     }
     payload.update(overrides)
 
-    response = client.post("/venue-approval-requests", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/venue-approval-requests", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -726,7 +839,10 @@ def create_game_image(
     }
     payload.update(overrides)
 
-    response = client.post("/game-images", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/game-images", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -744,10 +860,12 @@ def create_community_game_detail(
     }
     payload.update(overrides)
 
-    response = client.post("/community-game-details", json=payload)
+    def request():
+        response = client.post("/community-game-details", json=payload)
+        assert response.status_code == 201, response.text
+        return response.json()
 
-    assert response.status_code == 201, response.text
-    return response.json()
+    return run_as_temporary_admin(client, request)
 
 
 def create_host_publish_fee(
@@ -766,7 +884,10 @@ def create_host_publish_fee(
     }
     payload.update(overrides)
 
-    response = client.post("/host-publish-fees", json=payload)
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post("/host-publish-fees", json=payload),
+    )
 
     assert response.status_code == 201, response.text
     return response.json()

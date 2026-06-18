@@ -9,6 +9,7 @@ import { mapGameToForm } from './createGameMappers.js'
 
 export function useCreateGameContext({
   appUser,
+  firebaseUser,
   gameId,
   isEditMode,
   isLoading,
@@ -20,7 +21,6 @@ export function useCreateGameContext({
   const [currentUser, setCurrentUser] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState(null)
   const [firstPublishIsFree, setFirstPublishIsFree] = useState(true)
-  const [communityGameDetailId, setCommunityGameDetailId] = useState('')
   const [createdGameId, setCreatedGameId] = useState('')
   const [loadError, setLoadError] = useState('')
   const [isContextLoading, setIsContextLoading] = useState(false)
@@ -31,9 +31,9 @@ export function useCreateGameContext({
 
     async function loadVerifiedContext(effectiveAppUser) {
       const [paymentMethods, gameContext, hostPublishFees] = await Promise.all([
-        loadUserPaymentMethods(effectiveAppUser.id),
+        loadUserPaymentMethods(firebaseUser),
         isEditMode ? loadEditableGame(gameId) : Promise.resolve(null),
-        loadHostPublishFees(effectiveAppUser.id),
+        loadHostPublishFees(firebaseUser),
       ])
 
       if (ignore) {
@@ -52,11 +52,9 @@ export function useCreateGameContext({
           gameContext.venue,
           gameContext.communityDetails,
         )
-        setCommunityGameDetailId(gameContext.communityDetails?.id || '')
         setForm(editableForm)
         setFormBaseline(editableForm)
       } else {
-        setCommunityGameDetailId('')
         setForm(initialForm)
         setFormBaseline(initialForm)
       }
@@ -92,7 +90,6 @@ export function useCreateGameContext({
           if (!ignore) {
             setPaymentMethod(null)
             setFirstPublishIsFree(true)
-            setCommunityGameDetailId('')
             setCreatedGameId('')
             setForm(initialForm)
             setFormBaseline(initialForm)
@@ -128,6 +125,7 @@ export function useCreateGameContext({
     }
   }, [
     appUser,
+    firebaseUser,
     gameId,
     isEditMode,
     isLoading,
@@ -136,7 +134,6 @@ export function useCreateGameContext({
   ])
 
   return {
-    communityGameDetailId,
     createdGameId,
     currentUser,
     firstPublishIsFree,

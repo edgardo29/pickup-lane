@@ -10,7 +10,7 @@ export async function loadGameDetails({ appUser, firebaseUser, gameId }) {
     game.game_type === 'official'
       ? apiRequest(`/venue-images?venue_id=${game.venue_id}`).catch(() => [])
       : Promise.resolve([]),
-    apiRequest(`/game-participants?game_id=${gameId}`),
+    apiRequest(`/games/${gameId}/participants`),
     apiRequest(`/venues/${game.venue_id}`).catch(() => null),
   ])
   const displayImages =
@@ -46,7 +46,7 @@ export async function loadGameDetails({ appUser, firebaseUser, gameId }) {
 
 export async function refreshGameParticipants(gameId) {
   const [participants, game] = await Promise.all([
-    apiRequest(`/game-participants?game_id=${gameId}`),
+    apiRequest(`/games/${gameId}/participants`),
     apiRequest(`/games/${gameId}`),
   ])
 
@@ -64,27 +64,36 @@ export async function cancelGame(gameId, firebaseUser) {
   })
 }
 
-export async function leaveGame(gameId, userId) {
+export async function leaveGame(gameId, firebaseUser) {
   return apiRequest(`/games/${gameId}/leave`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ acting_user_id: userId }),
+    headers: {
+      ...(await getChatAuthHeaders(firebaseUser)),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({}),
   })
 }
 
-export async function addHostGuests(gameId, userId, guestCount) {
+export async function addHostGuests(gameId, firebaseUser, guestCount) {
   return apiRequest(`/games/${gameId}/guests/add`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ acting_user_id: userId, guest_count: guestCount }),
+    headers: {
+      ...(await getChatAuthHeaders(firebaseUser)),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ guest_count: guestCount }),
   })
 }
 
-export async function removeGameGuests(gameId, userId, removeCount) {
+export async function removeGameGuests(gameId, firebaseUser, removeCount) {
   return apiRequest(`/games/${gameId}/guests/remove`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ acting_user_id: userId, remove_count: removeCount }),
+    headers: {
+      ...(await getChatAuthHeaders(firebaseUser)),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ remove_count: removeCount }),
   })
 }
 

@@ -5,9 +5,8 @@ import {
 } from './createGamePayment.js'
 import { buildDateTime } from './createGameSchedule.js'
 
-export function buildCommunityPublishPayload(form, currentUser, paymentMethod) {
+export function buildCommunityPublishPayload(form, paymentMethod) {
   return {
-    host_user_id: currentUser.id,
     starts_at: buildDateTime(form.date, form.startTime),
     ends_at: buildDateTime(form.date, form.endTime),
     timezone: 'America/Chicago',
@@ -35,9 +34,8 @@ export function buildCommunityPublishPayload(form, currentUser, paymentMethod) {
   }
 }
 
-export function buildHostEditPayload(form, currentUser) {
+export function buildHostEditPayload(form) {
   return {
-    acting_user_id: currentUser.id,
     starts_at: buildDateTime(form.date, form.startTime),
     ends_at: buildDateTime(form.date, form.endTime),
     format_label: form.format,
@@ -58,9 +56,8 @@ export function buildHostEditPayload(form, currentUser) {
   }
 }
 
-export function buildCommunityGameDetailPayload(form, gameId) {
+export function buildCommunityGameDetailPayload(form) {
   return {
-    game_id: gameId,
     payment_methods_snapshot: serializePaymentMethods(form.paymentMethods),
     payment_instructions_snapshot: null,
   }

@@ -28,10 +28,37 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("target_payment_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("target_refund_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("target_game_credit_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("target_venue_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("target_venue_image_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("target_message_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("target_sub_post_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column(
+            "target_sub_post_request_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "target_sub_post_position_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "target_sub_chat_message_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column("target_notification_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column(
+            "target_platform_notice_campaign_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column("target_admin_action_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("reason", sa.Text(), nullable=True),
         sa.Column("metadata", postgresql.JSONB(), nullable=True),
+        sa.Column("idempotency_key", sa.String(length=160), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -41,15 +68,22 @@ def upgrade() -> None:
         sa.CheckConstraint(
             (
                 "action_type IN ("
-                "'cancel_game', 'refund_booking', 'mark_no_show', "
+                "'cancel_game', 'refund_booking', 'create_refund', "
+                "'update_refund', 'mark_no_show', "
+                "'create_payment', 'update_payment', "
                 "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
-                "'reject_venue', 'remove_chat_message', 'hide_chat_message', "
-                "'update_game', 'update_booking', "
+                "'reject_venue', 'create_venue_image', 'update_venue_image', "
+                "'remove_venue_image', 'remove_chat_message', 'hide_chat_message', "
+                "'update_game', 'create_game_chat', 'update_game_chat', "
+                "'update_booking', "
                 "'update_participant', 'issue_credit', 'reverse_credit', "
                 "'create_official_game', 'update_official_game', "
                 "'assign_official_host', 'remove_official_host', "
-                "'admin_add_player', 'admin_remove_player', 'waive_payment'"
+                "'admin_add_player', 'admin_remove_player', 'waive_payment', "
+                "'remove_sub_post', 'hide_unsafe_community_payment_text', "
+                "'create_notification', 'update_notification', "
+                "'change_staff_role', 'append_audit_note'"
                 ")"
             ),
             name="ck_admin_actions_action_type",
@@ -61,8 +95,18 @@ def upgrade() -> None:
                 "OR target_booking_id IS NOT NULL "
                 "OR target_participant_id IS NOT NULL "
                 "OR target_payment_id IS NOT NULL "
+                "OR target_refund_id IS NOT NULL "
+                "OR target_game_credit_id IS NOT NULL "
                 "OR target_venue_id IS NOT NULL "
-                "OR target_message_id IS NOT NULL"
+                "OR target_venue_image_id IS NOT NULL "
+                "OR target_message_id IS NOT NULL "
+                "OR target_sub_post_id IS NOT NULL "
+                "OR target_sub_post_request_id IS NOT NULL "
+                "OR target_sub_post_position_id IS NOT NULL "
+                "OR target_sub_chat_message_id IS NOT NULL "
+                "OR target_notification_id IS NOT NULL "
+                "OR target_platform_notice_campaign_id IS NOT NULL "
+                "OR target_admin_action_id IS NOT NULL"
             ),
             name="ck_admin_actions_target_required",
         ),
@@ -97,6 +141,11 @@ def upgrade() -> None:
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
+            ["target_refund_id"],
+            ["refunds.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
             ["target_venue_id"],
             ["venues.id"],
             ondelete="SET NULL",
@@ -105,6 +154,16 @@ def upgrade() -> None:
             ["target_message_id"],
             ["chat_messages.id"],
             ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_notification_id"],
+            ["notifications.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_admin_action_id"],
+            ["admin_actions.id"],
+            ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -157,9 +216,27 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
+        "ix_admin_actions_target_refund_id",
+        "admin_actions",
+        ["target_refund_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_game_credit_id",
+        "admin_actions",
+        ["target_game_credit_id"],
+        unique=False,
+    )
+    op.create_index(
         "ix_admin_actions_target_venue_id",
         "admin_actions",
         ["target_venue_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_venue_image_id",
+        "admin_actions",
+        ["target_venue_image_id"],
         unique=False,
     )
     op.create_index(
@@ -167,6 +244,63 @@ def upgrade() -> None:
         "admin_actions",
         ["target_message_id"],
         unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_sub_post_id",
+        "admin_actions",
+        ["target_sub_post_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_sub_post_request_id",
+        "admin_actions",
+        ["target_sub_post_request_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_sub_post_position_id",
+        "admin_actions",
+        ["target_sub_post_position_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_sub_chat_message_id",
+        "admin_actions",
+        ["target_sub_chat_message_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_notification_id",
+        "admin_actions",
+        ["target_notification_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_platform_notice_campaign_id",
+        "admin_actions",
+        ["target_platform_notice_campaign_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_admin_action_id",
+        "admin_actions",
+        ["target_admin_action_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_idempotency_key",
+        "admin_actions",
+        ["idempotency_key"],
+        unique=False,
+    )
+    op.create_index(
+        "uq_admin_actions_audit_note_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_admin_action_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'append_audit_note' AND idempotency_key IS NOT NULL"
+        ),
     )
     op.create_index(
         "ix_admin_actions_admin_user_id_created_at",
@@ -193,8 +327,68 @@ def downgrade() -> None:
         "ix_admin_actions_admin_user_id_created_at",
         table_name="admin_actions",
     )
+    op.drop_index(
+        "uq_admin_actions_audit_note_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_idempotency_key",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_admin_action_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_platform_notice_campaign_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_notification_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_sub_chat_message_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_sub_post_position_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_sub_post_request_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_sub_post_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
     op.drop_index("ix_admin_actions_target_message_id", table_name="admin_actions")
+    op.drop_index(
+        "ix_admin_actions_target_venue_image_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
     op.drop_index("ix_admin_actions_target_venue_id", table_name="admin_actions")
+    op.drop_index(
+        "ix_admin_actions_target_game_credit_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_refund_id",
+        table_name="admin_actions",
+        if_exists=True,
+    )
     op.drop_index("ix_admin_actions_target_payment_id", table_name="admin_actions")
     op.drop_index(
         "ix_admin_actions_target_participant_id",

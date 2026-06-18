@@ -1,6 +1,25 @@
 from fastapi.testclient import TestClient
 
-from backend.tests.helpers import authenticate_as, create_sub_post, create_user
+from backend.tests.helpers import (
+    authenticate_as,
+    create_sub_post,
+    create_user,
+    set_user_account_status,
+    set_user_role,
+)
+
+
+def test_sub_post_request_status_history_rejects_suspended_user(client: TestClient):
+    user = create_user(client)
+    set_user_account_status(user["id"], "suspended")
+    authenticate_as(user["id"])
+
+    response = client.get(
+        "/need-a-sub/requests/00000000-0000-4000-8000-000000000001/status-history"
+    )
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == "Active account required."
 
 
 def test_sub_post_request_status_history_records_request_and_accept(client: TestClient):
@@ -53,3 +72,22 @@ def test_sub_post_request_status_history_blocks_unrelated_user(client: TestClien
     response = client.get(f"/need-a-sub/requests/{request['id']}/status-history")
 
     assert response.status_code == 403, response.text
+
+
+def test_sub_post_request_status_history_allows_moderator(client: TestClient):
+    owner = create_user(client)
+    requester = create_user(client)
+    moderator = create_user(client)
+    set_user_role(moderator["id"], "moderator")
+    post = create_sub_post(client, owner["id"])
+
+    authenticate_as(requester["id"])
+    request = client.post(
+        f"/need-a-sub/posts/{post['id']}/requests",
+        json={"sub_post_position_id": post["positions"][0]["id"]},
+    ).json()
+
+    authenticate_as(moderator["id"])
+    response = client.get(f"/need-a-sub/requests/{request['id']}/status-history")
+
+    assert response.status_code == 200, response.text

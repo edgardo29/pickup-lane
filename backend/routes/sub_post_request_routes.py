@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import SubPostRequest, User
-from backend.services.auth_service import get_current_app_user
+from backend.services.auth_service import require_active_user
 from backend.schemas import (
     SubPostRequestAction,
     SubPostRequestCreate,
@@ -35,7 +35,7 @@ def request_need_a_sub_spot(
     sub_post_id: uuid.UUID,
     payload: SubPostRequestCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
     expire_due_posts_and_requests(db)
     return create_request(db, current_user, sub_post_id, payload.sub_post_position_id)
@@ -49,7 +49,7 @@ def request_need_a_sub_spot(
 def list_need_a_sub_post_requests(
     sub_post_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> list[dict]:
     return list_owner_sub_post_requests(db, sub_post_id, current_user)
 
@@ -61,7 +61,7 @@ def list_need_a_sub_post_requests(
 )
 def list_my_need_a_sub_requests(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> list[dict]:
     return list_requester_sub_post_requests(db, current_user)
 
@@ -74,7 +74,7 @@ def list_my_need_a_sub_requests(
 def accept_need_a_sub_request(
     request_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
     expire_due_posts_and_requests(db)
     return owner_accept_request(db, current_user, request_id)
@@ -89,7 +89,7 @@ def decline_need_a_sub_request(
     request_id: uuid.UUID,
     payload: SubPostRequestAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
     expire_due_posts_and_requests(db)
     return owner_decline_request(db, current_user, request_id, payload.reason)
@@ -103,7 +103,7 @@ def decline_need_a_sub_request(
 def cancel_my_need_a_sub_request(
     request_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
     expire_due_posts_and_requests(db)
     return requester_cancel_request(db, current_user, request_id)
@@ -118,7 +118,7 @@ def cancel_need_a_sub_request_by_owner(
     request_id: uuid.UUID,
     payload: SubPostRequestAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
     expire_due_posts_and_requests(db)
     return owner_cancel_request(db, current_user, request_id, payload.reason)
@@ -133,7 +133,7 @@ def report_need_a_sub_no_show(
     request_id: uuid.UUID,
     payload: SubPostRequestAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
     expire_due_posts_and_requests(db)
     return owner_report_no_show(db, current_user, request_id, payload.reason)

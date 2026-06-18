@@ -9,8 +9,10 @@ from backend.database import check_database_connection
 from backend.routes import (
     admin_actions_router,
     admin_game_credits_router,
+    admin_game_images_router,
     admin_lookups_router,
     admin_official_games_router,
+    admin_router,
     admin_venue_images_router,
     auth_router,
     booking_policy_acceptances_router,
@@ -101,7 +103,9 @@ app.include_router(venue_approval_requests_router)
 app.include_router(venue_images_router)
 app.include_router(game_chats_router)
 app.include_router(game_credits_router)
+app.include_router(admin_router)
 app.include_router(admin_game_credits_router)
+app.include_router(admin_game_images_router)
 app.include_router(admin_lookups_router)
 app.include_router(admin_official_games_router)
 app.include_router(admin_venue_images_router)

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import {
-  patchJson,
-  postJson,
+  patchHostEditGame,
   publishCommunityGame,
+  upsertHostCommunityGameDetails,
 } from './createGameApi.js'
 import {
   buildCommunityGameDetailPayload,
@@ -12,8 +12,8 @@ import {
 import { validateCreateGame } from './createGameValidation.js'
 
 export function useCreateGamePublish({
-  communityGameDetailId,
   currentUser,
+  firebaseUser,
   form,
   gameId,
   isEditMode,
@@ -56,24 +56,20 @@ export function useCreateGamePublish({
 
     try {
       if (isEditMode) {
-        await patchJson(`/games/${gameId}/host-edit`, buildHostEditPayload(form, currentUser))
-
-        const communityGameDetailPayload = buildCommunityGameDetailPayload(form, gameId)
-        if (communityGameDetailId) {
-          await patchJson(
-            `/community-game-details/${communityGameDetailId}`,
-            communityGameDetailPayload,
-          )
-        } else {
-          await postJson('/community-game-details', communityGameDetailPayload)
-        }
+        await patchHostEditGame(firebaseUser, gameId, buildHostEditPayload(form))
+        await upsertHostCommunityGameDetails(
+          firebaseUser,
+          gameId,
+          buildCommunityGameDetailPayload(form),
+        )
 
         navigate(`/games/${gameId}`)
         return
       }
 
       const game = await publishCommunityGame(
-        buildCommunityPublishPayload(form, currentUser, paymentMethod),
+        firebaseUser,
+        buildCommunityPublishPayload(form, paymentMethod),
       )
 
       setCreatedGameId(game.id)

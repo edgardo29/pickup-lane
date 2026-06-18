@@ -3,12 +3,15 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 
 from backend.tests.helpers import (
+    authenticate_as,
     create_booking,
     create_booking_policy_acceptance,
     create_game,
     create_policy_document,
     create_user,
     create_venue,
+    run_as_temporary_admin,
+    set_user_role,
 )
 
 
@@ -38,14 +41,20 @@ def test_booking_policy_acceptance_create_get_list_and_update_accepted_at(
         policy_document["id"],
     )
 
-    get_response = client.get(
-        f"/booking-policy-acceptances/{booking_policy_acceptance['id']}"
+    get_response = run_as_temporary_admin(
+        client,
+        lambda: client.get(
+            f"/booking-policy-acceptances/{booking_policy_acceptance['id']}"
+        ),
     )
     assert get_response.status_code == 200, get_response.text
     assert get_response.json()["id"] == booking_policy_acceptance["id"]
 
-    list_by_booking_response = client.get(
-        f"/booking-policy-acceptances?booking_id={booking['id']}"
+    list_by_booking_response = run_as_temporary_admin(
+        client,
+        lambda: client.get(
+            f"/booking-policy-acceptances?booking_id={booking['id']}"
+        ),
     )
     assert list_by_booking_response.status_code == 200, list_by_booking_response.text
     assert any(
@@ -53,8 +62,11 @@ def test_booking_policy_acceptance_create_get_list_and_update_accepted_at(
         for item in list_by_booking_response.json()
     )
 
-    list_by_document_response = client.get(
-        f"/booking-policy-acceptances?policy_document_id={policy_document['id']}"
+    list_by_document_response = run_as_temporary_admin(
+        client,
+        lambda: client.get(
+            f"/booking-policy-acceptances?policy_document_id={policy_document['id']}"
+        ),
     )
     assert list_by_document_response.status_code == 200, list_by_document_response.text
     assert any(
@@ -63,9 +75,12 @@ def test_booking_policy_acceptance_create_get_list_and_update_accepted_at(
     )
 
     corrected_accepted_at = datetime.now(UTC).isoformat()
-    patch_response = client.patch(
-        f"/booking-policy-acceptances/{booking_policy_acceptance['id']}",
-        json={"accepted_at": corrected_accepted_at},
+    patch_response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/booking-policy-acceptances/{booking_policy_acceptance['id']}",
+            json={"accepted_at": corrected_accepted_at},
+        ),
     )
     assert patch_response.status_code == 200, patch_response.text
     assert patch_response.json()["accepted_at"] is not None
@@ -79,12 +94,15 @@ def test_booking_policy_acceptance_reject_duplicate_booking_policy_document(
     )
     create_booking_policy_acceptance(client, booking["id"], policy_document["id"])
 
-    response = client.post(
-        "/booking-policy-acceptances",
-        json={
-            "booking_id": booking["id"],
-            "policy_document_id": policy_document["id"],
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/booking-policy-acceptances",
+            json={
+                "booking_id": booking["id"],
+                "policy_document_id": policy_document["id"],
+            },
+        ),
     )
 
     assert response.status_code == 409, response.text
@@ -94,12 +112,15 @@ def test_booking_policy_acceptance_reject_duplicate_booking_policy_document(
 def test_booking_policy_acceptance_reject_missing_booking(client: TestClient):
     policy_document = create_policy_document(client)
 
-    response = client.post(
-        "/booking-policy-acceptances",
-        json={
-            "booking_id": "00000000-0000-4000-8000-000000000000",
-            "policy_document_id": policy_document["id"],
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/booking-policy-acceptances",
+            json={
+                "booking_id": "00000000-0000-4000-8000-000000000000",
+                "policy_document_id": policy_document["id"],
+            },
+        ),
     )
 
     assert response.status_code == 404, response.text
@@ -114,12 +135,15 @@ def test_booking_policy_acceptance_reject_missing_policy_document(
     game = create_game(client, user["id"], venue)
     booking = create_booking(client, user["id"], game["id"])
 
-    response = client.post(
-        "/booking-policy-acceptances",
-        json={
-            "booking_id": booking["id"],
-            "policy_document_id": "00000000-0000-4000-8000-000000000000",
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/booking-policy-acceptances",
+            json={
+                "booking_id": booking["id"],
+                "policy_document_id": "00000000-0000-4000-8000-000000000000",
+            },
+        ),
     )
 
     assert response.status_code == 404, response.text
@@ -138,12 +162,15 @@ def test_booking_policy_acceptance_reject_inactive_policy_document(
         is_active=False,
     )
 
-    response = client.post(
-        "/booking-policy-acceptances",
-        json={
-            "booking_id": booking["id"],
-            "policy_document_id": inactive_policy_document["id"],
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/booking-policy-acceptances",
+            json={
+                "booking_id": booking["id"],
+                "policy_document_id": inactive_policy_document["id"],
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -165,12 +192,15 @@ def test_booking_policy_acceptance_reject_retired_policy_document(
         is_active=False,
     )
 
-    response = client.post(
-        "/booking-policy-acceptances",
-        json={
-            "booking_id": booking["id"],
-            "policy_document_id": retired_policy_document["id"],
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/booking-policy-acceptances",
+            json={
+                "booking_id": booking["id"],
+                "policy_document_id": retired_policy_document["id"],
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -189,12 +219,15 @@ def test_booking_policy_acceptance_reject_future_effective_policy_document(
         effective_at="2999-01-01T00:00:00+00:00",
     )
 
-    response = client.post(
-        "/booking-policy-acceptances",
-        json={
-            "booking_id": booking["id"],
-            "policy_document_id": future_policy_document["id"],
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/booking-policy-acceptances",
+            json={
+                "booking_id": booking["id"],
+                "policy_document_id": future_policy_document["id"],
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -213,10 +246,77 @@ def test_booking_policy_acceptance_reject_null_accepted_at_update(
         policy_document["id"],
     )
 
-    response = client.patch(
-        f"/booking-policy-acceptances/{booking_policy_acceptance['id']}",
-        json={"accepted_at": None},
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/booking-policy-acceptances/{booking_policy_acceptance['id']}",
+            json={"accepted_at": None},
+        ),
     )
 
     assert response.status_code == 400, response.text
     assert "accepted_at cannot be null" in response.text
+
+
+def test_booking_policy_acceptance_generic_routes_require_admin_permission(
+    client: TestClient,
+):
+    user, _game, booking, policy_document = create_booking_policy_acceptance_setup(
+        client
+    )
+    booking_policy_acceptance = create_booking_policy_acceptance(
+        client,
+        booking["id"],
+        policy_document["id"],
+    )
+    authenticate_as(user["id"])
+
+    get_response = client.get(
+        f"/booking-policy-acceptances/{booking_policy_acceptance['id']}"
+    )
+    list_response = client.get(
+        f"/booking-policy-acceptances?booking_id={booking['id']}"
+    )
+    create_response = client.post(
+        "/booking-policy-acceptances",
+        json={
+            "booking_id": booking["id"],
+            "policy_document_id": policy_document["id"],
+        },
+    )
+    patch_response = client.patch(
+        f"/booking-policy-acceptances/{booking_policy_acceptance['id']}",
+        json={"accepted_at": datetime.now(UTC).isoformat()},
+    )
+
+    assert get_response.status_code == 403, get_response.text
+    assert list_response.status_code == 403, list_response.text
+    assert create_response.status_code == 403, create_response.text
+    assert patch_response.status_code == 403, patch_response.text
+
+
+def test_booking_policy_acceptance_generic_routes_reject_moderator(
+    client: TestClient,
+):
+    _user, _game, booking, policy_document = create_booking_policy_acceptance_setup(
+        client
+    )
+    booking_policy_acceptance = create_booking_policy_acceptance(
+        client,
+        booking["id"],
+        policy_document["id"],
+    )
+    moderator = create_user(client)
+    set_user_role(moderator["id"], "moderator")
+    authenticate_as(moderator["id"])
+
+    get_response = client.get(
+        f"/booking-policy-acceptances/{booking_policy_acceptance['id']}"
+    )
+    patch_response = client.patch(
+        f"/booking-policy-acceptances/{booking_policy_acceptance['id']}",
+        json={"accepted_at": datetime.now(UTC).isoformat()},
+    )
+
+    assert get_response.status_code == 403, get_response.text
+    assert patch_response.status_code == 403, patch_response.text

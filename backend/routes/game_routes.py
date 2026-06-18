@@ -7,7 +7,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.services.auth_service import get_current_app_user
+from backend.services.admin_permission_service import (
+    PERMISSION_COMMUNITY_GAMES_WRITE,
+    PERMISSION_OFFICIAL_GAMES_WRITE,
+)
+from backend.services.auth_service import require_active_user, require_any_admin_permission
 from backend.models import (
     Game,
     GameParticipant,
@@ -34,6 +38,8 @@ from backend.services.game_service import (
     get_active_venue_or_404,
     get_default_host_guest_max,
     get_existing_active_participant,
+    list_public_game_participant_counts,
+    list_public_game_participants,
     host_edit_field_changed,
     normalize_game_lifecycle_fields,
     normalize_official_game_invariants,
@@ -68,10 +74,12 @@ from backend.schemas import (
     GameGuestRemoveCreate,
     GameGuestRemoveRead,
     GameHostEdit,
+    GameParticipantCountRead,
     GameJoinCreate,
     GameJoinRead,
     GameLeaveCreate,
     GameLeaveRead,
+    PublicGameParticipantRead,
     GameRead,
     GameUpdate,
 )
@@ -287,7 +295,16 @@ def notify_connected_users_game_updated(
 # This route creates the core game listing record after validating the related
 # venue and user references that the row depends on.
 @router.post("", response_model=GameRead, status_code=status.HTTP_201_CREATED)
-def create_game(game: GameCreate, db: Session = Depends(get_db)) -> Game:
+def create_game(
+    game: GameCreate,
+    db: Session = Depends(get_db),
+    _current_admin: User = Depends(
+        require_any_admin_permission(
+            PERMISSION_OFFICIAL_GAMES_WRITE,
+            PERMISSION_COMMUNITY_GAMES_WRITE,
+        )
+    ),
+) -> Game:
     game_data = normalize_official_game_invariants(
         game.model_dump(), is_create=True
     )
@@ -337,18 +354,24 @@ def create_game(game: GameCreate, db: Session = Depends(get_db)) -> Game:
     "/{game_id}/join", response_model=GameJoinRead, status_code=status.HTTP_201_CREATED
 )
 def join_game(
-    game_id: uuid.UUID, join_request: GameJoinCreate, db: Session = Depends(get_db)
+    game_id: uuid.UUID,
+    join_request: GameJoinCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active_user),
 ) -> GameJoinRead:
-    return join_game_roster_workflow(db, game_id, join_request)
+    return join_game_roster_workflow(db, game_id, join_request, current_user)
 
 
 @router.post(
     "/{game_id}/leave", response_model=GameLeaveRead, status_code=status.HTTP_200_OK
 )
 def leave_game(
-    game_id: uuid.UUID, leave_request: GameLeaveCreate, db: Session = Depends(get_db)
+    game_id: uuid.UUID,
+    leave_request: GameLeaveCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active_user),
 ) -> GameLeaveRead:
-    return leave_game_roster_workflow(db, game_id, leave_request)
+    return leave_game_roster_workflow(db, game_id, current_user)
 
 
 @router.post(
@@ -360,8 +383,9 @@ def add_booking_game_guests(
     game_id: uuid.UUID,
     guest_request: GameGuestAddCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active_user),
 ) -> GameGuestAddRead:
-    return add_booking_game_guests_workflow(db, game_id, guest_request)
+    return add_booking_game_guests_workflow(db, game_id, guest_request, current_user)
 
 
 @router.post(
@@ -373,8 +397,9 @@ def add_host_game_guests(
     game_id: uuid.UUID,
     guest_request: GameGuestAddCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active_user),
 ) -> GameGuestAddRead:
-    return add_host_game_guests_workflow(db, game_id, guest_request)
+    return add_host_game_guests_workflow(db, game_id, guest_request, current_user)
 
 
 @router.post(
@@ -386,8 +411,9 @@ def remove_game_guests(
     game_id: uuid.UUID,
     guest_request: GameGuestRemoveCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active_user),
 ) -> GameGuestRemoveRead:
-    return remove_game_guests_workflow(db, game_id, guest_request)
+    return remove_game_guests_workflow(db, game_id, guest_request, current_user)
 
 
 @router.post(
@@ -398,10 +424,33 @@ def remove_game_guests(
 def cancel_game(
     game_id: uuid.UUID,
     cancel_request: GameCancelCreate,
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ) -> Game:
     return cancel_game_state_workflow(db, game_id, cancel_request, current_user)
+
+
+@router.get(
+    "/participant-counts",
+    response_model=list[GameParticipantCountRead],
+    status_code=status.HTTP_200_OK,
+)
+def list_game_participant_counts(
+    db: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+    return list_public_game_participant_counts(db)
+
+
+@router.get(
+    "/{game_id}/participants",
+    response_model=list[PublicGameParticipantRead],
+    status_code=status.HTTP_200_OK,
+)
+def list_game_roster_participants(
+    game_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> list[GameParticipant]:
+    return list_public_game_participants(db, game_id)
 
 
 # This route fetches a single game record by its internal UUID.
@@ -432,7 +481,15 @@ def list_games(db: Session = Depends(get_db)) -> list[Game]:
 # This route applies partial updates to an existing game record.
 @router.patch("/{game_id}", response_model=GameRead, status_code=status.HTTP_200_OK)
 def update_game(
-    game_id: uuid.UUID, game_update: GameUpdate, db: Session = Depends(get_db)
+    game_id: uuid.UUID,
+    game_update: GameUpdate,
+    db: Session = Depends(get_db),
+    _current_admin: User = Depends(
+        require_any_admin_permission(
+            PERMISSION_OFFICIAL_GAMES_WRITE,
+            PERMISSION_COMMUNITY_GAMES_WRITE,
+        )
+    ),
 ) -> Game:
     db_game = db.get(Game, game_id)
 
@@ -616,7 +673,10 @@ def update_game(
     "/{game_id}/host-edit", response_model=GameRead, status_code=status.HTTP_200_OK
 )
 def host_edit_game(
-    game_id: uuid.UUID, game_update: GameHostEdit, db: Session = Depends(get_db)
+    game_id: uuid.UUID,
+    game_update: GameHostEdit,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active_user),
 ) -> Game:
     db_game = db.get(Game, game_id)
 
@@ -626,15 +686,13 @@ def host_edit_game(
             detail="Game not found.",
         )
 
-    get_active_user_or_404(db, game_update.acting_user_id, "Acting user not found.")
-
     if db_game.game_type != "community":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only community games can be edited by hosts.",
         )
 
-    if db_game.host_user_id != game_update.acting_user_id:
+    if db_game.host_user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the game host can edit this game.",
@@ -654,7 +712,6 @@ def host_edit_game(
     structural_snapshot_before = capture_game_updated_structural_snapshot(db_game)
 
     update_data = game_update.model_dump(exclude_unset=True)
-    update_data.pop("acting_user_id", None)
     if "format_label" in update_data:
         update_data["host_guest_max"] = get_default_host_guest_max(
             update_data["format_label"]
@@ -830,7 +887,7 @@ def host_edit_game(
         notify_connected_users_game_updated(
             db,
             db_game=db_game,
-            actor_user_id=game_update.acting_user_id,
+            actor_user_id=current_user.id,
             event_at=now,
         )
 
@@ -851,7 +908,16 @@ def host_edit_game(
 # This route performs a soft delete so the game record remains available for
 # history and operational review without appearing in normal game listings.
 @router.delete("/{game_id}", response_model=GameRead, status_code=status.HTTP_200_OK)
-def delete_game(game_id: uuid.UUID, db: Session = Depends(get_db)) -> Game:
+def delete_game(
+    game_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _current_admin: User = Depends(
+        require_any_admin_permission(
+            PERMISSION_OFFICIAL_GAMES_WRITE,
+            PERMISSION_COMMUNITY_GAMES_WRITE,
+        )
+    ),
+) -> Game:
     db_game = db.get(Game, game_id)
 
     if db_game is None or db_game.deleted_at is not None:
