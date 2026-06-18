@@ -23,8 +23,10 @@ from backend.tests.helpers import (
     authenticate_as,
     create_booking,
     create_game,
+    create_payment,
     create_user,
     create_venue,
+    set_user_account_status,
     set_user_role,
 )
 
@@ -105,6 +107,27 @@ def test_regular_user_cannot_issue_game_credit(client: TestClient):
     assert response.status_code == 403, response.text
 
 
+def test_admin_cannot_issue_game_credit_to_suspended_user(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    set_user_account_status(player["id"], "suspended")
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": player["id"],
+            "amount_cents": 2500,
+            "credit_reason": "admin_credit",
+            "note": "Suspended user should not receive credit.",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "User account is not active" in response.text
+
+
 def test_credit_source_must_be_official_game(client: TestClient):
     admin = create_user(client)
     player = create_user(client)
@@ -135,6 +158,163 @@ def test_credit_source_must_be_official_game(client: TestClient):
     assert "official in-app games" in response.text
 
 
+def test_admin_can_issue_game_credit_with_matching_source_booking_and_payment(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(client, player["id"], booking["id"])
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": player["id"],
+            "amount_cents": 2500,
+            "credit_reason": "admin_credit",
+            "source_game_id": game["id"],
+            "source_booking_id": booking["id"],
+            "source_payment_id": payment["id"],
+            "idempotency_key": "matching-source-credit",
+            "note": "Matching source references.",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    credit = response.json()
+    assert credit["source_game_id"] == game["id"]
+    assert credit["source_booking_id"] == booking["id"]
+    assert credit["source_payment_id"] == payment["id"]
+
+
+def test_admin_credit_rejects_source_booking_for_other_user(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    other_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    other_booking = create_booking(client, other_player["id"], game["id"])
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": player["id"],
+            "amount_cents": 2500,
+            "credit_reason": "admin_credit",
+            "source_game_id": game["id"],
+            "source_booking_id": other_booking["id"],
+            "note": "Mismatched booking owner.",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "Source booking must belong to the credited user" in response.text
+
+
+def test_admin_credit_rejects_source_payment_for_other_user(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    other_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    other_booking = create_booking(client, other_player["id"], game["id"])
+    other_payment = create_payment(
+        client,
+        other_player["id"],
+        other_booking["id"],
+    )
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": player["id"],
+            "amount_cents": 2500,
+            "credit_reason": "admin_credit",
+            "source_game_id": game["id"],
+            "source_payment_id": other_payment["id"],
+            "note": "Mismatched payment owner.",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "Source payment must belong to the credited user" in response.text
+
+
+def test_admin_credit_rejects_source_payment_for_different_booking(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    other_booking = create_booking(client, player["id"], game["id"])
+    other_payment = create_payment(
+        client,
+        player["id"],
+        other_booking["id"],
+    )
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": player["id"],
+            "amount_cents": 2500,
+            "credit_reason": "admin_credit",
+            "source_game_id": game["id"],
+            "source_booking_id": booking["id"],
+            "source_payment_id": other_payment["id"],
+            "note": "Mismatched payment booking.",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "Source payment must belong to the source booking" in response.text
+
+
+def test_admin_credit_rejects_source_payment_for_different_source_game(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    other_game = create_game(client, admin["id"], venue)
+    payment = create_payment(
+        client,
+        player["id"],
+        game_id=other_game["id"],
+        payment_type="community_publish_fee",
+    )
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": player["id"],
+            "amount_cents": 2500,
+            "credit_reason": "admin_credit",
+            "source_game_id": game["id"],
+            "source_payment_id": payment["id"],
+            "note": "Mismatched payment game.",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "Source payment must belong to the source game" in response.text
+
+
 def test_expired_credit_is_ignored_in_available_balance(client: TestClient):
     admin = create_user(client)
     player = create_user(client)
@@ -150,6 +330,7 @@ def test_expired_credit_is_ignored_in_available_balance(client: TestClient):
             "amount_cents": 2500,
             "credit_reason": "admin_credit",
             "source_game_id": game["id"],
+            "note": "Expired credit test.",
             "expires_at": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
         },
     )
@@ -269,6 +450,7 @@ def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
             "credit_reason": "admin_credit",
             "source_game_id": game["id"],
             "idempotency_key": "soon-expiring-credit",
+            "note": "Soon expiring credit.",
             "expires_at": (datetime.now(UTC) + timedelta(days=2)).isoformat(),
         },
     )
@@ -280,6 +462,7 @@ def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
             "credit_reason": "admin_credit",
             "source_game_id": game["id"],
             "idempotency_key": "later-expiring-credit",
+            "note": "Later expiring credit.",
             "expires_at": (datetime.now(UTC) + timedelta(days=10)).isoformat(),
         },
     )
@@ -432,6 +615,7 @@ def test_user_game_credit_application_uses_available_balance(client: TestClient)
             "credit_reason": "admin_credit",
             "source_game_id": game["id"],
             "idempotency_key": "minimum-charge-adjustment-credit",
+            "note": "Minimum charge adjustment.",
         },
     )
     assert response.status_code == 201, response.text

@@ -5,6 +5,7 @@ from backend.routes.admin_lookup_routes import router as admin_lookups_router
 from backend.routes.admin_official_game_routes import (
     router as admin_official_games_router,
 )
+from backend.routes.admin_routes import router as admin_router
 from backend.routes.auth_routes import router as auth_router
 from backend.routes.booking_policy_acceptance_routes import (
     router as booking_policy_acceptances_router,
@@ -22,6 +23,7 @@ from backend.routes.community_game_publish_routes import router as community_gam
 from backend.routes.game_chat_routes import router as game_chats_router
 from backend.routes.game_credit_routes import admin_router as admin_game_credits_router
 from backend.routes.game_credit_routes import router as game_credits_router
+from backend.routes.game_image_routes import admin_router as admin_game_images_router
 from backend.routes.game_image_routes import router as game_images_router
 from backend.routes.game_routes import router as games_router
 from backend.routes.game_participant_routes import router as game_participants_router
@@ -65,8 +67,10 @@ from backend.routes.waitlist_entry_routes import router as waitlist_entries_rout
 __all__ = [
     "admin_actions_router",
     "admin_game_credits_router",
+    "admin_game_images_router",
     "admin_lookups_router",
     "admin_official_games_router",
+    "admin_router",
     "admin_venue_images_router",
     "auth_router",
     "bookings_router",

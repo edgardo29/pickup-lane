@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -18,7 +18,9 @@ from backend.models import (
     Payment,
     User,
     Venue,
+    WaitlistEntry,
 )
+from backend.services.admin_action_service import record_admin_action
 from backend.services.game_service import (
     ACTIVE_JOIN_STATUSES,
     OFFICIAL_FORCED_FIELDS,
@@ -110,25 +112,6 @@ def clean_required_text(value: str, field_name: str) -> str:
 def build_user_display_name(user: User) -> str:
     full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
     return full_name or user.email or "Player"
-
-
-def serialize_audit_value(value: Any) -> Any:
-    if isinstance(value, uuid.UUID):
-        return str(value)
-
-    if isinstance(value, datetime):
-        return value.isoformat()
-
-    if isinstance(value, date):
-        return value.isoformat()
-
-    if isinstance(value, dict):
-        return {key: serialize_audit_value(item) for key, item in value.items()}
-
-    if isinstance(value, list):
-        return [serialize_audit_value(item) for item in value]
-
-    return value
 
 
 def get_active_user_or_404(db: Session, user_id: uuid.UUID, detail: str) -> User:
@@ -328,8 +311,8 @@ def add_admin_action(
     reason: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> AdminAction:
-    action = AdminAction(
-        id=uuid.uuid4(),
+    return record_admin_action(
+        db,
         admin_user_id=admin_user_id,
         action_type=action_type,
         target_game_id=target_game_id,
@@ -338,10 +321,8 @@ def add_admin_action(
         target_participant_id=target_participant_id,
         target_venue_id=target_venue_id,
         reason=reason,
-        metadata_=serialize_audit_value(metadata),
+        metadata=metadata,
     )
-    db.add(action)
-    return action
 
 
 def get_active_participant_for_user(
@@ -836,6 +817,38 @@ def list_official_games(
     )
 
     return list(db.scalars(statement).all())
+
+
+def list_official_game_bookings(
+    db: Session,
+    game_id: uuid.UUID,
+) -> list[Booking]:
+    get_official_game_or_404(db, game_id)
+    return list(
+        db.scalars(
+            select(Booking)
+            .where(Booking.game_id == game_id)
+            .order_by(Booking.created_at.desc())
+        ).all()
+    )
+
+
+def list_official_game_waitlist_entries(
+    db: Session,
+    game_id: uuid.UUID,
+) -> list[WaitlistEntry]:
+    get_official_game_or_404(db, game_id)
+    return list(
+        db.scalars(
+            select(WaitlistEntry)
+            .where(WaitlistEntry.game_id == game_id)
+            .order_by(
+                WaitlistEntry.position.asc(),
+                WaitlistEntry.joined_at.asc(),
+                WaitlistEntry.created_at.asc(),
+            )
+        ).all()
+    )
 
 
 def build_effective_official_game_data(

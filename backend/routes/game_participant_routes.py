@@ -8,10 +8,20 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Booking, Game, GameParticipant, User
+from backend.services.admin_permission_service import (
+    PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
+)
+from backend.services.auth_service import (
+    get_current_app_user,
+    require_admin_permission,
+    require_user_admin_permission,
+)
+from backend.services.game_service import list_current_user_game_participants
 from backend.schemas import (
     GameParticipantCreate,
     GameParticipantRead,
     GameParticipantUpdate,
+    PublicGameParticipantRead,
 )
 
 router = APIRouter(prefix="/game-participants", tags=["game_participants"])
@@ -306,8 +316,13 @@ def normalize_game_participant_lifecycle_fields(
     "", response_model=GameParticipantRead, status_code=status.HTTP_201_CREATED
 )
 def create_game_participant(
-    participant: GameParticipantCreate, db: Session = Depends(get_db)
+    participant: GameParticipantCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
+    ),
 ) -> GameParticipant:
+    del current_admin
     get_active_game_or_404(db, participant.game_id)
 
     if participant.booking_id is not None:
@@ -353,6 +368,18 @@ def create_game_participant(
     return new_participant
 
 
+@router.get(
+    "/me",
+    response_model=list[PublicGameParticipantRead],
+    status_code=status.HTTP_200_OK,
+)
+def list_my_game_participants(
+    current_user: User = Depends(get_current_app_user),
+    db: Session = Depends(get_db),
+) -> list[GameParticipant]:
+    return list_current_user_game_participants(db, current_user)
+
+
 # This route fetches a single participant roster row by its internal UUID.
 @router.get(
     "/{participant_id}",
@@ -360,7 +387,9 @@ def create_game_participant(
     status_code=status.HTTP_200_OK,
 )
 def get_game_participant(
-    participant_id: uuid.UUID, db: Session = Depends(get_db)
+    participant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_app_user),
 ) -> GameParticipant:
     db_participant = db.get(GameParticipant, participant_id)
 
@@ -368,6 +397,26 @@ def get_game_participant(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Game participant not found.",
+        )
+
+    can_read_participant = db_participant.user_id == current_user.id
+    can_read_participant = (
+        can_read_participant or db_participant.guest_of_user_id == current_user.id
+    )
+    if db_participant.booking_id is not None:
+        db_booking = db.get(Booking, db_participant.booking_id)
+        can_read_participant = (
+            can_read_participant
+            or (
+                db_booking is not None
+                and db_booking.buyer_user_id == current_user.id
+            )
+        )
+
+    if not can_read_participant:
+        require_user_admin_permission(
+            current_user,
+            PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
         )
 
     return db_participant
@@ -383,7 +432,11 @@ def list_game_participants(
     participant_status: str | None = None,
     attendance_status: str | None = None,
     db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
+    ),
 ) -> list[GameParticipant]:
+    del current_admin
     statement = select(GameParticipant)
 
     if game_id is not None:
@@ -440,7 +493,11 @@ def update_game_participant(
     participant_id: uuid.UUID,
     participant_update: GameParticipantUpdate,
     db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
+    ),
 ) -> GameParticipant:
+    del current_admin
     db_participant = db.get(GameParticipant, participant_id)
 
     if db_participant is None:

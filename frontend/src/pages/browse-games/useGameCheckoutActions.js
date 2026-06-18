@@ -173,6 +173,7 @@ export function useGameCheckoutActions({ navigate }) {
       appUser,
       effectiveGuestCount,
       existingParticipant,
+      firebaseUser,
       game,
       isAddGuestsCheckout,
       isJoinWindowClosed,
@@ -182,6 +183,7 @@ export function useGameCheckoutActions({ navigate }) {
         !agreed ||
         !game ||
         !appUser?.id ||
+        !firebaseUser ||
         isJoinWindowClosed ||
         (!isAddGuestsCheckout && existingParticipant) ||
         (isAddGuestsCheckout && (!isExistingConfirmedPlayer || effectiveGuestCount <= 0))
@@ -199,8 +201,8 @@ export function useGameCheckoutActions({ navigate }) {
         await confirmGameCheckout({
           gameId: game.id,
           guestCount: effectiveGuestCount,
+          firebaseUser,
           isAddGuestsCheckout,
-          userId: appUser.id,
         })
         navigate(`/games/${game.id}`, { replace: true })
       } catch (requestError) {

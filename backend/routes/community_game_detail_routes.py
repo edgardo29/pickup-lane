@@ -1,59 +1,26 @@
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import CommunityGameDetail, Game
+from backend.models import CommunityGameDetail, User
 from backend.schemas import (
     CommunityGameDetailCreate,
+    CommunityGameDetailHostUpsert,
     CommunityGameDetailRead,
     CommunityGameDetailUpdate,
 )
+from backend.services.admin_permission_service import PERMISSION_COMMUNITY_GAMES_WRITE
+from backend.services.auth_service import require_active_user, require_admin_permission
+from backend.services.community_game_detail_service import (
+    create_community_game_detail_workflow,
+    update_community_game_detail_workflow,
+    upsert_host_community_game_detail_workflow,
+)
 
 router = APIRouter(prefix="/community-game-details", tags=["community_game_details"])
-
-def build_community_game_detail_conflict_detail(exc: IntegrityError) -> str:
-    error_text = str(exc.orig)
-
-    if "uq_community_game_details_game_id" in error_text:
-        return "This game already has community game details."
-
-    return error_text
-
-
-def get_community_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
-    db_game = db.get(Game, game_id)
-
-    if db_game is None or db_game.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Game not found.",
-        )
-
-    if db_game.game_type != "community":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Community game details require a community game.",
-        )
-
-    return db_game
-
-
-def validate_community_game_detail_business_rules(
-    detail_data: dict[str, object]
-) -> None:
-    payment_methods = detail_data["payment_methods_snapshot"]
-    if not isinstance(payment_methods, list) or not all(
-        isinstance(method, dict) for method in payment_methods
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="payment_methods_snapshot must be a list of payment method objects.",
-        )
 
 
 @router.post(
@@ -64,25 +31,27 @@ def validate_community_game_detail_business_rules(
 def create_community_game_detail(
     community_game_detail: CommunityGameDetailCreate,
     db: Session = Depends(get_db),
+    _current_admin: User = Depends(
+        require_admin_permission(PERMISSION_COMMUNITY_GAMES_WRITE)
+    ),
 ) -> CommunityGameDetail:
-    detail_data = community_game_detail.model_dump()
-    validate_community_game_detail_business_rules(detail_data)
-    get_community_game_or_404(db, community_game_detail.game_id)
+    return create_community_game_detail_workflow(db, community_game_detail)
 
-    new_community_game_detail = CommunityGameDetail(id=uuid.uuid4(), **detail_data)
 
-    try:
-        db.add(new_community_game_detail)
-        db.commit()
-        db.refresh(new_community_game_detail)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_community_game_detail_conflict_detail(exc),
-        ) from exc
-
-    return new_community_game_detail
+@router.put(
+    "/games/{game_id}/host-edit",
+    response_model=CommunityGameDetailRead,
+    status_code=status.HTTP_200_OK,
+)
+def upsert_host_community_game_detail(
+    game_id: uuid.UUID,
+    detail_update: CommunityGameDetailHostUpsert,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active_user),
+) -> CommunityGameDetail:
+    return upsert_host_community_game_detail_workflow(
+        db, game_id, detail_update, current_user
+    )
 
 
 @router.get(
@@ -132,46 +101,10 @@ def update_community_game_detail(
     community_game_detail_id: uuid.UUID,
     community_game_detail_update: CommunityGameDetailUpdate,
     db: Session = Depends(get_db),
+    _current_admin: User = Depends(
+        require_admin_permission(PERMISSION_COMMUNITY_GAMES_WRITE)
+    ),
 ) -> CommunityGameDetail:
-    db_community_game_detail = db.get(
-        CommunityGameDetail, community_game_detail_id
+    return update_community_game_detail_workflow(
+        db, community_game_detail_id, community_game_detail_update
     )
-
-    if db_community_game_detail is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Community game details not found.",
-        )
-
-    update_data = community_game_detail_update.model_dump(exclude_unset=True)
-    effective_detail_data = {
-        "game_id": update_data.get("game_id", db_community_game_detail.game_id),
-        "payment_methods_snapshot": update_data.get(
-            "payment_methods_snapshot",
-            db_community_game_detail.payment_methods_snapshot,
-        ),
-        "payment_instructions_snapshot": update_data.get(
-            "payment_instructions_snapshot",
-            db_community_game_detail.payment_instructions_snapshot,
-        ),
-    }
-    validate_community_game_detail_business_rules(effective_detail_data)
-    get_community_game_or_404(db, effective_detail_data["game_id"])
-
-    for field_name, field_value in update_data.items():
-        setattr(db_community_game_detail, field_name, field_value)
-
-    db_community_game_detail.updated_at = datetime.now(timezone.utc)
-
-    try:
-        db.add(db_community_game_detail)
-        db.commit()
-        db.refresh(db_community_game_detail)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_community_game_detail_conflict_detail(exc),
-        ) from exc
-
-    return db_community_game_detail

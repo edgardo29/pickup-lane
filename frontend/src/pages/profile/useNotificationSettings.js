@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { saveUserSettings } from './profileApi.js'
 
 export function useNotificationSettings({
-  currentUser,
   effectiveSettings,
+  firebaseUser,
   setSettingsOverride,
 }) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
@@ -24,7 +24,7 @@ export function useNotificationSettings({
     setNotificationError('')
 
     try {
-      const savedSettings = await saveUserSettings(currentUser.id, effectiveSettings, {
+      const savedSettings = await saveUserSettings(firebaseUser, {
         email_notifications_enabled: emailNotificationsEnabled,
       })
 

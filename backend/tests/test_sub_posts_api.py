@@ -7,6 +7,7 @@ from backend.tests.helpers import (
     build_sub_post_payload,
     create_sub_post,
     create_user,
+    set_user_account_status,
     set_user_role,
 )
 
@@ -57,6 +58,30 @@ def notification_types(notifications: list[dict]) -> set[str]:
 
 def parse_iso_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def test_need_a_sub_post_routes_reject_suspended_user(client: TestClient):
+    user = create_user(client)
+    set_user_account_status(user["id"], "suspended")
+    authenticate_as(user["id"])
+    post_id = "00000000-0000-4000-8000-000000000001"
+
+    responses = [
+        client.post("/need-a-sub/posts", json=build_sub_post_payload()),
+        client.get("/need-a-sub/posts/mine"),
+        client.patch(
+            f"/need-a-sub/posts/{post_id}",
+            json=build_sub_post_payload(format_label="7v7"),
+        ),
+        client.patch(
+            f"/need-a-sub/posts/{post_id}/cancel",
+            json={"cancel_reason": "Cannot make it."},
+        ),
+    ]
+
+    for response in responses:
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"] == "Active account required."
 
 
 def test_sub_posts_create_get_list_cancel_and_remove(client: TestClient):
@@ -117,6 +142,25 @@ def test_sub_posts_create_get_list_cancel_and_remove(client: TestClient):
     )
     assert remove_response.status_code == 200, remove_response.text
     assert remove_response.json()["post_status"] == "removed"
+
+    audit_response = client.get(f"/admin/actions?target_sub_post_id={post['id']}")
+    assert audit_response.status_code == 200, audit_response.text
+    remove_actions = [
+        action
+        for action in audit_response.json()
+        if action["action_type"] == "remove_sub_post"
+    ]
+    assert len(remove_actions) == 1
+    audit_action = remove_actions[0]
+    assert audit_action["target_user_id"] == owner["id"]
+    assert audit_action["target_sub_post_id"] == post["id"]
+    assert audit_action["reason"] == "Moderation cleanup."
+    assert audit_action["metadata"] == {
+        "source": "need_a_sub",
+        "old_status": "canceled",
+        "new_status": "removed",
+        "removed_by": "admin",
+    }
 
 
 def test_sub_posts_cancel_cancels_active_requests_and_blocks_review(client: TestClient):
@@ -1136,6 +1180,65 @@ def test_sub_posts_edit_cancel_and_remove_expire_due_post_before_action(client: 
     )
     assert remove_response.status_code == 200, remove_response.text
     assert remove_response.json()["post_status"] == "removed"
+
+
+def test_sub_posts_moderator_can_remove_post(client: TestClient):
+    owner = create_user(client)
+    moderator = create_user(client)
+    set_user_role(moderator["id"], "moderator")
+    post = create_sub_post(client, owner["id"])
+
+    authenticate_as(moderator["id"])
+    response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/remove",
+        json={"remove_reason": "Unsafe payment details."},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["post_status"] == "removed"
+    assert response.json()["removed_by_user_id"] == moderator["id"]
+
+
+def test_sub_posts_remove_requires_reason_for_audit(client: TestClient):
+    owner = create_user(client)
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    post = create_sub_post(client, owner["id"])
+
+    authenticate_as(admin["id"])
+    response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/remove",
+        json={"remove_reason": "   "},
+    )
+
+    assert response.status_code == 400, response.text
+    assert "remove_sub_post requires a reason" in response.text
+
+    detail_response = client.get(f"/need-a-sub/posts/{post['id']}")
+    assert detail_response.status_code == 200, detail_response.text
+    assert detail_response.json()["post_status"] == "active"
+
+    audit_response = client.get(f"/admin/actions?target_sub_post_id={post['id']}")
+    assert audit_response.status_code == 200, audit_response.text
+    assert audit_response.json() == []
+
+
+def test_sub_posts_suspended_staff_cannot_remove_post(client: TestClient):
+    for role in ("admin", "moderator"):
+        owner = create_user(client)
+        staff = create_user(client)
+        set_user_role(staff["id"], role)
+        set_user_account_status(staff["id"], "suspended")
+        post = create_sub_post(client, owner["id"])
+
+        authenticate_as(staff["id"])
+        response = client.patch(
+            f"/need-a-sub/posts/{post['id']}/remove",
+            json={"remove_reason": "Should not run."},
+        )
+
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"] == "Active account required."
 
 
 def test_sub_posts_admin_remove_cancels_active_requests(client: TestClient):

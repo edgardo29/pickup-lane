@@ -7,7 +7,12 @@ from backend.services.need_a_sub_service import (
     MAX_WAITLIST_REQUESTS_PER_POST,
     expire_due_posts_and_requests,
 )
-from backend.tests.helpers import authenticate_as, create_sub_post, create_user
+from backend.tests.helpers import (
+    authenticate_as,
+    create_sub_post,
+    create_user,
+    set_user_account_status,
+)
 
 
 def request_spot(client: TestClient, requester_id: str, post: dict, position_index: int = 0):
@@ -28,6 +33,33 @@ def list_need_a_sub_notifications(client: TestClient, user_id: str) -> list[dict
 
 def notification_types(notifications: list[dict]) -> set[str]:
     return {notification["notification_type"] for notification in notifications}
+
+
+def test_sub_post_request_routes_reject_suspended_user(client: TestClient):
+    user = create_user(client)
+    set_user_account_status(user["id"], "suspended")
+    authenticate_as(user["id"])
+    post_id = "00000000-0000-4000-8000-000000000001"
+    position_id = "00000000-0000-4000-8000-000000000002"
+    request_id = "00000000-0000-4000-8000-000000000003"
+
+    responses = [
+        client.post(
+            f"/need-a-sub/posts/{post_id}/requests",
+            json={"sub_post_position_id": position_id},
+        ),
+        client.get(f"/need-a-sub/posts/{post_id}/requests"),
+        client.get("/need-a-sub/my-requests"),
+        client.patch(f"/need-a-sub/requests/{request_id}/accept"),
+        client.patch(f"/need-a-sub/requests/{request_id}/decline", json={}),
+        client.patch(f"/need-a-sub/requests/{request_id}/cancel"),
+        client.patch(f"/need-a-sub/requests/{request_id}/cancel-by-owner", json={}),
+        client.patch(f"/need-a-sub/requests/{request_id}/no-show", json={}),
+    ]
+
+    for response in responses:
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"] == "Active account required."
 
 
 def test_sub_post_request_owner_accept_marks_confirmed_and_filled(client: TestClient):

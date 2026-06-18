@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -34,6 +34,15 @@ class VenueImageUpdate(BaseModel):
     sort_order: int | None = Field(default=None, ge=0)
     alt_text: str | None = Field(default=None, max_length=280)
     caption: str | None = Field(default=None, max_length=280)
+    reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def strip_reason(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
 
 
 class VenueImageRead(BaseModel):

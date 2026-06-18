@@ -1,5 +1,4 @@
 import { buildMediaUrl } from '../../lib/apiClient.js'
-import { ACTIVE_ROSTER_STATUSES } from './gameParticipantSelectors.js'
 import {
   BROWSE_VISIBLE_AFTER_START_MINUTES,
   DATE_WINDOW_DAYS,
@@ -52,15 +51,11 @@ export function buildImageUrlsByGameId(games = [], gameImages = [], venueImages 
   return images
 }
 
-export function buildParticipantCountsByGameId(participants) {
+export function buildParticipantCountsByGameId(participantCounts) {
   const counts = new Map()
 
-  participants.forEach((participant) => {
-    if (!ACTIVE_ROSTER_STATUSES.has(participant.participant_status)) {
-      return
-    }
-
-    counts.set(participant.game_id, (counts.get(participant.game_id) || 0) + 1)
+  participantCounts.forEach((item) => {
+    counts.set(item.game_id, item.participant_count)
   })
 
   return counts

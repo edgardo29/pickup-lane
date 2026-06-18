@@ -31,3 +31,10 @@ class CommunityGameDetailUpdate(BaseModel):
     game_id: UUID | None = None
     payment_methods_snapshot: list[dict] | None = None
     payment_instructions_snapshot: str | None = None
+
+
+class CommunityGameDetailHostUpsert(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    payment_methods_snapshot: list[dict] = Field(default_factory=list)
+    payment_instructions_snapshot: str | None = None

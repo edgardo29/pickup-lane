@@ -25,8 +25,31 @@ from backend.tests.helpers import (
     create_sub_post,
     create_user,
     create_venue,
+    run_as_temporary_admin,
+    set_user_account_status,
     set_user_role,
 )
+
+
+def post_notification_as_admin(
+    client: TestClient,
+    payload: dict[str, object],
+):
+    return run_as_temporary_admin(
+        client,
+        lambda: client.post("/notifications", json=payload),
+    )
+
+
+def patch_notification_as_admin(
+    client: TestClient,
+    notification_id: str,
+    payload: dict[str, object],
+):
+    return run_as_temporary_admin(
+        client,
+        lambda: client.patch(f"/notifications/{notification_id}", json=payload),
+    )
 
 
 def notification_contract_fields(
@@ -56,6 +79,21 @@ def notification_contract_fields(
         fields["subject_timezone"] = subject_timezone
 
     return fields
+
+
+def admin_notice_payload(user_id: str, **overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "user_id": user_id,
+        "notification_type": "admin_notice",
+        "notification_category": "app",
+        "notification_domain": "admin",
+        "title": "CI notification",
+        **notification_contract_fields(),
+        "body": "CI notification body",
+        "is_read": False,
+    }
+    payload.update(overrides)
+    return payload
 
 
 def game_notification_contract_fields(
@@ -585,9 +623,9 @@ def test_notifications_reject_empty_title(client: TestClient):
     user = create_user(client)
     authenticate_as(user["id"])
 
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "admin_notice",
             "notification_category": "app",
@@ -609,9 +647,9 @@ def test_notifications_reject_missing_event_at(client: TestClient):
     contract_fields = notification_contract_fields()
     contract_fields.pop("event_at")
 
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "admin_notice",
             "notification_category": "app",
@@ -631,9 +669,9 @@ def test_notifications_reject_invalid_source_type(client: TestClient):
     user = create_user(client)
     authenticate_as(user["id"])
 
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "admin_notice",
             "notification_category": "app",
@@ -653,9 +691,9 @@ def test_notifications_reject_subject_start_without_timezone(client: TestClient)
     user = create_user(client)
     authenticate_as(user["id"])
 
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "admin_notice",
             "notification_category": "app",
@@ -677,9 +715,9 @@ def test_notifications_reject_action_without_target(client: TestClient):
     user = create_user(client)
     authenticate_as(user["id"])
 
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "admin_notice",
             "notification_category": "app",
@@ -699,9 +737,10 @@ def test_notifications_reject_immutable_update_fields(client: TestClient):
     user = create_user(client)
     notification = create_notification(client, user["id"])
 
-    response = client.patch(
-        f"/notifications/{notification['id']}",
-        json={"title": "New title"},
+    response = patch_notification_as_admin(
+        client,
+        notification["id"],
+        {"title": "New title"},
     )
 
     assert response.status_code == 400, response.text
@@ -716,9 +755,9 @@ def test_notifications_reject_booking_mismatched_game(client: TestClient):
     booking = create_booking(client, user["id"], first_game["id"])
     authenticate_as(user["id"])
 
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "booking_confirmed",
             "notification_category": "game_activity",
@@ -751,9 +790,9 @@ def test_notifications_support_payment_and_refund_relations(client: TestClient):
     )
 
     authenticate_as(user["id"])
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "booking_refunded",
             "notification_category": "game_activity",
@@ -800,9 +839,9 @@ def test_notifications_reject_payment_mismatched_booking(client: TestClient):
     )
 
     authenticate_as(user["id"])
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "payment_failed",
             "notification_category": "game_activity",
@@ -844,9 +883,9 @@ def test_notifications_reject_refund_mismatched_payment(client: TestClient):
     )
 
     authenticate_as(user["id"])
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "booking_refunded",
             "notification_category": "game_activity",
@@ -874,9 +913,10 @@ def test_notifications_unread_clears_read_at(client: TestClient):
     notification = create_notification(client, user["id"], is_read=True)
     assert notification["read_at"] is not None
 
-    response = client.patch(
-        f"/notifications/{notification['id']}",
-        json={"is_read": False},
+    response = patch_notification_as_admin(
+        client,
+        notification["id"],
+        {"is_read": False},
     )
 
     assert response.status_code == 200, response.text
@@ -888,9 +928,9 @@ def test_notifications_reject_category_domain_mismatch(client: TestClient):
     user = create_user(client)
     authenticate_as(user["id"])
 
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "admin_notice",
             "notification_category": "app",
@@ -914,9 +954,9 @@ def test_notifications_reject_type_domain_mismatch(client: TestClient):
     user = create_user(client)
     authenticate_as(user["id"])
 
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": user["id"],
             "notification_type": "sub_request_received",
             "notification_category": "game_activity",
@@ -963,6 +1003,104 @@ def test_notifications_are_scoped_to_owner_unless_admin(client: TestClient):
     assert [item["id"] for item in admin_list_response.json()] == [notification["id"]]
 
 
+def test_notification_admin_scaffolds_require_named_admin_permissions(
+    client: TestClient,
+):
+    owner = create_user(client)
+    notification = create_notification(client, owner["id"])
+
+    authenticate_as(owner["id"])
+    player_create_response = client.post(
+        "/notifications",
+        json=admin_notice_payload(owner["id"]),
+    )
+    assert player_create_response.status_code == 403, player_create_response.text
+
+    player_list_response = client.get(f"/notifications?user_id={owner['id']}")
+    assert player_list_response.status_code == 403, player_list_response.text
+
+    player_update_response = client.patch(
+        f"/notifications/{notification['id']}",
+        json={"is_read": True},
+    )
+    assert player_update_response.status_code == 403, player_update_response.text
+
+    moderator = create_user(client)
+    set_user_role(moderator["id"], "moderator")
+    authenticate_as(moderator["id"])
+
+    moderator_create_response = client.post(
+        "/notifications",
+        json=admin_notice_payload(owner["id"]),
+    )
+    assert moderator_create_response.status_code == 403, moderator_create_response.text
+
+    moderator_list_response = client.get(f"/notifications?user_id={owner['id']}")
+    assert moderator_list_response.status_code == 403, moderator_list_response.text
+
+    moderator_get_response = client.get(f"/notifications/{notification['id']}")
+    assert moderator_get_response.status_code == 404, moderator_get_response.text
+
+
+def test_notification_admin_create_and_update_are_audited(client: TestClient):
+    from backend.database import SessionLocal
+    from backend.models import AdminAction
+
+    owner = create_user(client)
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+
+    create_response = client.post(
+        "/notifications",
+        json=admin_notice_payload(owner["id"]),
+    )
+    assert create_response.status_code == 201, create_response.text
+    notification = create_response.json()
+
+    update_response = client.patch(
+        f"/notifications/{notification['id']}",
+        json={"is_read": True},
+    )
+    assert update_response.status_code == 200, update_response.text
+    assert update_response.json()["is_read"] is True
+
+    with SessionLocal() as db:
+        actions = (
+            db.query(AdminAction)
+            .filter(AdminAction.target_notification_id == UUID(notification["id"]))
+            .order_by(AdminAction.created_at.asc())
+            .all()
+        )
+
+    assert [action.action_type for action in actions] == [
+        "create_notification",
+        "update_notification",
+    ]
+    assert all(str(action.admin_user_id) == admin["id"] for action in actions)
+    assert all(str(action.target_user_id) == owner["id"] for action in actions)
+    assert "body" not in actions[0].metadata_
+    assert actions[1].metadata_["before"]["is_read"] is False
+    assert actions[1].metadata_["after"]["is_read"] is True
+
+
+def test_suspended_user_keeps_own_notification_inbox_access(client: TestClient):
+    user = create_user(client)
+    notification = create_notification(client, user["id"])
+    set_user_account_status(user["id"], "suspended")
+    authenticate_as(user["id"])
+
+    list_response = client.get("/notifications/me")
+    assert list_response.status_code == 200, list_response.text
+
+    get_response = client.get(f"/notifications/{notification['id']}")
+    assert get_response.status_code == 200, get_response.text
+
+    read_response = client.patch(f"/notifications/{notification['id']}/read", json={})
+    assert read_response.status_code == 200, read_response.text
+    assert read_response.json()["is_read"] is True
+
+
 def test_notifications_support_need_a_sub_relations(client: TestClient):
     owner = create_user(client)
     requester = create_user(client)
@@ -972,9 +1110,9 @@ def test_notifications_support_need_a_sub_relations(client: TestClient):
     sub_request = create_sub_request(client, requester["id"], sub_post)
 
     authenticate_as(admin["id"])
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": owner["id"],
             "notification_type": "sub_request_received",
             "notification_category": "game_activity",
@@ -1005,9 +1143,9 @@ def test_notifications_support_sub_post_updated_type(client: TestClient):
     sub_post = create_sub_post(client, owner["id"])
 
     authenticate_as(requester["id"])
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": requester["id"],
             "notification_type": "sub_post_updated",
             "notification_category": "game_activity",
@@ -1048,9 +1186,9 @@ def test_notifications_support_sub_chat_message_relations(client: TestClient):
     )
 
     authenticate_as(requester["id"])
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": requester["id"],
             "notification_type": "sub_chat_message",
             "notification_category": "game_activity",
@@ -1120,9 +1258,9 @@ def test_notifications_reject_sub_chat_message_mismatched_post(
     )
 
     authenticate_as(requester["id"])
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": requester["id"],
             "notification_type": "sub_chat_message",
             "notification_category": "game_activity",
@@ -1155,9 +1293,9 @@ def test_notifications_reject_mismatched_need_a_sub_relations(client: TestClient
     sub_request = create_sub_request(client, requester["id"], sub_post)
 
     authenticate_as(admin["id"])
-    response = client.post(
-        "/notifications",
-        json={
+    response = post_notification_as_admin(
+        client,
+        {
             "user_id": other_owner["id"],
             "notification_type": "sub_request_received",
             "notification_category": "game_activity",

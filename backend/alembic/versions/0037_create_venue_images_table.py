@@ -137,9 +137,21 @@ def upgrade() -> None:
             "is_primary = true AND image_status = 'active' AND deleted_at IS NULL"
         ),
     )
+    op.create_foreign_key(
+        "fk_admin_actions_target_venue_image_id",
+        "admin_actions",
+        "venue_images",
+        ["target_venue_image_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
 
 
 def downgrade() -> None:
+    op.execute(
+        "ALTER TABLE admin_actions "
+        "DROP CONSTRAINT IF EXISTS fk_admin_actions_target_venue_image_id"
+    )
     op.drop_index(
         "uq_venue_images_one_active_primary_per_venue",
         table_name="venue_images",

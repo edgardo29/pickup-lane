@@ -1,5 +1,4 @@
 import {
-  ACTIVE_PARTICIPANT_STATUSES,
   GAME_CANCELLED_TYPES,
   HISTORY_MY_GAME_STATUSES,
   UPCOMING_MY_GAME_STATUSES,
@@ -10,12 +9,8 @@ import { formatAgendaDate } from './myGamesFormatters.js'
 export function buildParticipantCounts(participants) {
   const counts = new Map()
 
-  participants.forEach((participant) => {
-    if (!ACTIVE_PARTICIPANT_STATUSES.has(participant.participant_status)) {
-      return
-    }
-
-    counts.set(participant.game_id, (counts.get(participant.game_id) || 0) + 1)
+  participants.forEach((participantCount) => {
+    counts.set(participantCount.game_id, participantCount.participant_count)
   })
 
   return counts

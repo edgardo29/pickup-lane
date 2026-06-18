@@ -14,6 +14,7 @@ from backend.tests.helpers import (
     authenticate_as,
     create_user,
     create_user_payment_method,
+    set_user_account_status,
 )
 
 
@@ -31,11 +32,11 @@ def mock_stripe_customer_and_setup(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.create_customer",
+        "backend.services.payment_method_service.create_customer",
         fake_create_customer,
     )
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.create_setup_intent",
+        "backend.services.payment_method_service.create_setup_intent",
         fake_create_setup_intent,
     )
 
@@ -70,19 +71,19 @@ def mock_stripe_sync(
         )
 
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.retrieve_setup_intent",
+        "backend.services.payment_method_service.retrieve_setup_intent",
         fake_retrieve_setup_intent,
     )
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.retrieve_payment_method",
+        "backend.services.payment_method_service.retrieve_payment_method",
         fake_retrieve_payment_method,
     )
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.set_customer_default_payment_method",
+        "backend.services.payment_method_service.set_customer_default_payment_method",
         lambda **kwargs: None,
     )
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.detach_payment_method",
+        "backend.services.payment_method_service.detach_payment_method",
         lambda stripe_payment_method_id: None,
     )
 
@@ -95,6 +96,29 @@ def set_user_stripe_customer_id(user_id: str, stripe_customer_id: str) -> None:
         assert db_user is not None
         db_user.stripe_customer_id = stripe_customer_id
         db.commit()
+
+
+def test_payment_method_routes_reject_suspended_user(client: TestClient):
+    user = create_user(client)
+    set_user_account_status(user["id"], "suspended")
+    authenticate_as(user["id"])
+
+    payment_method_id = "00000000-0000-4000-8000-000000000001"
+    responses = [
+        client.get("/user-payment-methods"),
+        client.post("/user-payment-methods/setup-intent", json={}),
+        client.post(
+            "/user-payment-methods/sync",
+            json={"setup_intent_id": "seti_suspended_user_test"},
+        ),
+        client.get(f"/user-payment-methods/{payment_method_id}"),
+        client.patch(f"/user-payment-methods/{payment_method_id}/default"),
+        client.delete(f"/user-payment-methods/{payment_method_id}"),
+    ]
+
+    for response in responses:
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"] == "Active account required."
 
 
 def test_payment_method_setup_intent_stores_customer_on_user(
@@ -139,11 +163,11 @@ def test_payment_method_setup_intent_reuses_existing_customer(
         )
 
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.create_customer",
+        "backend.services.payment_method_service.create_customer",
         fake_create_customer,
     )
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.create_setup_intent",
+        "backend.services.payment_method_service.create_setup_intent",
         fake_create_setup_intent,
     )
     authenticate_as(user["id"])
@@ -216,7 +240,7 @@ def test_payment_method_sync_rejects_incomplete_setup_intent(
         )
 
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.retrieve_setup_intent",
+        "backend.services.payment_method_service.retrieve_setup_intent",
         fake_retrieve_setup_intent,
     )
     authenticate_as(user["id"])
@@ -327,7 +351,7 @@ def test_payment_method_sync_can_make_new_card_default(
         captured_default.update(kwargs)
 
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.set_customer_default_payment_method",
+        "backend.services.payment_method_service.set_customer_default_payment_method",
         fake_set_customer_default_payment_method,
     )
     authenticate_as(user["id"])
@@ -378,7 +402,7 @@ def test_payment_method_default_change_keeps_added_order(
         is_default=False,
     )
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.set_customer_default_payment_method",
+        "backend.services.payment_method_service.set_customer_default_payment_method",
         lambda **kwargs: None,
     )
     authenticate_as(user["id"])
@@ -548,11 +572,11 @@ def test_payment_method_delete_detaches_and_hides_card(
         detached_ids.append(stripe_payment_method_id)
 
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.detach_payment_method",
+        "backend.services.payment_method_service.detach_payment_method",
         fake_detach_payment_method,
     )
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.clear_customer_default_payment_method",
+        "backend.services.payment_method_service.clear_customer_default_payment_method",
         lambda **kwargs: None,
     )
     authenticate_as(user["id"])
@@ -593,7 +617,7 @@ def test_payment_method_delete_promotes_oldest_remaining_card(
     captured_default: dict[str, str] = {}
 
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.detach_payment_method",
+        "backend.services.payment_method_service.detach_payment_method",
         lambda stripe_payment_method_id: None,
     )
 
@@ -601,7 +625,7 @@ def test_payment_method_delete_promotes_oldest_remaining_card(
         captured_default.update(kwargs)
 
     monkeypatch.setattr(
-        "backend.routes.user_payment_method_routes.set_customer_default_payment_method",
+        "backend.services.payment_method_service.set_customer_default_payment_method",
         fake_set_customer_default_payment_method,
     )
     authenticate_as(user["id"])

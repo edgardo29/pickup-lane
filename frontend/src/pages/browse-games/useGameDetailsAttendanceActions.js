@@ -9,6 +9,7 @@ export function useGameDetailsAttendanceActions({
   currentGuestCount,
   currentParticipant,
   currentUser,
+  firebaseUser,
   game,
   isHost,
   navigate,
@@ -22,7 +23,7 @@ export function useGameDetailsAttendanceActions({
   setShareCopied,
 }) {
   async function handleLeaveGame() {
-    if (!game || !currentUser?.id || !currentParticipant) {
+    if (!game || !currentUser?.id || !firebaseUser || !currentParticipant) {
       setIsLeaveModalOpen(false)
       return
     }
@@ -31,7 +32,7 @@ export function useGameDetailsAttendanceActions({
     setJoinNotice('')
 
     try {
-      await leaveGame(game.id, currentUser.id)
+      await leaveGame(game.id, firebaseUser)
       await refreshParticipants()
       setJoinNotice('')
       setIsLeaveModalOpen(false)
@@ -45,7 +46,7 @@ export function useGameDetailsAttendanceActions({
   }
 
   async function handleSaveHostGuestCount(nextGuestCount) {
-    if (!game || !currentUser?.id || !isHost) {
+    if (!game || !currentUser?.id || !firebaseUser || !isHost) {
       return
     }
 
@@ -61,7 +62,7 @@ export function useGameDetailsAttendanceActions({
       setIsAddingHostGuest(true)
 
       try {
-        await addHostGuests(game.id, currentUser.id, guestDelta)
+        await addHostGuests(game.id, firebaseUser, guestDelta)
         await refreshParticipants()
         setIsHostGuestModalOpen(false)
       } catch (requestError) {
@@ -89,7 +90,13 @@ export function useGameDetailsAttendanceActions({
   }
 
   async function handleRemoveGuests(removeCount, options = {}) {
-    if (!game || !currentUser?.id || !currentParticipant || removeCount <= 0) {
+    if (
+      !game ||
+      !currentUser?.id ||
+      !firebaseUser ||
+      !currentParticipant ||
+      removeCount <= 0
+    ) {
       return
     }
 
@@ -97,7 +104,7 @@ export function useGameDetailsAttendanceActions({
     setJoinNotice('')
 
     try {
-      await removeGameGuests(game.id, currentUser.id, removeCount)
+      await removeGameGuests(game.id, firebaseUser, removeCount)
       await refreshParticipants()
       setIsLeaveModalOpen(false)
       if (options.closeHostGuestModal) {

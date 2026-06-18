@@ -2,9 +2,10 @@
 # surface grows.
 from backend.schemas.admin_action_schema import (
     AdminActionCreate,
+    AdminActionNoteCreate,
     AdminActionRead,
-    AdminActionUpdate,
 )
+from backend.schemas.admin_schema import AdminMeRead
 from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCreate,
     AdminOfficialGameHostAssign,
@@ -44,6 +45,7 @@ from backend.schemas.checkout_schema import (
 )
 from backend.schemas.community_game_detail_schema import (
     CommunityGameDetailCreate,
+    CommunityGameDetailHostUpsert,
     CommunityGameDetailRead,
     CommunityGameDetailUpdate,
 )
@@ -87,9 +89,11 @@ from backend.schemas.game_schema import (
     GameUpdate,
 )
 from backend.schemas.game_participant_schema import (
+    GameParticipantCountRead,
     GameParticipantCreate,
     GameParticipantRead,
     GameParticipantUpdate,
+    PublicGameParticipantRead,
 )
 from backend.schemas.game_status_history_schema import (
     GameStatusHistoryCreate,
@@ -194,6 +198,7 @@ from backend.schemas.venue_image_schema import (
 )
 from backend.schemas.venue_schema import VenueCreate, VenueRead, VenueUpdate
 from backend.schemas.waitlist_entry_schema import (
+    CurrentUserWaitlistEntryRead,
     WaitlistEntryCreate,
     WaitlistEntryRead,
     WaitlistEntryUpdate,
@@ -201,8 +206,9 @@ from backend.schemas.waitlist_entry_schema import (
 
 __all__ = [
     "AdminActionCreate",
+    "AdminActionNoteCreate",
     "AdminActionRead",
-    "AdminActionUpdate",
+    "AdminMeRead",
     "AdminOfficialGameCreate",
     "AdminOfficialGameHostAssign",
     "AdminOfficialGameHostRemove",
@@ -231,6 +237,7 @@ __all__ = [
     "GameCheckoutPaymentIntentRead",
     "GameCheckoutStatusRead",
     "CommunityGameDetailCreate",
+    "CommunityGameDetailHostUpsert",
     "CommunityGameDetailRead",
     "CommunityGameDetailUpdate",
     "CommunityGamePublishCreate",
@@ -275,9 +282,11 @@ __all__ = [
     "GameGuestRemoveRead",
     "GameRead",
     "GameUpdate",
+    "GameParticipantCountRead",
     "GameParticipantCreate",
     "GameParticipantRead",
     "GameParticipantUpdate",
+    "PublicGameParticipantRead",
     "GameStatusHistoryCreate",
     "GameStatusHistoryRead",
     "GameStatusHistoryUpdate",
@@ -339,6 +348,7 @@ __all__ = [
     "VenueCreate",
     "VenueRead",
     "VenueUpdate",
+    "CurrentUserWaitlistEntryRead",
     "WaitlistEntryCreate",
     "WaitlistEntryRead",
     "WaitlistEntryUpdate",

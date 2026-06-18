@@ -1,46 +1,34 @@
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Game, User
-from backend.schemas import UserCreate, UserRead, UserUpdate
-from backend.services.user_service import build_user_conflict_detail
+from backend.models import User
+from backend.schemas import UserRead, UserUpdate
+from backend.services.admin_permission_service import (
+    PERMISSION_USERS_DELETE,
+    PERMISSION_USERS_MANAGE,
+    PERMISSION_USERS_READ,
+)
+from backend.services.auth_service import get_current_app_user, require_admin_permission
+from backend.services.user_service import (
+    get_current_user_profile,
+    reject_generic_user_mutation,
+    update_current_user_profile,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-def require_no_future_official_host_assignment(
-    db: Session,
-    user_id: uuid.UUID,
-    now: datetime,
-) -> None:
-    hosted_game_id = db.scalar(
-        select(Game.id)
-        .where(
-            Game.host_user_id == user_id,
-            Game.game_type == "official",
-            Game.deleted_at.is_(None),
-            Game.starts_at > now,
-            Game.game_status.in_(["scheduled", "full"]),
-        )
-        .limit(1)
-    )
-
-    if hosted_game_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Remove official host designation before deleting this user.",
-        )
-
-
 # This route returns all user profiles currently stored in the app database.
 @router.get("", response_model=list[UserRead], status_code=status.HTTP_200_OK)
-def list_users(db: Session = Depends(get_db)) -> list[User]:
+def list_users(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+) -> list[User]:
+    del current_admin
     users = db.scalars(
         select(User)
         .where(User.deleted_at.is_(None))
@@ -49,42 +37,46 @@ def list_users(db: Session = Depends(get_db)) -> list[User]:
     return list(users)
 
 
-# This route creates an app-level user profile after the client has already
-# authenticated the person through Firebase Auth.
+# Generic user mutations are intentionally disabled. Account creation, profile
+# edits, and admin support actions must use narrower authenticated workflows
+# instead of client-supplied identity CRUD.
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, db: Session = Depends(get_db)) -> User:
-    new_user = User(
-        id=uuid.uuid4(),
-        auth_user_id=user.auth_user_id,
-        email=user.email,
-        phone=user.phone,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        date_of_birth=user.date_of_birth,
-        profile_photo_url=user.profile_photo_url,
-        home_city=user.home_city,
-        home_state=user.home_state,
+def create_user(
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
+) -> User:
+    del current_admin
+    reject_generic_user_mutation()
+
+
+@router.get("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+def get_my_user_profile(
+    current_user: User = Depends(get_current_app_user),
+    db: Session = Depends(get_db),
+) -> User:
+    return get_current_user_profile(db, current_user)
+
+
+@router.patch("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+def update_my_user_profile(
+    user_update: UserUpdate,
+    current_user: User = Depends(get_current_app_user),
+    db: Session = Depends(get_db),
+) -> User:
+    return update_current_user_profile(
+        db,
+        current_user,
+        user_update.model_dump(exclude_unset=True),
     )
-
-    try:
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-    except IntegrityError as exc:
-        db.rollback()
-        # Surface the database failure more honestly so local API testing is
-        # easier to debug while the error handling layer is still minimal.
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_conflict_detail(exc),
-        ) from exc
-
-    return new_user
 
 
 # This route fetches a single user profile by the app's internal UUID.
 @router.get("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
-def get_user(user_id: uuid.UUID, db: Session = Depends(get_db)) -> User:
+def get_user(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+) -> User:
+    del current_admin
     db_user = db.get(User, user_id)
 
     if db_user is None or db_user.deleted_at is not None:
@@ -96,76 +88,19 @@ def get_user(user_id: uuid.UUID, db: Session = Depends(get_db)) -> User:
     return db_user
 
 
-# This route applies partial updates to an existing user profile.
 @router.patch("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
 def update_user(
-    user_id: uuid.UUID, user_update: UserUpdate, db: Session = Depends(get_db)
+    user_id: uuid.UUID,
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
 ) -> User:
-    db_user = db.get(User, user_id)
-
-    if db_user is None or db_user.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
-
-    update_data = user_update.model_dump(exclude_unset=True)
-    if (
-        "email" in update_data
-        and update_data["email"] != db_user.email
-        and "email_verified_at" not in update_data
-    ):
-        db_user.email_verified_at = None
-
-    for field_name, field_value in update_data.items():
-        setattr(db_user, field_name, field_value)
-
-    # Keep updated_at aligned with the latest profile change so downstream
-    # clients can reliably track when the record was last modified.
-    db_user.updated_at = datetime.now(timezone.utc)
-
-    try:
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_conflict_detail(exc),
-        ) from exc
-
-    return db_user
+    del user_id, current_admin
+    reject_generic_user_mutation()
 
 
-# This route performs a soft delete so the user record remains in the database
-# for history and audit purposes.
 @router.delete("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
-def delete_user(user_id: uuid.UUID, db: Session = Depends(get_db)) -> User:
-    db_user = db.get(User, user_id)
-
-    if db_user is None or db_user.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
-
-    now = datetime.now(timezone.utc)
-    require_no_future_official_host_assignment(db, db_user.id, now)
-
-    db_user.account_status = "deleted"
-    db_user.updated_at = now
-    db_user.deleted_at = now
-
-    try:
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_conflict_detail(exc),
-        ) from exc
-
-    return db_user
+def delete_user(
+    user_id: uuid.UUID,
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_DELETE)),
+) -> User:
+    del user_id, current_admin
+    reject_generic_user_mutation()

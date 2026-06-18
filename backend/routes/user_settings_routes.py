@@ -1,32 +1,35 @@
+import uuid
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-import uuid
 
 from backend.database import get_db
 from backend.models import User, UserSettings
 from backend.schemas import UserSettingsCreate, UserSettingsRead, UserSettingsUpdate
-from datetime import datetime, timezone
+from backend.services.admin_permission_service import (
+    PERMISSION_USERS_MANAGE,
+    PERMISSION_USERS_READ,
+)
+from backend.services.auth_service import get_current_app_user, require_admin_permission
+from backend.services.user_service import (
+    build_user_settings_conflict_detail,
+    get_current_user_settings,
+    update_current_user_settings,
+)
 
 router = APIRouter(prefix="/user-settings", tags=["user-settings"])
-
-
-def build_user_settings_conflict_detail(exc: IntegrityError) -> str:
-    # user_id is both the primary key and foreign key, so a create conflict
-    # usually means settings already exist for that user.
-    error_text = str(exc.orig)
-
-    if "user_settings_pkey" in error_text:
-        return "Settings already exist for this user."
-
-    return error_text
 
 
 # This route creates the one-to-one settings record for an existing user.
 @router.post("", response_model=UserSettingsRead, status_code=status.HTTP_201_CREATED)
 def create_user_settings(
-    user_settings: UserSettingsCreate, db: Session = Depends(get_db)
+    user_settings: UserSettingsCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
 ) -> UserSettings:
+    del current_admin
     db_user = db.get(User, user_settings.user_id)
 
     if db_user is None:
@@ -60,11 +63,37 @@ def create_user_settings(
     return new_user_settings
 
 
+@router.get("/me", response_model=UserSettingsRead, status_code=status.HTTP_200_OK)
+def get_my_user_settings(
+    current_user: User = Depends(get_current_app_user),
+    db: Session = Depends(get_db),
+) -> UserSettings:
+    return get_current_user_settings(db, current_user)
+
+
+@router.patch("/me", response_model=UserSettingsRead, status_code=status.HTTP_200_OK)
+def update_my_user_settings(
+    user_settings_update: UserSettingsUpdate,
+    current_user: User = Depends(get_current_app_user),
+    db: Session = Depends(get_db),
+) -> UserSettings:
+    return update_current_user_settings(
+        db,
+        current_user,
+        user_settings_update.model_dump(exclude_unset=True),
+    )
+
+
 # This route fetches the one-to-one settings record for a specific user.
 @router.get(
     "/{user_id}", response_model=UserSettingsRead, status_code=status.HTTP_200_OK
 )
-def get_user_settings(user_id: uuid.UUID, db: Session = Depends(get_db)) -> UserSettings:
+def get_user_settings(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+) -> UserSettings:
+    del current_admin
     db_user_settings = db.get(UserSettings, user_id)
 
     if db_user_settings is None:
@@ -84,7 +113,9 @@ def update_user_settings(
     user_id: uuid.UUID,
     user_settings_update: UserSettingsUpdate,
     db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
 ) -> UserSettings:
+    del current_admin
     db_user_settings = db.get(UserSettings, user_id)
 
     if db_user_settings is None:

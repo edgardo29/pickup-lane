@@ -17,8 +17,6 @@ class SubPostChatCreate(BaseModel):
 class SubPostChatEnsureCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    acting_user_id: UUID | None = None
-
 
 class SubPostChatRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

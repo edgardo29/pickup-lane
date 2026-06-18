@@ -1,4 +1,4 @@
-"""Authentication dependencies and role checks shared across route modules."""
+"""Authentication dependencies and permission checks shared across route modules."""
 
 import uuid
 from datetime import datetime, timezone
@@ -30,12 +30,8 @@ from backend.schemas import (
     AuthEmailAvailabilityRead,
     AuthSyncUserRequest,
 )
+from backend.services.admin_permission_service import user_has_admin_permission
 from backend.services.user_service import build_user_conflict_detail
-
-ADMIN_ROLE = "admin"
-MODERATOR_ROLE = "moderator"
-ADMIN_ROLES = {ADMIN_ROLE}
-ADMIN_OR_MODERATOR_ROLES = {ADMIN_ROLE, MODERATOR_ROLE}
 
 
 def get_active_user_by_auth_id(auth_user_id: str, db: Session) -> User | None:
@@ -205,6 +201,23 @@ def has_complete_profile(user: User) -> bool:
     return bool(user.first_name and user.last_name and user.date_of_birth)
 
 
+def build_sync_user_payload_from_token(authorization: str | None) -> AuthSyncUserRequest:
+    decoded_token = get_decoded_firebase_token(authorization)
+    email = decoded_token.get("email")
+
+    if not isinstance(email, str) or not email.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Authentication token is missing an email address.",
+        )
+
+    return AuthSyncUserRequest(
+        auth_user_id=decoded_token["uid"],
+        email=email.strip().lower(),
+        email_verified=bool(decoded_token.get("email_verified")),
+    )
+
+
 def hard_delete_incomplete_user(user: User, db: Session) -> None:
     if has_complete_profile(user):
         raise HTTPException(
@@ -226,7 +239,8 @@ def get_user_after_idempotent_conflict(
     return existing_user
 
 
-def sync_user_workflow(payload: AuthSyncUserRequest, db: Session) -> User:
+def sync_user_workflow(authorization: str | None, db: Session) -> User:
+    payload = build_sync_user_payload_from_token(authorization)
     existing_user = get_active_user_by_auth_id(payload.auth_user_id, db)
 
     if existing_user is not None:
@@ -529,6 +543,7 @@ def delete_account_workflow(
     user = get_authenticated_user_from_token(authorization, db)
     now = datetime.now(timezone.utc)
     auth_user_id = user.auth_user_id
+    previous_account_status = user.account_status
 
     if not auth_user_id:
         raise HTTPException(
@@ -553,7 +568,7 @@ def delete_account_workflow(
     try:
         delete_firebase_user(auth_user_id)
     except FirebaseAdminConfigError as exc:
-        user.account_status = "active"
+        user.account_status = previous_account_status
         user.updated_at = datetime.now(timezone.utc)
         db.add(user)
         db.commit()
@@ -562,7 +577,7 @@ def delete_account_workflow(
             detail=str(exc),
         ) from exc
     except Exception as exc:
-        user.account_status = "active"
+        user.account_status = previous_account_status
         user.updated_at = datetime.now(timezone.utc)
         db.add(user)
         db.commit()
@@ -635,39 +650,52 @@ def get_optional_current_app_user(
     return get_authenticated_user_from_token(authorization, db)
 
 
-def is_admin(user: User) -> bool:
-    return user.role == ADMIN_ROLE
+def require_active_account(user: User) -> None:
+    if user.account_status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active account required.",
+        )
 
 
-def is_admin_or_moderator(user: User) -> bool:
-    return user.role in ADMIN_OR_MODERATOR_ROLES
+def require_active_user(
+    current_user: User = Depends(get_current_app_user),
+) -> User:
+    require_active_account(current_user)
+    return current_user
 
 
-def require_admin(user: User) -> None:
-    if not is_admin(user):
+def require_user_admin_permission(user: User, permission: str) -> None:
+    require_active_account(user)
+
+    if not user_has_admin_permission(user, permission):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required.",
         )
 
 
-def require_admin_or_moderator(user: User) -> None:
-    if not is_admin_or_moderator(user):
+def require_user_any_admin_permission(user: User, permissions: tuple[str, ...]) -> None:
+    require_active_account(user)
+
+    if not any(user_has_admin_permission(user, permission) for permission in permissions):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only an admin or moderator can perform this action.",
+            detail="Admin access required.",
         )
 
 
-def get_current_admin_user(
-    current_user: User = Depends(get_current_app_user),
-) -> User:
-    require_admin(current_user)
-    return current_user
+def require_admin_permission(permission: str):
+    def dependency(current_user: User = Depends(get_current_app_user)) -> User:
+        require_user_admin_permission(current_user, permission)
+        return current_user
+
+    return dependency
 
 
-def get_current_admin_or_moderator_user(
-    current_user: User = Depends(get_current_app_user),
-) -> User:
-    require_admin_or_moderator(current_user)
-    return current_user
+def require_any_admin_permission(*permissions: str):
+    def dependency(current_user: User = Depends(get_current_app_user)) -> User:
+        require_user_any_admin_permission(current_user, permissions)
+        return current_user
+
+    return dependency

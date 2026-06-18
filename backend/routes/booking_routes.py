@@ -9,6 +9,17 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Booking, Game, User
 from backend.schemas import BookingCreate, BookingRead, BookingUpdate
+from backend.services.admin_permission_service import (
+    PERMISSION_MONEY_PAYMENT_MANAGE,
+    PERMISSION_MONEY_READ,
+    user_has_admin_permission,
+)
+from backend.services.auth_service import (
+    get_current_app_user,
+    require_admin_permission,
+    require_user_admin_permission,
+)
+from backend.services.booking_service import list_current_user_bookings
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
@@ -214,7 +225,14 @@ def normalize_booking_lifecycle_fields(
 # This route creates the buyer's booking/order row after validating the linked
 # game and user references plus the booking's money and lifecycle rules.
 @router.post("", response_model=BookingRead, status_code=status.HTTP_201_CREATED)
-def create_booking(booking: BookingCreate, db: Session = Depends(get_db)) -> Booking:
+def create_booking(
+    booking: BookingCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
+    ),
+) -> Booking:
+    del current_admin
     get_active_game_or_404(db, booking.game_id)
     get_active_user_or_404(db, booking.buyer_user_id, "Buyer user not found.")
 
@@ -245,9 +263,21 @@ def create_booking(booking: BookingCreate, db: Session = Depends(get_db)) -> Boo
     return new_booking
 
 
+@router.get("/me", response_model=list[BookingRead], status_code=status.HTTP_200_OK)
+def list_my_bookings(
+    current_user: User = Depends(get_current_app_user),
+    db: Session = Depends(get_db),
+) -> list[Booking]:
+    return list_current_user_bookings(db, current_user)
+
+
 # This route fetches a single booking record by its internal UUID.
 @router.get("/{booking_id}", response_model=BookingRead, status_code=status.HTTP_200_OK)
-def get_booking(booking_id: uuid.UUID, db: Session = Depends(get_db)) -> Booking:
+def get_booking(
+    booking_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_app_user),
+) -> Booking:
     db_booking = db.get(Booking, booking_id)
 
     if db_booking is None:
@@ -255,6 +285,9 @@ def get_booking(booking_id: uuid.UUID, db: Session = Depends(get_db)) -> Booking
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Booking not found.",
         )
+
+    if db_booking.buyer_user_id != current_user.id:
+        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
 
     return db_booking
 
@@ -267,8 +300,17 @@ def list_bookings(
     booking_status: str | None = None,
     payment_status: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_app_user),
 ) -> list[Booking]:
     statement = select(Booking)
+    can_read_all_bookings = user_has_admin_permission(current_user, PERMISSION_MONEY_READ)
+
+    if buyer_user_id is not None and buyer_user_id != current_user.id:
+        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+        can_read_all_bookings = True
+
+    if not can_read_all_bookings:
+        buyer_user_id = current_user.id
 
     if buyer_user_id is not None:
         statement = statement.where(Booking.buyer_user_id == buyer_user_id)
@@ -311,8 +353,14 @@ def list_bookings(
 # keeping its money math and lifecycle state internally consistent.
 @router.patch("/{booking_id}", response_model=BookingRead, status_code=status.HTTP_200_OK)
 def update_booking(
-    booking_id: uuid.UUID, booking_update: BookingUpdate, db: Session = Depends(get_db)
+    booking_id: uuid.UUID,
+    booking_update: BookingUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
+    ),
 ) -> Booking:
+    del current_admin
     db_booking = db.get(Booking, booking_id)
 
     if db_booking is None:

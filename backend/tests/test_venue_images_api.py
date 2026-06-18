@@ -62,15 +62,15 @@ def mock_azure_storage(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "backend.routes.venue_image_routes.create_blob_upload_sas_url",
+        "backend.services.venue_image_service.create_blob_upload_sas_url",
         fake_upload_sas_url,
     )
     monkeypatch.setattr(
-        "backend.routes.venue_image_routes.create_blob_read_sas_url",
+        "backend.services.venue_image_service.create_blob_read_sas_url",
         fake_read_sas_url,
     )
     monkeypatch.setattr(
-        "backend.routes.venue_image_routes.get_blob_properties",
+        "backend.services.venue_image_service.get_blob_properties",
         fake_blob_properties,
     )
 
@@ -115,6 +115,15 @@ def complete_venue_image_upload(client: TestClient, venue_image_id: str) -> dict
     return response.json()
 
 
+def list_admin_actions_for_venue_image(
+    client: TestClient,
+    venue_image_id: str,
+) -> list[dict]:
+    response = client.get(f"/admin/actions?target_venue_image_id={venue_image_id}")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 def test_admin_can_create_and_complete_venue_image_upload(
     client: TestClient,
     monkeypatch,
@@ -140,6 +149,38 @@ def test_admin_can_create_and_complete_venue_image_upload(
     assert completed["upload_completed_at"] is not None
     assert completed["etag"].startswith("etag-")
     assert completed["image_url"].startswith("https://read.test/")
+
+    audit_actions = list_admin_actions_for_venue_image(client, image["id"])
+    actions_by_type = {action["action_type"]: action for action in audit_actions}
+    assert actions_by_type["create_venue_image"]["target_venue_id"] == venue["id"]
+    assert actions_by_type["create_venue_image"]["target_venue_image_id"] == image["id"]
+    assert actions_by_type["create_venue_image"]["metadata"] == {
+        "source": "venue_image_upload_url",
+        "status": "pending_upload",
+        "after": {
+            "image_status": "pending_upload",
+            "image_role": "gallery",
+            "is_primary": True,
+            "sort_order": 0,
+        },
+    }
+    assert actions_by_type["update_venue_image"]["metadata"] == {
+        "source": "venue_image_upload_complete",
+        "old_status": "pending_upload",
+        "new_status": "active",
+        "before": {
+            "image_status": "pending_upload",
+            "image_role": "gallery",
+            "is_primary": True,
+            "sort_order": 0,
+        },
+        "after": {
+            "image_status": "active",
+            "image_role": "gallery",
+            "is_primary": True,
+            "sort_order": 0,
+        },
+    }
 
 
 def test_venue_images_public_list_returns_only_active_images(
@@ -211,6 +252,117 @@ def test_admin_can_hide_venue_image(client: TestClient, monkeypatch):
     assert response.json()["image_status"] == "hidden"
     assert response.json()["is_primary"] is False
 
+    audit_actions = list_admin_actions_for_venue_image(client, image["id"])
+    hide_action = next(
+        action
+        for action in audit_actions
+        if (
+            action["action_type"] == "update_venue_image"
+            and action["metadata"]["source"] == "venue_image_update"
+        )
+    )
+    assert hide_action["target_venue_id"] == venue["id"]
+    assert hide_action["reason"] is None
+    assert hide_action["metadata"] == {
+        "source": "venue_image_update",
+        "old_status": "active",
+        "new_status": "hidden",
+        "before": {
+            "image_status": "active",
+            "image_role": "gallery",
+            "is_primary": True,
+            "sort_order": 0,
+        },
+        "after": {
+            "image_status": "hidden",
+            "image_role": "gallery",
+            "is_primary": False,
+            "sort_order": 0,
+        },
+    }
+
+
+def test_admin_can_remove_venue_image_with_audit_reason(
+    client: TestClient,
+    monkeypatch,
+):
+    mock_azure_storage(monkeypatch)
+    admin, venue = create_admin_and_venue(client)
+
+    authenticate_as(admin["id"])
+    upload = create_venue_image_upload(client, venue["id"], is_primary=True)
+    image = complete_venue_image_upload(client, upload["image"]["id"])
+
+    response = client.patch(
+        f"/admin/venue-images/{image['id']}",
+        json={
+            "image_status": "removed",
+            "reason": "Duplicate venue photo.",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    removed_image = response.json()
+    assert removed_image["image_status"] == "removed"
+    assert removed_image["is_primary"] is False
+    assert removed_image["deleted_at"] is not None
+
+    audit_actions = list_admin_actions_for_venue_image(client, image["id"])
+    remove_action = next(
+        action
+        for action in audit_actions
+        if action["action_type"] == "remove_venue_image"
+    )
+    assert remove_action["target_venue_id"] == venue["id"]
+    assert remove_action["reason"] == "Duplicate venue photo."
+    assert remove_action["metadata"] == {
+        "source": "venue_image_update",
+        "old_status": "active",
+        "new_status": "removed",
+        "before": {
+            "image_status": "active",
+            "image_role": "gallery",
+            "is_primary": True,
+            "sort_order": 0,
+        },
+        "after": {
+            "image_status": "removed",
+            "image_role": "gallery",
+            "is_primary": False,
+            "sort_order": 0,
+        },
+    }
+
+
+def test_admin_venue_image_remove_requires_reason_for_audit(
+    client: TestClient,
+    monkeypatch,
+):
+    mock_azure_storage(monkeypatch)
+    admin, venue = create_admin_and_venue(client)
+
+    authenticate_as(admin["id"])
+    upload = create_venue_image_upload(client, venue["id"], is_primary=True)
+    image = complete_venue_image_upload(client, upload["image"]["id"])
+
+    response = client.patch(
+        f"/admin/venue-images/{image['id']}",
+        json={"image_status": "removed", "reason": "   "},
+    )
+
+    assert response.status_code == 400, response.text
+    assert "remove_venue_image requires a reason" in response.text
+
+    image_response = client.get(f"/admin/venues/{venue['id']}/images")
+    assert image_response.status_code == 200, image_response.text
+    image_by_id = {item["id"]: item for item in image_response.json()}
+    assert image_by_id[image["id"]]["image_status"] == "active"
+
+    audit_actions = list_admin_actions_for_venue_image(client, image["id"])
+    assert not any(
+        action["action_type"] == "remove_venue_image" for action in audit_actions
+    )
+
 
 def test_venue_image_upload_rejects_bad_type_and_large_file(
     client: TestClient,
@@ -254,7 +406,7 @@ def test_venue_image_complete_rejects_missing_blob(
         raise ResourceNotFoundError(message=f"{blob_name} was not found")
 
     monkeypatch.setattr(
-        "backend.routes.venue_image_routes.get_blob_properties",
+        "backend.services.venue_image_service.get_blob_properties",
         fake_missing_blob_properties,
     )
 

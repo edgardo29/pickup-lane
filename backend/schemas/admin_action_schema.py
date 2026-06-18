@@ -18,10 +18,21 @@ class AdminActionCreate(BaseModel):
     target_booking_id: UUID | None = None
     target_participant_id: UUID | None = None
     target_payment_id: UUID | None = None
+    target_refund_id: UUID | None = None
+    target_game_credit_id: UUID | None = None
     target_venue_id: UUID | None = None
+    target_venue_image_id: UUID | None = None
     target_message_id: UUID | None = None
+    target_sub_post_id: UUID | None = None
+    target_sub_post_request_id: UUID | None = None
+    target_sub_post_position_id: UUID | None = None
+    target_sub_chat_message_id: UUID | None = None
+    target_notification_id: UUID | None = None
+    target_platform_notice_campaign_id: UUID | None = None
+    target_admin_action_id: UUID | None = None
     reason: str | None = None
     metadata: dict[str, Any] | None = None
+    idempotency_key: str | None = None
 
 
 # AdminActionRead defines the admin action payload returned by the API.
@@ -36,28 +47,29 @@ class AdminActionRead(BaseModel):
     target_booking_id: UUID | None
     target_participant_id: UUID | None
     target_payment_id: UUID | None
+    target_refund_id: UUID | None
+    target_game_credit_id: UUID | None
     target_venue_id: UUID | None
+    target_venue_image_id: UUID | None
     target_message_id: UUID | None
+    target_sub_post_id: UUID | None
+    target_sub_post_request_id: UUID | None
+    target_sub_post_position_id: UUID | None
+    target_sub_chat_message_id: UUID | None
+    target_notification_id: UUID | None
+    target_platform_notice_campaign_id: UUID | None
+    target_admin_action_id: UUID | None
     reason: str | None
     metadata: dict[str, Any] | None = Field(
         validation_alias="metadata_",
         serialization_alias="metadata",
     )
+    idempotency_key: str | None
     created_at: datetime
 
 
-# AdminActionUpdate supports partial audit-row updates, so every field is
-# optional and only provided values should be applied by the route.
-class AdminActionUpdate(BaseModel):
+class AdminActionNoteCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    action_type: str | None = None
-    target_user_id: UUID | None = None
-    target_game_id: UUID | None = None
-    target_booking_id: UUID | None = None
-    target_participant_id: UUID | None = None
-    target_payment_id: UUID | None = None
-    target_venue_id: UUID | None = None
-    target_message_id: UUID | None = None
-    reason: str | None = None
-    metadata: dict[str, Any] | None = None
+    note: str
+    idempotency_key: str | None = None

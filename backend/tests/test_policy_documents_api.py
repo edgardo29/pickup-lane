@@ -2,7 +2,13 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from backend.tests.helpers import create_policy_document
+from backend.tests.helpers import (
+    authenticate_as,
+    create_policy_document,
+    create_user,
+    run_as_temporary_admin,
+    set_user_role,
+)
 
 
 def test_policy_document_create_get_list_and_update_content(client: TestClient):
@@ -24,12 +30,15 @@ def test_policy_document_create_get_list_and_update_content(client: TestClient):
     assert list_active_response.status_code == 200, list_active_response.text
     assert any(item["id"] == policy_document["id"] for item in list_active_response.json())
 
-    patch_response = client.patch(
-        f"/policy-documents/{policy_document['id']}",
-        json={
-            "title": "CI Privacy Policy Updated",
-            "content_text": "Updated CI policy document content.",
-        },
+    patch_response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/policy-documents/{policy_document['id']}",
+            json={
+                "title": "CI Privacy Policy Updated",
+                "content_text": "Updated CI policy document content.",
+            },
+        ),
     )
     assert patch_response.status_code == 200, patch_response.text
     assert patch_response.json()["title"] == "CI Privacy Policy Updated"
@@ -44,12 +53,15 @@ def test_policy_document_can_be_retired(client: TestClient):
         effective_at=effective_at.isoformat(),
     )
 
-    response = client.patch(
-        f"/policy-documents/{policy_document['id']}",
-        json={
-            "retired_at": retired_at.isoformat(),
-            "is_active": False,
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/policy-documents/{policy_document['id']}",
+            json={
+                "retired_at": retired_at.isoformat(),
+                "is_active": False,
+            },
+        ),
     )
 
     assert response.status_code == 200, response.text
@@ -58,16 +70,19 @@ def test_policy_document_can_be_retired(client: TestClient):
 
 
 def test_policy_document_reject_invalid_policy_type(client: TestClient):
-    response = client.post(
-        "/policy-documents",
-        json={
-            "policy_type": "bad_policy",
-            "version": "v1.0",
-            "title": "Bad Policy",
-            "content_text": "Bad policy content.",
-            "effective_at": datetime.now(UTC).isoformat(),
-            "is_active": True,
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/policy-documents",
+            json={
+                "policy_type": "bad_policy",
+                "version": "v1.0",
+                "title": "Bad Policy",
+                "content_text": "Bad policy content.",
+                "effective_at": datetime.now(UTC).isoformat(),
+                "is_active": True,
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -75,17 +90,20 @@ def test_policy_document_reject_invalid_policy_type(client: TestClient):
 
 
 def test_policy_document_reject_missing_content(client: TestClient):
-    response = client.post(
-        "/policy-documents",
-        json={
-            "policy_type": "privacy_policy",
-            "version": "v1.0",
-            "title": "Missing Content Policy",
-            "content_url": None,
-            "content_text": None,
-            "effective_at": datetime.now(UTC).isoformat(),
-            "is_active": True,
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/policy-documents",
+            json={
+                "policy_type": "privacy_policy",
+                "version": "v1.0",
+                "title": "Missing Content Policy",
+                "content_url": None,
+                "content_text": None,
+                "effective_at": datetime.now(UTC).isoformat(),
+                "is_active": True,
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -93,17 +111,20 @@ def test_policy_document_reject_missing_content(client: TestClient):
 
 
 def test_policy_document_reject_whitespace_only_content(client: TestClient):
-    response = client.post(
-        "/policy-documents",
-        json={
-            "policy_type": "privacy_policy",
-            "version": "v1.0",
-            "title": "Whitespace Content Policy",
-            "content_url": "   ",
-            "content_text": "   ",
-            "effective_at": datetime.now(UTC).isoformat(),
-            "is_active": True,
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/policy-documents",
+            json={
+                "policy_type": "privacy_policy",
+                "version": "v1.0",
+                "title": "Whitespace Content Policy",
+                "content_url": "   ",
+                "content_text": "   ",
+                "effective_at": datetime.now(UTC).isoformat(),
+                "is_active": True,
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -117,16 +138,19 @@ def test_policy_document_reject_duplicate_policy_type_version(client: TestClient
         version="v1.0",
     )
 
-    response = client.post(
-        "/policy-documents",
-        json={
-            "policy_type": "terms_of_service",
-            "version": "v1.0",
-            "title": "Duplicate Terms",
-            "content_text": "Duplicate terms content.",
-            "effective_at": datetime.now(UTC).isoformat(),
-            "is_active": True,
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/policy-documents",
+            json={
+                "policy_type": "terms_of_service",
+                "version": "v1.0",
+                "title": "Duplicate Terms",
+                "content_text": "Duplicate terms content.",
+                "effective_at": datetime.now(UTC).isoformat(),
+                "is_active": True,
+            },
+        ),
     )
 
     assert response.status_code == 409, response.text
@@ -140,11 +164,14 @@ def test_policy_document_reject_retired_before_effective(client: TestClient):
         effective_at=effective_at.isoformat(),
     )
 
-    response = client.patch(
-        f"/policy-documents/{policy_document['id']}",
-        json={
-            "retired_at": (effective_at - timedelta(days=1)).isoformat(),
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/policy-documents/{policy_document['id']}",
+            json={
+                "retired_at": (effective_at - timedelta(days=1)).isoformat(),
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -152,17 +179,78 @@ def test_policy_document_reject_retired_before_effective(client: TestClient):
 
 
 def test_policy_document_reject_empty_title(client: TestClient):
-    response = client.post(
-        "/policy-documents",
-        json={
-            "policy_type": "privacy_policy",
-            "version": "v1.0",
-            "title": "   ",
-            "content_text": "Policy content.",
-            "effective_at": datetime.now(UTC).isoformat(),
-            "is_active": True,
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/policy-documents",
+            json={
+                "policy_type": "privacy_policy",
+                "version": "v1.0",
+                "title": "   ",
+                "content_text": "Policy content.",
+                "effective_at": datetime.now(UTC).isoformat(),
+                "is_active": True,
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
     assert "title must not be empty" in response.text
+
+
+def test_policy_document_public_reads_hide_inactive_retired_and_future_documents(
+    client: TestClient,
+):
+    inactive_policy = create_policy_document(client, is_active=False)
+    future_policy = create_policy_document(
+        client,
+        effective_at="2999-01-01T00:00:00+00:00",
+    )
+
+    list_inactive_response = client.get("/policy-documents?is_active=false")
+    assert list_inactive_response.status_code == 403, list_inactive_response.text
+
+    inactive_get_response = client.get(f"/policy-documents/{inactive_policy['id']}")
+    assert inactive_get_response.status_code == 404, inactive_get_response.text
+
+    future_get_response = client.get(f"/policy-documents/{future_policy['id']}")
+    assert future_get_response.status_code == 404, future_get_response.text
+
+
+def test_policy_document_mutations_require_admin_permission(client: TestClient):
+    user = create_user(client)
+    policy_document = create_policy_document(client)
+    authenticate_as(user["id"])
+
+    create_response = client.post(
+        "/policy-documents",
+        json={
+            "policy_type": "privacy_policy",
+            "version": "denied",
+            "title": "Denied Policy",
+            "content_text": "Denied content.",
+            "effective_at": datetime.now(UTC).isoformat(),
+            "is_active": True,
+        },
+    )
+    patch_response = client.patch(
+        f"/policy-documents/{policy_document['id']}",
+        json={"title": "Denied Update"},
+    )
+
+    assert create_response.status_code == 403, create_response.text
+    assert patch_response.status_code == 403, patch_response.text
+
+
+def test_policy_document_mutations_reject_moderator(client: TestClient):
+    policy_document = create_policy_document(client)
+    moderator = create_user(client)
+    set_user_role(moderator["id"], "moderator")
+    authenticate_as(moderator["id"])
+
+    patch_response = client.patch(
+        f"/policy-documents/{policy_document['id']}",
+        json={"title": "Denied Moderator Update"},
+    )
+
+    assert patch_response.status_code == 403, patch_response.text

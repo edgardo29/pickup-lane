@@ -839,6 +839,59 @@ def get_booking_participants(
     )
 
 
+def list_public_game_participants(db: Session, game_id: uuid.UUID) -> list[GameParticipant]:
+    db_game = db.get(Game, game_id)
+
+    if db_game is None or db_game.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
+        )
+
+    return list(
+        db.scalars(
+            select(GameParticipant)
+            .where(GameParticipant.game_id == game_id)
+            .order_by(
+                GameParticipant.roster_order.asc().nulls_last(),
+                GameParticipant.created_at.asc(),
+            )
+        ).all()
+    )
+
+
+def list_public_game_participant_counts(db: Session) -> list[dict[str, object]]:
+    rows = db.execute(
+        select(
+            GameParticipant.game_id,
+            func.count(GameParticipant.id).label("participant_count"),
+        )
+        .where(GameParticipant.participant_status.in_(ROSTER_PLAYER_STATUSES))
+        .group_by(GameParticipant.game_id)
+    ).all()
+
+    return [
+        {"game_id": row.game_id, "participant_count": row.participant_count}
+        for row in rows
+    ]
+
+
+def list_current_user_game_participants(
+    db: Session,
+    current_user: User,
+) -> list[GameParticipant]:
+    return list(
+        db.scalars(
+            select(GameParticipant)
+            .where(GameParticipant.user_id == current_user.id)
+            .order_by(
+                GameParticipant.joined_at.desc(),
+                GameParticipant.created_at.desc(),
+            )
+        ).all()
+    )
+
+
 def build_booking_participants(
     db_game: Game,
     booking: Booking,

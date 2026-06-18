@@ -589,17 +589,6 @@ def serialize_sub_post_chat(
     )
 
 
-def validate_optional_acting_user(
-    acting_user_id: uuid.UUID | None,
-    current_user: User,
-) -> None:
-    if acting_user_id is not None and acting_user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="acting_user_id must match the authenticated user.",
-        )
-
-
 def get_accessible_sub_post_chat_or_404(
     db: Session,
     sub_post_id: uuid.UUID,
@@ -620,10 +609,9 @@ def get_accessible_sub_post_chat_or_404(
 def ensure_sub_post_chat_workflow(
     db: Session,
     sub_post_id: uuid.UUID,
-    payload: SubPostChatEnsureCreate,
+    _payload: SubPostChatEnsureCreate,
     current_user: User,
 ) -> SubPostChatReadSchema:
-    validate_optional_acting_user(payload.acting_user_id, current_user)
     sub_post = get_sub_post_or_404(db, sub_post_id)
     validate_sub_post_chat_access(db, sub_post, current_user)
     db_chat = get_or_create_active_sub_post_chat(db, sub_post)
@@ -679,10 +667,9 @@ def get_sub_post_chat_read_state_workflow(
 def mark_sub_post_chat_read_workflow(
     db: Session,
     sub_post_id: uuid.UUID,
-    payload: SubPostChatEnsureCreate,
+    _payload: SubPostChatEnsureCreate,
     current_user: User,
 ) -> SubPostChatReadStateReadSchema:
-    validate_optional_acting_user(payload.acting_user_id, current_user)
     _, db_chat = get_accessible_sub_post_chat_or_404(db, sub_post_id, current_user)
     read_state = mark_sub_chat_read(db, db_chat, current_user)
 
@@ -745,12 +732,6 @@ def create_sub_post_chat_message_workflow(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="chat_id must match this post's Need a Sub chat.",
-        )
-
-    if payload.sender_user_id is not None and payload.sender_user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="sender_user_id must match the authenticated user.",
         )
 
     message_body = normalize_message_body(payload.message_body)
@@ -828,24 +809,6 @@ def update_sub_post_chat_message_workflow(
         )
 
     update_data = payload.model_dump(exclude_unset=True)
-    if "chat_id" in update_data and update_data["chat_id"] != db_chat.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="chat_id cannot be changed for an existing Need a Sub chat message.",
-        )
-
-    forbidden_fields = {
-        "sender_user_id",
-        "sender_display_name_snapshot",
-        "sender_initials_snapshot",
-        "message_type",
-    }
-    if forbidden_fields & set(update_data):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Sender and message type fields cannot be changed.",
-        )
-
     if "message_body" in update_data:
         db_message.message_body = normalize_message_body(update_data["message_body"])
         db_message.edited_at = now_utc()

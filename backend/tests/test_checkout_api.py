@@ -23,7 +23,9 @@ from backend.tests.helpers import (
     create_user,
     create_user_payment_method,
     create_venue,
+    get_money_as_admin,
     mock_checkout_payment_method_verification,
+    set_user_account_status,
     set_user_role,
     unique_suffix,
 )
@@ -46,10 +48,30 @@ def issue_game_credit(
             "credit_reason": "admin_credit",
             "source_game_id": game_id,
             "idempotency_key": f"checkout-credit-{unique_suffix()}",
+            "note": "Checkout credit test.",
         },
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def test_checkout_routes_reject_suspended_user(client: TestClient):
+    user = create_user(client)
+    set_user_account_status(user["id"], "suspended")
+    authenticate_as(user["id"])
+
+    create_response = client.post(
+        "/checkout/games/00000000-0000-4000-8000-000000000001/payment-intent",
+        json={"guest_count": 0},
+    )
+    status_response = client.get(
+        "/checkout/bookings/00000000-0000-4000-8000-000000000002/status"
+    )
+
+    assert create_response.status_code == 403, create_response.text
+    assert create_response.json()["detail"] == "Active account required."
+    assert status_response.status_code == 403, status_response.text
+    assert status_response.json()["detail"] == "Active account required."
 
 
 def test_checkout_payment_intent_requires_saved_payment_method(client: TestClient):
@@ -288,7 +310,7 @@ def test_checkout_payment_intent_can_use_saved_payment_method(
     assert booking["participant_count"] == 1
     assert booking["total_cents"] == 1800
 
-    payment_response = client.get(f"/payments/{body['payment_id']}")
+    payment_response = get_money_as_admin(client, f"/payments/{body['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
     payment = payment_response.json()
     assert payment["booking_id"] == body["booking_id"]

@@ -11,14 +11,14 @@ import {
 } from './myGamesSelectors.js'
 
 export function useMyGamesPageModel() {
-  const { appUser, isLoading } = useAuth()
+  const { appUser, currentUser: firebaseUser, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState('upcoming')
   const [visibleUpcomingWindows, setVisibleUpcomingWindows] = useState(1)
   const [currentUser, setCurrentUser] = useState(null)
   const [games, setGames] = useState([])
   const [images, setImages] = useState([])
   const [venueImages, setVenueImages] = useState([])
-  const [participants, setParticipants] = useState([])
+  const [participantCounts, setParticipantCounts] = useState([])
   const [myParticipants, setMyParticipants] = useState([])
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState('')
@@ -51,14 +51,14 @@ export function useMyGamesPageModel() {
           throw new Error('Sign in to view your games.')
         }
 
-        const pageData = await loadMyGamesData(appUser.id)
+        const pageData = await loadMyGamesData(firebaseUser)
 
         if (!ignore) {
           setCurrentUser(appUser)
           setGames(pageData.games)
           setImages(pageData.images)
           setVenueImages(pageData.venueImages || [])
-          setParticipants(pageData.participants)
+          setParticipantCounts(pageData.participantCounts)
           setMyParticipants(pageData.myParticipants)
           setStatus('success')
         }
@@ -77,7 +77,7 @@ export function useMyGamesPageModel() {
     return () => {
       ignore = true
     }
-  }, [appUser, isLoading])
+  }, [appUser, firebaseUser, isLoading])
 
   const gamesById = useMemo(() => new Map(games.map((game) => [game.id, game])), [games])
   const imageUrlsByGameId = useMemo(
@@ -85,8 +85,8 @@ export function useMyGamesPageModel() {
     [games, images, venueImages],
   )
   const participantCountsByGameId = useMemo(
-    () => buildParticipantCounts(participants),
-    [participants],
+    () => buildParticipantCounts(participantCounts),
+    [participantCounts],
   )
   const myGameItems = useMemo(
     () => (nowMs === null ? [] : buildMyGameItems(myParticipants, gamesById, currentUser, nowMs)),

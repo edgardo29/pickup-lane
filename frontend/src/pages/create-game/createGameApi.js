@@ -1,23 +1,49 @@
 import { apiRequest } from '../../lib/apiClient.js'
+import { listUserPaymentMethods } from '../../lib/paymentMethodsApi.js'
 
-export async function postJson(path, payload) {
-  return apiRequest(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-}
+export async function patchHostEditGame(firebaseUser, gameId, payload) {
+  if (!firebaseUser) {
+    throw new Error('Sign in to edit this game.')
+  }
 
-export async function patchJson(path, payload) {
-  return apiRequest(path, {
+  return apiRequest(`/games/${gameId}/host-edit`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(payload),
   })
 }
 
-export async function publishCommunityGame(payload) {
-  const response = await postJson('/community-games/publish', payload)
+export async function upsertHostCommunityGameDetails(firebaseUser, gameId, payload) {
+  if (!firebaseUser) {
+    throw new Error('Sign in to edit this game.')
+  }
+
+  return apiRequest(`/community-game-details/games/${gameId}/host-edit`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function publishCommunityGame(firebaseUser, payload) {
+  if (!firebaseUser) {
+    throw new Error('Sign in to publish a game.')
+  }
+
+  const response = await apiRequest('/community-games/publish', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
   return response.game
 }
 
@@ -30,10 +56,22 @@ export async function loadEditableGame(gameId) {
   return { communityDetails, game, venue }
 }
 
-export async function loadHostPublishFees(userId) {
-  return apiRequest(`/host-publish-fees?host_user_id=${userId}`).catch(() => [])
+export async function loadHostPublishFees(firebaseUser) {
+  if (!firebaseUser) {
+    return []
+  }
+
+  return apiRequest('/host-publish-fees/me', {
+    headers: {
+      Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+    },
+  }).catch(() => [])
 }
 
-export async function loadUserPaymentMethods(userId) {
-  return apiRequest(`/user-payment-methods?user_id=${userId}`).catch(() => [])
+export async function loadUserPaymentMethods(firebaseUser) {
+  if (!firebaseUser) {
+    return []
+  }
+
+  return listUserPaymentMethods(firebaseUser).catch(() => [])
 }

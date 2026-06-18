@@ -69,6 +69,29 @@ class GameParticipantRead(BaseModel):
     updated_at: datetime
 
 
+class PublicGameParticipantRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    game_id: UUID
+    booking_id: UUID | None
+    participant_type: str
+    user_id: UUID | None
+    guest_of_user_id: UUID | None
+    display_name_snapshot: str
+    participant_status: str
+    cancellation_type: str
+    roster_order: int | None
+    joined_at: datetime
+    confirmed_at: datetime | None
+    cancelled_at: datetime | None
+
+
+class GameParticipantCountRead(BaseModel):
+    game_id: UUID
+    participant_count: int
+
+
 # GameParticipantUpdate supports partial participant updates, so every field is
 # optional and only provided values should be applied by the route.
 class GameParticipantUpdate(BaseModel):

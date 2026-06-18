@@ -20,7 +20,7 @@ export async function loadGameCheckout({ firebaseUser, gameId }) {
     game.game_type === 'official'
       ? apiRequest(`/venue-images?venue_id=${game.venue_id}`).catch(() => [])
       : Promise.resolve([]),
-    apiRequest(`/game-participants?game_id=${gameId}`),
+    apiRequest(`/games/${gameId}/participants`),
     firebaseUser ? listUserPaymentMethods(firebaseUser).catch(() => []) : Promise.resolve([]),
   ])
   const images =
@@ -36,10 +36,10 @@ export async function loadGameCheckout({ firebaseUser, gameId }) {
 }
 
 export async function confirmGameCheckout({
+  firebaseUser,
   gameId,
   guestCount,
   isAddGuestsCheckout,
-  userId,
 }) {
   const endpoint = isAddGuestsCheckout
     ? `/games/${gameId}/booking-guests/add`
@@ -47,8 +47,11 @@ export async function confirmGameCheckout({
 
   return apiRequest(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ acting_user_id: userId, guest_count: guestCount }),
+    headers: {
+      ...(await getAuthHeaders(firebaseUser)),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ guest_count: guestCount }),
   })
 }
 

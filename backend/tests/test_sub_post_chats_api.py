@@ -6,7 +6,12 @@ from fastapi.testclient import TestClient
 
 from backend.database import SessionLocal
 from backend.models import SubPostChatMessage
-from backend.tests.helpers import authenticate_as, create_sub_post, create_user
+from backend.tests.helpers import (
+    authenticate_as,
+    create_sub_post,
+    create_user,
+    set_user_account_status,
+)
 
 
 def authenticate_optional_as(user_id: str) -> None:
@@ -125,6 +130,38 @@ def insert_visible_sub_chat_messages(
     return created_ids
 
 
+def test_need_a_sub_chat_routes_reject_suspended_user(client: TestClient):
+    user = create_user(client)
+    set_user_account_status(user["id"], "suspended")
+    authenticate_as(user["id"])
+    post_id = "00000000-0000-4000-8000-000000000001"
+    chat_id = "00000000-0000-4000-8000-000000000002"
+    message_id = "00000000-0000-4000-8000-000000000003"
+
+    responses = [
+        client.post(f"/need-a-sub/posts/{post_id}/chat", json={}),
+        client.get(f"/need-a-sub/posts/{post_id}/chat"),
+        client.get(f"/need-a-sub/posts/{post_id}/chat/read-state"),
+        client.post(f"/need-a-sub/posts/{post_id}/chat/read", json={}),
+        client.get(f"/need-a-sub/posts/{post_id}/chat/messages"),
+        client.post(
+            f"/need-a-sub/posts/{post_id}/chat/messages",
+            json={
+                "chat_id": chat_id,
+                "message_body": "Can still make this?",
+            },
+        ),
+        client.patch(
+            f"/need-a-sub/posts/{post_id}/chat/messages/{message_id}",
+            json={"message_body": "Updated message."},
+        ),
+    ]
+
+    for response in responses:
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"] == "Active account required."
+
+
 def test_need_a_sub_chat_owner_can_open_before_confirmed_players(client: TestClient):
     owner = create_user(client)
     post = create_sub_post(client, owner["id"])
@@ -134,6 +171,45 @@ def test_need_a_sub_chat_owner_can_open_before_confirmed_players(client: TestCli
     assert chat["sub_post_id"] == post["id"]
     assert chat["chat_status"] == "active"
     assert chat["unread_count"] == 0
+
+
+def test_need_a_sub_chat_rejects_request_supplied_actor_fields(client: TestClient):
+    owner, _confirmed_player, post, _sub_request, chat = create_confirmed_sub_chat_setup(
+        client
+    )
+    authenticate_as(owner["id"])
+
+    ensure_response = client.post(
+        f"/need-a-sub/posts/{post['id']}/chat",
+        json={"acting_user_id": owner["id"]},
+    )
+    assert ensure_response.status_code == 422, ensure_response.text
+
+    read_response = client.post(
+        f"/need-a-sub/posts/{post['id']}/chat/read",
+        json={"acting_user_id": owner["id"]},
+    )
+    assert read_response.status_code == 422, read_response.text
+
+    message_response = client.post(
+        f"/need-a-sub/posts/{post['id']}/chat/messages",
+        json={
+            "chat_id": chat["id"],
+            "sender_user_id": owner["id"],
+            "message_body": "This should derive sender from auth.",
+        },
+    )
+    assert message_response.status_code == 422, message_response.text
+
+    message = send_sub_chat_message(client, owner["id"], post["id"], chat["id"])
+    update_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/chat/messages/{message['id']}",
+        json={
+            "sender_user_id": owner["id"],
+            "message_body": "This should also derive sender from auth.",
+        },
+    )
+    assert update_response.status_code == 422, update_response.text
 
 
 def test_need_a_sub_private_detail_stays_available_for_chat_window(

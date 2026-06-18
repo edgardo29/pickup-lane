@@ -60,6 +60,30 @@ class WaitlistEntryRead(BaseModel):
     updated_at: datetime
 
 
+class CurrentUserWaitlistEntryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    game_id: UUID
+    user_id: UUID
+    party_size: int
+    position: int
+    waitlist_status: str
+    promoted_booking_id: UUID | None
+    promotion_expires_at: datetime | None
+    auto_charge_consent_at: datetime | None
+    auto_charge_consent_version: str | None
+    authorized_payment_method_brand: str | None
+    authorized_payment_method_last4: str | None
+    authorized_amount_cents: int | None
+    joined_at: datetime
+    promoted_at: datetime | None
+    cancelled_at: datetime | None
+    expired_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 # WaitlistEntryUpdate supports partial waitlist updates, so every field is
 # optional and only provided values should be applied by the route.
 class WaitlistEntryUpdate(BaseModel):

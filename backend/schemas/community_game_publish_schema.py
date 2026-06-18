@@ -23,7 +23,6 @@ class CommunityGameVenuePayload(BaseModel):
 class CommunityGamePublishCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    host_user_id: UUID
     starts_at: datetime
     ends_at: datetime
     timezone: str = "America/Chicago"

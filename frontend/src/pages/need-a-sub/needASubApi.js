@@ -91,10 +91,10 @@ export async function getNeedASubChat(firebaseUser, postId) {
   return authenticatedRequest(firebaseUser, `/need-a-sub/posts/${postId}/chat`)
 }
 
-export async function ensureNeedASubChat(firebaseUser, postId, actingUserId = null) {
+export async function ensureNeedASubChat(firebaseUser, postId) {
   return authenticatedRequest(firebaseUser, `/need-a-sub/posts/${postId}/chat`, {
     method: 'POST',
-    body: JSON.stringify({ acting_user_id: actingUserId || null }),
+    body: JSON.stringify({}),
   })
 }
 
@@ -120,10 +120,10 @@ export async function listNeedASubChatMessages(
   )
 }
 
-export async function markNeedASubChatRead(firebaseUser, postId, actingUserId = null) {
+export async function markNeedASubChatRead(firebaseUser, postId) {
   return authenticatedRequest(firebaseUser, `/need-a-sub/posts/${postId}/chat/read`, {
     method: 'POST',
-    body: JSON.stringify({ acting_user_id: actingUserId || null }),
+    body: JSON.stringify({}),
   })
 }
 
@@ -132,13 +132,11 @@ export async function sendNeedASubChatMessage(
   postId,
   chatId,
   messageBody,
-  senderUserId = null,
 ) {
   return authenticatedRequest(firebaseUser, `/need-a-sub/posts/${postId}/chat/messages`, {
     method: 'POST',
     body: JSON.stringify({
       chat_id: chatId,
-      sender_user_id: senderUserId || null,
       message_body: messageBody,
     }),
   })

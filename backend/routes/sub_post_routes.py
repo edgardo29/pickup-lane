@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User
-from backend.services.auth_service import get_current_app_user, get_optional_current_app_user
+from backend.services.admin_permission_service import PERMISSION_NEED_A_SUB_MODERATE
+from backend.services.auth_service import (
+    get_optional_current_app_user,
+    require_admin_permission,
+    require_active_user,
+)
 from backend.schemas import (
     SubPostCancel,
     SubPostChatEnsureCreate,
@@ -52,7 +57,7 @@ router = APIRouter(prefix="/need-a-sub/posts", tags=["need_a_sub_posts"])
 def create_need_a_sub_post(
     sub_post: SubPostCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> dict:
     new_post = create_sub_post(db, current_user, sub_post)
     return serialize_sub_post(db, new_post)
@@ -90,7 +95,7 @@ def list_need_a_sub_posts(
 @router.get("/mine", response_model=list[SubPostRead], status_code=status.HTTP_200_OK)
 def list_my_need_a_sub_posts(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> list[dict]:
     expire_due_posts_and_requests(db)
     posts = query_owner_posts(db, current_user)
@@ -106,7 +111,7 @@ def ensure_need_a_sub_chat(
     sub_post_id: uuid.UUID,
     payload: SubPostChatEnsureCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostChatRead:
     return ensure_sub_post_chat_workflow(db, sub_post_id, payload, current_user)
 
@@ -119,7 +124,7 @@ def ensure_need_a_sub_chat(
 def get_need_a_sub_chat(
     sub_post_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostChatRead:
     return get_sub_post_chat_workflow(db, sub_post_id, current_user)
 
@@ -132,7 +137,7 @@ def get_need_a_sub_chat(
 def get_need_a_sub_chat_read_state(
     sub_post_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostChatReadStateRead:
     return get_sub_post_chat_read_state_workflow(db, sub_post_id, current_user)
 
@@ -146,7 +151,7 @@ def mark_need_a_sub_chat_read(
     sub_post_id: uuid.UUID,
     payload: SubPostChatEnsureCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> SubPostChatReadStateRead:
     return mark_sub_post_chat_read_workflow(db, sub_post_id, payload, current_user)
 
@@ -161,7 +166,7 @@ def list_need_a_sub_chat_messages(
     before_created_at: datetime | None = None,
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> list[dict]:
     return list_sub_post_chat_messages_workflow(
         db,
@@ -181,7 +186,7 @@ def create_need_a_sub_chat_message(
     sub_post_id: uuid.UUID,
     payload: SubPostChatMessageCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> dict:
     return create_sub_post_chat_message_workflow(
         db,
@@ -201,7 +206,7 @@ def update_need_a_sub_chat_message(
     message_id: uuid.UUID,
     payload: SubPostChatMessageUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> dict:
     return update_sub_post_chat_message_workflow(
         db,
@@ -242,7 +247,7 @@ def update_need_a_sub_post(
     sub_post_id: uuid.UUID,
     payload: SubPostUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> dict:
     expire_due_posts_and_requests(db)
     sub_post = update_sub_post(db, current_user, sub_post_id, payload)
@@ -258,7 +263,7 @@ def cancel_need_a_sub_post(
     sub_post_id: uuid.UUID,
     payload: SubPostCancel,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_user),
 ) -> dict:
     expire_due_posts_and_requests(db)
     sub_post = cancel_sub_post(db, current_user, sub_post_id, payload.cancel_reason)
@@ -274,7 +279,9 @@ def remove_need_a_sub_post(
     sub_post_id: uuid.UUID,
     payload: SubPostRemove,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(
+        require_admin_permission(PERMISSION_NEED_A_SUB_MODERATE)
+    ),
 ) -> dict:
     expire_due_posts_and_requests(db)
     sub_post = remove_sub_post(db, current_user, sub_post_id, payload.remove_reason)

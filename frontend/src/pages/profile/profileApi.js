@@ -2,17 +2,19 @@ import { apiRequest } from '../../lib/apiClient.js'
 import { listUserPaymentMethods } from '../../lib/paymentMethodsApi.js'
 import { emptyGameCreditBalance, emptySettings, emptyStats } from './profileData.js'
 
-export async function loadProfileData(userId, firebaseUser = null) {
+export async function loadProfileData(firebaseUser = null) {
   const [
+    userResponse,
     gameCreditBalanceResponse,
     paymentMethodsResponse,
     settingsResponse,
     statsResponse,
   ] = await Promise.all([
+    loadCurrentProfileUser(firebaseUser),
     loadGameCreditBalance(firebaseUser).catch(() => emptyGameCreditBalance),
     firebaseUser ? listUserPaymentMethods(firebaseUser).catch(() => []) : Promise.resolve([]),
-    apiRequest(`/user-settings/${userId}`).catch(() => emptySettings),
-    apiRequest(`/user-stats/${userId}`).catch(() => emptyStats),
+    authenticatedProfileRequest(firebaseUser, '/user-settings/me').catch(() => emptySettings),
+    authenticatedProfileRequest(firebaseUser, '/user-stats/me').catch(() => emptyStats),
   ])
 
   return {
@@ -20,7 +22,12 @@ export async function loadProfileData(userId, firebaseUser = null) {
     paymentMethods: paymentMethodsResponse,
     settings: settingsResponse,
     stats: statsResponse,
+    user: userResponse,
   }
+}
+
+function loadCurrentProfileUser(firebaseUser) {
+  return authenticatedProfileRequest(firebaseUser, '/users/me')
 }
 
 async function loadGameCreditBalance(firebaseUser) {
@@ -35,41 +42,37 @@ async function loadGameCreditBalance(firebaseUser) {
   })
 }
 
-export function updateProfileUser(userId, profilePayload) {
-  return apiRequest(`/users/${userId}`, {
+export function updateProfileUser(firebaseUser, profilePayload) {
+  return authenticatedProfileRequest(firebaseUser, '/users/me', {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    includeJson: true,
     body: JSON.stringify(profilePayload),
   })
 }
 
-export async function saveUserSettings(userId, currentSettings, nextSettings) {
-  try {
-    return await apiRequest(`/user-settings/${userId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(nextSettings),
-    })
-  } catch (requestError) {
-    if (
-      requestError instanceof Error &&
-      !requestError.message.toLowerCase().includes('not found')
-    ) {
-      throw requestError
-    }
+export function saveUserSettings(firebaseUser, nextSettings) {
+  return authenticatedProfileRequest(firebaseUser, '/user-settings/me', {
+    method: 'PATCH',
+    includeJson: true,
+    body: JSON.stringify(nextSettings),
+  })
+}
 
-    return apiRequest('/user-settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email_notifications_enabled: currentSettings.email_notifications_enabled,
-        location_permission_status: currentSettings.location_permission_status,
-        marketing_opt_in: currentSettings.marketing_opt_in,
-        push_notifications_enabled: currentSettings.push_notifications_enabled,
-        sms_notifications_enabled: currentSettings.sms_notifications_enabled,
-        user_id: userId,
-        ...nextSettings,
-      }),
-    })
+async function authenticatedProfileRequest(firebaseUser, path, options = {}) {
+  if (!firebaseUser) {
+    throw new Error('Sign in to view your profile.')
   }
+
+  const headers = {
+    Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+    ...(options.includeJson ? { 'Content-Type': 'application/json' } : {}),
+    ...options.headers,
+  }
+  const requestOptions = { ...options }
+  delete requestOptions.includeJson
+
+  return apiRequest(path, {
+    ...requestOptions,
+    headers,
+  })
 }

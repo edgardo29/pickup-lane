@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import Booking, Game, GameParticipant, Payment
+from backend.models import Booking, Game, GameParticipant, Payment, User
 from backend.schemas import (
     GameGuestAddCreate,
     GameGuestAddRead,
@@ -16,7 +16,6 @@ from backend.schemas import (
     GameGuestRemoveRead,
     GameJoinCreate,
     GameJoinRead,
-    GameLeaveCreate,
     GameLeaveRead,
 )
 from backend.services.game_service import (
@@ -242,6 +241,7 @@ def join_game_roster_workflow(
     db: Session,
     game_id: uuid.UUID,
     join_request: GameJoinCreate,
+    joining_user: User,
 ) -> GameJoinRead:
     db_game = db.get(Game, game_id)
 
@@ -251,9 +251,6 @@ def join_game_roster_workflow(
             detail="Game not found.",
         )
 
-    joining_user = get_active_user_or_404(
-        db, join_request.acting_user_id, "Joining user not found."
-    )
     require_join_ready_user(joining_user)
     require_minimum_age(joining_user, db_game.minimum_age)
 
@@ -405,7 +402,7 @@ def join_game_roster_workflow(
 def leave_game_roster_workflow(
     db: Session,
     game_id: uuid.UUID,
-    leave_request: GameLeaveCreate,
+    leaving_user: User,
 ) -> GameLeaveRead:
     db_game = db.get(Game, game_id)
 
@@ -414,10 +411,6 @@ def leave_game_roster_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Game not found.",
         )
-
-    leaving_user = get_active_user_or_404(
-        db, leave_request.acting_user_id, "Leaving user not found."
-    )
 
     if db_game.host_user_id == leaving_user.id:
         raise HTTPException(
@@ -534,6 +527,7 @@ def add_booking_game_guests_workflow(
     db: Session,
     game_id: uuid.UUID,
     guest_request: GameGuestAddCreate,
+    acting_user: User,
 ) -> GameGuestAddRead:
     db_game = db.get(Game, game_id)
 
@@ -542,10 +536,6 @@ def add_booking_game_guests_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Game not found.",
         )
-
-    acting_user = get_active_user_or_404(
-        db, guest_request.acting_user_id, "Acting user not found."
-    )
 
     if db_game.publish_status != "published" or db_game.game_status not in JOINABLE_GAME_STATUSES:
         raise HTTPException(
@@ -666,6 +656,7 @@ def add_host_game_guests_workflow(
     db: Session,
     game_id: uuid.UUID,
     guest_request: GameGuestAddCreate,
+    acting_user: User,
 ) -> GameGuestAddRead:
     db_game = db.get(Game, game_id)
 
@@ -674,10 +665,6 @@ def add_host_game_guests_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Game not found.",
         )
-
-    acting_user = get_active_user_or_404(
-        db, guest_request.acting_user_id, "Acting user not found."
-    )
 
     if db_game.host_user_id != acting_user.id:
         raise HTTPException(
@@ -765,6 +752,7 @@ def remove_game_guests_workflow(
     db: Session,
     game_id: uuid.UUID,
     guest_request: GameGuestRemoveCreate,
+    acting_user: User,
 ) -> GameGuestRemoveRead:
     db_game = db.get(Game, game_id)
 
@@ -773,10 +761,6 @@ def remove_game_guests_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Game not found.",
         )
-
-    acting_user = get_active_user_or_404(
-        db, guest_request.acting_user_id, "Acting user not found."
-    )
 
     if guest_request.remove_count <= 0:
         raise HTTPException(

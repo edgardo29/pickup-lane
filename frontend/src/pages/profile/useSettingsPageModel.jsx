@@ -37,8 +37,8 @@ export function useSettingsPageModel() {
   )
   const deleteSettings = useDeleteAccountSettings({ deleteAccount, logout, navigate })
   const notificationSettings = useNotificationSettings({
-    currentUser,
     effectiveSettings,
+    firebaseUser: authUser,
     setSettingsOverride,
   })
   const passwordSettings = useAddPasswordSettings({ addPasswordToCurrentAccount })
@@ -83,6 +83,7 @@ export function useSettingsPageModel() {
     handleDeleteAccount: deleteSettings.handleDeleteAccount,
     handleProfileSaved,
     handleSaveNotifications: notificationSettings.handleSaveNotifications,
+    firebaseUser: authUser,
     isDeleteOpen: deleteSettings.isDeleteOpen,
     isNotificationOpen: notificationSettings.isNotificationOpen,
     isPasswordOpen: passwordSettings.isPasswordOpen,

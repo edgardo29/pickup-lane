@@ -20,6 +20,7 @@ function CreateGamePage() {
   const { gameId } = useParams()
   const {
     appUser,
+    currentUser: firebaseUser,
     isLoading,
     refreshCurrentUserVerification,
     sendCurrentUserVerificationEmail,
@@ -41,7 +42,6 @@ function CreateGamePage() {
     sendCurrentUserVerificationEmail,
   })
   const {
-    communityGameDetailId,
     createdGameId,
     currentUser,
     firstPublishIsFree,
@@ -54,6 +54,7 @@ function CreateGamePage() {
     setForm,
   } = useCreateGameContext({
     appUser,
+    firebaseUser,
     gameId,
     isEditMode,
     isLoading,
@@ -79,8 +80,8 @@ function CreateGamePage() {
     stepError,
     submitGame,
   } = useCreateGamePublish({
-    communityGameDetailId,
     currentUser,
+    firebaseUser,
     form,
     gameId,
     isEditMode,

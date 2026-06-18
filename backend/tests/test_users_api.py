@@ -1,9 +1,38 @@
 from fastapi.testclient import TestClient
 
-from backend.tests.helpers import create_user
+from backend.tests.helpers import (
+    authenticate_as,
+    create_user,
+    set_user_account_status,
+    set_user_role,
+    unique_suffix,
+)
+from backend.services.user_service import GENERIC_USER_MUTATION_DISABLED_DETAIL
 
 
-def test_users_create_get_list_update_and_soft_delete(client: TestClient):
+def authenticate_admin(client: TestClient) -> dict:
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+    return admin
+
+
+def _valid_user_payload() -> dict:
+    suffix = unique_suffix()
+    return {
+        "auth_user_id": f"firebase-route-{suffix}",
+        "email": f"route-user-{suffix}@example.com",
+        "phone": f"+1555{suffix[:7]}",
+        "first_name": "Route",
+        "last_name": "User",
+        "date_of_birth": "1995-01-01",
+        "home_city": "Chicago",
+        "home_state": "IL",
+    }
+
+
+def test_users_admin_read_routes_and_generic_mutations_disabled(client: TestClient):
+    authenticate_admin(client)
     user = create_user(client)
 
     get_response = client.get(f"/users/{user['id']}")
@@ -14,71 +43,93 @@ def test_users_create_get_list_update_and_soft_delete(client: TestClient):
     assert list_response.status_code == 200, list_response.text
     assert any(item["id"] == user["id"] for item in list_response.json())
 
+    create_response = client.post("/users", json=_valid_user_payload())
+    assert create_response.status_code == 403, create_response.text
+    assert create_response.json()["detail"] == GENERIC_USER_MUTATION_DISABLED_DETAIL
+
     patch_response = client.patch(
         f"/users/{user['id']}",
-        json={
-            "first_name": "Updated",
-            "email_verified_at": "2026-01-01T12:00:00Z",
-        },
+        json={"first_name": "Updated"},
     )
-    assert patch_response.status_code == 200, patch_response.text
-    assert patch_response.json()["first_name"] == "Updated"
-    assert patch_response.json()["email_verified_at"] is not None
-
-    email_patch_response = client.patch(
-        f"/users/{user['id']}",
-        json={"email": "updated-user@example.com"},
-    )
-    assert email_patch_response.status_code == 200, email_patch_response.text
-    assert email_patch_response.json()["email"] == "updated-user@example.com"
-    assert email_patch_response.json()["email_verified_at"] is None
+    assert patch_response.status_code == 403, patch_response.text
+    assert patch_response.json()["detail"] == GENERIC_USER_MUTATION_DISABLED_DETAIL
 
     delete_response = client.delete(f"/users/{user['id']}")
-    assert delete_response.status_code == 200, delete_response.text
-    assert delete_response.json()["deleted_at"] is not None
+    assert delete_response.status_code == 403, delete_response.text
+    assert delete_response.json()["detail"] == GENERIC_USER_MUTATION_DISABLED_DETAIL
 
-    missing_response = client.get(f"/users/{user['id']}")
-    assert missing_response.status_code == 404
+    preserved_response = client.get(f"/users/{user['id']}")
+    assert preserved_response.status_code == 200, preserved_response.text
+    assert preserved_response.json()["deleted_at"] is None
 
 
-def test_users_reject_duplicate_email(client: TestClient):
+def test_user_scaffold_routes_reject_regular_user(client: TestClient):
     user = create_user(client)
+    authenticate_as(user["id"])
 
-    duplicate_response = client.post(
-        "/users",
-        json={
-            "auth_user_id": "different-auth-id",
-            "email": user["email"],
-            "phone": "+15550000000",
-            "first_name": "Second",
-            "last_name": "User",
-            "date_of_birth": "1995-01-01",
-        },
-    )
+    list_response = client.get("/users")
+    assert list_response.status_code == 403, list_response.text
 
-    assert duplicate_response.status_code == 409, duplicate_response.text
-    assert "email already exists" in duplicate_response.text
-
-
-def test_users_reject_client_managed_stripe_customer_id(client: TestClient):
-    user = create_user(client)
+    get_response = client.get(f"/users/{user['id']}")
+    assert get_response.status_code == 403, get_response.text
 
     create_response = client.post(
         "/users",
+        json=_valid_user_payload(),
+    )
+    assert create_response.status_code == 403, create_response.text
+
+    patch_response = client.patch(f"/users/{user['id']}", json={"first_name": "Nope"})
+    assert patch_response.status_code == 403, patch_response.text
+
+    delete_response = client.delete(f"/users/{user['id']}")
+    assert delete_response.status_code == 403, delete_response.text
+
+
+def test_users_me_reads_and_updates_authenticated_user(client: TestClient):
+    current_user = create_user(client)
+    other_user = create_user(client)
+    authenticate_as(current_user["id"])
+
+    get_response = client.get("/users/me")
+    assert get_response.status_code == 200, get_response.text
+    assert get_response.json()["id"] == current_user["id"]
+
+    patch_response = client.patch(
+        "/users/me",
         json={
-            "auth_user_id": "firebase-client-stripe",
-            "email": "client-stripe@example.com",
-            "phone": "+15550000001",
-            "first_name": "Stripe",
-            "last_name": "Client",
-            "date_of_birth": "1995-01-01",
-            "stripe_customer_id": "cus_client_supplied",
+            "first_name": "Current",
+            "email": "current-profile@example.com",
         },
     )
-    assert create_response.status_code == 422, create_response.text
+    assert patch_response.status_code == 200, patch_response.text
+    assert patch_response.json()["id"] == current_user["id"]
+    assert patch_response.json()["first_name"] == "Current"
+    assert patch_response.json()["email"] == "current-profile@example.com"
+    assert patch_response.json()["email_verified_at"] is None
 
-    update_response = client.patch(
-        f"/users/{user['id']}",
+    other_response = client.get(f"/users/{other_user['id']}")
+    assert other_response.status_code == 403, other_response.text
+
+
+def test_users_me_allows_suspended_user_account_access(client: TestClient):
+    user = create_user(client)
+    set_user_account_status(user["id"], "suspended")
+    authenticate_as(user["id"])
+
+    response = client.get("/users/me")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == user["id"]
+    assert response.json()["account_status"] == "suspended"
+
+
+def test_users_me_rejects_client_managed_stripe_customer_id(client: TestClient):
+    user = create_user(client)
+    authenticate_as(user["id"])
+
+    response = client.patch(
+        "/users/me",
         json={"stripe_customer_id": "cus_client_supplied"},
     )
-    assert update_response.status_code == 422, update_response.text
+    assert response.status_code == 422, response.text

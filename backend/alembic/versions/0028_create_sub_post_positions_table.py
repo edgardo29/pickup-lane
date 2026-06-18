@@ -88,9 +88,21 @@ def upgrade() -> None:
         "sub_post_positions",
         ["sub_post_id"],
     )
+    op.create_foreign_key(
+        "fk_admin_actions_target_sub_post_position_id",
+        "admin_actions",
+        "sub_post_positions",
+        ["target_sub_post_position_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
 
 
 def downgrade() -> None:
+    op.execute(
+        "ALTER TABLE admin_actions "
+        "DROP CONSTRAINT IF EXISTS fk_admin_actions_target_sub_post_position_id"
+    )
     op.drop_index(
         "ix_sub_post_positions_sub_post_id",
         table_name="sub_post_positions",

@@ -10,15 +10,7 @@ class SubPostChatMessageCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     chat_id: UUID
-    sender_user_id: UUID | None = None
-    sender_display_name_snapshot: str | None = None
-    sender_initials_snapshot: str | None = None
-    message_type: str = "text"
     message_body: str
-    moderation_status: str = "visible"
-    edited_at: datetime | None = None
-    deleted_at: datetime | None = None
-    deleted_by_user_id: UUID | None = None
 
 
 class SubPostChatMessageRead(BaseModel):
@@ -44,13 +36,5 @@ class SubPostChatMessageRead(BaseModel):
 class SubPostChatMessageUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    chat_id: UUID | None = None
-    sender_user_id: UUID | None = None
-    sender_display_name_snapshot: str | None = None
-    sender_initials_snapshot: str | None = None
-    message_type: str | None = None
     message_body: str | None = None
     moderation_status: str | None = None
-    edited_at: datetime | None = None
-    deleted_at: datetime | None = None
-    deleted_by_user_id: UUID | None = None
