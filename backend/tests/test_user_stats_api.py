@@ -5,6 +5,7 @@ from backend.tests.helpers import (
     create_user,
     create_user_stats,
     set_user_role,
+    soft_delete_user,
 )
 
 
@@ -186,8 +187,7 @@ def test_user_stats_treat_soft_deleted_user_as_unavailable(client: TestClient):
     user = create_user(client)
     user_stats = create_user_stats(client, user["id"])
 
-    delete_response = client.delete(f"/users/{user['id']}")
-    assert delete_response.status_code == 200, delete_response.text
+    soft_delete_user(user["id"])
 
     get_response = client.get(f"/user-stats/{user_stats['user_id']}")
     assert get_response.status_code == 404, get_response.text

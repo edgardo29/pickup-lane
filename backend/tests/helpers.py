@@ -68,6 +68,19 @@ def set_user_account_status(user_id: str, account_status: str) -> None:
         db.commit()
 
 
+def soft_delete_user(user_id: str) -> None:
+    from datetime import UTC, datetime
+
+    from backend.database import SessionLocal
+    from backend.models import User
+
+    with SessionLocal() as db:
+        db_user = db.get(User, UUID(user_id))
+        assert db_user is not None
+        db_user.deleted_at = datetime.now(UTC)
+        db.commit()
+
+
 def mark_user_email_verified(user_id: str) -> None:
     from datetime import UTC, datetime
 
@@ -391,7 +404,7 @@ def create_booking(
 
 def create_game_participant(
     client: TestClient,
-    user_id: str,
+    user_id: str | None,
     game_id: str,
     booking_id: str | None = None,
     **overrides: object,

@@ -1460,7 +1460,9 @@ def test_admin_remove_player_rejects_current_official_host(client: TestClient):
     assert participant_response.json()["participant_status"] == "confirmed"
 
 
-def test_user_delete_rejects_current_future_official_host(client: TestClient):
+def test_generic_user_delete_disabled_for_current_future_official_host(
+    client: TestClient,
+):
     admin = create_user(client)
     host = create_user(client)
     set_user_role(admin["id"], "admin")
@@ -1481,8 +1483,8 @@ def test_user_delete_rejects_current_future_official_host(client: TestClient):
 
     delete_response = client.delete(f"/users/{host['id']}")
 
-    assert delete_response.status_code == 400, delete_response.text
-    assert "Remove official host designation" in delete_response.text
+    assert delete_response.status_code == 403, delete_response.text
+    assert "Generic user mutations are disabled" in delete_response.text
     user_response = client.get(f"/users/{host['id']}")
     assert user_response.status_code == 200
     assert user_response.json()["deleted_at"] is None

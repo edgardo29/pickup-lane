@@ -289,12 +289,15 @@ def test_game_structural_update_notifies_connected_users(client: TestClient):
 
     starts_at = datetime.fromisoformat(game["starts_at"])
     ends_at = datetime.fromisoformat(game["ends_at"])
-    response = client.patch(
-        f"/games/{game['id']}",
-        json={
-            "starts_at": (starts_at + timedelta(minutes=30)).isoformat(),
-            "ends_at": (ends_at + timedelta(minutes=30)).isoformat(),
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/games/{game['id']}",
+            json={
+                "starts_at": (starts_at + timedelta(minutes=30)).isoformat(),
+                "ends_at": (ends_at + timedelta(minutes=30)).isoformat(),
+            },
+        ),
     )
     assert response.status_code == 200, response.text
 
@@ -335,14 +338,17 @@ def test_game_text_and_price_updates_do_not_notify_connected_users(
     )
     create_game_participant(client, player["id"], game["id"])
 
-    response = client.patch(
-        f"/games/{game['id']}",
-        json={
-            "description": "Tiny typo cleanup.",
-            "game_notes": "Use the north entrance.",
-            "parking_notes": "Street parking nearby.",
-            "price_per_player_cents": 1400,
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/games/{game['id']}",
+            json={
+                "description": "Tiny typo cleanup.",
+                "game_notes": "Use the north entrance.",
+                "parking_notes": "Street parking nearby.",
+                "price_per_player_cents": 1400,
+            },
+        ),
     )
     assert response.status_code == 200, response.text
 
@@ -364,9 +370,12 @@ def test_game_structural_update_reuses_notification_row(client: TestClient):
     )
     create_game_participant(client, player["id"], game["id"])
 
-    first_response = client.patch(
-        f"/games/{game['id']}",
-        json={"venue_name_snapshot": "First Updated Field"},
+    first_response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/games/{game['id']}",
+            json={"venue_name_snapshot": "First Updated Field"},
+        ),
     )
     assert first_response.status_code == 200, first_response.text
 
@@ -377,9 +386,12 @@ def test_game_structural_update_reuses_notification_row(client: TestClient):
     read_response = client.patch(f"/notifications/{notification_id}/read", json={})
     assert read_response.status_code == 200, read_response.text
 
-    second_response = client.patch(
-        f"/games/{game['id']}",
-        json={"venue_name_snapshot": "Second Updated Field"},
+    second_response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/games/{game['id']}",
+            json={"venue_name_snapshot": "Second Updated Field"},
+        ),
     )
     assert second_response.status_code == 200, second_response.text
 
@@ -409,10 +421,12 @@ def test_cancel_game_resolves_game_updated_without_reading_chat(
     )
     create_game_participant(client, player["id"], game["id"])
 
-    authenticate_as(host["id"])
-    update_response = client.patch(
-        f"/games/{game['id']}",
-        json={"venue_name_snapshot": "Updated Cancellation Field"},
+    update_response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/games/{game['id']}",
+            json={"venue_name_snapshot": "Updated Cancellation Field"},
+        ),
     )
     assert update_response.status_code == 200, update_response.text
 
@@ -1682,28 +1696,31 @@ def test_games_reject_invalid_schedule(client: TestClient):
     user = create_user(client)
     venue = create_venue(client, user["id"])
 
-    response = client.post(
-        "/games",
-        json={
-            "game_type": "official",
-            "payment_collection_type": "in_app",
-            "publish_status": "draft",
-            "game_status": "scheduled",
-            "title": "Bad Schedule",
-            "venue_id": venue["id"],
-            "venue_name_snapshot": venue["name"],
-            "address_snapshot": venue["address_line_1"],
-            "city_snapshot": venue["city"],
-            "state_snapshot": venue["state"],
-            "created_by_user_id": user["id"],
-            "starts_at": "2026-01-01T10:00:00Z",
-            "ends_at": "2026-01-01T09:00:00Z",
-            "format_label": "5v5",
-            "environment_type": "indoor",
-            "total_spots": 10,
-            "price_per_player_cents": 1200,
-            "policy_mode": "official_standard",
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/games",
+            json={
+                "game_type": "official",
+                "payment_collection_type": "in_app",
+                "publish_status": "draft",
+                "game_status": "scheduled",
+                "title": "Bad Schedule",
+                "venue_id": venue["id"],
+                "venue_name_snapshot": venue["name"],
+                "address_snapshot": venue["address_line_1"],
+                "city_snapshot": venue["city"],
+                "state_snapshot": venue["state"],
+                "created_by_user_id": user["id"],
+                "starts_at": "2026-01-01T10:00:00Z",
+                "ends_at": "2026-01-01T09:00:00Z",
+                "format_label": "5v5",
+                "environment_type": "indoor",
+                "total_spots": 10,
+                "price_per_player_cents": 1200,
+                "policy_mode": "official_standard",
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -1716,28 +1733,31 @@ def test_games_reject_past_start_time(client: TestClient):
     starts_at = datetime.now(UTC) - timedelta(hours=1)
     ends_at = starts_at + timedelta(hours=2)
 
-    response = client.post(
-        "/games",
-        json={
-            "game_type": "official",
-            "payment_collection_type": "in_app",
-            "publish_status": "published",
-            "game_status": "scheduled",
-            "title": "Past Start",
-            "venue_id": venue["id"],
-            "venue_name_snapshot": venue["name"],
-            "address_snapshot": venue["address_line_1"],
-            "city_snapshot": venue["city"],
-            "state_snapshot": venue["state"],
-            "created_by_user_id": user["id"],
-            "starts_at": starts_at.isoformat(),
-            "ends_at": ends_at.isoformat(),
-            "format_label": "5v5",
-            "environment_type": "indoor",
-            "total_spots": 10,
-            "price_per_player_cents": 1200,
-            "policy_mode": "official_standard",
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/games",
+            json={
+                "game_type": "official",
+                "payment_collection_type": "in_app",
+                "publish_status": "published",
+                "game_status": "scheduled",
+                "title": "Past Start",
+                "venue_id": venue["id"],
+                "venue_name_snapshot": venue["name"],
+                "address_snapshot": venue["address_line_1"],
+                "city_snapshot": venue["city"],
+                "state_snapshot": venue["state"],
+                "created_by_user_id": user["id"],
+                "starts_at": starts_at.isoformat(),
+                "ends_at": ends_at.isoformat(),
+                "format_label": "5v5",
+                "environment_type": "indoor",
+                "total_spots": 10,
+                "price_per_player_cents": 1200,
+                "policy_mode": "official_standard",
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -1750,28 +1770,31 @@ def test_games_reject_total_spots_below_format_minimum(client: TestClient):
     starts_at = datetime.now(UTC) + timedelta(days=5)
     ends_at = starts_at + timedelta(hours=2)
 
-    response = client.post(
-        "/games",
-        json={
-            "game_type": "official",
-            "payment_collection_type": "in_app",
-            "publish_status": "published",
-            "game_status": "scheduled",
-            "title": "Too Few Spots",
-            "venue_id": venue["id"],
-            "venue_name_snapshot": venue["name"],
-            "address_snapshot": venue["address_line_1"],
-            "city_snapshot": venue["city"],
-            "state_snapshot": venue["state"],
-            "created_by_user_id": user["id"],
-            "starts_at": starts_at.isoformat(),
-            "ends_at": ends_at.isoformat(),
-            "format_label": "7v7",
-            "environment_type": "indoor",
-            "total_spots": 10,
-            "price_per_player_cents": 1200,
-            "policy_mode": "official_standard",
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/games",
+            json={
+                "game_type": "official",
+                "payment_collection_type": "in_app",
+                "publish_status": "published",
+                "game_status": "scheduled",
+                "title": "Too Few Spots",
+                "venue_id": venue["id"],
+                "venue_name_snapshot": venue["name"],
+                "address_snapshot": venue["address_line_1"],
+                "city_snapshot": venue["city"],
+                "state_snapshot": venue["state"],
+                "created_by_user_id": user["id"],
+                "starts_at": starts_at.isoformat(),
+                "ends_at": ends_at.isoformat(),
+                "format_label": "7v7",
+                "environment_type": "indoor",
+                "total_spots": 10,
+                "price_per_player_cents": 1200,
+                "policy_mode": "official_standard",
+            },
+        ),
     )
 
     assert response.status_code == 400, response.text
@@ -1796,30 +1819,33 @@ def test_community_host_can_only_publish_one_active_game_per_local_date(client: 
         ends_at=ends_at.isoformat(),
     )
 
-    response = client.post(
-        "/games",
-        json={
-            "game_type": "community",
-            "payment_collection_type": "external_host",
-            "publish_status": "published",
-            "game_status": "scheduled",
-            "title": "Second Community Game",
-            "venue_id": venue["id"],
-            "venue_name_snapshot": venue["name"],
-            "address_snapshot": venue["address_line_1"],
-            "city_snapshot": venue["city"],
-            "state_snapshot": venue["state"],
-            "host_user_id": host["id"],
-            "created_by_user_id": host["id"],
-            "starts_at": (starts_at + timedelta(hours=3)).isoformat(),
-            "ends_at": (starts_at + timedelta(hours=5)).isoformat(),
-            "timezone": "America/Chicago",
-            "format_label": "5v5",
-            "environment_type": "indoor",
-            "total_spots": 10,
-            "price_per_player_cents": 1200,
-            "policy_mode": "custom_hosted",
-        },
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/games",
+            json={
+                "game_type": "community",
+                "payment_collection_type": "external_host",
+                "publish_status": "published",
+                "game_status": "scheduled",
+                "title": "Second Community Game",
+                "venue_id": venue["id"],
+                "venue_name_snapshot": venue["name"],
+                "address_snapshot": venue["address_line_1"],
+                "city_snapshot": venue["city"],
+                "state_snapshot": venue["state"],
+                "host_user_id": host["id"],
+                "created_by_user_id": host["id"],
+                "starts_at": (starts_at + timedelta(hours=3)).isoformat(),
+                "ends_at": (starts_at + timedelta(hours=5)).isoformat(),
+                "timezone": "America/Chicago",
+                "format_label": "5v5",
+                "environment_type": "indoor",
+                "total_spots": 10,
+                "price_per_player_cents": 1200,
+                "policy_mode": "custom_hosted",
+            },
+        ),
     )
 
     assert response.status_code == 409, response.text
@@ -1889,14 +1915,17 @@ def test_community_host_rejects_different_utc_dates_when_local_date_matches(
         second_start, "America/Chicago"
     )
 
-    response = client.post(
-        "/games",
-        json=build_community_game_payload(
-            host,
-            venue,
-            second_start,
-            second_start + timedelta(hours=1),
-            title="Different UTC Same Local Date",
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/games",
+            json=build_community_game_payload(
+                host,
+                venue,
+                second_start,
+                second_start + timedelta(hours=1),
+                title="Different UTC Same Local Date",
+            ),
         ),
     )
 
@@ -1975,14 +2004,17 @@ def test_community_host_date_rule_handles_dst_boundary(client: TestClient):
         ends_at=(first_start + timedelta(hours=1)).isoformat(),
     )
 
-    response = client.post(
-        "/games",
-        json=build_community_game_payload(
-            host,
-            venue,
-            second_start,
-            second_start + timedelta(hours=1),
-            title="DST Boundary Community Game",
+    response = run_as_temporary_admin(
+        client,
+        lambda: client.post(
+            "/games",
+            json=build_community_game_payload(
+                host,
+                venue,
+                second_start,
+                second_start + timedelta(hours=1),
+                title="DST Boundary Community Game",
+            ),
         ),
     )
 
@@ -2129,15 +2161,18 @@ def test_official_game_update_forces_fields_and_blocks_location_host_changes(
     )
     game = create_game(client, admin["id"], venue)
 
-    update_response = client.patch(
-        f"/games/{game['id']}",
-        json={
-            "title": "Official fields normalized",
-            "minimum_age": 21,
-            "host_guest_max": 4,
-            "custom_rules_text": "Nope.",
-            "custom_cancellation_text": "Also nope.",
-        },
+    update_response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/games/{game['id']}",
+            json={
+                "title": "Official fields normalized",
+                "minimum_age": 21,
+                "host_guest_max": 4,
+                "custom_rules_text": "Nope.",
+                "custom_cancellation_text": "Also nope.",
+            },
+        ),
     )
 
     assert update_response.status_code == 200, update_response.text
@@ -2148,16 +2183,22 @@ def test_official_game_update_forces_fields_and_blocks_location_host_changes(
     assert updated_game["custom_rules_text"] is None
     assert updated_game["custom_cancellation_text"] is None
 
-    location_response = client.patch(
-        f"/games/{game['id']}",
-        json={"venue_id": new_venue["id"]},
+    location_response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/games/{game['id']}",
+            json={"venue_id": new_venue["id"]},
+        ),
     )
     assert location_response.status_code == 400, location_response.text
     assert "venue/location cannot be changed" in location_response.text
 
-    host_response = client.patch(
-        f"/games/{game['id']}",
-        json={"host_user_id": host["id"]},
+    host_response = run_as_temporary_admin(
+        client,
+        lambda: client.patch(
+            f"/games/{game['id']}",
+            json={"host_user_id": host["id"]},
+        ),
     )
     assert host_response.status_code == 400, host_response.text
     assert "host assignment route" in host_response.text
@@ -2517,27 +2558,20 @@ def test_list_game_participants_returns_public_safe_roster(client: TestClient):
         attendance_notes="Private attendance note.",
         roster_order=1,
     )
-    guest_response = client.post(
-        "/game-participants",
-        json={
-            "game_id": game["id"],
-            "booking_id": booking["id"],
-            "participant_type": "guest",
-            "guest_of_user_id": player["id"],
-            "guest_name": "Private Guest Name",
-            "guest_email": "guest@example.com",
-            "guest_phone": "+15555550123",
-            "display_name_snapshot": "Guest 1",
-            "participant_status": "confirmed",
-            "attendance_status": "not_applicable",
-            "cancellation_type": "none",
-            "price_cents": 1200,
-            "currency": "USD",
-            "roster_order": 2,
-        },
+    guest_participant = create_game_participant(
+        client,
+        None,
+        game["id"],
+        booking["id"],
+        participant_type="guest",
+        guest_of_user_id=player["id"],
+        guest_name="Private Guest Name",
+        guest_email="guest@example.com",
+        guest_phone="+15555550123",
+        display_name_snapshot="Guest 1",
+        attendance_status="not_applicable",
+        roster_order=2,
     )
-    assert guest_response.status_code == 201, guest_response.text
-    guest_participant = guest_response.json()
 
     response = client.get(f"/games/{game['id']}/participants")
 
@@ -3161,7 +3195,10 @@ def test_community_waitlist_promotion_creates_no_player_payment(
     leave_response = leave_game_as(client, game["id"], joined_players[0]["id"])
     assert leave_response.status_code == 200, leave_response.text
 
-    promoted_booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    promoted_booking_response = get_money_as_admin(
+        client,
+        f"/bookings/{waitlist_body['booking_id']}",
+    )
     assert promoted_booking_response.status_code == 200, promoted_booking_response.text
     promoted_booking = promoted_booking_response.json()
     assert promoted_booking["booking_status"] == "confirmed"
@@ -3216,7 +3253,10 @@ def test_leave_game_rejects_drop_after_start_grace_window_without_promotion(
     assert leave_response.status_code == 400, leave_response.text
     assert leave_response.json()["detail"] == "Attendance changes are closed for this game."
 
-    waitlisted_booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    waitlisted_booking_response = get_money_as_admin(
+        client,
+        f"/bookings/{waitlist_body['booking_id']}",
+    )
     assert waitlisted_booking_response.status_code == 200, waitlisted_booking_response.text
     waitlisted_booking = waitlisted_booking_response.json()
     assert waitlisted_booking["booking_status"] == "waitlisted"
@@ -3517,7 +3557,8 @@ def test_leave_game_promotes_paid_waitlist_after_successful_auto_charge(
     waitlist_body = waitlist_response.json()
     assert waitlist_body["status"] == "waitlisted"
 
-    waitlist_entry_response = client.get(
+    waitlist_entry_response = get_roster_as_admin(
+        client,
         f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
     )
     assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
@@ -3530,13 +3571,17 @@ def test_leave_game_promotes_paid_waitlist_after_successful_auto_charge(
     leave_response = leave_game_as(client, game["id"], joined_players[0]["id"])
     assert leave_response.status_code == 200, leave_response.text
 
-    promoted_booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    promoted_booking_response = get_money_as_admin(
+        client,
+        f"/bookings/{waitlist_body['booking_id']}",
+    )
     assert promoted_booking_response.status_code == 200, promoted_booking_response.text
     promoted_booking = promoted_booking_response.json()
     assert promoted_booking["booking_status"] == "confirmed"
     assert promoted_booking["payment_status"] == "paid"
 
-    waitlist_entry_response = client.get(
+    waitlist_entry_response = get_roster_as_admin(
+        client,
         f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
     )
     assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
@@ -3630,13 +3675,17 @@ def test_paid_waitlist_requires_action_fails_auto_promotion_and_notifies_buyer(
     leave_response = leave_game_as(client, game["id"], joined_players[0]["id"])
     assert leave_response.status_code == 200, leave_response.text
 
-    booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    booking_response = get_money_as_admin(
+        client,
+        f"/bookings/{waitlist_body['booking_id']}",
+    )
     assert booking_response.status_code == 200, booking_response.text
     booking = booking_response.json()
     assert booking["booking_status"] == "failed"
     assert booking["payment_status"] == "failed"
 
-    waitlist_entry_response = client.get(
+    waitlist_entry_response = get_roster_as_admin(
+        client,
         f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
     )
     assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
@@ -3726,13 +3775,17 @@ def test_paid_waitlist_processing_holds_capacity_and_blocks_duplicate_join(
     leave_response = leave_game_as(client, game["id"], joined_players[0]["id"])
     assert leave_response.status_code == 200, leave_response.text
 
-    waitlist_entry_response = client.get(
+    waitlist_entry_response = get_roster_as_admin(
+        client,
         f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
     )
     assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
     assert waitlist_entry_response.json()["waitlist_status"] == "payment_processing"
 
-    booking_response = client.get(f"/bookings/{waitlist_body['booking_id']}")
+    booking_response = get_money_as_admin(
+        client,
+        f"/bookings/{waitlist_body['booking_id']}",
+    )
     assert booking_response.status_code == 200, booking_response.text
     booking = booking_response.json()
     assert booking["booking_status"] == "pending_payment"
@@ -3857,7 +3910,8 @@ def test_paid_waitlist_failed_auto_charge_moves_to_next_active_party(
     leave_response = leave_game_as(client, game["id"], joined_players[0]["id"])
     assert leave_response.status_code == 200, leave_response.text
 
-    first_booking_response = client.get(
+    first_booking_response = get_money_as_admin(
+        client,
         f"/bookings/{first_waitlist_body['booking_id']}"
     )
     assert first_booking_response.status_code == 200, first_booking_response.text
@@ -3865,13 +3919,15 @@ def test_paid_waitlist_failed_auto_charge_moves_to_next_active_party(
     assert first_booking["booking_status"] == "failed"
     assert first_booking["payment_status"] == "failed"
 
-    first_waitlist_entry_response = client.get(
+    first_waitlist_entry_response = get_roster_as_admin(
+        client,
         f"/waitlist-entries/{first_waitlist_body['waitlist_entry_id']}"
     )
     assert first_waitlist_entry_response.status_code == 200
     assert first_waitlist_entry_response.json()["waitlist_status"] == "payment_failed"
 
-    second_booking_response = client.get(
+    second_booking_response = get_money_as_admin(
+        client,
         f"/bookings/{second_waitlist_body['booking_id']}"
     )
     assert second_booking_response.status_code == 200, second_booking_response.text
@@ -3879,7 +3935,8 @@ def test_paid_waitlist_failed_auto_charge_moves_to_next_active_party(
     assert second_booking["booking_status"] == "confirmed"
     assert second_booking["payment_status"] == "paid"
 
-    second_waitlist_entry_response = client.get(
+    second_waitlist_entry_response = get_roster_as_admin(
+        client,
         f"/waitlist-entries/{second_waitlist_body['waitlist_entry_id']}"
     )
     assert second_waitlist_entry_response.status_code == 200
@@ -3979,7 +4036,8 @@ def test_waitlist_promotion_skips_oversized_party_without_splitting(
     leave_response = leave_game_as(client, game["id"], joined_players[0]["id"])
     assert leave_response.status_code == 200, leave_response.text
 
-    oversized_waitlist_response = client.get(
+    oversized_waitlist_response = get_roster_as_admin(
+        client,
         f"/waitlist-entries/{oversized_body['waitlist_entry_id']}"
     )
     assert oversized_waitlist_response.status_code == 200
@@ -3987,19 +4045,26 @@ def test_waitlist_promotion_skips_oversized_party_without_splitting(
     assert oversized_waitlist["waitlist_status"] == "active"
     assert oversized_waitlist["position"] == 1
 
-    oversized_booking_response = client.get(f"/bookings/{oversized_body['booking_id']}")
+    oversized_booking_response = get_money_as_admin(
+        client,
+        f"/bookings/{oversized_body['booking_id']}",
+    )
     assert oversized_booking_response.status_code == 200, oversized_booking_response.text
     oversized_booking = oversized_booking_response.json()
     assert oversized_booking["booking_status"] == "waitlisted"
     assert oversized_booking["participant_count"] == 2
 
-    fitting_waitlist_response = client.get(
+    fitting_waitlist_response = get_roster_as_admin(
+        client,
         f"/waitlist-entries/{fitting_body['waitlist_entry_id']}"
     )
     assert fitting_waitlist_response.status_code == 200
     assert fitting_waitlist_response.json()["waitlist_status"] == "accepted"
 
-    fitting_booking_response = client.get(f"/bookings/{fitting_body['booking_id']}")
+    fitting_booking_response = get_money_as_admin(
+        client,
+        f"/bookings/{fitting_body['booking_id']}",
+    )
     assert fitting_booking_response.status_code == 200, fitting_booking_response.text
     fitting_booking = fitting_booking_response.json()
     assert fitting_booking["booking_status"] == "confirmed"
