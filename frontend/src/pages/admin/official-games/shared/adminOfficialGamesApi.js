@@ -126,11 +126,25 @@ export async function cancelAdminOfficialGame({
   cancelReason = '',
   firebaseUser,
   gameId,
+  previewToken,
 }) {
-  return apiRequest(`/games/${gameId}/cancel`, {
+  return apiRequest(`/admin/official-games/${gameId}/cancel`, {
     method: 'POST',
     headers: await getAdminHeaders(firebaseUser, true),
-    body: JSON.stringify(cancelReason ? { cancel_reason: cancelReason } : {}),
+    body: JSON.stringify({
+      preview_token: previewToken,
+      reason: cancelReason,
+    }),
+  })
+}
+
+export async function previewAdminOfficialGameCancellation({
+  firebaseUser,
+  gameId,
+}) {
+  return apiRequest(`/admin/official-games/${gameId}/cancel-preview`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser),
   })
 }
 
@@ -187,6 +201,42 @@ export async function removeAdminOfficialGamePlayer({
   })
 }
 
+export async function previewAdminOfficialGamePlayerRemoval({
+  firebaseUser,
+  gameId,
+  participantId,
+}) {
+  return apiRequest(
+    `/admin/official-games/${gameId}/participants/${participantId}/remove-preview`,
+    {
+      method: 'POST',
+      headers: await getAdminHeaders(firebaseUser),
+    },
+  )
+}
+
+export async function executeAdminOfficialGamePlayerRemoval({
+  firebaseUser,
+  gameId,
+  participantId,
+  previewToken,
+  outcome,
+  reason,
+}) {
+  return apiRequest(
+    `/admin/official-games/${gameId}/participants/${participantId}/remove`,
+    {
+      method: 'POST',
+      headers: await getAdminHeaders(firebaseUser, true),
+      body: JSON.stringify({
+        preview_token: previewToken,
+        outcome,
+        reason,
+      }),
+    },
+  )
+}
+
 export async function listAdminOfficialGameUsers({ firebaseUser, query = '' }) {
   const search = query ? `?query=${encodeURIComponent(query)}` : ''
 
@@ -195,22 +245,51 @@ export async function listAdminOfficialGameUsers({ firebaseUser, query = '' }) {
   })
 }
 
-export async function listAdminOfficialGameVenues({ firebaseUser, query = '' }) {
-  const search = query ? `?query=${encodeURIComponent(query)}` : ''
-
-  return apiRequest(`/admin/lookups/venues${search}`, {
-    headers: await getAdminHeaders(firebaseUser),
-  })
-}
-
-export async function listAdminVenueImages({ firebaseUser, venueId }) {
-  return apiRequest(`/admin/venues/${venueId}/images?image_status=active`, {
-    headers: await getAdminHeaders(firebaseUser),
-  })
+export async function listOfficialGameVenueImages({ venueId }) {
+  return apiRequest(`/venue-images?venue_id=${encodeURIComponent(venueId)}`)
 }
 
 export async function listAdminOfficialGameParticipants({ firebaseUser, gameId }) {
   return apiRequest(`/admin/official-games/${gameId}/participants`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function listAdminOfficialGameChatRooms({ firebaseUser, gameId }) {
+  return apiRequest(`/game-chats?game_id=${encodeURIComponent(gameId)}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function listAdminOfficialGameChatMessages({
+  chatId,
+  firebaseUser,
+  limit = 50,
+}) {
+  const searchParams = new URLSearchParams({
+    chat_id: chatId,
+    limit: String(limit),
+  })
+
+  return apiRequest(`/chat-messages?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function listAdminOfficialGameBookings({ firebaseUser, gameId }) {
+  return apiRequest(`/admin/official-games/${gameId}/bookings`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function listAdminOfficialGameWaitlist({ firebaseUser, gameId }) {
+  return apiRequest(`/admin/official-games/${gameId}/waitlist`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getAdminOfficialGameMoney({ firebaseUser, gameId }) {
+  return apiRequest(`/admin/official-games/${gameId}/money`, {
     headers: await getAdminHeaders(firebaseUser),
   })
 }

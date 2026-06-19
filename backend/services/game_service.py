@@ -637,6 +637,7 @@ def booking_refunded_copy(
     *,
     stripe_refund_processed: bool,
     credit_restored: bool,
+    game_cancelled: bool = True,
 ) -> dict[str, str]:
     if stripe_refund_processed and credit_restored:
         return {
@@ -644,7 +645,12 @@ def booking_refunded_copy(
             "summary": "Your refund was processed and your game credit was restored.",
             "body": (
                 "Your Stripe refund was processed and your Pickup Lane game credit "
-                "was restored for this canceled official game."
+                "was restored "
+                + (
+                    "for this canceled official game."
+                    if game_cancelled
+                    else "after your booking was removed from this official game."
+                )
             ),
         }
 
@@ -653,8 +659,12 @@ def booking_refunded_copy(
             "title": "Credit restored",
             "summary": "Your Pickup Lane game credit was restored.",
             "body": (
-                "Your Pickup Lane game credit was restored for this canceled "
-                "official game."
+                "Your Pickup Lane game credit was restored "
+                + (
+                    "for this canceled official game."
+                    if game_cancelled
+                    else "after your booking was removed from this official game."
+                )
             ),
         }
 
@@ -675,11 +685,14 @@ def create_or_reopen_booking_refunded_notification(
     refund: Refund | None = None,
     stripe_refund_processed: bool,
     credit_restored: bool,
+    game_cancelled: bool = True,
+    force_action_null: bool = True,
 ) -> None:
     aggregation_key = booking_refunded_aggregation_key(db_game.id, booking.id)
     copy = booking_refunded_copy(
         stripe_refund_processed=stripe_refund_processed,
         credit_restored=credit_restored,
+        game_cancelled=game_cancelled,
     )
     reopen_aggregated_notification(
         db,
@@ -693,7 +706,7 @@ def create_or_reopen_booking_refunded_notification(
                 db_game,
                 "booking_refunded",
                 event_at=now,
-                force_action_null=True,
+                force_action_null=force_action_null,
                 aggregation_key=aggregation_key,
                 **copy,
             ),

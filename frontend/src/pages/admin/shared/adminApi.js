@@ -44,11 +44,16 @@ export async function listAdminActions({
   actionType = '',
   firebaseUser,
   limit = 100,
+  targetGameId = '',
 } = {}) {
   const searchParams = new URLSearchParams()
 
   if (actionType.trim()) {
     searchParams.set('action_type', actionType.trim())
+  }
+
+  if (String(targetGameId).trim()) {
+    searchParams.set('target_game_id', String(targetGameId).trim())
   }
 
   searchParams.set('limit', String(limit))

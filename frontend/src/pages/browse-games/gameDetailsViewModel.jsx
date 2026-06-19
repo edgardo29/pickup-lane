@@ -31,6 +31,8 @@ import {
 const JOIN_WINDOW_MINUTES = 5
 
 export function buildGameDetailsViewModel({
+  canAdminCancelCommunityGame = false,
+  canAdminCancelOfficialGame = false,
   communityGameDetails,
   currentGuestCount,
   currentParticipant,
@@ -97,12 +99,16 @@ export function buildGameDetailsViewModel({
     ['scheduled', 'full'].includes(game.game_status)
   const canEditGame = canShowEditGame && !isGameStarted
   const isHost = currentUser?.id && currentUser.id === game.host_user_id
+  const canShowOfficialAdminCancel =
+    game.game_type === 'official' && canAdminCancelOfficialGame
+  const canShowCommunityCancel =
+    game.game_type === 'community' && (isHost || canAdminCancelCommunityGame)
   const canShowCancelGame =
     game.publish_status === 'published' &&
     ['scheduled', 'full'].includes(game.game_status) &&
     (
-      currentUser?.role === 'admin' ||
-      (game.game_type === 'community' && isHost)
+      canShowOfficialAdminCancel ||
+      canShowCommunityCancel
     )
   const canCancelGame = canShowCancelGame && !isGameStarted
   const canOpenGameChat = canUseGameChat(game, participants, currentUser)
@@ -158,6 +164,7 @@ export function buildGameDetailsViewModel({
     canCancelGame,
     canEditGame,
     canOpenGameChat,
+    cancelGameOpensAdminWorkflow: canShowOfficialAdminCancel,
     canShowCancelGame,
     canShowEditGame,
     facts,
