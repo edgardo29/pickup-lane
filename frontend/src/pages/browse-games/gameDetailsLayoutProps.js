@@ -88,7 +88,14 @@ export function buildGameDetailsLayoutProps({
     onJoin: actions.handleJoinIntent,
     onLeaveGame: actions.handleLeaveGame,
     onNextImage: actions.handleNextImage,
-    onOpenCancelGameModal: () => setIsCancelGameModalOpen(true),
+    onOpenCancelGameModal: () => {
+      if (viewModel.cancelGameOpensAdminWorkflow) {
+        navigate(`/admin/official-games/${game.id}`)
+        return
+      }
+
+      setIsCancelGameModalOpen(true)
+    },
     onOpenChat: handleOpenChat,
     onOpenHostGuestModal: () => setIsHostGuestModalOpen(true),
     onOpenLeaveModal: () => setIsLeaveModalOpen(true),

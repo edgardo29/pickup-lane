@@ -2,8 +2,16 @@ export const ADMIN_PERMISSIONS = {
   ACTION_CENTER_VIEW: 'admin.action_center.view',
   AUDIT_READ: 'admin.audit.read',
   AUDIT_SUPPORT_READ: 'admin.audit.support_read',
+  COMMUNITY_GAMES_CANCEL: 'admin.community_games.cancel',
+  CONTENT_MODERATE: 'admin.content.moderate',
   OFFICIAL_GAMES_READ: 'admin.official_games.read',
   OFFICIAL_GAMES_WRITE: 'admin.official_games.write',
+  OFFICIAL_GAMES_CANCEL: 'admin.official_games.cancel',
+  OFFICIAL_GAMES_ROSTER_MANAGE: 'admin.official_games.roster_manage',
+  MONEY_CREDIT_MANAGE: 'admin.money.credit_manage',
+  MONEY_READ: 'admin.money.read',
+  MONEY_REFUND: 'admin.money.refund',
+  USERS_READ: 'admin.users.read',
 }
 
 export const adminWorkspaceNavItems = [

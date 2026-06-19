@@ -2,6 +2,10 @@ import {
   toDateInputValue,
   toTimeInputValue,
 } from '../../../create-game/createGameSchedule.js'
+import {
+  buildOfficialGameIsoDateTime,
+  getOfficialGameDateTimeInputs,
+} from './adminOfficialGameDateTime.js'
 
 const MAX_OFFICIAL_GUESTS = 2
 
@@ -46,16 +50,6 @@ function clampGuests(value) {
   return Math.min(Math.max(Number(value) || 0, 0), MAX_OFFICIAL_GUESTS)
 }
 
-function isoDateTime(dateValue, timeValue) {
-  const date = new Date(`${dateValue}T${timeValue}:00`)
-
-  if (Number.isNaN(date.getTime())) {
-    throw new Error('Enter a valid start and end time.')
-  }
-
-  return date.toISOString()
-}
-
 function cleanText(value) {
   return String(value ?? '').trim()
 }
@@ -69,13 +63,23 @@ function buildGeneratedTitle(form) {
 }
 
 function getGameDateParts(game) {
-  const startsAt = game?.starts_at ? new Date(game.starts_at) : null
-  const endsAt = game?.ends_at ? new Date(game.ends_at) : null
+  const timeZone = game?.timezone || 'America/Chicago'
 
-  return {
-    date: startsAt ? toDateInputValue(startsAt) : getDefaultSchedule().date,
-    startTime: startsAt ? toTimeInputValue(startsAt) : getDefaultSchedule().startTime,
-    endTime: endsAt ? toTimeInputValue(endsAt) : getDefaultSchedule().endTime,
+  try {
+    const startsAt = game?.starts_at
+      ? getOfficialGameDateTimeInputs(game.starts_at, timeZone)
+      : null
+    const endsAt = game?.ends_at
+      ? getOfficialGameDateTimeInputs(game.ends_at, timeZone)
+      : null
+
+    return {
+      date: startsAt?.date || getDefaultSchedule().date,
+      startTime: startsAt?.time || getDefaultSchedule().startTime,
+      endTime: endsAt?.time || getDefaultSchedule().endTime,
+    }
+  } catch {
+    return getDefaultSchedule()
   }
 }
 
@@ -142,12 +146,13 @@ export function buildAdminOfficialGamePayload(form, venues = []) {
     venueName: selectedVenue?.name || form.venueName,
     maxGuestsPerBooking: clampGuests(form.maxGuestsPerBooking),
   }
+  const timeZone = cleanText(form.timezone) || 'America/Chicago'
 
   const payload = {
     title: buildGeneratedTitle(generatedForm),
-    starts_at: isoDateTime(form.date, form.startTime),
-    ends_at: isoDateTime(form.date, form.endTime),
-    timezone: cleanText(form.timezone) || 'America/Chicago',
+    starts_at: buildOfficialGameIsoDateTime(form.date, form.startTime, timeZone),
+    ends_at: buildOfficialGameIsoDateTime(form.date, form.endTime, timeZone),
+    timezone: timeZone,
     format_label: form.formatLabel,
     environment_type: form.environmentType,
     total_spots: Number(form.totalSpots),
@@ -184,15 +189,18 @@ export function formatOfficialGameSchedule(game) {
 
   const day = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
+    timeZone: game.timezone || 'America/Chicago',
   }).format(new Date(game.starts_at))
   const start = new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
     minute: '2-digit',
+    timeZone: game.timezone || 'America/Chicago',
   }).format(new Date(game.starts_at))
   const end = new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
+    timeZone: game.timezone || 'America/Chicago',
   }).format(new Date(game.ends_at))
 
   return `${day}, ${start} - ${end}`

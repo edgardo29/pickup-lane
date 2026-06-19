@@ -1,4 +1,5 @@
 import { getTodayDate } from './adminCreateOfficialGameData.js'
+import { buildOfficialGameIsoDateTime } from '../shared/adminOfficialGameDateTime.js'
 
 export function getMinimumAdminOfficialSpots(format) {
   const [homeSide, awaySide] = String(format || '').toLowerCase().split('v')
@@ -26,12 +27,20 @@ export function validateAdminOfficialCreateStep(step, form) {
       return 'End time must be after the start time.'
     }
 
-    if (new Date(`${form.date}T${form.startTime}:00`) <= new Date()) {
-      return 'Start time must be in the future.'
-    }
-
     if (!form.timezone.trim()) {
       return 'Add a timezone.'
+    }
+
+    try {
+      const startsAt = new Date(
+        buildOfficialGameIsoDateTime(form.date, form.startTime, form.timezone),
+      )
+      buildOfficialGameIsoDateTime(form.date, form.endTime, form.timezone)
+      if (startsAt <= new Date()) {
+        return 'Start time must be in the future.'
+      }
+    } catch (error) {
+      return error.message || 'Enter a valid schedule.'
     }
 
     const minimumSpots = getMinimumAdminOfficialSpots(form.formatLabel)

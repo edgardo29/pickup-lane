@@ -164,6 +164,7 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
     "official_game": frozenset(
         {
             "game",
+            "replacement",
             "changed_fields",
             "checkout_sensitive_changed_fields",
             "expired_pending_booking_count",
@@ -177,6 +178,14 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
             "removed_participant_ids",
             "removed_count",
             "payment_refund_created",
+            "removal_outcome",
+            "refund_created_count",
+            "refund_failed_count",
+            "refund_processing_count",
+            "refund_follow_up_required",
+            "credit_restored_count",
+            "credit_restored_cents",
+            "waitlist_advanced_entry_ids",
         }
     ),
     "support": frozenset(

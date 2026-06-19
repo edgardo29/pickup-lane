@@ -1,18 +1,40 @@
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from backend.database import SessionLocal
-from backend.models import GameCredit, GameCreditUsage, Notification
-from backend.services.game_credit_service import RELEASED_USAGE_STATUS
-from backend.services.stripe_service import StripePaymentIntentResult
+from backend.models import (
+    GameCredit,
+    GameCreditUsage,
+    Notification,
+    Payment,
+    Refund,
+    SupportFlag,
+)
+from backend.services.admin_permission_service import (
+    PERMISSION_MONEY_READ,
+    PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
+    PERMISSION_OFFICIAL_GAMES_READ,
+    ROLE_PERMISSIONS,
+)
+from backend.services.game_credit_service import (
+    GameCreditLedgerError,
+    RELEASED_USAGE_STATUS,
+    redeem_reserved_game_credits,
+    reserve_game_credits,
+)
+from backend.services.stripe_service import (
+    StripePaymentIntentResult,
+    StripeRefundResult,
+)
 from backend.tests.helpers import (
     authenticate_as,
     create_booking,
     create_game_participant,
     create_payment,
+    create_refund,
     create_user,
     create_user_payment_method,
     create_venue,
@@ -61,7 +83,9 @@ def issue_game_credit(
     *,
     admin_id: str,
     user_id: str,
-    game_id: str,
+    game_id: str | None = None,
+    booking_id: str | None = None,
+    payment_id: str | None = None,
     amount_cents: int,
 ) -> dict:
     authenticate_as(admin_id)
@@ -72,6 +96,8 @@ def issue_game_credit(
             "amount_cents": amount_cents,
             "credit_reason": "admin_credit",
             "source_game_id": game_id,
+            "source_booking_id": booking_id,
+            "source_payment_id": payment_id,
             "idempotency_key": f"admin-official-credit-{unique_suffix()}",
             "note": "Admin official game credit test.",
         },
@@ -173,6 +199,66 @@ def test_admin_can_create_official_game_from_existing_venue(client: TestClient):
 
     assert response.status_code == 201, response.text
     assert response.json()["game"]["venue_id"] == venue["id"]
+
+
+def test_admin_create_official_game_records_replacement_source_metadata(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    source_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(title="Wrong Venue Game"),
+    )
+    assert source_response.status_code == 201, source_response.text
+    source_game = source_response.json()["game"]
+
+    replacement_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(
+            title="Correct Venue Game",
+            replacement_for_game_id=source_game["id"],
+            reason=f"Replacement for official game {source_game['id']}.",
+        ),
+    )
+    assert replacement_response.status_code == 201, replacement_response.text
+    replacement_game = replacement_response.json()["game"]
+
+    audit_response = client.get("/admin/actions?action_type=create_official_game")
+    assert audit_response.status_code == 200, audit_response.text
+    replacement_audit = next(
+        action
+        for action in audit_response.json()
+        if action["target_game_id"] == replacement_game["id"]
+    )
+    assert replacement_audit["reason"] == (
+        f"Replacement for official game {source_game['id']}."
+    )
+    assert replacement_audit["metadata"]["replacement"] == {
+        "replacement_for_game_id": source_game["id"],
+        "replacement_for_game_title": source_game["title"],
+        "replacement_for_game_status": source_game["game_status"],
+    }
+
+
+def test_admin_create_official_game_rejects_invalid_replacement_source(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(
+            replacement_for_game_id=str(uuid4()),
+        ),
+    )
+
+    assert response.status_code == 400, response.text
+    assert "replacement_for_game_id" in response.text
 
 
 def test_admin_can_list_and_get_official_games(client: TestClient):
@@ -309,6 +395,823 @@ def test_admin_can_list_official_game_waitlist_from_admin_route(
     assert waitlist_entries[0]["authorized_payment_method_last4"] == "4242"
     assert "authorized_payment_method_id" not in waitlist_entries[0]
     assert "authorized_stripe_payment_method_id" not in waitlist_entries[0]
+
+
+def test_admin_can_list_official_game_money_from_admin_route(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    cross_game_player = create_user(client)
+    participant_refund_player = create_user(client)
+    other_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    other_game_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(title="Other Admin Official Match"),
+    )
+    assert other_game_response.status_code == 201, other_game_response.text
+    other_game = other_game_response.json()["game"]
+
+    booking = create_booking(client, player["id"], game["id"])
+    cross_game_booking = create_booking(
+        client,
+        cross_game_player["id"],
+        game["id"],
+    )
+    other_booking = create_booking(client, other_player["id"], other_game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+    )
+    other_payment = create_payment(
+        client,
+        other_player["id"],
+        booking_id=other_booking["id"],
+        amount_cents=other_booking["total_cents"],
+        payment_status="succeeded",
+    )
+    participant_refund_target = create_game_participant(
+        client,
+        participant_refund_player["id"],
+        game["id"],
+        roster_order=2,
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        amount_cents=500,
+        refund_status="processing",
+    )
+    other_refund = create_refund(
+        client,
+        other_payment["id"],
+        booking_id=other_booking["id"],
+        amount_cents=500,
+        refund_status="processing",
+    )
+    direct_game_payment_id = uuid4()
+    participant_refund_id = uuid4()
+    # Seed defensive diagnostic linkages that current payment/refund mutation
+    # services intentionally do not create, but the read model must still surface.
+    with SessionLocal() as db:
+        db.add(
+            Payment(
+                id=direct_game_payment_id,
+                payer_user_id=UUID(player["id"]),
+                booking_id=None,
+                game_id=UUID(game["id"]),
+                payment_type="admin_charge",
+                provider="stripe",
+                provider_payment_intent_id=f"pi_direct_game_{unique_suffix()}",
+                provider_charge_id=None,
+                idempotency_key=f"direct-game-payment-{unique_suffix()}",
+                amount_cents=250,
+                currency="USD",
+                payment_status="processing",
+                payment_metadata={"source": "admin_money_route_coverage"},
+            )
+        )
+        db.add(
+            Refund(
+                id=participant_refund_id,
+                payment_id=UUID(other_payment["id"]),
+                booking_id=None,
+                participant_id=UUID(participant_refund_target["id"]),
+                provider_refund_id=f"re_participant_scope_{unique_suffix()}",
+                amount_cents=200,
+                currency="USD",
+                refund_reason="admin_refund",
+                refund_status="processing",
+            )
+        )
+        db.commit()
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=700,
+    )
+    other_credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=other_player["id"],
+        game_id=other_game["id"],
+        amount_cents=700,
+    )
+    cross_game_credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=cross_game_player["id"],
+        game_id=other_game["id"],
+        amount_cents=400,
+    )
+    source_booking_credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        booking_id=booking["id"],
+        amount_cents=200,
+    )
+    source_payment_credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        payment_id=str(direct_game_payment_id),
+        amount_cents=150,
+    )
+    authenticate_as(admin["id"])
+    reverse_response = client.post(
+        f"/admin/game-credits/{source_payment_credit['id']}/reverse",
+        json={
+            "idempotency_key": f"reverse-payment-credit-{unique_suffix()}",
+            "note": "Reverse payment-linked credit for money route coverage.",
+        },
+    )
+    assert reverse_response.status_code == 200, reverse_response.text
+    with SessionLocal() as db:
+        now = datetime.now(UTC)
+        usages = reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=300,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            payment_id=UUID(payment["id"]),
+            now=now,
+            idempotency_scope=f"admin-money-route:{booking['id']}",
+        )
+        credit_usage_id = str(usages[0].id)
+        cross_game_usages = reserve_game_credits(
+            db,
+            UUID(cross_game_player["id"]),
+            amount_cents=400,
+            booking_id=UUID(cross_game_booking["id"]),
+            game_id=UUID(game["id"]),
+            now=now,
+            idempotency_scope=f"cross-game-money-route:{cross_game_booking['id']}",
+        )
+        cross_game_usage_id = str(cross_game_usages[0].id)
+        db.commit()
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/official-games/{game['id']}/money")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    payment_ids = {item["id"] for item in body["payments"]}
+    refund_ids = {item["id"] for item in body["refunds"]}
+    credit_ids = {item["id"] for item in body["credits"]}
+    credit_usage_ids = {item["id"] for item in body["credit_usages"]}
+    assert payment["id"] in payment_ids
+    assert str(direct_game_payment_id) in payment_ids
+    assert other_payment["id"] not in payment_ids
+    assert refund["id"] in refund_ids
+    assert str(participant_refund_id) in refund_ids
+    assert other_refund["id"] not in refund_ids
+    assert credit["id"] in credit_ids
+    assert cross_game_credit["id"] in credit_ids
+    assert source_booking_credit["id"] in credit_ids
+    assert source_payment_credit["id"] in credit_ids
+    assert other_credit["id"] not in credit_ids
+    assert credit_usage_id in credit_usage_ids
+    assert cross_game_usage_id in credit_usage_ids
+    assert any(
+        item["game_credit_id"] == source_payment_credit["id"]
+        and item["payment_id"] == str(direct_game_payment_id)
+        and item["booking_id"] is None
+        and item["game_id"] is None
+        for item in body["credit_usages"]
+    )
+
+
+def test_official_game_money_reads_require_money_permission(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    monkeypatch.setitem(
+        ROLE_PERMISSIONS,
+        "admin",
+        frozenset(
+            {
+                PERMISSION_OFFICIAL_GAMES_READ,
+                PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
+            }
+        ),
+    )
+    missing_game_id = "00000000-0000-0000-0000-000000000000"
+
+    authenticate_as(admin["id"])
+    game_response = client.get(f"/admin/official-games/{missing_game_id}")
+    participant_response = client.get(
+        f"/admin/official-games/{missing_game_id}/participants"
+    )
+    booking_response = client.get(
+        f"/admin/official-games/{missing_game_id}/bookings"
+    )
+    waitlist_response = client.get(
+        f"/admin/official-games/{missing_game_id}/waitlist"
+    )
+    money_response = client.get(f"/admin/official-games/{missing_game_id}/money")
+    removal_preview_response = client.post(
+        (
+            f"/admin/official-games/{missing_game_id}/participants/"
+            f"{missing_game_id}/remove-preview"
+        )
+    )
+
+    assert game_response.status_code == 404, game_response.text
+    assert participant_response.status_code == 404, participant_response.text
+    assert booking_response.status_code == 403, booking_response.text
+    assert waitlist_response.status_code == 403, waitlist_response.text
+    assert money_response.status_code == 403, money_response.text
+    assert removal_preview_response.status_code == 403, removal_preview_response.text
+
+
+def test_admin_official_game_cancel_preview_reports_money_without_mutation(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    waitlisted_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=booking["total_cents"],
+    )
+    create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id="ch_admin_cancel_preview",
+    )
+    create_waitlist_entry(client, waitlisted_player["id"], game["id"])
+
+    authenticate_as(admin["id"])
+    response = client.post(f"/admin/official-games/{game['id']}/cancel-preview")
+
+    assert response.status_code == 200, response.text
+    preview = response.json()
+    assert len(preview["preview_token"]) == 64
+    assert preview["required_permissions"] == ["admin.official_games.cancel"]
+    assert preview["booking_count"] == 1
+    assert preview["participant_count"] == 1
+    assert preview["waitlist_entry_count"] == 1
+    assert preview["cash_refundable_cents"] == booking["total_cents"]
+    assert preview["refund_follow_up_required"] is False
+    assert preview["payment_follow_up_required"] is False
+    impact = preview["booking_impacts"][0]
+    assert impact["booking_id"] == booking["id"]
+    assert impact["result_category"] == "stripe_refund"
+    assert impact["cash_refundable_cents"] == booking["total_cents"]
+
+    get_response = client.get(f"/admin/official-games/{game['id']}")
+    assert get_response.status_code == 200, get_response.text
+    assert get_response.json()["game"]["game_status"] == "scheduled"
+
+    refunds_response = get_money_as_admin(client, f"/refunds?booking_id={booking['id']}")
+    assert refunds_response.status_code == 200, refunds_response.text
+    assert refunds_response.json() == []
+
+
+def test_admin_official_game_cancel_execution_returns_booking_results(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=booking["total_cents"],
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id="ch_admin_cancel_execute",
+    )
+    refund_calls: list[dict[str, object]] = []
+
+    def fake_create_stripe_refund(**kwargs):
+        refund_calls.append(kwargs)
+        return StripeRefundResult(
+            id="re_admin_cancel_execute",
+            status="succeeded",
+            amount_cents=int(kwargs["amount_cents"]),
+            currency=str(kwargs["currency"]),
+            charge_id=str(kwargs["charge_id"]),
+            payment_intent_id=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.services.game_cancellation_service.create_stripe_refund",
+        fake_create_stripe_refund,
+    )
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel-preview"
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    execute_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel",
+        json={
+            "preview_token": preview["preview_token"],
+            "reason": "Venue emergency.",
+        },
+    )
+
+    assert execute_response.status_code == 200, execute_response.text
+    result = execute_response.json()
+    assert result["game"]["game_status"] == "cancelled"
+    assert result["game"]["cancel_reason"] == "Venue emergency."
+    assert result["cancelled_booking_count"] == 1
+    assert result["refund_created_count"] == 1
+    assert result["refund_follow_up_required"] is False
+    assert result["support_flag_ids"] == []
+    booking_result = result["booking_results"][0]
+    assert booking_result["booking_id"] == booking["id"]
+    assert booking_result["result_category"] == "stripe_refunded"
+    assert booking_result["cash_refunded_cents"] == booking["total_cents"]
+    assert booking_result["refunds"][0]["refund_status"] == "succeeded"
+    assert refund_calls[0]["charge_id"] == payment["provider_charge_id"]
+
+
+def test_admin_official_game_cancel_releases_pending_credit_hold(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(
+        client,
+        player["id"],
+        game["id"],
+        booking_status="pending_payment",
+        payment_status="requires_action",
+        booked_at=None,
+    )
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        participant_status="pending_payment",
+        confirmed_at=None,
+        price_cents=booking["total_cents"],
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=800,
+        payment_status="requires_action",
+    )
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
+    with SessionLocal() as db:
+        usages = reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=500,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            payment_id=UUID(payment["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"admin-cancel-pending:{booking['id']}",
+        )
+        assert len(usages) == 1
+        db.commit()
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel-preview"
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["credit_releasable_cents"] == 500
+    assert preview["booking_impacts"] == [
+        {
+            "booking_id": booking["id"],
+            "buyer_user_id": player["id"],
+            "booking_status": "pending_payment",
+            "booking_payment_status": "requires_action",
+            "participant_count": 1,
+            "payment_statuses": ["requires_action"],
+            "refund_statuses": [],
+            "result_category": "pending_hold_release",
+            "cash_refundable_cents": 0,
+            "credit_restorable_cents": 0,
+            "credit_releasable_cents": 500,
+            "follow_up_required": False,
+            "follow_up_reason": None,
+        }
+    ]
+
+    execute_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel",
+        json={
+            "preview_token": preview["preview_token"],
+            "reason": "Venue emergency.",
+        },
+    )
+
+    assert execute_response.status_code == 200, execute_response.text
+    result = execute_response.json()
+    assert result["credit_released_count"] == 1
+    assert result["credit_released_cents"] == 500
+    assert result["credit_restored_cents"] == 0
+    booking_result = result["booking_results"][0]
+    assert booking_result["result_category"] == "pending_hold_released"
+    assert booking_result["booking_payment_status"] == "failed"
+    assert booking_result["credit_released_cents"] == 500
+    assert booking_result["credit_restored_cents"] == 0
+
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    assert payment_response.json()["payment_status"] == "canceled"
+    with SessionLocal() as db:
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(booking["id"])
+            )
+        ).one()
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 500
+    assert usage.usage_status == RELEASED_USAGE_STATUS
+
+
+def test_admin_official_game_cancel_rejects_reason_over_500_characters(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    preview_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel-preview"
+    )
+    assert preview_response.status_code == 200, preview_response.text
+
+    execute_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel",
+        json={
+            "preview_token": preview_response.json()["preview_token"],
+            "reason": "x" * 501,
+        },
+    )
+
+    assert execute_response.status_code == 422, execute_response.text
+    get_response = client.get(f"/admin/official-games/{game['id']}")
+    assert get_response.status_code == 200, get_response.text
+    assert get_response.json()["game"]["game_status"] == "scheduled"
+
+
+def test_admin_official_game_cancel_partial_failure_returns_support_follow_up(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=booking["total_cents"],
+    )
+    create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id=None,
+    )
+
+    preview_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel-preview"
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["refund_follow_up_required"] is True
+    assert preview["booking_impacts"][0]["follow_up_reason"] == (
+        "missing_stripe_charge_id"
+    )
+
+    execute_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel",
+        json={
+            "preview_token": preview["preview_token"],
+            "reason": "Venue emergency.",
+        },
+    )
+
+    assert execute_response.status_code == 200, execute_response.text
+    result = execute_response.json()
+    assert result["refund_follow_up_required"] is True
+    assert result["refund_failed_count"] == 1
+    assert result["refund_missing_charge_count"] == 1
+    assert len(result["support_flag_ids"]) == 1
+    booking_result = result["booking_results"][0]
+    assert booking_result["result_category"] == "follow_up_required"
+    assert booking_result["follow_up_required"] is True
+    assert booking_result["follow_up_reason"] == "missing_stripe_charge_id"
+    assert booking_result["refunds"][0]["refund_status"] == "failed"
+
+    with SessionLocal() as db:
+        support_flag = db.get(SupportFlag, UUID(result["support_flag_ids"][0]))
+
+    assert support_flag is not None
+    assert support_flag.flag_type == "official_cancel_partial_failure"
+    assert support_flag.target_game_id == UUID(game["id"])
+    assert support_flag.source_admin_action_id is not None
+
+
+def test_admin_official_game_cancel_credit_failure_happens_before_stripe(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    cash_player = create_user(client)
+    credit_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    refund_calls: list[dict[str, object]] = []
+
+    def fake_create_stripe_refund(**kwargs):
+        refund_calls.append(kwargs)
+        raise AssertionError("Stripe must not run before all credit returns succeed.")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    cash_booking = create_booking(client, cash_player["id"], game["id"])
+    create_game_participant(
+        client,
+        cash_player["id"],
+        game["id"],
+        booking_id=cash_booking["id"],
+        price_cents=cash_booking["total_cents"],
+    )
+    create_payment(
+        client,
+        cash_player["id"],
+        booking_id=cash_booking["id"],
+        amount_cents=cash_booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id="ch_cancel_credit_preflight",
+    )
+    credit_booking = create_booking(client, credit_player["id"], game["id"])
+    create_game_participant(
+        client,
+        credit_player["id"],
+        game["id"],
+        booking_id=credit_booking["id"],
+        price_cents=credit_booking["total_cents"],
+    )
+
+    def fail_second_credit_restore(db, booking_id, **kwargs):
+        del db, kwargs
+        if str(booking_id) == credit_booking["id"]:
+            raise GameCreditLedgerError("Credit ledger is inconsistent.")
+        return []
+
+    monkeypatch.setattr(
+        "backend.services.game_cancellation_service.create_stripe_refund",
+        fake_create_stripe_refund,
+    )
+    monkeypatch.setattr(
+        "backend.services.game_cancellation_service.restore_redeemed_game_credits",
+        fail_second_credit_restore,
+    )
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel-preview"
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    execute_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel",
+        json={
+            "preview_token": preview_response.json()["preview_token"],
+            "reason": "Venue emergency.",
+        },
+    )
+
+    assert execute_response.status_code == 409, execute_response.text
+    assert "game was not cancelled" in execute_response.text.lower()
+    assert refund_calls == []
+
+    game_response = client.get(f"/admin/official-games/{game['id']}")
+    assert game_response.status_code == 200, game_response.text
+    assert game_response.json()["game"]["game_status"] == "scheduled"
+
+    with SessionLocal() as db:
+        support_flag = db.scalars(
+            select(SupportFlag).where(
+                SupportFlag.flag_type == "official_cancel_partial_failure",
+                SupportFlag.target_game_id == UUID(game["id"]),
+                SupportFlag.target_booking_id == UUID(credit_booking["id"]),
+            )
+        ).one()
+
+    assert support_flag.metadata_["credit_operation"] == "restore"
+    assert support_flag.source_admin_action_id is None
+
+    resolve_response = client.post(
+        f"/admin/support-flags/{support_flag.id}/resolve",
+        json={
+            "outcome": "handled_externally",
+            "reason": "Verified the first credit follow-up externally.",
+        },
+    )
+    assert resolve_response.status_code == 200, resolve_response.text
+    assert resolve_response.json()["flag_status"] == "resolved"
+
+    repeat_preview_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel-preview"
+    )
+    assert repeat_preview_response.status_code == 200, repeat_preview_response.text
+    repeat_execute_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel",
+        json={
+            "preview_token": repeat_preview_response.json()["preview_token"],
+            "reason": "Venue emergency again.",
+        },
+    )
+
+    assert repeat_execute_response.status_code == 409, repeat_execute_response.text
+    assert refund_calls == []
+
+    with SessionLocal() as db:
+        reopened_flags = db.scalars(
+            select(SupportFlag).where(
+                SupportFlag.flag_type == "official_cancel_partial_failure",
+                SupportFlag.target_game_id == UUID(game["id"]),
+                SupportFlag.target_booking_id == UUID(credit_booking["id"]),
+            )
+        ).all()
+
+    assert len(reopened_flags) == 1
+    reopened_flag = reopened_flags[0]
+    assert reopened_flag.id == support_flag.id
+    assert reopened_flag.flag_status == "open"
+    assert reopened_flag.resolved_at is None
+    assert reopened_flag.resolved_by_user_id is None
+    assert reopened_flag.resolution_outcome is None
+    assert reopened_flag.resolution_reason is None
+    assert reopened_flag.resolution_admin_action_id is None
+
+
+def test_admin_official_game_cancel_execution_rejects_stale_preview(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    late_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+    )
+    create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id="ch_admin_cancel_stale",
+    )
+
+    def fail_create_stripe_refund(**kwargs):
+        raise AssertionError("Stripe refund should not run for a stale preview.")
+
+    monkeypatch.setattr(
+        "backend.services.game_cancellation_service.create_stripe_refund",
+        fail_create_stripe_refund,
+    )
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel-preview"
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+
+    late_booking = create_booking(client, late_player["id"], game["id"])
+    create_game_participant(
+        client,
+        late_player["id"],
+        game["id"],
+        booking_id=late_booking["id"],
+    )
+
+    authenticate_as(admin["id"])
+    execute_response = client.post(
+        f"/admin/official-games/{game['id']}/cancel",
+        json={
+            "preview_token": preview["preview_token"],
+            "reason": "Venue emergency.",
+        },
+    )
+
+    assert execute_response.status_code == 409, execute_response.text
+    assert "impact changed" in execute_response.text
+
+    get_response = client.get(f"/admin/official-games/{game['id']}")
+    assert get_response.status_code == 200, get_response.text
+    assert get_response.json()["game"]["game_status"] == "scheduled"
 
 
 def test_admin_lookup_routes_return_users_and_venues(client: TestClient):
@@ -762,7 +1665,9 @@ def test_admin_can_remove_admin_added_player(client: TestClient):
     assert audit_rows[0]["metadata"]["payment_refund_created"] is False
 
 
-def test_admin_remove_paid_player_does_not_refund_payment(client: TestClient):
+def test_admin_remove_paid_player_requires_preview_without_mutation(
+    client: TestClient,
+):
     admin = create_user(client)
     player = create_user(client)
     set_user_role(admin["id"], "admin")
@@ -796,7 +1701,8 @@ def test_admin_remove_paid_player_does_not_refund_payment(client: TestClient):
         json={"reason": "Admin support removal."},
     )
 
-    assert remove_response.status_code == 200, remove_response.text
+    assert remove_response.status_code == 409, remove_response.text
+    assert "Removal impact preview is required" in remove_response.text
     payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
     assert payment_response.status_code == 200, payment_response.text
     assert payment_response.json()["payment_status"] == "succeeded"
@@ -804,15 +1710,1126 @@ def test_admin_remove_paid_player_does_not_refund_payment(client: TestClient):
     booking_response = client.get(f"/bookings/{booking['id']}")
     assert booking_response.status_code == 200, booking_response.text
     updated_booking = booking_response.json()
-    assert updated_booking["booking_status"] == "cancelled"
+    assert updated_booking["booking_status"] == "confirmed"
     assert updated_booking["payment_status"] == "paid"
+    participant_response = get_roster_as_admin(
+        client,
+        f"/game-participants/{participant['id']}",
+    )
+    assert participant_response.status_code == 200, participant_response.text
+    assert participant_response.json()["participant_status"] == "confirmed"
+    assert list_user_notifications(
+        client,
+        player["id"],
+        "game_player_removed_by_admin",
+    ) == []
+
+    authenticate_as(admin["id"])
+    audit_response = client.get(
+        f"/admin/actions?action_type=admin_remove_player&target_game_id={game['id']}"
+    )
+    assert audit_response.status_code == 200, audit_response.text
+    assert audit_response.json() == []
+
+
+def test_admin_paid_player_removal_preview_reports_impact_without_mutation(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    waitlisted_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=1300,
+        payment_status="succeeded",
+    )
+    create_waitlist_entry(
+        client,
+        waitlisted_player["id"],
+        game["id"],
+        party_size=1,
+    )
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["selected_participant_id"] == participant["id"]
+    assert preview["booking_id"] == booking["id"]
+    assert preview["removal_scope"] == "booking_party"
+    assert preview["classification"] == "refund_cash"
+    assert preview["automatic_outcome_available"] is True
+    assert len(preview["preview_token"]) == 64
+    assert preview["blocking_reasons"] == []
+    assert preview["allowed_outcomes"] == ["refund_cash_and_remove_party"]
+    assert preview["required_permissions"] == ["admin.money.refund"]
+    assert preview["payment_statuses"] == ["succeeded"]
+    assert preview["cash_collected_cents"] == 1300
+    assert preview["cash_refundable_cents"] == 1300
+    assert preview["cash_refunded_cents"] == 0
+    assert preview["affected_participants"] == [
+        {
+            "id": participant["id"],
+            "display_name": participant["display_name_snapshot"],
+            "participant_type": "registered_user",
+            "participant_status": "confirmed",
+            "price_cents": 1500,
+            "is_selected": True,
+        }
+    ]
+    assert preview["spots_opened"] == 1
+    assert preview["available_spots_after_removal"] == 10
+    assert preview["active_waitlist_entry_count"] == 1
+    assert preview["active_waitlist_player_count"] == 1
+    assert preview["next_waitlist_party_size"] == 1
+    assert preview["waitlist_promotion_possible"] is True
+
+    participant_response = get_roster_as_admin(
+        client,
+        f"/game-participants/{participant['id']}",
+    )
+    assert participant_response.status_code == 200, participant_response.text
+    assert participant_response.json()["participant_status"] == "confirmed"
+    booking_response = client.get(f"/bookings/{booking['id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    assert booking_response.json()["booking_status"] == "confirmed"
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    assert payment_response.json()["payment_status"] == "succeeded"
+    assert list_user_notifications(
+        client,
+        player["id"],
+        "game_player_removed_by_admin",
+    ) == []
+
+    authenticate_as(admin["id"])
+    audit_response = client.get(
+        f"/admin/actions?action_type=admin_remove_player&target_game_id={game['id']}"
+    )
+    assert audit_response.status_code == 200, audit_response.text
+    assert audit_response.json() == []
+
+
+def test_admin_player_removal_preview_reports_combined_cash_and_credit(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=800,
+        payment_status="succeeded",
+    )
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
+
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        usages = reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=500,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            now=now,
+            idempotency_scope=f"preview-test:{booking['id']}",
+        )
+        assert len(usages) == 1
+        assert str(usages[0].game_credit_id) == credit["id"]
+        redeem_reserved_game_credits(
+            db,
+            UUID(booking["id"]),
+            user_id=UUID(player["id"]),
+            now=now,
+        )
+        db.commit()
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["classification"] == "refund_cash_and_restore_credit"
+    assert preview["allowed_outcomes"] == [
+        "refund_cash_restore_credit_and_remove_party"
+    ]
+    assert set(preview["required_permissions"]) == {
+        "admin.money.credit_manage",
+        "admin.money.refund",
+    }
+    assert preview["cash_collected_cents"] == 800
+    assert preview["cash_refundable_cents"] == 800
+    assert preview["credit_redeemed_cents"] == 500
+    assert preview["credit_restorable_cents"] == 500
+
+
+def test_admin_paid_guest_removal_preview_requires_manual_allocation(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(
+        client,
+        player["id"],
+        game["id"],
+        participant_count=2,
+        subtotal_cents=3000,
+        platform_fee_cents=0,
+        total_cents=3000,
+        price_per_player_snapshot_cents=1500,
+    )
+    create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+        roster_order=1,
+    )
+    guest = create_game_participant(
+        client,
+        None,
+        game["id"],
+        booking_id=booking["id"],
+        participant_type="guest",
+        guest_of_user_id=player["id"],
+        guest_name="Paid Guest",
+        display_name_snapshot="Paid Guest",
+        price_cents=1500,
+        roster_order=2,
+    )
+    create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=3000,
+        payment_status="succeeded",
+    )
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{guest['id']}/remove-preview"
+        )
+    )
+
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["removal_scope"] == "single_participant"
+    assert preview["classification"] == "manual_review_required"
+    assert preview["automatic_outcome_available"] is False
+    assert preview["allowed_outcomes"] == []
+    assert "whole booking" in preview["blocking_reasons"][0]
+    assert len(preview["affected_participants"]) == 1
+    assert preview["affected_participants"][0]["id"] == guest["id"]
+
+
+def test_admin_player_removal_preview_reports_active_refund(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=1300,
+        payment_status="succeeded",
+    )
+    create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        amount_cents=500,
+        refund_status="pending",
+    )
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["classification"] == "refund_in_progress"
+    assert preview["automatic_outcome_available"] is False
+    assert preview["refund_statuses"] == ["pending"]
+    assert preview["cash_refund_pending_cents"] == 500
+    assert preview["cash_refundable_cents"] == 800
+
+
+def test_admin_executes_paid_player_removal_with_successful_refund(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    refund_calls: list[dict] = []
+    waitlist_promotion_calls: list[str] = []
+
+    def fake_create_stripe_refund(**kwargs):
+        refund_calls.append(kwargs)
+        return StripeRefundResult(
+            id="re_admin_player_remove",
+            status="succeeded",
+            amount_cents=kwargs["amount_cents"],
+            currency=kwargs["currency"],
+            charge_id=kwargs["charge_id"],
+            payment_intent_id="pi_admin_player_remove",
+        )
+
+    def fake_promote_waitlist_entries(db, game, now):
+        del db, now
+        waitlist_promotion_calls.append(str(game.id))
+
+    monkeypatch.setattr(
+        "backend.services.official_game_service.create_stripe_refund",
+        fake_create_stripe_refund,
+    )
+    monkeypatch.setattr(
+        "backend.services.official_game_service.promote_waitlist_entries",
+        fake_promote_waitlist_entries,
+    )
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=1300,
+        payment_status="succeeded",
+        provider_charge_id="ch_admin_player_remove",
+    )
+
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+
+    execute_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove"
+        ),
+        json={
+            "preview_token": preview["preview_token"],
+            "outcome": preview["allowed_outcomes"][0],
+            "reason": "Player requested a support removal.",
+        },
+    )
+
+    assert execute_response.status_code == 200, execute_response.text
+    result = execute_response.json()
+    assert result["outcome"] == "refund_cash_and_remove_party"
+    assert result["removed_participant_ids"] == [participant["id"]]
+    assert result["booking_status"] == "cancelled"
+    assert result["booking_payment_status"] == "refunded"
+    assert result["refund_follow_up_required"] is False
+    assert result["support_flag_ids"] == []
+    assert result["waitlist_advanced_entry_ids"] == []
+    assert len(result["refunds"]) == 1
+    assert result["refunds"][0]["payment_id"] == payment["id"]
+    assert result["refunds"][0]["amount_cents"] == 1300
+    assert result["refunds"][0]["refund_status"] == "succeeded"
+    assert len(refund_calls) == 1
+    assert refund_calls[0]["charge_id"] == "ch_admin_player_remove"
+    assert refund_calls[0]["amount_cents"] == 1300
+    assert waitlist_promotion_calls == [game["id"]]
+
+    participant_response = get_roster_as_admin(
+        client,
+        f"/game-participants/{participant['id']}",
+    )
+    assert participant_response.status_code == 200, participant_response.text
+    assert participant_response.json()["participant_status"] == "removed"
+    booking_response = client.get(f"/bookings/{booking['id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    assert booking_response.json()["booking_status"] == "cancelled"
+    assert booking_response.json()["payment_status"] == "refunded"
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    assert payment_response.json()["payment_status"] == "refunded"
+
     removed_notifications = list_user_notifications(
         client,
         player["id"],
         "game_player_removed_by_admin",
     )
+    refunded_notifications = list_user_notifications(
+        client,
+        player["id"],
+        "booking_refunded",
+    )
     assert len(removed_notifications) == 1
-    assert "Any payment or credit updates" in removed_notifications[0]["body"]
+    assert len(refunded_notifications) == 1
+    assert refunded_notifications[0]["title"] == "Refund processed"
+
+    authenticate_as(admin["id"])
+    audit_response = client.get(
+        f"/admin/actions?action_type=admin_remove_player&target_game_id={game['id']}"
+    )
+    assert audit_response.status_code == 200, audit_response.text
+    audit_rows = audit_response.json()
+    assert len(audit_rows) == 1
+    assert audit_rows[0]["reason"] == "Player requested a support removal."
+    assert audit_rows[0]["metadata"]["removal_outcome"] == (
+        "refund_cash_and_remove_party"
+    )
+    assert audit_rows[0]["metadata"]["refund_created_count"] == 1
+    assert audit_rows[0]["metadata"]["refund_follow_up_required"] is False
+
+
+def test_admin_executes_pending_hold_removal_and_releases_reserved_credit(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(
+        client,
+        player["id"],
+        game["id"],
+        booking_status="pending_payment",
+        payment_status="requires_action",
+        booked_at=None,
+    )
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        participant_status="pending_payment",
+        confirmed_at=None,
+        price_cents=1500,
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=800,
+        payment_status="requires_action",
+    )
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
+    with SessionLocal() as db:
+        usages = reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=500,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            payment_id=UUID(payment["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"pending-removal:{booking['id']}",
+        )
+        assert len(usages) == 1
+        db.commit()
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["classification"] == "release_pending_hold"
+    assert preview["allowed_outcomes"] == [
+        "release_pending_hold_and_remove_party"
+    ]
+    assert preview["required_permissions"] == []
+
+    execute_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove"
+        ),
+        json={
+            "preview_token": preview["preview_token"],
+            "outcome": preview["allowed_outcomes"][0],
+            "reason": "Release the unfinished checkout hold.",
+        },
+    )
+
+    assert execute_response.status_code == 200, execute_response.text
+    result = execute_response.json()
+    assert result["outcome"] == "release_pending_hold_and_remove_party"
+    assert result["removed_participant_ids"] == [participant["id"]]
+    assert result["booking_status"] == "cancelled"
+    assert result["booking_payment_status"] == "failed"
+    assert result["refunds"] == []
+    assert result["credit_restored_cents"] == 0
+
+    booking_response = client.get(f"/bookings/{booking['id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    assert booking_response.json()["booking_status"] == "cancelled"
+    assert booking_response.json()["payment_status"] == "failed"
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    assert payment_response.json()["payment_status"] == "canceled"
+    assert payment_response.json()["failure_code"] == "admin_player_removed"
+
+    with SessionLocal() as db:
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+        usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(booking["id"])
+            )
+        ).one()
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.credit_status == "active"
+    assert usage.usage_status == RELEASED_USAGE_STATUS
+    assert usage.release_reason == "admin_player_removed"
+
+
+def test_admin_paid_player_removal_rejects_stale_preview_before_stripe(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    refund_calls: list[dict] = []
+
+    def fail_create_stripe_refund(**kwargs):
+        refund_calls.append(kwargs)
+        raise AssertionError("Stripe must not be called for a stale preview.")
+
+    monkeypatch.setattr(
+        "backend.services.official_game_service.create_stripe_refund",
+        fail_create_stripe_refund,
+    )
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=1300,
+        payment_status="succeeded",
+        provider_charge_id="ch_stale_preview",
+    )
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+
+    with SessionLocal() as db:
+        db_payment = db.get(Payment, UUID(payment["id"]))
+        assert db_payment is not None
+        db_payment.payment_status = "processing"
+        db_payment.updated_at = datetime.now(UTC)
+        db.commit()
+
+    execute_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove"
+        ),
+        json={
+            "preview_token": preview["preview_token"],
+            "outcome": preview["allowed_outcomes"][0],
+            "reason": "This preview is stale.",
+        },
+    )
+
+    assert execute_response.status_code == 409, execute_response.text
+    assert "Removal impact changed" in execute_response.text
+    assert refund_calls == []
+    participant_response = get_roster_as_admin(
+        client,
+        f"/game-participants/{participant['id']}",
+    )
+    assert participant_response.status_code == 200, participant_response.text
+    assert participant_response.json()["participant_status"] == "confirmed"
+
+
+def test_admin_executes_combined_refund_and_credit_restore(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    def fake_create_stripe_refund(**kwargs):
+        return StripeRefundResult(
+            id="re_admin_combined_remove",
+            status="succeeded",
+            amount_cents=kwargs["amount_cents"],
+            currency=kwargs["currency"],
+            charge_id=kwargs["charge_id"],
+            payment_intent_id="pi_admin_combined_remove",
+        )
+
+    monkeypatch.setattr(
+        "backend.services.official_game_service.create_stripe_refund",
+        fake_create_stripe_refund,
+    )
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=800,
+        payment_status="succeeded",
+        provider_charge_id="ch_admin_combined_remove",
+    )
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=500,
+    )
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=500,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            payment_id=UUID(payment["id"]),
+            now=now,
+            idempotency_scope=f"execute-preview-test:{booking['id']}",
+        )
+        redeem_reserved_game_credits(
+            db,
+            UUID(booking["id"]),
+            user_id=UUID(player["id"]),
+            now=now,
+        )
+        db.commit()
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["classification"] == "refund_cash_and_restore_credit"
+
+    execute_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove"
+        ),
+        json={
+            "preview_token": preview["preview_token"],
+            "outcome": preview["allowed_outcomes"][0],
+            "reason": "Return both payment sources.",
+        },
+    )
+
+    assert execute_response.status_code == 200, execute_response.text
+    result = execute_response.json()
+    assert result["booking_payment_status"] == "refunded"
+    assert result["credit_restored_count"] == 1
+    assert result["credit_restored_cents"] == 500
+    assert result["refunds"][0]["refund_status"] == "succeeded"
+
+    with SessionLocal() as db:
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+        usages = list(
+            db.scalars(
+                select(GameCreditUsage).where(
+                    GameCreditUsage.booking_id == UUID(booking["id"])
+                )
+            ).all()
+        )
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 500
+    assert {usage.usage_status for usage in usages} == {"redeemed", "restored"}
+    refunded_notifications = list_user_notifications(
+        client,
+        player["id"],
+        "booking_refunded",
+    )
+    assert len(refunded_notifications) == 1
+    assert refunded_notifications[0]["title"] == "Refund and credit processed"
+
+
+def test_admin_executes_credit_only_player_removal(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    credit = issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        amount_cents=1300,
+    )
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=1300,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            now=now,
+            idempotency_scope=f"credit-only-remove:{booking['id']}",
+        )
+        redeem_reserved_game_credits(
+            db,
+            UUID(booking["id"]),
+            user_id=UUID(player["id"]),
+            now=now,
+        )
+        db.commit()
+
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["classification"] == "restore_credit"
+    assert preview["required_permissions"] == ["admin.money.credit_manage"]
+
+    execute_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove"
+        ),
+        json={
+            "preview_token": preview["preview_token"],
+            "outcome": preview["allowed_outcomes"][0],
+            "reason": "Restore the full-credit booking.",
+        },
+    )
+
+    assert execute_response.status_code == 200, execute_response.text
+    result = execute_response.json()
+    assert result["booking_payment_status"] == "credit_restored"
+    assert result["refunds"] == []
+    assert result["credit_restored_count"] == 1
+    assert result["credit_restored_cents"] == 1300
+
+    with SessionLocal() as db:
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.remaining_cents == 1300
+    restored_notifications = list_user_notifications(
+        client,
+        player["id"],
+        "booking_refunded",
+    )
+    assert len(restored_notifications) == 1
+    assert restored_notifications[0]["title"] == "Credit restored"
+    assert "booking was removed" in restored_notifications[0]["body"]
+
+
+def test_admin_paid_player_removal_refund_failure_creates_follow_up(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    def fail_create_stripe_refund(**kwargs):
+        del kwargs
+        raise RuntimeError("Stripe refund unavailable.")
+
+    monkeypatch.setattr(
+        "backend.services.official_game_service.create_stripe_refund",
+        fail_create_stripe_refund,
+    )
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=1300,
+        payment_status="succeeded",
+        provider_charge_id="ch_failed_admin_remove",
+    )
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+
+    execute_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove"
+        ),
+        json={
+            "preview_token": preview["preview_token"],
+            "outcome": preview["allowed_outcomes"][0],
+            "reason": "Remove with refund follow-up.",
+        },
+    )
+
+    assert execute_response.status_code == 200, execute_response.text
+    result = execute_response.json()
+    assert result["booking_status"] == "cancelled"
+    assert result["booking_payment_status"] == "paid"
+    assert result["refund_follow_up_required"] is True
+    assert result["refunds"][0]["refund_status"] == "failed"
+    assert len(result["support_flag_ids"]) == 1
+
+    with SessionLocal() as db:
+        db_payment = db.get(Payment, UUID(payment["id"]))
+        db_refund = db.get(Refund, UUID(result["refunds"][0]["id"]))
+        support_flag = db.get(SupportFlag, UUID(result["support_flag_ids"][0]))
+
+    assert db_payment is not None
+    assert db_payment.payment_status == "succeeded"
+    assert db_refund is not None
+    assert db_refund.refund_status == "failed"
+    assert support_flag is not None
+    assert support_flag.flag_type == "stripe_refund_failed"
+    assert support_flag.target_refund_id == db_refund.id
+    assert (
+        list_user_notifications(client, player["id"], "booking_refunded")
+        == []
+    )
+
+
+def test_admin_paid_player_removal_execution_requires_refund_permission(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(client, player["id"], game["id"])
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        price_cents=1500,
+    )
+    create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=1300,
+        payment_status="succeeded",
+        provider_charge_id="ch_missing_refund_permission",
+    )
+    monkeypatch.setitem(
+        ROLE_PERMISSIONS,
+        "admin",
+        frozenset(
+            {
+                PERMISSION_OFFICIAL_GAMES_READ,
+                PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
+                PERMISSION_MONEY_READ,
+            }
+        ),
+    )
+    authenticate_as(admin["id"])
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+
+    execute_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove"
+        ),
+        json={
+            "preview_token": preview["preview_token"],
+            "outcome": preview["allowed_outcomes"][0],
+            "reason": "Permission boundary test.",
+        },
+    )
+
+    assert execute_response.status_code == 403, execute_response.text
+
+
+def test_admin_paid_player_removal_execution_requires_money_read(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(
+        client,
+        player["id"],
+        game["id"],
+        booking_status="pending_payment",
+        payment_status="requires_action",
+        booked_at=None,
+    )
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        participant_status="pending_payment",
+        confirmed_at=None,
+        price_cents=1500,
+    )
+    create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=1300,
+        payment_status="requires_action",
+    )
+
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["allowed_outcomes"] == [
+        "release_pending_hold_and_remove_party"
+    ]
+
+    monkeypatch.setitem(
+        ROLE_PERMISSIONS,
+        "admin",
+        frozenset(
+            {
+                PERMISSION_OFFICIAL_GAMES_READ,
+                PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
+            }
+        ),
+    )
+    authenticate_as(admin["id"])
+    execute_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove"
+        ),
+        json={
+            "preview_token": preview["preview_token"],
+            "outcome": preview["allowed_outcomes"][0],
+            "reason": "Permission boundary test.",
+        },
+    )
+
+    assert execute_response.status_code == 403, execute_response.text
 
 
 def test_admin_remove_guest_notifies_booking_owner_with_guest_copy(
@@ -829,7 +2846,15 @@ def test_admin_remove_guest_notifies_booking_owner_with_guest_copy(
     )
     assert create_response.status_code == 201, create_response.text
     game = create_response.json()["game"]
-    booking = create_booking(client, player["id"], game["id"], participant_count=2)
+    booking = create_booking(
+        client,
+        player["id"],
+        game["id"],
+        participant_count=2,
+        payment_status="not_required",
+        discount_cents=1300,
+        total_cents=0,
+    )
     create_game_participant(
         client,
         player["id"],
@@ -880,7 +2905,7 @@ def test_admin_remove_guest_notifies_booking_owner_with_guest_copy(
     assert list_user_notifications(client, player["id"], "game_roster_update") == []
 
 
-def test_admin_remove_pending_checkout_party_invalidates_payment(
+def test_admin_remove_requires_action_checkout_party_invalidates_payment(
     client: TestClient,
     monkeypatch,
 ):
@@ -899,7 +2924,7 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
         return StripePaymentIntentResult(
             id=payment_intent_id,
             client_secret="pi_admin_remove_pending_secret",
-            status="processing",
+            status="requires_action",
         )
 
     monkeypatch.setattr(
@@ -1005,6 +3030,132 @@ def test_admin_remove_pending_checkout_party_invalidates_payment(
     assert refreshed_credit.credit_status == "active"
     assert usage.usage_status == RELEASED_USAGE_STATUS
     assert usage.release_reason == "admin_player_removed"
+
+
+def test_admin_remove_processing_checkout_requires_preview_without_mutation(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    booking = create_booking(
+        client,
+        player["id"],
+        game["id"],
+        booking_status="pending_payment",
+        payment_status="processing",
+        booked_at=None,
+    )
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=booking["id"],
+        participant_status="pending_payment",
+        confirmed_at=None,
+        price_cents=1500,
+    )
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=1300,
+        payment_status="processing",
+    )
+
+    remove_response = client.request(
+        "DELETE",
+        f"/admin/official-games/{game['id']}/participants/{participant['id']}",
+        json={"reason": "Do not race a processing payment."},
+    )
+
+    assert remove_response.status_code == 409, remove_response.text
+    assert "Removal impact preview is required" in remove_response.text
+
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["classification"] == "payment_processing"
+    assert preview["automatic_outcome_available"] is False
+    assert preview["payment_statuses"] == ["processing"]
+
+    booking_response = client.get(f"/bookings/{booking['id']}")
+    assert booking_response.status_code == 200, booking_response.text
+    assert booking_response.json()["booking_status"] == "pending_payment"
+    assert booking_response.json()["payment_status"] == "processing"
+
+    payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    assert payment_response.json()["payment_status"] == "processing"
+
+    participant_response = get_roster_as_admin(
+        client,
+        f"/game-participants/{participant['id']}",
+    )
+    assert participant_response.status_code == 200, participant_response.text
+    assert participant_response.json()["participant_status"] == "pending_payment"
+
+
+def test_admin_remove_player_without_booking_requires_preview(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    participant = create_game_participant(
+        client,
+        player["id"],
+        game["id"],
+        booking_id=None,
+        price_cents=1500,
+    )
+
+    remove_response = client.request(
+        "DELETE",
+        f"/admin/official-games/{game['id']}/participants/{participant['id']}",
+        json={"reason": "Missing booking context."},
+    )
+
+    assert remove_response.status_code == 409, remove_response.text
+    assert "Removal impact preview is required" in remove_response.text
+    preview_response = client.post(
+        (
+            f"/admin/official-games/{game['id']}/participants/"
+            f"{participant['id']}/remove-preview"
+        )
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["classification"] == "blocked_missing_booking"
+    assert preview["automatic_outcome_available"] is False
+    assert preview["booking_id"] is None
+    participant_response = get_roster_as_admin(
+        client,
+        f"/game-participants/{participant['id']}",
+    )
+    assert participant_response.status_code == 200, participant_response.text
+    assert participant_response.json()["participant_status"] == "confirmed"
 
 
 def test_admin_can_assign_replace_and_remove_official_game_host_designation(

@@ -1,6 +1,10 @@
 import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
+import {
+  ADMIN_PERMISSIONS,
+} from '../admin/shared/adminWorkspaceData.js'
+import { useAdminAccess } from '../admin/shared/useAdminAccess.js'
 import { buildGameDetailsLayoutProps } from './gameDetailsLayoutProps.js'
 import { useGameDetailsActions } from './useGameDetailsActions.js'
 import { useGameDetailsChat } from './useGameDetailsChat.js'
@@ -12,6 +16,10 @@ export function useGameDetailsPageModel() {
   const { gameId } = useParams()
   const navigate = useNavigate()
   const { appUser, currentUser: firebaseUser, isLoading: isAuthLoading } = useAuth()
+  const shouldLoadAdminAccess = appUser?.role === 'admin' || appUser?.role === 'moderator'
+  const { hasPermission: hasAdminPermission } = useAdminAccess({
+    enabled: shouldLoadAdminAccess,
+  })
   const uiState = useGameDetailsUiState()
   const {
     activeImageIndex,
@@ -64,6 +72,12 @@ export function useGameDetailsPageModel() {
     venue,
   } = detailsData
   const derivedState = useGameDetailsDerivedState({
+    canAdminCancelCommunityGame: hasAdminPermission(
+      ADMIN_PERMISSIONS.COMMUNITY_GAMES_CANCEL,
+    ),
+    canAdminCancelOfficialGame: hasAdminPermission(
+      ADMIN_PERMISSIONS.OFFICIAL_GAMES_CANCEL,
+    ),
     communityGameDetails,
     currentUser,
     game,

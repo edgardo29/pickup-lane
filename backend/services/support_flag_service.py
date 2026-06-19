@@ -301,7 +301,42 @@ def get_existing_support_flag_by_idempotency_key(
     )
 
 
-def create_support_flag(
+def reopen_resolved_support_flag(
+    support_flag: SupportFlag,
+    *,
+    source: str,
+    title: str,
+    summary: str,
+    severity: str,
+    metadata: dict[str, Any] | None,
+    source_admin_action_id: uuid.UUID | None,
+) -> SupportFlag:
+    reopened_at = datetime.now(timezone.utc)
+    support_flag.flag_status = "open"
+    support_flag.severity = severity
+    support_flag.source = source
+    support_flag.title = normalize_limited_text(
+        title,
+        "title",
+        MAX_SUPPORT_FLAG_TITLE_LENGTH,
+    )
+    support_flag.summary = normalize_limited_text(
+        summary,
+        "summary",
+        MAX_SUPPORT_FLAG_SUMMARY_LENGTH,
+    )
+    support_flag.metadata_ = normalize_support_flag_metadata(metadata)
+    support_flag.source_admin_action_id = source_admin_action_id
+    support_flag.resolved_by_user_id = None
+    support_flag.resolution_outcome = None
+    support_flag.resolution_reason = None
+    support_flag.resolution_admin_action_id = None
+    support_flag.resolved_at = None
+    support_flag.updated_at = reopened_at
+    return support_flag
+
+
+def stage_support_flag(
     db: Session,
     *,
     flag_type: str,
@@ -313,6 +348,7 @@ def create_support_flag(
     idempotency_key: str | None = None,
     source_admin_action_id: uuid.UUID | None = None,
     created_by_user_id: uuid.UUID | None = None,
+    reopen_resolved: bool = False,
     **targets: uuid.UUID | None,
 ) -> SupportFlag:
     policy = get_policy_or_400(flag_type)
@@ -328,6 +364,17 @@ def create_support_flag(
             idempotency_key=normalized_idempotency_key,
         )
         if existing_flag is not None:
+            if reopen_resolved and existing_flag.flag_status == "resolved":
+                reopen_resolved_support_flag(
+                    existing_flag,
+                    source=source,
+                    title=title,
+                    summary=summary,
+                    severity=severity,
+                    metadata=metadata,
+                    source_admin_action_id=source_admin_action_id,
+                )
+                db.add(existing_flag)
             return existing_flag
 
     flag_data = {
@@ -358,8 +405,40 @@ def create_support_flag(
         },
     )
 
+    db.add(support_flag)
+    return support_flag
+
+
+def create_support_flag(
+    db: Session,
+    *,
+    flag_type: str,
+    source: str,
+    title: str,
+    summary: str,
+    severity: str = "attention",
+    metadata: dict[str, Any] | None = None,
+    idempotency_key: str | None = None,
+    source_admin_action_id: uuid.UUID | None = None,
+    created_by_user_id: uuid.UUID | None = None,
+    reopen_resolved: bool = False,
+    **targets: uuid.UUID | None,
+) -> SupportFlag:
     try:
-        db.add(support_flag)
+        support_flag = stage_support_flag(
+            db,
+            flag_type=flag_type,
+            source=source,
+            title=title,
+            summary=summary,
+            severity=severity,
+            metadata=metadata,
+            idempotency_key=idempotency_key,
+            source_admin_action_id=source_admin_action_id,
+            created_by_user_id=created_by_user_id,
+            reopen_resolved=reopen_resolved,
+            **targets,
+        )
         db.commit()
         db.refresh(support_flag)
     except IntegrityError as exc:

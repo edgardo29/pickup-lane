@@ -4,6 +4,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.schemas.game_schema import GameRead
+from backend.schemas.game_credit_schema import GameCreditRead, GameCreditUsageRead
+from backend.schemas.payment_schema import PaymentRead
+from backend.schemas.refund_schema import RefundRead
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -42,6 +45,7 @@ class AdminOfficialGameCreate(BaseModel):
     game_notes: str | None = None
     parking_notes: str | None = None
     reason: str | None = None
+    replacement_for_game_id: UUID | None = None
 
 
 class AdminOfficialGameUpdate(BaseModel):
@@ -90,6 +94,182 @@ class AdminOfficialGamePlayerRemove(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     reason: str | None = None
+
+
+class AdminOfficialGamePlayerRemovalExecute(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    preview_token: str = Field(min_length=64, max_length=64)
+    outcome: str
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class AdminOfficialGameCancelExecute(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    preview_token: str = Field(min_length=64, max_length=64)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class AdminOfficialGameRemovalParticipantRead(BaseModel):
+    id: UUID
+    display_name: str
+    participant_type: str
+    participant_status: str
+    price_cents: int
+    is_selected: bool
+
+
+class AdminOfficialGamePlayerRemovalPreviewRead(BaseModel):
+    game_id: UUID
+    selected_participant_id: UUID
+    selected_participant_name: str
+    booking_id: UUID | None = None
+    buyer_user_id: UUID | None = None
+    removal_scope: str
+    classification: str
+    automatic_outcome_available: bool
+    preview_token: str
+    blocking_reasons: list[str] = Field(default_factory=list)
+    allowed_outcomes: list[str] = Field(default_factory=list)
+    required_permissions: list[str] = Field(default_factory=list)
+    affected_participants: list[AdminOfficialGameRemovalParticipantRead] = Field(
+        default_factory=list
+    )
+    booking_status: str | None = None
+    booking_payment_status: str | None = None
+    booking_total_cents: int = 0
+    currency: str = "USD"
+    payment_statuses: list[str] = Field(default_factory=list)
+    refund_statuses: list[str] = Field(default_factory=list)
+    cash_collected_cents: int = 0
+    cash_refunded_cents: int = 0
+    cash_refund_pending_cents: int = 0
+    cash_refundable_cents: int = 0
+    credit_reserved_cents: int = 0
+    credit_redeemed_cents: int = 0
+    credit_released_cents: int = 0
+    credit_restored_cents: int = 0
+    credit_reversed_cents: int = 0
+    credit_restorable_cents: int = 0
+    spots_opened: int = 0
+    available_spots_after_removal: int = 0
+    active_waitlist_entry_count: int = 0
+    active_waitlist_player_count: int = 0
+    next_waitlist_party_size: int | None = None
+    waitlist_promotion_possible: bool = False
+
+
+class AdminOfficialGameRemovalRefundRead(BaseModel):
+    id: UUID
+    payment_id: UUID
+    amount_cents: int
+    currency: str
+    refund_status: str
+
+
+class AdminOfficialGamePlayerRemovalResultRead(BaseModel):
+    game_id: UUID
+    selected_participant_id: UUID
+    booking_id: UUID
+    outcome: str
+    removed_participant_ids: list[UUID] = Field(default_factory=list)
+    booking_status: str
+    booking_payment_status: str
+    refunds: list[AdminOfficialGameRemovalRefundRead] = Field(default_factory=list)
+    credit_restored_count: int = 0
+    credit_restored_cents: int = 0
+    refund_follow_up_required: bool = False
+    support_flag_ids: list[UUID] = Field(default_factory=list)
+    waitlist_advanced_entry_ids: list[UUID] = Field(default_factory=list)
+
+
+class AdminOfficialGameCancellationBookingImpactRead(BaseModel):
+    booking_id: UUID
+    buyer_user_id: UUID
+    booking_status: str
+    booking_payment_status: str
+    participant_count: int = 0
+    payment_statuses: list[str] = Field(default_factory=list)
+    refund_statuses: list[str] = Field(default_factory=list)
+    result_category: str
+    cash_refundable_cents: int = 0
+    credit_restorable_cents: int = 0
+    credit_releasable_cents: int = 0
+    follow_up_required: bool = False
+    follow_up_reason: str | None = None
+
+
+class AdminOfficialGameCancellationPreviewRead(BaseModel):
+    game_id: UUID
+    game_status: str
+    preview_token: str
+    required_permissions: list[str] = Field(default_factory=list)
+    booking_count: int = 0
+    participant_count: int = 0
+    waitlist_entry_count: int = 0
+    cash_refundable_cents: int = 0
+    credit_restorable_cents: int = 0
+    credit_releasable_cents: int = 0
+    refund_follow_up_required: bool = False
+    payment_follow_up_required: bool = False
+    booking_impacts: list[AdminOfficialGameCancellationBookingImpactRead] = Field(
+        default_factory=list
+    )
+
+
+class AdminOfficialGameCancellationRefundRead(BaseModel):
+    id: UUID
+    payment_id: UUID
+    amount_cents: int
+    currency: str
+    refund_status: str
+
+
+class AdminOfficialGameCancellationBookingResultRead(BaseModel):
+    booking_id: UUID
+    buyer_user_id: UUID
+    booking_status: str
+    booking_payment_status: str
+    result_category: str
+    refunds: list[AdminOfficialGameCancellationRefundRead] = Field(
+        default_factory=list
+    )
+    cash_refunded_cents: int = 0
+    credit_restored_cents: int = 0
+    credit_released_cents: int = 0
+    follow_up_required: bool = False
+    follow_up_reason: str | None = None
+
+
+class AdminOfficialGameCancellationResultRead(BaseModel):
+    game: GameRead
+    preview_token: str
+    cancelled_booking_count: int = 0
+    cancelled_participant_count: int = 0
+    cancelled_waitlist_entry_count: int = 0
+    notified_user_count: int = 0
+    refund_created_count: int = 0
+    refund_failed_count: int = 0
+    refund_processing_count: int = 0
+    refund_missing_charge_count: int = 0
+    credit_restored_count: int = 0
+    credit_restored_cents: int = 0
+    credit_released_count: int = 0
+    credit_released_cents: int = 0
+    refund_follow_up_required: bool = False
+    payment_follow_up_required: bool = False
+    support_flag_ids: list[UUID] = Field(default_factory=list)
+    booking_results: list[AdminOfficialGameCancellationBookingResultRead] = Field(
+        default_factory=list
+    )
+
+
+class AdminOfficialGameMoneyRead(BaseModel):
+    payments: list[PaymentRead] = Field(default_factory=list)
+    refunds: list[RefundRead] = Field(default_factory=list)
+    credits: list[GameCreditRead] = Field(default_factory=list)
+    credit_usages: list[GameCreditUsageRead] = Field(default_factory=list)
 
 
 class AdminOfficialGameRead(BaseModel):

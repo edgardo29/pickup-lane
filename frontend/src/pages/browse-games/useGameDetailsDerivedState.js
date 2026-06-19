@@ -10,6 +10,8 @@ import {
 import { buildGameDetailsViewModel } from './gameDetailsViewModel.jsx'
 
 export function useGameDetailsDerivedState({
+  canAdminCancelCommunityGame = false,
+  canAdminCancelOfficialGame = false,
   communityGameDetails,
   currentUser,
   game,
@@ -64,6 +66,8 @@ export function useGameDetailsDerivedState({
       }
 
       return buildGameDetailsViewModel({
+        canAdminCancelCommunityGame,
+        canAdminCancelOfficialGame,
         communityGameDetails,
         currentGuestCount,
         currentParticipant,
@@ -77,6 +81,8 @@ export function useGameDetailsDerivedState({
       })
     },
     [
+      canAdminCancelCommunityGame,
+      canAdminCancelOfficialGame,
       communityGameDetails,
       currentGuestCount,
       currentParticipant,

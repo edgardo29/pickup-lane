@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../../../hooks/useAuth.js'
 import '../../../../styles/admin/AdminOfficialGames.css'
 import '../../../../styles/admin/AdminOfficialGameCreate.css'
 import AdminCreateOfficialGameLayout from './AdminCreateOfficialGameLayout.jsx'
-import { initialAdminOfficialGameForm } from './adminCreateOfficialGameData.js'
+import {
+  buildAdminOfficialReplacementForm,
+  initialAdminOfficialGameForm,
+} from './adminCreateOfficialGameData.js'
 import { buildAdminCreateOfficialGamePayload } from './adminCreateOfficialGamePayloads.js'
 import {
   validateAdminOfficialCreateForm,
@@ -13,6 +16,7 @@ import {
 import {
   assertAdminVenueImageUploadsReady,
   createAdminOfficialGame,
+  getAdminOfficialGame,
   uploadAdminVenueImage,
 } from '../shared/adminOfficialGamesApi.js'
 
@@ -28,12 +32,19 @@ function createPhotoId(file) {
   return `${file.name}-${file.size}-${file.lastModified}-${randomId}`
 }
 
-function AdminCreateOfficialGamePage() {
+function AdminCreateOfficialGameFlow() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const replacementSourceGameId = searchParams.get('replace_game_id') || ''
   const [activeStep, setActiveStep] = useState(1)
   const [createdGameId, setCreatedGameId] = useState('')
   const [form, setForm] = useState(initialAdminOfficialGameForm)
+  const [replacementSourceGame, setReplacementSourceGame] = useState(null)
+  const [replacementLoadState, setReplacementLoadState] = useState(
+    replacementSourceGameId ? 'loading' : 'idle',
+  )
+  const [replacementLoadAttempt, setReplacementLoadAttempt] = useState(0)
   const [venuePhotos, setVenuePhotos] = useState([])
   const [saveState, setSaveState] = useState('idle')
   const [pageError, setPageError] = useState('')
@@ -52,13 +63,60 @@ function AdminCreateOfficialGamePage() {
     [],
   )
 
+  useEffect(() => {
+    if (!currentUser || !replacementSourceGameId) {
+      return undefined
+    }
+
+    let isMounted = true
+
+    getAdminOfficialGame({
+      firebaseUser: currentUser,
+      gameId: replacementSourceGameId,
+    })
+      .then((response) => {
+        if (!isMounted) {
+          return
+        }
+
+        const sourceGame = response.game
+        setReplacementSourceGame(sourceGame)
+        setForm(buildAdminOfficialReplacementForm(sourceGame))
+        setReplacementLoadState('ready')
+        setPageError('')
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return
+        }
+
+        setReplacementSourceGame(null)
+        setForm(initialAdminOfficialGameForm)
+        setReplacementLoadState('error')
+        setPageError(error.message || 'Replacement source game could not be loaded.')
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [currentUser, replacementLoadAttempt, replacementSourceGameId])
+
   function updateField(field, value) {
-    setPageError('')
+    if (replacementLoadState !== 'error') {
+      setPageError('')
+    }
     setStepError('')
     setForm((currentForm) => ({
       ...currentForm,
       [field]: value,
     }))
+  }
+
+  function retryReplacementSource() {
+    setReplacementSourceGame(null)
+    setReplacementLoadState('loading')
+    setPageError('')
+    setReplacementLoadAttempt((currentAttempt) => currentAttempt + 1)
   }
 
   function addVenuePhotos(files) {
@@ -158,6 +216,17 @@ function AdminCreateOfficialGamePage() {
       return
     }
 
+    if (
+      replacementSourceGameId
+      && (
+        replacementLoadState !== 'ready'
+        || replacementSourceGame?.id !== replacementSourceGameId
+      )
+    ) {
+      setPageError('Load the replacement source game before creating its replacement.')
+      return
+    }
+
     const validationError = validateAdminOfficialCreateForm(form)
     if (validationError) {
       setActiveStep(validationError.step)
@@ -179,7 +248,9 @@ function AdminCreateOfficialGamePage() {
       setSaveState('saving')
       const response = await createAdminOfficialGame({
         firebaseUser: currentUser,
-        payload: buildAdminCreateOfficialGamePayload(form),
+        payload: buildAdminCreateOfficialGamePayload(form, {
+          replacementForGameId: replacementSourceGame?.id,
+        }),
       })
       createdGame = response.game
       setCreatedGameId(createdGame.id)
@@ -210,6 +281,8 @@ function AdminCreateOfficialGamePage() {
       pageError={pageError}
       photoError={photoError}
       photos={venuePhotos}
+      replacementLoadState={replacementLoadState}
+      replacementSourceGame={replacementSourceGame}
       saveState={saveState}
       stepError={stepError}
       onBack={goBack}
@@ -218,9 +291,16 @@ function AdminCreateOfficialGamePage() {
       onNext={goNext}
       onPhotoAdd={addVenuePhotos}
       onPhotoRemove={removeVenuePhoto}
+      onRetryReplacementSource={retryReplacementSource}
       onUpdateField={updateField}
     />
   )
+}
+
+function AdminCreateOfficialGamePage() {
+  const { search } = useLocation()
+
+  return <AdminCreateOfficialGameFlow key={search} />
 }
 
 export default AdminCreateOfficialGamePage

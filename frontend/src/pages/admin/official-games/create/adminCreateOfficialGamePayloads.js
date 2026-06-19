@@ -1,3 +1,5 @@
+import { buildOfficialGameIsoDateTime } from '../shared/adminOfficialGameDateTime.js'
+
 function cleanText(value) {
   return String(value ?? '').trim()
 }
@@ -7,20 +9,20 @@ function moneyToCents(value) {
   return Math.round((Number(normalized) || 0) * 100)
 }
 
-function buildIsoDateTime(date, time) {
-  return new Date(`${date}T${time}:00`).toISOString()
-}
-
 function buildGeneratedTitle(form) {
   return `${cleanText(form.venueName) || 'Official'} ${form.formatLabel}`.trim()
 }
 
-export function buildAdminCreateOfficialGamePayload(form) {
+export function buildAdminCreateOfficialGamePayload(
+  form,
+  { replacementForGameId = '' } = {},
+) {
+  const timeZone = cleanText(form.timezone) || 'America/Chicago'
   const payload = {
     title: buildGeneratedTitle(form),
-    starts_at: buildIsoDateTime(form.date, form.startTime),
-    ends_at: buildIsoDateTime(form.date, form.endTime),
-    timezone: cleanText(form.timezone) || 'America/Chicago',
+    starts_at: buildOfficialGameIsoDateTime(form.date, form.startTime, timeZone),
+    ends_at: buildOfficialGameIsoDateTime(form.date, form.endTime, timeZone),
+    timezone: timeZone,
     format_label: form.formatLabel,
     environment_type: form.environmentType,
     total_spots: Number(form.totalSpots),
@@ -40,6 +42,16 @@ export function buildAdminCreateOfficialGamePayload(form) {
       country_code: cleanText(form.countryCode) || 'US',
       neighborhood: cleanText(form.neighborhood) || null,
     },
+  }
+
+  const reason = cleanText(form.reason)
+  if (reason) {
+    payload.reason = reason
+  }
+
+  const normalizedReplacementForGameId = cleanText(replacementForGameId)
+  if (normalizedReplacementForGameId) {
+    payload.replacement_for_game_id = normalizedReplacementForGameId
   }
 
   Object.keys(payload).forEach((key) => {

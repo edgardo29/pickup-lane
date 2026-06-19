@@ -1,18 +1,24 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Booking, GameParticipant, User, WaitlistEntry
 from backend.schemas import (
+    AdminOfficialGameCancelExecute,
+    AdminOfficialGameCancellationPreviewRead,
+    AdminOfficialGameCancellationResultRead,
     AdminOfficialGameCreate,
     AdminOfficialGameHostAssign,
     AdminOfficialGameHostRemove,
     AdminOfficialGameListRead,
+    AdminOfficialGameMoneyRead,
     AdminOfficialGamePlayerAdd,
+    AdminOfficialGamePlayerRemovalExecute,
     AdminOfficialGamePlayerRemove,
+    AdminOfficialGamePlayerRemovalPreviewRead,
+    AdminOfficialGamePlayerRemovalResultRead,
     AdminOfficialGameRead,
     AdminOfficialGameUpdate,
     BookingRead,
@@ -20,19 +26,30 @@ from backend.schemas import (
     GameParticipantRead,
 )
 from backend.services.admin_permission_service import (
+    PERMISSION_MONEY_READ,
+    PERMISSION_OFFICIAL_GAMES_CANCEL,
     PERMISSION_OFFICIAL_GAMES_READ,
     PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
     PERMISSION_OFFICIAL_GAMES_WRITE,
 )
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import (
+    require_admin_permission,
+    require_user_admin_permission,
+)
 from backend.services.official_game_service import (
     add_official_game_player,
     assign_official_game_host,
     create_official_game,
+    execute_official_game_cancellation,
+    execute_official_game_player_removal,
+    get_official_game_money,
     get_official_game_or_404,
     list_official_game_bookings,
+    list_official_game_participants,
     list_official_game_waitlist_entries,
     list_official_games,
+    preview_official_game_player_removal,
+    preview_official_game_cancellation,
     remove_official_game_host,
     remove_official_game_player,
     update_official_game,
@@ -116,16 +133,7 @@ def list_admin_official_game_participants(
     ),
 ) -> list[GameParticipant]:
     del current_admin
-    get_official_game_or_404(db, game_id)
-    participants = db.scalars(
-        select(GameParticipant)
-        .where(GameParticipant.game_id == game_id)
-        .order_by(
-            GameParticipant.roster_order.asc().nulls_last(),
-            GameParticipant.created_at.asc(),
-        )
-    ).all()
-    return list(participants)
+    return list_official_game_participants(db, game_id)
 
 
 @router.get(
@@ -139,7 +147,7 @@ def list_admin_official_game_bookings(
         require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
     ),
 ) -> list[Booking]:
-    del current_admin
+    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
     return list_official_game_bookings(db, game_id)
 
 
@@ -154,8 +162,23 @@ def list_admin_official_game_waitlist(
         require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
     ),
 ) -> list[WaitlistEntry]:
-    del current_admin
+    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
     return list_official_game_waitlist_entries(db, game_id)
+
+
+@router.get(
+    "/{game_id}/money",
+    response_model=AdminOfficialGameMoneyRead,
+)
+def get_admin_official_game_money(
+    game_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
+    ),
+) -> AdminOfficialGameMoneyRead:
+    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
+    return get_official_game_money(db, game_id)
 
 
 @router.patch("/{game_id}", response_model=AdminOfficialGameRead)
@@ -174,6 +197,44 @@ def update_admin_official_game(
         update_request=update_request,
     )
     return AdminOfficialGameRead(game=game)
+
+
+@router.post(
+    "/{game_id}/cancel-preview",
+    response_model=AdminOfficialGameCancellationPreviewRead,
+)
+def preview_admin_official_game_cancellation(
+    game_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_CANCEL)
+    ),
+) -> AdminOfficialGameCancellationPreviewRead:
+    return preview_official_game_cancellation(
+        db,
+        game_id=game_id,
+        admin_user=current_admin,
+    )
+
+
+@router.post(
+    "/{game_id}/cancel",
+    response_model=AdminOfficialGameCancellationResultRead,
+)
+def execute_admin_official_game_cancellation(
+    game_id: uuid.UUID,
+    cancel_request: AdminOfficialGameCancelExecute,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_CANCEL)
+    ),
+) -> AdminOfficialGameCancellationResultRead:
+    return execute_official_game_cancellation(
+        db,
+        game_id=game_id,
+        admin_user=current_admin,
+        cancel_request=cancel_request,
+    )
 
 
 @router.post("/{game_id}/host", response_model=AdminOfficialGameRead)
@@ -237,6 +298,49 @@ def remove_admin_official_game_player(
         remove_request=remove_request or AdminOfficialGamePlayerRemove(),
     )
     return participant
+
+
+@router.post(
+    "/{game_id}/participants/{participant_id}/remove-preview",
+    response_model=AdminOfficialGamePlayerRemovalPreviewRead,
+)
+def preview_admin_official_game_player_removal(
+    game_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
+    ),
+) -> AdminOfficialGamePlayerRemovalPreviewRead:
+    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
+    return preview_official_game_player_removal(
+        db,
+        game_id=game_id,
+        participant_id=participant_id,
+    )
+
+
+@router.post(
+    "/{game_id}/participants/{participant_id}/remove",
+    response_model=AdminOfficialGamePlayerRemovalResultRead,
+)
+def execute_admin_official_game_player_removal(
+    game_id: uuid.UUID,
+    participant_id: uuid.UUID,
+    execute_request: AdminOfficialGamePlayerRemovalExecute,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
+    ),
+) -> AdminOfficialGamePlayerRemovalResultRead:
+    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
+    return execute_official_game_player_removal(
+        db,
+        admin_user=current_admin,
+        game_id=game_id,
+        participant_id=participant_id,
+        execute_request=execute_request,
+    )
 
 
 @router.delete("/{game_id}/host", response_model=AdminOfficialGameRead)
