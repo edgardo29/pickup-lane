@@ -11,6 +11,16 @@ import {
   AdminActionCenterPage,
   AdminAuditLogPage,
   AdminCreateOfficialGamePage,
+  AdminMoneyCreditPage,
+  AdminMoneyCreditsPage,
+  AdminMoneyPaymentPage,
+  AdminMoneyPaymentMethodsPage,
+  AdminMoneyPaymentsPage,
+  AdminMoneyRefundPage,
+  AdminMoneyRefundsPage,
+  AdminMoneySupportFlagPage,
+  AdminMoneySupportFlagsPage,
+  AdminMoneyUserPage,
   AdminOfficialGamePage,
   AdminOfficialGamesPage,
   AdminSignInPage,
@@ -131,6 +141,94 @@ export function AppRoutes() {
             ]}
           >
             <AdminAuditLogPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/payments"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneyPaymentsPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/users"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneyUserPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/users/:userId"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneyUserPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/payment-methods"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneyPaymentMethodsPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/credits"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneyCreditsPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/credits/:creditId"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneyCreditPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/support-flags"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneySupportFlagsPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/support-flags/:supportFlagId"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneySupportFlagPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/payments/:paymentId"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneyPaymentPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/refunds"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneyRefundsPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/money/refunds/:refundId"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <AdminMoneyRefundPage />
           </RequireAdmin>
         }
       />

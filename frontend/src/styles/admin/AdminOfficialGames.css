@@ -1620,6 +1620,19 @@
   text-transform: uppercase;
 }
 
+.admin-money-link {
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 920;
+  text-decoration: none;
+}
+
+.admin-money-link:hover,
+.admin-money-link:focus-visible {
+  color: var(--lime);
+}
+
 .admin-money-table {
   margin-bottom: 4px;
 }

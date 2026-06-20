@@ -42,6 +42,65 @@ export const adminWorkspaceNavItems = [
     end: true,
     permission: ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE,
   },
+  {
+    label: 'Money Follow-Up',
+    to: '/admin/money/support-flags',
+    end: true,
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+  {
+    label: 'Payments',
+    to: '/admin/money/payments',
+    end: true,
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+  {
+    label: 'Refunds',
+    to: '/admin/money/refunds',
+    end: true,
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+  {
+    label: 'User Money',
+    to: '/admin/money/users',
+    end: true,
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+  {
+    label: 'Credits',
+    to: '/admin/money/credits',
+    end: true,
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+  {
+    label: 'Saved Cards',
+    to: '/admin/money/payment-methods',
+    end: true,
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+]
+
+const adminWorkspaceStandalonePathRules = [
+  {
+    matches: (pathname) => pathname.startsWith('/admin/money/payments/'),
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/admin/money/refunds/'),
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/admin/money/credits/'),
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/admin/money/support-flags/'),
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
+  {
+    matches: (pathname) => pathname.startsWith('/admin/money/users/'),
+    permission: ADMIN_PERMISSIONS.MONEY_READ,
+  },
 ]
 
 export function hasAdminPermission(adminAccess, permission) {
@@ -78,12 +137,44 @@ export function isAdminWorkspaceItemActive(item, pathname) {
     )
   }
 
+  if (item.to === '/admin/money/support-flags') {
+    return pathname === item.to || pathname.startsWith('/admin/money/support-flags/')
+  }
+
+  if (item.to === '/admin/money/payments') {
+    return pathname === item.to || pathname.startsWith('/admin/money/payments/')
+  }
+
+  if (item.to === '/admin/money/refunds') {
+    return pathname === item.to || pathname.startsWith('/admin/money/refunds/')
+  }
+
+  if (item.to === '/admin/money/credits') {
+    return pathname === item.to || pathname.startsWith('/admin/money/credits/')
+  }
+
+  if (item.to === '/admin/money/users') {
+    return pathname === item.to || pathname.startsWith('/admin/money/users/')
+  }
+
+  if (item.to === '/admin/money/payment-methods') {
+    return pathname === item.to
+  }
+
   return pathname === item.to
 }
 
 export function canAccessAdminPath(pathname, adminAccess) {
   if (pathname === '/admin') {
     return getVisibleAdminWorkspaceNavItems(adminAccess).length > 0
+  }
+
+  const matchedStandalonePath = adminWorkspaceStandalonePathRules.find((item) =>
+    item.matches(pathname),
+  )
+
+  if (matchedStandalonePath) {
+    return hasAdminPermission(adminAccess, matchedStandalonePath.permission)
   }
 
   const matchedItem = adminWorkspaceNavItems.find((item) =>

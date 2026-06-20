@@ -1,0 +1,639 @@
+.admin-money-shell {
+  width: min(1280px, calc(100% - 56px));
+}
+
+.admin-money-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-money-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-money-inline-search {
+  min-width: 0;
+  display: inline-flex;
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-money-inline-search label {
+  min-width: min(420px, 58vw);
+  display: grid;
+  gap: 5px;
+}
+
+.admin-money-inline-search span,
+.admin-money-checkbox span {
+  color: rgba(248, 250, 252, 0.62);
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.admin-money-inline-search input {
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(248, 250, 252, 0.14);
+  border-radius: 7px;
+  color: #ffffff;
+  background: rgba(2, 8, 14, 0.46);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.admin-money-inline-search input:focus {
+  border-color: rgba(184, 255, 36, 0.54);
+  outline: none;
+}
+
+.admin-money-segment {
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid rgba(248, 250, 252, 0.12);
+  border-radius: 8px;
+  background: rgba(2, 8, 14, 0.38);
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.admin-money-segment button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(248, 250, 252, 0.68);
+  background: transparent;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.admin-money-segment button:hover,
+.admin-money-segment button:focus-visible,
+.admin-money-segment button.is-active {
+  color: #ffffff;
+  background: rgba(248, 250, 252, 0.1);
+}
+
+.admin-money-filters {
+  padding: 12px;
+  border: 1px solid var(--admin-line, rgba(248, 250, 252, 0.1));
+  border-radius: 8px;
+  background: var(--admin-panel, #0c141d);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-money-filters--payments {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+}
+
+.admin-money-filters--cards {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.admin-money-filters label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.admin-money-filters span {
+  color: rgba(248, 250, 252, 0.62);
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.admin-money-filters input {
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(248, 250, 252, 0.14);
+  border-radius: 7px;
+  color: #ffffff;
+  background: rgba(2, 8, 14, 0.46);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.admin-money-filters input:focus {
+  border-color: rgba(184, 255, 36, 0.54);
+  outline: none;
+}
+
+.admin-money-filters .admin-money-checkbox {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(248, 250, 252, 0.12);
+  border-radius: 7px;
+  background: rgba(2, 8, 14, 0.32);
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-money-checkbox--standalone {
+  width: fit-content;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(248, 250, 252, 0.12);
+  border-radius: 7px;
+  background: rgba(2, 8, 14, 0.32);
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-money-filters .admin-money-checkbox input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--lime);
+}
+
+.admin-money-checkbox--standalone input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--lime);
+}
+
+.admin-money-filters .admin-money-checkbox span {
+  white-space: nowrap;
+}
+
+.admin-money-button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(248, 250, 252, 0.14);
+  border-radius: 7px;
+  color: rgba(248, 250, 252, 0.92);
+  background: rgba(248, 250, 252, 0.06);
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.admin-money-button:hover,
+.admin-money-button:focus-visible {
+  border-color: rgba(248, 250, 252, 0.28);
+  color: #ffffff;
+  background: rgba(248, 250, 252, 0.1);
+}
+
+.admin-money-button--primary {
+  border-color: rgba(184, 255, 36, 0.34);
+  color: #08110f;
+  background: var(--lime);
+}
+
+.admin-money-button--primary:hover,
+.admin-money-button--primary:focus-visible {
+  border-color: rgba(184, 255, 36, 0.6);
+  color: #08110f;
+  background: #d9ff66;
+}
+
+.admin-money-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.admin-money-button svg,
+.admin-money-panel svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+}
+
+.admin-money-panel {
+  min-width: 0;
+  border: 1px solid var(--admin-line, rgba(248, 250, 252, 0.1));
+  border-radius: 8px;
+  background: var(--admin-panel, #0c141d);
+}
+
+.admin-money-panel__heading {
+  min-height: 58px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--admin-line, rgba(248, 250, 252, 0.1));
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-money-panel__heading > div {
+  min-width: 0;
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-money-panel__heading h2,
+.admin-money-panel__heading em,
+.admin-money-field span,
+.admin-money-field strong,
+.admin-money-context h3,
+.admin-money-context strong,
+.admin-money-context span,
+.admin-money-empty,
+.admin-money-alert,
+.admin-money-row strong,
+.admin-money-row span,
+.admin-money-note {
+  margin: 0;
+}
+
+.admin-money-panel__heading h2 {
+  color: #ffffff;
+  font-size: 1rem;
+  line-height: 1.2;
+  font-weight: 950;
+}
+
+.admin-money-panel__heading svg {
+  width: 20px;
+  height: 20px;
+  color: var(--lime);
+}
+
+.admin-money-panel__heading em,
+.admin-money-row em {
+  min-height: 26px;
+  max-width: 220px;
+  padding: 0 9px;
+  border: 1px solid rgba(184, 255, 36, 0.3);
+  border-radius: 999px;
+  color: var(--lime);
+  background: rgba(184, 255, 36, 0.08);
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  font-size: 0.69rem;
+  font-style: normal;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.admin-money-kpis {
+  padding: 14px;
+  border-bottom: 1px solid rgba(248, 250, 252, 0.08);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-money-kpis > div,
+.admin-money-field,
+.admin-money-context > div {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(248, 250, 252, 0.1);
+  border-radius: 7px;
+  background: rgba(2, 8, 14, 0.46);
+}
+
+.admin-money-kpis span,
+.admin-money-field span,
+.admin-money-context h3 {
+  color: rgba(248, 250, 252, 0.62);
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.admin-money-kpis strong,
+.admin-money-field strong,
+.admin-money-context strong {
+  min-width: 0;
+  color: #ffffff;
+  display: block;
+  overflow: hidden;
+  font-size: 0.94rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-money-field-grid,
+.admin-money-context {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-money-field {
+  display: grid;
+  gap: 5px;
+}
+
+.admin-money-field code,
+.admin-money-row code {
+  min-width: 0;
+  color: rgba(248, 250, 252, 0.82);
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-money-context > div {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+}
+
+.admin-money-context a {
+  width: fit-content;
+  color: var(--lime);
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.admin-money-context span {
+  color: rgba(248, 250, 252, 0.72);
+  font-size: 0.84rem;
+  font-weight: 780;
+}
+
+.admin-money-row-list {
+  display: grid;
+}
+
+.admin-money-row {
+  min-width: 0;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(248, 250, 252, 0.08);
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.72fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-money-row--four {
+  grid-template-columns: minmax(0, 1.24fr) minmax(0, 0.58fr) minmax(0, 0.7fr) minmax(0, 0.86fr);
+}
+
+.admin-money-row:first-child {
+  border-top: 0;
+}
+
+.admin-money-row > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.admin-money-row strong {
+  min-width: 0;
+  color: #ffffff;
+  overflow: hidden;
+  font-size: 0.88rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-money-row-link {
+  min-width: 0;
+  color: #ffffff;
+  overflow: hidden;
+  font-size: 0.88rem;
+  font-weight: 900;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-money-row-link:hover,
+.admin-money-row-link:focus-visible {
+  color: var(--lime);
+}
+
+.admin-money-row span {
+  min-width: 0;
+  color: rgba(248, 250, 252, 0.68);
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-money-empty,
+.admin-money-note {
+  padding: 16px 18px;
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 0.9rem;
+  font-weight: 780;
+}
+
+.admin-money-action-form {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-money-action-form label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-money-action-form label span {
+  color: rgba(248, 250, 252, 0.62);
+  font-size: 0.66rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.admin-money-action-form select,
+.admin-money-action-form textarea {
+  min-width: 0;
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid rgba(248, 250, 252, 0.14);
+  border-radius: 7px;
+  color: #ffffff;
+  background: rgba(2, 8, 14, 0.46);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.admin-money-action-form select {
+  min-height: 42px;
+}
+
+.admin-money-action-form textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.admin-money-action-form select:focus,
+.admin-money-action-form textarea:focus {
+  border-color: rgba(184, 255, 36, 0.54);
+  outline: none;
+}
+
+.admin-money-action-form select:disabled,
+.admin-money-action-form textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.admin-money-action-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-money-action-status {
+  min-width: 0;
+}
+
+.admin-money-form-error,
+.admin-money-form-success {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.admin-money-form-error {
+  color: #ffd5d2;
+}
+
+.admin-money-form-success {
+  color: var(--lime);
+}
+
+.admin-money-alert {
+  padding: 11px 13px;
+  border-radius: 7px;
+  color: #ffd5d2;
+  background: rgba(122, 32, 32, 0.32);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.admin-money-link {
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 920;
+  text-decoration: none;
+}
+
+.admin-money-link:hover,
+.admin-money-link:focus-visible {
+  color: var(--lime);
+}
+
+@media (max-width: 980px) {
+  .admin-money-shell {
+    width: min(100% - 28px, 780px);
+  }
+
+  .admin-money-kpis,
+  .admin-money-field-grid,
+  .admin-money-context {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-money-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-money-row--four {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-money-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-money-filters--cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-money-shell {
+    width: min(100% - 20px, 520px);
+  }
+
+  .admin-money-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-money-inline-search {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-money-inline-search label {
+    min-width: 0;
+  }
+
+  .admin-money-button {
+    width: 100%;
+  }
+
+  .admin-money-action-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-money-segment {
+    width: 100%;
+  }
+
+  .admin-money-segment button {
+    flex: 1 1 0;
+  }
+
+  .admin-money-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-money-filters .admin-money-button {
+    width: 100%;
+  }
+
+  .admin-money-kpis,
+  .admin-money-field-grid,
+  .admin-money-context {
+    grid-template-columns: 1fr;
+  }
+}

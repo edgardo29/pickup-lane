@@ -57,6 +57,7 @@ class GameCredit(Base):
         Index("ix_game_credits_credit_reason", "credit_reason"),
         Index("ix_game_credits_source_game_id", "source_game_id"),
         Index("ix_game_credits_source_booking_id", "source_booking_id"),
+        Index("ix_game_credits_source_payment_id", "source_payment_id"),
         Index("ix_game_credits_created_at", "created_at"),
         Index(
             "ix_game_credits_user_id_credit_status",
