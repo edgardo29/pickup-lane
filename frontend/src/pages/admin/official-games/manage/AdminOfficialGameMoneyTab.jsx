@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { formatAdminGameMoney } from '../shared/adminOfficialGameForm.js'
 import {
   formatAdminDateTime,
@@ -117,7 +118,9 @@ function AdminOfficialGameMoneyTab({
                       <span>{String(payment.payer_user_id).slice(0, 8)}</span>
                     </div>
                     <div data-label="Payment" role="cell">
-                      <strong>{getStatusLabel(payment.payment_type)}</strong>
+                      <Link className="admin-money-link" to={`/admin/money/payments/${payment.id}`}>
+                        {getStatusLabel(payment.payment_type)}
+                      </Link>
                       <span>{String(payment.id).slice(0, 8)}</span>
                     </div>
                     <div data-label="Amount" role="cell">
@@ -157,7 +160,9 @@ function AdminOfficialGameMoneyTab({
                 {refunds.map((refund) => (
                   <div key={refund.id} className="admin-bookings-table__row" role="row">
                     <div data-label="Refund" role="cell">
-                      <strong>{getStatusLabel(refund.refund_reason)}</strong>
+                      <Link className="admin-money-link" to={`/admin/money/refunds/${refund.id}`}>
+                        {getStatusLabel(refund.refund_reason)}
+                      </Link>
                       <span>{String(refund.id).slice(0, 8)}</span>
                     </div>
                     <div data-label="Payment" role="cell">
@@ -209,7 +214,9 @@ function AdminOfficialGameMoneyTab({
                         <span>{String(credit.user_id).slice(0, 8)}</span>
                       </div>
                       <div data-label="Credit" role="cell">
-                        <strong>{getStatusLabel(credit.credit_reason)}</strong>
+                        <Link className="admin-money-link" to={`/admin/money/credits/${credit.id}`}>
+                          {getStatusLabel(credit.credit_reason)}
+                        </Link>
                         <span>{String(credit.id).slice(0, 8)}</span>
                       </div>
                       <div data-label="Amount" role="cell">
@@ -251,7 +258,9 @@ function AdminOfficialGameMoneyTab({
                         <span>{String(usage.user_id).slice(0, 8)}</span>
                       </div>
                       <div data-label="Usage" role="cell">
-                        <strong>{getStatusLabel(usage.usage_type)}</strong>
+                        <Link className="admin-money-link" to={`/admin/money/credits/${usage.game_credit_id}`}>
+                          {getStatusLabel(usage.usage_type)}
+                        </Link>
                         <span>{String(usage.id).slice(0, 8)}</span>
                       </div>
                       <div data-label="Amount" role="cell">

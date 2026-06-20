@@ -8,6 +8,7 @@ from backend.routes.admin_rejected_attempt_routes import (
     router as admin_rejected_attempts_router,
 )
 from backend.routes.admin_lookup_routes import router as admin_lookups_router
+from backend.routes.admin_money_routes import router as admin_money_router
 from backend.routes.admin_official_game_routes import (
     router as admin_official_games_router,
 )
@@ -78,6 +79,7 @@ __all__ = [
     "admin_game_credits_router",
     "admin_game_images_router",
     "admin_lookups_router",
+    "admin_money_router",
     "admin_official_games_router",
     "admin_router",
     "admin_venue_images_router",

@@ -123,6 +123,11 @@ def upgrade() -> None:
         "game_credits",
         ["source_game_id"],
     )
+    op.create_index(
+        "ix_game_credits_source_payment_id",
+        "game_credits",
+        ["source_payment_id"],
+    )
     op.create_index("ix_game_credits_user_id", "game_credits", ["user_id"])
     op.create_index(
         "ix_game_credits_user_id_credit_status",
@@ -146,6 +151,7 @@ def downgrade() -> None:
     )
     op.drop_index("ix_game_credits_user_id_credit_status", table_name="game_credits")
     op.drop_index("ix_game_credits_user_id", table_name="game_credits")
+    op.execute("DROP INDEX IF EXISTS ix_game_credits_source_payment_id")
     op.drop_index("ix_game_credits_source_game_id", table_name="game_credits")
     op.drop_index("ix_game_credits_source_booking_id", table_name="game_credits")
     op.drop_index("ix_game_credits_credit_status", table_name="game_credits")

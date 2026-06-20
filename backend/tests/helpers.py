@@ -172,6 +172,7 @@ def create_user_payment_method(
         "exp_year": 2030,
         "method_status": "active",
         "is_default": True,
+        "detached_at": None,
     }
     defaults.update(overrides)
 
@@ -192,6 +193,7 @@ def create_user_payment_method(
             exp_year=int(defaults["exp_year"]),
             method_status=str(defaults["method_status"]),
             is_default=bool(defaults["is_default"]),
+            detached_at=defaults["detached_at"],
             updated_at=datetime.now(UTC),
         )
         db.add(db_user)
@@ -204,7 +206,6 @@ def create_user_payment_method(
         **defaults,
         "created_at": None,
         "updated_at": None,
-        "detached_at": None,
     }
 
 
