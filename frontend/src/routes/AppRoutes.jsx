@@ -24,6 +24,9 @@ import {
   AdminOfficialGamePage,
   AdminOfficialGamesPage,
   AdminSignInPage,
+  AdminStaffPage,
+  AdminUserPage,
+  AdminUsersPage,
 } from '../pages/admin/index.js'
 import { ADMIN_PERMISSIONS } from '../pages/admin/shared/adminWorkspaceData.js'
 import {
@@ -141,6 +144,30 @@ export function AppRoutes() {
             ]}
           >
             <AdminAuditLogPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.USERS_READ}>
+            <AdminUsersPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/users/staff"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.STAFF_MANAGE}>
+            <AdminStaffPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/users/:userId"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.USERS_READ}>
+            <AdminUserPage />
           </RequireAdmin>
         }
       />

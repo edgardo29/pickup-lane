@@ -6,7 +6,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = "0039_sub_post_chats"
-down_revision = "0038_paid_waitlist_auto_charge"
+down_revision = "0037_venue_images"
 branch_labels = None
 depends_on = None
 
@@ -61,9 +61,22 @@ def upgrade() -> None:
         "sub_post_chats",
         ["chat_status"],
     )
+    op.create_foreign_key(
+        "fk_notifications_related_sub_post_chat_id",
+        "notifications",
+        "sub_post_chats",
+        ["related_sub_post_chat_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint(
+        "fk_notifications_related_sub_post_chat_id",
+        "notifications",
+        type_="foreignkey",
+    )
     op.drop_index("ix_sub_post_chats_chat_status", table_name="sub_post_chats")
     op.drop_index("ix_sub_post_chats_sub_post_id", table_name="sub_post_chats")
     op.drop_table("sub_post_chats")

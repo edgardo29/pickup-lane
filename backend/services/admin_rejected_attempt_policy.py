@@ -6,6 +6,8 @@ from backend.services.admin_permission_service import PERMISSION_AUDIT_READ
 
 ATTEMPT_TYPE_ISSUE_CREDIT_REJECTED = "issue_credit_rejected"
 ATTEMPT_TYPE_REVERSE_CREDIT_REJECTED = "reverse_credit_rejected"
+ATTEMPT_TYPE_SUSPEND_USER_REJECTED = "suspend_user_rejected"
+ATTEMPT_TYPE_DELETE_USER_REJECTED = "delete_user_rejected"
 
 REJECTION_PERMISSION_DENIED_PRELOAD = "permission_denied_preload"
 REJECTION_DOMAIN_REJECTED_POSTLOAD = "domain_rejected_postload"
@@ -57,6 +59,16 @@ ADMIN_REJECTED_ATTEMPT_POLICIES: dict[str, AdminRejectedAttemptPolicy] = {
         attempt_type=ATTEMPT_TYPE_REVERSE_CREDIT_REJECTED,
         read_permission=PERMISSION_AUDIT_READ,
         allowed_target_fields=target_set(TARGET_GAME_CREDIT_ID),
+    ),
+    ATTEMPT_TYPE_SUSPEND_USER_REJECTED: AdminRejectedAttemptPolicy(
+        attempt_type=ATTEMPT_TYPE_SUSPEND_USER_REJECTED,
+        read_permission=PERMISSION_AUDIT_READ,
+        allowed_target_fields=target_set(TARGET_USER_ID),
+    ),
+    ATTEMPT_TYPE_DELETE_USER_REJECTED: AdminRejectedAttemptPolicy(
+        attempt_type=ATTEMPT_TYPE_DELETE_USER_REJECTED,
+        read_permission=PERMISSION_AUDIT_READ,
+        allowed_target_fields=target_set(TARGET_USER_ID),
     ),
 }
 

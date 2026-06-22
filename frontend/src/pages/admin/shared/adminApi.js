@@ -40,6 +40,199 @@ export async function fetchAdminActionCenter({ firebaseUser }) {
   })
 }
 
+export async function listAdminUsers({
+  accountStatus = '',
+  firebaseUser,
+  hostingStatus = '',
+  includeDeleted = false,
+  limit = 100,
+  query = '',
+  role = '',
+} = {}) {
+  const searchParams = new URLSearchParams()
+
+  if (query.trim()) {
+    searchParams.set('query', query.trim())
+  }
+  if (accountStatus) {
+    searchParams.set('account_status', accountStatus)
+  }
+  if (hostingStatus) {
+    searchParams.set('hosting_status', hostingStatus)
+  }
+  if (role) {
+    searchParams.set('role', role)
+  }
+
+  searchParams.set('include_deleted', includeDeleted ? 'true' : 'false')
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/users?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function listAdminStaff({
+  firebaseUser,
+  includeDeleted = false,
+  limit = 100,
+} = {}) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('include_deleted', includeDeleted ? 'true' : 'false')
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/users/staff?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function changeAdminUserStaffRole({
+  firebaseUser,
+  idempotencyKey,
+  reason,
+  role,
+  userId,
+} = {}) {
+  return apiRequest(`/admin/users/${userId}/staff-role`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      role,
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function getAdminUser({
+  firebaseUser,
+  limit = 50,
+  userId,
+} = {}) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/users/${userId}?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function previewAdminUserSuspension({
+  firebaseUser,
+  userId,
+} = {}) {
+  return apiRequest(`/admin/users/${userId}/suspension-preview`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function previewAdminUserHostingRestriction({
+  firebaseUser,
+  userId,
+} = {}) {
+  return apiRequest(`/admin/users/${userId}/hosting-restriction-preview`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function previewAdminUserDeleteImpact({
+  firebaseUser,
+  userId,
+} = {}) {
+  return apiRequest(`/admin/users/${userId}/delete-preview`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function deleteAdminUser({
+  firebaseUser,
+  idempotencyKey,
+  previewToken,
+  reason,
+  userId,
+} = {}) {
+  return apiRequest(`/admin/users/${userId}/delete`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      preview_token: previewToken,
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function restrictAdminUserHosting({
+  firebaseUser,
+  idempotencyKey,
+  previewToken,
+  reason,
+  userId,
+} = {}) {
+  return apiRequest(`/admin/users/${userId}/restrict-hosting`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      preview_token: previewToken,
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function restoreAdminUserHosting({
+  firebaseUser,
+  idempotencyKey,
+  reason,
+  userId,
+} = {}) {
+  return apiRequest(`/admin/users/${userId}/restore-hosting`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function suspendAdminUser({
+  firebaseUser,
+  idempotencyKey,
+  previewToken,
+  reason,
+  userId,
+} = {}) {
+  return apiRequest(`/admin/users/${userId}/suspend`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      preview_token: previewToken,
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function unsuspendAdminUser({
+  firebaseUser,
+  idempotencyKey,
+  reason,
+  userId,
+} = {}) {
+  return apiRequest(`/admin/users/${userId}/unsuspend`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
 export async function listAdminActions({
   actionType = '',
   firebaseUser,

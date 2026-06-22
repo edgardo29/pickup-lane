@@ -193,8 +193,17 @@ def build_user_display_name(user: User) -> str:
     return full_name or user.email or "Player"
 
 
-def get_active_user_or_404(db: Session, user_id: uuid.UUID, detail: str) -> User:
-    user = db.get(User, user_id)
+def get_active_user_or_404(
+    db: Session,
+    user_id: uuid.UUID,
+    detail: str,
+    *,
+    for_update: bool = False,
+) -> User:
+    statement = select(User).where(User.id == user_id)
+    if for_update:
+        statement = statement.with_for_update()
+    user = db.scalar(statement)
 
     if user is None or user.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
@@ -3010,10 +3019,15 @@ def assign_official_game_host(
     game_id: uuid.UUID,
     host_request: AdminOfficialGameHostAssign,
 ) -> Game:
+    host = get_active_user_or_404(
+        db,
+        host_request.host_user_id,
+        "Host not found.",
+        for_update=True,
+    )
     game = get_official_game_or_404(db, game_id, for_update=True)
     require_official_host_change_allowed(game, action="assigned")
 
-    host = get_active_user_or_404(db, host_request.host_user_id, "Host not found.")
     host_participant = get_official_host_roster_participant(
         db,
         game_id=game.id,

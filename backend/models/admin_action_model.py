@@ -21,6 +21,7 @@ class AdminAction(Base):
                 "'create_payment', 'update_payment', "
                 "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
+                "'delete_user', "
                 "'reject_venue', 'create_venue_image', 'update_venue_image', "
                 "'remove_venue_image', 'remove_chat_message', 'hide_chat_message', "
                 "'update_game', 'create_game_chat', 'update_game_chat', "
@@ -102,6 +103,66 @@ class AdminAction(Base):
             unique=True,
             postgresql_where=text(
                 "action_type = 'append_audit_note' AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_suspend_user_idempotency",
+            "admin_user_id",
+            "target_user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'suspend_user' AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_unsuspend_user_idempotency",
+            "admin_user_id",
+            "target_user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'unsuspend_user' AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_restrict_hosting_idempotency",
+            "admin_user_id",
+            "target_user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'restrict_hosting' AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_restore_hosting_idempotency",
+            "admin_user_id",
+            "target_user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'restore_hosting' AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_change_staff_role_idempotency",
+            "admin_user_id",
+            "target_user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'change_staff_role' AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_delete_user_idempotency",
+            "admin_user_id",
+            "target_user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'delete_user' AND idempotency_key IS NOT NULL"
             ),
         ),
         Index(

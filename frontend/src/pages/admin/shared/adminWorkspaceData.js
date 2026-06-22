@@ -12,6 +12,10 @@ export const ADMIN_PERMISSIONS = {
   MONEY_READ: 'admin.money.read',
   MONEY_REFUND: 'admin.money.refund',
   USERS_READ: 'admin.users.read',
+  USERS_DELETE: 'admin.users.delete',
+  USERS_HOSTING_MANAGE: 'admin.users.hosting_manage',
+  USERS_SUSPEND: 'admin.users.suspend',
+  STAFF_MANAGE: 'admin.staff.manage',
 }
 
 export const adminWorkspaceNavItems = [
@@ -29,6 +33,18 @@ export const adminWorkspaceNavItems = [
       ADMIN_PERMISSIONS.AUDIT_READ,
       ADMIN_PERMISSIONS.AUDIT_SUPPORT_READ,
     ],
+  },
+  {
+    label: 'Users',
+    to: '/admin/users',
+    end: true,
+    permission: ADMIN_PERMISSIONS.USERS_READ,
+  },
+  {
+    label: 'Staff',
+    to: '/admin/users/staff',
+    end: true,
+    permission: ADMIN_PERMISSIONS.STAFF_MANAGE,
   },
   {
     label: 'Official Games',
@@ -130,6 +146,20 @@ export function getDefaultAdminPath(adminAccess) {
 }
 
 export function isAdminWorkspaceItemActive(item, pathname) {
+  if (item.to === '/admin/users') {
+    return (
+      pathname === item.to
+      || (
+        pathname.startsWith('/admin/users/')
+        && !pathname.startsWith('/admin/users/staff')
+      )
+    )
+  }
+
+  if (item.to === '/admin/users/staff') {
+    return pathname === item.to
+  }
+
   if (item.to === '/admin/official-games') {
     return (
       pathname === item.to

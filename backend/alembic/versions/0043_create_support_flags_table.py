@@ -6,97 +6,9 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = "0043_support_flags"
-down_revision = "0042_sub_chat_notifs"
+down_revision = "0041_sub_post_chat_reads"
 branch_labels = None
 depends_on = None
-
-
-ADMIN_ACTION_TYPE_CHECK = (
-    "action_type IN ("
-    "'cancel_game', 'refund_booking', 'create_refund', "
-    "'update_refund', 'mark_no_show', "
-    "'create_payment', 'update_payment', "
-    "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
-    "'restrict_hosting', 'restore_hosting', 'approve_venue', "
-    "'reject_venue', 'create_venue_image', 'update_venue_image', "
-    "'remove_venue_image', 'remove_chat_message', 'hide_chat_message', "
-    "'update_game', 'create_game_chat', 'update_game_chat', "
-    "'update_booking', "
-    "'update_participant', 'issue_credit', 'reverse_credit', "
-    "'create_official_game', 'update_official_game', "
-    "'assign_official_host', 'remove_official_host', "
-    "'admin_add_player', 'admin_remove_player', 'waive_payment', "
-    "'remove_sub_post', 'hide_unsafe_community_payment_text', "
-    "'create_notification', 'update_notification', "
-    "'change_staff_role', 'append_audit_note', "
-    "'resolve_support_flag'"
-    ")"
-)
-
-
-OLD_ADMIN_ACTION_TYPE_CHECK = (
-    "action_type IN ("
-    "'cancel_game', 'refund_booking', 'create_refund', "
-    "'update_refund', 'mark_no_show', "
-    "'create_payment', 'update_payment', "
-    "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
-    "'restrict_hosting', 'restore_hosting', 'approve_venue', "
-    "'reject_venue', 'create_venue_image', 'update_venue_image', "
-    "'remove_venue_image', 'remove_chat_message', 'hide_chat_message', "
-    "'update_game', 'create_game_chat', 'update_game_chat', "
-    "'update_booking', "
-    "'update_participant', 'issue_credit', 'reverse_credit', "
-    "'create_official_game', 'update_official_game', "
-    "'assign_official_host', 'remove_official_host', "
-    "'admin_add_player', 'admin_remove_player', 'waive_payment', "
-    "'remove_sub_post', 'hide_unsafe_community_payment_text', "
-    "'create_notification', 'update_notification', "
-    "'change_staff_role', 'append_audit_note'"
-    ")"
-)
-
-
-ADMIN_ACTION_TARGET_REQUIRED_CHECK = (
-    "target_user_id IS NOT NULL "
-    "OR target_game_id IS NOT NULL "
-    "OR target_booking_id IS NOT NULL "
-    "OR target_participant_id IS NOT NULL "
-    "OR target_payment_id IS NOT NULL "
-    "OR target_refund_id IS NOT NULL "
-    "OR target_game_credit_id IS NOT NULL "
-    "OR target_venue_id IS NOT NULL "
-    "OR target_venue_image_id IS NOT NULL "
-    "OR target_message_id IS NOT NULL "
-    "OR target_sub_post_id IS NOT NULL "
-    "OR target_sub_post_request_id IS NOT NULL "
-    "OR target_sub_post_position_id IS NOT NULL "
-    "OR target_sub_chat_message_id IS NOT NULL "
-    "OR target_notification_id IS NOT NULL "
-    "OR target_platform_notice_campaign_id IS NOT NULL "
-    "OR target_admin_action_id IS NOT NULL "
-    "OR target_support_flag_id IS NOT NULL"
-)
-
-
-OLD_ADMIN_ACTION_TARGET_REQUIRED_CHECK = (
-    "target_user_id IS NOT NULL "
-    "OR target_game_id IS NOT NULL "
-    "OR target_booking_id IS NOT NULL "
-    "OR target_participant_id IS NOT NULL "
-    "OR target_payment_id IS NOT NULL "
-    "OR target_refund_id IS NOT NULL "
-    "OR target_game_credit_id IS NOT NULL "
-    "OR target_venue_id IS NOT NULL "
-    "OR target_venue_image_id IS NOT NULL "
-    "OR target_message_id IS NOT NULL "
-    "OR target_sub_post_id IS NOT NULL "
-    "OR target_sub_post_request_id IS NOT NULL "
-    "OR target_sub_post_position_id IS NOT NULL "
-    "OR target_sub_chat_message_id IS NOT NULL "
-    "OR target_notification_id IS NOT NULL "
-    "OR target_platform_notice_campaign_id IS NOT NULL "
-    "OR target_admin_action_id IS NOT NULL"
-)
 
 
 SUPPORT_FLAG_TYPE_CHECK = (
@@ -139,16 +51,6 @@ SUPPORT_FLAG_RESOLUTION_STATE_CHECK = (
 
 
 def upgrade() -> None:
-    op.drop_constraint(
-        "ck_admin_actions_action_type",
-        "admin_actions",
-        type_="check",
-    )
-    op.drop_constraint(
-        "ck_admin_actions_target_required",
-        "admin_actions",
-        type_="check",
-    )
     op.create_table(
         "support_flags",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -369,10 +271,6 @@ def upgrade() -> None:
         unique=True,
         postgresql_where=sa.text("idempotency_key IS NOT NULL"),
     )
-    op.add_column(
-        "admin_actions",
-        sa.Column("target_support_flag_id", postgresql.UUID(as_uuid=True), nullable=True),
-    )
     op.create_foreign_key(
         "fk_admin_actions_target_support_flag_id",
         "admin_actions",
@@ -381,52 +279,12 @@ def upgrade() -> None:
         ["id"],
         ondelete="SET NULL",
     )
-    op.create_index(
-        "ix_admin_actions_target_support_flag_id",
-        "admin_actions",
-        ["target_support_flag_id"],
-    )
-    op.create_check_constraint(
-        "ck_admin_actions_action_type",
-        "admin_actions",
-        ADMIN_ACTION_TYPE_CHECK,
-    )
-    op.create_check_constraint(
-        "ck_admin_actions_target_required",
-        "admin_actions",
-        ADMIN_ACTION_TARGET_REQUIRED_CHECK,
-    )
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "ck_admin_actions_target_required",
-        "admin_actions",
-        type_="check",
-    )
-    op.drop_constraint(
-        "ck_admin_actions_action_type",
-        "admin_actions",
-        type_="check",
-    )
-    op.drop_index(
-        "ix_admin_actions_target_support_flag_id",
-        table_name="admin_actions",
-    )
     op.drop_constraint(
         "fk_admin_actions_target_support_flag_id",
         "admin_actions",
         type_="foreignkey",
     )
-    op.drop_column("admin_actions", "target_support_flag_id")
     op.drop_table("support_flags")
-    op.create_check_constraint(
-        "ck_admin_actions_action_type",
-        "admin_actions",
-        OLD_ADMIN_ACTION_TYPE_CHECK,
-    )
-    op.create_check_constraint(
-        "ck_admin_actions_target_required",
-        "admin_actions",
-        OLD_ADMIN_ACTION_TARGET_REQUIRED_CHECK,
-    )

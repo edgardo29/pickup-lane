@@ -1,4 +1,6 @@
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
+import pytest
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -8,17 +10,23 @@ from sqlalchemy import select
 from backend.database import SessionLocal
 from backend.models import (
     Booking,
+    Game,
     GameCredit,
     GameCreditUsage,
     GameParticipant,
     Payment,
+    User,
 )
+from backend.schemas import CommunityGamePublishCreate
 from backend.services.game_credit_service import (
     REDEEMED_USAGE_STATUS,
     RELEASED_USAGE_STATUS,
     RESTORED_USAGE_STATUS,
     redeem_reserved_game_credits,
     reserve_game_credits,
+)
+from backend.services.community_game_publish_service import (
+    publish_community_game_workflow,
 )
 from backend.services.stripe_service import (
     StripeConfigError,
@@ -43,6 +51,7 @@ from backend.tests.helpers import (
     mock_checkout_payment_method_verification,
     run_as_temporary_admin,
     set_user_account_status,
+    set_user_hosting_status,
     set_user_role,
     unique_suffix,
 )
@@ -2287,6 +2296,100 @@ def test_publish_community_game_rejects_request_host_user_id(client: TestClient)
     )
 
     assert response.status_code == 422, response.text
+
+
+@pytest.mark.parametrize(
+    ("hosting_status", "expected_detail"),
+    [
+        (
+            "not_eligible",
+            "Your account is not eligible to host community games.",
+        ),
+        ("pending_review", "Your hosting access is pending review."),
+        ("restricted", "Your hosting access is restricted."),
+        ("suspended", "Your hosting access is suspended."),
+        ("banned_from_hosting", "Your account is banned from hosting."),
+    ],
+)
+def test_publish_community_game_requires_eligible_hosting_status(
+    client: TestClient,
+    hosting_status: str,
+    expected_detail: str,
+):
+    host = create_user(client)
+    mark_user_email_verified(host["id"])
+    set_user_hosting_status(host["id"], hosting_status)
+    authenticate_as(host["id"])
+    starts_at = datetime.now(UTC) + timedelta(days=13)
+
+    response = client.post(
+        "/community-games/publish",
+        json={
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(hours=2)).isoformat(),
+            "timezone": "America/Chicago",
+            "format_label": "7v7",
+            "environment_type": "outdoor",
+            "total_spots": 14,
+            "price_per_player_cents": 2500,
+            "venue": {
+                "name": "Blocked Community Publish Field",
+                "address_line_1": "123 Blocked Ave",
+                "city": "Chicago",
+                "state": "IL",
+                "postal_code": "60601",
+                "country_code": "US",
+            },
+            "payment_methods_snapshot": [{"type": "venmo", "value": "@host"}],
+        },
+    )
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == expected_detail
+
+
+def test_publish_community_game_rechecks_locked_host_account_status(
+    client: TestClient,
+):
+    host = create_user(client)
+    mark_user_email_verified(host["id"])
+    with SessionLocal() as db:
+        stale_current_user = db.get(User, UUID(host["id"]))
+        assert stale_current_user is not None
+        db.expunge(stale_current_user)
+
+    set_user_account_status(host["id"], "suspended")
+    starts_at = datetime.now(UTC) + timedelta(days=13)
+    publish_request = CommunityGamePublishCreate(
+        starts_at=starts_at,
+        ends_at=starts_at + timedelta(hours=2),
+        timezone="America/Chicago",
+        format_label="7v7",
+        environment_type="outdoor",
+        total_spots=14,
+        price_per_player_cents=2500,
+        venue={
+            "name": "Suspended Publish Field",
+            "address_line_1": "123 Suspended Ave",
+            "city": "Chicago",
+            "state": "IL",
+            "postal_code": "60601",
+            "country_code": "US",
+        },
+        payment_methods_snapshot=[{"type": "venmo", "value": "@host"}],
+    )
+
+    with SessionLocal() as db:
+        with pytest.raises(HTTPException) as exc_info:
+            publish_community_game_workflow(db, publish_request, stale_current_user)
+
+        game_ids = db.scalars(
+            select(Game.id).where(Game.host_user_id == UUID(host["id"]))
+        ).all()
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Active account required."
+    assert game_ids == []
 
 
 def test_second_community_publish_creates_paid_publish_fee(client: TestClient):

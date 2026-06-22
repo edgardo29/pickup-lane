@@ -12,7 +12,14 @@ class AdminRejectedAttempt(Base):
     __tablename__ = "admin_rejected_attempts"
     __table_args__ = (
         CheckConstraint(
-            "attempt_type IN ('issue_credit_rejected', 'reverse_credit_rejected')",
+            (
+                "attempt_type IN ("
+                "'issue_credit_rejected', "
+                "'reverse_credit_rejected', "
+                "'suspend_user_rejected', "
+                "'delete_user_rejected'"
+                ")"
+            ),
             name="ck_admin_rejected_attempts_attempt_type",
         ),
         CheckConstraint(

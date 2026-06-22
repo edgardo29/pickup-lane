@@ -16,6 +16,7 @@ from backend.routes import (
     admin_money_router,
     admin_official_games_router,
     admin_router,
+    admin_users_router,
     admin_venue_images_router,
     auth_router,
     booking_policy_acceptances_router,
@@ -108,6 +109,7 @@ app.include_router(venue_images_router)
 app.include_router(game_chats_router)
 app.include_router(game_credits_router)
 app.include_router(admin_router)
+app.include_router(admin_users_router)
 app.include_router(admin_action_center_router)
 app.include_router(admin_rejected_attempts_router)
 app.include_router(admin_game_credits_router)
