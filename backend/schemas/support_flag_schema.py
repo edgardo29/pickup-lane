@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -8,7 +7,7 @@ REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
 
 class SupportFlagRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     flag_type: str
@@ -26,17 +25,8 @@ class SupportFlagRead(BaseModel):
     target_venue_id: UUID | None
     target_venue_image_id: UUID | None
     target_notification_id: UUID | None
-    metadata: dict[str, Any] | None = Field(
-        validation_alias="metadata_",
-        serialization_alias="metadata",
-    )
-    idempotency_key: str | None
-    source_admin_action_id: UUID | None
-    created_by_user_id: UUID | None
-    resolved_by_user_id: UUID | None
     resolution_outcome: str | None
     resolution_reason: str | None
-    resolution_admin_action_id: UUID | None
     resolved_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -47,3 +37,4 @@ class SupportFlagResolve(BaseModel):
 
     outcome: str
     reason: str
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)

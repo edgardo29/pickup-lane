@@ -6,6 +6,9 @@ from backend.services.admin_permission_service import (
     DATA_SCOPE_ADMIN_ONLY,
     DATA_SCOPE_MONEY_SENSITIVE,
     DATA_SCOPE_STAFF_SENSITIVE,
+    DATA_SCOPE_SUPPORT_SAFE,
+    PERMISSION_COMMUNITY_GAMES_READ,
+    PERMISSION_COMMUNITY_GAMES_WRITE,
     PERMISSION_MONEY_CREDIT_MANAGE,
     PERMISSION_MONEY_PAYMENT_MANAGE,
     PERMISSION_MONEY_READ,
@@ -61,6 +64,7 @@ class SupportFlagPolicy:
     required_target_rules: tuple[SupportFlagTargetRule, ...]
     allowed_target_fields: frozenset[str]
     allowed_resolution_outcomes: tuple[str, ...] = BASELINE_RESOLUTION_OUTCOMES
+    resolution_requires_idempotency: bool = False
 
 
 def target_set(*fields: str) -> frozenset[str]:
@@ -188,6 +192,21 @@ SUPPORT_FLAG_POLICIES: dict[str, SupportFlagPolicy] = {
             TARGET_REFUND_ID,
             TARGET_GAME_CREDIT_ID,
         ),
+    ),
+    "community_game_review_required": SupportFlagPolicy(
+        flag_type="community_game_review_required",
+        sensitivity_scope=DATA_SCOPE_SUPPORT_SAFE,
+        read_permission=PERMISSION_COMMUNITY_GAMES_READ,
+        resolve_permission=PERMISSION_COMMUNITY_GAMES_WRITE,
+        required_target_rules=(SupportFlagTargetRule(all_of=(TARGET_GAME_ID,)),),
+        allowed_target_fields=target_set(TARGET_GAME_ID),
+        allowed_resolution_outcomes=(
+            "handled_externally",
+            "no_action_needed",
+            "duplicate",
+            "invalid_flag",
+        ),
+        resolution_requires_idempotency=True,
     ),
 }
 

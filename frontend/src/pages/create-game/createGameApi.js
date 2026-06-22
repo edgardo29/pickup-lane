@@ -47,12 +47,27 @@ export async function publishCommunityGame(firebaseUser, payload) {
   return response.game
 }
 
-export async function loadEditableGame(gameId) {
+export async function loadEditableGame(firebaseUser, gameId) {
+  if (!firebaseUser) {
+    throw new Error('Sign in to edit this game.')
+  }
+
   const game = await apiRequest(`/games/${gameId}`)
   const venue = await apiRequest(`/venues/${game.venue_id}`).catch(() => null)
-  const communityDetails = await apiRequest(`/community-game-details?game_id=${gameId}`)
-    .then((details) => details[0] || null)
-    .catch(() => null)
+  const communityDetails = await apiRequest(
+    `/community-game-details/games/${gameId}/host-edit`,
+    {
+      headers: {
+        Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+      },
+    },
+  )
+    .catch((error) => {
+      if (error?.status === 404) {
+        return null
+      }
+      throw error
+    })
   return { communityDetails, game, venue }
 }
 

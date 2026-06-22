@@ -3,6 +3,9 @@ export const ADMIN_PERMISSIONS = {
   AUDIT_READ: 'admin.audit.read',
   AUDIT_SUPPORT_READ: 'admin.audit.support_read',
   COMMUNITY_GAMES_CANCEL: 'admin.community_games.cancel',
+  COMMUNITY_GAMES_FLAG: 'admin.community_games.flag',
+  COMMUNITY_GAMES_HIDE_UNSAFE_CONTENT: 'admin.community_games.hide_unsafe_content',
+  COMMUNITY_GAMES_READ: 'admin.community_games.read',
   CONTENT_MODERATE: 'admin.content.moderate',
   OFFICIAL_GAMES_READ: 'admin.official_games.read',
   OFFICIAL_GAMES_WRITE: 'admin.official_games.write',
@@ -11,6 +14,7 @@ export const ADMIN_PERMISSIONS = {
   MONEY_CREDIT_MANAGE: 'admin.money.credit_manage',
   MONEY_READ: 'admin.money.read',
   MONEY_REFUND: 'admin.money.refund',
+  NEED_A_SUB_MODERATE: 'admin.need_a_sub.moderate',
   USERS_READ: 'admin.users.read',
   USERS_DELETE: 'admin.users.delete',
   USERS_HOSTING_MANAGE: 'admin.users.hosting_manage',
@@ -45,6 +49,18 @@ export const adminWorkspaceNavItems = [
     to: '/admin/users/staff',
     end: true,
     permission: ADMIN_PERMISSIONS.STAFF_MANAGE,
+  },
+  {
+    label: 'Community Games',
+    to: '/admin/community-games',
+    end: true,
+    permission: ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ,
+  },
+  {
+    label: 'Need a Sub',
+    to: '/admin/need-a-sub',
+    end: true,
+    permission: ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE,
   },
   {
     label: 'Official Games',
@@ -158,6 +174,14 @@ export function isAdminWorkspaceItemActive(item, pathname) {
 
   if (item.to === '/admin/users/staff') {
     return pathname === item.to
+  }
+
+  if (item.to === '/admin/community-games') {
+    return pathname === item.to || pathname.startsWith('/admin/community-games/')
+  }
+
+  if (item.to === '/admin/need-a-sub') {
+    return pathname === item.to || pathname.startsWith('/admin/need-a-sub/')
   }
 
   if (item.to === '/admin/official-games') {

@@ -40,6 +40,196 @@ export async function fetchAdminActionCenter({ firebaseUser }) {
   })
 }
 
+export async function listAdminCommunityGames({
+  firebaseUser,
+  gameStatus = '',
+  limit = 50,
+  offset = 0,
+  publishStatus = '',
+  query = '',
+} = {}) {
+  const searchParams = new URLSearchParams()
+
+  if (query.trim()) {
+    searchParams.set('query', query.trim())
+  }
+  if (gameStatus) {
+    searchParams.set('game_status', gameStatus)
+  }
+  if (publishStatus) {
+    searchParams.set('publish_status', publishStatus)
+  }
+
+  searchParams.set('limit', String(limit))
+  searchParams.set('offset', String(offset))
+
+  return apiRequest(`/admin/community-games?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getAdminCommunityGame({
+  auditLimit = 50,
+  auditOffset = 0,
+  firebaseUser,
+  gameId,
+  supportFlagLimit = 50,
+  supportFlagOffset = 0,
+} = {}) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('support_flag_offset', String(supportFlagOffset))
+  searchParams.set('support_flag_limit', String(supportFlagLimit))
+  searchParams.set('audit_offset', String(auditOffset))
+  searchParams.set('audit_limit', String(auditLimit))
+
+  return apiRequest(`/admin/community-games/${gameId}?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function hideAdminCommunityGamePaymentText({
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  reason,
+} = {}) {
+  return apiRequest(`/admin/community-games/${gameId}/hide-payment-text`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function flagAdminCommunityGameForReview({
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  reason,
+} = {}) {
+  return apiRequest(`/admin/community-games/${gameId}/flag-for-review`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function resolveAdminSupportFlag({
+  firebaseUser,
+  idempotencyKey,
+  outcome,
+  reason,
+  supportFlagId,
+} = {}) {
+  return apiRequest(`/admin/support-flags/${supportFlagId}/resolve`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      idempotency_key: idempotencyKey,
+      outcome,
+      reason,
+    }),
+  })
+}
+
+export async function listAdminNeedASubPosts({
+  firebaseUser,
+  limit = 50,
+  offset = 0,
+  postStatus = '',
+  query = '',
+} = {}) {
+  const searchParams = new URLSearchParams()
+  if (query.trim()) {
+    searchParams.set('query', query.trim())
+  }
+  if (postStatus) {
+    searchParams.set('post_status', postStatus)
+  }
+  searchParams.set('offset', String(offset))
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/need-a-sub?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getAdminNeedASubPost({
+  auditLimit = 50,
+  auditOffset = 0,
+  firebaseUser,
+  postId,
+  requestLimit = 50,
+  requestOffset = 0,
+} = {}) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('request_offset', String(requestOffset))
+  searchParams.set('request_limit', String(requestLimit))
+  searchParams.set('audit_offset', String(auditOffset))
+  searchParams.set('audit_limit', String(auditLimit))
+
+  return apiRequest(`/admin/need-a-sub/${postId}?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function removeAdminNeedASubPost({
+  firebaseUser,
+  idempotencyKey,
+  postId,
+  reason,
+} = {}) {
+  return apiRequest(`/need-a-sub/posts/${postId}/remove`, {
+    method: 'PATCH',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      remove_reason: reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function getAdminNeedASubChat({
+  firebaseUser,
+  limit = 50,
+  offset = 0,
+  postId,
+} = {}) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('offset', String(offset))
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/need-a-sub/${postId}/chat?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function moderateAdminNeedASubChatMessage({
+  action,
+  firebaseUser,
+  idempotencyKey,
+  messageId,
+  postId,
+  reason,
+} = {}) {
+  return apiRequest(
+    `/admin/need-a-sub/${postId}/chat/messages/${messageId}/${action}`,
+    {
+      method: 'POST',
+      headers: await getAdminHeaders(firebaseUser, true),
+      body: JSON.stringify({
+        reason,
+        idempotency_key: idempotencyKey,
+      }),
+    },
+  )
+}
+
 export async function listAdminUsers({
   accountStatus = '',
   firebaseUser,

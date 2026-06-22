@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
+    AdminAction,
     Notification,
     SubPost,
     SubPostPosition,
@@ -22,7 +23,11 @@ from backend.schemas import (
     SubPostCreate,
     SubPostUpdate,
 )
-from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_action_service import (
+    normalize_idempotency_key,
+    normalize_optional_text,
+    record_admin_action,
+)
 from backend.services.admin_permission_service import PERMISSION_NEED_A_SUB_MODERATE
 from backend.services.auth_service import require_user_admin_permission
 from backend.services.notification_service import (
@@ -169,6 +174,25 @@ def get_sub_post_request_or_404(db: Session, request_id: uuid.UUID) -> SubPostRe
         )
 
     return sub_request
+
+
+def get_sub_post_request_and_post_for_update(
+    db: Session,
+    request_id: uuid.UUID,
+) -> tuple[SubPostRequest, SubPost]:
+    request_snapshot = get_sub_post_request_or_404(db, request_id)
+    sub_post = get_sub_post_for_update_or_404(db, request_snapshot.sub_post_id)
+    sub_request = db.scalar(
+        select(SubPostRequest)
+        .where(SubPostRequest.id == request_id)
+        .with_for_update()
+    )
+    if sub_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub request not found.",
+        )
+    return sub_request, sub_post
 
 
 def get_position_or_404(
@@ -703,7 +727,7 @@ def update_sub_post(
     sub_post_id: uuid.UUID,
     post_update: SubPostUpdate,
 ) -> SubPost:
-    sub_post = get_sub_post_or_404(db, sub_post_id)
+    sub_post = get_sub_post_for_update_or_404(db, sub_post_id)
     require_owner(sub_post, owner)
 
     if sub_post.post_status not in {"active", "filled"}:
@@ -1599,8 +1623,7 @@ def promote_next_waitlisted_request(
 
 
 def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> SubPostRequest:
-    sub_request = get_sub_post_request_or_404(db, request_id)
-    sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
+    sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
     position = get_position_or_404(db, sub_request.sub_post_position_id, lock_for_update=True)
     current_time = now_utc()
     require_owner(sub_post, owner)
@@ -1649,8 +1672,7 @@ def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> Sub
 def owner_decline_request(
     db: Session, owner: User, request_id: uuid.UUID, reason: str | None = None
 ) -> SubPostRequest:
-    sub_request = get_sub_post_request_or_404(db, request_id)
-    sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
+    sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
     require_owner(sub_post, owner)
     require_live_sub_post(sub_post, "Only active or filled posts can be reviewed.")
     require_before_post_start(sub_post, "Requests cannot be declined after the game starts.")
@@ -1712,8 +1734,7 @@ def owner_decline_request(
 def requester_cancel_request(
     db: Session, requester: User, request_id: uuid.UUID
 ) -> SubPostRequest:
-    sub_request = get_sub_post_request_or_404(db, request_id)
-    sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
+    sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
 
     if sub_request.requester_user_id != requester.id:
         raise HTTPException(
@@ -1793,8 +1814,7 @@ def owner_cancel_request(
     request_id: uuid.UUID,
     reason: str | None = None,
 ) -> SubPostRequest:
-    sub_request = get_sub_post_request_or_404(db, request_id)
-    sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
+    sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
     require_owner(sub_post, owner)
     require_before_post_start(sub_post, "Confirmed players cannot be removed after the game starts.")
     require_live_sub_post(sub_post, "Only active or filled posts can be reviewed.")
@@ -1852,8 +1872,7 @@ def owner_report_no_show(
     request_id: uuid.UUID,
     reason: str | None = None,
 ) -> SubPostRequest:
-    sub_request = get_sub_post_request_or_404(db, request_id)
-    sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
+    sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
     require_owner(sub_post, owner)
 
     if sub_request.request_status != "confirmed":
@@ -1950,14 +1969,107 @@ def cancel_sub_post(
     return sub_post
 
 
+def get_existing_remove_sub_post_action(
+    db: Session,
+    *,
+    admin_user_id: uuid.UUID,
+    sub_post_id: uuid.UUID,
+    idempotency_key: str,
+) -> AdminAction | None:
+    return db.scalar(
+        select(AdminAction)
+        .where(
+            AdminAction.action_type == "remove_sub_post",
+            AdminAction.admin_user_id == admin_user_id,
+            AdminAction.target_sub_post_id == sub_post_id,
+            AdminAction.idempotency_key == idempotency_key,
+        )
+        .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
+        .limit(1)
+    )
+
+
+def validate_remove_sub_post_replay(
+    action: AdminAction,
+    *,
+    expected_reason: str,
+) -> None:
+    if action.reason != expected_reason:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "idempotency_key was already used for a different "
+                "Need a Sub removal request."
+            ),
+        )
+
+
+def get_removed_sub_post_replay_result(
+    db: Session,
+    *,
+    action: AdminAction,
+    sub_post_id: uuid.UUID,
+    expected_reason: str,
+) -> SubPost:
+    validate_remove_sub_post_replay(action, expected_reason=expected_reason)
+    sub_post = db.get(SubPost, sub_post_id)
+    if sub_post is None or sub_post.post_status != "removed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Removal audit exists but the Need a Sub post is not removed.",
+        )
+    return sub_post
+
+
 def remove_sub_post(
     db: Session,
     admin_user: User,
     sub_post_id: uuid.UUID,
     reason: str | None = None,
+    idempotency_key_value: str | None = None,
 ) -> SubPost:
     require_user_admin_permission(admin_user, PERMISSION_NEED_A_SUB_MODERATE)
+    normalized_reason = normalize_optional_text(reason, "remove_reason")
+    if normalized_reason is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="remove_sub_post requires a reason.",
+        )
+    idempotency_key = normalize_idempotency_key(idempotency_key_value)
+    if idempotency_key is None or len(idempotency_key) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="idempotency_key must be at least 8 characters.",
+        )
+
+    existing_action = get_existing_remove_sub_post_action(
+        db,
+        admin_user_id=admin_user.id,
+        sub_post_id=sub_post_id,
+        idempotency_key=idempotency_key,
+    )
+    if existing_action is not None:
+        return get_removed_sub_post_replay_result(
+            db,
+            action=existing_action,
+            sub_post_id=sub_post_id,
+            expected_reason=normalized_reason,
+        )
+
     sub_post = get_sub_post_for_update_or_404(db, sub_post_id)
+    existing_action = get_existing_remove_sub_post_action(
+        db,
+        admin_user_id=admin_user.id,
+        sub_post_id=sub_post.id,
+        idempotency_key=idempotency_key,
+    )
+    if existing_action is not None:
+        return get_removed_sub_post_replay_result(
+            db,
+            action=existing_action,
+            sub_post_id=sub_post.id,
+            expected_reason=normalized_reason,
+        )
 
     if sub_post.post_status == "removed":
         raise HTTPException(
@@ -1967,26 +2079,28 @@ def remove_sub_post(
 
     old_status = sub_post.post_status
     actor_role = "moderator" if admin_user.role == "moderator" else "admin"
+    current_time = now_utc()
     record_admin_action(
         db,
         admin_user_id=admin_user.id,
         action_type="remove_sub_post",
         target_user_id=sub_post.owner_user_id,
         target_sub_post_id=sub_post.id,
-        reason=reason,
+        reason=normalized_reason,
         metadata={
             "source": "need_a_sub",
             "old_status": old_status,
             "new_status": "removed",
             "removed_by": actor_role,
         },
+        idempotency_key=idempotency_key,
+        created_at=current_time,
     )
 
-    current_time = now_utc()
     sub_post.post_status = "removed"
     sub_post.removed_at = current_time
     sub_post.removed_by_user_id = admin_user.id
-    sub_post.remove_reason = reason
+    sub_post.remove_reason = normalized_reason
     sub_post.updated_at = current_time
     db.add(sub_post)
     add_post_status_history(
@@ -1996,12 +2110,20 @@ def remove_sub_post(
         "removed",
         admin_user.id,
         "admin",
-        reason,
+        normalized_reason,
     )
     resolve_sub_chat_notifications_for_post(
         db,
         sub_post_id=sub_post.id,
         read_at=current_time,
+    )
+    add_need_a_sub_notification(
+        db,
+        recipient_user_id=sub_post.owner_user_id,
+        notification_type="sub_post_removed",
+        sub_post=sub_post,
+        actor_user_id=admin_user.id,
+        event_at=current_time,
     )
 
     active_requests = db.scalars(
@@ -2018,7 +2140,7 @@ def remove_sub_post(
             "canceled_by_owner",
             admin_user.id,
             "admin",
-            reason or "Post removed by admin.",
+            normalized_reason,
             current_time,
         )
         if previous_status == "pending":
@@ -2036,11 +2158,32 @@ def remove_sub_post(
             title=None,
             body=None,
             actor_user_id=admin_user.id,
+            event_at=current_time,
         )
 
-    db.commit()
-    db.refresh(sub_post)
-    return sub_post
+    try:
+        db.commit()
+        db.refresh(sub_post)
+        return sub_post
+    except IntegrityError as exc:
+        db.rollback()
+        existing_action = get_existing_remove_sub_post_action(
+            db,
+            admin_user_id=admin_user.id,
+            sub_post_id=sub_post_id,
+            idempotency_key=idempotency_key,
+        )
+        if existing_action is not None:
+            return get_removed_sub_post_replay_result(
+                db,
+                action=existing_action,
+                sub_post_id=sub_post_id,
+                expected_reason=normalized_reason,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Need a Sub post could not be removed.",
+        ) from exc
 
 
 def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
@@ -2052,7 +2195,7 @@ def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
         select(SubPost).where(
             SubPost.post_status.in_({"active", "filled"}),
             SubPost.expires_at <= current_time,
-        )
+        ).with_for_update()
     ).all()
 
     for sub_post in posts:

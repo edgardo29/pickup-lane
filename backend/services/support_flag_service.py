@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
+    AdminAction,
     Booking,
     Game,
     GameCredit,
@@ -34,6 +35,7 @@ from backend.services.admin_permission_service import (
 )
 from backend.services.auth_service import require_user_admin_permission
 from backend.services.support_flag_policy import (
+    SUPPORT_FLAG_POLICIES,
     SUPPORT_FLAG_TARGET_FIELDS,
     TARGET_BOOKING_ID,
     TARGET_GAME_CREDIT_ID,
@@ -225,6 +227,16 @@ def user_can_read_support_flag(user: User, support_flag: SupportFlag) -> bool:
     )
 
 
+def readable_support_flag_types(user: User) -> tuple[str, ...]:
+    data_scopes = get_admin_data_scopes_for_user(user)
+    return tuple(
+        flag_type
+        for flag_type, policy in SUPPORT_FLAG_POLICIES.items()
+        if policy.sensitivity_scope in data_scopes
+        and user_has_admin_permission(user, policy.read_permission)
+    )
+
+
 def get_support_flag_or_404(db: Session, support_flag_id: uuid.UUID) -> SupportFlag:
     support_flag = db.get(SupportFlag, support_flag_id)
 
@@ -270,7 +282,13 @@ def list_support_flags(
     if flag_type is not None:
         get_policy_or_400(flag_type)
 
-    query = select(SupportFlag)
+    readable_flag_types = readable_support_flag_types(viewer_user)
+    if not readable_flag_types:
+        return []
+
+    query = select(SupportFlag).where(
+        SupportFlag.flag_type.in_(readable_flag_types)
+    )
     if flag_status != "all":
         query = query.where(SupportFlag.flag_status == flag_status)
     if flag_type:
@@ -280,11 +298,7 @@ def list_support_flags(
         query.order_by(SupportFlag.created_at.desc(), SupportFlag.id.asc()).limit(limit)
     ).all()
 
-    return [
-        support_flag
-        for support_flag in support_flags
-        if user_can_read_support_flag(viewer_user, support_flag)
-    ]
+    return list(support_flags)
 
 
 def get_existing_support_flag_by_idempotency_key(
@@ -458,6 +472,52 @@ def build_support_flag_audit_targets(support_flag: SupportFlag) -> dict[str, uui
     }
 
 
+def get_existing_support_flag_resolution_action(
+    db: Session,
+    *,
+    resolver_user_id: uuid.UUID,
+    support_flag_id: uuid.UUID,
+    idempotency_key: str,
+) -> AdminAction | None:
+    return db.scalar(
+        select(AdminAction)
+        .where(
+            AdminAction.action_type == "resolve_support_flag",
+            AdminAction.admin_user_id == resolver_user_id,
+            AdminAction.target_support_flag_id == support_flag_id,
+            AdminAction.idempotency_key == idempotency_key,
+        )
+        .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
+        .limit(1)
+    )
+
+
+def validate_existing_support_flag_resolution_action(
+    action: AdminAction,
+    *,
+    expected_outcome: str,
+    expected_reason: str,
+) -> None:
+    after_metadata = (
+        action.metadata_.get("after")
+        if isinstance(action.metadata_, dict)
+        else None
+    )
+    recorded_outcome = (
+        after_metadata.get("resolution_outcome")
+        if isinstance(after_metadata, dict)
+        else None
+    )
+    if action.reason != expected_reason or recorded_outcome != expected_outcome:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "idempotency_key was already used for a different "
+                "support flag resolution request."
+            ),
+        )
+
+
 def resolve_support_flag(
     db: Session,
     *,
@@ -465,9 +525,50 @@ def resolve_support_flag(
     resolver_user: User,
     payload: SupportFlagResolve,
 ) -> SupportFlag:
-    support_flag = get_support_flag_for_viewer_or_404(db, support_flag_id, resolver_user)
-    policy = get_policy_or_400(support_flag.flag_type)
+    visible_flag = get_support_flag_for_viewer_or_404(
+        db,
+        support_flag_id,
+        resolver_user,
+    )
+    policy = get_policy_or_400(visible_flag.flag_type)
     require_user_admin_permission(resolver_user, policy.resolve_permission)
+
+    resolution_reason = normalize_limited_text(payload.reason, "reason", 1000)
+    idempotency_key = normalize_idempotency_key(payload.idempotency_key)
+    if policy.resolution_requires_idempotency and (
+        idempotency_key is None or len(idempotency_key) < 8
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="idempotency_key must be at least 8 characters.",
+        )
+
+    support_flag = db.scalar(
+        select(SupportFlag)
+        .where(SupportFlag.id == support_flag_id)
+        .with_for_update()
+    )
+    if support_flag is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Support flag not found.",
+        )
+    policy = get_policy_or_400(support_flag.flag_type)
+
+    if idempotency_key is not None:
+        existing_action = get_existing_support_flag_resolution_action(
+            db,
+            resolver_user_id=resolver_user.id,
+            support_flag_id=support_flag.id,
+            idempotency_key=idempotency_key,
+        )
+        if existing_action is not None:
+            validate_existing_support_flag_resolution_action(
+                existing_action,
+                expected_outcome=payload.outcome,
+                expected_reason=resolution_reason,
+            )
+            return support_flag
 
     if support_flag.flag_status != "open":
         raise HTTPException(
@@ -481,7 +582,6 @@ def resolve_support_flag(
             detail="resolution outcome is not supported for this support flag.",
         )
 
-    resolution_reason = normalize_limited_text(payload.reason, "reason", 1000)
     resolved_at = datetime.now(timezone.utc)
     audit_action = record_admin_action(
         db,
@@ -499,6 +599,7 @@ def resolve_support_flag(
                 "flag_type": support_flag.flag_type,
             },
         },
+        idempotency_key=idempotency_key,
         target_support_flag_id=support_flag.id,
         **build_support_flag_audit_targets(support_flag),
     )

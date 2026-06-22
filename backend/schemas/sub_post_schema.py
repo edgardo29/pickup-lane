@@ -176,6 +176,7 @@ class SubPostRemove(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     remove_reason: str | None = Field(default=None, max_length=500)
+    idempotency_key: str = Field(min_length=8, max_length=160)
 
     @field_validator("remove_reason", mode="before")
     @classmethod

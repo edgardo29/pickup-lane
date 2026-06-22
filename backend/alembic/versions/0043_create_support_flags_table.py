@@ -17,7 +17,7 @@ SUPPORT_FLAG_TYPE_CHECK = (
     "'missing_stripe_charge_id', 'credit_restore_failed', "
     "'credit_release_failed', 'venue_image_upload_failed', "
     "'venue_image_readiness_failed', 'account_delete_partial_failure', "
-    "'official_cancel_partial_failure'"
+    "'official_cancel_partial_failure', 'community_game_review_required'"
     ")"
 )
 

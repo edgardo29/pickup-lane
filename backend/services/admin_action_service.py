@@ -798,7 +798,9 @@ def list_admin_actions(
             statement = statement.where(getattr(AdminAction, field_name) == target_id)
 
     visible_actions: list[AdminAction] = []
-    for admin_action in db.scalars(statement.order_by(AdminAction.created_at.desc())):
+    for admin_action in db.scalars(
+        statement.order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
+    ):
         if user_can_read_admin_action(viewer_user, admin_action):
             visible_actions.append(admin_action)
 

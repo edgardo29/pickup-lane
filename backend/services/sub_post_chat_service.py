@@ -64,8 +64,20 @@ def get_sub_post_chat_or_404(db: Session, chat_id: uuid.UUID) -> SubPostChat:
     return db_chat
 
 
-def get_sub_post_or_404(db: Session, sub_post_id: uuid.UUID) -> SubPost:
-    sub_post = db.get(SubPost, sub_post_id)
+def get_sub_post_or_404(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    *,
+    lock_for_update: bool = False,
+) -> SubPost:
+    if lock_for_update:
+        sub_post = db.scalar(
+            select(SubPost)
+            .where(SubPost.id == sub_post_id)
+            .with_for_update()
+        )
+    else:
+        sub_post = db.get(SubPost, sub_post_id)
 
     if sub_post is None:
         raise HTTPException(
@@ -532,6 +544,74 @@ def resolve_sub_chat_notifications_for_post(
         db.add(notification)
 
 
+def reconcile_sub_chat_notifications_after_moderation(
+    db: Session,
+    *,
+    db_chat: SubPostChat,
+    moderated_at: datetime,
+) -> None:
+    notifications = db.scalars(
+        select(Notification).where(
+            Notification.related_sub_post_chat_id == db_chat.id,
+            Notification.notification_type == "sub_chat_message",
+        )
+    ).all()
+
+    for notification in notifications:
+        read_state = db.scalar(
+            select(SubPostChatRead).where(
+                SubPostChatRead.chat_id == db_chat.id,
+                SubPostChatRead.user_id == notification.user_id,
+            )
+        )
+        unread_filters = [
+            SubPostChatMessage.chat_id == db_chat.id,
+            SubPostChatMessage.moderation_status.in_(VISIBLE_MESSAGE_STATUSES),
+            SubPostChatMessage.sender_user_id != notification.user_id,
+        ]
+        if read_state is not None:
+            unread_filters.append(
+                SubPostChatMessage.created_at
+                > ensure_aware(read_state.last_read_at)
+            )
+
+        unread_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(SubPostChatMessage)
+                .where(*unread_filters)
+            )
+            or 0
+        )
+        latest_unread_message = db.scalar(
+            select(SubPostChatMessage)
+            .where(*unread_filters)
+            .order_by(
+                SubPostChatMessage.created_at.desc(),
+                SubPostChatMessage.id.desc(),
+            )
+            .limit(1)
+        )
+
+        if unread_count == 0 or latest_unread_message is None:
+            notification.is_read = True
+            if notification.read_at is None:
+                notification.read_at = moderated_at
+            notification.aggregate_count = None
+        else:
+            notification.is_read = False
+            notification.read_at = None
+            notification.aggregate_count = unread_count
+            notification.actor_user_id = latest_unread_message.sender_user_id
+            notification.related_sub_post_chat_message_id = (
+                latest_unread_message.id
+            )
+            notification.event_at = latest_unread_message.created_at
+
+        notification.updated_at = moderated_at
+        db.add(notification)
+
+
 def sender_is_current_sub_chat_member(
     db: Session,
     sub_post: SubPost,
@@ -593,8 +673,14 @@ def get_accessible_sub_post_chat_or_404(
     db: Session,
     sub_post_id: uuid.UUID,
     current_user: User,
+    *,
+    lock_post_for_update: bool = False,
 ) -> tuple[SubPost, SubPostChat]:
-    sub_post = get_sub_post_or_404(db, sub_post_id)
+    sub_post = get_sub_post_or_404(
+        db,
+        sub_post_id,
+        lock_for_update=lock_post_for_update,
+    )
     validate_sub_post_chat_access(db, sub_post, current_user)
     db_chat = get_sub_post_chat_for_post(db, sub_post.id)
     if db_chat is None:
@@ -612,7 +698,7 @@ def ensure_sub_post_chat_workflow(
     _payload: SubPostChatEnsureCreate,
     current_user: User,
 ) -> SubPostChatReadSchema:
-    sub_post = get_sub_post_or_404(db, sub_post_id)
+    sub_post = get_sub_post_or_404(db, sub_post_id, lock_for_update=True)
     validate_sub_post_chat_access(db, sub_post, current_user)
     db_chat = get_or_create_active_sub_post_chat(db, sub_post)
 
@@ -725,6 +811,7 @@ def create_sub_post_chat_message_workflow(
         db,
         sub_post_id,
         current_user,
+        lock_post_for_update=True,
     )
     require_sub_post_chat_can_write(db, db_chat, current_user)
 
@@ -780,7 +867,7 @@ def update_sub_post_chat_message_workflow(
     payload: SubPostChatMessageUpdate,
     current_user: User,
 ) -> dict:
-    sub_post = get_sub_post_or_404(db, sub_post_id)
+    sub_post = get_sub_post_or_404(db, sub_post_id, lock_for_update=True)
     db_chat = get_sub_post_chat_for_post(db, sub_post.id)
     if db_chat is None:
         raise HTTPException(
@@ -802,7 +889,11 @@ def update_sub_post_chat_message_workflow(
             detail="Only the sender can update this Need a Sub chat message.",
         )
 
-    if db_message.moderation_status in {"hidden_by_admin", "deleted_by_sender"}:
+    if db_message.moderation_status in {
+        "hidden_by_admin",
+        "removed_by_admin",
+        "deleted_by_sender",
+    }:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Hidden or deleted Need a Sub chat messages cannot be updated.",

@@ -27,6 +27,10 @@ export function getVisibleHostPaymentMethods(game, communityGameDetails) {
     return []
   }
 
+  if (communityGameDetails?.payment_text_moderation_status === 'hidden') {
+    return []
+  }
+
   return (communityGameDetails?.payment_methods_snapshot || [])
     .filter((method) => method?.type && method.type !== 'none' && method?.value)
     .map((method) => ({
