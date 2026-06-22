@@ -4,11 +4,15 @@ from backend.routes.admin_action_routes import router as admin_actions_router
 from backend.routes.admin_action_center_routes import (
     router as admin_action_center_router,
 )
+from backend.routes.admin_community_routes import (
+    router as admin_community_games_router,
+)
 from backend.routes.admin_rejected_attempt_routes import (
     router as admin_rejected_attempts_router,
 )
 from backend.routes.admin_lookup_routes import router as admin_lookups_router
 from backend.routes.admin_money_routes import router as admin_money_router
+from backend.routes.admin_need_a_sub_routes import router as admin_need_a_sub_router
 from backend.routes.admin_official_game_routes import (
     router as admin_official_games_router,
 )
@@ -76,11 +80,13 @@ from backend.routes.waitlist_entry_routes import router as waitlist_entries_rout
 __all__ = [
     "admin_actions_router",
     "admin_action_center_router",
+    "admin_community_games_router",
     "admin_rejected_attempts_router",
     "admin_game_credits_router",
     "admin_game_images_router",
     "admin_lookups_router",
     "admin_money_router",
+    "admin_need_a_sub_router",
     "admin_official_games_router",
     "admin_router",
     "admin_users_router",

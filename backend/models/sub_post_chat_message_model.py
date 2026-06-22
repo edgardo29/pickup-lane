@@ -28,7 +28,8 @@ class SubPostChatMessage(Base):
         CheckConstraint(
             (
                 "moderation_status IN ("
-                "'visible', 'hidden_by_admin', 'deleted_by_sender', 'flagged'"
+                "'visible', 'hidden_by_admin', 'removed_by_admin', "
+                "'deleted_by_sender', 'flagged'"
                 ")"
             ),
             name="ck_sub_post_chat_messages_moderation_status",
@@ -62,6 +63,13 @@ class SubPostChatMessage(Base):
                 "OR deleted_at IS NOT NULL)"
             ),
             name="ck_sub_post_chat_messages_hidden_requires_deleted_at",
+        ),
+        CheckConstraint(
+            (
+                "(moderation_status <> 'removed_by_admin' "
+                "OR deleted_at IS NOT NULL)"
+            ),
+            name="ck_sub_post_chat_messages_removed_requires_deleted_at",
         ),
         Index("ix_sub_post_chat_messages_chat_id", "chat_id"),
         Index("ix_sub_post_chat_messages_sender_user_id", "sender_user_id"),

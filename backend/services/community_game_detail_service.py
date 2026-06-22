@@ -10,6 +10,7 @@ from backend.models import CommunityGameDetail, Game, User
 from backend.schemas.community_game_detail_schema import (
     CommunityGameDetailCreate,
     CommunityGameDetailHostUpsert,
+    CommunityGameDetailPublicRead,
     CommunityGameDetailUpdate,
 )
 from backend.services.game_service import (
@@ -66,6 +67,20 @@ def validate_community_game_detail_business_rules(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Paid community games require at least one host payment method.",
         )
+
+
+def serialize_public_community_game_detail(
+    detail: CommunityGameDetail,
+) -> CommunityGameDetailPublicRead:
+    serialized = CommunityGameDetailPublicRead.model_validate(detail)
+    if serialized.payment_text_moderation_status == "hidden":
+        return serialized.model_copy(
+            update={
+                "payment_methods_snapshot": [],
+                "payment_instructions_snapshot": None,
+            }
+        )
+    return serialized
 
 
 def create_community_game_detail_workflow(
@@ -137,6 +152,29 @@ def update_community_game_detail_workflow(
             detail=build_community_game_detail_conflict_detail(exc),
         ) from exc
 
+    return db_community_game_detail
+
+
+def get_host_community_game_detail_workflow(
+    db: Session,
+    game_id: uuid.UUID,
+    current_user: User,
+) -> CommunityGameDetail:
+    db_game = get_community_game_or_404(db, game_id)
+    if db_game.host_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the game host can edit this game.",
+        )
+
+    db_community_game_detail = db.scalar(
+        select(CommunityGameDetail).where(CommunityGameDetail.game_id == game_id)
+    )
+    if db_community_game_detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Community game details not found.",
+        )
     return db_community_game_detail
 
 

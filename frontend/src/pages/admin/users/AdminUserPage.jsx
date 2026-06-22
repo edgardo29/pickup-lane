@@ -173,16 +173,27 @@ function UserStats({ stats }) {
   )
 }
 
-function GameRelationshipRow({ canOpenOfficialGames, item, relationship }) {
+function GameRelationshipRow({
+  canOpenCommunityGames,
+  canOpenOfficialGames,
+  item,
+  relationship,
+}) {
   const title = item.game_title || item.title
   const gameId = item.game_id || item.id
-  const canOpen = canOpenOfficialGames && item.game_type === 'official'
+  let targetPath = ''
+  if (canOpenOfficialGames && item.game_type === 'official') {
+    targetPath = `/admin/official-games/${gameId}`
+  }
+  if (canOpenCommunityGames && item.game_type === 'community') {
+    targetPath = `/admin/community-games/${gameId}`
+  }
 
   return (
     <div className="admin-user-activity-row">
       <div>
-        {canOpen ? (
-          <Link to={`/admin/official-games/${gameId}`}>{title}</Link>
+        {targetPath ? (
+          <Link to={targetPath}>{title}</Link>
         ) : (
           <strong>{title}</strong>
         )}
@@ -202,6 +213,7 @@ function GameRelationshipRow({ canOpenOfficialGames, item, relationship }) {
 
 function GameActivitySection({
   bookings,
+  canOpenCommunityGames,
   canOpenOfficialGames,
   communityGames,
   officialHosts,
@@ -225,6 +237,7 @@ function GameActivitySection({
               <h3>Bookings</h3>
               {bookings.map((booking) => (
                 <GameRelationshipRow
+                  canOpenCommunityGames={canOpenCommunityGames}
                   canOpenOfficialGames={canOpenOfficialGames}
                   item={booking}
                   key={booking.id}
@@ -238,6 +251,7 @@ function GameActivitySection({
               <h3>Participation</h3>
               {participations.map((participation) => (
                 <GameRelationshipRow
+                  canOpenCommunityGames={canOpenCommunityGames}
                   canOpenOfficialGames={canOpenOfficialGames}
                   item={participation}
                   key={participation.id}
@@ -251,6 +265,7 @@ function GameActivitySection({
               <h3>Community Hosting</h3>
               {communityGames.map((game) => (
                 <GameRelationshipRow
+                  canOpenCommunityGames={canOpenCommunityGames}
                   canOpenOfficialGames={canOpenOfficialGames}
                   item={game}
                   key={game.id}
@@ -264,6 +279,7 @@ function GameActivitySection({
               <h3>Official Host Assignments</h3>
               {officialHosts.map((game) => (
                 <GameRelationshipRow
+                  canOpenCommunityGames={canOpenCommunityGames}
                   canOpenOfficialGames={canOpenOfficialGames}
                   item={game}
                   key={game.id}
@@ -464,6 +480,10 @@ function AdminUserPage() {
     adminAccess,
     ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ,
   )
+  const canOpenCommunityGames = hasAdminPermission(
+    adminAccess,
+    ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ,
+  )
   const canSuspendUsers = hasAdminPermission(
     adminAccess,
     ADMIN_PERMISSIONS.USERS_SUSPEND,
@@ -632,6 +652,7 @@ function AdminUserPage() {
             <UserStats stats={detail.stats} />
             <GameActivitySection
               bookings={detail.bookings ?? []}
+              canOpenCommunityGames={canOpenCommunityGames}
               canOpenOfficialGames={canOpenOfficialGames}
               communityGames={detail.community_games_hosted ?? []}
               officialHosts={detail.official_host_assignments ?? []}

@@ -10,10 +10,12 @@ from backend.routes import (
     admin_action_center_router,
     admin_actions_router,
     admin_rejected_attempts_router,
+    admin_community_games_router,
     admin_game_credits_router,
     admin_game_images_router,
     admin_lookups_router,
     admin_money_router,
+    admin_need_a_sub_router,
     admin_official_games_router,
     admin_router,
     admin_users_router,
@@ -111,11 +113,13 @@ app.include_router(game_credits_router)
 app.include_router(admin_router)
 app.include_router(admin_users_router)
 app.include_router(admin_action_center_router)
+app.include_router(admin_community_games_router)
 app.include_router(admin_rejected_attempts_router)
 app.include_router(admin_game_credits_router)
 app.include_router(admin_game_images_router)
 app.include_router(admin_lookups_router)
 app.include_router(admin_money_router)
+app.include_router(admin_need_a_sub_router)
 app.include_router(admin_official_games_router)
 app.include_router(admin_venue_images_router)
 app.include_router(game_images_router)

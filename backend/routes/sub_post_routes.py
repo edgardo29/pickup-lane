@@ -284,5 +284,11 @@ def remove_need_a_sub_post(
     ),
 ) -> dict:
     expire_due_posts_and_requests(db)
-    sub_post = remove_sub_post(db, current_user, sub_post_id, payload.remove_reason)
+    sub_post = remove_sub_post(
+        db,
+        current_user,
+        sub_post_id,
+        payload.remove_reason,
+        payload.idempotency_key,
+    )
     return serialize_sub_post(db, sub_post)

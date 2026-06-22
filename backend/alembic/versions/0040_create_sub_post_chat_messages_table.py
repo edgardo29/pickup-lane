@@ -62,7 +62,8 @@ def upgrade() -> None:
         sa.CheckConstraint(
             (
                 "moderation_status IN ("
-                "'visible', 'hidden_by_admin', 'deleted_by_sender', 'flagged'"
+                "'visible', 'hidden_by_admin', 'removed_by_admin', "
+                "'deleted_by_sender', 'flagged'"
                 ")"
             ),
             name="ck_sub_post_chat_messages_moderation_status",
@@ -96,6 +97,13 @@ def upgrade() -> None:
                 "OR deleted_at IS NOT NULL)"
             ),
             name="ck_sub_post_chat_messages_hidden_requires_deleted_at",
+        ),
+        sa.CheckConstraint(
+            (
+                "(moderation_status <> 'removed_by_admin' "
+                "OR deleted_at IS NOT NULL)"
+            ),
+            name="ck_sub_post_chat_messages_removed_requires_deleted_at",
         ),
         sa.ForeignKeyConstraint(
             ["chat_id"],

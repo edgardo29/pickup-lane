@@ -166,6 +166,51 @@ class AdminAction(Base):
             ),
         ),
         Index(
+            "uq_admin_actions_hide_unsafe_community_payment_text_idempotency",
+            "admin_user_id",
+            "target_game_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'hide_unsafe_community_payment_text' "
+                "AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_remove_sub_post_idempotency",
+            "admin_user_id",
+            "target_sub_post_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'remove_sub_post' AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_hide_sub_chat_message_idempotency",
+            "admin_user_id",
+            "target_sub_chat_message_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'hide_chat_message' "
+                "AND target_sub_chat_message_id IS NOT NULL "
+                "AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_remove_sub_chat_message_idempotency",
+            "admin_user_id",
+            "target_sub_chat_message_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'remove_chat_message' "
+                "AND target_sub_chat_message_id IS NOT NULL "
+                "AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
             "ix_admin_actions_admin_user_id_created_at",
             "admin_user_id",
             "created_at",

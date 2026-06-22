@@ -32,7 +32,7 @@ export function useCreateGameContext({
     async function loadVerifiedContext(effectiveAppUser) {
       const [paymentMethods, gameContext, hostPublishFees] = await Promise.all([
         loadUserPaymentMethods(firebaseUser),
-        isEditMode ? loadEditableGame(gameId) : Promise.resolve(null),
+        isEditMode ? loadEditableGame(firebaseUser, gameId) : Promise.resolve(null),
         loadHostPublishFees(firebaseUser),
       ])
 

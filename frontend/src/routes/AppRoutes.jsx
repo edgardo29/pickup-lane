@@ -10,6 +10,8 @@ import {
 import {
   AdminActionCenterPage,
   AdminAuditLogPage,
+  AdminCommunityGamePage,
+  AdminCommunityGamesPage,
   AdminCreateOfficialGamePage,
   AdminMoneyCreditPage,
   AdminMoneyCreditsPage,
@@ -21,6 +23,8 @@ import {
   AdminMoneySupportFlagPage,
   AdminMoneySupportFlagsPage,
   AdminMoneyUserPage,
+  AdminNeedASubPage,
+  AdminNeedASubPostPage,
   AdminOfficialGamePage,
   AdminOfficialGamesPage,
   AdminSignInPage,
@@ -168,6 +172,38 @@ export function AppRoutes() {
         element={
           <RequireAdmin permission={ADMIN_PERMISSIONS.USERS_READ}>
             <AdminUserPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/community-games"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ}>
+            <AdminCommunityGamesPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/community-games/:gameId"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ}>
+            <AdminCommunityGamePage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/need-a-sub"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE}>
+            <AdminNeedASubPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/need-a-sub/:postId"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE}>
+            <AdminNeedASubPostPage />
           </RequireAdmin>
         }
       />

@@ -9,6 +9,7 @@ from backend.tests.helpers import (
     create_user,
     set_user_account_status,
     set_user_role,
+    unique_suffix,
 )
 
 
@@ -138,7 +139,10 @@ def test_sub_posts_create_get_list_cancel_and_remove(client: TestClient):
     authenticate_as(admin["id"])
     remove_response = client.patch(
         f"/need-a-sub/posts/{post['id']}/remove",
-        json={"remove_reason": "Moderation cleanup."},
+        json={
+            "remove_reason": "Moderation cleanup.",
+            "idempotency_key": f"remove-sub-post-{unique_suffix()}",
+        },
     )
     assert remove_response.status_code == 200, remove_response.text
     assert remove_response.json()["post_status"] == "removed"
@@ -1176,7 +1180,10 @@ def test_sub_posts_edit_cancel_and_remove_expire_due_post_before_action(client: 
     authenticate_as(admin["id"])
     remove_response = client.patch(
         f"/need-a-sub/posts/{post['id']}/remove",
-        json={"remove_reason": "Moderation cleanup."},
+        json={
+            "remove_reason": "Moderation cleanup.",
+            "idempotency_key": f"remove-sub-post-{unique_suffix()}",
+        },
     )
     assert remove_response.status_code == 200, remove_response.text
     assert remove_response.json()["post_status"] == "removed"
@@ -1191,7 +1198,10 @@ def test_sub_posts_moderator_can_remove_post(client: TestClient):
     authenticate_as(moderator["id"])
     response = client.patch(
         f"/need-a-sub/posts/{post['id']}/remove",
-        json={"remove_reason": "Unsafe payment details."},
+        json={
+            "remove_reason": "Unsafe payment details.",
+            "idempotency_key": f"remove-sub-post-{unique_suffix()}",
+        },
     )
 
     assert response.status_code == 200, response.text
@@ -1208,7 +1218,10 @@ def test_sub_posts_remove_requires_reason_for_audit(client: TestClient):
     authenticate_as(admin["id"])
     response = client.patch(
         f"/need-a-sub/posts/{post['id']}/remove",
-        json={"remove_reason": "   "},
+        json={
+            "remove_reason": "   ",
+            "idempotency_key": f"remove-sub-post-{unique_suffix()}",
+        },
     )
 
     assert response.status_code == 400, response.text
@@ -1223,6 +1236,58 @@ def test_sub_posts_remove_requires_reason_for_audit(client: TestClient):
     assert audit_response.json() == []
 
 
+def test_sub_posts_remove_replays_matching_idempotency_key(client: TestClient):
+    owner = create_user(client)
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    post = create_sub_post(client, owner["id"])
+    idempotency_key = f"remove-sub-post-{unique_suffix()}"
+    payload = {
+        "remove_reason": "Repeated support request.",
+        "idempotency_key": idempotency_key,
+    }
+
+    authenticate_as(admin["id"])
+    first_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/remove",
+        json=payload,
+    )
+    replay_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/remove",
+        json=payload,
+    )
+    mismatch_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/remove",
+        json={
+            "remove_reason": "Different support request.",
+            "idempotency_key": idempotency_key,
+        },
+    )
+
+    assert first_response.status_code == 200, first_response.text
+    assert replay_response.status_code == 200, replay_response.text
+    assert replay_response.json()["removed_at"] == first_response.json()["removed_at"]
+    assert mismatch_response.status_code == 409, mismatch_response.text
+    assert "different Need a Sub removal request" in mismatch_response.text
+
+    audit_response = client.get(f"/admin/actions?target_sub_post_id={post['id']}")
+    assert audit_response.status_code == 200, audit_response.text
+    remove_actions = [
+        action
+        for action in audit_response.json()
+        if action["action_type"] == "remove_sub_post"
+    ]
+    assert len(remove_actions) == 1
+    assert remove_actions[0]["idempotency_key"] == idempotency_key
+
+    owner_notifications = list_need_a_sub_notifications(client, owner["id"])
+    assert [
+        notification["notification_type"]
+        for notification in owner_notifications
+        if notification["notification_type"] == "sub_post_removed"
+    ] == ["sub_post_removed"]
+
+
 def test_sub_posts_suspended_staff_cannot_remove_post(client: TestClient):
     for role in ("admin", "moderator"):
         owner = create_user(client)
@@ -1234,7 +1299,10 @@ def test_sub_posts_suspended_staff_cannot_remove_post(client: TestClient):
         authenticate_as(staff["id"])
         response = client.patch(
             f"/need-a-sub/posts/{post['id']}/remove",
-            json={"remove_reason": "Should not run."},
+            json={
+                "remove_reason": "Should not run.",
+                "idempotency_key": f"remove-sub-post-{unique_suffix()}",
+            },
         )
 
         assert response.status_code == 403, response.text
@@ -1263,7 +1331,10 @@ def test_sub_posts_admin_remove_cancels_active_requests(client: TestClient):
     authenticate_as(admin["id"])
     remove_response = client.patch(
         f"/need-a-sub/posts/{post['id']}/remove",
-        json={"remove_reason": "Moderation cleanup."},
+        json={
+            "remove_reason": "Moderation cleanup.",
+            "idempotency_key": f"remove-sub-post-{unique_suffix()}",
+        },
     )
     assert remove_response.status_code == 200, remove_response.text
     owner_notifications = list_need_a_sub_notifications(client, owner["id"])

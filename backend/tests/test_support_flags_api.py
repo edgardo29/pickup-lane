@@ -58,7 +58,14 @@ def test_admin_lists_gets_and_resolves_support_flag(client: TestClient):
     resolved_flag = resolve_response.json()
     assert resolved_flag["flag_status"] == "resolved"
     assert resolved_flag["resolution_outcome"] == "handled_externally"
-    assert resolved_flag["resolution_admin_action_id"] is not None
+    assert {
+        "metadata",
+        "idempotency_key",
+        "source_admin_action_id",
+        "created_by_user_id",
+        "resolved_by_user_id",
+        "resolution_admin_action_id",
+    }.isdisjoint(resolved_flag)
 
     audit_response = client.get(
         f"/admin/actions?target_support_flag_id={support_flag_id}"
@@ -141,7 +148,11 @@ def test_idempotent_support_flag_can_reopen_resolved_flag(client: TestClient):
         },
     )
     assert resolve_response.status_code == 200, resolve_response.text
-    resolution_admin_action_id = resolve_response.json()["resolution_admin_action_id"]
+
+    with SessionLocal() as db:
+        resolved_flag = db.get(SupportFlag, support_flag_id)
+        assert resolved_flag is not None
+        resolution_admin_action_id = resolved_flag.resolution_admin_action_id
 
     with SessionLocal() as db:
         reopened = create_support_flag(

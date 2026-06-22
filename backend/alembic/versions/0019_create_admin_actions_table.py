@@ -367,6 +367,47 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
+        "uq_admin_actions_hide_unsafe_community_payment_text_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_game_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'hide_unsafe_community_payment_text' "
+            "AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_remove_sub_post_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_sub_post_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'remove_sub_post' AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_hide_sub_chat_message_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_sub_chat_message_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'hide_chat_message' "
+            "AND target_sub_chat_message_id IS NOT NULL "
+            "AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_remove_sub_chat_message_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_sub_chat_message_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'remove_chat_message' "
+            "AND target_sub_chat_message_id IS NOT NULL "
+            "AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
         "ix_admin_actions_admin_user_id_created_at",
         "admin_actions",
         ["admin_user_id", "created_at"],
@@ -392,7 +433,27 @@ def downgrade() -> None:
         table_name="admin_actions",
     )
     op.drop_index(
+        "uq_admin_actions_remove_sub_chat_message_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "uq_admin_actions_hide_sub_chat_message_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "uq_admin_actions_remove_sub_post_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
         "uq_admin_actions_delete_user_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "uq_admin_actions_hide_unsafe_community_payment_text_idempotency",
         table_name="admin_actions",
         if_exists=True,
     )
