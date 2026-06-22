@@ -62,6 +62,16 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column(
+            "related_sub_post_chat_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "related_sub_post_chat_message_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column(
             "is_read",
             sa.Boolean(),
             nullable=False,
@@ -96,7 +106,7 @@ def upgrade() -> None:
                 "'sub_request_declined', 'sub_waitlist_promoted_to_pending', "
                 "'sub_request_canceled_by_player', "
                 "'sub_request_canceled_by_owner', 'sub_post_canceled', "
-                "'sub_post_removed', 'sub_post_updated'"
+                "'sub_post_removed', 'sub_post_updated', 'sub_chat_message'"
                 ")"
             ),
             name="ck_notifications_notification_type",
@@ -171,7 +181,7 @@ def upgrade() -> None:
                 "'sub_request_declined', 'sub_waitlist_promoted_to_pending', "
                 "'sub_request_canceled_by_player', "
                 "'sub_request_canceled_by_owner', 'sub_post_canceled', "
-                "'sub_post_removed', 'sub_post_updated'"
+                "'sub_post_removed', 'sub_post_updated', 'sub_chat_message'"
                 ") AND notification_category = 'game_activity' "
                 "AND notification_domain = 'need_a_sub') "
                 "OR (notification_type IN ("
@@ -440,6 +450,18 @@ def upgrade() -> None:
         ["related_sub_post_position_id"],
         unique=False,
     )
+    op.create_index(
+        "ix_notifications_related_sub_post_chat_id",
+        "notifications",
+        ["related_sub_post_chat_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_notifications_related_sub_post_chat_message_id",
+        "notifications",
+        ["related_sub_post_chat_message_id"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
@@ -453,6 +475,16 @@ def downgrade() -> None:
     )
     op.drop_index(
         "ix_notifications_user_id_is_read_event_at",
+        table_name="notifications",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_notifications_related_sub_post_chat_message_id",
+        table_name="notifications",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_notifications_related_sub_post_chat_id",
         table_name="notifications",
         if_exists=True,
     )

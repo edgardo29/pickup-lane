@@ -13,6 +13,7 @@ from backend.routes.admin_official_game_routes import (
     router as admin_official_games_router,
 )
 from backend.routes.admin_routes import router as admin_router
+from backend.routes.admin_user_routes import router as admin_users_router
 from backend.routes.auth_routes import router as auth_router
 from backend.routes.booking_policy_acceptance_routes import (
     router as booking_policy_acceptances_router,
@@ -82,6 +83,7 @@ __all__ = [
     "admin_money_router",
     "admin_official_games_router",
     "admin_router",
+    "admin_users_router",
     "admin_venue_images_router",
     "auth_router",
     "bookings_router",

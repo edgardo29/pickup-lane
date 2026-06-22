@@ -22,6 +22,9 @@ from backend.services.game_service import (
     normalize_game_lifecycle_fields,
     validate_game_business_rules,
 )
+from backend.services.hosting_access_service import (
+    require_community_publish_hosting_access,
+)
 from backend.services.venue_service import find_matching_active_venue
 
 COMMUNITY_PUBLISH_FEE_CENTS = 499
@@ -29,12 +32,20 @@ FIRST_FREE_WAIVER_REASON = "first_game_free"
 
 
 def get_verified_community_host_or_404(db: Session, user_id: uuid.UUID) -> User:
-    db_user = db.get(User, user_id)
+    db_user = db.scalar(
+        select(User).where(User.id == user_id).with_for_update()
+    )
 
     if db_user is None or db_user.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Host user not found.",
+        )
+
+    if db_user.account_status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active account required.",
         )
 
     if db_user.email_verified_at is None:
@@ -43,6 +54,7 @@ def get_verified_community_host_or_404(db: Session, user_id: uuid.UUID) -> User:
             detail="Verify your email before publishing.",
         )
 
+    require_community_publish_hosting_access(db_user)
     return db_user
 
 

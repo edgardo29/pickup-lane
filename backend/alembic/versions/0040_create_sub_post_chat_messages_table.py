@@ -147,9 +147,22 @@ def upgrade() -> None:
         ["id"],
         ondelete="SET NULL",
     )
+    op.create_foreign_key(
+        "fk_notifications_related_sub_post_chat_message_id",
+        "notifications",
+        "sub_post_chat_messages",
+        ["related_sub_post_chat_message_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint(
+        "fk_notifications_related_sub_post_chat_message_id",
+        "notifications",
+        type_="foreignkey",
+    )
     op.execute(
         "ALTER TABLE admin_actions "
         "DROP CONSTRAINT IF EXISTS fk_admin_actions_target_sub_chat_message_id"

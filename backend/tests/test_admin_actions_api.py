@@ -260,6 +260,19 @@ def test_admin_action_reject_unrelated_target_pollution(client: TestClient):
     assert response.status_code == 400, response.text
     assert "does not allow target field" in response.text
 
+    notification_response = client.post(
+        "/admin/actions",
+        json={
+            "action_type": "suspend_user",
+            "target_user_id": target_user["id"],
+            "target_notification_id": "00000000-0000-4000-8000-000000000000",
+            "reason": "Bad notification target pollution.",
+        },
+    )
+
+    assert notification_response.status_code == 400, notification_response.text
+    assert "does not allow target field" in notification_response.text
+
 
 def test_admin_action_reject_missing_target_user(client: TestClient):
     admin_user = create_user(client)

@@ -56,6 +56,7 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("target_admin_action_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("target_support_flag_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("reason", sa.Text(), nullable=True),
         sa.Column("metadata", postgresql.JSONB(), nullable=True),
         sa.Column("idempotency_key", sa.String(length=160), nullable=True),
@@ -73,6 +74,7 @@ def upgrade() -> None:
                 "'create_payment', 'update_payment', "
                 "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
+                "'delete_user', "
                 "'reject_venue', 'create_venue_image', 'update_venue_image', "
                 "'remove_venue_image', 'remove_chat_message', 'hide_chat_message', "
                 "'update_game', 'create_game_chat', 'update_game_chat', "
@@ -83,7 +85,8 @@ def upgrade() -> None:
                 "'admin_add_player', 'admin_remove_player', 'waive_payment', "
                 "'remove_sub_post', 'hide_unsafe_community_payment_text', "
                 "'create_notification', 'update_notification', "
-                "'change_staff_role', 'append_audit_note'"
+                "'change_staff_role', 'append_audit_note', "
+                "'resolve_support_flag'"
                 ")"
             ),
             name="ck_admin_actions_action_type",
@@ -106,7 +109,8 @@ def upgrade() -> None:
                 "OR target_sub_chat_message_id IS NOT NULL "
                 "OR target_notification_id IS NOT NULL "
                 "OR target_platform_notice_campaign_id IS NOT NULL "
-                "OR target_admin_action_id IS NOT NULL"
+                "OR target_admin_action_id IS NOT NULL "
+                "OR target_support_flag_id IS NOT NULL"
             ),
             name="ck_admin_actions_target_required",
         ),
@@ -288,6 +292,12 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
+        "ix_admin_actions_target_support_flag_id",
+        "admin_actions",
+        ["target_support_flag_id"],
+        unique=False,
+    )
+    op.create_index(
         "ix_admin_actions_idempotency_key",
         "admin_actions",
         ["idempotency_key"],
@@ -300,6 +310,60 @@ def upgrade() -> None:
         unique=True,
         postgresql_where=sa.text(
             "action_type = 'append_audit_note' AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_suspend_user_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_user_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'suspend_user' AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_unsuspend_user_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_user_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'unsuspend_user' AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_restrict_hosting_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_user_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'restrict_hosting' AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_restore_hosting_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_user_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'restore_hosting' AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_change_staff_role_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_user_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'change_staff_role' AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_delete_user_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_user_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'delete_user' AND idempotency_key IS NOT NULL"
         ),
     )
     op.create_index(
@@ -328,12 +392,47 @@ def downgrade() -> None:
         table_name="admin_actions",
     )
     op.drop_index(
+        "uq_admin_actions_delete_user_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "uq_admin_actions_change_staff_role_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "uq_admin_actions_restore_hosting_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "uq_admin_actions_restrict_hosting_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "uq_admin_actions_unsuspend_user_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "uq_admin_actions_suspend_user_idempotency",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
         "uq_admin_actions_audit_note_idempotency",
         table_name="admin_actions",
         if_exists=True,
     )
     op.drop_index(
         "ix_admin_actions_idempotency_key",
+        table_name="admin_actions",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_support_flag_id",
         table_name="admin_actions",
         if_exists=True,
     )

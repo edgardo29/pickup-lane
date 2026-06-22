@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -16,14 +16,9 @@ from backend.firebase_admin_client import (
     verify_firebase_token,
 )
 from backend.models import (
-    Game,
-    GameParticipant,
-    Notification,
     User,
-    UserPaymentMethod,
     UserSettings,
     UserStats,
-    WaitlistEntry,
 )
 from backend.schemas import (
     AuthDeleteAccountRequest,
@@ -31,6 +26,19 @@ from backend.schemas import (
     AuthSyncUserRequest,
 )
 from backend.services.admin_permission_service import user_has_admin_permission
+from backend.services.hosting_access_service import (
+    HOSTING_STATUS_ELIGIBLE,
+    HOSTING_STATUS_NOT_ELIGIBLE,
+    apply_verified_hosting_eligibility,
+)
+from backend.services.account_deletion_service import (
+    anonymize_user,
+    cancel_future_user_activity,
+    detach_account_saved_payment_methods,
+    lock_user_and_active_admins_for_account_removal,
+    record_account_delete_partial_failure,
+    require_account_removal_preserves_active_admin,
+)
 from backend.services.user_service import build_user_conflict_detail
 
 
@@ -102,13 +110,24 @@ def sync_email_verification_from_firebase(
     email_verified: bool,
     db: Session,
 ) -> bool:
-    if not email_verified or user.email_verified_at is not None:
+    if not email_verified:
         return False
 
-    user.email_verified_at = datetime.now(timezone.utc)
-    user.updated_at = user.email_verified_at
-    db.add(user)
-    return True
+    now = datetime.now(timezone.utc)
+    did_change = False
+
+    if user.email_verified_at is None:
+        user.email_verified_at = now
+        user.updated_at = now
+        did_change = True
+
+    did_change = (
+        apply_verified_hosting_eligibility(user, verified_at=now) or did_change
+    )
+    if did_change:
+        db.add(user)
+
+    return did_change
 
 
 def add_missing_user_context_rows(user: User, db: Session) -> bool:
@@ -332,6 +351,11 @@ def sync_user_workflow(authorization: str | None, db: Session) -> User:
         email_verified_at=(
             datetime.now(timezone.utc) if payload.email_verified else None
         ),
+        hosting_status=(
+            HOSTING_STATUS_ELIGIBLE
+            if payload.email_verified
+            else HOSTING_STATUS_NOT_ELIGIBLE
+        ),
     )
 
     try:
@@ -365,143 +389,23 @@ def sync_user_workflow(authorization: str | None, db: Session) -> User:
     return new_user
 
 
-def cancel_future_user_activity(user: User, db: Session, now: datetime) -> None:
-    official_hosted_games = db.scalars(
-        select(Game).where(
-            Game.host_user_id == user.id,
-            Game.game_type == "official",
-            Game.starts_at > now,
-            Game.game_status.in_(["scheduled", "full"]),
-        )
-    ).all()
-
-    for game in official_hosted_games:
-        assigned_host_notifications = db.scalars(
-            select(Notification).where(
-                Notification.user_id == user.id,
-                Notification.related_game_id == game.id,
-                Notification.notification_type == "game_host_assigned",
-                Notification.is_read.is_(False),
-            )
-        ).all()
-        for notification in assigned_host_notifications:
-            notification.is_read = True
-            if notification.read_at is None:
-                notification.read_at = now
-            notification.updated_at = now
-            db.add(notification)
-
-        game.host_user_id = None
-        game.updated_at = now
-        db.add(game)
-
-    future_participants = db.scalars(
-        select(GameParticipant)
-        .join(Game, GameParticipant.game_id == Game.id)
-        .where(
-            GameParticipant.user_id == user.id,
-            Game.starts_at > now,
-            GameParticipant.participant_status.in_(
-                ["pending_payment", "confirmed", "waitlisted"]
-            ),
-        )
-    ).all()
-
-    for participant in future_participants:
-        participant.participant_status = "cancelled"
-        participant.cancellation_type = "on_time"
-        participant.cancelled_at = participant.cancelled_at or now
-        participant.updated_at = now
-        db.add(participant)
-
-    participant_snapshots = db.scalars(
-        select(GameParticipant).where(GameParticipant.user_id == user.id)
-    ).all()
-
-    for participant in participant_snapshots:
-        participant.display_name_snapshot = "Deleted User"
-        participant.updated_at = now
-        db.add(participant)
-
-    waitlist_entries = db.scalars(
-        select(WaitlistEntry).where(
-            WaitlistEntry.user_id == user.id,
-            WaitlistEntry.waitlist_status.in_(
-                ["active", "promoted", "payment_processing", "accepted"]
-            ),
-        )
-    ).all()
-
-    for waitlist_entry in waitlist_entries:
-        waitlist_entry.waitlist_status = "cancelled"
-        waitlist_entry.cancelled_at = waitlist_entry.cancelled_at or now
-        waitlist_entry.updated_at = now
-        db.add(waitlist_entry)
-
-    hosted_games = db.scalars(
-        select(Game).where(
-            Game.host_user_id == user.id,
-            Game.game_type == "community",
-            Game.starts_at > now,
-            Game.game_status.in_(["scheduled", "full"]),
-        )
-    ).all()
-
-    for game in hosted_games:
-        game.game_status = "cancelled"
-        game.cancelled_at = game.cancelled_at or now
-        game.cancelled_by_user_id = user.id
-        game.cancel_reason = "Host account deleted."
-        game.updated_at = now
-        db.add(game)
-
-    payment_methods = db.scalars(
-        select(UserPaymentMethod).where(UserPaymentMethod.user_id == user.id)
-    ).all()
-
-    for payment_method in payment_methods:
-        db.delete(payment_method)
-
-    settings = db.get(UserSettings, user.id)
-
-    if settings is not None:
-        settings.push_notifications_enabled = False
-        settings.email_notifications_enabled = False
-        settings.sms_notifications_enabled = False
-        settings.marketing_opt_in = False
-        settings.location_permission_status = "unknown"
-        settings.selected_city = None
-        settings.selected_state = None
-        settings.updated_at = now
-        db.add(settings)
-
-
-def anonymize_user(user: User, now: datetime) -> None:
-    user.auth_user_id = None
-    user.email = None
-    user.phone = None
-    user.first_name = "Deleted"
-    user.last_name = "User"
-    user.date_of_birth = None
-    user.profile_photo_url = None
-    user.home_city = None
-    user.home_state = None
-    user.account_status = "deleted"
-    user.hosting_status = "not_eligible"
-    user.hosting_suspended_until = None
-    user.stripe_customer_id = None
-    user.deleted_at = now
-    user.updated_at = now
-
-
 def cleanup_unfinished_account_workflow(
     authorization: str | None,
     db: Session,
 ) -> None:
     auth_user_id = get_auth_user_id_from_token(authorization)
     user = get_active_user_by_auth_id(auth_user_id, db)
+    user_id = user.id if user is not None else None
 
     if user is not None:
+        user, active_admin_count = lock_user_and_active_admins_for_account_removal(
+            db,
+            user_id=user.id,
+        )
+        require_account_removal_preserves_active_admin(
+            user,
+            active_admin_count=active_admin_count,
+        )
         hard_delete_incomplete_user(user, db)
 
     try:
@@ -521,12 +425,75 @@ def cleanup_unfinished_account_workflow(
 
     try:
         db.commit()
-    except IntegrityError as exc:
+    except SQLAlchemyError as exc:
         db.rollback()
+        if user_id is not None:
+            record_account_delete_partial_failure(
+                db,
+                user_id=user_id,
+                created_by_user_id=user_id,
+                metadata={
+                    "auth_identity_deleted": True,
+                    "app_cleanup_completed": False,
+                    "failure_type": "unfinished_account_cleanup_commit_error",
+                },
+                summary=(
+                    "Firebase cleanup succeeded, but the unfinished app account "
+                    "could not be removed."
+                ),
+            )
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_conflict_detail(exc),
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase cleanup succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
         ) from exc
+
+
+def restore_self_delete_staged_account_after_firebase_failure(
+    db: Session,
+    *,
+    user: User,
+    previous_account_status: str,
+    response_status_code: int,
+    response_detail: str,
+) -> None:
+    user.account_status = previous_account_status
+    user.updated_at = datetime.now(timezone.utc)
+    db.add(user)
+    try:
+        db.commit()
+    except SQLAlchemyError as restore_exc:
+        db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            clear_auth_link=False,
+            metadata={
+                "auth_identity_deleted": False,
+                "app_cleanup_completed": False,
+                "restore_failed": True,
+                "previous_account_status": previous_account_status,
+            },
+            summary=(
+                "Firebase deletion failed, and the staged app account status "
+                "could not be restored."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion failed, and app account restoration requires "
+                "support follow-up."
+            ),
+        ) from restore_exc
+
+    raise HTTPException(
+        status_code=response_status_code,
+        detail=response_detail,
+    )
 
 
 def delete_account_workflow(
@@ -540,7 +507,15 @@ def delete_account_workflow(
             detail='Type "delete" to confirm account deletion.',
         )
 
-    user = get_authenticated_user_from_token(authorization, db)
+    authenticated_user = get_authenticated_user_from_token(authorization, db)
+    user, active_admin_count = lock_user_and_active_admins_for_account_removal(
+        db,
+        user_id=authenticated_user.id,
+    )
+    require_account_removal_preserves_active_admin(
+        user,
+        active_admin_count=active_admin_count,
+    )
     now = datetime.now(timezone.utc)
     auth_user_id = user.auth_user_id
     previous_account_status = user.account_status
@@ -557,7 +532,6 @@ def delete_account_workflow(
 
     try:
         db.commit()
-        db.refresh(user)
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
@@ -568,37 +542,170 @@ def delete_account_workflow(
     try:
         delete_firebase_user(auth_user_id)
     except FirebaseAdminConfigError as exc:
-        user.account_status = previous_account_status
-        user.updated_at = datetime.now(timezone.utc)
-        db.add(user)
+        restore_self_delete_staged_account_after_firebase_failure(
+            db,
+            user=user,
+            previous_account_status=previous_account_status,
+            response_status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            response_detail=str(exc),
+        )
+    except Exception as exc:
+        restore_self_delete_staged_account_after_firebase_failure(
+            db,
+            user=user,
+            previous_account_status=previous_account_status,
+            response_status_code=status.HTTP_502_BAD_GATEWAY,
+            response_detail="Firebase could not delete this account. Please try again.",
+        )
+
+    checkpoint_at = datetime.now(timezone.utc)
+    user.auth_user_id = None
+    user.updated_at = checkpoint_at
+    db.add(user)
+    try:
         db.commit()
+        db.refresh(user)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata={
+                "auth_identity_deleted": True,
+                "app_cleanup_completed": False,
+                "failure_type": "auth_unlink_checkpoint_commit_error",
+            },
+            summary=(
+                "Firebase deletion succeeded, but the app auth unlink did not "
+                "commit."
+            ),
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
-    except Exception as exc:
-        user.account_status = previous_account_status
-        user.updated_at = datetime.now(timezone.utc)
-        db.add(user)
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Firebase could not delete this account. Please try again.",
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
         ) from exc
 
-    now = datetime.now(timezone.utc)
-    cancel_future_user_activity(user, db, now)
-    anonymize_user(user, now)
-    db.add(user)
+    payment_method_result = detach_account_saved_payment_methods(
+        db,
+        user_id=user.id,
+    )
+    if payment_method_result.has_blocking_failures:
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata=payment_method_result.support_metadata(
+                auth_identity_deleted=True
+            ),
+            detached_payment_method_ids=(
+                payment_method_result.detached_saved_payment_method_ids
+            ),
+            summary=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        )
 
     try:
         db.commit()
         db.refresh(user)
-    except IntegrityError as exc:
+    except SQLAlchemyError as exc:
         db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata={
+                **payment_method_result.support_metadata(
+                    auth_identity_deleted=True
+                ),
+                "failure_type": "saved_payment_method_checkpoint_commit_error",
+            },
+            detached_payment_method_ids=(
+                payment_method_result.detached_saved_payment_method_ids
+            ),
+            summary=(
+                "Firebase deletion succeeded, but saved-card cleanup state did "
+                "not commit."
+            ),
+        )
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_conflict_detail(exc),
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        ) from exc
+
+    now = datetime.now(timezone.utc)
+    try:
+        cancel_future_user_activity(
+            user,
+            db,
+            now,
+            changed_by_user_id=user.id,
+        )
+        anonymize_user(user, now)
+        db.add(user)
+    except Exception as exc:
+        db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata={
+                "auth_identity_deleted": True,
+                "app_cleanup_completed": False,
+                "failure_type": "app_cleanup_execution_error",
+            },
+            summary=(
+                "Firebase deletion succeeded, but app account cleanup failed "
+                "before the final commit."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        ) from exc
+
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata={
+                "auth_identity_deleted": True,
+                "app_cleanup_completed": False,
+                "failure_type": "app_cleanup_commit_error",
+            },
+            summary=(
+                "Firebase deletion succeeded, but final app account cleanup did "
+                "not commit."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
         ) from exc
 
     return user

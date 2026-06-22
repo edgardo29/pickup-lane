@@ -68,6 +68,17 @@ def set_user_account_status(user_id: str, account_status: str) -> None:
         db.commit()
 
 
+def set_user_hosting_status(user_id: str, hosting_status: str) -> None:
+    from backend.database import SessionLocal
+    from backend.models import User
+
+    with SessionLocal() as db:
+        db_user = db.get(User, UUID(user_id))
+        assert db_user is not None
+        db_user.hosting_status = hosting_status
+        db.commit()
+
+
 def soft_delete_user(user_id: str) -> None:
     from datetime import UTC, datetime
 
@@ -77,6 +88,7 @@ def soft_delete_user(user_id: str) -> None:
     with SessionLocal() as db:
         db_user = db.get(User, UUID(user_id))
         assert db_user is not None
+        db_user.account_status = "deleted"
         db_user.deleted_at = datetime.now(UTC)
         db.commit()
 
@@ -91,6 +103,8 @@ def mark_user_email_verified(user_id: str) -> None:
         db_user = db.get(User, UUID(user_id))
         assert db_user is not None
         db_user.email_verified_at = datetime.now(UTC)
+        if db_user.hosting_status == "not_eligible":
+            db_user.hosting_status = "eligible"
         db.commit()
 
 

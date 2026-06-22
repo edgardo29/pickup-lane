@@ -12,7 +12,12 @@ depends_on = None
 
 
 ADMIN_REJECTED_ATTEMPT_TYPE_CHECK = (
-    "attempt_type IN ('issue_credit_rejected', 'reverse_credit_rejected')"
+    "attempt_type IN ("
+    "'issue_credit_rejected', "
+    "'reverse_credit_rejected', "
+    "'suspend_user_rejected', "
+    "'delete_user_rejected'"
+    ")"
 )
 
 

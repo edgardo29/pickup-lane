@@ -38,6 +38,33 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("promotion_expires_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("auto_charge_consent_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "auto_charge_consent_version",
+            sa.String(length=50),
+            nullable=True,
+        ),
+        sa.Column(
+            "authorized_payment_method_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "authorized_stripe_payment_method_id",
+            sa.String(length=255),
+            nullable=True,
+        ),
+        sa.Column(
+            "authorized_payment_method_brand",
+            sa.String(length=50),
+            nullable=True,
+        ),
+        sa.Column(
+            "authorized_payment_method_last4",
+            sa.String(length=4),
+            nullable=True,
+        ),
+        sa.Column("authorized_amount_cents", sa.Integer(), nullable=True),
         sa.Column(
             "joined_at",
             sa.DateTime(timezone=True),
@@ -63,7 +90,7 @@ def upgrade() -> None:
             (
                 "waitlist_status IN ("
                 "'active', 'promoted', 'accepted', 'declined', 'expired', "
-                "'cancelled', 'removed'"
+                "'cancelled', 'removed', 'payment_processing', 'payment_failed'"
                 ")"
             ),
             name="ck_waitlist_entries_waitlist_status",
@@ -92,6 +119,10 @@ def upgrade() -> None:
             "(waitlist_status <> 'expired' OR expired_at IS NOT NULL)",
             name="ck_waitlist_entries_expired_requires_expired_at",
         ),
+        sa.CheckConstraint(
+            "(authorized_amount_cents IS NULL OR authorized_amount_cents >= 0)",
+            name="ck_waitlist_entries_authorized_amount_non_negative",
+        ),
         sa.ForeignKeyConstraint(
             ["game_id"],
             ["games.id"],
@@ -106,6 +137,12 @@ def upgrade() -> None:
             ["promoted_booking_id"],
             ["bookings.id"],
             ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["authorized_payment_method_id"],
+            ["user_payment_methods.id"],
+            ondelete="SET NULL",
+            name="fk_waitlist_entries_authorized_payment_method",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -144,7 +181,9 @@ def upgrade() -> None:
         "waitlist_entries",
         ["game_id", "user_id"],
         unique=True,
-        postgresql_where=sa.text("waitlist_status = 'active'"),
+        postgresql_where=sa.text(
+            "waitlist_status IN ('active', 'payment_processing')"
+        ),
     )
     op.create_index(
         "ux_waitlist_entries_active_position_per_game",
