@@ -25,46 +25,14 @@ from backend.schemas import (
     ParticipantStatusHistoryUpdate,
 )
 from backend.services.admin_permission_service import ADMIN_ROLE
+from backend.services.booking_rules import VALID_BOOKING_STATUSES, VALID_PAYMENT_STATUSES
+from backend.services.game_participant_rules import (
+    VALID_ATTENDANCE_STATUSES,
+    VALID_PARTICIPANT_STATUSES,
+)
 
 VALID_PUBLISH_STATUSES = {"draft", "published", "archived"}
 VALID_GAME_STATUSES = {"scheduled", "full", "cancelled", "completed", "abandoned"}
-VALID_BOOKING_STATUSES = {
-    "pending_payment",
-    "confirmed",
-    "waitlisted",
-    "partially_cancelled",
-    "cancelled",
-    "expired",
-    "failed",
-}
-VALID_PAYMENT_STATUSES = {
-    "not_required",
-    "unpaid",
-    "requires_action",
-    "processing",
-    "paid",
-    "failed",
-    "partially_refunded",
-    "refunded",
-    "credit_restored",
-    "disputed",
-}
-VALID_PARTICIPANT_STATUSES = {
-    "pending_payment",
-    "confirmed",
-    "waitlisted",
-    "cancelled",
-    "late_cancelled",
-    "removed",
-    "refunded",
-}
-VALID_ATTENDANCE_STATUSES = {
-    "unknown",
-    "attended",
-    "no_show",
-    "excused_absence",
-    "not_applicable",
-}
 VALID_CHANGE_SOURCES = {
     "user",
     "host",

@@ -89,22 +89,6 @@ def get_authorized_waitlist_payment_method(
     return payment_method
 
 
-def list_current_user_waitlist_entries(
-    db: Session,
-    current_user: User,
-) -> list[WaitlistEntry]:
-    return list(
-        db.scalars(
-            select(WaitlistEntry)
-            .where(WaitlistEntry.user_id == current_user.id)
-            .order_by(
-                WaitlistEntry.created_at.desc(),
-                WaitlistEntry.joined_at.desc(),
-            )
-        ).all()
-    )
-
-
 def normalize_auto_charge_consent_version(version: str | None) -> str:
     normalized_version = " ".join((version or "").strip().split())
     if not normalized_version:
