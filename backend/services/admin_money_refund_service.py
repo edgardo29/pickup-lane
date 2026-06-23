@@ -14,12 +14,12 @@ from backend.schemas.admin_money_schema import (
     AdminMoneyRefundDetailRead,
     AdminMoneyRefundRetryCreate,
 )
-from backend.services.admin_action_service import (
+from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_money_service import get_admin_money_refund_detail
+from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
-    record_admin_action,
 )
-from backend.services.admin_money_service import get_admin_money_refund_detail
 from backend.services.game_service import (
     create_or_reopen_booking_refunded_notification,
     game_allows_inbox_action,

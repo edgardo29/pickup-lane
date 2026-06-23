@@ -23,11 +23,11 @@ from backend.models import (
     VenueImage,
 )
 from backend.schemas.support_flag_schema import SupportFlagResolve
-from backend.services.admin_action_service import (
+from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_record_rules import (
     describe_fields,
     normalize_idempotency_key,
     normalize_metadata_value,
-    record_admin_action,
 )
 from backend.services.admin_permission_service import (
     get_admin_data_scopes_for_user,

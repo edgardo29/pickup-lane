@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from backend.models import User
 from backend.schemas.admin_money_schema import AdminMoneySupportFlagDetailRead
 from backend.schemas.support_flag_schema import SupportFlagResolve
-from backend.services.admin_money_service import (
+from backend.services.admin_money_support_flag_read_service import (
     get_admin_money_support_flag_detail,
     get_admin_money_support_flag_or_404,
 )

@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import AdminRejectedAttempt, User
-from backend.services.admin_action_service import (
+from backend.services.admin_record_rules import (
     describe_fields,
     normalize_metadata_value,
 )
