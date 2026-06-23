@@ -23,8 +23,10 @@ from backend.schemas.platform_notice_campaign_schema import (
     PlatformNoticeCampaignDeliveryResult,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import PERMISSION_NOTIFICATIONS_MANAGE
-from backend.services.auth_service import require_user_admin_permission
+from backend.services.admin_permission_service import (
+    PERMISSION_NOTIFICATIONS_MANAGE,
+    require_user_admin_permission,
+)
 from backend.services.notification_service import build_app_notification_fields
 from backend.services.platform_notice_campaign_service import (
     campaign_delivery_summary,

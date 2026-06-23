@@ -28,8 +28,10 @@ from backend.services.admin_action_service import (
     normalize_optional_text,
     record_admin_action,
 )
-from backend.services.admin_permission_service import PERMISSION_NEED_A_SUB_MODERATE
-from backend.services.auth_service import require_user_admin_permission
+from backend.services.admin_permission_service import (
+    PERMISSION_NEED_A_SUB_MODERATE,
+    require_user_admin_permission,
+)
 from backend.services.notification_service import (
     build_need_a_sub_notification_fields,
     reopen_aggregated_notification,

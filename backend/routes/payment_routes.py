@@ -10,13 +10,13 @@ from backend.schemas import PaymentCreate, PaymentRead, PaymentUpdate
 from backend.services.admin_permission_service import (
     PERMISSION_MONEY_PAYMENT_MANAGE,
     PERMISSION_MONEY_READ,
+    require_user_admin_permission,
     user_has_admin_permission,
 )
 from backend.services.auth_service import (
     get_current_app_user,
     require_active_account,
     require_admin_permission,
-    require_user_admin_permission,
 )
 from backend.services.payment_service import (
     VALID_PAYMENT_STATUSES,

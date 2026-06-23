@@ -23,8 +23,10 @@ from backend.services.admin_action_service import (
 from backend.services.admin_need_a_sub_service import (
     get_admin_need_a_sub_post_or_404,
 )
-from backend.services.admin_permission_service import PERMISSION_CONTENT_MODERATE
-from backend.services.auth_service import require_user_admin_permission
+from backend.services.admin_permission_service import (
+    PERMISSION_CONTENT_MODERATE,
+    require_user_admin_permission,
+)
 from backend.services.sub_post_chat_service import (
     reconcile_sub_chat_notifications_after_moderation,
     sub_chat_closes_at,

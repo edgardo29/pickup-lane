@@ -1,5 +1,7 @@
 """Admin permission and response-scope policy helpers."""
 
+from fastapi import HTTPException, status
+
 from backend.models import User
 
 ADMIN_ROLE = "admin"
@@ -129,6 +131,39 @@ def get_admin_permissions_for_user(user: User) -> tuple[str, ...]:
 
 def user_has_admin_permission(user: User, permission: str) -> bool:
     return permission in ROLE_PERMISSIONS.get(user.role, frozenset())
+
+
+def _require_active_admin_account(user: User) -> None:
+    if user.account_status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Active account required.",
+        )
+
+
+def require_user_admin_permission(user: User, permission: str) -> None:
+    _require_active_admin_account(user)
+
+    if not user_has_admin_permission(user, permission):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        )
+
+
+def require_user_any_admin_permission(
+    user: User,
+    permissions: tuple[str, ...],
+) -> None:
+    _require_active_admin_account(user)
+
+    if not any(
+        user_has_admin_permission(user, permission) for permission in permissions
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        )
 
 
 def get_admin_data_scopes_for_user(user: User) -> tuple[str, ...]:

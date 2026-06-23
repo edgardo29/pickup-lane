@@ -203,7 +203,7 @@ def test_delete_account_rejects_last_active_admin(
     )
     deleted_auth_user_ids: list[str] = []
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         deleted_auth_user_ids.append,
     )
 
@@ -244,7 +244,7 @@ def test_delete_account_allows_admin_when_another_active_admin_exists(
     )
     deleted_auth_user_ids: list[str] = []
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         deleted_auth_user_ids.append,
     )
 
@@ -284,7 +284,7 @@ def test_cleanup_unfinished_account_rejects_last_active_admin(
     )
     deleted_auth_user_ids: list[str] = []
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.auth_account_service.delete_firebase_user",
         deleted_auth_user_ids.append,
     )
 
@@ -324,7 +324,7 @@ def test_cleanup_unfinished_account_quarantines_after_database_commit_failure(
     )
     deleted_auth_user_ids: list[str] = []
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.auth_account_service.delete_firebase_user",
         deleted_auth_user_ids.append,
     )
     original_commit = Session.commit
@@ -386,7 +386,7 @@ def test_delete_account_restores_previous_status_when_firebase_delete_fails(
         raise RuntimeError("Firebase delete failed")
 
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         fail_delete_firebase_user,
     )
 
@@ -424,7 +424,7 @@ def test_delete_account_records_partial_failure_when_firebase_restore_fails(
         raise RuntimeError("Firebase delete failed")
 
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         fail_delete_firebase_user,
     )
     original_commit = Session.commit
@@ -491,7 +491,7 @@ def test_delete_account_records_partial_failure_when_saved_card_detach_fails(
     )
     deleted_auth_user_ids: list[str] = []
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         deleted_auth_user_ids.append,
     )
 
@@ -568,7 +568,7 @@ def test_delete_account_checkpoints_partial_multi_card_detach_for_retry(
         },
     )
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         lambda _auth_user_id: None,
     )
 
@@ -653,7 +653,7 @@ def test_delete_account_records_partial_failure_when_final_cleanup_commit_fails(
     )
     deleted_auth_user_ids: list[str] = []
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         deleted_auth_user_ids.append,
     )
     original_commit = Session.commit
@@ -719,7 +719,7 @@ def test_delete_account_records_partial_failure_when_cleanup_execution_raises(
         },
     )
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         lambda _auth_user_id: None,
     )
 
@@ -727,7 +727,7 @@ def test_delete_account_records_partial_failure_when_cleanup_execution_raises(
         raise RuntimeError("forced cleanup execution failure")
 
     monkeypatch.setattr(
-        "backend.services.auth_service.cancel_future_user_activity",
+        "backend.services.account_deletion_service.cancel_future_user_activity",
         fail_cleanup,
     )
 
@@ -771,7 +771,7 @@ def test_delete_account_surfaces_recovery_record_commit_failure(
         },
     )
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         lambda _auth_user_id: None,
     )
 
@@ -779,7 +779,7 @@ def test_delete_account_surfaces_recovery_record_commit_failure(
         raise RuntimeError("forced cleanup execution failure")
 
     monkeypatch.setattr(
-        "backend.services.auth_service.cancel_future_user_activity",
+        "backend.services.account_deletion_service.cancel_future_user_activity",
         fail_cleanup,
     )
     original_commit = Session.commit

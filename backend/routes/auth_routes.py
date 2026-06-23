@@ -8,13 +8,13 @@ from backend.schemas import (
     AuthEmailAvailabilityRead,
     UserRead,
 )
-from backend.services.auth_service import (
+from backend.services.account_deletion_service import delete_account_workflow
+from backend.services.auth_account_service import (
     check_email_availability_workflow,
     cleanup_unfinished_account_workflow,
-    delete_account_workflow,
-    get_current_app_user,
     sync_user_workflow,
 )
+from backend.services.auth_service import get_current_app_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

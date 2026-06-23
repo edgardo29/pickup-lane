@@ -29,8 +29,8 @@ from backend.services.admin_action_service import record_admin_action
 from backend.services.admin_permission_service import (
     PERMISSION_MONEY_CREDIT_MANAGE,
     PERMISSION_MONEY_REFUND,
+    require_user_admin_permission,
 )
-from backend.services.auth_service import require_user_admin_permission
 from backend.services.game_service import (
     ACTIVE_JOIN_STATUSES,
     OFFICIAL_FORCED_FIELDS,

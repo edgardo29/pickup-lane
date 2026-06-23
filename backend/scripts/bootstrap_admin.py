@@ -14,7 +14,7 @@ from backend.firebase_admin_client import (
     initialize_firebase_admin,
 )
 from backend.models import User
-from backend.services.auth_service import add_missing_user_context_rows
+from backend.services.auth_account_service import add_missing_user_context_rows
 
 
 class BootstrapAdminError(RuntimeError):

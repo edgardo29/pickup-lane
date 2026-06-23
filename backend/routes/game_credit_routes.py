@@ -10,6 +10,7 @@ from backend.models import GameCredit, User
 from backend.services.admin_permission_service import (
     PERMISSION_MONEY_CREDIT_MANAGE,
     PERMISSION_MONEY_READ,
+    require_user_admin_permission,
 )
 from backend.services.admin_rejected_attempt_policy import (
     ATTEMPT_TYPE_ISSUE_CREDIT_REJECTED,
@@ -20,10 +21,7 @@ from backend.services.admin_rejected_attempt_service import (
     build_permission_denied_metadata,
     record_admin_rejected_attempt,
 )
-from backend.services.auth_service import (
-    get_current_app_user,
-    require_user_admin_permission,
-)
+from backend.services.auth_service import get_current_app_user
 from backend.schemas import (
     GameCreditBalanceRead,
     GameCreditIssueCreate,

@@ -31,11 +31,9 @@ from backend.services.admin_permission_service import (
     PERMISSION_OFFICIAL_GAMES_READ,
     PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
     PERMISSION_OFFICIAL_GAMES_WRITE,
-)
-from backend.services.auth_service import (
-    require_admin_permission,
     require_user_admin_permission,
 )
+from backend.services.auth_service import require_admin_permission
 from backend.services.official_game_service import (
     add_official_game_player,
     assign_official_game_host,
