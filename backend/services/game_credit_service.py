@@ -1,11 +1,16 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.models import GameCredit, GameCreditUsage
+from backend.models import GameCredit, GameCreditUsage, User
+from backend.schemas.game_credit_schema import GameCreditBalanceRead
+from backend.services.admin_permission_service import (
+    PERMISSION_MONEY_READ,
+    require_user_admin_permission,
+)
 
 REDEEM_USAGE_TYPE = "redeem"
 REVERSE_USAGE_TYPE = "reverse"
@@ -118,6 +123,48 @@ def get_available_game_credit_balance(
         )
     )
     return int(balance or 0)
+
+
+def get_game_credit_balance_for_user(
+    db: Session,
+    current_user: User,
+    *,
+    user_id: uuid.UUID | None = None,
+) -> GameCreditBalanceRead:
+    effective_user_id = user_id or current_user.id
+
+    if effective_user_id != current_user.id:
+        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+
+    balance = get_available_game_credit_balance(
+        db,
+        effective_user_id,
+        now=datetime.now(timezone.utc),
+    )
+
+    return GameCreditBalanceRead(
+        user_id=effective_user_id,
+        available_credit_cents=balance,
+    )
+
+
+def list_game_credits_for_user(
+    db: Session,
+    current_user: User,
+    *,
+    user_id: uuid.UUID | None = None,
+) -> list[GameCredit]:
+    effective_user_id = user_id or current_user.id
+
+    if effective_user_id != current_user.id:
+        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+
+    statement = (
+        select(GameCredit)
+        .where(GameCredit.user_id == effective_user_id)
+        .order_by(GameCredit.created_at.desc(), GameCredit.id.desc())
+    )
+    return list(db.scalars(statement).all())
 
 
 def get_ordered_available_credit_grants_for_update(
