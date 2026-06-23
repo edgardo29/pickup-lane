@@ -36,8 +36,6 @@ from backend.schemas.admin_community_schema import (
 )
 from backend.services.admin_action_service import (
     list_admin_actions,
-    normalize_idempotency_key,
-    normalize_optional_text,
     record_admin_action,
 )
 from backend.services.admin_permission_service import (
@@ -51,6 +49,10 @@ from backend.services.admin_permission_service import (
     PERMISSION_USERS_READ,
     require_user_admin_permission,
     user_has_admin_permission,
+)
+from backend.services.admin_record_rules import (
+    normalize_idempotency_key,
+    normalize_optional_text,
 )
 from backend.services.support_flag_service import (
     create_support_flag,

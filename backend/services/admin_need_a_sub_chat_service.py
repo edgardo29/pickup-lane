@@ -15,17 +15,17 @@ from backend.schemas.admin_need_a_sub_schema import (
     AdminNeedASubChatModerationResultRead,
     AdminNeedASubChatRead,
 )
-from backend.services.admin_action_service import (
-    normalize_idempotency_key,
-    normalize_optional_text,
-    record_admin_action,
-)
+from backend.services.admin_action_service import record_admin_action
 from backend.services.admin_need_a_sub_service import (
     get_admin_need_a_sub_post_or_404,
 )
 from backend.services.admin_permission_service import (
     PERMISSION_CONTENT_MODERATE,
     require_user_admin_permission,
+)
+from backend.services.admin_record_rules import (
+    normalize_idempotency_key,
+    normalize_optional_text,
 )
 from backend.services.sub_post_chat_service import (
     reconcile_sub_chat_notifications_after_moderation,

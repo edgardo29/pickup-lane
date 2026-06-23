@@ -24,12 +24,14 @@ from backend.services.admin_money_service import (
     get_admin_money_credit_detail,
     get_admin_money_payment_detail,
     get_admin_money_refund_detail,
-    get_admin_money_support_flag_detail,
     get_admin_money_user_detail,
     list_admin_money_credits,
     list_admin_money_payment_methods,
     list_admin_money_payments,
     list_admin_money_refunds,
+)
+from backend.services.admin_money_support_flag_read_service import (
+    get_admin_money_support_flag_detail,
     list_admin_money_support_flags,
 )
 from backend.services.admin_money_support_flag_service import (
