@@ -3,9 +3,11 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
-from backend.services.need_a_sub_service import (
-    MAX_WAITLIST_REQUESTS_PER_POST,
+from backend.services.need_a_sub_lifecycle_service import (
     expire_due_posts_and_requests,
+)
+from backend.services.need_a_sub_rules import (
+    MAX_WAITLIST_REQUESTS_PER_POST,
 )
 from backend.tests.helpers import (
     authenticate_as,

@@ -29,7 +29,8 @@ from backend.services.admin_permission_service import (
     PERMISSION_USERS_READ,
     user_has_admin_permission,
 )
-from backend.services.need_a_sub_service import serialize_sub_post
+from backend.services.need_a_sub_lifecycle_service import expire_due_posts_and_requests
+from backend.services.need_a_sub_post_service import serialize_sub_post
 
 
 def parse_uuid(value: str) -> uuid.UUID | None:
@@ -134,6 +135,7 @@ def list_admin_need_a_sub_posts(
     offset: int = 0,
     limit: int = 50,
 ) -> tuple[list[AdminNeedASubPostListItemRead], int]:
+    expire_due_posts_and_requests(db)
     statement = select(SubPost, User).join(User, SubPost.owner_user_id == User.id)
 
     if post_status is not None:
@@ -233,6 +235,7 @@ def get_admin_need_a_sub_post_detail(
     audit_offset: int = 0,
     audit_limit: int = 50,
 ) -> AdminNeedASubPostDetailRead:
+    expire_due_posts_and_requests(db)
     post = get_admin_need_a_sub_post_or_404(db, post_id)
     owner = db.get(User, post.owner_user_id)
     if owner is None:

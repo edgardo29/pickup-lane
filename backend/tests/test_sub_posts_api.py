@@ -1372,7 +1372,9 @@ def test_sub_posts_expiration_service_expires_posts_and_open_requests(client: Te
 
     from backend.database import SessionLocal
     from backend.models import SubPost, SubPostRequest
-    from backend.services.need_a_sub_service import expire_due_posts_and_requests
+    from backend.services.need_a_sub_lifecycle_service import (
+        expire_due_posts_and_requests,
+    )
 
     owner = create_user(client)
     requester = create_user(client)

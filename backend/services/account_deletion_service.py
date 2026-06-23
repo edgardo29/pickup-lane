@@ -24,6 +24,10 @@ from backend.models import (
 from backend.schemas import AuthDeleteAccountRequest
 from backend.services.auth_service import get_authenticated_user_from_token
 from backend.services.game_rules import ACTIVE_BOOKING_STATUSES, ACTIVE_JOIN_STATUSES
+from backend.services.need_a_sub_rules import (
+    ACTIVE_REQUEST_STATUSES,
+    ACTIVE_VISIBLE_POST_STATUSES,
+)
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
@@ -32,8 +36,6 @@ from backend.services.stripe_service import StripeConfigError, detach_payment_me
 from backend.services.user_service import build_user_conflict_detail
 
 ACCOUNT_DELETION_REASON = "Account deleted."
-ACTIVE_VISIBLE_SUB_POST_STATUSES = {"active", "filled"}
-ACTIVE_SUB_REQUEST_STATUSES = {"pending", "confirmed", "sub_waitlist"}
 ACTIVE_SAVED_PAYMENT_METHOD_STATUS = "active"
 DELETE_WAITLIST_STATUSES = {"active", "promoted", "payment_processing", "accepted"}
 FUTURE_GAME_CLEANUP_STATUSES = {"scheduled", "full"}
@@ -673,9 +675,11 @@ def cancel_owned_need_a_sub_posts(
     changed_by_user_id: uuid.UUID | None,
     now: datetime,
 ) -> None:
-    from backend.services.need_a_sub_service import (
+    from backend.services.need_a_sub_lifecycle_service import (
         add_post_status_history,
         change_request_status,
+    )
+    from backend.services.need_a_sub_notification_service import (
         notify_requester_sub_status,
         resolve_owner_request_activity_notification,
     )
@@ -687,7 +691,7 @@ def cancel_owned_need_a_sub_posts(
         select(SubPost)
         .where(
             SubPost.owner_user_id == user_id,
-            SubPost.post_status.in_(ACTIVE_VISIBLE_SUB_POST_STATUSES),
+            SubPost.post_status.in_(ACTIVE_VISIBLE_POST_STATUSES),
         )
         .with_for_update()
     ).all()
@@ -719,7 +723,7 @@ def cancel_owned_need_a_sub_posts(
             select(SubPostRequest)
             .where(
                 SubPostRequest.sub_post_id == sub_post.id,
-                SubPostRequest.request_status.in_(ACTIVE_SUB_REQUEST_STATUSES),
+                SubPostRequest.request_status.in_(ACTIVE_REQUEST_STATUSES),
             )
             .with_for_update()
         ).all()
@@ -760,14 +764,16 @@ def cancel_need_a_sub_requests_made(
     changed_by_user_id: uuid.UUID | None,
     now: datetime,
 ) -> None:
-    from backend.services.need_a_sub_service import (
-        add_need_a_sub_notification,
+    from backend.services.need_a_sub_lifecycle_service import (
         change_request_status,
-        notify_waitlist_promoted,
-        promote_next_waitlisted_request,
         recalculate_filled_status,
+    )
+    from backend.services.need_a_sub_notification_service import (
+        add_need_a_sub_notification,
+        notify_waitlist_promoted,
         resolve_owner_request_activity_notification,
     )
+    from backend.services.need_a_sub_request_service import promote_next_waitlisted_request
     from backend.services.sub_post_chat_service import (
         resolve_sub_chat_notifications_for_user,
     )
@@ -776,7 +782,7 @@ def cancel_need_a_sub_requests_made(
         select(SubPostRequest)
         .where(
             SubPostRequest.requester_user_id == user_id,
-            SubPostRequest.request_status.in_(ACTIVE_SUB_REQUEST_STATUSES),
+            SubPostRequest.request_status.in_(ACTIVE_REQUEST_STATUSES),
         )
         .with_for_update()
     ).all()
