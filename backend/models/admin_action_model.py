@@ -32,6 +32,10 @@ class AdminAction(Base):
                 "'admin_add_player', 'admin_remove_player', 'waive_payment', "
                 "'remove_sub_post', 'hide_unsafe_community_payment_text', "
                 "'create_notification', 'update_notification', "
+                "'create_platform_notice_campaign', "
+                "'update_platform_notice_campaign', "
+                "'send_platform_notice_campaign', "
+                "'retry_platform_notice_campaign', "
                 "'change_staff_role', 'append_audit_note', "
                 "'resolve_support_flag'"
                 ")"
@@ -324,6 +328,7 @@ class AdminAction(Base):
 
     target_platform_notice_campaign_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("platform_notice_campaigns.id", ondelete="SET NULL"),
         nullable=True,
     )
 

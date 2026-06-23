@@ -15,6 +15,8 @@ export const ADMIN_PERMISSIONS = {
   MONEY_READ: 'admin.money.read',
   MONEY_REFUND: 'admin.money.refund',
   NEED_A_SUB_MODERATE: 'admin.need_a_sub.moderate',
+  NOTIFICATIONS_MANAGE: 'admin.notifications.manage',
+  NOTIFICATIONS_READ: 'admin.notifications.read',
   USERS_READ: 'admin.users.read',
   USERS_DELETE: 'admin.users.delete',
   USERS_HOSTING_MANAGE: 'admin.users.hosting_manage',
@@ -61,6 +63,18 @@ export const adminWorkspaceNavItems = [
     to: '/admin/need-a-sub',
     end: true,
     permission: ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE,
+  },
+  {
+    label: 'Notifications',
+    to: '/admin/notifications',
+    end: true,
+    permission: ADMIN_PERMISSIONS.NOTIFICATIONS_READ,
+  },
+  {
+    label: 'Platform Notices',
+    to: '/admin/platform-notices',
+    end: true,
+    permission: ADMIN_PERMISSIONS.NOTIFICATIONS_MANAGE,
   },
   {
     label: 'Official Games',
@@ -182,6 +196,14 @@ export function isAdminWorkspaceItemActive(item, pathname) {
 
   if (item.to === '/admin/need-a-sub') {
     return pathname === item.to || pathname.startsWith('/admin/need-a-sub/')
+  }
+
+  if (item.to === '/admin/notifications') {
+    return pathname === item.to
+  }
+
+  if (item.to === '/admin/platform-notices') {
+    return pathname === item.to
   }
 
   if (item.to === '/admin/official-games') {

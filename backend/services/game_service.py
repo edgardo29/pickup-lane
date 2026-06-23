@@ -43,6 +43,7 @@ VALID_POLICY_MODES = {"official_standard", "custom_hosted"}
 VALID_CURRENCY = "USD"
 HOST_EDITABLE_GAME_STATUSES = {"scheduled", "full"}
 CANCELLABLE_GAME_STATUSES = {"scheduled", "full"}
+GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS = {"cancelled", "abandoned"}
 ACTIVE_PLAYER_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
 RESERVED_PLAYER_STATUSES = {"pending_payment", "confirmed"}
 ROSTER_PLAYER_STATUSES = {"pending_payment", "confirmed"}
@@ -673,6 +674,14 @@ def booking_refunded_copy(
         "summary": "Your refund was processed.",
         "body": "Your refund for this official game was processed.",
     }
+
+
+def game_allows_inbox_action(db_game: Game) -> bool:
+    return (
+        db_game.deleted_at is None
+        and db_game.publish_status == "published"
+        and db_game.game_status not in GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS
+    )
 
 
 def create_or_reopen_booking_refunded_notification(

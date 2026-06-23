@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from backend.database import SessionLocal
-from backend.models import AdminAction, Payment, Refund, SupportFlag
+from backend.models import AdminAction, Notification, Payment, Refund, SupportFlag
 from backend.services.game_credit_service import reserve_game_credits
 from backend.services.stripe_service import StripeRefundResult
 from backend.services.support_flag_service import create_support_flag
@@ -712,6 +712,17 @@ def test_admin_can_retry_failed_refund_from_money_detail(
         flag["flag_type"] != "stripe_refund_failed"
         for flag in body["support_flags"]
     )
+    with SessionLocal() as db:
+        notification = db.scalar(
+            select(Notification).where(
+                Notification.user_id == UUID(player["id"]),
+                Notification.notification_type == "booking_refunded",
+                Notification.related_refund_id == UUID(refund["id"]),
+            )
+        )
+        assert notification is not None
+        assert notification.action_key == "view_game"
+        assert notification.related_game_id == UUID(game["id"])
 
 
 def test_admin_refund_retry_failure_creates_money_follow_up(
@@ -869,6 +880,7 @@ def test_admin_can_retry_cancelled_refund_from_money_detail(
         payment["id"],
         booking_id=booking["id"],
         amount_cents=500,
+        refund_reason="game_cancelled",
         refund_status="cancelled",
     )
     provider_refund_id = f"re_{unique_suffix()}"
@@ -906,6 +918,16 @@ def test_admin_can_retry_cancelled_refund_from_money_detail(
     assert body["refund"]["refund_status"] == "succeeded"
     assert body["payment"]["payment_status"] == "partially_refunded"
     assert body["booking"]["payment_status"] == "partially_refunded"
+    with SessionLocal() as db:
+        notification = db.scalar(
+            select(Notification).where(
+                Notification.user_id == UUID(player["id"]),
+                Notification.notification_type == "booking_refunded",
+                Notification.related_refund_id == UUID(refund["id"]),
+            )
+        )
+        assert notification is not None
+        assert notification.action_key is None
 
 
 def test_admin_refund_retry_stripe_error_does_not_mutate_money_truth(

@@ -98,6 +98,12 @@ from backend.schemas.admin_need_a_sub_schema import (
     AdminNeedASubStatusHistoryRead,
     AdminNeedASubUserRead,
 )
+from backend.schemas.admin_notification_schema import (
+    AdminNotificationActionStateRead,
+    AdminNotificationAuditActionRead,
+    AdminNotificationDebugListRead,
+    AdminNotificationDebugRead,
+)
 from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCancelExecute,
     AdminOfficialGameCancellationBookingImpactRead,
@@ -237,6 +243,19 @@ from backend.schemas.policy_document_schema import (
     PolicyDocumentRead,
     PolicyDocumentUpdate,
 )
+from backend.schemas.platform_notice_campaign_schema import (
+    PlatformNoticeCampaignAttemptListRead,
+    PlatformNoticeCampaignAttemptRead,
+    PlatformNoticeCampaignCreate,
+    PlatformNoticeCampaignDeliveryListRead,
+    PlatformNoticeCampaignDeliveryRead,
+    PlatformNoticeCampaignDeliveryRequest,
+    PlatformNoticeCampaignDeliveryResult,
+    PlatformNoticeCampaignDeliverySummary,
+    PlatformNoticeCampaignListRead,
+    PlatformNoticeCampaignRead,
+    PlatformNoticeCampaignUpdate,
+)
 from backend.schemas.refund_schema import RefundCreate, RefundRead, RefundUpdate
 from backend.schemas.sub_post_chat_message_schema import (
     SubPostChatMessageCreate,
@@ -366,6 +385,10 @@ __all__ = [
     "AdminNeedASubRequestRead",
     "AdminNeedASubStatusHistoryRead",
     "AdminNeedASubUserRead",
+    "AdminNotificationActionStateRead",
+    "AdminNotificationAuditActionRead",
+    "AdminNotificationDebugListRead",
+    "AdminNotificationDebugRead",
     "AdminRejectedAttemptRead",
     "AdminOfficialGameCancelExecute",
     "AdminOfficialGameCancellationBookingImpactRead",
@@ -483,6 +506,17 @@ __all__ = [
     "PolicyAcceptanceCreate",
     "PolicyAcceptanceRead",
     "PolicyAcceptanceUpdate",
+    "PlatformNoticeCampaignAttemptListRead",
+    "PlatformNoticeCampaignAttemptRead",
+    "PlatformNoticeCampaignCreate",
+    "PlatformNoticeCampaignDeliveryListRead",
+    "PlatformNoticeCampaignDeliveryRead",
+    "PlatformNoticeCampaignDeliveryRequest",
+    "PlatformNoticeCampaignDeliveryResult",
+    "PlatformNoticeCampaignDeliverySummary",
+    "PlatformNoticeCampaignListRead",
+    "PlatformNoticeCampaignRead",
+    "PlatformNoticeCampaignUpdate",
     "RefundCreate",
     "RefundRead",
     "RefundUpdate",

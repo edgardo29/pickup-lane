@@ -230,6 +230,187 @@ export async function moderateAdminNeedASubChatMessage({
   )
 }
 
+const adminNotificationFilterParams = [
+  'user_id',
+  'notification_type',
+  'notification_category',
+  'notification_domain',
+  'source_type',
+  'is_read',
+  'action_key',
+  'aggregation_key',
+  'related_game_id',
+  'related_chat_id',
+  'related_booking_id',
+  'related_payment_id',
+  'related_refund_id',
+  'related_participant_id',
+  'related_message_id',
+  'related_sub_post_id',
+  'related_sub_post_chat_id',
+  'related_sub_post_chat_message_id',
+  'related_sub_post_request_id',
+  'related_sub_post_position_id',
+]
+
+export async function listAdminNotifications({
+  firebaseUser,
+  filters = {},
+  limit = 50,
+  offset = 0,
+} = {}) {
+  const searchParams = new URLSearchParams()
+
+  adminNotificationFilterParams.forEach((param) => {
+    const value = filters[param]
+    const normalizedValue = String(value ?? '').trim()
+    if (normalizedValue) {
+      searchParams.set(param, normalizedValue)
+    }
+  })
+
+  searchParams.set('offset', String(offset))
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/notifications?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getAdminNotification({ firebaseUser, notificationId }) {
+  return apiRequest(`/admin/notifications/${notificationId}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function listPlatformNoticeCampaigns({
+  audienceType = '',
+  campaignStatus = '',
+  deliveryClass = '',
+  firebaseUser,
+  limit = 50,
+  offset = 0,
+  search = '',
+} = {}) {
+  const searchParams = new URLSearchParams()
+
+  if (campaignStatus) {
+    searchParams.set('campaign_status', campaignStatus)
+  }
+  if (audienceType) {
+    searchParams.set('audience_type', audienceType)
+  }
+  if (deliveryClass) {
+    searchParams.set('delivery_class', deliveryClass)
+  }
+  if (search.trim()) {
+    searchParams.set('search', search.trim())
+  }
+  searchParams.set('offset', String(offset))
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/platform-notice-campaigns?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getPlatformNoticeCampaign({ campaignId, firebaseUser }) {
+  return apiRequest(`/admin/platform-notice-campaigns/${campaignId}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function createPlatformNoticeCampaign({
+  firebaseUser,
+  payload,
+}) {
+  return apiRequest('/admin/platform-notice-campaigns', {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updatePlatformNoticeCampaign({
+  campaignId,
+  firebaseUser,
+  payload,
+}) {
+  return apiRequest(`/admin/platform-notice-campaigns/${campaignId}`, {
+    method: 'PATCH',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function sendPlatformNoticeCampaign({
+  campaignId,
+  firebaseUser,
+  idempotencyKey,
+}) {
+  return apiRequest(`/admin/platform-notice-campaigns/${campaignId}/send`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({ idempotency_key: idempotencyKey }),
+  })
+}
+
+export async function retryFailedPlatformNoticeCampaign({
+  campaignId,
+  firebaseUser,
+  idempotencyKey,
+}) {
+  return apiRequest(`/admin/platform-notice-campaigns/${campaignId}/retry-failed`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({ idempotency_key: idempotencyKey }),
+  })
+}
+
+export async function listPlatformNoticeCampaignDeliveries({
+  campaignId,
+  deliveryStatus = '',
+  firebaseUser,
+  limit = 50,
+  offset = 0,
+}) {
+  const searchParams = new URLSearchParams()
+  if (deliveryStatus) {
+    searchParams.set('delivery_status', deliveryStatus)
+  }
+  searchParams.set('offset', String(offset))
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(
+    `/admin/platform-notice-campaigns/${campaignId}/deliveries?${searchParams.toString()}`,
+    { headers: await getAdminHeaders(firebaseUser) },
+  )
+}
+
+export async function listPlatformNoticeCampaignAttempts({
+  attemptStatus = '',
+  attemptType = '',
+  campaignId,
+  firebaseUser,
+  limit = 50,
+  offset = 0,
+}) {
+  const searchParams = new URLSearchParams()
+  if (attemptType) {
+    searchParams.set('attempt_type', attemptType)
+  }
+  if (attemptStatus) {
+    searchParams.set('attempt_status', attemptStatus)
+  }
+  searchParams.set('offset', String(offset))
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(
+    `/admin/platform-notice-campaigns/${campaignId}/attempts?${searchParams.toString()}`,
+    { headers: await getAdminHeaders(firebaseUser) },
+  )
+}
+
 export async function listAdminUsers({
   accountStatus = '',
   firebaseUser,

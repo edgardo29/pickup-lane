@@ -13,6 +13,9 @@ from backend.routes.admin_rejected_attempt_routes import (
 from backend.routes.admin_lookup_routes import router as admin_lookups_router
 from backend.routes.admin_money_routes import router as admin_money_router
 from backend.routes.admin_need_a_sub_routes import router as admin_need_a_sub_router
+from backend.routes.admin_notification_routes import (
+    router as admin_notifications_router,
+)
 from backend.routes.admin_official_game_routes import (
     router as admin_official_games_router,
 )
@@ -51,6 +54,9 @@ from backend.routes.payment_event_routes import router as payment_events_router
 from backend.routes.payment_routes import router as payments_router
 from backend.routes.policy_acceptance_routes import router as policy_acceptances_router
 from backend.routes.policy_document_routes import router as policy_documents_router
+from backend.routes.platform_notice_campaign_routes import (
+    router as platform_notice_campaigns_router,
+)
 from backend.routes.refund_routes import router as refunds_router
 from backend.routes.stripe_webhook_routes import router as stripe_webhook_router
 from backend.routes.sub_post_position_routes import router as sub_post_positions_router
@@ -87,6 +93,7 @@ __all__ = [
     "admin_lookups_router",
     "admin_money_router",
     "admin_need_a_sub_router",
+    "admin_notifications_router",
     "admin_official_games_router",
     "admin_router",
     "admin_users_router",
@@ -120,6 +127,7 @@ __all__ = [
     "payment_events_router",
     "policy_documents_router",
     "policy_acceptances_router",
+    "platform_notice_campaigns_router",
     "refunds_router",
     "stripe_webhook_router",
     "sub_posts_router",

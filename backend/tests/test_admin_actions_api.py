@@ -428,10 +428,13 @@ def test_admin_action_policy_includes_expected_core_types():
     assert "update_game_chat" in ADMIN_ACTION_TYPES
     assert "create_notification" in ADMIN_ACTION_TYPES
     assert "update_notification" in ADMIN_ACTION_TYPES
+    assert "create_platform_notice_campaign" in ADMIN_ACTION_TYPES
+    assert "update_platform_notice_campaign" in ADMIN_ACTION_TYPES
+    assert "send_platform_notice_campaign" in ADMIN_ACTION_TYPES
+    assert "retry_platform_notice_campaign" in ADMIN_ACTION_TYPES
     assert "issue_credit" in ADMIN_ACTION_TYPES
     assert "remove_sub_post" in ADMIN_ACTION_TYPES
     assert "append_audit_note" in ADMIN_ACTION_TYPES
-    assert "send_platform_notice_campaign" not in ADMIN_ACTION_TYPES
 
 
 def test_admin_action_model_constraint_includes_policy_types():

@@ -16,6 +16,7 @@ from backend.routes import (
     admin_lookups_router,
     admin_money_router,
     admin_need_a_sub_router,
+    admin_notifications_router,
     admin_official_games_router,
     admin_router,
     admin_users_router,
@@ -41,6 +42,7 @@ from backend.routes import (
     payments_router,
     policy_acceptances_router,
     policy_documents_router,
+    platform_notice_campaigns_router,
     refunds_router,
     stripe_webhook_router,
     sub_post_positions_router,
@@ -120,6 +122,7 @@ app.include_router(admin_game_images_router)
 app.include_router(admin_lookups_router)
 app.include_router(admin_money_router)
 app.include_router(admin_need_a_sub_router)
+app.include_router(admin_notifications_router)
 app.include_router(admin_official_games_router)
 app.include_router(admin_venue_images_router)
 app.include_router(game_images_router)
@@ -142,6 +145,7 @@ app.include_router(payments_router)
 app.include_router(payment_events_router)
 app.include_router(policy_documents_router)
 app.include_router(policy_acceptances_router)
+app.include_router(platform_notice_campaigns_router)
 app.include_router(refunds_router)
 app.include_router(stripe_webhook_router)
 app.include_router(sub_posts_router)

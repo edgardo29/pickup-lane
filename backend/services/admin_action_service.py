@@ -19,6 +19,7 @@ from backend.models import (
     GameParticipant,
     Notification,
     Payment,
+    PlatformNoticeCampaign,
     Refund,
     SubPost,
     SubPostChatMessage,
@@ -40,6 +41,7 @@ from backend.services.admin_action_policy import (
     TARGET_NOTIFICATION_ID,
     TARGET_PARTICIPANT_ID,
     TARGET_PAYMENT_ID,
+    TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,
     TARGET_REFUND_ID,
     TARGET_SUB_CHAT_MESSAGE_ID,
     TARGET_SUB_POST_ID,
@@ -188,6 +190,23 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
             "waitlist_advanced_entry_ids",
         }
     ),
+    "platform_notice": frozenset(
+        {
+            "campaign_status",
+            "audience_type",
+            "delivery_class",
+            "selected_user_count",
+            "attempt_id",
+            "attempt_type",
+            "targeted_count",
+            "delivered_count",
+            "skipped_count",
+            "failed_count",
+            "changed_fields",
+            "before",
+            "after",
+        }
+    ),
     "support": frozenset(
         {
             "source",
@@ -217,6 +236,7 @@ TARGET_MODEL_BY_FIELD = {
     TARGET_SUB_POST_POSITION_ID: SubPostPosition,
     TARGET_SUB_CHAT_MESSAGE_ID: SubPostChatMessage,
     TARGET_NOTIFICATION_ID: Notification,
+    TARGET_PLATFORM_NOTICE_CAMPAIGN_ID: PlatformNoticeCampaign,
     TARGET_ADMIN_ACTION_ID: AdminAction,
     TARGET_SUPPORT_FLAG_ID: SupportFlag,
 }
@@ -237,6 +257,9 @@ TARGET_NOT_FOUND_DETAIL = {
     TARGET_SUB_POST_POSITION_ID: "Target Need a Sub position not found.",
     TARGET_SUB_CHAT_MESSAGE_ID: "Target Need a Sub chat message not found.",
     TARGET_NOTIFICATION_ID: "Target notification not found.",
+    TARGET_PLATFORM_NOTICE_CAMPAIGN_ID: (
+        "Target platform notice campaign not found."
+    ),
     TARGET_ADMIN_ACTION_ID: "Target admin action not found.",
     TARGET_SUPPORT_FLAG_ID: "Target support flag not found.",
 }
