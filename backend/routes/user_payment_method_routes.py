@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -13,15 +14,17 @@ from backend.schemas import (
 )
 from backend.services.auth_service import require_active_user
 from backend.services.payment_method_service import (
+    ACTIVE_PAYMENT_METHOD_STATUS,
     create_saved_payment_method_setup_intent,
     detach_saved_payment_method,
     get_owned_payment_method_or_404,
-    list_current_user_payment_methods as list_current_user_payment_methods_workflow,
     set_default_saved_payment_method,
     sync_saved_payment_method,
 )
 
 router = APIRouter(prefix="/user-payment-methods", tags=["user-payment-methods"])
+
+ACTIVE_METHOD_STATUS = ACTIVE_PAYMENT_METHOD_STATUS
 
 
 @router.get(
@@ -34,11 +37,22 @@ def list_current_user_payment_methods(
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ) -> list[UserPaymentMethod]:
-    return list_current_user_payment_methods_workflow(
-        db,
-        current_user,
-        include_inactive=include_inactive,
+    statement = select(UserPaymentMethod).where(
+        UserPaymentMethod.user_id == current_user.id
     )
+
+    if not include_inactive:
+        statement = statement.where(
+            UserPaymentMethod.method_status == ACTIVE_METHOD_STATUS
+        )
+
+    payment_methods = db.scalars(
+        statement.order_by(
+            UserPaymentMethod.created_at.asc(),
+            UserPaymentMethod.id.asc(),
+        )
+    ).all()
+    return list(payment_methods)
 
 
 @router.post(

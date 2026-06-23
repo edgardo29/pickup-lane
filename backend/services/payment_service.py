@@ -5,18 +5,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, Payment, User
 from backend.schemas.payment_schema import PaymentCreate, PaymentUpdate
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_READ,
-    require_user_admin_permission,
-    user_has_admin_permission,
-)
 
 VALID_PAYMENT_TYPES = {
     "booking",
@@ -220,29 +214,6 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
         )
 
 
-def validate_payment_type(value: str) -> None:
-    if value not in VALID_PAYMENT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "payment_type must be 'booking', 'community_publish_fee', "
-                "'refund_adjustment', or 'admin_charge'."
-            ),
-        )
-
-
-def validate_payment_status(value: str) -> None:
-    if value not in VALID_PAYMENT_STATUSES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "payment_status must be 'requires_payment_method', "
-                "'processing', 'requires_action', 'succeeded', 'failed', "
-                "'canceled', 'refunded', 'partially_refunded', or 'disputed'."
-            ),
-        )
-
-
 def normalize_payment_lifecycle_fields(
     payment_data: dict[str, object],
     existing_payment: Payment | None = None,
@@ -366,66 +337,6 @@ def create_payment_record(
         ) from exc
 
     return new_payment
-
-
-def get_payment_for_user_or_404(
-    db: Session,
-    payment_id: uuid.UUID,
-    current_user: User,
-) -> Payment:
-    db_payment = db.get(Payment, payment_id)
-
-    if db_payment is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Payment not found.",
-        )
-
-    if db_payment.payer_user_id != current_user.id:
-        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
-
-    return db_payment
-
-
-def list_payments(
-    db: Session,
-    current_user: User,
-    *,
-    payer_user_id: uuid.UUID | None = None,
-    booking_id: uuid.UUID | None = None,
-    game_id: uuid.UUID | None = None,
-    payment_type: str | None = None,
-    payment_status: str | None = None,
-) -> list[Payment]:
-    can_read_all_money = user_has_admin_permission(current_user, PERMISSION_MONEY_READ)
-    statement = select(Payment)
-
-    if payer_user_id is not None and payer_user_id != current_user.id:
-        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
-        can_read_all_money = True
-
-    if not can_read_all_money:
-        payer_user_id = current_user.id
-
-    if payer_user_id is not None:
-        statement = statement.where(Payment.payer_user_id == payer_user_id)
-
-    if booking_id is not None:
-        statement = statement.where(Payment.booking_id == booking_id)
-
-    if game_id is not None:
-        statement = statement.where(Payment.game_id == game_id)
-
-    if payment_type is not None:
-        validate_payment_type(payment_type)
-        statement = statement.where(Payment.payment_type == payment_type)
-
-    if payment_status is not None:
-        validate_payment_status(payment_status)
-        statement = statement.where(Payment.payment_status == payment_status)
-
-    payments = db.scalars(statement.order_by(Payment.created_at.desc())).all()
-    return list(payments)
 
 
 def update_payment_record(
