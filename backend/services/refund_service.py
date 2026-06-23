@@ -12,6 +12,11 @@ from sqlalchemy.orm import Session
 from backend.models import Booking, GameParticipant, Payment, Refund, User
 from backend.schemas.refund_schema import RefundCreate, RefundUpdate
 from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_permission_service import (
+    PERMISSION_MONEY_READ,
+    require_user_admin_permission,
+    user_has_admin_permission,
+)
 
 VALID_REFUND_REASONS = {
     "player_cancelled",
@@ -161,6 +166,29 @@ def validate_refund_business_rules(refund_data: dict[str, object]) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Refunds require booking_id or participant_id.",
+        )
+
+
+def validate_refund_status(value: str) -> None:
+    if value not in VALID_REFUND_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "refund_status must be 'pending', 'approved', 'processing', "
+                "'succeeded', 'failed', or 'cancelled'."
+            ),
+        )
+
+
+def validate_refund_reason(value: str) -> None:
+    if value not in VALID_REFUND_REASONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "refund_reason must be 'player_cancelled', 'late_cancel', "
+                "'host_cancelled', 'game_cancelled', 'weather', 'admin_refund', "
+                "'duplicate_payment', or 'dispute_resolution'."
+            ),
         )
 
 
@@ -385,6 +413,71 @@ def create_refund_record(
         ) from exc
 
     return new_refund
+
+
+def get_refund_for_user_or_404(
+    db: Session,
+    refund_id: uuid.UUID,
+    current_user: User,
+) -> Refund:
+    db_refund = db.get(Refund, refund_id)
+
+    if db_refund is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Refund not found.",
+        )
+
+    db_payment = get_payment_or_404(db, db_refund.payment_id)
+    if db_payment.payer_user_id != current_user.id:
+        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+
+    return db_refund
+
+
+def list_refunds(
+    db: Session,
+    current_user: User,
+    *,
+    payment_id: uuid.UUID | None = None,
+    booking_id: uuid.UUID | None = None,
+    participant_id: uuid.UUID | None = None,
+    refund_status: str | None = None,
+    refund_reason: str | None = None,
+    requested_by_user_id: uuid.UUID | None = None,
+    approved_by_user_id: uuid.UUID | None = None,
+) -> list[Refund]:
+    can_read_all_money = user_has_admin_permission(current_user, PERMISSION_MONEY_READ)
+    statement = select(Refund).join(Payment, Refund.payment_id == Payment.id)
+
+    if not can_read_all_money:
+        statement = statement.where(Payment.payer_user_id == current_user.id)
+
+    if payment_id is not None:
+        statement = statement.where(Refund.payment_id == payment_id)
+
+    if booking_id is not None:
+        statement = statement.where(Refund.booking_id == booking_id)
+
+    if participant_id is not None:
+        statement = statement.where(Refund.participant_id == participant_id)
+
+    if refund_status is not None:
+        validate_refund_status(refund_status)
+        statement = statement.where(Refund.refund_status == refund_status)
+
+    if refund_reason is not None:
+        validate_refund_reason(refund_reason)
+        statement = statement.where(Refund.refund_reason == refund_reason)
+
+    if requested_by_user_id is not None:
+        statement = statement.where(Refund.requested_by_user_id == requested_by_user_id)
+
+    if approved_by_user_id is not None:
+        statement = statement.where(Refund.approved_by_user_id == approved_by_user_id)
+
+    refunds = db.scalars(statement.order_by(Refund.created_at.desc())).all()
+    return list(refunds)
 
 
 def update_refund_record(

@@ -12,6 +12,17 @@ from backend.schemas.game_credit_schema import (
     GameCreditReverseCreate,
 )
 from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_permission_service import (
+    PERMISSION_MONEY_CREDIT_MANAGE,
+    require_user_admin_permission,
+)
+from backend.services.admin_rejected_attempt_policy import (
+    REJECTION_PERMISSION_DENIED_PRELOAD,
+)
+from backend.services.admin_rejected_attempt_service import (
+    build_permission_denied_metadata,
+    record_admin_rejected_attempt,
+)
 from backend.services.game_credit_service import (
     REVERSED_USAGE_STATUS,
     REVERSE_USAGE_TYPE,
@@ -25,6 +36,35 @@ VALID_CREDIT_REASONS = {
     "admin_credit",
     "support_adjustment",
 }
+
+
+def require_credit_admin_or_log_rejection(
+    db: Session,
+    *,
+    current_user: User,
+    route_method: str,
+    route_path: str,
+    attempt_type: str,
+    attempted_refs: dict[str, object],
+) -> None:
+    try:
+        require_user_admin_permission(current_user, PERMISSION_MONEY_CREDIT_MANAGE)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_403_FORBIDDEN:
+            record_admin_rejected_attempt(
+                db,
+                admin_user_id=current_user.id,
+                attempt_type=attempt_type,
+                rejection_mode=REJECTION_PERMISSION_DENIED_PRELOAD,
+                response_status_code=exc.status_code,
+                route_method=route_method,
+                route_path=route_path,
+                metadata=build_permission_denied_metadata(
+                    attempted_refs=attempted_refs,
+                    required_permission=PERMISSION_MONEY_CREDIT_MANAGE,
+                ),
+            )
+        raise
 
 
 def get_active_credit_user_or_404(db: Session, user_id: uuid.UUID) -> User:

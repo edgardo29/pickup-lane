@@ -1,7 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -15,6 +14,8 @@ from backend.services.admin_permission_service import (
 from backend.services.auth_service import get_current_app_user, require_admin_permission
 from backend.services.user_service import (
     get_current_user_profile,
+    get_user_profile_or_404,
+    list_user_profiles,
     reject_generic_user_mutation,
     update_current_user_profile,
 )
@@ -28,13 +29,7 @@ def list_users(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
 ) -> list[User]:
-    del current_admin
-    users = db.scalars(
-        select(User)
-        .where(User.deleted_at.is_(None))
-        .order_by(User.created_at.asc())
-    ).all()
-    return list(users)
+    return list_user_profiles(db)
 
 
 # Generic user mutations are intentionally disabled. Account creation, profile
@@ -76,16 +71,7 @@ def get_user(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
 ) -> User:
-    del current_admin
-    db_user = db.get(User, user_id)
-
-    if db_user is None or db_user.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
-
-    return db_user
+    return get_user_profile_or_404(db, user_id)
 
 
 @router.patch("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)

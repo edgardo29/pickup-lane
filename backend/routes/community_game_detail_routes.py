@@ -1,7 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -19,7 +18,8 @@ from backend.services.auth_service import require_active_user, require_admin_per
 from backend.services.community_game_detail_service import (
     create_community_game_detail_workflow,
     get_host_community_game_detail_workflow,
-    serialize_public_community_game_detail,
+    get_public_community_game_detail,
+    list_public_community_game_details,
     update_community_game_detail_workflow,
     upsert_host_community_game_detail_workflow,
 )
@@ -79,17 +79,7 @@ def get_host_community_game_detail(
 def get_community_game_detail(
     community_game_detail_id: uuid.UUID, db: Session = Depends(get_db)
 ) -> CommunityGameDetailPublicRead:
-    db_community_game_detail = db.get(
-        CommunityGameDetail, community_game_detail_id
-    )
-
-    if db_community_game_detail is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Community game details not found.",
-        )
-
-    return serialize_public_community_game_detail(db_community_game_detail)
+    return get_public_community_game_detail(db, community_game_detail_id)
 
 
 @router.get(
@@ -100,18 +90,7 @@ def get_community_game_detail(
 def list_community_game_details(
     game_id: uuid.UUID | None = None, db: Session = Depends(get_db)
 ) -> list[CommunityGameDetailPublicRead]:
-    statement = select(CommunityGameDetail)
-
-    if game_id is not None:
-        statement = statement.where(CommunityGameDetail.game_id == game_id)
-
-    community_game_details = db.scalars(
-        statement.order_by(CommunityGameDetail.created_at.desc())
-    ).all()
-    return [
-        serialize_public_community_game_detail(detail)
-        for detail in community_game_details
-    ]
+    return list_public_community_game_details(db, game_id=game_id)
 
 
 @router.patch(

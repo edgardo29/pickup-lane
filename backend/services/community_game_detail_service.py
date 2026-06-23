@@ -106,6 +106,42 @@ def create_community_game_detail_workflow(
     return new_community_game_detail
 
 
+def get_public_community_game_detail(
+    db: Session,
+    community_game_detail_id: uuid.UUID,
+) -> CommunityGameDetailPublicRead:
+    db_community_game_detail = db.get(
+        CommunityGameDetail, community_game_detail_id
+    )
+
+    if db_community_game_detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Community game details not found.",
+        )
+
+    return serialize_public_community_game_detail(db_community_game_detail)
+
+
+def list_public_community_game_details(
+    db: Session,
+    *,
+    game_id: uuid.UUID | None = None,
+) -> list[CommunityGameDetailPublicRead]:
+    statement = select(CommunityGameDetail)
+
+    if game_id is not None:
+        statement = statement.where(CommunityGameDetail.game_id == game_id)
+
+    community_game_details = db.scalars(
+        statement.order_by(CommunityGameDetail.created_at.desc())
+    ).all()
+    return [
+        serialize_public_community_game_detail(detail)
+        for detail in community_game_details
+    ]
+
+
 def update_community_game_detail_workflow(
     db: Session,
     community_game_detail_id: uuid.UUID,
