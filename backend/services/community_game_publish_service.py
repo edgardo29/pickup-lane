@@ -16,7 +16,7 @@ from backend.models import (
     Venue,
 )
 from backend.schemas import CommunityGamePublishCreate, CommunityGamePublishRead
-from backend.services.game_service import (
+from backend.services.game_rules import (
     build_game_conflict_detail,
     get_default_host_guest_max,
     normalize_game_lifecycle_fields,

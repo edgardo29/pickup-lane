@@ -20,7 +20,7 @@ from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
 )
-from backend.services.game_service import (
+from backend.services.game_notification_service import (
     create_or_reopen_booking_refunded_notification,
     game_allows_inbox_action,
 )

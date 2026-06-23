@@ -23,6 +23,7 @@ from backend.models import (
 )
 from backend.schemas import AuthDeleteAccountRequest
 from backend.services.auth_service import get_authenticated_user_from_token
+from backend.services.game_rules import ACTIVE_BOOKING_STATUSES, ACTIVE_JOIN_STATUSES
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
@@ -31,7 +32,6 @@ from backend.services.stripe_service import StripeConfigError, detach_payment_me
 from backend.services.user_service import build_user_conflict_detail
 
 ACCOUNT_DELETION_REASON = "Account deleted."
-ACTIVE_JOIN_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
 ACTIVE_VISIBLE_SUB_POST_STATUSES = {"active", "filled"}
 ACTIVE_SUB_REQUEST_STATUSES = {"pending", "confirmed", "sub_waitlist"}
 ACTIVE_SAVED_PAYMENT_METHOD_STATUS = "active"
@@ -328,8 +328,6 @@ def active_future_buyer_bookings_for_user_deletion(
     user_id: uuid.UUID,
     now: datetime,
 ) -> list[Booking]:
-    from backend.services.game_service import ACTIVE_BOOKING_STATUSES
-
     return list(
         db.scalars(
             select(Booking)

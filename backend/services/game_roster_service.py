@@ -18,27 +18,29 @@ from backend.schemas import (
     GameJoinRead,
     GameLeaveRead,
 )
-from backend.services.game_service import (
+from backend.services.game_rules import (
     ACTIVE_JOIN_STATUSES,
     HOST_EDITABLE_GAME_STATUSES,
     JOINABLE_GAME_STATUSES,
     REFUND_CUTOFF_HOURS,
-    build_booking_participants,
     build_game_conflict_detail,
-    count_roster_players,
+    ensure_timezone,
     game_requires_app_player_payment,
+    require_join_ready_user,
+    require_minimum_age,
+    require_roster_window_open,
+    validate_guest_count,
+)
+from backend.services.game_service import (
+    build_booking_participants,
+    count_roster_players,
     get_active_user_or_404,
     get_booking_participants,
     get_display_name,
     get_existing_active_participant,
     get_existing_active_waitlist_entry,
     get_next_roster_order,
-    ensure_timezone,
-    require_join_ready_user,
-    require_minimum_age,
-    require_roster_window_open,
     sync_game_capacity_status,
-    validate_guest_count,
 )
 from backend.services.game_waitlist_service import (
     build_waitlist_entry_for_join,

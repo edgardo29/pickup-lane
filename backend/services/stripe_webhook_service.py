@@ -29,12 +29,14 @@ from backend.services.game_credit_service import (
 )
 from backend.services.game_service import (
     count_roster_players,
+    get_next_roster_order,
+    sync_game_capacity_status,
+)
+from backend.services.game_rules import game_requires_app_player_payment
+from backend.services.game_notification_service import (
     create_or_reopen_booking_refunded_notification,
     create_waitlist_payment_failed_notification,
     create_waitlist_promotion_notification,
-    game_requires_app_player_payment,
-    get_next_roster_order,
-    sync_game_capacity_status,
 )
 from backend.services.notification_event_service import (
     build_game_notification_fields,

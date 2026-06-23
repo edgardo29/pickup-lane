@@ -17,19 +17,23 @@ from backend.models import (
     WaitlistEntry,
 )
 from backend.schemas import GameJoinCreate
-from backend.services.game_service import (
+from backend.services.game_rules import (
     AUTO_CHARGE_CONSENT_VERSION_MAX_LENGTH,
     WAITLIST_PROMOTION_CANDIDATE_STATUSES,
-    count_roster_players,
-    create_waitlist_payment_failed_notification,
-    create_waitlist_promotion_notification,
     game_requires_app_player_payment,
+    is_roster_locked,
+)
+from backend.services.game_service import (
+    count_roster_players,
     get_booking_participants,
     get_existing_active_participant,
     get_next_roster_order,
     get_next_waitlist_position,
-    is_roster_locked,
     sync_game_capacity_status,
+)
+from backend.services.game_notification_service import (
+    create_waitlist_payment_failed_notification,
+    create_waitlist_promotion_notification,
 )
 from backend.services.payment_method_service import is_saved_payment_method_expired
 from backend.services.stripe_service import (
