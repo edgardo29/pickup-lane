@@ -34,22 +34,30 @@ from backend.services.admin_permission_service import (
     require_user_admin_permission,
 )
 from backend.services.auth_service import require_admin_permission
-from backend.services.official_game_service import (
-    add_official_game_player,
-    assign_official_game_host,
-    create_official_game,
+from backend.services.game_cancellation_service import (
+    build_official_game_cancellation_preview as preview_official_game_cancellation,
     execute_official_game_cancellation,
+)
+from backend.services.official_game_player_removal_service import (
     execute_official_game_player_removal,
+    preview_official_game_player_removal,
+)
+from backend.services.official_game_query_service import (
     get_official_game_money,
-    get_official_game_or_404,
     list_official_game_bookings,
     list_official_game_participants,
     list_official_game_waitlist_entries,
     list_official_games,
-    preview_official_game_player_removal,
-    preview_official_game_cancellation,
+)
+from backend.services.official_game_roster_service import (
+    add_official_game_player,
+    assign_official_game_host,
     remove_official_game_host,
     remove_official_game_player,
+)
+from backend.services.official_game_service import (
+    create_official_game,
+    get_official_game_or_404,
     update_official_game,
 )
 

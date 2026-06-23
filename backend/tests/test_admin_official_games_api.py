@@ -2068,11 +2068,17 @@ def test_admin_executes_paid_player_removal_with_successful_refund(
         waitlist_promotion_calls.append(str(game.id))
 
     monkeypatch.setattr(
-        "backend.services.official_game_service.create_stripe_refund",
+        (
+            "backend.services.official_game_player_removal_service"
+            ".create_stripe_refund"
+        ),
         fake_create_stripe_refund,
     )
     monkeypatch.setattr(
-        "backend.services.official_game_service.promote_waitlist_entries",
+        (
+            "backend.services.official_game_player_removal_service"
+            ".promote_waitlist_entries"
+        ),
         fake_promote_waitlist_entries,
     )
 
@@ -2315,7 +2321,10 @@ def test_admin_paid_player_removal_rejects_stale_preview_before_stripe(
         raise AssertionError("Stripe must not be called for a stale preview.")
 
     monkeypatch.setattr(
-        "backend.services.official_game_service.create_stripe_refund",
+        (
+            "backend.services.official_game_player_removal_service"
+            ".create_stripe_refund"
+        ),
         fail_create_stripe_refund,
     )
 
@@ -2400,7 +2409,10 @@ def test_admin_executes_combined_refund_and_credit_restore(
         )
 
     monkeypatch.setattr(
-        "backend.services.official_game_service.create_stripe_refund",
+        (
+            "backend.services.official_game_player_removal_service"
+            ".create_stripe_refund"
+        ),
         fake_create_stripe_refund,
     )
 
@@ -2613,7 +2625,10 @@ def test_admin_paid_player_removal_refund_failure_creates_follow_up(
         raise RuntimeError("Stripe refund unavailable.")
 
     monkeypatch.setattr(
-        "backend.services.official_game_service.create_stripe_refund",
+        (
+            "backend.services.official_game_player_removal_service"
+            ".create_stripe_refund"
+        ),
         fail_create_stripe_refund,
     )
 
