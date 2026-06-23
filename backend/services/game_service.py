@@ -20,7 +20,7 @@ from backend.models import (
     Venue,
     WaitlistEntry,
 )
-from backend.services.notification_service import (
+from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
 )

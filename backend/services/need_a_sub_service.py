@@ -32,7 +32,7 @@ from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
 )
-from backend.services.notification_service import (
+from backend.services.notification_event_service import (
     build_need_a_sub_notification_fields,
     reopen_aggregated_notification,
     resolve_aggregated_notification,

@@ -27,7 +27,7 @@ from backend.services.admin_permission_service import (
     PERMISSION_NOTIFICATIONS_MANAGE,
     require_user_admin_permission,
 )
-from backend.services.notification_service import build_app_notification_fields
+from backend.services.notification_event_service import build_app_notification_fields
 from backend.services.platform_notice_campaign_read_service import (
     campaign_delivery_summary,
     campaign_target_user_ids,

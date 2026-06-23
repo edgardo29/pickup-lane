@@ -60,7 +60,7 @@ from backend.services.game_credit_service import (
     release_reserved_game_credits,
     restore_redeemed_game_credits,
 )
-from backend.services.notification_service import (
+from backend.services.notification_event_service import (
     build_game_notification_fields,
     resolve_aggregated_notification,
 )

@@ -36,7 +36,7 @@ from backend.services.game_service import (
     get_next_roster_order,
     sync_game_capacity_status,
 )
-from backend.services.notification_service import (
+from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
 )

@@ -5,11 +5,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
 
-from backend.services.notification_service import (
+from backend.services.notification_policy import (
     NOTIFICATION_IMPLEMENTATION_STATUS_BY_TYPE,
     NOTIFICATION_PREFERENCE_CLASS_BY_TYPE,
     NOTIFICATION_TYPE_CONFIG,
     VALID_NOTIFICATION_PREFERENCE_CLASSES,
+)
+from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
     resolve_aggregated_notification,

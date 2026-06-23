@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, GameParticipant, Notification, User
-from backend.services.notification_service import build_game_notification_fields
+from backend.services.notification_event_service import build_game_notification_fields
 
 
 def resolve_unread_official_game_notification(
