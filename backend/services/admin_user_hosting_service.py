@@ -30,7 +30,7 @@ from backend.services.hosting_access_service import (
     HOSTING_STATUS_RESTRICTED,
     HOSTING_STATUS_SUSPENDED,
 )
-from backend.services.notification_service import build_app_notification_fields
+from backend.services.notification_event_service import build_app_notification_fields
 from backend.services.user_service import build_user_conflict_detail
 
 FUTURE_COMMUNITY_HOST_GAME_STATUSES = ("scheduled", "full")

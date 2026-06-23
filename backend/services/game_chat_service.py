@@ -22,7 +22,7 @@ from backend.services.admin_permission_service import (
     PERMISSION_CONTENT_MODERATE,
     user_has_admin_permission,
 )
-from backend.services.notification_service import (
+from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
     resolve_aggregated_notification,

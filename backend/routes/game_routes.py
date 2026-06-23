@@ -60,7 +60,7 @@ from backend.services.game_roster_service import (
     leave_game_roster_workflow,
     remove_game_guests_workflow,
 )
-from backend.services.notification_service import (
+from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
     resolve_aggregated_notification,

@@ -16,13 +16,13 @@ from backend.services.admin_permission_service import (
     PERMISSION_NOTIFICATIONS_READ,
     require_user_admin_permission,
 )
-from backend.services.notification_service import (
+from backend.services.notification_display_service import serialize_notification
+from backend.services.notification_policy import (
     VALID_ACTION_KEYS,
     VALID_NOTIFICATION_CATEGORIES,
     VALID_NOTIFICATION_DOMAINS,
     VALID_NOTIFICATION_TYPES,
     VALID_SOURCE_TYPES,
-    serialize_notification,
 )
 
 

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from backend.models import Booking, ChatMessage, Game, GameParticipant, Notification, User
 from backend.scripts.demo_data.helpers import demo_uuid, now_utc, upsert_by_id
 from backend.scripts.demo_data.users import CURRENT_USER_KEY
-from backend.services.notification_service import (
+from backend.services.notification_event_service import (
     build_app_notification_fields,
     build_game_notification_fields,
 )
