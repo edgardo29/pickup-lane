@@ -1,21 +1,44 @@
-"""Admin money refund mutation workflows."""
+"""Admin money refund reads and retry workflows."""
 
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import AdminAction, Booking, Game, Payment, Refund, User
+from backend.models import (
+    AdminAction,
+    Booking,
+    Game,
+    GameCredit,
+    Payment,
+    Refund,
+    SupportFlag,
+    User,
+)
 from backend.schemas.admin_money_schema import (
     AdminMoneyRefundDetailRead,
     AdminMoneyRefundRetryCreate,
 )
-from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_money_service import get_admin_money_refund_detail
+from backend.services.admin_action_service import (
+    record_admin_action,
+    user_can_read_admin_action,
+)
+from backend.services.admin_money_payment_service import (
+    get_payment_game,
+    list_payment_credit_grants,
+    list_payment_credit_usages,
+)
+from backend.services.admin_money_support_flag_read_service import (
+    MONEY_SUPPORT_FLAG_TYPES,
+)
+from backend.services.admin_permission_service import (
+    PERMISSION_AUDIT_READ,
+    user_has_admin_permission,
+)
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
@@ -35,8 +58,21 @@ from backend.services.stripe_service import (
     StripeRefundResult,
     create_refund as create_stripe_refund,
 )
-from backend.services.support_flag_service import stage_support_flag
+from backend.services.support_flag_service import (
+    stage_support_flag,
+    user_can_read_support_flag,
+)
 
+ADMIN_MONEY_DETAIL_RELATED_LIMIT = 100
+ADMIN_MONEY_REFUND_STATUSES = (
+    "pending",
+    "approved",
+    "processing",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "all",
+)
 RETRYABLE_REFUND_STATUSES = {"failed", "cancelled"}
 RETRYABLE_PAYMENT_STATUSES = {"succeeded", "partially_refunded"}
 
@@ -535,4 +571,214 @@ def retry_admin_money_refund(
         db,
         refund_id=refund_id,
         viewer_user=admin_user,
+    )
+
+
+def get_refund_or_404(db: Session, refund_id: uuid.UUID) -> Refund:
+    refund = db.get(Refund, refund_id)
+    if refund is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Refund not found.",
+        )
+    return refund
+
+
+def validate_admin_money_refund_status(refund_status: str) -> None:
+    if refund_status not in ADMIN_MONEY_REFUND_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="refund_status is not supported.",
+        )
+
+
+def list_admin_money_refunds(
+    db: Session,
+    *,
+    user_id: uuid.UUID | None = None,
+    refund_status: str = "all",
+    payment_id: uuid.UUID | None = None,
+    booking_id: uuid.UUID | None = None,
+    game_id: uuid.UUID | None = None,
+    limit: int = 100,
+) -> list[Refund]:
+    validate_admin_money_refund_status(refund_status)
+
+    query = select(Refund).join(Payment, Refund.payment_id == Payment.id)
+    if user_id is not None:
+        query = query.where(Payment.payer_user_id == user_id)
+    if refund_status != "all":
+        query = query.where(Refund.refund_status == refund_status)
+    if payment_id is not None:
+        query = query.where(Refund.payment_id == payment_id)
+    if booking_id is not None:
+        query = query.where(
+            or_(Refund.booking_id == booking_id, Payment.booking_id == booking_id)
+        )
+    if game_id is not None:
+        query = query.outerjoin(
+            Booking,
+            or_(Refund.booking_id == Booking.id, Payment.booking_id == Booking.id),
+        ).where(or_(Payment.game_id == game_id, Booking.game_id == game_id))
+
+    return list(
+        db.scalars(
+            query.order_by(Refund.created_at.desc(), Refund.id.desc()).limit(limit)
+        ).all()
+    )
+
+
+def get_refund_payment(db: Session, refund: Refund) -> Payment | None:
+    return db.get(Payment, refund.payment_id)
+
+
+def get_refund_booking(
+    db: Session,
+    *,
+    refund: Refund,
+    payment: Payment | None,
+) -> Booking | None:
+    booking_id = refund.booking_id or (
+        payment.booking_id if payment is not None else None
+    )
+    if booking_id is None:
+        return None
+    return db.get(Booking, booking_id)
+
+
+def list_refund_support_flags(
+    db: Session,
+    *,
+    viewer_user: User,
+    refund: Refund,
+    payment: Payment | None,
+    booking_id: uuid.UUID | None,
+    credit_grants: list[GameCredit],
+) -> list[SupportFlag]:
+    filters = [SupportFlag.target_refund_id == refund.id]
+
+    if payment is not None:
+        filters.append(SupportFlag.target_payment_id == payment.id)
+
+    if booking_id is not None:
+        filters.append(SupportFlag.target_booking_id == booking_id)
+
+    credit_ids = [credit.id for credit in credit_grants]
+    if credit_ids:
+        filters.append(SupportFlag.target_game_credit_id.in_(credit_ids))
+
+    support_flags = db.scalars(
+        select(SupportFlag)
+        .where(
+            SupportFlag.flag_type.in_(MONEY_SUPPORT_FLAG_TYPES),
+            or_(*filters),
+        )
+        .order_by(SupportFlag.created_at.desc(), SupportFlag.id.desc())
+        .limit(ADMIN_MONEY_DETAIL_RELATED_LIMIT)
+    ).all()
+
+    return [
+        support_flag
+        for support_flag in support_flags
+        if user_can_read_support_flag(viewer_user, support_flag)
+    ]
+
+
+def list_refund_audit_actions(
+    db: Session,
+    *,
+    viewer_user: User,
+    refund: Refund,
+    payment: Payment | None,
+    booking_id: uuid.UUID | None,
+    credit_grants: list[GameCredit],
+    support_flags: list[SupportFlag],
+) -> list[AdminAction]:
+    if not user_has_admin_permission(viewer_user, PERMISSION_AUDIT_READ):
+        return []
+
+    filters = [AdminAction.target_refund_id == refund.id]
+
+    if payment is not None:
+        filters.append(AdminAction.target_payment_id == payment.id)
+
+    if booking_id is not None:
+        filters.append(AdminAction.target_booking_id == booking_id)
+
+    credit_ids = [credit.id for credit in credit_grants]
+    if credit_ids:
+        filters.append(AdminAction.target_game_credit_id.in_(credit_ids))
+
+    support_flag_ids = [support_flag.id for support_flag in support_flags]
+    if support_flag_ids:
+        filters.append(AdminAction.target_support_flag_id.in_(support_flag_ids))
+
+    audit_actions = db.scalars(
+        select(AdminAction)
+        .where(or_(*filters))
+        .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
+        .limit(ADMIN_MONEY_DETAIL_RELATED_LIMIT)
+    ).all()
+
+    return [
+        audit_action
+        for audit_action in audit_actions
+        if user_can_read_admin_action(viewer_user, audit_action)
+    ]
+
+
+def get_admin_money_refund_detail(
+    db: Session,
+    *,
+    refund_id: uuid.UUID,
+    viewer_user: User,
+) -> AdminMoneyRefundDetailRead:
+    refund = get_refund_or_404(db, refund_id)
+    payment = get_refund_payment(db, refund)
+    booking = get_refund_booking(db, refund=refund, payment=payment)
+    game = (
+        get_payment_game(db, payment=payment, booking=booking)
+        if payment is not None
+        else None
+    )
+    payment_id = payment.id if payment is not None else refund.payment_id
+    booking_id = booking.id if booking is not None else refund.booking_id
+    credit_usages = list_payment_credit_usages(
+        db,
+        payment_id=payment_id,
+        booking_id=booking_id,
+    )
+    credit_grants = list_payment_credit_grants(
+        db,
+        payment_id=payment_id,
+        booking_id=booking_id,
+        credit_usages=credit_usages,
+    )
+    support_flags = list_refund_support_flags(
+        db,
+        viewer_user=viewer_user,
+        refund=refund,
+        payment=payment,
+        booking_id=booking_id,
+        credit_grants=credit_grants,
+    )
+    audit_actions = list_refund_audit_actions(
+        db,
+        viewer_user=viewer_user,
+        refund=refund,
+        payment=payment,
+        booking_id=booking_id,
+        credit_grants=credit_grants,
+        support_flags=support_flags,
+    )
+
+    return AdminMoneyRefundDetailRead(
+        refund=refund,
+        payment=payment,
+        booking=booking,
+        game=game,
+        credit_grants=credit_grants,
+        credit_usages=credit_usages,
+        support_flags=support_flags,
+        audit_actions=audit_actions,
     )
