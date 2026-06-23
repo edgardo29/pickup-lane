@@ -1,22 +1,22 @@
 import uuid
-from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import User, UserSettings
+from backend.models import UserSettings, User
 from backend.schemas import UserSettingsCreate, UserSettingsRead, UserSettingsUpdate
 from backend.services.admin_permission_service import (
     PERMISSION_USERS_MANAGE,
     PERMISSION_USERS_READ,
 )
 from backend.services.auth_service import get_current_app_user, require_admin_permission
-from backend.services.user_service import (
-    build_user_settings_conflict_detail,
+from backend.services.user_settings_service import (
+    create_user_settings_workflow,
     get_current_user_settings,
+    get_user_settings_or_404,
     update_current_user_settings,
+    update_user_settings_workflow,
 )
 
 router = APIRouter(prefix="/user-settings", tags=["user-settings"])
@@ -29,38 +29,7 @@ def create_user_settings(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
 ) -> UserSettings:
-    del current_admin
-    db_user = db.get(User, user_settings.user_id)
-
-    if db_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
-        )
-
-    new_user_settings = UserSettings(
-        user_id=user_settings.user_id,
-        push_notifications_enabled=user_settings.push_notifications_enabled,
-        email_notifications_enabled=user_settings.email_notifications_enabled,
-        sms_notifications_enabled=user_settings.sms_notifications_enabled,
-        marketing_opt_in=user_settings.marketing_opt_in,
-        location_permission_status=user_settings.location_permission_status,
-        selected_city=user_settings.selected_city,
-        selected_state=user_settings.selected_state,
-    )
-
-    try:
-        db.add(new_user_settings)
-        db.commit()
-        db.refresh(new_user_settings)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_settings_conflict_detail(exc),
-        ) from exc
-
-    return new_user_settings
+    return create_user_settings_workflow(db, user_settings)
 
 
 @router.get("/me", response_model=UserSettingsRead, status_code=status.HTTP_200_OK)
@@ -77,11 +46,7 @@ def update_my_user_settings(
     current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> UserSettings:
-    return update_current_user_settings(
-        db,
-        current_user,
-        user_settings_update.model_dump(exclude_unset=True),
-    )
+    return update_current_user_settings(db, current_user, user_settings_update)
 
 
 # This route fetches the one-to-one settings record for a specific user.
@@ -93,16 +58,7 @@ def get_user_settings(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
 ) -> UserSettings:
-    del current_admin
-    db_user_settings = db.get(UserSettings, user_id)
-
-    if db_user_settings is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User settings not found.",
-        )
-
-    return db_user_settings
+    return get_user_settings_or_404(db, user_id)
 
 
 # This route applies partial updates to an existing settings record.
@@ -115,33 +71,4 @@ def update_user_settings(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
 ) -> UserSettings:
-    del current_admin
-    db_user_settings = db.get(UserSettings, user_id)
-
-    if db_user_settings is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User settings not found.",
-        )
-
-    update_data = user_settings_update.model_dump(exclude_unset=True)
-
-    for field_name, field_value in update_data.items():
-        setattr(db_user_settings, field_name, field_value)
-
-    # Keep updated_at aligned with the latest preference change so the settings
-    # record has a trustworthy modification timestamp.
-    db_user_settings.updated_at = datetime.now(timezone.utc)
-
-    try:
-        db.add(db_user_settings)
-        db.commit()
-        db.refresh(db_user_settings)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_settings_conflict_detail(exc),
-        ) from exc
-
-    return db_user_settings
+    return update_user_settings_workflow(db, user_id, user_settings_update)
