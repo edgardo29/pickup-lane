@@ -20,7 +20,10 @@ from backend.services.admin_action_service import (
     record_admin_action,
 )
 from backend.services.admin_money_service import get_admin_money_refund_detail
-from backend.services.game_service import create_or_reopen_booking_refunded_notification
+from backend.services.game_service import (
+    create_or_reopen_booking_refunded_notification,
+    game_allows_inbox_action,
+)
 from backend.services.refund_service import (
     build_refund_conflict_detail,
     refund_audit_metadata,
@@ -268,6 +271,10 @@ def maybe_notify_refund_processed(
     if game is None or game.game_type != "official":
         return
 
+    force_action_null = (
+        refund.refund_reason == "game_cancelled"
+        or not game_allows_inbox_action(game)
+    )
     create_or_reopen_booking_refunded_notification(
         db,
         db_game=game,
@@ -278,6 +285,7 @@ def maybe_notify_refund_processed(
         stripe_refund_processed=True,
         credit_restored=False,
         game_cancelled=refund.refund_reason == "game_cancelled",
+        force_action_null=force_action_null,
     )
 
 

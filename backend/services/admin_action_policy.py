@@ -567,6 +567,50 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         allowed_target_fields=target_set(TARGET_NOTIFICATION_ID, TARGET_USER_ID),
         metadata_builder_key="support",
     ),
+    "create_platform_notice_campaign": AdminActionPolicy(
+        action_type="create_platform_notice_campaign",
+        sensitivity_scope=DATA_SCOPE_ADMIN_ONLY,
+        read_permission=PERMISSION_AUDIT_READ,
+        mutation_permission=PERMISSION_NOTIFICATIONS_MANAGE,
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,)),
+        ),
+        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID),
+        metadata_builder_key="platform_notice",
+    ),
+    "update_platform_notice_campaign": AdminActionPolicy(
+        action_type="update_platform_notice_campaign",
+        sensitivity_scope=DATA_SCOPE_ADMIN_ONLY,
+        read_permission=PERMISSION_AUDIT_READ,
+        mutation_permission=PERMISSION_NOTIFICATIONS_MANAGE,
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,)),
+        ),
+        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID),
+        metadata_builder_key="platform_notice",
+    ),
+    "send_platform_notice_campaign": AdminActionPolicy(
+        action_type="send_platform_notice_campaign",
+        sensitivity_scope=DATA_SCOPE_ADMIN_ONLY,
+        read_permission=PERMISSION_AUDIT_READ,
+        mutation_permission=PERMISSION_NOTIFICATIONS_MANAGE,
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,)),
+        ),
+        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID),
+        metadata_builder_key="platform_notice",
+    ),
+    "retry_platform_notice_campaign": AdminActionPolicy(
+        action_type="retry_platform_notice_campaign",
+        sensitivity_scope=DATA_SCOPE_ADMIN_ONLY,
+        read_permission=PERMISSION_AUDIT_READ,
+        mutation_permission=PERMISSION_NOTIFICATIONS_MANAGE,
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,)),
+        ),
+        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID),
+        metadata_builder_key="platform_notice",
+    ),
     "change_staff_role": AdminActionPolicy(
         action_type="change_staff_role",
         sensitivity_scope=DATA_SCOPE_STAFF_SENSITIVE,

@@ -1042,6 +1042,193 @@ def test_notification_admin_scaffolds_require_named_admin_permissions(
     assert moderator_get_response.status_code == 404, moderator_get_response.text
 
 
+def test_admin_notification_debug_routes_require_admin_read_permission(
+    client: TestClient,
+):
+    owner = create_user(client)
+    notification = create_notification(client, owner["id"])
+
+    authenticate_as(owner["id"])
+    player_list_response = client.get("/admin/notifications")
+    assert player_list_response.status_code == 403, player_list_response.text
+
+    player_detail_response = client.get(f"/admin/notifications/{notification['id']}")
+    assert player_detail_response.status_code == 403, player_detail_response.text
+
+    moderator = create_user(client)
+    set_user_role(moderator["id"], "moderator")
+    authenticate_as(moderator["id"])
+
+    moderator_list_response = client.get("/admin/notifications")
+    assert moderator_list_response.status_code == 403, moderator_list_response.text
+
+    moderator_detail_response = client.get(
+        f"/admin/notifications/{notification['id']}"
+    )
+    assert moderator_detail_response.status_code == 403, moderator_detail_response.text
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+
+    admin_list_response = client.get("/admin/notifications")
+    assert admin_list_response.status_code == 200, admin_list_response.text
+
+    admin_detail_response = client.get(f"/admin/notifications/{notification['id']}")
+    assert admin_detail_response.status_code == 200, admin_detail_response.text
+
+
+def test_admin_notification_debug_list_filters_and_paginates(
+    client: TestClient,
+):
+    owner, game, booking, participant, game_chat, chat_message = (
+        create_notification_setup(client)
+    )
+    other_user = create_user(client)
+    older_event_at = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    newer_event_at = datetime.now(UTC).isoformat()
+    create_notification(
+        client,
+        other_user["id"],
+        event_at=newer_event_at,
+        title="Different user notification",
+    )
+    matching_notification = create_notification(
+        client,
+        owner["id"],
+        notification_type="chat_message",
+        notification_category="game_activity",
+        notification_domain="game",
+        source_type="official_game",
+        title="New chat activity",
+        subject_label=game["title"],
+        summary="New messages were posted.",
+        body="New messages were posted for this game.",
+        action_key="view_game",
+        subject_starts_at=game["starts_at"],
+        subject_ends_at=game["ends_at"],
+        subject_timezone=game["timezone"],
+        event_at=older_event_at,
+        aggregation_key=(
+            f"game:{game['id']}:chat:{game_chat['id']}:"
+            f"user:{owner['id']}:chat_message"
+        ),
+        related_game_id=game["id"],
+        related_chat_id=game_chat["id"],
+        related_booking_id=booking["id"],
+        related_participant_id=participant["id"],
+        related_message_id=chat_message["id"],
+    )
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+
+    response = client.get(
+        "/admin/notifications",
+        params={
+            "user_id": owner["id"],
+            "notification_type": "chat_message",
+            "notification_category": "game_activity",
+            "notification_domain": "game",
+            "source_type": "official_game",
+            "is_read": False,
+            "action_key": "view_game",
+            "related_game_id": game["id"],
+            "related_chat_id": game_chat["id"],
+            "related_booking_id": booking["id"],
+            "related_participant_id": participant["id"],
+            "related_message_id": chat_message["id"],
+            "offset": 0,
+            "limit": 1,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total_count"] == 1
+    assert body["offset"] == 0
+    assert body["limit"] == 1
+    assert [item["id"] for item in body["notifications"]] == [
+        matching_notification["id"]
+    ]
+    item = body["notifications"][0]
+    assert item["action_state"] == {
+        "action_key": "view_game",
+        "status": "available",
+        "path": f"/games/{game['id']}",
+        "disabled_reason": None,
+    }
+    assert item["audit_action_count"] == 1
+    assert item["audit_actions"][0]["action_type"] == "create_notification"
+
+
+def test_admin_notification_debug_detail_reports_unavailable_actions(
+    client: TestClient,
+):
+    owner, game, *_ = create_notification_setup(client)
+    notification = create_notification(
+        client,
+        owner["id"],
+        notification_type="game_updated",
+        notification_category="game_activity",
+        notification_domain="game",
+        source_type="official_game",
+        title="Game updated",
+        subject_label=game["title"],
+        summary="Important game details were updated.",
+        body="Review the latest game details before heading out.",
+        action_key="view_game",
+        subject_starts_at=game["starts_at"],
+        subject_ends_at=game["ends_at"],
+        subject_timezone=game["timezone"],
+        related_game_id=game["id"],
+    )
+
+    from backend.database import SessionLocal
+    from backend.models import Game
+
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game["id"]))
+        assert db_game is not None
+        db_game.game_status = "cancelled"
+        db_game.cancelled_at = datetime.now(UTC)
+        db.commit()
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+
+    response = client.get(f"/admin/notifications/{notification['id']}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["id"] == notification["id"]
+    assert body["action"] is None
+    assert body["action_state"] == {
+        "action_key": "view_game",
+        "status": "unavailable",
+        "path": None,
+        "disabled_reason": None,
+    }
+    assert body["audit_action_count"] == 1
+    assert body["audit_actions"][0]["action_type"] == "create_notification"
+
+
+def test_admin_notification_debug_rejects_invalid_filters(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+
+    response = client.get(
+        "/admin/notifications",
+        params={"notification_type": "made_up_type"},
+    )
+
+    assert response.status_code == 400, response.text
+    assert "notification_type is not supported" in response.text
+
+
 def test_notification_admin_create_and_update_are_audited(client: TestClient):
     from backend.database import SessionLocal
     from backend.models import AdminAction

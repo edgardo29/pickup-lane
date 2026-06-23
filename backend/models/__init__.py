@@ -22,6 +22,12 @@ from backend.models.payment_event_model import PaymentEvent
 from backend.models.payment_model import Payment
 from backend.models.policy_acceptance_model import PolicyAcceptance
 from backend.models.policy_document_model import PolicyDocument
+from backend.models.platform_notice_campaign_model import (
+    PlatformNoticeCampaign,
+    PlatformNoticeCampaignAttempt,
+    PlatformNoticeCampaignDelivery,
+    PlatformNoticeCampaignTargetUser,
+)
 from backend.models.refund_model import Refund
 from backend.models.sub_post_model import SubPost
 from backend.models.sub_post_chat_message_model import SubPostChatMessage
@@ -74,6 +80,10 @@ __all__ = [
     "PaymentEvent",
     "PolicyDocument",
     "PolicyAcceptance",
+    "PlatformNoticeCampaign",
+    "PlatformNoticeCampaignAttempt",
+    "PlatformNoticeCampaignDelivery",
+    "PlatformNoticeCampaignTargetUser",
     "Refund",
     "SubPost",
     "SubPostChat",

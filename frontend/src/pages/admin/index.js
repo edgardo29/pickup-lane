@@ -14,6 +14,8 @@ export { default as AdminMoneySupportFlagsPage } from './money/AdminMoneySupport
 export { default as AdminMoneyUserPage } from './money/AdminMoneyUserPage.jsx'
 export { default as AdminNeedASubPage } from './need-a-sub/AdminNeedASubPage.jsx'
 export { default as AdminNeedASubPostPage } from './need-a-sub/AdminNeedASubPostPage.jsx'
+export { default as AdminNotificationsPage } from './notifications/AdminNotificationsPage.jsx'
+export { default as AdminPlatformNoticesPage } from './platform-notices/AdminPlatformNoticesPage.jsx'
 export { default as AdminCreateOfficialGamePage } from './official-games/create/AdminCreateOfficialGamePage.jsx'
 export { default as AdminOfficialGamePage } from './official-games/manage/AdminOfficialGamePage.jsx'
 export { default as AdminOfficialGamesPage } from './official-games/list/AdminOfficialGamesPage.jsx'

@@ -25,6 +25,8 @@ import {
   AdminMoneyUserPage,
   AdminNeedASubPage,
   AdminNeedASubPostPage,
+  AdminNotificationsPage,
+  AdminPlatformNoticesPage,
   AdminOfficialGamePage,
   AdminOfficialGamesPage,
   AdminSignInPage,
@@ -204,6 +206,22 @@ export function AppRoutes() {
         element={
           <RequireAdmin permission={ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE}>
             <AdminNeedASubPostPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/notifications"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.NOTIFICATIONS_READ}>
+            <AdminNotificationsPage />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/platform-notices"
+        element={
+          <RequireAdmin permission={ADMIN_PERMISSIONS.NOTIFICATIONS_MANAGE}>
+            <AdminPlatformNoticesPage />
           </RequireAdmin>
         }
       />
