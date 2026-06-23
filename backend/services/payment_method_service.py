@@ -206,30 +206,6 @@ def get_owned_payment_method_or_404(
     return payment_method
 
 
-def list_current_user_payment_methods(
-    db: Session,
-    current_user: User,
-    *,
-    include_inactive: bool = False,
-) -> list[UserPaymentMethod]:
-    statement = select(UserPaymentMethod).where(
-        UserPaymentMethod.user_id == current_user.id
-    )
-
-    if not include_inactive:
-        statement = statement.where(
-            UserPaymentMethod.method_status == ACTIVE_PAYMENT_METHOD_STATUS
-        )
-
-    payment_methods = db.scalars(
-        statement.order_by(
-            UserPaymentMethod.created_at.asc(),
-            UserPaymentMethod.id.asc(),
-        )
-    ).all()
-    return list(payment_methods)
-
-
 def sync_saved_payment_method(
     db: Session,
     current_user: User,
