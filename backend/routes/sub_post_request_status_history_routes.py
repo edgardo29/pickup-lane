@@ -1,20 +1,14 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import SubPostRequestStatusHistory, User
 from backend.schemas import SubPostRequestStatusHistoryRead
-from backend.services.admin_permission_service import (
-    PERMISSION_NEED_A_SUB_MODERATE,
-    user_has_admin_permission,
-)
 from backend.services.auth_service import require_active_user
-from backend.services.need_a_sub_service import (
-    get_sub_post_or_404,
-    get_sub_post_request_or_404,
+from backend.services.need_a_sub_lifecycle_service import (
+    list_sub_post_request_status_history as list_sub_post_request_status_history_workflow,
 )
 
 router = APIRouter(
@@ -33,24 +27,4 @@ def list_need_a_sub_request_status_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> list[SubPostRequestStatusHistory]:
-    sub_request = get_sub_post_request_or_404(db, request_id)
-    sub_post = get_sub_post_or_404(db, sub_request.sub_post_id)
-    can_view = (
-        sub_request.requester_user_id == current_user.id
-        or sub_post.owner_user_id == current_user.id
-        or user_has_admin_permission(current_user, PERMISSION_NEED_A_SUB_MODERATE)
-    )
-
-    if not can_view:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You cannot view this request history.",
-        )
-
-    return list(
-        db.scalars(
-            select(SubPostRequestStatusHistory)
-            .where(SubPostRequestStatusHistory.sub_post_request_id == request_id)
-            .order_by(SubPostRequestStatusHistory.created_at.asc())
-        ).all()
-    )
+    return list_sub_post_request_status_history_workflow(db, request_id, current_user)

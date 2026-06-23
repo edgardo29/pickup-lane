@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -26,19 +26,14 @@ from backend.schemas import (
     SubPostRemove,
     SubPostUpdate,
 )
-from backend.services.need_a_sub_service import (
-    cancel_sub_post,
-    create_sub_post,
-    expire_due_posts_and_requests,
-    get_sub_post_or_404,
-    is_publicly_visible_sub_post,
-    query_owner_posts,
-    query_visible_posts,
-    remove_sub_post,
-    serialize_public_sub_post,
-    serialize_sub_post,
-    update_sub_post,
-    user_can_view_private_sub_post,
+from backend.services.need_a_sub_post_service import (
+    cancel_sub_post_workflow,
+    create_sub_post_workflow,
+    get_visible_sub_post_detail,
+    list_owner_sub_posts,
+    list_visible_sub_posts,
+    remove_sub_post_workflow,
+    update_sub_post_workflow,
 )
 from backend.services.sub_post_chat_service import (
     create_sub_post_chat_message_workflow,
@@ -59,8 +54,7 @@ def create_need_a_sub_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> dict:
-    new_post = create_sub_post(db, current_user, sub_post)
-    return serialize_sub_post(db, new_post)
+    return create_sub_post_workflow(db, current_user, sub_post)
 
 
 @router.get("", response_model=list[SubPostPublicRead], status_code=status.HTTP_200_OK)
@@ -76,8 +70,7 @@ def list_need_a_sub_posts(
     sport_type: str | None = None,
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    expire_due_posts_and_requests(db)
-    posts = query_visible_posts(
+    return list_visible_sub_posts(
         db,
         city=city,
         state_value=state,
@@ -89,7 +82,6 @@ def list_need_a_sub_posts(
         environment_type=environment_type,
         sport_type=sport_type,
     )
-    return [serialize_public_sub_post(db, sub_post) for sub_post in posts]
 
 
 @router.get("/mine", response_model=list[SubPostRead], status_code=status.HTTP_200_OK)
@@ -97,9 +89,7 @@ def list_my_need_a_sub_posts(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> list[dict]:
-    expire_due_posts_and_requests(db)
-    posts = query_owner_posts(db, current_user)
-    return [serialize_sub_post(db, sub_post) for sub_post in posts]
+    return list_owner_sub_posts(db, current_user)
 
 
 @router.post(
@@ -227,19 +217,7 @@ def get_need_a_sub_post(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_current_app_user),
 ) -> dict:
-    expire_due_posts_and_requests(db)
-    sub_post = get_sub_post_or_404(db, sub_post_id)
-
-    if user_can_view_private_sub_post(db, sub_post, current_user):
-        return serialize_sub_post(db, sub_post)
-
-    if not is_publicly_visible_sub_post(sub_post):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Need a Sub post not found.",
-        )
-
-    return serialize_public_sub_post(db, sub_post)
+    return get_visible_sub_post_detail(db, sub_post_id, current_user)
 
 
 @router.patch("/{sub_post_id}", response_model=SubPostRead, status_code=status.HTTP_200_OK)
@@ -249,9 +227,7 @@ def update_need_a_sub_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> dict:
-    expire_due_posts_and_requests(db)
-    sub_post = update_sub_post(db, current_user, sub_post_id, payload)
-    return serialize_sub_post(db, sub_post)
+    return update_sub_post_workflow(db, current_user, sub_post_id, payload)
 
 
 @router.patch(
@@ -265,9 +241,12 @@ def cancel_need_a_sub_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> dict:
-    expire_due_posts_and_requests(db)
-    sub_post = cancel_sub_post(db, current_user, sub_post_id, payload.cancel_reason)
-    return serialize_sub_post(db, sub_post)
+    return cancel_sub_post_workflow(
+        db,
+        current_user,
+        sub_post_id,
+        payload.cancel_reason,
+    )
 
 
 @router.patch(
@@ -283,12 +262,10 @@ def remove_need_a_sub_post(
         require_admin_permission(PERMISSION_NEED_A_SUB_MODERATE)
     ),
 ) -> dict:
-    expire_due_posts_and_requests(db)
-    sub_post = remove_sub_post(
+    return remove_sub_post_workflow(
         db,
         current_user,
         sub_post_id,
         payload.remove_reason,
         payload.idempotency_key,
     )
-    return serialize_sub_post(db, sub_post)

@@ -11,9 +11,8 @@ from backend.schemas import (
     SubPostRequestCreate,
     SubPostRequestRead,
 )
-from backend.services.need_a_sub_service import (
+from backend.services.need_a_sub_request_service import (
     create_request,
-    expire_due_posts_and_requests,
     list_owner_sub_post_requests,
     list_requester_sub_post_requests,
     owner_accept_request,
@@ -37,7 +36,6 @@ def request_need_a_sub_spot(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
-    expire_due_posts_and_requests(db)
     return create_request(db, current_user, sub_post_id, payload.sub_post_position_id)
 
 
@@ -76,7 +74,6 @@ def accept_need_a_sub_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
-    expire_due_posts_and_requests(db)
     return owner_accept_request(db, current_user, request_id)
 
 
@@ -91,7 +88,6 @@ def decline_need_a_sub_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
-    expire_due_posts_and_requests(db)
     return owner_decline_request(db, current_user, request_id, payload.reason)
 
 
@@ -105,7 +101,6 @@ def cancel_my_need_a_sub_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
-    expire_due_posts_and_requests(db)
     return requester_cancel_request(db, current_user, request_id)
 
 
@@ -120,7 +115,6 @@ def cancel_need_a_sub_request_by_owner(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
-    expire_due_posts_and_requests(db)
     return owner_cancel_request(db, current_user, request_id, payload.reason)
 
 
@@ -135,5 +129,4 @@ def report_need_a_sub_no_show(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> SubPostRequest:
-    expire_due_posts_and_requests(db)
     return owner_report_no_show(db, current_user, request_id, payload.reason)

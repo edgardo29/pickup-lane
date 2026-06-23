@@ -24,11 +24,9 @@ from backend.services.admin_permission_service import (
     PERMISSION_NEED_A_SUB_MODERATE,
 )
 from backend.services.auth_service import require_admin_permission
-from backend.services.need_a_sub_service import expire_due_posts_and_requests
+from backend.services.need_a_sub_rules import POST_STATUSES
 
 router = APIRouter(prefix="/admin/need-a-sub", tags=["admin_need_a_sub"])
-
-VALID_POST_STATUSES = {"active", "filled", "expired", "canceled", "removed"}
 
 
 @router.get("", response_model=AdminNeedASubPostListRead)
@@ -43,12 +41,11 @@ def list_admin_need_a_sub_posts_route(
     ),
 ) -> AdminNeedASubPostListRead:
     normalized_status = post_status.strip().lower() if post_status else None
-    if normalized_status and normalized_status not in VALID_POST_STATUSES:
+    if normalized_status and normalized_status not in POST_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="post_status is not supported.",
         )
-    expire_due_posts_and_requests(db)
     posts, total_count = list_admin_need_a_sub_posts(
         db,
         viewer_user=current_admin,
@@ -77,7 +74,6 @@ def get_admin_need_a_sub_post_route(
         require_admin_permission(PERMISSION_NEED_A_SUB_MODERATE)
     ),
 ) -> AdminNeedASubPostDetailRead:
-    expire_due_posts_and_requests(db)
     return get_admin_need_a_sub_post_detail(
         db,
         post_id=post_id,
