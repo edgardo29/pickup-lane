@@ -30,18 +30,22 @@ from backend.services.admin_permission_service import (
     PERMISSION_MONEY_REFUND,
     require_user_admin_permission,
 )
-from backend.services.game_service import (
+from backend.services.game_rules import (
     ACTIVE_JOIN_STATUSES,
     OFFICIAL_FORCED_FIELDS,
     build_game_conflict_detail,
-    count_roster_players,
-    create_or_reopen_booking_refunded_notification,
-    get_next_roster_order,
-    normalize_official_game_invariants,
     normalize_game_lifecycle_fields,
+    normalize_official_game_invariants,
     require_game_not_started,
-    sync_game_capacity_status,
     validate_game_business_rules,
+)
+from backend.services.game_service import (
+    count_roster_players,
+    get_next_roster_order,
+    sync_game_capacity_status,
+)
+from backend.services.game_notification_service import (
+    create_or_reopen_booking_refunded_notification,
 )
 from backend.services.venue_service import find_matching_active_venue
 from backend.schemas.admin_official_game_schema import (

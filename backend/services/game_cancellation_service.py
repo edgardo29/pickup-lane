@@ -40,7 +40,7 @@ from backend.services.admin_permission_service import (
     PERMISSION_OFFICIAL_GAMES_CANCEL,
     user_has_admin_permission,
 )
-from backend.services.game_service import (
+from backend.services.game_rules import (
     ACTIVE_BOOKING_STATUSES,
     ACTIVE_JOIN_STATUSES,
     ACTIVE_WAITLIST_STATUSES,
@@ -51,9 +51,12 @@ from backend.services.game_service import (
     CANCELLATION_UNCHARGED_PENDING_PAYMENT_STATUSES,
     MAX_CANCEL_REASON_LENGTH,
     build_game_conflict_detail,
-    create_or_reopen_booking_refunded_notification,
     game_requires_app_player_payment,
     require_game_not_started,
+)
+from backend.services.game_notification_service import (
+    create_or_reopen_booking_refunded_notification,
+    game_updated_aggregation_key,
 )
 from backend.services.game_credit_service import (
     GameCreditLedgerError,
@@ -1049,13 +1052,6 @@ def archive_game_chats(db: Session, db_game: Game, now: datetime) -> None:
         game_chat.chat_status = "archived"
         game_chat.updated_at = now
         db.add(game_chat)
-
-
-def game_updated_aggregation_key(
-    game_id: uuid.UUID,
-    recipient_user_id: uuid.UUID,
-) -> str:
-    return f"game:{game_id}:user:{recipient_user_id}:game_updated"
 
 
 def resolve_unread_game_notification_rows(

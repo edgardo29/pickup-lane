@@ -13,7 +13,7 @@ from backend.schemas.community_game_detail_schema import (
     CommunityGameDetailPublicRead,
     CommunityGameDetailUpdate,
 )
-from backend.services.game_service import (
+from backend.services.game_rules import (
     HOST_EDITABLE_GAME_STATUSES,
     require_game_not_started,
 )

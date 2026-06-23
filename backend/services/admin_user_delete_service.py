@@ -52,7 +52,7 @@ from backend.services.account_deletion_service import (
     lock_user_and_active_admins_for_account_removal,
     record_account_delete_partial_failure,
 )
-from backend.services.game_service import ACTIVE_BOOKING_STATUSES, ACTIVE_JOIN_STATUSES
+from backend.services.game_rules import ACTIVE_BOOKING_STATUSES, ACTIVE_JOIN_STATUSES
 from backend.services.need_a_sub_service import (
     ACTIVE_REQUEST_STATUSES,
     ACTIVE_VISIBLE_POST_STATUSES,

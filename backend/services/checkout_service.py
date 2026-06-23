@@ -30,21 +30,23 @@ from backend.services.game_credit_service import (
     release_reserved_game_credits,
     reserve_game_credits,
 )
-from backend.services.game_service import (
+from backend.services.game_rules import (
     JOINABLE_GAME_STATUSES,
-    build_booking_participants,
     build_game_conflict_detail,
-    count_roster_players,
     game_requires_app_player_payment,
+    require_join_ready_user,
+    require_minimum_age,
+    require_roster_window_open,
+    validate_guest_count,
+)
+from backend.services.game_service import (
+    build_booking_participants,
+    count_roster_players,
     get_display_name,
     get_existing_active_participant,
     get_existing_active_waitlist_entry,
     get_next_roster_order,
-    require_join_ready_user,
-    require_minimum_age,
-    require_roster_window_open,
     sync_game_capacity_status,
-    validate_guest_count,
 )
 from backend.services.payment_method_service import (
     get_current_user_saved_payment_method_for_checkout,
