@@ -10,11 +10,11 @@ from backend.database import get_db
 from backend.models import Booking, Game, GameParticipant, User
 from backend.services.admin_permission_service import (
     PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
+    require_user_admin_permission,
 )
 from backend.services.auth_service import (
     get_current_app_user,
     require_admin_permission,
-    require_user_admin_permission,
 )
 from backend.services.game_service import list_current_user_game_participants
 from backend.schemas import (

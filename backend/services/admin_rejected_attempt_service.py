@@ -21,7 +21,7 @@ from backend.services.admin_rejected_attempt_policy import (
     AdminRejectedAttemptPolicy,
     get_admin_rejected_attempt_policy,
 )
-from backend.services.auth_service import require_user_admin_permission
+from backend.services.admin_permission_service import require_user_admin_permission
 from backend.services.user_service import build_user_conflict_detail
 
 MAX_ROUTE_METHOD_LENGTH = 10

@@ -49,9 +49,9 @@ from backend.services.admin_permission_service import (
     PERMISSION_COMMUNITY_GAMES_WRITE,
     PERMISSION_MONEY_READ,
     PERMISSION_USERS_READ,
+    require_user_admin_permission,
     user_has_admin_permission,
 )
-from backend.services.auth_service import require_user_admin_permission
 from backend.services.support_flag_service import (
     create_support_flag,
     get_existing_support_flag_by_idempotency_key,

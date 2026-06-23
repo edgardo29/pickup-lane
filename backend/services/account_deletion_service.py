@@ -1,4 +1,4 @@
-"""Shared account-deletion cleanup and anonymization helpers."""
+"""Account-deletion workflows, cleanup, recovery, and anonymization."""
 
 import uuid
 from dataclasses import dataclass
@@ -6,9 +6,10 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from backend.firebase_admin_client import FirebaseAdminConfigError, delete_firebase_user
 from backend.models import (
     Booking,
     Game,
@@ -20,11 +21,14 @@ from backend.models import (
     UserSettings,
     WaitlistEntry,
 )
+from backend.schemas import AuthDeleteAccountRequest
+from backend.services.auth_service import get_authenticated_user_from_token
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
 )
 from backend.services.stripe_service import StripeConfigError, detach_payment_method
+from backend.services.user_service import build_user_conflict_detail
 
 ACCOUNT_DELETION_REASON = "Account deleted."
 ACTIVE_JOIN_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
@@ -926,3 +930,263 @@ def anonymize_user(user: User, now: datetime) -> None:
     user.stripe_customer_id = None
     user.deleted_at = now
     user.updated_at = now
+
+
+def restore_self_delete_staged_account_after_firebase_failure(
+    db: Session,
+    *,
+    user: User,
+    previous_account_status: str,
+    response_status_code: int,
+    response_detail: str,
+) -> None:
+    user.account_status = previous_account_status
+    user.updated_at = datetime.now(timezone.utc)
+    db.add(user)
+    try:
+        db.commit()
+    except SQLAlchemyError as restore_exc:
+        db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            clear_auth_link=False,
+            metadata={
+                "auth_identity_deleted": False,
+                "app_cleanup_completed": False,
+                "restore_failed": True,
+                "previous_account_status": previous_account_status,
+            },
+            summary=(
+                "Firebase deletion failed, and the staged app account status "
+                "could not be restored."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion failed, and app account restoration requires "
+                "support follow-up."
+            ),
+        ) from restore_exc
+
+    raise HTTPException(
+        status_code=response_status_code,
+        detail=response_detail,
+    )
+
+
+def delete_account_workflow(
+    payload: AuthDeleteAccountRequest,
+    authorization: str | None,
+    db: Session,
+) -> User:
+    if payload.confirmation.strip().upper() != "DELETE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Type "delete" to confirm account deletion.',
+        )
+
+    authenticated_user = get_authenticated_user_from_token(authorization, db)
+    user, active_admin_count = lock_user_and_active_admins_for_account_removal(
+        db,
+        user_id=authenticated_user.id,
+    )
+    require_account_removal_preserves_active_admin(
+        user,
+        active_admin_count=active_admin_count,
+    )
+    now = datetime.now(timezone.utc)
+    auth_user_id = user.auth_user_id
+    previous_account_status = user.account_status
+
+    if not auth_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This account cannot be deleted because it is already unlinked.",
+        )
+
+    user.account_status = "pending_deletion"
+    user.updated_at = now
+    db.add(user)
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=build_user_conflict_detail(exc),
+        ) from exc
+
+    try:
+        delete_firebase_user(auth_user_id)
+    except FirebaseAdminConfigError as exc:
+        restore_self_delete_staged_account_after_firebase_failure(
+            db,
+            user=user,
+            previous_account_status=previous_account_status,
+            response_status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            response_detail=str(exc),
+        )
+    except Exception as exc:
+        restore_self_delete_staged_account_after_firebase_failure(
+            db,
+            user=user,
+            previous_account_status=previous_account_status,
+            response_status_code=status.HTTP_502_BAD_GATEWAY,
+            response_detail="Firebase could not delete this account. Please try again.",
+        )
+
+    checkpoint_at = datetime.now(timezone.utc)
+    user.auth_user_id = None
+    user.updated_at = checkpoint_at
+    db.add(user)
+    try:
+        db.commit()
+        db.refresh(user)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata={
+                "auth_identity_deleted": True,
+                "app_cleanup_completed": False,
+                "failure_type": "auth_unlink_checkpoint_commit_error",
+            },
+            summary=(
+                "Firebase deletion succeeded, but the app auth unlink did not "
+                "commit."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        ) from exc
+
+    payment_method_result = detach_account_saved_payment_methods(
+        db,
+        user_id=user.id,
+    )
+    if payment_method_result.has_blocking_failures:
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata=payment_method_result.support_metadata(
+                auth_identity_deleted=True
+            ),
+            detached_payment_method_ids=(
+                payment_method_result.detached_saved_payment_method_ids
+            ),
+            summary=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        )
+
+    try:
+        db.commit()
+        db.refresh(user)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata={
+                **payment_method_result.support_metadata(
+                    auth_identity_deleted=True
+                ),
+                "failure_type": "saved_payment_method_checkpoint_commit_error",
+            },
+            detached_payment_method_ids=(
+                payment_method_result.detached_saved_payment_method_ids
+            ),
+            summary=(
+                "Firebase deletion succeeded, but saved-card cleanup state did "
+                "not commit."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        ) from exc
+
+    now = datetime.now(timezone.utc)
+    try:
+        cancel_future_user_activity(
+            user,
+            db,
+            now,
+            changed_by_user_id=user.id,
+        )
+        anonymize_user(user, now)
+        db.add(user)
+    except Exception as exc:
+        db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata={
+                "auth_identity_deleted": True,
+                "app_cleanup_completed": False,
+                "failure_type": "app_cleanup_execution_error",
+            },
+            summary=(
+                "Firebase deletion succeeded, but app account cleanup failed "
+                "before the final commit."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        ) from exc
+
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            metadata={
+                "auth_identity_deleted": True,
+                "app_cleanup_completed": False,
+                "failure_type": "app_cleanup_commit_error",
+            },
+            summary=(
+                "Firebase deletion succeeded, but final app account cleanup did "
+                "not commit."
+            ),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Firebase deletion succeeded, but app account cleanup requires "
+                "support follow-up."
+            ),
+        ) from exc
+
+    return user

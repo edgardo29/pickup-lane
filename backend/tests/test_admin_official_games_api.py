@@ -3705,7 +3705,7 @@ def test_account_delete_clears_future_official_host_without_cancelling_game(
         lambda token: {"uid": host["auth_user_id"], "email_verified": True},
     )
     monkeypatch.setattr(
-        "backend.services.auth_service.delete_firebase_user",
+        "backend.services.account_deletion_service.delete_firebase_user",
         lambda auth_user_id: None,
     )
 

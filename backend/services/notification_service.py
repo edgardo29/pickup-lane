@@ -30,9 +30,9 @@ from backend.services.admin_action_service import record_admin_action
 from backend.services.admin_permission_service import (
     PERMISSION_NOTIFICATIONS_MANAGE,
     PERMISSION_NOTIFICATIONS_READ,
+    require_user_admin_permission,
     user_has_admin_permission,
 )
-from backend.services.auth_service import require_user_admin_permission
 
 VALID_NOTIFICATION_PREFERENCE_CLASSES = {
     "mandatory",

@@ -12,8 +12,10 @@ from backend.schemas.admin_notification_schema import (
     AdminNotificationDebugListRead,
     AdminNotificationDebugRead,
 )
-from backend.services.admin_permission_service import PERMISSION_NOTIFICATIONS_READ
-from backend.services.auth_service import require_user_admin_permission
+from backend.services.admin_permission_service import (
+    PERMISSION_NOTIFICATIONS_READ,
+    require_user_admin_permission,
+)
 from backend.services.notification_service import (
     VALID_ACTION_KEYS,
     VALID_NOTIFICATION_CATEGORIES,

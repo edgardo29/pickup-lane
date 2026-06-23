@@ -31,9 +31,9 @@ from backend.services.admin_action_service import (
 )
 from backend.services.admin_permission_service import (
     get_admin_data_scopes_for_user,
+    require_user_admin_permission,
     user_has_admin_permission,
 )
-from backend.services.auth_service import require_user_admin_permission
 from backend.services.support_flag_policy import (
     SUPPORT_FLAG_POLICIES,
     SUPPORT_FLAG_TARGET_FIELDS,

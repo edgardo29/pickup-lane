@@ -55,8 +55,10 @@ from backend.services.admin_action_policy import (
     TargetRule,
     get_admin_action_policy,
 )
-from backend.services.admin_permission_service import get_admin_data_scopes_for_user
-from backend.services.auth_service import require_user_admin_permission
+from backend.services.admin_permission_service import (
+    get_admin_data_scopes_for_user,
+    require_user_admin_permission,
+)
 from backend.services.user_service import build_user_conflict_detail
 
 MAX_REASON_LENGTH = 1000
