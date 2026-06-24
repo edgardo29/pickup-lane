@@ -16,7 +16,7 @@ from backend.models import (
     UserPaymentMethod,
     WaitlistEntry,
 )
-from backend.schemas import GameJoinCreate
+from backend.schemas.game_schema import GameJoinCreate
 from backend.services.game_rules import (
     AUTO_CHARGE_CONSENT_VERSION_MAX_LENGTH,
     WAITLIST_PROMOTION_CANDIDATE_STATUSES,

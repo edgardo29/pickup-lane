@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, GameParticipant, Payment, User
-from backend.schemas import (
+from backend.schemas.checkout_schema import (
     GameCheckoutPaymentIntentCreate,
     GameCheckoutPaymentIntentRead,
     GameCheckoutStatusRead,
@@ -42,7 +42,6 @@ from backend.services.game_rules import (
 from backend.services.game_service import (
     build_booking_participants,
     count_roster_players,
-    get_display_name,
     get_existing_active_participant,
     get_existing_active_waitlist_entry,
     get_next_roster_order,
@@ -51,6 +50,7 @@ from backend.services.game_service import (
 from backend.services.payment_method_service import (
     get_current_user_saved_payment_method_for_checkout,
 )
+from backend.services.payment_rules import PENDING_PAYMENT_STATUSES
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
@@ -63,14 +63,10 @@ from backend.services.stripe_service import (
     map_payment_intent_status,
     retrieve_payment_intent,
 )
+from backend.services.user_service import get_user_display_name
 
 CHECKOUT_HOLD_MINUTES = 15
 MINIMUM_USD_PAYMENT_INTENT_AMOUNT_CENTS = 50
-PENDING_PAYMENT_STATUSES = {
-    "requires_payment_method",
-    "requires_action",
-    "processing",
-}
 
 
 def get_locked_active_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
@@ -303,7 +299,7 @@ def build_pending_checkout_rows(
         db_game,
         booking,
         current_user,
-        get_display_name(current_user),
+        get_user_display_name(current_user),
         guest_count,
         now,
         participant_status="pending_payment",

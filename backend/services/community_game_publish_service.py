@@ -15,7 +15,10 @@ from backend.models import (
     User,
     Venue,
 )
-from backend.schemas import CommunityGamePublishCreate, CommunityGamePublishRead
+from backend.schemas.community_game_publish_schema import (
+    CommunityGamePublishCreate,
+    CommunityGamePublishRead,
+)
 from backend.services.game_rules import (
     build_game_conflict_detail,
     get_default_host_guest_max,
@@ -25,6 +28,7 @@ from backend.services.game_rules import (
 from backend.services.hosting_access_service import (
     require_community_publish_hosting_access,
 )
+from backend.services.user_service import get_user_display_name
 from backend.services.venue_service import find_matching_active_venue
 
 COMMUNITY_PUBLISH_FEE_CENTS = 499
@@ -180,11 +184,6 @@ def build_game_data(
     }
 
 
-def build_host_display_name(host: User) -> str:
-    full_name = f"{host.first_name or ''} {host.last_name or ''}".strip()
-    return full_name or host.email or "Host"
-
-
 def build_publish_conflict_detail(exc: IntegrityError) -> str:
     error_text = str(exc.orig)
 
@@ -240,7 +239,7 @@ def publish_community_game_workflow(
                 game_id=game_id,
                 participant_type="host",
                 user_id=host.id,
-                display_name_snapshot=build_host_display_name(host),
+                display_name_snapshot=get_user_display_name(host, fallback="Host"),
                 participant_status="confirmed",
                 attendance_status="unknown",
                 cancellation_type="none",

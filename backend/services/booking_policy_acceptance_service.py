@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import Booking, BookingPolicyAcceptance, PolicyDocument
-from backend.schemas import (
+from backend.schemas.booking_policy_acceptance_schema import (
     BookingPolicyAcceptanceCreate,
     BookingPolicyAcceptanceUpdate,
 )

@@ -26,21 +26,11 @@ from backend.services.admin_permission_service import (
     PERMISSION_AUDIT_READ,
     user_has_admin_permission,
 )
+from backend.services.payment_rules import VALID_PAYMENT_STATUSES
 from backend.services.support_flag_service import user_can_read_support_flag
 
 ADMIN_MONEY_DETAIL_RELATED_LIMIT = 100
-ADMIN_MONEY_PAYMENT_STATUSES = (
-    "requires_payment_method",
-    "processing",
-    "requires_action",
-    "succeeded",
-    "failed",
-    "canceled",
-    "refunded",
-    "partially_refunded",
-    "disputed",
-    "all",
-)
+ADMIN_MONEY_PAYMENT_STATUSES = VALID_PAYMENT_STATUSES | {"all"}
 
 
 def get_payment_or_404(db: Session, payment_id: uuid.UUID) -> Payment:

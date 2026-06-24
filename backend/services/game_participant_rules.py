@@ -8,6 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from backend.models import GameParticipant
 
 VALID_PARTICIPANT_TYPES = {"registered_user", "guest", "host", "admin_added"}
+ROSTER_USER_PARTICIPANT_TYPES = {"registered_user", "host", "admin_added"}
+OFFICIAL_ROSTER_PARTICIPANT_TYPES = {"registered_user", "admin_added"}
+ACTIVE_ROSTER_PARTICIPANT_STATUSES = {"pending_payment", "confirmed"}
 VALID_PARTICIPANT_STATUSES = {
     "pending_payment",
     "confirmed",

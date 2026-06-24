@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import User, Venue
-from backend.schemas import VenueCreate, VenueUpdate
+from backend.schemas.venue_schema import VenueCreate, VenueUpdate
 
 APPROVED_VENUE_STATUS = "approved"
 

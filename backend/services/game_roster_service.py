@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, GameParticipant, Payment, User
-from backend.schemas import (
+from backend.schemas.game_schema import (
     GameGuestAddCreate,
     GameGuestAddRead,
     GameGuestRemoveCreate,
@@ -34,14 +34,13 @@ from backend.services.game_rules import (
 from backend.services.game_service import (
     build_booking_participants,
     count_roster_players,
-    get_active_user_or_404,
     get_booking_participants,
-    get_display_name,
     get_existing_active_participant,
     get_existing_active_waitlist_entry,
     get_next_roster_order,
     sync_game_capacity_status,
 )
+from backend.services.user_service import get_user_display_name
 from backend.services.game_waitlist_service import (
     build_waitlist_entry_for_join,
     promote_waitlist_entries,
@@ -288,7 +287,7 @@ def join_game_roster_workflow(
         )
 
     roster_count = count_roster_players(db, db_game.id)
-    display_name = get_display_name(joining_user)
+    display_name = get_user_display_name(joining_user)
     guest_count = validate_guest_count(db_game, join_request.guest_count)
     party_size = guest_count + 1
     spots_left = max(db_game.total_spots - roster_count, 0)
@@ -605,7 +604,7 @@ def add_booking_game_guests_workflow(
         db_game,
         booking,
         acting_user.id,
-        get_display_name(acting_user),
+        get_user_display_name(acting_user),
         guest_request.guest_count,
         current_guest_count,
         now,
@@ -723,7 +722,7 @@ def add_host_game_guests_workflow(
     guests = build_host_guest_participants(
         db_game,
         acting_user.id,
-        get_display_name(acting_user),
+        get_user_display_name(acting_user),
         guest_count,
         now,
         get_next_roster_order(db, db_game.id),

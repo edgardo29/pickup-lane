@@ -52,14 +52,17 @@ from backend.services.account_deletion_service import (
     lock_user_and_active_admins_for_account_removal,
     record_account_delete_partial_failure,
 )
-from backend.services.game_rules import ACTIVE_BOOKING_STATUSES, ACTIVE_JOIN_STATUSES
+from backend.services.game_rules import (
+    ACTIVE_BOOKING_STATUSES,
+    ACTIVE_JOIN_STATUSES,
+    OPEN_GAME_STATUSES,
+)
 from backend.services.need_a_sub_rules import (
     ACTIVE_REQUEST_STATUSES,
     ACTIVE_VISIBLE_POST_STATUSES,
 )
 from backend.services.user_service import build_user_conflict_detail
 
-DELETE_PREVIEW_FUTURE_GAME_STATUSES = ("scheduled", "full")
 DELETE_PREVIEW_WAITLIST_STATUSES = (
     "active",
     "promoted",
@@ -131,7 +134,7 @@ def future_hosted_game_filters(
     filters = [
         Game.host_user_id == user_id,
         Game.game_type == game_type,
-        Game.game_status.in_(DELETE_PREVIEW_FUTURE_GAME_STATUSES),
+        Game.game_status.in_(OPEN_GAME_STATUSES),
         Game.starts_at > now,
         Game.deleted_at.is_(None),
     ]
@@ -192,7 +195,7 @@ def active_future_booking_metric(
     filters = [
         Booking.buyer_user_id == user_id,
         Booking.booking_status.in_(ACTIVE_BOOKING_STATUSES),
-        Game.game_status.in_(DELETE_PREVIEW_FUTURE_GAME_STATUSES),
+        Game.game_status.in_(OPEN_GAME_STATUSES),
         Game.starts_at > now,
         Game.deleted_at.is_(None),
     ]
@@ -223,7 +226,7 @@ def active_future_participant_metric(
         .where(
             participant_user_field == user_id,
             GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
-            Game.game_status.in_(DELETE_PREVIEW_FUTURE_GAME_STATUSES),
+            Game.game_status.in_(OPEN_GAME_STATUSES),
             Game.starts_at > now,
             Game.deleted_at.is_(None),
         ),

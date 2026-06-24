@@ -10,7 +10,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import PolicyAcceptance, PolicyDocument, User
-from backend.schemas import PolicyAcceptanceCreate, PolicyAcceptanceUpdate
+from backend.schemas.policy_acceptance_schema import (
+    PolicyAcceptanceCreate,
+    PolicyAcceptanceUpdate,
+)
 
 
 def build_policy_acceptance_conflict_detail(exc: IntegrityError) -> str:

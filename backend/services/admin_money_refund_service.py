@@ -48,6 +48,7 @@ from backend.services.game_notification_service import (
     game_allows_inbox_action,
 )
 from backend.services.refund_service import (
+    VALID_REFUND_STATUSES,
     build_refund_conflict_detail,
     refund_audit_metadata,
     refund_audit_snapshot,
@@ -64,15 +65,7 @@ from backend.services.support_flag_service import (
 )
 
 ADMIN_MONEY_DETAIL_RELATED_LIMIT = 100
-ADMIN_MONEY_REFUND_STATUSES = (
-    "pending",
-    "approved",
-    "processing",
-    "succeeded",
-    "failed",
-    "cancelled",
-    "all",
-)
+ADMIN_MONEY_REFUND_STATUSES = VALID_REFUND_STATUSES | {"all"}
 RETRYABLE_REFUND_STATUSES = {"failed", "cancelled"}
 RETRYABLE_PAYMENT_STATUSES = {"succeeded", "partially_refunded"}
 

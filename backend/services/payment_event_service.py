@@ -10,9 +10,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import Payment, PaymentEvent
-from backend.schemas import PaymentEventCreate, PaymentEventUpdate
+from backend.schemas.payment_event_schema import PaymentEventCreate, PaymentEventUpdate
+from backend.services.payment_rules import VALID_PROVIDERS
 
-VALID_PROVIDERS = {"stripe"}
 VALID_PROCESSING_STATUSES = {
     "pending",
     "processed",

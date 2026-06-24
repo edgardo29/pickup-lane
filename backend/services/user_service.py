@@ -14,6 +14,15 @@ GENERIC_USER_MUTATION_DISABLED_DETAIL = (
 )
 
 
+def get_user_display_name(
+    user: User,
+    *,
+    fallback: str = "Pickup Lane Player",
+) -> str:
+    full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    return full_name or user.email or fallback
+
+
 def reject_generic_user_mutation() -> None:
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

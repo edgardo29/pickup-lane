@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import User, Venue, VenueApprovalRequest
-from backend.schemas import (
+from backend.schemas.venue_approval_request_schema import (
     VenueApprovalRequestCreate,
     VenueApprovalRequestUpdate,
 )

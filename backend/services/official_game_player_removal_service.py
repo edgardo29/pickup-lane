@@ -57,6 +57,10 @@ from backend.services.official_game_service import (
     clean_required_text,
     get_official_game_or_404,
 )
+from backend.services.payment_rules import (
+    COLLECTED_PAYMENT_STATUSES,
+    SUCCEEDED_PAYMENT_STATUSES,
+)
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
 )
@@ -69,13 +73,6 @@ from backend.services.support_flag_service import (
     stage_support_flag,
 )
 
-REMOVAL_PREVIEW_COLLECTED_PAYMENT_STATUSES = {
-    "succeeded",
-    "partially_refunded",
-    "refunded",
-    "disputed",
-}
-REMOVAL_PREVIEW_REFUNDABLE_PAYMENT_STATUSES = {"succeeded"}
 REMOVAL_PREVIEW_ACTIVE_REFUND_STATUSES = {
     "pending",
     "approved",
@@ -349,7 +346,7 @@ def preview_official_game_player_removal(
     cash_collected_cents = sum(
         payment.amount_cents
         for payment in payments
-        if payment.payment_status in REMOVAL_PREVIEW_COLLECTED_PAYMENT_STATUSES
+        if payment.payment_status in COLLECTED_PAYMENT_STATUSES
     )
     cash_refunded_cents = sum(
         refund.amount_cents
@@ -368,7 +365,7 @@ def preview_official_game_player_removal(
             0,
         )
         for payment in payments
-        if payment.payment_status in REMOVAL_PREVIEW_REFUNDABLE_PAYMENT_STATUSES
+        if payment.payment_status in SUCCEEDED_PAYMENT_STATUSES
     )
 
     credit_totals = {

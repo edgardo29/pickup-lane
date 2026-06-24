@@ -17,34 +17,15 @@ from backend.services.admin_permission_service import (
     require_user_admin_permission,
     user_has_admin_permission,
 )
-
-VALID_PAYMENT_TYPES = {
-    "booking",
-    "community_publish_fee",
-    "refund_adjustment",
-    "admin_charge",
-}
-VALID_PROVIDERS = {"stripe"}
-VALID_PAYMENT_STATUSES = {
-    "requires_payment_method",
-    "processing",
-    "requires_action",
-    "succeeded",
-    "failed",
-    "canceled",
-    "refunded",
-    "partially_refunded",
-    "disputed",
-}
-VALID_CURRENCY = "USD"
-PAID_HISTORY_PAYMENT_STATUSES = {
-    "succeeded",
-    "refunded",
-    "partially_refunded",
-    "disputed",
-}
-POST_SUCCESS_PAYMENT_STATUSES = {"refunded", "partially_refunded", "disputed"}
-FAILED_PAYMENT_STATUSES = {"failed", "canceled"}
+from backend.services.payment_rules import (
+    COLLECTED_PAYMENT_STATUSES,
+    FAILED_PAYMENT_STATUSES,
+    POST_SUCCESS_PAYMENT_STATUSES,
+    VALID_CURRENCY,
+    VALID_PAYMENT_STATUSES,
+    VALID_PAYMENT_TYPES,
+    VALID_PROVIDERS,
+)
 
 
 def build_payment_conflict_detail(exc: IntegrityError) -> str:
@@ -251,7 +232,7 @@ def normalize_payment_lifecycle_fields(
 
     # Preserve paid_at for payment states that can only happen after a
     # successful payment, including later refund or dispute history.
-    if normalized_data["payment_status"] in PAID_HISTORY_PAYMENT_STATUSES:
+    if normalized_data["payment_status"] in COLLECTED_PAYMENT_STATUSES:
         if normalized_data["payment_status"] == "succeeded":
             normalized_data["paid_at"] = (
                 normalized_data.get("paid_at")

@@ -1,6 +1,7 @@
 """Shared helpers for recording and querying lifecycle status changes."""
 
 import uuid
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -16,11 +17,15 @@ from backend.models import (
     ParticipantStatusHistory,
     User,
 )
-from backend.schemas import (
+from backend.schemas.booking_status_history_schema import (
     BookingStatusHistoryCreate,
     BookingStatusHistoryUpdate,
+)
+from backend.schemas.game_status_history_schema import (
     GameStatusHistoryCreate,
     GameStatusHistoryUpdate,
+)
+from backend.schemas.participant_status_history_schema import (
     ParticipantStatusHistoryCreate,
     ParticipantStatusHistoryUpdate,
 )
@@ -30,9 +35,8 @@ from backend.services.game_participant_rules import (
     VALID_ATTENDANCE_STATUSES,
     VALID_PARTICIPANT_STATUSES,
 )
+from backend.services.game_rules import VALID_GAME_STATUSES, VALID_PUBLISH_STATUSES
 
-VALID_PUBLISH_STATUSES = {"draft", "published", "archived"}
-VALID_GAME_STATUSES = {"scheduled", "full", "cancelled", "completed", "abandoned"}
 VALID_CHANGE_SOURCES = {
     "user",
     "host",
@@ -68,6 +72,47 @@ PARTICIPANT_IMMUTABLE_HISTORY_UPDATE_FIELDS = {
     "changed_by_user_id",
     "change_source",
 }
+
+
+def add_game_status_history_if_changed(
+    db: Session,
+    game: Game,
+    *,
+    old_publish_status: str,
+    old_game_status: str,
+    new_publish_status: str | None = None,
+    new_game_status: str | None = None,
+    reason: str | None,
+    changed_by_user_id: uuid.UUID | None = None,
+    change_source: str = "system",
+    changed_at: datetime | None = None,
+) -> None:
+    resolved_new_publish_status = (
+        game.publish_status if new_publish_status is None else new_publish_status
+    )
+    resolved_new_game_status = (
+        game.game_status if new_game_status is None else new_game_status
+    )
+    if (
+        old_publish_status == resolved_new_publish_status
+        and old_game_status == resolved_new_game_status
+    ):
+        return
+
+    history = GameStatusHistory(
+        id=uuid.uuid4(),
+        game_id=game.id,
+        old_publish_status=old_publish_status,
+        new_publish_status=resolved_new_publish_status,
+        old_game_status=old_game_status,
+        new_game_status=resolved_new_game_status,
+        changed_by_user_id=changed_by_user_id,
+        change_source=change_source,
+        change_reason=reason,
+    )
+    if changed_at is not None:
+        history.created_at = changed_at
+    db.add(history)
 
 
 def add_booking_status_history_if_changed(

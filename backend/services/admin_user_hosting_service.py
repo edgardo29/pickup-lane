@@ -30,10 +30,10 @@ from backend.services.hosting_access_service import (
     HOSTING_STATUS_RESTRICTED,
     HOSTING_STATUS_SUSPENDED,
 )
+from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.notification_event_service import build_app_notification_fields
 from backend.services.user_service import build_user_conflict_detail
 
-FUTURE_COMMUNITY_HOST_GAME_STATUSES = ("scheduled", "full")
 HOSTING_RESTRICTION_PREVIEW_GAME_LIMIT = 100
 HOSTING_RESTRICTION_BLOCKING_MESSAGES = {
     "deleted": "Deleted accounts cannot have hosting restricted.",
@@ -92,7 +92,7 @@ def list_future_community_hosted_games(
             Game.host_user_id == user_id,
             Game.game_type == "community",
             Game.publish_status == "published",
-            Game.game_status.in_(FUTURE_COMMUNITY_HOST_GAME_STATUSES),
+            Game.game_status.in_(OPEN_GAME_STATUSES),
             Game.starts_at > now,
             Game.deleted_at.is_(None),
         )

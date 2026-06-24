@@ -9,7 +9,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import Game, HostPublishFee, Payment, User
-from backend.schemas import HostPublishFeeCreate, HostPublishFeeUpdate
+from backend.schemas.host_publish_fee_schema import (
+    HostPublishFeeCreate,
+    HostPublishFeeUpdate,
+)
 
 VALID_FEE_STATUSES = {"paid", "waived"}
 VALID_WAIVER_REASONS = {"none", "first_game_free", "admin_comp"}

@@ -17,6 +17,7 @@ from backend.services.admin_permission_service import (
     require_user_admin_permission,
     user_has_admin_permission,
 )
+from backend.services.payment_rules import COLLECTED_PAYMENT_STATUSES
 
 VALID_REFUND_REASONS = {
     "player_cancelled",
@@ -37,12 +38,7 @@ VALID_REFUND_STATUSES = {
     "cancelled",
 }
 VALID_CURRENCY = "USD"
-REFUNDABLE_PAYMENT_STATUSES = {
-    "succeeded",
-    "refunded",
-    "partially_refunded",
-    "disputed",
-}
+REFUNDABLE_PAYMENT_STATUSES = COLLECTED_PAYMENT_STATUSES
 REFUND_AMOUNT_HOLD_STATUSES = {
     "pending",
     "approved",

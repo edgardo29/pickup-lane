@@ -54,19 +54,16 @@ from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
 )
+from backend.services.game_participant_rules import (
+    CANCELLED_PARTICIPANT_STATUSES,
+    ROSTER_USER_PARTICIPANT_TYPES,
+)
 from backend.services.support_flag_service import (
     create_support_flag,
     get_existing_support_flag_by_idempotency_key,
     readable_support_flag_types,
 )
 
-PARTICIPANT_INACTIVE_STATUSES = {
-    "cancelled",
-    "late_cancelled",
-    "removed",
-    "refunded",
-}
-CONFIRMED_ROSTER_USER_TYPES = {"registered_user", "host", "admin_added"}
 PAYMENT_TEXT_STATUS_HIDDEN = "hidden"
 PAYMENT_TEXT_STATUS_VISIBLE = "visible"
 HIDE_PAYMENT_TEXT_ACTION_TYPE = "hide_unsafe_community_payment_text"
@@ -233,7 +230,7 @@ def summarize_game_participants_by_game(
                 case(
                     (
                         GameParticipant.participant_status.in_(
-                            tuple(PARTICIPANT_INACTIVE_STATUSES)
+                            tuple(CANCELLED_PARTICIPANT_STATUSES)
                         ),
                         1,
                     ),
@@ -246,7 +243,7 @@ def summarize_game_participants_by_game(
                         and_(
                             confirmed_participant,
                             GameParticipant.participant_type.in_(
-                                tuple(CONFIRMED_ROSTER_USER_TYPES)
+                                tuple(ROSTER_USER_PARTICIPANT_TYPES)
                             ),
                         ),
                         1,

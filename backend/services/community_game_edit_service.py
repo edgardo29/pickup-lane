@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import Game, User, Venue
-from backend.schemas import GameHostEdit
+from backend.schemas.game_schema import GameHostEdit
 from backend.services.game_notification_service import (
     capture_game_updated_structural_snapshot,
     game_updated_structural_snapshot_changed,

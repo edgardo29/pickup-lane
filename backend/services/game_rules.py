@@ -7,6 +7,14 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
 from backend.models import Game, User
+from backend.services.game_participant_rules import (
+    ACTIVE_ROSTER_PARTICIPANT_STATUSES,
+    OFFICIAL_ROSTER_PARTICIPANT_TYPES,
+)
+from backend.services.payment_rules import (
+    COLLECTED_PAYMENT_STATUSES,
+    SUCCEEDED_PAYMENT_STATUSES,
+)
 
 VALID_GAME_TYPES = {"official", "community"}
 VALID_PAYMENT_COLLECTION_TYPES = {"in_app", "external_host", "none"}
@@ -24,13 +32,14 @@ VALID_SKILL_LEVELS = {
 }
 VALID_POLICY_MODES = {"official_standard", "custom_hosted"}
 VALID_CURRENCY = "USD"
-HOST_EDITABLE_GAME_STATUSES = {"scheduled", "full"}
-CANCELLABLE_GAME_STATUSES = {"scheduled", "full"}
+OPEN_GAME_STATUSES = {"scheduled", "full"}
+HOST_EDITABLE_GAME_STATUSES = OPEN_GAME_STATUSES
+CANCELLABLE_GAME_STATUSES = OPEN_GAME_STATUSES
 GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS = {"cancelled", "abandoned"}
-ACTIVE_PLAYER_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
-RESERVED_PLAYER_STATUSES = {"pending_payment", "confirmed"}
-ROSTER_PLAYER_STATUSES = {"pending_payment", "confirmed"}
 ACTIVE_JOIN_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
+ACTIVE_PLAYER_STATUSES = ACTIVE_JOIN_STATUSES
+RESERVED_PLAYER_STATUSES = ACTIVE_ROSTER_PARTICIPANT_STATUSES
+ROSTER_PLAYER_STATUSES = ACTIVE_ROSTER_PARTICIPANT_STATUSES
 ACTIVE_WAITLIST_STATUSES = {"active", "promoted", "payment_processing"}
 WAITLIST_PROMOTION_CANDIDATE_STATUSES = {"active"}
 ACTIVE_BOOKING_STATUSES = {
@@ -39,7 +48,7 @@ ACTIVE_BOOKING_STATUSES = {
     "waitlisted",
     "partially_cancelled",
 }
-JOINABLE_GAME_STATUSES = {"scheduled", "full"}
+JOINABLE_GAME_STATUSES = OPEN_GAME_STATUSES
 OFFICIAL_FORCED_FIELDS = {
     "minimum_age",
     "host_guest_max",
@@ -60,17 +69,12 @@ CANCELLATION_REFUND_FOLLOWUP_BOOKING_PAYMENT_STATUSES = {
     "refunded",
     "disputed",
 }
-CANCELLATION_REFUND_FOLLOWUP_PAYMENT_STATUSES = {
-    "succeeded",
-    "partially_refunded",
-    "refunded",
-    "disputed",
-}
+CANCELLATION_REFUND_FOLLOWUP_PAYMENT_STATUSES = COLLECTED_PAYMENT_STATUSES
 CANCELLATION_UNCHARGED_PENDING_PAYMENT_STATUSES = {
     "requires_payment_method",
     "requires_action",
 }
-CANCELLATION_AUTO_REFUND_PAYMENT_STATUSES = {"succeeded"}
+CANCELLATION_AUTO_REFUND_PAYMENT_STATUSES = SUCCEEDED_PAYMENT_STATUSES
 MINIMUM_TOTAL_SPOTS = 6
 MAXIMUM_TOTAL_SPOTS = 99
 MAX_CANCEL_REASON_LENGTH = 500
@@ -102,9 +106,9 @@ NON_NULL_HOST_EDIT_FIELDS = MAJOR_HOST_EDIT_FIELDS | {
     "state",
     "postal_code",
 }
-GAME_UPDATED_GAME_STATUSES = {"scheduled", "full"}
+GAME_UPDATED_GAME_STATUSES = OPEN_GAME_STATUSES
 GAME_UPDATED_PARTICIPANT_STATUSES = {"confirmed", "waitlisted"}
-GAME_UPDATED_PARTICIPANT_TYPES = {"registered_user", "admin_added"}
+GAME_UPDATED_PARTICIPANT_TYPES = OFFICIAL_ROSTER_PARTICIPANT_TYPES
 GAME_UPDATED_STRUCTURAL_FIELDS = (
     "starts_at",
     "ends_at",

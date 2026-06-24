@@ -14,11 +14,11 @@ from backend.services.admin_permission_service import (
     PERMISSION_OFFICIAL_GAMES_READ,
     user_has_admin_permission,
 )
+from backend.services.game_rules import OPEN_GAME_STATUSES
 
 ACTION_CENTER_ITEM_LIMIT = 50
 OFFICIAL_GAMES_SECTION_KEY = "official_games"
 OFFICIAL_GAMES_SECTION_LABEL = "Official Games"
-OPEN_OFFICIAL_GAME_STATUSES = ("scheduled", "full")
 
 
 def get_admin_action_center(db: Session, *, viewer_user: User) -> AdminActionCenterRead:
@@ -136,7 +136,7 @@ def base_upcoming_official_games_query(generated_at: datetime):
         .where(
             Game.game_type == "official",
             Game.publish_status == "published",
-            Game.game_status.in_(OPEN_OFFICIAL_GAME_STATUSES),
+            Game.game_status.in_(OPEN_GAME_STATUSES),
             Game.deleted_at.is_(None),
             Game.starts_at >= generated_at,
         )
