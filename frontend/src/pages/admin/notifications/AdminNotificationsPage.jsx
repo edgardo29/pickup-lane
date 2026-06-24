@@ -12,7 +12,6 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminNotifications.css'
@@ -442,10 +441,7 @@ function AdminNotificationsPage() {
   const hasNextPage = offset + notifications.length < totalCount
 
   return (
-    <AppPageShell
-      className="admin-page"
-      mainClassName="admin-shell"
-    >
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'System', 'Notifications']}
         description="Search notification records and inspect delivery and action state."
@@ -682,7 +678,7 @@ function AdminNotificationsPage() {
           </section>
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

@@ -13,7 +13,6 @@ import {
   UsersRound,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
-import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminNeedASub.css'
@@ -407,7 +406,7 @@ function AdminNeedASubPostPage() {
   const title = detail?.post?.team_name || 'Need a Sub Post'
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         actions={(
           <div className="admin-sub-header-actions">
@@ -492,7 +491,7 @@ function AdminNeedASubPostPage() {
           onRemoved={() => setRefreshCount((count) => count + 1)}
         />
       )}
-    </AppPageShell>
+    </>
   )
 }
 

@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from 'react'
 import { useAuth } from '../../../hooks/useAuth.js'
 import { fetchAdminMe } from './adminApi.js'
 import { hasAdminPermission } from './adminWorkspaceData.js'
 
-export function useAdminAccess({ enabled = true, reloadKey = 0 } = {}) {
+export const AdminAccessContext = createContext(null)
+
+export function useAdminAccessState({ enabled = true, reloadKey = 0 } = {}) {
   const { appUser, currentUser, isLoading: isAuthLoading } = useAuth()
   const [adminAccess, setAdminAccess] = useState(null)
   const [loadState, setLoadState] = useState('idle')
@@ -12,6 +19,7 @@ export function useAdminAccess({ enabled = true, reloadKey = 0 } = {}) {
     enabled
     && Boolean(appUser)
     && !error
+    && !adminAccess
     && (isAuthLoading || !currentUser || loadState === 'idle' || loadState === 'loading')
   )
 
@@ -72,6 +80,17 @@ export function useAdminAccess({ enabled = true, reloadKey = 0 } = {}) {
     error,
     hasPermission: (permission) => hasAdminPermission(adminAccess, permission),
     isLoading: isAuthLoading || isWaitingToLoad,
+    isRefreshing: loadState === 'loading' && Boolean(adminAccess),
     loadState,
   }
+}
+
+export function useAdminAccess(options = {}) {
+  const sharedAccess = useContext(AdminAccessContext)
+  const localAccess = useAdminAccessState({
+    ...options,
+    enabled: (options.enabled ?? true) && !sharedAccess,
+  })
+
+  return sharedAccess || localAccess
 }

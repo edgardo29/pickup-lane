@@ -148,10 +148,6 @@
   margin-top: 18px;
 }
 
-.admin-workspace-layout--single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .admin-guard-state {
   min-height: calc(100vh - 88px);
   padding: 96px 20px;

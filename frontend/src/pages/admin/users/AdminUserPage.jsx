@@ -15,7 +15,6 @@ import {
   UserRound,
   WalletCards,
 } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminUsers.css'
@@ -419,7 +418,10 @@ function AdminUserPage() {
     logout,
     syncCurrentFirebaseUser,
   } = useAuth()
-  const { adminAccess } = useAdminAccess()
+  const {
+    adminAccess,
+    reload: reloadAdminAccess,
+  } = useAdminAccess()
   const [detail, setDetail] = useState(null)
   const [loadState, setLoadState] = useState('loading')
   const [pageError, setPageError] = useState('')
@@ -525,6 +527,8 @@ function AdminUserPage() {
         navigate('/admin/sign-in', { replace: true })
         return
       }
+
+      reloadAdminAccess()
     } catch {
       navigate('/admin/sign-in', { replace: true })
       return
@@ -547,7 +551,7 @@ function AdminUserPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         actions={(
           <div className="admin-user-header-actions">
@@ -721,7 +725,7 @@ function AdminUserPage() {
           onUnsuspended={() => setRefreshCount((count) => count + 1)}
         />
       )}
-    </AppPageShell>
+    </>
   )
 }
 

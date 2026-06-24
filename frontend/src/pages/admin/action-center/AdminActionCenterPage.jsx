@@ -7,7 +7,6 @@ import {
   MapPin,
   ShieldCheck,
 } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminActionCenter.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
@@ -131,7 +130,7 @@ function AdminActionCenterPage() {
   const totalCount = useMemo(() => countItems(sections), [sections])
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Action Center']}
         description="Review operational items that need staff attention."
@@ -165,7 +164,7 @@ function AdminActionCenterPage() {
           ))}
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

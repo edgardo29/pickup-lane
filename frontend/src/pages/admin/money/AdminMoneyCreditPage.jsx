@@ -6,7 +6,6 @@ import {
   Hash,
   RefreshCw,
 } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
@@ -83,7 +82,7 @@ function AdminMoneyCreditPage() {
   ), [detail])
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Money', 'Credits']}
         description="Inspect this credit, its usage, and related money support context."
@@ -138,7 +137,7 @@ function AdminMoneyCreditPage() {
           )}
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

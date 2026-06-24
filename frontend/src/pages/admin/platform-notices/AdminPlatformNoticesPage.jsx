@@ -12,7 +12,6 @@ import {
   UserPlus,
   X,
 } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
@@ -620,10 +619,7 @@ function AdminPlatformNoticesPage() {
   const pageEnd = Math.min(offset + campaigns.length, totalCount)
 
   return (
-    <AppPageShell
-      className="admin-page"
-      mainClassName="admin-shell"
-    >
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'System', 'Platform Notices']}
         description="Create, review, send, and monitor platform notices."
@@ -768,7 +764,7 @@ function AdminPlatformNoticesPage() {
           </section>
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

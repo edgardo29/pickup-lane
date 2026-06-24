@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
 import {
@@ -53,12 +52,12 @@ export function RequireAdmin({
   permissions = null,
 }) {
   const { appUser, isLoading } = useAuth()
-  const [reloadKey, setReloadKey] = useState(0)
   const {
     adminAccess,
     error,
     isLoading: isAdminAccessLoading,
-  } = useAdminAccess({ enabled: Boolean(appUser), reloadKey })
+    reload,
+  } = useAdminAccess({ enabled: Boolean(appUser) })
   const location = useLocation()
 
   if (isLoading) {
@@ -83,7 +82,7 @@ export function RequireAdmin({
 
   if (error) {
     if (!isAdminAccessDeniedError(error)) {
-      return <AdminAccessRetryState onRetry={() => setReloadKey((current) => current + 1)} />
+      return <AdminAccessRetryState onRetry={reload} />
     }
 
     return (
