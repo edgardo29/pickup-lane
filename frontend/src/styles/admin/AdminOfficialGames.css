@@ -4,10 +4,6 @@
   --admin-muted: rgba(248, 250, 252, 0.68);
 }
 
-.admin-official-shell {
-  width: min(1320px, calc(100% - 56px));
-}
-
 .admin-official-page-grid,
 .admin-official-detail-columns {
   margin-top: 30px;
@@ -19,7 +15,7 @@
 
 .admin-official-list-layout,
 .admin-official-create-layout {
-  margin-top: 30px;
+  margin-top: 0;
 }
 
 .admin-official-create-layout {
@@ -34,7 +30,7 @@
 }
 
 .admin-official-detail-layout {
-  margin-top: 24px;
+  margin-top: 0;
   display: grid;
   gap: 14px;
 }
@@ -1969,10 +1965,6 @@
 }
 
 @media (max-width: 760px) {
-  .admin-official-shell {
-    width: calc(100% - 28px);
-  }
-
   .admin-official-form__grid,
   .admin-official-form__grid--dense,
   .admin-official-form__grid--two,

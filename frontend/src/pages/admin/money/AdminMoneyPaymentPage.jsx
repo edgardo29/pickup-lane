@@ -4,8 +4,9 @@ import {
   ArrowLeft,
   Hash,
   RefreshCw,
+  WalletCards,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
@@ -86,13 +87,13 @@ function AdminMoneyPaymentPage() {
   const backLabel = hasOfficialGameContext ? 'Official game' : 'Payments'
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-money-shell">
-      <AppPageHeader
-        subtitle="Money Support"
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Money', 'Payments']}
+        description="Inspect this payment and its related booking, refund, credit, and audit context."
+        icon={WalletCards}
         title={pageTitle}
-      />
-
-      <AdminWorkspaceLayout>
+      >
         <div className="admin-money-layout">
           <div className="admin-money-toolbar">
             <Link className="admin-money-button" to={backPath}>

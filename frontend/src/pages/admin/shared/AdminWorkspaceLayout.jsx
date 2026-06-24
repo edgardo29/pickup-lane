@@ -1,19 +1,36 @@
 import AdminWorkspaceNav from './AdminWorkspaceNav.jsx'
-import { getVisibleAdminWorkspaceNavItems } from './adminWorkspaceData.js'
+import AdminPageHeader from './AdminPageHeader.jsx'
+import { getVisibleAdminWorkspaceNavGroups } from './adminWorkspaceData.js'
 import { useAdminAccess } from './useAdminAccess.js'
 
-function AdminWorkspaceLayout({ children }) {
+function AdminWorkspaceLayout({
+  actions,
+  breadcrumbs,
+  children,
+  description,
+  icon,
+  title,
+}) {
   const { adminAccess, isLoading } = useAdminAccess()
-  const navItems = isLoading ? [] : getVisibleAdminWorkspaceNavItems(adminAccess)
-  const layoutClassName = navItems.length
+  const navGroups = isLoading ? [] : getVisibleAdminWorkspaceNavGroups(adminAccess)
+  const layoutClassName = navGroups.length
     ? 'admin-workspace-layout'
     : 'admin-workspace-layout admin-workspace-layout--single'
 
   return (
     <div className={layoutClassName}>
-      {navItems.length > 0 && <AdminWorkspaceNav items={navItems} />}
+      {navGroups.length > 0 && <AdminWorkspaceNav groups={navGroups} />}
       <div className="admin-workspace-content">
-        {children}
+        <AdminPageHeader
+          actions={actions}
+          breadcrumbs={breadcrumbs}
+          description={description}
+          icon={icon}
+          title={title}
+        />
+        <div className="admin-workspace-body">
+          {children}
+        </div>
       </div>
     </div>
   )

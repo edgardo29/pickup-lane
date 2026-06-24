@@ -1,4 +1,5 @@
-import { AppPageHeader, AppPageShell } from '../../../../components/app/index.js'
+import { BadgePlus } from 'lucide-react'
+import { AppPageShell } from '../../../../components/app/index.js'
 import AdminWorkspaceLayout from '../../shared/AdminWorkspaceLayout.jsx'
 import AdminCreateOfficialGamePreview from './AdminCreateOfficialGamePreview.jsx'
 import AdminCreateOfficialGameReviewStep from './AdminCreateOfficialGameReviewStep.jsx'
@@ -35,13 +36,13 @@ function AdminCreateOfficialGameLayout({
   )
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-official-shell">
-      <AppPageHeader
-        subtitle="Admin"
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Games', 'Create Official Game']}
+        description="Configure and publish a new Pickup Lane official game."
+        icon={BadgePlus}
         title="Create Official Game"
-      />
-
-      <AdminWorkspaceLayout>
+      >
         <div className="admin-create-flow">
           <AdminCreateOfficialGameStepRail activeStep={activeStep} />
 

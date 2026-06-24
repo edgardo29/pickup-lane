@@ -1,7 +1,3 @@
-.admin-users-shell {
-  width: min(1420px, calc(100% - 56px));
-}
-
 .admin-users-layout {
   min-width: 0;
 }
@@ -915,10 +911,6 @@
 }
 
 @media (max-width: 760px) {
-  .admin-users-shell {
-    width: min(100% - 28px, 1420px);
-  }
-
   .admin-users-filters {
     grid-template-columns: 1fr 1fr;
   }

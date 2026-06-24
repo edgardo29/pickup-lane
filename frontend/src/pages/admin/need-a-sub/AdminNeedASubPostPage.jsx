@@ -13,7 +13,7 @@ import {
   UsersRound,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminNeedASub.css'
@@ -407,10 +407,8 @@ function AdminNeedASubPostPage() {
   const title = detail?.post?.team_name || 'Need a Sub Post'
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-sub-shell">
-      <AppPageHeader
-        subtitle="Admin"
-        title={title}
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
         actions={(
           <div className="admin-sub-header-actions">
             <Link className="admin-sub-button" to="/admin/need-a-sub">
@@ -427,8 +425,11 @@ function AdminNeedASubPostPage() {
             </button>
           </div>
         )}
-      />
-      <AdminWorkspaceLayout>
+        breadcrumbs={['Admin', 'Games', 'Need a Sub']}
+        description="Review post, requests, chat, and moderation context."
+        icon={ClipboardList}
+        title={title}
+      >
         <div className="admin-sub-detail-layout">
           {pageError && (
             <FormErrorMessage className="admin-sub-page-error">

@@ -3,7 +3,7 @@ import {
   CreditCard,
   Search,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
@@ -74,13 +74,13 @@ function AdminMoneyPaymentMethodsPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-money-shell">
-      <AppPageHeader
-        subtitle="Money Support"
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Money', 'Saved Cards']}
+        description="Inspect safe saved-card metadata for a selected user."
+        icon={CreditCard}
         title="Saved Cards"
-      />
-
-      <AdminWorkspaceLayout>
+      >
         <div className="admin-money-layout">
           <form className="admin-money-filters admin-money-filters--cards" onSubmit={handleSearch}>
             <label>

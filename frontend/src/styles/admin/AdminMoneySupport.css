@@ -1,7 +1,3 @@
-.admin-money-shell {
-  width: min(1280px, calc(100% - 56px));
-}
-
 .admin-money-layout {
   display: grid;
   gap: 14px;
@@ -560,10 +556,6 @@
 }
 
 @media (max-width: 980px) {
-  .admin-money-shell {
-    width: min(100% - 28px, 780px);
-  }
-
   .admin-money-kpis,
   .admin-money-field-grid,
   .admin-money-context {
@@ -588,10 +580,6 @@
 }
 
 @media (max-width: 640px) {
-  .admin-money-shell {
-    width: min(100% - 20px, 520px);
-  }
-
   .admin-money-toolbar {
     align-items: stretch;
     flex-direction: column;

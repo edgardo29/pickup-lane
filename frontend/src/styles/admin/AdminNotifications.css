@@ -4,10 +4,6 @@
   --admin-muted: rgba(248, 250, 252, 0.68);
 }
 
-.admin-notifications-shell {
-  width: min(1480px, calc(100% - 56px));
-}
-
 .admin-notifications-layout {
   display: grid;
   grid-template-columns: minmax(420px, 0.96fr) minmax(0, 1.04fr);
@@ -534,12 +530,6 @@
   font-weight: 950;
 }
 
-@media (min-width: 1024px) {
-  .admin-workspace-content .admin-notifications-layout {
-    margin-top: 0;
-  }
-}
-
 @media (max-width: 1180px) {
   .admin-notifications-layout,
   .admin-notifications-detail-grid {
@@ -559,10 +549,6 @@
 }
 
 @media (max-width: 720px) {
-  .admin-notifications-shell {
-    width: min(100% - 28px, 1480px);
-  }
-
   .admin-notifications-filter-grid,
   .admin-notifications-related-filters,
   .admin-notifications-detail-grid {

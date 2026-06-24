@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AppPageHeader, AppPageShell } from '../../../../components/app/index.js'
+import { Trophy } from 'lucide-react'
+import { AppPageShell } from '../../../../components/app/index.js'
 import { useAuth } from '../../../../hooks/useAuth.js'
 import '../../../../styles/admin/AdminOfficialGames.css'
 import AdminWorkspaceLayout from '../../shared/AdminWorkspaceLayout.jsx'
@@ -44,13 +45,13 @@ function AdminOfficialGamesPage() {
   }, [currentUser, gameStatus])
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-official-shell">
-      <AppPageHeader
-        subtitle="Admin"
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Games', 'Official Games']}
+        description="Find and manage Pickup Lane official games."
+        icon={Trophy}
         title="Official Games"
-      />
-
-      <AdminWorkspaceLayout>
+      >
         <div className="admin-official-list-layout">
           <section className="admin-official-panel admin-official-panel--list" aria-label="Official games list">
             <div className="admin-official-panel__heading admin-official-panel__heading--filter">

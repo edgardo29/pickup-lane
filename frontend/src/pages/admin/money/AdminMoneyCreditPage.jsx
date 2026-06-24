@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  CircleDollarSign,
   Hash,
   RefreshCw,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
@@ -82,13 +83,13 @@ function AdminMoneyCreditPage() {
   ), [detail])
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-money-shell">
-      <AppPageHeader
-        subtitle="Money Support"
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Money', 'Credits']}
+        description="Inspect this credit, its usage, and related money support context."
+        icon={CircleDollarSign}
         title={pageTitle}
-      />
-
-      <AdminWorkspaceLayout>
+      >
         <div className="admin-money-layout">
           <div className="admin-money-toolbar">
             <Link className="admin-money-button" to="/admin/money/credits">

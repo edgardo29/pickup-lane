@@ -1,3 +1,11 @@
+import {
+  CircleDollarSign,
+  Goal,
+  LayoutDashboard,
+  Settings,
+  UsersRound,
+} from 'lucide-react'
+
 export const ADMIN_PERMISSIONS = {
   ACTION_CENTER_VIEW: 'admin.action_center.view',
   AUDIT_READ: 'admin.audit.read',
@@ -24,107 +32,146 @@ export const ADMIN_PERMISSIONS = {
   STAFF_MANAGE: 'admin.staff.manage',
 }
 
-export const adminWorkspaceNavItems = [
+export const adminWorkspaceNavGroups = [
   {
-    label: 'Action Center',
-    to: '/admin/action-center',
-    end: true,
-    permission: ADMIN_PERMISSIONS.ACTION_CENTER_VIEW,
-  },
-  {
-    label: 'Audit Log',
-    to: '/admin/audit',
-    end: true,
-    permissions: [
-      ADMIN_PERMISSIONS.AUDIT_READ,
-      ADMIN_PERMISSIONS.AUDIT_SUPPORT_READ,
+    id: 'overview',
+    icon: LayoutDashboard,
+    label: 'Overview',
+    items: [
+      {
+        label: 'Action Center',
+        to: '/admin/action-center',
+        end: true,
+        permission: ADMIN_PERMISSIONS.ACTION_CENTER_VIEW,
+      },
+      {
+        label: 'Audit Log',
+        to: '/admin/audit',
+        end: true,
+        permissions: [
+          ADMIN_PERMISSIONS.AUDIT_READ,
+          ADMIN_PERMISSIONS.AUDIT_SUPPORT_READ,
+        ],
+      },
     ],
   },
   {
-    label: 'Users',
-    to: '/admin/users',
-    end: true,
-    permission: ADMIN_PERMISSIONS.USERS_READ,
+    id: 'people',
+    icon: UsersRound,
+    label: 'People',
+    items: [
+      {
+        label: 'Users',
+        to: '/admin/users',
+        end: true,
+        permission: ADMIN_PERMISSIONS.USERS_READ,
+      },
+      {
+        label: 'Staff',
+        to: '/admin/users/staff',
+        end: true,
+        permission: ADMIN_PERMISSIONS.STAFF_MANAGE,
+      },
+    ],
   },
   {
-    label: 'Staff',
-    to: '/admin/users/staff',
-    end: true,
-    permission: ADMIN_PERMISSIONS.STAFF_MANAGE,
+    id: 'games',
+    icon: Goal,
+    label: 'Games',
+    items: [
+      {
+        label: 'Community Games',
+        to: '/admin/community-games',
+        end: true,
+        permission: ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ,
+      },
+      {
+        label: 'Need a Sub',
+        to: '/admin/need-a-sub',
+        end: true,
+        permission: ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE,
+      },
+      {
+        label: 'Official Games',
+        to: '/admin/official-games',
+        end: true,
+        permission: ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ,
+      },
+      {
+        label: 'Create Official Game',
+        to: '/admin/official-games/new',
+        end: true,
+        permission: ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE,
+      },
+    ],
   },
   {
-    label: 'Community Games',
-    to: '/admin/community-games',
-    end: true,
-    permission: ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ,
+    id: 'money',
+    icon: CircleDollarSign,
+    label: 'Money',
+    items: [
+      {
+        label: 'Money Follow-Up',
+        to: '/admin/money/support-flags',
+        end: true,
+        permission: ADMIN_PERMISSIONS.MONEY_READ,
+      },
+      {
+        label: 'Payments',
+        to: '/admin/money/payments',
+        end: true,
+        permission: ADMIN_PERMISSIONS.MONEY_READ,
+      },
+      {
+        label: 'Refunds',
+        to: '/admin/money/refunds',
+        end: true,
+        permission: ADMIN_PERMISSIONS.MONEY_READ,
+      },
+      {
+        label: 'User Money',
+        to: '/admin/money/users',
+        end: true,
+        permission: ADMIN_PERMISSIONS.MONEY_READ,
+      },
+      {
+        label: 'Credits',
+        to: '/admin/money/credits',
+        end: true,
+        permission: ADMIN_PERMISSIONS.MONEY_READ,
+      },
+      {
+        label: 'Saved Cards',
+        to: '/admin/money/payment-methods',
+        end: true,
+        permission: ADMIN_PERMISSIONS.MONEY_READ,
+      },
+    ],
   },
   {
-    label: 'Need a Sub',
-    to: '/admin/need-a-sub',
-    end: true,
-    permission: ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE,
-  },
-  {
-    label: 'Notifications',
-    to: '/admin/notifications',
-    end: true,
-    permission: ADMIN_PERMISSIONS.NOTIFICATIONS_READ,
-  },
-  {
-    label: 'Platform Notices',
-    to: '/admin/platform-notices',
-    end: true,
-    permission: ADMIN_PERMISSIONS.NOTIFICATIONS_MANAGE,
-  },
-  {
-    label: 'Official Games',
-    to: '/admin/official-games',
-    end: true,
-    permission: ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ,
-  },
-  {
-    label: 'Create Official Game',
-    to: '/admin/official-games/new',
-    end: true,
-    permission: ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE,
-  },
-  {
-    label: 'Money Follow-Up',
-    to: '/admin/money/support-flags',
-    end: true,
-    permission: ADMIN_PERMISSIONS.MONEY_READ,
-  },
-  {
-    label: 'Payments',
-    to: '/admin/money/payments',
-    end: true,
-    permission: ADMIN_PERMISSIONS.MONEY_READ,
-  },
-  {
-    label: 'Refunds',
-    to: '/admin/money/refunds',
-    end: true,
-    permission: ADMIN_PERMISSIONS.MONEY_READ,
-  },
-  {
-    label: 'User Money',
-    to: '/admin/money/users',
-    end: true,
-    permission: ADMIN_PERMISSIONS.MONEY_READ,
-  },
-  {
-    label: 'Credits',
-    to: '/admin/money/credits',
-    end: true,
-    permission: ADMIN_PERMISSIONS.MONEY_READ,
-  },
-  {
-    label: 'Saved Cards',
-    to: '/admin/money/payment-methods',
-    end: true,
-    permission: ADMIN_PERMISSIONS.MONEY_READ,
+    id: 'system',
+    icon: Settings,
+    label: 'System',
+    items: [
+      {
+        label: 'Notifications',
+        to: '/admin/notifications',
+        end: true,
+        permission: ADMIN_PERMISSIONS.NOTIFICATIONS_READ,
+      },
+      {
+        label: 'Platform Notices',
+        to: '/admin/platform-notices',
+        end: true,
+        permission: ADMIN_PERMISSIONS.NOTIFICATIONS_MANAGE,
+      },
+    ],
   },
 ]
+
+export const adminWorkspaceNavItems = adminWorkspaceNavGroups.flatMap(
+  (group) => group.items,
+)
 
 const adminWorkspaceStandalonePathRules = [
   {
@@ -169,6 +216,17 @@ export function getVisibleAdminWorkspaceNavItems(adminAccess) {
   return adminWorkspaceNavItems.filter((item) =>
     canAccessAdminWorkspaceItem(item, adminAccess),
   )
+}
+
+export function getVisibleAdminWorkspaceNavGroups(adminAccess) {
+  return adminWorkspaceNavGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        canAccessAdminWorkspaceItem(item, adminAccess),
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
 }
 
 export function getDefaultAdminPath(adminAccess) {

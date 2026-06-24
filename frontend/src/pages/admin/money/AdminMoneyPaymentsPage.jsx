@@ -5,7 +5,7 @@ import {
   Search,
   WalletCards,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
@@ -115,13 +115,13 @@ function AdminMoneyPaymentsPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-money-shell">
-      <AppPageHeader
-        subtitle="Money Support"
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Money', 'Payments']}
+        description="Search payment records and inspect their current state."
+        icon={WalletCards}
         title={pageTitle}
-      />
-
-      <AdminWorkspaceLayout>
+      >
         <div className="admin-money-layout">
           <div className="admin-money-toolbar">
             <div className="admin-money-segment" role="group" aria-label="Payment status">

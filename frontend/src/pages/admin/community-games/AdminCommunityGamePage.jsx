@@ -17,7 +17,7 @@ import {
   WalletCards,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminCommunityGames.css'
@@ -642,10 +642,8 @@ function AdminCommunityGamePage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-community-shell">
-      <AppPageHeader
-        subtitle="Admin"
-        title={title}
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
         actions={(
           <div className="admin-community-header-actions">
             <Link className="admin-community-button" to="/admin/community-games">
@@ -662,9 +660,11 @@ function AdminCommunityGamePage() {
             </button>
           </div>
         )}
-      />
-
-      <AdminWorkspaceLayout>
+        breadcrumbs={['Admin', 'Games', 'Community Games']}
+        description="Review game, host, participant, payment, and moderation context."
+        icon={ShieldAlert}
+        title={title}
+      >
         <div className="admin-community-detail-layout">
           {pageError && (
             <FormErrorMessage className="admin-community-page-error">

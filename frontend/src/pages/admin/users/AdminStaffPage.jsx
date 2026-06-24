@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RefreshCw, UsersRound } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminUsers.css'
@@ -142,10 +142,13 @@ function AdminStaffPage() {
   }, [currentUser, includeDeleted, refreshCount])
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-users-shell">
-      <AppPageHeader subtitle="Admin Users" title="Staff" />
-
-      <AdminWorkspaceLayout>
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'People', 'Staff']}
+        description="Review staff accounts, permissions, and role assignments."
+        icon={UsersRound}
+        title="Staff"
+      >
         <div className="admin-users-layout">
           <section className="admin-users-panel" aria-label="Staff list">
             <div className="admin-users-panel__heading">

@@ -15,7 +15,7 @@ import {
   UserRound,
   WalletCards,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminUsers.css'
@@ -547,8 +547,8 @@ function AdminUserPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-users-shell">
-      <AppPageHeader
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
         actions={(
           <div className="admin-user-header-actions">
             <Link className="admin-users-button" to="/admin/users">Back</Link>
@@ -633,11 +633,11 @@ function AdminUserPage() {
             </button>
           </div>
         )}
-        subtitle="Admin Users"
+        breadcrumbs={['Admin', 'People', 'Users']}
+        description="Review account state, activity, hosting, staff, and support context."
+        icon={UserRound}
         title={pageTitle}
-      />
-
-      <AdminWorkspaceLayout>
+      >
         {pageError && (
           <div className="admin-users-alert" role="alert">
             {pageError}

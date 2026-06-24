@@ -19,7 +19,7 @@ function AppNav({ isLoading: isForcedLoading = false, preferPublicWhileLoading =
         isLoading={navState.isLoading}
         isMenuOpen={navState.isMenuOpen}
         unreadCount={navState.unreadCount}
-        visibleAdminNavItems={navState.visibleAdminNavItems}
+        visibleAdminNavGroups={navState.visibleAdminNavGroups}
         visibleNavItems={navState.visibleNavItems}
       />
 

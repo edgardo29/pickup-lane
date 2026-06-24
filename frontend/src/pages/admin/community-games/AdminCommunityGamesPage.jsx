@@ -9,7 +9,7 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminCommunityGames.css'
@@ -242,10 +242,13 @@ function AdminCommunityGamesPage() {
   const hasNextPage = offset + games.length < totalCount
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-community-shell">
-      <AppPageHeader subtitle="Admin" title="Community Games" />
-
-      <AdminWorkspaceLayout>
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Games', 'Community Games']}
+        description="Find community games and review moderation or support context."
+        icon={ShieldAlert}
+        title="Community Games"
+      >
         <div className="admin-community-layout">
           <section className="admin-community-panel" aria-label="Community game search">
             <div className="admin-community-panel__heading">
