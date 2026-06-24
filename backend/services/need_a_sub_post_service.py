@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import AdminAction, SubPost, SubPostPosition, SubPostRequest, User
-from backend.schemas import (
+from backend.schemas.sub_post_schema import (
     MAX_SUB_POST_POSITION_ROWS,
     MAX_SUB_POST_TOTAL_SUBS,
     SubPostCreate,

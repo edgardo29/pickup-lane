@@ -17,7 +17,7 @@ from backend.models import (
     Venue,
     WaitlistEntry,
 )
-from backend.schemas import GameCreate, GameUpdate
+from backend.schemas.game_schema import GameCreate, GameUpdate
 from backend.services.game_notification_service import (
     capture_game_updated_structural_snapshot,
     game_updated_structural_snapshot_changed,
@@ -26,14 +26,9 @@ from backend.services.game_notification_service import (
 from backend.services.game_rules import (
     ACTIVE_JOIN_STATUSES,
     ACTIVE_WAITLIST_STATUSES,
-    CANCELLATION_AUTO_REFUND_PAYMENT_STATUSES,
-    CANCELLATION_REFUND_FOLLOWUP_BOOKING_PAYMENT_STATUSES,
-    CANCELLATION_REFUND_FOLLOWUP_PAYMENT_STATUSES,
-    CANCELLATION_UNCHARGED_PENDING_PAYMENT_STATUSES,
     OFFICIAL_FORCED_FIELDS,
     ROSTER_PLAYER_STATUSES,
     build_game_conflict_detail,
-    game_requires_app_player_payment,
     get_default_host_guest_max,
     normalize_game_lifecycle_fields,
     normalize_official_game_invariants,
@@ -42,13 +37,6 @@ from backend.services.game_rules import (
     require_game_not_started,
     validate_game_business_rules,
 )
-
-
-def get_display_name(user: User) -> str:
-    full_name = " ".join(
-        value for value in [user.first_name, user.last_name] if value
-    ).strip()
-    return full_name or user.email or "Pickup Lane Player"
 
 
 def get_active_venue_or_404(db: Session, venue_id: uuid.UUID) -> Venue:

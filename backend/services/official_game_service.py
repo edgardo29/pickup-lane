@@ -30,16 +30,11 @@ from backend.services.game_rules import (
 )
 from backend.services.game_service import sync_game_capacity_status
 from backend.services.game_credit_service import release_reserved_game_credits
+from backend.services.payment_rules import PENDING_PAYMENT_STATUSES
 from backend.services.status_history_service import (
     add_participant_status_history_if_changed,
 )
 from backend.services.venue_service import find_matching_active_venue
-
-PENDING_ADMIN_INVALIDATED_PAYMENT_STATUSES = {
-    "requires_payment_method",
-    "requires_action",
-    "processing",
-}
 
 ADMIN_EDIT_NON_NULL_FIELDS = {
     "title",
@@ -528,7 +523,7 @@ def expire_pending_checkouts_for_admin_edit(
         db.scalars(
             select(Payment).where(
                 Payment.booking_id.in_(pending_booking_ids),
-                Payment.payment_status.in_(PENDING_ADMIN_INVALIDATED_PAYMENT_STATUSES),
+                Payment.payment_status.in_(PENDING_PAYMENT_STATUSES),
             )
         ).all()
     )

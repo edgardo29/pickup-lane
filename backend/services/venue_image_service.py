@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from backend.models import User, Venue, VenueImage
-from backend.schemas import (
+from backend.schemas.venue_image_schema import (
     VenueImageCompleteUpload,
     VenueImageRead,
     VenueImageUpdate,
@@ -26,8 +26,8 @@ from backend.services.azure_blob_service import (
     get_blob_properties,
     get_content_type_extension,
 )
+from backend.services.image_rules import VALID_IMAGE_ROLES
 
-VALID_IMAGE_ROLES = {"card", "gallery"}
 VALID_IMAGE_STATUSES = {"pending_upload", "active", "hidden", "removed"}
 PUBLIC_IMAGE_STATUSES = {"active"}
 

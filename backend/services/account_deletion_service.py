@@ -21,9 +21,13 @@ from backend.models import (
     UserSettings,
     WaitlistEntry,
 )
-from backend.schemas import AuthDeleteAccountRequest
+from backend.schemas.auth_schema import AuthDeleteAccountRequest
 from backend.services.auth_service import get_authenticated_user_from_token
-from backend.services.game_rules import ACTIVE_BOOKING_STATUSES, ACTIVE_JOIN_STATUSES
+from backend.services.game_rules import (
+    ACTIVE_BOOKING_STATUSES,
+    ACTIVE_JOIN_STATUSES,
+    OPEN_GAME_STATUSES,
+)
 from backend.services.need_a_sub_rules import (
     ACTIVE_REQUEST_STATUSES,
     ACTIVE_VISIBLE_POST_STATUSES,
@@ -38,7 +42,6 @@ from backend.services.user_service import build_user_conflict_detail
 ACCOUNT_DELETION_REASON = "Account deleted."
 ACTIVE_SAVED_PAYMENT_METHOD_STATUS = "active"
 DELETE_WAITLIST_STATUSES = {"active", "promoted", "payment_processing", "accepted"}
-FUTURE_GAME_CLEANUP_STATUSES = {"scheduled", "full"}
 
 
 @dataclass(frozen=True)
@@ -306,7 +309,7 @@ def clear_future_official_host_assignments(
             Game.host_user_id == user_id,
             Game.game_type == "official",
             Game.starts_at > now,
-            Game.game_status.in_(FUTURE_GAME_CLEANUP_STATUSES),
+            Game.game_status.in_(OPEN_GAME_STATUSES),
             Game.deleted_at.is_(None),
         )
         .with_for_update()
@@ -338,7 +341,7 @@ def active_future_buyer_bookings_for_user_deletion(
                 Booking.buyer_user_id == user_id,
                 Booking.booking_status.in_(ACTIVE_BOOKING_STATUSES),
                 Game.starts_at > now,
-                Game.game_status.in_(FUTURE_GAME_CLEANUP_STATUSES),
+                Game.game_status.in_(OPEN_GAME_STATUSES),
                 Game.deleted_at.is_(None),
             )
             .with_for_update()
@@ -363,7 +366,7 @@ def active_booking_participants_for_user_deletion(
                     GameParticipant.guest_of_user_id == user_id,
                 ),
                 Game.starts_at > now,
-                Game.game_status.in_(FUTURE_GAME_CLEANUP_STATUSES),
+                Game.game_status.in_(OPEN_GAME_STATUSES),
                 Game.deleted_at.is_(None),
                 GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
             )
@@ -547,7 +550,7 @@ def cancel_future_roster_activity(
             game is not None
             and game.deleted_at is None
             and game.starts_at > now
-            and game.game_status in FUTURE_GAME_CLEANUP_STATUSES
+            and game.game_status in OPEN_GAME_STATUSES
         ):
             promote_waitlist_entries(db, game, now)
             sync_game_capacity_status(db, game)
@@ -625,7 +628,7 @@ def cancel_future_community_hosted_games(
             Game.host_user_id == user.id,
             Game.game_type == "community",
             Game.starts_at > now,
-            Game.game_status.in_(FUTURE_GAME_CLEANUP_STATUSES),
+            Game.game_status.in_(OPEN_GAME_STATUSES),
             Game.deleted_at.is_(None),
         )
         .with_for_update()

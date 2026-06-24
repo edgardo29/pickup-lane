@@ -28,6 +28,8 @@ from backend.services.admin_permission_service import (
     PERMISSION_CONTENT_MODERATE,
     user_has_admin_permission,
 )
+from backend.services.game_participant_rules import ROSTER_USER_PARTICIPANT_TYPES
+from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
@@ -35,9 +37,7 @@ from backend.services.notification_event_service import (
 )
 
 CHAT_MEMBER_STATUSES = {"confirmed"}
-CHAT_MEMBER_TYPES = {"host", "registered_user", "admin_added"}
 VALID_CHAT_STATUSES = {"active", "locked", "archived"}
-CHAT_CREATABLE_GAME_STATUSES = {"scheduled", "full"}
 TERMINAL_CHAT_STATUSES = {"archived"}
 MAX_CHAT_MESSAGE_LENGTH = 300
 MAX_CHAT_MESSAGES_PER_PAGE = 50
@@ -168,7 +168,7 @@ def validate_game_chat_references(db: Session, chat_data: dict[str, object]) -> 
             detail="Archived games cannot create chat rooms.",
         )
 
-    if db_game.game_status not in CHAT_CREATABLE_GAME_STATUSES:
+    if db_game.game_status not in OPEN_GAME_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only scheduled or full games can create chat rooms.",
@@ -360,7 +360,7 @@ def get_or_create_active_game_chat(db: Session, db_game: Game) -> GameChat:
             detail="Archived games cannot create chat rooms.",
         )
 
-    if db_game.game_status not in CHAT_CREATABLE_GAME_STATUSES:
+    if db_game.game_status not in OPEN_GAME_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only scheduled or full games can create chat rooms.",
@@ -448,7 +448,7 @@ def is_chat_member(db: Session, db_game: Game, user_id: uuid.UUID) -> bool:
         select(GameParticipant.id).where(
             GameParticipant.game_id == db_game.id,
             GameParticipant.user_id == user_id,
-            GameParticipant.participant_type.in_(CHAT_MEMBER_TYPES),
+            GameParticipant.participant_type.in_(ROSTER_USER_PARTICIPANT_TYPES),
             GameParticipant.participant_status.in_(CHAT_MEMBER_STATUSES),
         )
     )
@@ -470,7 +470,7 @@ def list_chat_member_user_ids(
         select(GameParticipant.user_id).where(
             GameParticipant.game_id == db_game.id,
             GameParticipant.user_id.is_not(None),
-            GameParticipant.participant_type.in_(CHAT_MEMBER_TYPES),
+            GameParticipant.participant_type.in_(ROSTER_USER_PARTICIPANT_TYPES),
             GameParticipant.participant_status.in_(CHAT_MEMBER_STATUSES),
         )
     ).all()

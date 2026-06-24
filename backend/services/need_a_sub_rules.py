@@ -6,6 +6,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import HTTPException, status
 
 from backend.models import SubPost
+from backend.services.game_rules import (
+    VALID_ENVIRONMENT_TYPES as GAME_VALID_ENVIRONMENT_TYPES,
+    VALID_SKILL_LEVELS as GAME_VALID_SKILL_LEVELS,
+)
 
 POST_STATUSES = {"active", "filled", "expired", "canceled", "removed"}
 REQUEST_STATUSES = {
@@ -19,11 +23,14 @@ REQUEST_STATUSES = {
     "expired",
 }
 ACTIVE_VISIBLE_POST_STATUSES = {"active", "filled"}
+CHAT_ALLOWED_POST_STATUSES = {"active", "filled", "expired"}
 ACTIVE_REQUEST_STATUSES = {"pending", "confirmed", "sub_waitlist"}
 QUEUE_HOLD_REQUEST_STATUSES = {"pending", "confirmed"}
 EXPIRABLE_REQUEST_STATUSES = {"pending", "sub_waitlist"}
 MAX_WAITLIST_REQUESTS_PER_POST = 25
 MAX_SUB_POST_SCHEDULE_DAYS_AHEAD = 14
+VALID_SKILL_LEVELS = GAME_VALID_SKILL_LEVELS
+VALID_ENVIRONMENT_TYPES = GAME_VALID_ENVIRONMENT_TYPES
 VALID_FORMAT_LABELS = {
     "3v3",
     "4v4",
@@ -35,15 +42,6 @@ VALID_FORMAT_LABELS = {
     "10v10",
     "11v11",
 }
-VALID_SKILL_LEVELS = {
-    "any",
-    "beginner",
-    "recreational",
-    "intermediate",
-    "advanced",
-    "competitive",
-}
-VALID_ENVIRONMENT_TYPES = {"indoor", "outdoor"}
 VALID_POSITION_LABELS = {"field_player", "goalkeeper"}
 TERMINAL_REQUEST_STATUSES = {
     "declined",
@@ -52,7 +50,7 @@ TERMINAL_REQUEST_STATUSES = {
     "no_show_reported",
     "expired",
 }
-SUB_POST_UPDATED_RECIPIENT_STATUSES = {"pending", "confirmed", "sub_waitlist"}
+SUB_POST_UPDATED_RECIPIENT_STATUSES = ACTIVE_REQUEST_STATUSES
 SUB_POST_UPDATED_STRUCTURAL_FIELDS = (
     "starts_at",
     "ends_at",

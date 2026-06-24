@@ -4,6 +4,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.orm import Session
 
 from backend.models import Game, Notification, SubPost, SubPostRequest
+from backend.services.game_rules import GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS
+from backend.services.need_a_sub_rules import (
+    ACTIVE_VISIBLE_POST_STATUSES,
+    CHAT_ALLOWED_POST_STATUSES,
+)
 from backend.services.notification_policy import (
     ACTION_LABEL_BY_KEY,
     ICON_BY_NOTIFICATION_TYPE,
@@ -11,9 +16,6 @@ from backend.services.notification_policy import (
     SOURCE_LABEL_BY_TYPE,
 )
 
-GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS = {"cancelled", "abandoned"}
-SUB_POST_STATUSES_WITH_INBOX_ACTIONS = {"active", "filled"}
-SUB_CHAT_MESSAGE_ACTION_POST_STATUSES = {"active", "filled", "expired"}
 SUB_CHAT_MESSAGE_ACTION_GRACE_HOURS = 24
 
 
@@ -98,7 +100,7 @@ def build_sub_chat_message_action(
             "This Need a Sub post is no longer available.",
         )
 
-    if sub_post.post_status not in SUB_CHAT_MESSAGE_ACTION_POST_STATUSES:
+    if sub_post.post_status not in CHAT_ALLOWED_POST_STATUSES:
         return build_disabled_action_payload(
             action_key,
             "This Need a Sub chat is no longer available.",
@@ -162,7 +164,7 @@ def build_notification_action(
 
         starts_at = ensure_aware_utc(sub_post.starts_at)
         if (
-            sub_post.post_status not in SUB_POST_STATUSES_WITH_INBOX_ACTIONS
+            sub_post.post_status not in ACTIVE_VISIBLE_POST_STATUSES
             or starts_at < datetime.now(timezone.utc)
         ):
             return None

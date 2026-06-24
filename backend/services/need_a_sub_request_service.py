@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import SubPost, SubPostPosition, SubPostRequest, User
+from backend.models import SubPost, SubPostRequest, User
 from backend.services.need_a_sub_lifecycle_service import (
     add_request_status_history,
     change_request_status,

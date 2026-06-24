@@ -18,20 +18,21 @@ from backend.models import (
     GameChat,
     GameCreditUsage,
     GameParticipant,
-    GameStatusHistory,
     Notification,
     Payment,
     Refund,
     User,
     WaitlistEntry,
 )
-from backend.schemas import (
+from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCancelExecute,
     AdminOfficialGameCancellationBookingImpactRead,
     AdminOfficialGameCancellationBookingResultRead,
     AdminOfficialGameCancellationPreviewRead,
     AdminOfficialGameCancellationRefundRead,
     AdminOfficialGameCancellationResultRead,
+)
+from backend.schemas.game_schema import (
     GameCancelCreate,
 )
 from backend.services.admin_action_service import record_admin_action
@@ -66,6 +67,9 @@ from backend.services.game_credit_service import (
 from backend.services.notification_event_service import (
     build_game_notification_fields,
     resolve_aggregated_notification,
+)
+from backend.services.status_history_service import (
+    add_game_status_history_if_changed,
 )
 from backend.services.support_flag_service import stage_support_flag
 from backend.services.stripe_service import (
@@ -1149,19 +1153,16 @@ def create_game_cancellation_history(
     change_source: str,
     now: datetime,
 ) -> None:
-    db.add(
-        GameStatusHistory(
-            id=uuid.uuid4(),
-            game_id=db_game.id,
-            old_publish_status=db_game.publish_status,
-            new_publish_status=db_game.publish_status,
-            old_game_status=old_game_status,
-            new_game_status="cancelled",
-            changed_by_user_id=current_user.id,
-            change_source=change_source,
-            change_reason=cancel_reason,
-            created_at=now,
-        )
+    add_game_status_history_if_changed(
+        db,
+        db_game,
+        old_publish_status=db_game.publish_status,
+        old_game_status=old_game_status,
+        new_game_status="cancelled",
+        changed_by_user_id=current_user.id,
+        change_source=change_source,
+        reason=cancel_reason,
+        changed_at=now,
     )
 
 

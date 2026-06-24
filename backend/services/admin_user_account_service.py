@@ -31,10 +31,10 @@ from backend.services.admin_user_service import (
     count_active_admins,
     get_admin_user_or_404,
 )
+from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.notification_event_service import build_app_notification_fields
 from backend.services.user_service import build_user_conflict_detail
 
-FUTURE_OFFICIAL_HOST_GAME_STATUSES = ("scheduled", "full")
 SUSPENSION_PREVIEW_HOST_ASSIGNMENT_LIMIT = 100
 SUSPEND_USER_ROUTE_PATH = "/admin/users/{user_id}/suspend"
 SUSPENSION_BLOCKING_MESSAGES = {
@@ -60,7 +60,7 @@ def list_future_official_host_assignments(
         .where(
             Game.host_user_id == user_id,
             Game.game_type == "official",
-            Game.game_status.in_(FUTURE_OFFICIAL_HOST_GAME_STATUSES),
+            Game.game_status.in_(OPEN_GAME_STATUSES),
             Game.starts_at > now,
             Game.deleted_at.is_(None),
         )

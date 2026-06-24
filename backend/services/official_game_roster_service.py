@@ -28,6 +28,10 @@ from backend.services.game_rules import (
     build_game_conflict_detail,
     require_game_not_started,
 )
+from backend.services.game_participant_rules import (
+    ACTIVE_ROSTER_PARTICIPANT_STATUSES,
+    OFFICIAL_ROSTER_PARTICIPANT_TYPES,
+)
 from backend.services.game_service import (
     count_roster_players,
     get_next_roster_order,
@@ -40,17 +44,16 @@ from backend.services.official_game_notification_service import (
     create_official_game_player_added_notification,
     create_official_game_player_removed_notification,
 )
-from backend.services.official_game_service import (
-    PENDING_ADMIN_INVALIDATED_PAYMENT_STATUSES,
-    get_official_game_or_404,
-)
+from backend.services.official_game_service import get_official_game_or_404
+from backend.services.payment_rules import PENDING_PAYMENT_STATUSES
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
 )
+from backend.services.user_service import get_user_display_name
 
-ADMIN_REMOVABLE_PLAYER_STATUSES = {"pending_payment", "confirmed"}
-OFFICIAL_HOST_PARTICIPANT_TYPES = {"registered_user", "admin_added"}
+ADMIN_REMOVABLE_PLAYER_STATUSES = ACTIVE_ROSTER_PARTICIPANT_STATUSES
+OFFICIAL_HOST_PARTICIPANT_TYPES = OFFICIAL_ROSTER_PARTICIPANT_TYPES
 IMMEDIATE_REMOVAL_BOOKING_PAYMENT_STATUSES = {
     "not_required",
     "unpaid",
@@ -67,11 +70,6 @@ IMMEDIATE_REMOVAL_CREDIT_USAGE_STATUSES = {"reserved", "released"}
 REMOVAL_PREVIEW_REQUIRED_DETAIL = (
     "Removal impact preview is required before removing this player."
 )
-
-
-def build_user_display_name(user: User) -> str:
-    full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-    return full_name or user.email or "Player"
 
 
 def get_active_user_or_404(
@@ -247,7 +245,7 @@ def add_official_game_player(
         booking_id=booking.id,
         participant_type="admin_added",
         user_id=player.id,
-        display_name_snapshot=build_user_display_name(player),
+        display_name_snapshot=get_user_display_name(player, fallback="Player"),
         participant_status="confirmed",
         attendance_status="unknown",
         cancellation_type="none",
@@ -825,7 +823,7 @@ def cancel_pending_booking_payments_for_admin_removal(
     pending_payments = db.scalars(
         select(Payment).where(
             Payment.booking_id == booking.id,
-            Payment.payment_status.in_(PENDING_ADMIN_INVALIDATED_PAYMENT_STATUSES),
+            Payment.payment_status.in_(PENDING_PAYMENT_STATUSES),
         )
     ).all()
 

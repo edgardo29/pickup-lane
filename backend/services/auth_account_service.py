@@ -14,7 +14,7 @@ from backend.firebase_admin_client import (
     firebase_email_exists,
 )
 from backend.models import User, UserSettings, UserStats
-from backend.schemas import AuthEmailAvailabilityRead, AuthSyncUserRequest
+from backend.schemas.auth_schema import AuthEmailAvailabilityRead, AuthSyncUserRequest
 from backend.services.account_deletion_service import (
     lock_user_and_active_admins_for_account_removal,
     record_account_delete_partial_failure,

@@ -10,12 +10,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import Game, GameImage, User
-from backend.schemas import GameImageCreate, GameImageUpdate
+from backend.schemas.game_image_schema import GameImageCreate, GameImageUpdate
+from backend.services.image_rules import VALID_IMAGE_ROLES
 
-VALID_IMAGE_ROLES = {
-    "card",
-    "gallery",
-}
 VALID_IMAGE_STATUSES = {
     "active",
     "hidden",

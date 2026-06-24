@@ -15,25 +15,29 @@ from backend.models import (
     SubPostRequest,
     User,
 )
-from backend.schemas import (
-    SubPostChatEnsureCreate,
+from backend.schemas.sub_post_chat_message_schema import (
     SubPostChatMessageCreate,
     SubPostChatMessageUpdate,
-    SubPostChatRead as SubPostChatReadSchema,
+)
+from backend.schemas.sub_post_chat_read_schema import (
     SubPostChatReadStateRead as SubPostChatReadStateReadSchema,
+)
+from backend.schemas.sub_post_chat_schema import (
+    SubPostChatEnsureCreate,
+    SubPostChatRead as SubPostChatReadSchema,
 )
 from backend.services.notification_event_service import (
     build_need_a_sub_notification_fields,
     reopen_aggregated_notification,
     resolve_aggregated_notification,
 )
+from backend.services.need_a_sub_rules import CHAT_ALLOWED_POST_STATUSES
 
 MAX_SUB_CHAT_MESSAGE_LENGTH = 300
 MAX_SUB_CHAT_MESSAGES_PER_PAGE = 50
 MAX_SUB_CHAT_MESSAGES_TOTAL = 200
 MAX_SUB_CHAT_MESSAGES_PER_MINUTE = 5
 SUB_CHAT_ACCESS_GRACE_HOURS = 24
-SUB_CHAT_ALLOWED_POST_STATUSES = {"active", "filled", "expired"}
 VISIBLE_MESSAGE_STATUSES = {"visible", "flagged"}
 NO_LONGER_IN_GAME_LABEL = "No longer in game"
 
@@ -152,7 +156,7 @@ def validate_sub_post_chat_access(
     sub_post: SubPost,
     user: User,
 ) -> None:
-    if sub_post.post_status not in SUB_CHAT_ALLOWED_POST_STATUSES:
+    if sub_post.post_status not in CHAT_ALLOWED_POST_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This Need a Sub chat is not available.",

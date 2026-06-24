@@ -10,7 +10,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import PolicyDocument
-from backend.schemas import PolicyDocumentCreate, PolicyDocumentUpdate
+from backend.schemas.policy_document_schema import (
+    PolicyDocumentCreate,
+    PolicyDocumentUpdate,
+)
 
 VALID_POLICY_TYPES = {
     "terms_of_service",

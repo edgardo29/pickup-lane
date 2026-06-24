@@ -42,6 +42,10 @@ from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
 )
+from backend.services.payment_rules import (
+    COLLECTED_PAYMENT_STATUSES,
+    PENDING_PAYMENT_STATUSES,
+)
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
@@ -60,17 +64,6 @@ HANDLED_REFUND_EVENTS = {
     "charge.refund.updated",
 }
 HANDLED_STRIPE_EVENTS = HANDLED_PAYMENT_INTENT_EVENTS | HANDLED_REFUND_EVENTS
-PENDING_INTERNAL_PAYMENT_STATUSES = {
-    "requires_payment_method",
-    "requires_action",
-    "processing",
-}
-POST_SUCCESS_INTERNAL_PAYMENT_STATUSES = {
-    "succeeded",
-    "refunded",
-    "partially_refunded",
-    "disputed",
-}
 
 
 def stripe_object_to_dict(value: Any) -> dict[str, Any]:
@@ -602,7 +595,7 @@ def apply_payment_intent_succeeded(
         mark_event_failed(event, "Internal game is not eligible for Stripe booking payment.")
         return
 
-    if payment.payment_status in POST_SUCCESS_INTERNAL_PAYMENT_STATUSES:
+    if payment.payment_status in COLLECTED_PAYMENT_STATUSES:
         mark_event_processed(event, now)
         return
 
@@ -729,11 +722,11 @@ def apply_payment_intent_processing(
         mark_event_failed(event, validation_error)
         return
 
-    if payment.payment_status in POST_SUCCESS_INTERNAL_PAYMENT_STATUSES:
+    if payment.payment_status in COLLECTED_PAYMENT_STATUSES:
         mark_event_ignored(event, "Processing event arrived after payment success.")
         return
 
-    if payment.payment_status not in PENDING_INTERNAL_PAYMENT_STATUSES:
+    if payment.payment_status not in PENDING_PAYMENT_STATUSES:
         mark_event_ignored(event, "Payment is no longer pending.")
         return
 
@@ -879,7 +872,7 @@ def apply_payment_intent_failed_or_canceled(
         mark_event_failed(event, validation_error)
         return
 
-    if payment.payment_status in POST_SUCCESS_INTERNAL_PAYMENT_STATUSES:
+    if payment.payment_status in COLLECTED_PAYMENT_STATUSES:
         mark_event_ignored(event, "Failure or cancel event arrived after payment success.")
         return
 
