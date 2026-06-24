@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RefreshCw, RotateCcw, Search, UsersRound } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminUsers.css'
@@ -195,10 +195,13 @@ function AdminUsersPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-users-shell">
-      <AppPageHeader subtitle="Admin" title="Users" />
-
-      <AdminWorkspaceLayout>
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'People', 'Users']}
+        description="Search accounts, review roles, hosting status, and account state."
+        icon={UsersRound}
+        title="Users"
+      >
         <div className="admin-users-layout">
           <section className="admin-users-panel" aria-label="User search">
             <div className="admin-users-panel__heading">

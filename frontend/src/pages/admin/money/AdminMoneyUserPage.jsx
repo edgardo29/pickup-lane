@@ -6,7 +6,7 @@ import {
   Search,
   UserRound,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
@@ -188,13 +188,13 @@ function AdminMoneyUserPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-money-shell">
-      <AppPageHeader
-        subtitle="Money Support"
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Money', 'User Money']}
+        description="Open a user-centered payment, refund, credit, and support summary."
+        icon={UserRound}
         title={pageTitle}
-      />
-
-      <AdminWorkspaceLayout>
+      >
         <div className="admin-money-layout">
           <div className="admin-money-toolbar">
             <form className="admin-money-inline-search" onSubmit={handleSearch}>

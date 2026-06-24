@@ -12,7 +12,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
@@ -622,11 +622,14 @@ function AdminPlatformNoticesPage() {
   return (
     <AppPageShell
       className="admin-page"
-      mainClassName="admin-shell admin-platform-notices-shell"
+      mainClassName="admin-shell"
     >
-      <AppPageHeader subtitle="Admin" title="Platform Notices" />
-
-      <AdminWorkspaceLayout>
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'System', 'Platform Notices']}
+        description="Create, review, send, and monitor platform notices."
+        icon={Megaphone}
+        title="Platform Notices"
+      >
         <div className="admin-platform-notices-layout">
           <section className="admin-platform-notices-panel">
             <div className="admin-platform-notices-panel__heading">

@@ -8,7 +8,7 @@ import {
   ShieldCheckIcon,
   UsersIcon,
 } from '../../../../components/BrowseIcons.jsx'
-import { AppPageHeader, AppPageShell } from '../../../../components/app/index.js'
+import { AppPageShell } from '../../../../components/app/index.js'
 import { useAuth } from '../../../../hooks/useAuth.js'
 import { buildMediaUrl } from '../../../../lib/apiClient.js'
 import '../../../../styles/admin/AdminOfficialGames.css'
@@ -990,8 +990,8 @@ function AdminOfficialGamePageContent({ gameId }) {
   )
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-official-shell">
-      <AppPageHeader
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
         actions={(
           <div className="admin-official-header-actions">
             <Link className="admin-official-button" to="/admin/official-games">
@@ -1010,11 +1010,15 @@ function AdminOfficialGamePageContent({ gameId }) {
             )}
           </div>
         )}
-        subtitle={workspaceIsCurrent && game?.id === gameId ? game.title : 'Admin'}
+        breadcrumbs={['Admin', 'Games', 'Official Games']}
+        description={(
+          workspaceIsCurrent && game?.id === gameId
+            ? `${game.title}: review roster, host, money, and lifecycle details.`
+            : 'Review roster, host, money, and lifecycle details.'
+        )}
+        icon={ShieldCheckIcon}
         title="Manage Official Game"
-      />
-
-      <AdminWorkspaceLayout>
+      >
         {workspaceIsCurrent && pageError && (
           <p className="admin-official-alert">{pageError}</p>
         )}

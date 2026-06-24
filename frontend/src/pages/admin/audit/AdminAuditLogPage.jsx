@@ -7,7 +7,7 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminAuditLog.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
@@ -299,13 +299,13 @@ function AdminAuditLogPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-audit-shell">
-      <AppPageHeader
-        subtitle="Admin"
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Audit Log']}
+        description="Inspect sensitive staff actions and their recorded context."
+        icon={FileClock}
         title="Audit Log"
-      />
-
-      <AdminWorkspaceLayout>
+      >
         <div className="admin-audit-layout">
           <section className="admin-audit-panel" aria-label="Audit action list">
             <div className="admin-audit-panel__heading">

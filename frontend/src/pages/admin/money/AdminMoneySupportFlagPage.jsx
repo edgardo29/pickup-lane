@@ -6,7 +6,7 @@ import {
   Hash,
   RefreshCw,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
@@ -179,13 +179,13 @@ function AdminMoneySupportFlagPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-money-shell">
-      <AppPageHeader
-        subtitle="Money Support"
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Money', 'Money Follow-Up']}
+        description="Review this support flag and its related money records."
+        icon={CheckCircle2}
         title={pageTitle}
-      />
-
-      <AdminWorkspaceLayout>
+      >
         <div className="admin-money-layout">
           <div className="admin-money-toolbar">
             <Link className="admin-money-button" to="/admin/money/support-flags">

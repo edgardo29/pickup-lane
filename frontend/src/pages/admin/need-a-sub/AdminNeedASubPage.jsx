@@ -9,7 +9,7 @@ import {
   Search,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminNeedASub.css'
@@ -177,9 +177,13 @@ function AdminNeedASubPage() {
   const hasNextPage = offset + posts.length < totalCount
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell admin-sub-shell">
-      <AppPageHeader subtitle="Admin" title="Need a Sub" />
-      <AdminWorkspaceLayout>
+    <AppPageShell className="admin-page" mainClassName="admin-shell">
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'Games', 'Need a Sub']}
+        description="Find Need a Sub posts and review moderation activity."
+        icon={ClipboardList}
+        title="Need a Sub"
+      >
         <section className="admin-sub-panel" aria-label="Need a Sub support">
           <div className="admin-sub-panel__heading">
             <div>

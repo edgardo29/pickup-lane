@@ -7,6 +7,8 @@ from firebase_admin import auth, credentials
 
 load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
 
+FIREBASE_TOKEN_CLOCK_SKEW_SECONDS = 10
+
 
 class FirebaseAdminConfigError(RuntimeError):
     pass
@@ -32,7 +34,10 @@ def initialize_firebase_admin() -> None:
 
 def verify_firebase_token(id_token: str) -> dict:
     initialize_firebase_admin()
-    return auth.verify_id_token(id_token)
+    return auth.verify_id_token(
+        id_token,
+        clock_skew_seconds=FIREBASE_TOKEN_CLOCK_SKEW_SECONDS,
+    )
 
 
 def firebase_email_exists(email: str) -> bool:

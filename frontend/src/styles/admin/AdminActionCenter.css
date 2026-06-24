@@ -4,10 +4,6 @@
   --admin-muted: rgba(248, 250, 252, 0.68);
 }
 
-.admin-action-center-shell {
-  width: min(1320px, calc(100% - 56px));
-}
-
 .admin-action-center-layout {
   display: grid;
   gap: 14px;
@@ -221,17 +217,7 @@
   font-weight: 950;
 }
 
-@media (min-width: 1024px) {
-  .admin-workspace-content .admin-action-center-layout {
-    margin-top: 0;
-  }
-}
-
 @media (max-width: 720px) {
-  .admin-action-center-shell {
-    width: min(100% - 28px, 1320px);
-  }
-
   .admin-action-center-row {
     grid-template-columns: 38px minmax(0, 1fr);
   }

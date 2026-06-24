@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { isAdminWorkspaceItemActive } from '../../pages/admin/shared/adminWorkspaceData.js'
 
@@ -42,6 +43,45 @@ function AppNavMenuSection({
   )
 }
 
+function AppNavAdminGroups({ closeMenu, groups, pathname }) {
+  return (
+    <div className="app-nav__menu-section app-nav__menu-section--menu-only app-nav__menu-section--admin">
+      <span className="app-nav__menu-section-title">Admin</span>
+      <div className="app-nav__admin-groups">
+        {groups.map((group) => {
+          const Icon = group.icon
+
+          return (
+            <section className="app-nav__admin-group" key={group.id}>
+              <span className="app-nav__admin-group-title">
+                <Icon aria-hidden="true" />
+                <span>{group.label}</span>
+              </span>
+              <div className="app-nav__admin-group-items">
+                {group.items.map((item) => (
+                  <NavLink
+                    className={() => (
+                      `app-nav__link app-nav__admin-item ${
+                        isAdminWorkspaceItemActive(item, pathname) ? 'active' : ''
+                      }`
+                    )}
+                    end={item.end}
+                    key={item.to}
+                    to={item.to}
+                    onClick={closeMenu}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </section>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function AppNavLinks({
   appUser,
   closeMenu,
@@ -51,10 +91,26 @@ export function AppNavLinks({
   isLoading,
   isMenuOpen,
   unreadCount,
-  visibleAdminNavItems,
+  visibleAdminNavGroups,
   visibleNavItems,
 }) {
   const { pathname } = useLocation()
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return undefined
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      menuRef.current
+        ?.querySelector('.app-nav__link.active')
+        ?.scrollIntoView({ block: 'nearest' })
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [isMenuOpen, pathname])
+
   const appSection = (
     <AppNavMenuSection
       closeMenu={closeMenu}
@@ -65,13 +121,10 @@ export function AppNavLinks({
     />
   )
   const adminSection = hasAdminWorkspaceAccess ? (
-    <AppNavMenuSection
+    <AppNavAdminGroups
       closeMenu={closeMenu}
-      items={visibleAdminNavItems}
-      label="Admin"
-      menuOnly
+      groups={visibleAdminNavGroups}
       pathname={pathname}
-      unreadCount={0}
     />
   ) : null
 
@@ -79,6 +132,7 @@ export function AppNavLinks({
     <nav
       className={`app-nav__links ${isMenuOpen ? 'app-nav__links--open' : ''}`}
       aria-label="Main navigation"
+      ref={menuRef}
     >
       {!isLoading && (
         <Link

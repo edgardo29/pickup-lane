@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
 import {
   getDefaultAdminPath,
-  getVisibleAdminWorkspaceNavItems,
+  getVisibleAdminWorkspaceNavGroups,
 } from '../../pages/admin/shared/adminWorkspaceData.js'
 import { useAdminAccess } from '../../pages/admin/shared/useAdminAccess.js'
 import { appNavItems } from './appNavData.js'
@@ -93,10 +93,10 @@ export function useAppNavState({
 
   const displayName = appUser ? getDisplayName(appUser, currentUser) : 'Sign In / Register'
   const initials = getInitials(appUser, currentUser)
-  const visibleAdminNavItems = isAdminAccessLoading
+  const visibleAdminNavGroups = isAdminAccessLoading
     ? []
-    : getVisibleAdminWorkspaceNavItems(adminAccess)
-  const hasAdminWorkspaceAccess = visibleAdminNavItems.length > 0
+    : getVisibleAdminWorkspaceNavGroups(adminAccess)
+  const hasAdminWorkspaceAccess = visibleAdminNavGroups.length > 0
   const adminEntryPath = hasAdminWorkspaceAccess
     ? getDefaultAdminPath(adminAccess)
     : '/admin/sign-in'
@@ -135,7 +135,7 @@ export function useAppNavState({
     isMenuOpen,
     toggleMenu,
     unreadCount,
-    visibleAdminNavItems,
+    visibleAdminNavGroups,
     visibleNavItems,
   }
 }

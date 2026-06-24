@@ -1,7 +1,3 @@
-.admin-sub-shell {
-  width: min(1420px, calc(100% - 56px));
-}
-
 .admin-sub-panel,
 .admin-sub-detail-panel {
   min-width: 0;
@@ -798,10 +794,6 @@
 }
 
 @media (max-width: 1040px) {
-  .admin-sub-shell {
-    width: min(100% - 28px, 1420px);
-  }
-
   .admin-sub-table__header {
     display: none;
   }
@@ -828,10 +820,6 @@
 }
 
 @media (max-width: 720px) {
-  .admin-sub-shell {
-    width: min(100% - 22px, 1420px);
-  }
-
   .admin-sub-filters,
   .admin-sub-table__row,
   .admin-sub-detail-grid,

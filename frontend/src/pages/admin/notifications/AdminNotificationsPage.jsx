@@ -12,7 +12,7 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react'
-import { AppPageHeader, AppPageShell } from '../../../components/app/index.js'
+import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminNotifications.css'
@@ -444,11 +444,14 @@ function AdminNotificationsPage() {
   return (
     <AppPageShell
       className="admin-page"
-      mainClassName="admin-shell admin-notifications-shell"
+      mainClassName="admin-shell"
     >
-      <AppPageHeader subtitle="Admin" title="Notifications" />
-
-      <AdminWorkspaceLayout>
+      <AdminWorkspaceLayout
+        breadcrumbs={['Admin', 'System', 'Notifications']}
+        description="Search notification records and inspect delivery and action state."
+        icon={Bell}
+        title="Notifications"
+      >
         <div className="admin-notifications-layout">
           <section
             aria-label="Notification debug list"
