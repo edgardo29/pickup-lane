@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Trophy } from 'lucide-react'
-import { AppPageShell } from '../../../../components/app/index.js'
 import { useAuth } from '../../../../hooks/useAuth.js'
 import '../../../../styles/admin/AdminOfficialGames.css'
 import AdminWorkspaceLayout from '../../shared/AdminWorkspaceLayout.jsx'
@@ -45,7 +44,7 @@ function AdminOfficialGamesPage() {
   }, [currentUser, gameStatus])
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Games', 'Official Games']}
         description="Find and manage Pickup Lane official games."
@@ -82,7 +81,7 @@ function AdminOfficialGamesPage() {
           </section>
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

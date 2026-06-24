@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect frontend and backend changes
+        id: filter
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+            head_sha="${{ github.sha }}"
+          fi
+
+          if [[ "$base_sha" =~ ^0+$ ]] || ! git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+            base_sha="$(git rev-list --max-parents=0 "$head_sha")"
+          fi
+
+          frontend=false
+          backend=false
+
+          while IFS= read -r changed_file; do
+            case "$changed_file" in
+              frontend/*)
+                frontend=true
+                ;;
+              backend/*|alembic.ini)
+                backend=true
+                ;;
+              .github/workflows/*)
+                frontend=true
+                backend=true
+                ;;
+            esac
+          done < <(git diff --name-only "$base_sha" "$head_sha")
+
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+
+  frontend:
+    name: Frontend CI
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Build frontend
+        run: npm run build
+
+  backend:
+    name: Backend CI
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pickup_lane_test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_test_db
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Compile backend Python files
+        run: >
+          python -m compileall
+          backend/alembic
+          backend/models
+          backend/routes
+          backend/schemas
+          backend/tests
+          backend/database.py
+          backend/main.py
+
+      - name: Apply database migrations
+        run: python -m alembic upgrade head
+
+      - name: Run backend tests
+        run: pytest backend/tests
+
+  required:
+    name: CI Required
+    needs: [changes, frontend, backend]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify required checks
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          FRONTEND_CHANGED: ${{ needs.changes.outputs.frontend }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          BACKEND_CHANGED: ${{ needs.changes.outputs.backend }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+        shell: bash
+        run: |
+          if [[ "$CHANGES_RESULT" != "success" ]]; then
+            echo "Change detection did not complete successfully."
+            exit 1
+          fi
+
+          if [[ "$FRONTEND_CHANGED" == "true" && "$FRONTEND_RESULT" != "success" ]]; then
+            echo "Frontend CI did not complete successfully."
+            exit 1
+          fi
+
+          if [[ "$BACKEND_CHANGED" == "true" && "$BACKEND_RESULT" != "success" ]]; then
+            echo "Backend CI did not complete successfully."
+            exit 1
+          fi
+
+          echo "All required CI checks passed."

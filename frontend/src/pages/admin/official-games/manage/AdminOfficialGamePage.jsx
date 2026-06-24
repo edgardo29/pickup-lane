@@ -8,7 +8,6 @@ import {
   ShieldCheckIcon,
   UsersIcon,
 } from '../../../../components/BrowseIcons.jsx'
-import { AppPageShell } from '../../../../components/app/index.js'
 import { useAuth } from '../../../../hooks/useAuth.js'
 import { buildMediaUrl } from '../../../../lib/apiClient.js'
 import '../../../../styles/admin/AdminOfficialGames.css'
@@ -990,7 +989,7 @@ function AdminOfficialGamePageContent({ gameId }) {
   )
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         actions={(
           <div className="admin-official-header-actions">
@@ -1246,7 +1245,7 @@ function AdminOfficialGamePageContent({ gameId }) {
           onExecute={handleExecuteRemoval}
         />
       )}
-    </AppPageShell>
+    </>
   )
 }
 

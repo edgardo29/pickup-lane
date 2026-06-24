@@ -7,7 +7,6 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminAuditLog.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
@@ -299,7 +298,7 @@ function AdminAuditLogPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Audit Log']}
         description="Inspect sensitive staff actions and their recorded context."
@@ -387,7 +386,7 @@ function AdminAuditLogPage() {
           </section>
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

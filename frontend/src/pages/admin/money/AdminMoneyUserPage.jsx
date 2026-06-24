@@ -6,7 +6,6 @@ import {
   Search,
   UserRound,
 } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
@@ -188,7 +187,7 @@ function AdminMoneyUserPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Money', 'User Money']}
         description="Open a user-centered payment, refund, credit, and support summary."
@@ -269,7 +268,7 @@ function AdminMoneyUserPage() {
           )}
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

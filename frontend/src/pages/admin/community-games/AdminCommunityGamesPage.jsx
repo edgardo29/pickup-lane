@@ -9,7 +9,6 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
-import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminCommunityGames.css'
@@ -242,7 +241,7 @@ function AdminCommunityGamesPage() {
   const hasNextPage = offset + games.length < totalCount
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Games', 'Community Games']}
         description="Find community games and review moderation or support context."
@@ -359,7 +358,7 @@ function AdminCommunityGamesPage() {
           </section>
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

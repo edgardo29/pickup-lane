@@ -6,7 +6,6 @@ import {
   RefreshCw,
   RotateCcw,
 } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
@@ -220,7 +219,7 @@ function AdminMoneyRefundPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Money', 'Refunds']}
         description="Inspect this refund, its payment context, and retry or support state."
@@ -332,7 +331,7 @@ function AdminMoneyRefundPage() {
           )}
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

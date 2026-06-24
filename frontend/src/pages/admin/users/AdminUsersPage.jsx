@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RefreshCw, RotateCcw, Search, UsersRound } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminUsers.css'
@@ -195,7 +194,7 @@ function AdminUsersPage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'People', 'Users']}
         description="Search accounts, review roles, hosting status, and account state."
@@ -294,7 +293,7 @@ function AdminUsersPage() {
           </section>
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

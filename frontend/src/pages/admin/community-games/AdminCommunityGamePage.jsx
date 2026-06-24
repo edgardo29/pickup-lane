@@ -17,7 +17,6 @@ import {
   WalletCards,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
-import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminCommunityGames.css'
@@ -642,7 +641,7 @@ function AdminCommunityGamePage() {
   }
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         actions={(
           <div className="admin-community-header-actions">
@@ -743,7 +742,7 @@ function AdminCommunityGamePage() {
           onCompleted={() => setRefreshCount((count) => count + 1)}
         />
       )}
-    </AppPageShell>
+    </>
   )
 }
 

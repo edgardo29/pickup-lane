@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RefreshCw, UsersRound } from 'lucide-react'
-import { AppPageShell } from '../../../components/app/index.js'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminUsers.css'
@@ -142,7 +141,7 @@ function AdminStaffPage() {
   }, [currentUser, includeDeleted, refreshCount])
 
   return (
-    <AppPageShell className="admin-page" mainClassName="admin-shell">
+    <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'People', 'Staff']}
         description="Review staff accounts, permissions, and role assignments."
@@ -190,7 +189,7 @@ function AdminStaffPage() {
           </section>
         </div>
       </AdminWorkspaceLayout>
-    </AppPageShell>
+    </>
   )
 }
 

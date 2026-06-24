@@ -34,7 +34,13 @@ import {
   AdminUserPage,
   AdminUsersPage,
 } from '../pages/admin/index.js'
-import { ADMIN_PERMISSIONS } from '../pages/admin/shared/adminWorkspaceData.js'
+import AdminWorkspaceShell from '../pages/admin/shared/AdminWorkspaceShell.jsx'
+import AdminAccessProvider from '../pages/admin/shared/AdminAccessProvider.jsx'
+import {
+  ADMIN_PERMISSIONS,
+  getDefaultAdminPath,
+} from '../pages/admin/shared/adminWorkspaceData.js'
+import { useAdminAccess } from '../pages/admin/shared/useAdminAccess.js'
 import {
   BrowseGamesPage,
   GameCheckoutPage,
@@ -127,216 +133,220 @@ export function AppRoutes() {
       <Route
         path="/admin"
         element={
-          <RequireAdmin>
-            <Navigate to="/admin/action-center" replace />
-          </RequireAdmin>
+          <AdminAccessProvider>
+            <RequireAdmin permissions={Object.values(ADMIN_PERMISSIONS)}>
+              <AdminWorkspaceShell />
+            </RequireAdmin>
+          </AdminAccessProvider>
         }
-      />
-      <Route
-        path="/admin/action-center"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.ACTION_CENTER_VIEW}>
-            <AdminActionCenterPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/audit"
-        element={
-          <RequireAdmin
-            permissions={[
-              ADMIN_PERMISSIONS.AUDIT_READ,
-              ADMIN_PERMISSIONS.AUDIT_SUPPORT_READ,
-            ]}
-          >
-            <AdminAuditLogPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/users"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.USERS_READ}>
-            <AdminUsersPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/users/staff"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.STAFF_MANAGE}>
-            <AdminStaffPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/users/:userId"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.USERS_READ}>
-            <AdminUserPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/community-games"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ}>
-            <AdminCommunityGamesPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/community-games/:gameId"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ}>
-            <AdminCommunityGamePage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/need-a-sub"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE}>
-            <AdminNeedASubPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/need-a-sub/:postId"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE}>
-            <AdminNeedASubPostPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/notifications"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.NOTIFICATIONS_READ}>
-            <AdminNotificationsPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/platform-notices"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.NOTIFICATIONS_MANAGE}>
-            <AdminPlatformNoticesPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/payments"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneyPaymentsPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/users"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneyUserPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/users/:userId"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneyUserPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/payment-methods"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneyPaymentMethodsPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/credits"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneyCreditsPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/credits/:creditId"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneyCreditPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/support-flags"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneySupportFlagsPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/support-flags/:supportFlagId"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneySupportFlagPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/payments/:paymentId"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneyPaymentPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/refunds"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneyRefundsPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/money/refunds/:refundId"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
-            <AdminMoneyRefundPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/official-games"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ}>
-            <AdminOfficialGamesPage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/official-games/new"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE}>
-            <AdminCreateOfficialGamePage />
-          </RequireAdmin>
-        }
-      />
-      <Route
-        path="/admin/official-games/:gameId"
-        element={
-          <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ}>
-            <AdminOfficialGamePage />
-          </RequireAdmin>
-        }
-      />
+      >
+        <Route index element={<AdminIndexRedirect />} />
+        <Route
+          path="action-center"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.ACTION_CENTER_VIEW}>
+              <AdminActionCenterPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="audit"
+          element={
+            <RequireAdmin
+              permissions={[
+                ADMIN_PERMISSIONS.AUDIT_READ,
+                ADMIN_PERMISSIONS.AUDIT_SUPPORT_READ,
+              ]}
+            >
+              <AdminAuditLogPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="users"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.USERS_READ}>
+              <AdminUsersPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="users/staff"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.STAFF_MANAGE}>
+              <AdminStaffPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="users/:userId"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.USERS_READ}>
+              <AdminUserPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="community-games"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ}>
+              <AdminCommunityGamesPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="community-games/:gameId"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ}>
+              <AdminCommunityGamePage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="need-a-sub"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE}>
+              <AdminNeedASubPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="need-a-sub/:postId"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE}>
+              <AdminNeedASubPostPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="notifications"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.NOTIFICATIONS_READ}>
+              <AdminNotificationsPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="platform-notices"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.NOTIFICATIONS_MANAGE}>
+              <AdminPlatformNoticesPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/payments"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneyPaymentsPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/users"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneyUserPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/users/:userId"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneyUserPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/payment-methods"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneyPaymentMethodsPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/credits"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneyCreditsPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/credits/:creditId"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneyCreditPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/support-flags"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneySupportFlagsPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/support-flags/:supportFlagId"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneySupportFlagPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/payments/:paymentId"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneyPaymentPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/refunds"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneyRefundsPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/refunds/:refundId"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+              <AdminMoneyRefundPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="official-games"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ}>
+              <AdminOfficialGamesPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="official-games/new"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE}>
+              <AdminCreateOfficialGamePage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="official-games/:gameId"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ}>
+              <AdminOfficialGamePage />
+            </RequireAdmin>
+          }
+        />
+      </Route>
       <Route path="/need-a-sub" element={<NeedASubPage />} />
       <Route path="/need-a-sub/posts/:postId" element={<NeedASubDetailPage />} />
       <Route
@@ -416,4 +426,10 @@ function NeedASubManageRedirect() {
   const { postId } = useParams()
 
   return <Navigate to={`/need-a-sub/posts/${postId}`} replace />
+}
+
+function AdminIndexRedirect() {
+  const { adminAccess } = useAdminAccess()
+
+  return <Navigate to={getDefaultAdminPath(adminAccess)} replace />
 }
