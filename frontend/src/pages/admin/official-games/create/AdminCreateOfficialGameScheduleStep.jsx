@@ -1,20 +1,15 @@
 import {
-  BuildingIcon,
-  CalendarIcon,
-  ClockIcon,
-  PriceTagIcon,
-  UsersIcon,
-} from '../../../../components/BrowseIcons.jsx'
-import {
   AdminCreateCurrencyInput,
   AdminCreateField,
-  AdminCreateSectionLabel,
-  AdminCreateStepperInput,
   AdminCreateStepHeading,
 } from './AdminCreateOfficialGameControls.jsx'
 import {
   adminOfficialEnvironmentOptions,
   adminOfficialFormatOptions,
+  adminOfficialMaxTotalSpots,
+  adminOfficialMinTotalSpots,
+  adminOfficialPlayerGroupOptions,
+  adminOfficialSkillLevelOptions,
   adminOfficialTimeOptions,
   clampDate,
   getTodayDate,
@@ -22,13 +17,24 @@ import {
 import { getMinimumAdminOfficialSpots } from './adminCreateOfficialGameValidation.js'
 
 function AdminCreateOfficialGameScheduleStep({ form, updateField }) {
-  const minimumSpots = getMinimumAdminOfficialSpots(form.formatLabel)
+  const hasSelectedFormat = Boolean(form.formatLabel)
+  const minimumSpots = hasSelectedFormat
+    ? getMinimumAdminOfficialSpots(form.formatLabel)
+    : adminOfficialMinTotalSpots
+  const totalSpotOptions = Array.from(
+    { length: adminOfficialMaxTotalSpots - minimumSpots + 1 },
+    (_, index) => minimumSpots + index,
+  )
 
   function handleFormatChange(nextFormat) {
     updateField('formatLabel', nextFormat)
 
+    if (!nextFormat) {
+      return
+    }
+
     const nextMinimumSpots = getMinimumAdminOfficialSpots(nextFormat)
-    if (Number(form.totalSpots) < nextMinimumSpots) {
+    if (!form.totalSpots || Number(form.totalSpots) < nextMinimumSpots) {
       updateField('totalSpots', nextMinimumSpots)
     }
   }
@@ -36,85 +42,123 @@ function AdminCreateOfficialGameScheduleStep({ form, updateField }) {
   return (
     <>
       <AdminCreateStepHeading
-        title="Let's start with the basics"
-        text="Set the official game schedule, format, roster size, and checkout price."
+        title="Let's start with the game"
+        text="Set the schedule, player group, skill level, and price."
       />
 
-      <div className="admin-create-section">
-        <AdminCreateSectionLabel>When</AdminCreateSectionLabel>
-        <div className="admin-create-grid">
-          <AdminCreateField icon={<CalendarIcon />} label="Date">
-            <input
-              min={getTodayDate()}
-              type="date"
-              value={form.date}
-              onChange={(event) => updateField('date', clampDate(event.target.value))}
-            />
-          </AdminCreateField>
-          <AdminCreateField icon={<ClockIcon />} label="Start time">
-            <select value={form.startTime} onChange={(event) => updateField('startTime', event.target.value)}>
-              {adminOfficialTimeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </AdminCreateField>
-          <AdminCreateField icon={<ClockIcon />} label="End time">
-            <select value={form.endTime} onChange={(event) => updateField('endTime', event.target.value)}>
-              {adminOfficialTimeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </AdminCreateField>
-        </div>
-      </div>
-
-      <div className="admin-create-section">
-        <AdminCreateSectionLabel>Game Setup</AdminCreateSectionLabel>
-        <div className="admin-create-grid admin-create-grid--two">
-          <AdminCreateField icon={<UsersIcon />} label="Format">
-            <select value={form.formatLabel} onChange={(event) => handleFormatChange(event.target.value)}>
-              {adminOfficialFormatOptions.map((format) => (
-                <option key={format} value={format}>
-                  {format}
-                </option>
-              ))}
-            </select>
-          </AdminCreateField>
-          <AdminCreateField icon={<BuildingIcon />} label="Indoor / Outdoor">
-            <select value={form.environmentType} onChange={(event) => updateField('environmentType', event.target.value)}>
-              {adminOfficialEnvironmentOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </AdminCreateField>
-        </div>
-      </div>
-
-      <div className="admin-create-section">
-        <AdminCreateSectionLabel>Spots & Price</AdminCreateSectionLabel>
-        <div className="admin-create-grid admin-create-grid--two">
-          <AdminCreateField icon={<UsersIcon />} label="Total spots">
-            <AdminCreateStepperInput
-              ariaLabel="total spots"
-              value={form.totalSpots}
-              min={minimumSpots}
-              max={99}
-              onChange={(value) => updateField('totalSpots', value)}
-            />
-          </AdminCreateField>
-          <AdminCreateField icon={<PriceTagIcon />} label="Price per player">
-            <AdminCreateCurrencyInput
-              value={form.price}
-              onChange={(value) => updateField('price', value)}
-            />
-          </AdminCreateField>
-        </div>
+      <div className="admin-create-grid admin-create-grid--basics">
+        <AdminCreateField label="Date">
+          <input
+            min={getTodayDate()}
+            type="date"
+            value={form.date}
+            onChange={(event) => updateField('date', clampDate(event.target.value))}
+          />
+        </AdminCreateField>
+        <AdminCreateField label="Start time">
+          <select
+            aria-label="Start time"
+            value={form.startTime}
+            onChange={(event) => updateField('startTime', event.target.value)}
+          >
+            {adminOfficialTimeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </AdminCreateField>
+        <AdminCreateField label="End time">
+          <select
+            aria-label="End time"
+            value={form.endTime}
+            onChange={(event) => updateField('endTime', event.target.value)}
+          >
+            {adminOfficialTimeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </AdminCreateField>
+        <AdminCreateField label="Format">
+          <select
+            aria-label="Format"
+            value={form.formatLabel}
+            onChange={(event) => handleFormatChange(event.target.value)}
+          >
+            <option value="">Select</option>
+            {adminOfficialFormatOptions.map((format) => (
+              <option key={format} value={format}>
+                {format}
+              </option>
+            ))}
+          </select>
+        </AdminCreateField>
+        <AdminCreateField label="Player group">
+          <select
+            aria-label="Player group"
+            value={form.gamePlayerGroup}
+            onChange={(event) => updateField('gamePlayerGroup', event.target.value)}
+          >
+            <option value="">Select</option>
+            {adminOfficialPlayerGroupOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </AdminCreateField>
+        <AdminCreateField label="Skill level">
+          <select
+            aria-label="Skill level"
+            value={form.skillLevel}
+            onChange={(event) => updateField('skillLevel', event.target.value)}
+          >
+            <option value="">Select</option>
+            {adminOfficialSkillLevelOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </AdminCreateField>
+        <AdminCreateField label="Indoor/Outdoor">
+          <select
+            aria-label="Indoor or outdoor"
+            value={form.environmentType}
+            onChange={(event) => updateField('environmentType', event.target.value)}
+          >
+            <option value="">Select</option>
+            {adminOfficialEnvironmentOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </AdminCreateField>
+        <AdminCreateField label="Total spots">
+          <select
+            aria-label="Total spots"
+            value={form.totalSpots || ''}
+            onChange={(event) => (
+              updateField('totalSpots', event.target.value ? Number(event.target.value) : '')
+            )}
+          >
+            <option value="">Select</option>
+            {totalSpotOptions.map((spots) => (
+              <option key={spots} value={spots}>
+                {spots}
+              </option>
+            ))}
+          </select>
+        </AdminCreateField>
+        <AdminCreateField label="Price per player">
+          <AdminCreateCurrencyInput
+            value={form.price}
+            onChange={(value) => updateField('price', value)}
+          />
+        </AdminCreateField>
       </div>
     </>
   )

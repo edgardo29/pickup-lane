@@ -5,11 +5,16 @@ function AdminCreateOfficialGameStepRail({ activeStep }) {
     <ol className="admin-create-steps" aria-label="Create official game progress">
       {adminCreateOfficialGameSteps.map((step) => (
         <li
-          className={step.id === activeStep ? 'active' : step.id < activeStep ? 'complete' : ''}
+          className={`admin-create-step ${step.id === activeStep ? 'active' : step.id < activeStep ? 'complete' : ''}`.trim()}
           key={step.id}
         >
-          <span>{step.id}</span>
-          <strong>{step.label}</strong>
+          <span className="admin-create-step__content">
+            <span className="admin-create-step__marker">{step.id}</span>
+            <strong>
+              <span className="admin-create-step__label-full">{step.label}</span>
+              <span className="admin-create-step__label-mobile">{step.mobileLabel || step.label}</span>
+            </strong>
+          </span>
         </li>
       ))}
     </ol>

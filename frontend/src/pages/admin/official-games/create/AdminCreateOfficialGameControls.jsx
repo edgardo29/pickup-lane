@@ -21,26 +21,6 @@ export function AdminCreateField({ icon, label, children }) {
   )
 }
 
-export function AdminCreateStepperInput({ ariaLabel, value, min, max, onChange }) {
-  const numericValue = Number(value) || min
-
-  function updateValue(nextValue) {
-    onChange(Math.min(Math.max(nextValue, min), max))
-  }
-
-  return (
-    <div className="admin-create-stepper">
-      <button type="button" onClick={() => updateValue(numericValue - 1)} aria-label={`Decrease ${ariaLabel}`}>
-        -
-      </button>
-      <strong>{numericValue}</strong>
-      <button type="button" onClick={() => updateValue(numericValue + 1)} aria-label={`Increase ${ariaLabel}`}>
-        +
-      </button>
-    </div>
-  )
-}
-
 export function AdminCreateCurrencyInput({ value, onChange }) {
   function sanitizeMoney(nextValue) {
     const digitsOnly = nextValue.replace(/[^\d]/g, '')
@@ -49,7 +29,6 @@ export function AdminCreateCurrencyInput({ value, onChange }) {
 
   return (
     <div className="admin-create-money-input">
-      <span>$</span>
       <input
         inputMode="numeric"
         pattern="[0-9]*"
@@ -60,11 +39,19 @@ export function AdminCreateCurrencyInput({ value, onChange }) {
   )
 }
 
-export function AdminCreateTextInput({ field, form, label, placeholder, updateField }) {
+export function AdminCreateTextInput({
+  field,
+  form,
+  label,
+  maxLength,
+  placeholder,
+  updateField,
+}) {
   return (
     <label className="admin-create-text-field">
       <span>{label}</span>
       <input
+        maxLength={maxLength}
         placeholder={placeholder}
         value={form[field]}
         onChange={(event) => updateField(field, event.target.value)}
@@ -107,14 +94,6 @@ export function AdminCreateToggle({ checked, label, text, onChange }) {
   )
 }
 
-export function AdminCreateModeButton({ active, children, onClick }) {
-  return (
-    <button className={active ? 'active' : ''} type="button" onClick={onClick}>
-      {children}
-    </button>
-  )
-}
-
 export function AdminCreateTextarea({ field, form, label, maxLength, placeholder, updateField }) {
   return (
     <label className="admin-create-textarea-field">
@@ -127,15 +106,5 @@ export function AdminCreateTextarea({ field, form, label, maxLength, placeholder
       />
       <small>{form[field].length}/{maxLength}</small>
     </label>
-  )
-}
-
-export function AdminCreateReviewRow({ icon, label, value }) {
-  return (
-    <div className="admin-create-review-row">
-      {icon}
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   )
 }

@@ -22,7 +22,7 @@ export function buildAuthProviderVerificationActions({
       await activeUser.reload()
       const latestUser = auth.currentUser || activeUser
       if (latestUser.emailVerified) {
-        const syncedUser = await syncFirebaseUser(latestUser)
+        const syncedUser = await syncFirebaseUser(latestUser, true)
         setFirebaseUser(latestUser)
         setAppUser(syncedUser)
         return
@@ -49,7 +49,7 @@ export function buildAuthProviderVerificationActions({
       }
 
       const refreshedAppUser = refreshedUser.emailVerified
-        ? await syncFirebaseUser(refreshedUser)
+        ? await syncFirebaseUser(refreshedUser, true)
         : await getAuthenticatedAppUser(refreshedUser, true)
       setAppUser((currentAppUser) => {
         if (

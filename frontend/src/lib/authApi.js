@@ -34,12 +34,12 @@ export async function getAuthenticatedAppUser(firebaseUser, forceRefresh = false
   }
 }
 
-export async function syncFirebaseUser(firebaseUser) {
+export async function syncFirebaseUser(firebaseUser, forceRefresh = false) {
   if (!firebaseUser?.uid || !firebaseUser?.email) {
     return null
   }
 
-  const idToken = await firebaseUser.getIdToken()
+  const idToken = await firebaseUser.getIdToken(forceRefresh)
 
   return apiRequest('/auth/sync-user', {
     method: 'POST',
