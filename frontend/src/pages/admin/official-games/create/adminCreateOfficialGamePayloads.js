@@ -24,6 +24,8 @@ export function buildAdminCreateOfficialGamePayload(
     ends_at: buildOfficialGameIsoDateTime(form.date, form.endTime, timeZone),
     timezone: timeZone,
     format_label: form.formatLabel,
+    game_player_group: form.gamePlayerGroup,
+    skill_level: form.skillLevel,
     environment_type: form.environmentType,
     total_spots: Number(form.totalSpots),
     price_per_player_cents: moneyToCents(form.price),

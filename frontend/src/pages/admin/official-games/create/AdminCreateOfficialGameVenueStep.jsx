@@ -1,12 +1,16 @@
 import { useRef } from 'react'
 import { MapPinIcon, PlusCircleIcon } from '../../../../components/BrowseIcons.jsx'
+import { FormErrorMessage } from '../../../../components/FormErrorMessage.jsx'
 import {
   AdminCreateSelectInput,
   AdminCreateStepHeading,
   AdminCreateTextarea,
   AdminCreateTextInput,
 } from './AdminCreateOfficialGameControls.jsx'
-import { US_STATE_OPTIONS } from './adminCreateOfficialGameData.js'
+import {
+  adminOfficialCreateFieldLimits,
+  US_STATE_OPTIONS,
+} from './adminCreateOfficialGameData.js'
 
 function AdminCreateOfficialGameVenueStep({
   form,
@@ -35,52 +39,73 @@ function AdminCreateOfficialGameVenueStep({
         text="Add the venue details players will see on the official game page."
       />
 
-      <div className="admin-create-grid admin-create-grid--single">
-        <AdminCreateTextInput
-          field="venueName"
+      <div className="admin-create-location-fields">
+        <div className="admin-create-location-field admin-create-location-field--venue">
+          <AdminCreateTextInput
+            field="venueName"
+            form={form}
+            label="Venue name"
+            maxLength={adminOfficialCreateFieldLimits.venueName}
+            updateField={updateField}
+          />
+        </div>
+        <div className="admin-create-location-field admin-create-location-field--street">
+          <AdminCreateTextInput
+            field="addressLine1"
+            form={form}
+            label="Street address"
+            maxLength={adminOfficialCreateFieldLimits.addressLine1}
+            updateField={updateField}
+          />
+        </div>
+        <div className="admin-create-location-field admin-create-location-field--city">
+          <AdminCreateTextInput
+            field="city"
+            form={form}
+            label="City"
+            maxLength={adminOfficialCreateFieldLimits.city}
+            updateField={updateField}
+          />
+        </div>
+        <div className="admin-create-location-field admin-create-location-field--state">
+          <AdminCreateSelectInput
+            field="state"
+            form={form}
+            label="State"
+            options={US_STATE_OPTIONS}
+            updateField={updateField}
+          />
+        </div>
+        <div className="admin-create-location-field admin-create-location-field--zip">
+          <AdminCreateTextInput
+            field="postalCode"
+            form={form}
+            label="ZIP code"
+            maxLength={adminOfficialCreateFieldLimits.postalCode}
+            updateField={updateField}
+          />
+        </div>
+        <div className="admin-create-location-field admin-create-location-field--neighborhood">
+          <AdminCreateTextInput
+            field="neighborhood"
+            form={form}
+            label="Neighborhood (optional)"
+            maxLength={adminOfficialCreateFieldLimits.neighborhood}
+            updateField={updateField}
+          />
+        </div>
+      </div>
+
+      <div className="admin-create-location-note">
+        <AdminCreateTextarea
+          field="parkingNotes"
           form={form}
-          label="Venue name"
-          placeholder="e.g. Harrison Park"
-          updateField={updateField}
-        />
-        <AdminCreateTextInput
-          field="addressLine1"
-          form={form}
-          label="Street address"
-          placeholder="840 S Wood St"
+          label="Parking note (optional)"
+          maxLength={adminOfficialCreateFieldLimits.parkingNotes}
+          placeholder="Share parking info or nearby options."
           updateField={updateField}
         />
       </div>
-
-      <div className="admin-create-grid admin-create-grid--two">
-        <AdminCreateTextInput field="city" form={form} label="City" placeholder="Chicago" updateField={updateField} />
-        <AdminCreateSelectInput
-          field="state"
-          form={form}
-          label="State"
-          options={US_STATE_OPTIONS}
-          updateField={updateField}
-        />
-        <AdminCreateTextInput field="postalCode" form={form} label="ZIP code" placeholder="60608" updateField={updateField} />
-        <AdminCreateTextInput
-          field="neighborhood"
-          form={form}
-          label="Neighborhood (optional)"
-          placeholder="Near West Side"
-          updateField={updateField}
-        />
-      </div>
-
-      <div className="admin-create-divider" />
-
-      <AdminCreateTextarea
-        field="parkingNotes"
-        form={form}
-        label="Parking note (optional)"
-        maxLength={160}
-        placeholder="Share parking info or nearby options."
-        updateField={updateField}
-      />
 
       <div className="admin-create-photo-panel" aria-label="Venue photos">
         <div>
@@ -104,7 +129,7 @@ function AdminCreateOfficialGameVenueStep({
         />
       </div>
 
-      {photoError && <p className="admin-create-error">{photoError}</p>}
+      <FormErrorMessage>{photoError}</FormErrorMessage>
 
       {photos.length > 0 && (
         <div className="admin-create-photo-grid" aria-label="Selected venue photos">

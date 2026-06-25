@@ -1,4 +1,11 @@
-import { getTodayDate } from './adminCreateOfficialGameData.js'
+import {
+  adminOfficialCreateFieldLimits,
+  adminOfficialEnvironmentOptions,
+  adminOfficialFormatOptions,
+  adminOfficialPlayerGroupOptions,
+  adminOfficialSkillLevelOptions,
+  getTodayDate,
+} from './adminCreateOfficialGameData.js'
 import { buildOfficialGameIsoDateTime } from '../shared/adminOfficialGameDateTime.js'
 
 export function getMinimumAdminOfficialSpots(format) {
@@ -15,12 +22,44 @@ export function getMinimumAdminOfficialSpots(format) {
 
 export function validateAdminOfficialCreateStep(step, form) {
   if (step === 1) {
-    if (form.date < getTodayDate()) {
-      return 'Choose today or a future date.'
+    const missingGameFields = [
+      [!form.date, 'date', 'Choose a date.'],
+      [!form.startTime, 'start time', 'Choose a start time.'],
+      [!form.endTime, 'end time', 'Choose an end time.'],
+      [
+        !adminOfficialFormatOptions.includes(form.formatLabel),
+        'format',
+        'Choose a game format.',
+      ],
+      [
+        !adminOfficialPlayerGroupOptions.some(
+          (option) => option.value === form.gamePlayerGroup,
+        ),
+        'player group',
+        'Choose a player group.',
+      ],
+      [
+        !adminOfficialSkillLevelOptions.some((option) => option.value === form.skillLevel),
+        'skill level',
+        'Choose a skill level.',
+      ],
+      [
+        !adminOfficialEnvironmentOptions.some(
+          (option) => option.value === form.environmentType,
+        ),
+        'indoor/outdoor',
+        'Choose indoor or outdoor.',
+      ],
+      [form.totalSpots === '' || form.totalSpots == null, 'total spots', 'Choose total spots.'],
+    ].filter(([isMissing]) => isMissing)
+
+    const missingMessage = getRequiredFieldsMessage(missingGameFields)
+    if (missingMessage) {
+      return missingMessage
     }
 
-    if (!form.startTime || !form.endTime) {
-      return 'Choose a start and end time.'
+    if (form.date < getTodayDate()) {
+      return 'Choose today or a future date.'
     }
 
     if (form.endTime <= form.startTime) {
@@ -48,29 +87,76 @@ export function validateAdminOfficialCreateStep(step, form) {
       return `${form.formatLabel} games need at least ${minimumSpots} total spots.`
     }
 
-    if (Number(form.price) < 0) {
-      return 'Price cannot be negative.'
+    if (!Number.isFinite(Number(form.price)) || Number(form.price) < 0) {
+      return 'Price per player must be 0 or more.'
     }
   }
 
   if (step === 2) {
-    const requiredVenueFields = [
-      ['venueName', 'venue name'],
-      ['addressLine1', 'street address'],
-      ['city', 'city'],
-      ['state', 'state'],
-      ['postalCode', 'postal code'],
-    ]
-    const missingField = requiredVenueFields.find(([field]) => !String(form[field]).trim())
+    const locationLengthError = validateFieldLengths([
+      ['Venue name', form.venueName, adminOfficialCreateFieldLimits.venueName],
+      ['Street address', form.addressLine1, adminOfficialCreateFieldLimits.addressLine1],
+      ['City', form.city, adminOfficialCreateFieldLimits.city],
+      ['ZIP code', form.postalCode, adminOfficialCreateFieldLimits.postalCode],
+      ['Neighborhood', form.neighborhood, adminOfficialCreateFieldLimits.neighborhood],
+      ['Parking note', form.parkingNotes, adminOfficialCreateFieldLimits.parkingNotes],
+    ])
+    if (locationLengthError) {
+      return locationLengthError
+    }
 
-    if (missingField) {
-      return `Add a ${missingField[1]}.`
+    const missingLocationFields = [
+      [!form.venueName.trim(), 'venue name', 'Add venue name.'],
+      [!form.addressLine1.trim(), 'street address', 'Add street address.'],
+      [!form.city.trim(), 'city', 'Add city.'],
+      [!form.state.trim(), 'state', 'Add state.'],
+      [!form.postalCode.trim(), 'ZIP code', 'Add ZIP code.'],
+    ].filter(([isMissing]) => isMissing)
+
+    const missingMessage = getRequiredFieldsMessage(missingLocationFields)
+    if (missingMessage) {
+      return missingMessage
     }
   }
 
   if (step === 3) {
     if (Number(form.maxGuestsPerBooking) < 0) {
       return 'Max guests cannot be negative.'
+    }
+  }
+
+  return ''
+}
+
+function getRequiredFieldsMessage(missingFields) {
+  if (missingFields.length === 0) {
+    return ''
+  }
+
+  if (missingFields.length === 1) {
+    return missingFields[0][2]
+  }
+
+  const labels = missingFields.map(([, label]) => label)
+  return `Add ${formatList(labels)}.`
+}
+
+function formatList(labels) {
+  if (labels.length === 1) {
+    return labels[0]
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`
+  }
+
+  return `${labels.slice(0, -1).join(', ')}, and ${labels.at(-1)}`
+}
+
+function validateFieldLengths(fields) {
+  for (const [label, value, maxLength] of fields) {
+    if (String(value || '').length > maxLength) {
+      return `${label} must be ${maxLength} characters or fewer.`
     }
   }
 

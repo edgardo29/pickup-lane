@@ -1,4 +1,5 @@
 import { BadgePlus } from 'lucide-react'
+import { FormErrorMessage } from '../../../../components/FormErrorMessage.jsx'
 import AdminWorkspaceLayout from '../../shared/AdminWorkspaceLayout.jsx'
 import AdminCreateOfficialGamePreview from './AdminCreateOfficialGamePreview.jsx'
 import AdminCreateOfficialGameReviewStep from './AdminCreateOfficialGameReviewStep.jsx'
@@ -64,8 +65,8 @@ function AdminCreateOfficialGameLayout({
               )}
 
               {replacementLoadState === 'error' && (
-                <div className="admin-create-replacement-error" role="alert">
-                  <p className="admin-create-error admin-create-error--top">{pageError}</p>
+                <div className="admin-create-replacement-error">
+                  <FormErrorMessage>{pageError}</FormErrorMessage>
                   <button
                     className="admin-create-secondary"
                     type="button"
@@ -78,7 +79,7 @@ function AdminCreateOfficialGameLayout({
 
               {!replacementSourceBlocked && (
                 <>
-                  {pageError && <p className="admin-create-error admin-create-error--top">{pageError}</p>}
+                  {activeStep !== 4 && <FormErrorMessage>{pageError}</FormErrorMessage>}
 
                   {activeStep === 1 && (
                     <AdminCreateOfficialGameScheduleStep form={form} updateField={onUpdateField} />
@@ -99,11 +100,12 @@ function AdminCreateOfficialGameLayout({
                   {activeStep === 4 && (
                     <AdminCreateOfficialGameReviewStep
                       form={form}
+                      photos={photos}
                       publishError={pageError}
                     />
                   )}
 
-                  {stepError && <p className="admin-create-error">{stepError}</p>}
+                  <FormErrorMessage>{stepError}</FormErrorMessage>
                 </>
               )}
 
@@ -120,7 +122,7 @@ function AdminCreateOfficialGameLayout({
                     )}
                     {isLastStep ? (
                       <button
-                        className="admin-create-primary"
+                        className="admin-create-primary admin-create-primary--publish"
                         disabled={
                           saveState === 'checking_photos' ||
                             saveState === 'saving' ||
@@ -129,13 +131,16 @@ function AdminCreateOfficialGameLayout({
                         type="button"
                         onClick={onCreate}
                       >
-                        {getCreateButtonLabel(saveState, hasCreatedGame)}
-                        <span aria-hidden="true">-&gt;</span>
+                        <span>{getCreateButtonLabel(saveState, hasCreatedGame)}</span>
+                        <span aria-hidden="true">→</span>
                       </button>
                     ) : (
                       <button className="admin-create-primary" type="button" onClick={onNext}>
-                        Next: {adminCreateOfficialGameSteps[activeStep].label}
-                        <span aria-hidden="true">-&gt;</span>
+                        <span className="admin-create-primary__label-full">
+                          Next: {adminCreateOfficialGameSteps[activeStep].label}
+                        </span>
+                        <span className="admin-create-primary__label-short">Next</span>
+                        <span aria-hidden="true">→</span>
                       </button>
                     )}
                   </div>
@@ -143,7 +148,9 @@ function AdminCreateOfficialGameLayout({
               </div>
             </div>
 
-            {!replacementSourceBlocked && <AdminCreateOfficialGamePreview form={form} />}
+            {!replacementSourceBlocked && (
+              <AdminCreateOfficialGamePreview activeStep={activeStep} form={form} />
+            )}
           </section>
         </div>
       </AdminWorkspaceLayout>
