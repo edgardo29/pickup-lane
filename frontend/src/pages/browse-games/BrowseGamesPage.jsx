@@ -34,16 +34,28 @@ function BrowseGamesPage() {
             )}
 
             {page.status === 'success' && page.timeGroups.length > 0 && (
-              <div className="browse-results">
-                {page.timeGroups.map((group) => (
-                  <BrowseTimeSection
-                    group={group}
-                    imageUrlsByGameId={page.imageUrlsByGameId}
-                    participantCountsByGameId={page.participantCountsByGameId}
-                    key={group.label}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="browse-results">
+                  {page.timeGroups.map((group) => (
+                    <BrowseTimeSection
+                      group={group}
+                      key={group.label}
+                    />
+                  ))}
+                </div>
+
+                {page.hasMoreGames && (
+                  <div className="browse-load-more">
+                    <button
+                      type="button"
+                      onClick={page.loadMoreGames}
+                      disabled={page.isLoadingMore}
+                    >
+                      {page.isLoadingMore ? 'Loading…' : 'Load More'}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
         </>

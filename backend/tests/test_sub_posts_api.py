@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
@@ -59,6 +60,15 @@ def notification_types(notifications: list[dict]) -> set[str]:
 
 def parse_iso_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def sub_post_local_date(post: dict) -> str:
+    return (
+        parse_iso_datetime(post["starts_at"])
+        .astimezone(ZoneInfo(post["timezone"]))
+        .date()
+        .isoformat()
+    )
 
 
 def test_need_a_sub_post_routes_reject_suspended_user(client: TestClient):
@@ -165,6 +175,113 @@ def test_sub_posts_create_get_list_cancel_and_remove(client: TestClient):
         "new_status": "removed",
         "removed_by": "admin",
     }
+
+
+def test_sub_post_cards_cursor_paginates_and_returns_counts(client: TestClient):
+    owners = [create_user(client) for _ in range(3)]
+    requester = create_user(client)
+    base_start = (
+        datetime.now(UTC)
+        .replace(hour=18, minute=0, second=0, microsecond=0)
+        + timedelta(days=7)
+    )
+
+    posts: list[dict] = []
+    for index, owner in enumerate(owners):
+        starts_at = base_start + timedelta(hours=index)
+        post = create_sub_post(
+            client,
+            owner["id"],
+            location_name=f"Card Field {index + 1}",
+            starts_at=starts_at.isoformat(),
+            ends_at=(starts_at + timedelta(hours=2)).isoformat(),
+        )
+        posts.append(post)
+
+    request_sub_spot(client, requester["id"], posts[0])
+
+    starts_on = sub_post_local_date(posts[0])
+    first_page = client.get(
+        "/need-a-sub/posts/cards",
+        params={"view": "all", "starts_on": starts_on, "limit": 2},
+    )
+
+    assert first_page.status_code == 200, first_page.text
+    first_body = first_page.json()
+    assert first_body["limit"] == 2
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"]
+    assert [post["id"] for post in first_body["posts"]] == [
+        posts[0]["id"],
+        posts[1]["id"],
+    ]
+    assert first_body["posts"][0]["pending_count"] == 1
+    assert first_body["posts"][0]["positions"][0]["pending_count"] == 1
+
+    second_page = client.get(
+        "/need-a-sub/posts/cards",
+        params={
+            "view": "all",
+            "starts_on": starts_on,
+            "limit": 2,
+            "cursor": first_body["next_cursor"],
+        },
+    )
+    assert second_page.status_code == 200, second_page.text
+    second_body = second_page.json()
+    assert [post["id"] for post in second_body["posts"]] == [posts[2]["id"]]
+    assert second_body["has_more"] is False
+    assert second_body["next_cursor"] is None
+
+    authenticate_optional_as(owners[0]["id"])
+    mismatch_response = client.get(
+        "/need-a-sub/posts/cards",
+        params={
+            "view": "mine",
+            "starts_on": starts_on,
+            "cursor": first_body["next_cursor"],
+        },
+    )
+    assert mismatch_response.status_code == 400, mismatch_response.text
+    assert "cursor does not match" in mismatch_response.text
+
+
+def test_sub_post_cards_mine_filters_owner_and_caps_limit(client: TestClient):
+    owner = create_user(client)
+    other_owner = create_user(client)
+    base_start = (
+        datetime.now(UTC)
+        .replace(hour=18, minute=0, second=0, microsecond=0)
+        + timedelta(days=7)
+    )
+    owner_post = create_sub_post(
+        client,
+        owner["id"],
+        starts_at=base_start.isoformat(),
+        ends_at=(base_start + timedelta(hours=2)).isoformat(),
+    )
+    create_sub_post(
+        client,
+        other_owner["id"],
+        location_name="Other Owner Field",
+        starts_at=(base_start + timedelta(hours=1)).isoformat(),
+        ends_at=(base_start + timedelta(hours=3)).isoformat(),
+    )
+
+    authenticate_optional_as(owner["id"])
+    response = client.get(
+        "/need-a-sub/posts/cards",
+        params={
+            "view": "mine",
+            "starts_on": sub_post_local_date(owner_post),
+            "limit": 500,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["limit"] == 100
+    assert [post["id"] for post in body["posts"]] == [owner_post["id"]]
 
 
 def test_sub_posts_cancel_cancels_active_requests_and_blocks_review(client: TestClient):

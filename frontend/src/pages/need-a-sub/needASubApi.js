@@ -13,6 +13,35 @@ export function listNeedASubPosts(query = {}) {
   return apiRequest(`/need-a-sub/posts${queryString ? `?${queryString}` : ''}`)
 }
 
+export async function listNeedASubPostCards(
+  firebaseUser,
+  {
+    cursor = '',
+    limit = 40,
+    startsOn,
+    view = 'all',
+  } = {},
+) {
+  const params = new URLSearchParams()
+
+  params.set('view', view)
+  params.set('limit', String(limit))
+  if (startsOn) {
+    params.set('starts_on', startsOn)
+  }
+  if (cursor) {
+    params.set('cursor', cursor)
+  }
+
+  const path = `/need-a-sub/posts/cards?${params.toString()}`
+
+  if (firebaseUser) {
+    return authenticatedRequest(firebaseUser, path)
+  }
+
+  return apiRequest(path)
+}
+
 export async function listMyNeedASubPosts(firebaseUser) {
   return authenticatedRequest(firebaseUser, '/need-a-sub/posts/mine')
 }

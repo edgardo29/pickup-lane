@@ -14,6 +14,7 @@ depends_on = None
 def upgrade() -> None:
     # Fifth schema migration: create the games table that captures the core
     # game listing, venue snapshot, and lifecycle state without bookings.
+    op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
     op.create_table(
         "games",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -298,21 +299,97 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_games_browse_city_publish_status_game_status_starts_at",
+        "ix_games_browse_cards_local_starts_created_id",
         "games",
-        ["city_snapshot", "publish_status", "game_status", "starts_at"],
+        ["starts_on_local", "starts_at", "created_at", "id"],
         unique=False,
+        postgresql_where=sa.text(
+            "publish_status = 'published' "
+            "AND game_status IN ('scheduled', 'full') "
+            "AND deleted_at IS NULL"
+        ),
+    )
+    op.create_index(
+        "ix_games_host_cards_starts_created_id",
+        "games",
+        ["host_user_id", "starts_at", "created_at", "id"],
+        unique=False,
+        postgresql_where=sa.text(
+            "publish_status = 'published' "
+            "AND deleted_at IS NULL"
+        ),
+    )
+    admin_official_index_where = sa.text(
+        "game_type = 'official' "
+        "AND publish_status = 'published' "
+        "AND deleted_at IS NULL"
+    )
+    op.create_index(
+        "ix_games_admin_official_status_starts_created_id",
+        "games",
+        ["game_status", "starts_at", "created_at", "id"],
+        unique=False,
+        postgresql_where=admin_official_index_where,
+    )
+    op.create_index(
+        "ix_games_admin_official_status_local_starts_created_id",
+        "games",
+        ["game_status", "starts_on_local", "starts_at", "created_at", "id"],
+        unique=False,
+        postgresql_where=admin_official_index_where,
+    )
+    op.create_index(
+        "ix_games_admin_official_title_trgm",
+        "games",
+        ["title"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"title": "gin_trgm_ops"},
+        postgresql_where=admin_official_index_where,
+    )
+    op.create_index(
+        "ix_games_admin_official_venue_name_trgm",
+        "games",
+        ["venue_name_snapshot"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"venue_name_snapshot": "gin_trgm_ops"},
+        postgresql_where=admin_official_index_where,
+    )
+    op.create_index(
+        "ix_games_admin_official_city_trgm",
+        "games",
+        ["city_snapshot"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"city_snapshot": "gin_trgm_ops"},
+        postgresql_where=admin_official_index_where,
+    )
+    op.create_index(
+        "ix_games_admin_official_state_trgm",
+        "games",
+        ["state_snapshot"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"state_snapshot": "gin_trgm_ops"},
+        postgresql_where=admin_official_index_where,
     )
 
 
 def downgrade() -> None:
     # Downgrade removes the games table and its indexes because this migration
     # only introduces that single table.
-    op.execute("DROP INDEX IF EXISTS ux_games_one_active_community_game_per_host_date")
-    op.drop_index(
-        "ix_games_browse_city_publish_status_game_status_starts_at",
-        table_name="games",
+    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_state_trgm")
+    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_city_trgm")
+    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_venue_name_trgm")
+    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_title_trgm")
+    op.execute(
+        "DROP INDEX IF EXISTS ix_games_admin_official_status_local_starts_created_id"
     )
+    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_status_starts_created_id")
+    op.execute("DROP INDEX IF EXISTS ix_games_host_cards_starts_created_id")
+    op.execute("DROP INDEX IF EXISTS ix_games_browse_cards_local_starts_created_id")
+    op.execute("DROP INDEX IF EXISTS ux_games_one_active_community_game_per_host_date")
     op.drop_index("ix_games_starts_at", table_name="games")
     op.execute("DROP INDEX IF EXISTS ix_games_starts_on_local")
     op.drop_index("ix_games_created_by_user_id", table_name="games")

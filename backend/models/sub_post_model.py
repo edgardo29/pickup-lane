@@ -67,6 +67,23 @@ class SubPost(Base):
             postgresql_where=text("post_status IN ('active', 'filled')"),
         ),
         Index(
+            "ix_sub_posts_cards_local_starts_created_id",
+            "starts_on_local",
+            "starts_at",
+            "created_at",
+            "id",
+            postgresql_where=text("post_status IN ('active', 'filled')"),
+        ),
+        Index(
+            "ix_sub_posts_owner_cards_local_starts_created_id",
+            "owner_user_id",
+            "starts_on_local",
+            "starts_at",
+            "created_at",
+            "id",
+            postgresql_where=text("post_status IN ('active', 'filled')"),
+        ),
+        Index(
             "ux_sub_posts_owner_live_starts_on_local",
             "owner_user_id",
             "starts_on_local",

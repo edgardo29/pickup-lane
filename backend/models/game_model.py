@@ -165,11 +165,96 @@ class Game(Base):
             ),
         ),
         Index(
-            "ix_games_browse_city_publish_status_game_status_starts_at",
-            "city_snapshot",
-            "publish_status",
+            "ix_games_browse_cards_local_starts_created_id",
+            "starts_on_local",
+            "starts_at",
+            "created_at",
+            "id",
+            postgresql_where=text(
+                "publish_status = 'published' "
+                "AND game_status IN ('scheduled', 'full') "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_host_cards_starts_created_id",
+            "host_user_id",
+            "starts_at",
+            "created_at",
+            "id",
+            postgresql_where=text(
+                "publish_status = 'published' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_official_status_starts_created_id",
             "game_status",
             "starts_at",
+            "created_at",
+            "id",
+            postgresql_where=text(
+                "game_type = 'official' "
+                "AND publish_status = 'published' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_official_status_local_starts_created_id",
+            "game_status",
+            "starts_on_local",
+            "starts_at",
+            "created_at",
+            "id",
+            postgresql_where=text(
+                "game_type = 'official' "
+                "AND publish_status = 'published' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_official_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+            postgresql_where=text(
+                "game_type = 'official' "
+                "AND publish_status = 'published' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_official_venue_name_trgm",
+            "venue_name_snapshot",
+            postgresql_using="gin",
+            postgresql_ops={"venue_name_snapshot": "gin_trgm_ops"},
+            postgresql_where=text(
+                "game_type = 'official' "
+                "AND publish_status = 'published' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_official_city_trgm",
+            "city_snapshot",
+            postgresql_using="gin",
+            postgresql_ops={"city_snapshot": "gin_trgm_ops"},
+            postgresql_where=text(
+                "game_type = 'official' "
+                "AND publish_status = 'published' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_official_state_trgm",
+            "state_snapshot",
+            postgresql_using="gin",
+            postgresql_ops={"state_snapshot": "gin_trgm_ops"},
+            postgresql_where=text(
+                "game_type = 'official' "
+                "AND publish_status = 'published' "
+                "AND deleted_at IS NULL"
+            ),
         ),
     )
 

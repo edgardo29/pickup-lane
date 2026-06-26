@@ -156,35 +156,53 @@
 }
 
 .app-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid rgba(248, 250, 252, 0.1);
+  border-radius: 10px;
+  background: rgba(5, 10, 16, 0.44);
+  display: inline-grid;
+  grid-auto-columns: minmax(108px, 1fr);
+  grid-auto-flow: column;
+  gap: 4px;
+  overflow: visible;
 }
 
 .app-tabs button {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid rgba(248, 250, 252, 0.14);
-  border-radius: 999px;
-  color: rgba(248, 250, 252, 0.76);
-  background: rgba(248, 250, 252, 0.035);
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: rgba(248, 250, 252, 0.72);
+  background: transparent;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   font: inherit;
-  font-size: 0.92rem;
-  font-weight: 850;
+  font-size: 0.8rem;
+  font-weight: 650;
+  box-shadow: none;
+}
+
+.app-tabs button:hover {
+  color: #ffffff;
+  background: rgba(248, 250, 252, 0.045);
 }
 
 .app-tabs button.active {
-  border-color: rgba(184, 255, 36, 0.38);
+  border-color: rgba(184, 255, 36, 0.28);
   color: var(--lime);
-  background: rgba(184, 255, 36, 0.08);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.052), rgba(248, 250, 252, 0.014)),
+    rgba(13, 22, 31, 0.8);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.07);
 }
 
 .app-tabs button:focus-visible {
-  outline: 2px solid var(--lime);
-  outline-offset: 3px;
+  outline: 2px solid rgba(184, 255, 36, 0.52);
+  outline-offset: 2px;
 }
 
 .app-card-grid {
@@ -1034,6 +1052,11 @@
 
   .app-page-header__tabs {
     padding-left: 0;
+  }
+
+  .app-tabs {
+    width: 100%;
+    grid-auto-columns: minmax(0, 1fr);
   }
 
   .app-card-grid {

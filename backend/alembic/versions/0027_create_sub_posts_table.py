@@ -174,6 +174,18 @@ def upgrade() -> None:
         postgresql_where=sa.text("post_status IN ('active', 'filled')"),
     )
     op.create_index(
+        "ix_sub_posts_cards_local_starts_created_id",
+        "sub_posts",
+        ["starts_on_local", "starts_at", "created_at", "id"],
+        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+    )
+    op.create_index(
+        "ix_sub_posts_owner_cards_local_starts_created_id",
+        "sub_posts",
+        ["owner_user_id", "starts_on_local", "starts_at", "created_at", "id"],
+        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+    )
+    op.create_index(
         "ux_sub_posts_owner_live_starts_on_local",
         "sub_posts",
         ["owner_user_id", "starts_on_local"],
@@ -202,6 +214,18 @@ def downgrade() -> None:
     )
     op.drop_index(
         "ix_sub_posts_browse_active_filled_starts_at",
+        table_name="sub_posts",
+        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_sub_posts_owner_cards_local_starts_created_id",
+        table_name="sub_posts",
+        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_sub_posts_cards_local_starts_created_id",
         table_name="sub_posts",
         postgresql_where=sa.text("post_status IN ('active', 'filled')"),
         if_exists=True,

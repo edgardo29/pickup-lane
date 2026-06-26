@@ -130,6 +130,11 @@ class GameParticipant(Base):
             "participant_status",
         ),
         Index(
+            "ix_game_participants_user_id_game_id",
+            "user_id",
+            "game_id",
+        ),
+        Index(
             "ux_game_participants_active_registered_user_per_game",
             "game_id",
             "user_id",

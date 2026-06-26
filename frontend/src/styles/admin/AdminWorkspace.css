@@ -1,5 +1,5 @@
 .admin-page {
-  --admin-shell-max-width: 1600px;
+  --admin-shell-max-width: 1640px;
   --admin-shell-inline-gutter: 28px;
   --admin-workspace-sidebar-width: 236px;
   --admin-workspace-gap: 24px;
@@ -417,10 +417,6 @@
 }
 
 @media (max-width: 600px) {
-  .admin-page {
-    --admin-shell-inline-gutter: 10px;
-  }
-
   .admin-page-header {
     min-height: 0;
     padding: 8px 0 18px;

@@ -6,12 +6,14 @@ from sqlalchemy import select
 
 from backend.database import SessionLocal
 from backend.models import (
+    Game,
     GameCredit,
     GameCreditUsage,
     Notification,
     Payment,
     Refund,
     SupportFlag,
+    VenueImage,
 )
 from backend.services.admin_permission_service import (
     PERMISSION_MONEY_READ,
@@ -107,9 +109,6 @@ def issue_game_credit(
 
 
 def set_game_status(game_id: str, game_status: str) -> None:
-    from backend.database import SessionLocal
-    from backend.models import Game
-
     with SessionLocal() as db:
         db_game = db.get(Game, UUID(game_id))
         assert db_game is not None
@@ -123,19 +122,53 @@ def set_game_status(game_id: str, game_status: str) -> None:
 
 
 def set_game_starts_at(game_id: str, starts_at: datetime) -> None:
-    from backend.database import SessionLocal
-    from backend.models import Game
-
     with SessionLocal() as db:
         db_game = db.get(Game, UUID(game_id))
         assert db_game is not None
         db_game.starts_at = starts_at
         db_game.ends_at = starts_at + timedelta(hours=1)
+        db_game.starts_on_local = starts_at.date()
+        db.commit()
+
+
+def set_game_host(game_id: str, host_user_id: str) -> None:
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game_id))
+        assert db_game is not None
+        db_game.host_user_id = UUID(host_user_id)
+        db.commit()
+
+
+def create_active_primary_venue_image(venue_id: str, uploaded_by_user_id: str) -> None:
+    now = datetime.now(UTC)
+    image_id = uuid4()
+
+    with SessionLocal() as db:
+        db.add(
+            VenueImage(
+                id=image_id,
+                venue_id=UUID(venue_id),
+                uploaded_by_user_id=UUID(uploaded_by_user_id),
+                blob_name=f"venues/{venue_id}/primary-{image_id}.jpg",
+                container_name="venue-images",
+                storage_account_name="pickuplanetestmedia",
+                content_type="image/jpeg",
+                size_bytes=1200,
+                etag=f"etag-{image_id}",
+                image_role="card",
+                image_status="active",
+                is_primary=True,
+                sort_order=0,
+                alt_text="Primary venue photo",
+                caption="Primary venue photo",
+                upload_requested_at=now,
+                upload_completed_at=now,
+            )
+        )
         db.commit()
 
 
 def set_user_account_status(user_id: str, account_status: str) -> None:
-    from backend.database import SessionLocal
     from backend.models import User
 
     with SessionLocal() as db:
@@ -273,13 +306,306 @@ def test_admin_can_list_and_get_official_games(client: TestClient):
     assert create_response.status_code == 201, create_response.text
     game = create_response.json()["game"]
 
-    list_response = client.get("/admin/official-games?game_status=scheduled")
+    list_response = client.get("/admin/official-games?view=active")
     assert list_response.status_code == 200, list_response.text
-    assert any(item["id"] == game["id"] for item in list_response.json()["games"])
+    list_body = list_response.json()
+    assert list_body["limit"] == 24
+    assert list_body["has_more"] is False
+    assert list_body["next_cursor"] is None
+    listed_game = next(item for item in list_body["games"] if item["id"] == game["id"])
+    assert listed_game["title"] == game["title"]
+    assert listed_game["starts_on_local"] == game["starts_on_local"]
+    assert listed_game["format_label"] == game["format_label"]
+    assert listed_game["game_player_group"] == game["game_player_group"]
+    assert listed_game["environment_type"] == game["environment_type"]
+    assert listed_game["booked_spots"] == 0
+    assert listed_game["issues"] == ["missing_host", "missing_photo"]
+    assert "game_status" not in listed_game
 
     get_response = client.get(f"/admin/official-games/{game['id']}")
     assert get_response.status_code == 200, get_response.text
     assert get_response.json()["game"]["id"] == game["id"]
+
+
+def test_admin_official_games_list_returns_card_data_without_n_plus_one_counts(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    host = create_user(client)
+    confirmed_player = create_user(client)
+    pending_player = create_user(client)
+    waitlisted_player = create_user(client)
+    cancelled_player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(title="Photo Ready Official"),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    set_game_host(game["id"], host["id"])
+    create_active_primary_venue_image(game["venue_id"], admin["id"])
+
+    create_game_participant(
+        client,
+        confirmed_player["id"],
+        game["id"],
+        price_cents=1500,
+        participant_status="confirmed",
+    )
+    create_game_participant(
+        client,
+        pending_player["id"],
+        game["id"],
+        price_cents=1500,
+        participant_status="pending_payment",
+        roster_order=2,
+    )
+    create_game_participant(
+        client,
+        waitlisted_player["id"],
+        game["id"],
+        price_cents=1500,
+        participant_status="waitlisted",
+        roster_order=3,
+    )
+    create_game_participant(
+        client,
+        cancelled_player["id"],
+        game["id"],
+        price_cents=1500,
+        participant_status="cancelled",
+        cancellation_type="admin_cancelled",
+        roster_order=4,
+    )
+
+    monkeypatch.setattr(
+        "backend.services.official_game_query_service.create_blob_read_sas_url",
+        lambda blob_name: f"https://read.test/{blob_name}",
+    )
+
+    response = client.get("/admin/official-games?view=active&search=photo")
+
+    assert response.status_code == 200, response.text
+    games = response.json()["games"]
+    assert len(games) == 1
+    card = games[0]
+    assert card["id"] == game["id"]
+    assert card["venue_name_snapshot"] == game["venue_name_snapshot"]
+    assert card["city_snapshot"] == game["city_snapshot"]
+    assert card["state_snapshot"] == game["state_snapshot"]
+    assert card["price_per_player_cents"] == 1500
+    assert card["currency"] == "USD"
+    assert card["total_spots"] == 10
+    assert card["booked_spots"] == 2
+    assert card["host_user_id"] == host["id"]
+    assert card["primary_venue_image_url"].startswith("https://read.test/venues/")
+    assert card["issues"] == []
+
+
+def test_admin_official_games_list_keeps_photo_valid_when_sas_generation_fails(
+    client: TestClient,
+    monkeypatch,
+):
+    from backend.services.azure_blob_service import AzureStorageConfigError
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(title="Photo Blob Official"),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    create_active_primary_venue_image(game["venue_id"], admin["id"])
+
+    def raise_sas_config_error(blob_name: str) -> str:
+        del blob_name
+        raise AzureStorageConfigError("Missing Azure config in test.")
+
+    monkeypatch.setattr(
+        "backend.services.official_game_query_service.create_blob_read_sas_url",
+        raise_sas_config_error,
+    )
+
+    response = client.get("/admin/official-games?view=active&search=photo")
+
+    assert response.status_code == 200, response.text
+    games = response.json()["games"]
+    assert len(games) == 1
+    card = games[0]
+    assert card["id"] == game["id"]
+    assert card["primary_venue_image_url"] is None
+    assert card["issues"] == ["missing_host"]
+
+
+def test_admin_official_games_list_filters_by_view_search_and_date(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    june_26 = datetime(2026, 6, 26, 23, 0, tzinfo=UTC)
+    june_27 = datetime(2026, 6, 27, 23, 0, tzinfo=UTC)
+
+    authenticate_as(admin["id"])
+    harrison_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(
+            title="Harrison Park 4v4",
+            starts_at=june_26.isoformat(),
+            ends_at=(june_26 + timedelta(hours=1)).isoformat(),
+        ),
+    )
+    assert harrison_response.status_code == 201, harrison_response.text
+    harrison_game = harrison_response.json()["game"]
+
+    fleet_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(
+            title="Fleet Fields 7v7",
+            venue={
+                "name": "Fleet Fields",
+                "address_line_1": "700 Fleet Ave",
+                "city": "Chicago",
+                "state": "IL",
+                "postal_code": "60607",
+                "country_code": "US",
+                "neighborhood": "West Loop",
+            },
+            starts_at=june_27.isoformat(),
+            ends_at=(june_27 + timedelta(hours=1)).isoformat(),
+        ),
+    )
+    assert fleet_response.status_code == 201, fleet_response.text
+
+    completed_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(
+            title="Harrison Completed",
+            starts_at=june_26.isoformat(),
+            ends_at=(june_26 + timedelta(hours=1)).isoformat(),
+        ),
+    )
+    assert completed_response.status_code == 201, completed_response.text
+    completed_game = completed_response.json()["game"]
+    set_game_status(completed_game["id"], "completed")
+
+    active_response = client.get(
+        "/admin/official-games?view=active&search=harrison&starts_on=2026-06-26"
+    )
+    assert active_response.status_code == 200, active_response.text
+    assert [item["id"] for item in active_response.json()["games"]] == [
+        harrison_game["id"]
+    ]
+
+    completed_list_response = client.get(
+        "/admin/official-games?view=completed&search=harrison&starts_on=2026-06-26"
+    )
+    assert completed_list_response.status_code == 200, completed_list_response.text
+    completed_games = completed_list_response.json()["games"]
+    assert [item["id"] for item in completed_games] == [completed_game["id"]]
+    assert completed_games[0]["issues"] == []
+
+
+def test_admin_official_games_cancelled_view_includes_abandoned_games(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    cancelled_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(title="Cancelled Official"),
+    )
+    assert cancelled_response.status_code == 201, cancelled_response.text
+    cancelled_game = cancelled_response.json()["game"]
+    set_game_status(cancelled_game["id"], "cancelled")
+
+    abandoned_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(title="Abandoned Official"),
+    )
+    assert abandoned_response.status_code == 201, abandoned_response.text
+    abandoned_game = abandoned_response.json()["game"]
+    set_game_status(abandoned_game["id"], "abandoned")
+
+    response = client.get("/admin/official-games?view=cancelled")
+
+    assert response.status_code == 200, response.text
+    returned_ids = {item["id"] for item in response.json()["games"]}
+    assert cancelled_game["id"] in returned_ids
+    assert abandoned_game["id"] in returned_ids
+
+
+def test_admin_official_games_list_cursor_paginates_and_is_query_bound(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    first_start = datetime(2026, 6, 26, 22, 0, tzinfo=UTC)
+
+    authenticate_as(admin["id"])
+    game_ids: list[str] = []
+    for index in range(3):
+        starts_at = first_start + timedelta(hours=index)
+        create_response = client.post(
+            "/admin/official-games",
+            json=build_official_game_payload(
+                title=f"Cursor Official {index + 1}",
+                starts_at=starts_at.isoformat(),
+                ends_at=(starts_at + timedelta(hours=1)).isoformat(),
+            ),
+        )
+        assert create_response.status_code == 201, create_response.text
+        game_ids.append(create_response.json()["game"]["id"])
+
+    first_page = client.get("/admin/official-games?view=active&limit=2")
+    assert first_page.status_code == 200, first_page.text
+    first_body = first_page.json()
+    assert [item["id"] for item in first_body["games"]] == game_ids[:2]
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"]
+
+    second_page = client.get(
+        "/admin/official-games",
+        params={
+            "view": "active",
+            "limit": 2,
+            "cursor": first_body["next_cursor"],
+        },
+    )
+    assert second_page.status_code == 200, second_page.text
+    second_body = second_page.json()
+    assert [item["id"] for item in second_body["games"]] == [game_ids[2]]
+    assert second_body["has_more"] is False
+    assert second_body["next_cursor"] is None
+
+    mismatch_response = client.get(
+        "/admin/official-games",
+        params={
+            "view": "completed",
+            "cursor": first_body["next_cursor"],
+        },
+    )
+    assert mismatch_response.status_code == 400, mismatch_response.text
+    assert "cursor does not match" in mismatch_response.text
+
+
+def test_admin_official_games_list_caps_limit(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    response = client.get("/admin/official-games?view=active&limit=500")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["limit"] == 100
 
 
 def test_admin_can_list_official_game_participants_from_admin_route(
@@ -3801,17 +4127,17 @@ def test_admin_can_remove_official_game_host_without_body(client: TestClient):
     assert participant_response.json()["participant_status"] == "confirmed"
 
 
-def test_admin_official_game_list_rejects_invalid_status_filter(
+def test_admin_official_game_list_rejects_invalid_view_filter(
     client: TestClient,
 ):
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
 
     authenticate_as(admin["id"])
-    response = client.get("/admin/official-games?game_status=weird")
+    response = client.get("/admin/official-games?view=weird")
 
     assert response.status_code == 400, response.text
-    assert "game_status must be" in response.text
+    assert "view must be" in response.text
 
 
 def test_admin_official_game_routes_reject_non_admin(client: TestClient):

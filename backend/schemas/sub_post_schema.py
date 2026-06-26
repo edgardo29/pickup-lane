@@ -257,3 +257,10 @@ class SubPostPublicRead(BaseModel):
     pending_count: int = 0
     confirmed_count: int = 0
     sub_waitlist_count: int = 0
+
+
+class SubPostListRead(BaseModel):
+    posts: list[SubPostPublicRead] = Field(default_factory=list)
+    next_cursor: str | None = None
+    has_more: bool = False
+    limit: int = 40

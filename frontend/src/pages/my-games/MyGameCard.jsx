@@ -4,27 +4,31 @@ import {
   ShieldCheckIcon,
   SoccerBallIcon,
 } from '../../components/BrowseIcons.jsx'
-import { AddressIcon, GameFormatIcon, GameSpotsIcon, GameTimeIcon } from '../../components/GameFactIcons.jsx'
+import { AddressIcon, GameSpotsIcon, GameTimeIcon, GameTraitIcon } from '../../components/GameFactIcons.jsx'
 import {
   formatEnvironment,
   formatGamePlayerGroup,
   formatPrice,
-  formatSkillLevel,
   formatTimeRange,
 } from './myGamesFormatters.js'
+import { buildMediaUrl } from '../../lib/apiClient.js'
 
-function MyGameCard({ imageUrl, item, participantCount }) {
-  const { bucket, game, statusLabel, statusTone } = item
+function MyGameCard({ item }) {
+  const { bucket, game } = item
+  const statusLabel = item.statusLabel || item.status_label
+  const statusTone = item.statusTone || item.status_tone
   const tone = game.game_type === 'community' ? 'community' : 'official'
   const title = game.venue_name_snapshot || game.title
+  const imageUrl = buildMediaUrl(game.primary_image_url)
   const cardImageUrl = imageUrl || (tone === 'community' ? defaultCommunityVenueImage : '')
+  const participantCount = game.participant_count || 0
   const isFull = participantCount >= game.total_spots
   const isHistory = bucket === 'history'
+  const locationLabel = [game.city_snapshot, game.state_snapshot].filter(Boolean).join(', ')
   const gameSpec = [
-    formatEnvironment(game.environment_type),
-    game.format_label,
     formatGamePlayerGroup(game.game_player_group),
-    formatSkillLevel(game.skill_level),
+    game.format_label,
+    formatEnvironment(game.environment_type),
   ].filter(Boolean).join(' · ')
 
   return (
@@ -55,7 +59,7 @@ function MyGameCard({ imageUrl, item, participantCount }) {
 
         <p className="game-card__location">
           <AddressIcon />
-          {game.city_snapshot}
+          {locationLabel || 'Location not set'}
         </p>
 
         <p className="game-card__meta">
@@ -64,7 +68,7 @@ function MyGameCard({ imageUrl, item, participantCount }) {
         </p>
 
         <p className="game-card__meta">
-          <GameFormatIcon />
+          <GameTraitIcon />
           <span className="game-card__meta-text">{gameSpec}</span>
         </p>
       </div>

@@ -12,10 +12,39 @@ async function getAdminHeaders(firebaseUser, includeJson = false) {
   }
 }
 
-export async function listAdminOfficialGames({ firebaseUser, gameStatus = '' }) {
-  const search = gameStatus ? `?game_status=${encodeURIComponent(gameStatus)}` : ''
+export async function listAdminOfficialGames({
+  cursor = '',
+  firebaseUser,
+  limit = 24,
+  search = '',
+  startsOn = '',
+  view = 'active',
+}) {
+  const searchParams = new URLSearchParams()
 
-  return apiRequest(`/admin/official-games${search}`, {
+  if (view) {
+    searchParams.set('view', view)
+  }
+
+  if (search) {
+    searchParams.set('search', search)
+  }
+
+  if (startsOn) {
+    searchParams.set('starts_on', startsOn)
+  }
+
+  if (limit) {
+    searchParams.set('limit', String(limit))
+  }
+
+  if (cursor) {
+    searchParams.set('cursor', cursor)
+  }
+
+  const queryString = searchParams.toString()
+
+  return apiRequest(`/admin/official-games${queryString ? `?${queryString}` : ''}`, {
     headers: await getAdminHeaders(firebaseUser),
   })
 }

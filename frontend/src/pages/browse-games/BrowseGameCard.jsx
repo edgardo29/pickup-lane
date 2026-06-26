@@ -11,16 +11,20 @@ import {
   formatPrice,
   formatTimeRange,
 } from './browseGameFormatters.js'
+import { buildMediaUrl } from '../../lib/apiClient.js'
 
-function BrowseGameCard({ game, imageUrl, signedUpCount }) {
+function BrowseGameCard({ game }) {
   const tone = game.game_type === 'community' ? 'community' : 'official'
   const title = game.venue_name_snapshot || game.title
+  const signedUpCount = game.participant_count || 0
+  const imageUrl = buildMediaUrl(game.primary_image_url)
   const cardImageUrl = imageUrl || (tone === 'community' ? defaultCommunityVenueImage : '')
   const isFull = signedUpCount >= game.total_spots
+  const locationLabel = [game.city_snapshot, game.state_snapshot].filter(Boolean).join(', ')
   const gameSpec = [
-    formatEnvironment(game.environment_type),
-    game.format_label,
     formatGamePlayerGroup(game.game_player_group),
+    game.format_label,
+    formatEnvironment(game.environment_type),
   ].filter(Boolean).join(' · ')
 
   return (
@@ -44,7 +48,7 @@ function BrowseGameCard({ game, imageUrl, signedUpCount }) {
 
         <p className="game-card__location">
           <AddressIcon />
-          {game.city_snapshot}
+          {locationLabel || 'Location not set'}
         </p>
 
         <p className="game-card__meta">

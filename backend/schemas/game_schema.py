@@ -110,6 +110,53 @@ class GameRead(BaseModel):
     deleted_at: datetime | None
 
 
+class GameCardRead(BaseModel):
+    id: UUID
+    game_type: str
+    game_status: str
+    title: str
+    venue_name_snapshot: str
+    city_snapshot: str
+    state_snapshot: str
+    starts_at: datetime
+    ends_at: datetime
+    starts_on_local: date
+    timezone: str
+    format_label: str
+    game_player_group: str
+    environment_type: str
+    total_spots: int
+    price_per_player_cents: int
+    currency: str
+    participant_count: int
+    primary_image_url: str | None = None
+
+
+class GameCardListRead(BaseModel):
+    games: list[GameCardRead]
+    next_cursor: str | None = None
+    has_more: bool = False
+    limit: int = 40
+
+
+class MyGameCardRead(BaseModel):
+    bucket: str
+    game: GameCardRead
+    is_host: bool
+    participant_id: UUID | None = None
+    participant_status: str | None = None
+    cancellation_type: str | None = None
+    status_label: str
+    status_tone: str
+
+
+class MyGamesListRead(BaseModel):
+    items: list[MyGameCardRead]
+    next_cursor: str | None = None
+    has_more: bool = False
+    limit: int = 40
+
+
 # GameUpdate supports partial game updates, so every field is optional and only
 # provided values should be applied by the route.
 class GameUpdate(BaseModel):

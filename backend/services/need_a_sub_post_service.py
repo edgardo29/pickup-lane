@@ -1,10 +1,13 @@
 """Need a Sub post, position, visibility, and moderation workflows."""
 
 import uuid
+from base64 import urlsafe_b64decode, urlsafe_b64encode
+from binascii import Error as BinasciiError
 from datetime import date, datetime, timedelta
+from json import JSONDecodeError, dumps, loads
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,6 +16,7 @@ from backend.schemas.sub_post_schema import (
     MAX_SUB_POST_POSITION_ROWS,
     MAX_SUB_POST_TOTAL_SUBS,
     SubPostCreate,
+    SubPostListRead,
     SubPostUpdate,
 )
 from backend.services.admin_action_service import record_admin_action
@@ -56,6 +60,10 @@ from backend.services.need_a_sub_rules import (
 from backend.services.sub_post_chat_service import (
     resolve_sub_chat_notifications_for_post,
 )
+
+SUB_POST_CARD_DEFAULT_LIMIT = 40
+SUB_POST_CARD_MAX_LIMIT = 100
+SUB_POST_CARD_VALID_VIEWS = {"all", "mine"}
 
 
 def get_sub_post_or_404(db: Session, sub_post_id: uuid.UUID) -> SubPost:
@@ -821,6 +829,304 @@ def query_owner_posts(db: Session, owner: User) -> list[SubPost]:
             .order_by(SubPost.starts_at.desc(), SubPost.created_at.desc())
         ).all()
     )
+
+
+def list_sub_post_cards(
+    db: Session,
+    *,
+    view: str = "all",
+    starts_on: date,
+    current_user: User | None = None,
+    limit: int = SUB_POST_CARD_DEFAULT_LIMIT,
+    cursor: str | None = None,
+) -> SubPostListRead:
+    expire_due_posts_and_requests(db)
+
+    if view not in SUB_POST_CARD_VALID_VIEWS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="view must be 'all' or 'mine'.",
+        )
+
+    if view == "mine" and current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in to view your Need a Sub posts.",
+        )
+
+    effective_limit = min(limit, SUB_POST_CARD_MAX_LIMIT)
+    cursor_payload = decode_sub_post_card_cursor(cursor) if cursor else None
+    validate_sub_post_card_cursor_context(
+        cursor_payload,
+        starts_on=starts_on,
+        view=view,
+    )
+
+    statement = select(SubPost).where(
+        SubPost.post_status.in_(ACTIVE_VISIBLE_POST_STATUSES),
+        SubPost.starts_on_local == starts_on,
+        SubPost.starts_at >= now_utc(),
+    )
+
+    if view == "mine":
+        statement = statement.where(SubPost.owner_user_id == current_user.id)
+
+    if cursor_payload is not None:
+        statement = statement.where(build_sub_post_card_cursor_filter(cursor_payload))
+
+    statement = statement.order_by(
+        SubPost.starts_at.asc(),
+        SubPost.created_at.asc(),
+        SubPost.id.asc(),
+    )
+
+    posts = list(db.scalars(statement.limit(effective_limit + 1)).all())
+    page_posts = posts[:effective_limit]
+    has_more = len(posts) > effective_limit
+    next_cursor = None
+
+    if has_more and page_posts:
+        next_cursor = encode_sub_post_card_cursor(
+            post=page_posts[-1],
+            starts_on=starts_on,
+            view=view,
+        )
+
+    return SubPostListRead(
+        posts=serialize_public_sub_posts_for_list(db, page_posts),
+        next_cursor=next_cursor,
+        has_more=has_more,
+        limit=effective_limit,
+    )
+
+
+def encode_sub_post_card_cursor(
+    *,
+    post: SubPost,
+    starts_on: date,
+    view: str,
+) -> str:
+    payload = {
+        "view": view,
+        "starts_on": starts_on.isoformat(),
+        "starts_at": post.starts_at.isoformat(),
+        "created_at": post.created_at.isoformat(),
+        "id": str(post.id),
+    }
+    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return urlsafe_b64encode(serialized).decode("ascii")
+
+
+def decode_sub_post_card_cursor(cursor: str | None) -> dict[str, object] | None:
+    if cursor is None:
+        return None
+
+    try:
+        decoded = urlsafe_b64decode(cursor.encode("ascii"))
+        payload = loads(decoded.decode("utf-8"))
+    except (BinasciiError, JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    required_keys = {"view", "starts_on", "starts_at", "created_at", "id"}
+    if not required_keys.issubset(payload.keys()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    return payload
+
+
+def validate_sub_post_card_cursor_context(
+    cursor_payload: dict[str, object] | None,
+    *,
+    starts_on: date,
+    view: str,
+) -> None:
+    if cursor_payload is None:
+        return
+
+    if (
+        cursor_payload["starts_on"] != starts_on.isoformat()
+        or cursor_payload["view"] != view
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor does not match the current query.",
+        )
+
+
+def build_sub_post_card_cursor_filter(cursor_payload: dict[str, object]):
+    starts_at = parse_sub_post_card_cursor_datetime(cursor_payload, "starts_at")
+    created_at = parse_sub_post_card_cursor_datetime(cursor_payload, "created_at")
+    post_id = parse_sub_post_card_cursor_uuid(cursor_payload)
+
+    return or_(
+        SubPost.starts_at > starts_at,
+        and_(SubPost.starts_at == starts_at, SubPost.created_at > created_at),
+        and_(
+            SubPost.starts_at == starts_at,
+            SubPost.created_at == created_at,
+            SubPost.id > post_id,
+        ),
+    )
+
+
+def parse_sub_post_card_cursor_datetime(
+    cursor_payload: dict[str, object],
+    key: str,
+) -> datetime:
+    value = cursor_payload[key]
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+
+def parse_sub_post_card_cursor_uuid(cursor_payload: dict[str, object]) -> uuid.UUID:
+    value = cursor_payload["id"]
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    try:
+        return uuid.UUID(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+
+def serialize_public_sub_posts_for_list(
+    db: Session,
+    posts: list[SubPost],
+) -> list[dict]:
+    if not posts:
+        return []
+
+    post_ids = [post.id for post in posts]
+    request_counts_by_post: dict[uuid.UUID, dict[str, int]] = {}
+    request_counts_by_position: dict[uuid.UUID, dict[str, int]] = {}
+    positions_by_post: dict[uuid.UUID, list[dict]] = {}
+
+    for post_id, request_status, count in db.execute(
+        select(
+            SubPostRequest.sub_post_id,
+            SubPostRequest.request_status,
+            func.count(),
+        )
+        .where(SubPostRequest.sub_post_id.in_(post_ids))
+        .group_by(SubPostRequest.sub_post_id, SubPostRequest.request_status)
+    ).all():
+        request_counts_by_post.setdefault(post_id, {})[request_status] = count
+
+    positions = list(
+        db.scalars(
+            select(SubPostPosition)
+            .where(SubPostPosition.sub_post_id.in_(post_ids))
+            .order_by(
+                SubPostPosition.sub_post_id.asc(),
+                SubPostPosition.sort_order.asc(),
+                SubPostPosition.created_at.asc(),
+            )
+        ).all()
+    )
+    position_ids = [position.id for position in positions]
+
+    if position_ids:
+        for position_id, request_status, count in db.execute(
+            select(
+                SubPostRequest.sub_post_position_id,
+                SubPostRequest.request_status,
+                func.count(),
+            )
+            .where(SubPostRequest.sub_post_position_id.in_(position_ids))
+            .group_by(
+                SubPostRequest.sub_post_position_id,
+                SubPostRequest.request_status,
+            )
+        ).all():
+            request_counts_by_position.setdefault(position_id, {})[
+                request_status
+            ] = count
+
+    for position in positions:
+        counts = request_counts_by_position.get(position.id, {})
+        positions_by_post.setdefault(position.sub_post_id, []).append(
+            {
+                "id": position.id,
+                "sub_post_id": position.sub_post_id,
+                "position_label": position.position_label,
+                "player_group": position.player_group,
+                "spots_needed": position.spots_needed,
+                "sort_order": position.sort_order,
+                "pending_count": counts.get("pending", 0),
+                "confirmed_count": counts.get("confirmed", 0),
+                "sub_waitlist_count": counts.get("sub_waitlist", 0),
+                "created_at": position.created_at,
+                "updated_at": position.updated_at,
+            }
+        )
+
+    serialized_posts = []
+    for post in posts:
+        counts = request_counts_by_post.get(post.id, {})
+        serialized_posts.append(
+            {
+                **{
+                    field: getattr(post, field)
+                    for field in (
+                        "id",
+                        "post_status",
+                        "sport_type",
+                        "format_label",
+                        "environment_type",
+                        "skill_level",
+                        "game_player_group",
+                        "starts_at",
+                        "ends_at",
+                        "timezone",
+                        "location_name",
+                        "city",
+                        "state",
+                        "neighborhood",
+                        "subs_needed",
+                        "price_due_at_venue_cents",
+                        "currency",
+                        "expires_at",
+                        "created_at",
+                        "updated_at",
+                    )
+                },
+                "positions": positions_by_post.get(post.id, []),
+                "pending_count": counts.get("pending", 0),
+                "confirmed_count": counts.get("confirmed", 0),
+                "sub_waitlist_count": counts.get("sub_waitlist", 0),
+            }
+        )
+
+    return serialized_posts
 
 
 def create_sub_post_workflow(
