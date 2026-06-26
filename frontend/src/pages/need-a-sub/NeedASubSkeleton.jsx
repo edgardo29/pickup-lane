@@ -5,6 +5,7 @@ import {
 } from '../../components/skeleton/index.js'
 
 const postCards = ['one', 'two', 'three', 'four', 'five']
+const postCardFacts = ['venue', 'location', 'time', 'spec']
 const detailFacts = ['date', 'time', 'location']
 const needs = ['field', 'keeper', 'open']
 const postNeedGroups = [
@@ -19,49 +20,59 @@ export function NeedASubPostListSkeleton() {
       <p className="skeleton-status" role="status">
         Loading Need a Sub posts
       </p>
-      <div className="need-sub-post-grid need-sub-skeleton-grid" aria-hidden="true">
-        {postCards.map((card) => (
-          <SkeletonCard className="need-sub-post need-sub-skeleton-post" key={card}>
-            <div className="need-sub-post__top">
-              <div className="need-sub-post__title-row">
-                <SkeletonBlock height="1.1rem" rounded width="7.6rem" />
-                <SkeletonBlock height="24px" rounded width="4.8rem" />
-              </div>
-              <SkeletonBlock height="0.76rem" rounded width="58%" />
-            </div>
-
-            <div className="need-sub-post__facts need-sub-skeleton-card-facts">
-              {detailFacts.map((fact) => (
-                <span key={fact}>
-                  <SkeletonCircle size="16px" />
-                  <SkeletonBlock height="0.76rem" rounded width={fact === 'location' ? '62%' : '46%'} />
-                </span>
-              ))}
-            </div>
-
-            <div className="need-sub-post__needs">
-              <SkeletonBlock height="0.62rem" rounded width="5.4rem" />
-              {postNeedGroups.map((group) => (
-                <div className="need-sub-post__needs-group" key={group.key}>
-                  <div className="need-sub-post__need-summary">
-                    <SkeletonCircle size="15px" />
-                    <SkeletonBlock height="0.62rem" rounded width={group.labelWidth} />
-                    <SkeletonBlock height="0.72rem" rounded width="3.2rem" />
-                  </div>
-                  <SkeletonBlock height="0.72rem" rounded width={group.playersWidth} />
-                </div>
-              ))}
-            </div>
-
-            <div className="need-sub-post__footer">
-              <span>
-                <SkeletonCircle size="16px" />
-                <SkeletonBlock height="0.76rem" rounded width="4.6rem" />
-              </span>
-              <SkeletonCircle size="24px" />
-            </div>
+      <div className="need-sub-results" aria-hidden="true">
+        <section className="need-sub-time-section">
+          <SkeletonCard className="need-sub-time-section__header need-sub-skeleton-time-header">
+            <h2>
+              <SkeletonCircle size="28px" />
+              <SkeletonBlock height="1.35rem" rounded width="4.2rem" />
+            </h2>
+            <SkeletonBlock height="34px" rounded width="5.6rem" />
           </SkeletonCard>
-        ))}
+
+          <div className="need-sub-post-grid need-sub-skeleton-grid">
+            {postCards.map((card) => (
+              <SkeletonCard className="need-sub-post need-sub-skeleton-post" key={card}>
+                <div className="need-sub-post__top">
+                  <div className="need-sub-post__title-row">
+                    <SkeletonBlock height="1.1rem" rounded width="7.6rem" />
+                  </div>
+                </div>
+
+                <div className="need-sub-post__facts need-sub-skeleton-card-facts">
+                  {postCardFacts.map((fact) => (
+                    <span key={fact}>
+                      <SkeletonCircle size="16px" />
+                      <SkeletonBlock height="0.76rem" rounded width={fact === 'location' ? '62%' : '46%'} />
+                    </span>
+                  ))}
+                </div>
+
+                <div className="need-sub-post__needs">
+                  <SkeletonBlock height="0.62rem" rounded width="5.4rem" />
+                  {postNeedGroups.map((group) => (
+                    <div className="need-sub-post__needs-group" key={group.key}>
+                      <div className="need-sub-post__need-summary">
+                        <SkeletonCircle size="15px" />
+                        <SkeletonBlock height="0.62rem" rounded width={group.labelWidth} />
+                        <SkeletonBlock height="0.72rem" rounded width="3.2rem" />
+                      </div>
+                      <SkeletonBlock height="0.72rem" rounded width={group.playersWidth} />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="need-sub-post__footer">
+                  <span>
+                    <SkeletonCircle size="16px" />
+                    <SkeletonBlock height="0.76rem" rounded width="4.6rem" />
+                  </span>
+                  <SkeletonCircle size="24px" />
+                </div>
+              </SkeletonCard>
+            ))}
+          </div>
+        </section>
       </div>
     </>
   )

@@ -39,6 +39,7 @@ from backend.tests.helpers import (
     create_chat_message,
     create_game,
     create_game_chat,
+    create_game_image,
     create_game_participant,
     create_notification,
     create_payment,
@@ -66,6 +67,22 @@ def set_game_times(game_id: str, starts_at: datetime, ends_at: datetime | None =
         assert db_game is not None
         db_game.starts_at = starts_at
         db_game.ends_at = ends_at or starts_at + timedelta(hours=1)
+        db_game.starts_on_local = starts_at.astimezone(
+            ZoneInfo(db_game.timezone)
+        ).date()
+        db.commit()
+
+
+def set_game_status_for_test(game_id: str, game_status: str) -> None:
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game_id))
+        assert db_game is not None
+        now = datetime.now(UTC)
+        db_game.game_status = game_status
+        if game_status == "cancelled":
+            db_game.cancelled_at = now
+        if game_status == "completed":
+            db_game.completed_at = now
         db.commit()
 
 
@@ -226,6 +243,209 @@ def test_games_create_get_list_update_and_soft_delete(client: TestClient):
     )
     assert delete_response.status_code == 200, delete_response.text
     assert delete_response.json()["deleted_at"] is not None
+
+
+def test_browse_game_cards_cursor_paginates_and_returns_card_metadata(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    second_player = create_user(client)
+    venue = create_venue(client, admin["id"])
+    base_start = datetime.now(UTC).replace(microsecond=0) + timedelta(days=7)
+
+    game_ids: list[str] = []
+    for index in range(3):
+        starts_at = base_start + timedelta(hours=index)
+        game = create_game(
+            client,
+            admin["id"],
+            venue,
+            title=f"Browse Card {index + 1}",
+            starts_at=starts_at.isoformat(),
+            ends_at=(starts_at + timedelta(hours=1)).isoformat(),
+        )
+        game_ids.append(game["id"])
+
+    create_game_participant(client, player["id"], game_ids[0])
+    create_game_participant(
+        client,
+        second_player["id"],
+        game_ids[0],
+        roster_order=2,
+    )
+    create_game_image(
+        client,
+        game_ids[0],
+        admin["id"],
+        image_url="https://example.com/browse-primary.jpg",
+        image_status="active",
+        is_primary=True,
+    )
+
+    starts_on = local_date_string(base_start, "America/Chicago")
+    first_page = client.get(
+        "/games/browse",
+        params={"starts_on": starts_on, "limit": 2},
+    )
+
+    assert first_page.status_code == 200, first_page.text
+    first_body = first_page.json()
+    assert first_body["limit"] == 2
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"]
+    assert [item["id"] for item in first_body["games"]] == game_ids[:2]
+    assert first_body["games"][0]["participant_count"] == 2
+    assert (
+        first_body["games"][0]["primary_image_url"]
+        == "https://example.com/browse-primary.jpg"
+    )
+
+    second_page = client.get(
+        "/games/browse",
+        params={
+            "starts_on": starts_on,
+            "limit": 2,
+            "cursor": first_body["next_cursor"],
+        },
+    )
+    assert second_page.status_code == 200, second_page.text
+    second_body = second_page.json()
+    assert [item["id"] for item in second_body["games"]] == [game_ids[2]]
+    assert second_body["has_more"] is False
+    assert second_body["next_cursor"] is None
+
+    mismatch_response = client.get(
+        "/games/browse",
+        params={
+            "starts_on": local_date_string(
+                base_start + timedelta(days=1),
+                "America/Chicago",
+            ),
+            "cursor": first_body["next_cursor"],
+        },
+    )
+    assert mismatch_response.status_code == 400, mismatch_response.text
+    assert "cursor does not match" in mismatch_response.text
+
+
+def test_browse_game_cards_caps_limit(client: TestClient):
+    response = client.get(
+        "/games/browse",
+        params={
+            "starts_on": (datetime.now(UTC) + timedelta(days=7)).date().isoformat(),
+            "limit": 500,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["limit"] == 100
+
+
+def test_my_games_cards_cursor_paginates_upcoming_hosted_games(
+    client: TestClient,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    base_start = datetime.now(UTC).replace(microsecond=0) + timedelta(days=7)
+
+    game_ids: list[str] = []
+    for index in range(3):
+        starts_at = base_start + timedelta(days=index)
+        game = create_game(
+            client,
+            host["id"],
+            venue,
+            game_type="community",
+            host_user_id=host["id"],
+            policy_mode="custom_hosted",
+            title=f"My Upcoming {index + 1}",
+            starts_at=starts_at.isoformat(),
+            ends_at=(starts_at + timedelta(hours=1)).isoformat(),
+        )
+        game_ids.append(game["id"])
+
+    authenticate_as(host["id"])
+    first_page = client.get("/my-games", params={"view": "upcoming", "limit": 2})
+
+    assert first_page.status_code == 200, first_page.text
+    first_body = first_page.json()
+    assert first_body["limit"] == 2
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"]
+    assert [item["game"]["id"] for item in first_body["items"]] == game_ids[:2]
+    assert first_body["items"][0]["is_host"] is True
+    assert first_body["items"][0]["status_label"] == "Hosting"
+
+    second_page = client.get(
+        "/my-games",
+        params={
+            "view": "upcoming",
+            "limit": 2,
+            "cursor": first_body["next_cursor"],
+        },
+    )
+    assert second_page.status_code == 200, second_page.text
+    second_body = second_page.json()
+    assert [item["game"]["id"] for item in second_body["items"]] == [game_ids[2]]
+    assert second_body["has_more"] is False
+    assert second_body["next_cursor"] is None
+
+    mismatch_response = client.get(
+        "/my-games",
+        params={"view": "history", "cursor": first_body["next_cursor"]},
+    )
+    assert mismatch_response.status_code == 400, mismatch_response.text
+    assert "cursor does not match" in mismatch_response.text
+
+
+def test_my_games_history_cards_sort_newest_first_and_cap_limit(
+    client: TestClient,
+):
+    host = create_user(client)
+    venue = create_venue(client, host["id"])
+    create_start = datetime.now(UTC).replace(microsecond=0) + timedelta(days=7)
+    older_game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        title="Older Completed",
+        starts_at=create_start.isoformat(),
+        ends_at=(create_start + timedelta(hours=1)).isoformat(),
+    )
+    newer_game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+        title="Newer Completed",
+        starts_at=(create_start + timedelta(days=1)).isoformat(),
+        ends_at=(create_start + timedelta(days=1, hours=1)).isoformat(),
+    )
+
+    older_start = datetime.now(UTC).replace(microsecond=0) - timedelta(days=10)
+    newer_start = datetime.now(UTC).replace(microsecond=0) - timedelta(days=3)
+    set_game_times(older_game["id"], older_start)
+    set_game_times(newer_game["id"], newer_start)
+    set_game_status_for_test(older_game["id"], "completed")
+    set_game_status_for_test(newer_game["id"], "completed")
+
+    authenticate_as(host["id"])
+    response = client.get("/my-games", params={"view": "history", "limit": 500})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["limit"] == 100
+    assert [item["game"]["id"] for item in body["items"]] == [
+        newer_game["id"],
+        older_game["id"],
+    ]
+    assert all(item["bucket"] == "history" for item in body["items"])
 
 
 def test_generic_game_mutations_require_admin_permission(client: TestClient):

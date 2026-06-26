@@ -1,23 +1,39 @@
 """Shared game database helpers and workflow support used by routes and services."""
 
 import uuid
-from datetime import datetime, timezone
+from base64 import urlsafe_b64decode, urlsafe_b64encode
+from binascii import Error as BinasciiError
+from datetime import date, datetime, timedelta, timezone
+from json import JSONDecodeError, dumps, loads
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
     Booking,
     Game,
+    GameImage,
     GameParticipant,
     Payment,
     User,
     Venue,
+    VenueImage,
     WaitlistEntry,
 )
-from backend.schemas.game_schema import GameCreate, GameUpdate
+from backend.schemas.game_schema import (
+    GameCardListRead,
+    GameCardRead,
+    GameCreate,
+    GameUpdate,
+    MyGameCardRead,
+    MyGamesListRead,
+)
+from backend.services.azure_blob_service import (
+    AzureStorageConfigError,
+    create_blob_read_sas_url,
+)
 from backend.services.game_notification_service import (
     capture_game_updated_structural_snapshot,
     game_updated_structural_snapshot_changed,
@@ -27,6 +43,7 @@ from backend.services.game_rules import (
     ACTIVE_JOIN_STATUSES,
     ACTIVE_WAITLIST_STATUSES,
     OFFICIAL_FORCED_FIELDS,
+    OPEN_GAME_STATUSES,
     ROSTER_PLAYER_STATUSES,
     build_game_conflict_detail,
     get_default_host_guest_max,
@@ -37,6 +54,16 @@ from backend.services.game_rules import (
     require_game_not_started,
     validate_game_business_rules,
 )
+
+BROWSE_GAME_CARD_DEFAULT_LIMIT = 40
+BROWSE_GAME_CARD_MAX_LIMIT = 100
+BROWSE_VISIBLE_AFTER_START_MINUTES = 15
+MY_GAMES_CARD_DEFAULT_LIMIT = 40
+MY_GAMES_CARD_MAX_LIMIT = 100
+MY_GAMES_VALID_VIEWS = {"upcoming", "history"}
+MY_GAMES_UPCOMING_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
+MY_GAMES_HISTORY_STATUSES = {"confirmed"}
+MY_GAMES_CANCELLED_TYPES = {"host_cancelled", "admin_cancelled"}
 
 
 def get_active_venue_or_404(db: Session, venue_id: uuid.UUID) -> Venue:
@@ -128,6 +155,570 @@ def list_games(db: Session) -> list[Game]:
         .order_by(Game.starts_at.asc(), Game.created_at.asc())
     ).all()
     return list(games)
+
+
+def list_browse_game_cards(
+    db: Session,
+    *,
+    starts_on: date,
+    limit: int = BROWSE_GAME_CARD_DEFAULT_LIMIT,
+    cursor: str | None = None,
+) -> GameCardListRead:
+    effective_limit = min(limit, BROWSE_GAME_CARD_MAX_LIMIT)
+    cursor_payload = decode_browse_game_card_cursor(cursor) if cursor else None
+    validate_browse_game_card_cursor_context(cursor_payload, starts_on=starts_on)
+    visible_after_start_cutoff = datetime.now(timezone.utc) - timedelta(
+        minutes=BROWSE_VISIBLE_AFTER_START_MINUTES
+    )
+
+    statement = select(Game).where(
+        Game.publish_status == "published",
+        Game.deleted_at.is_(None),
+        Game.game_status.in_(OPEN_GAME_STATUSES),
+        Game.starts_on_local == starts_on,
+        Game.starts_at > visible_after_start_cutoff,
+    )
+
+    if cursor_payload is not None:
+        statement = statement.where(build_browse_game_card_cursor_filter(cursor_payload))
+
+    statement = statement.order_by(
+        Game.starts_at.asc(),
+        Game.created_at.asc(),
+        Game.id.asc(),
+    )
+
+    rows = list(db.scalars(statement.limit(effective_limit + 1)).all())
+    page_games = rows[:effective_limit]
+    has_more = len(rows) > effective_limit
+    (
+        participant_counts_by_game_id,
+        primary_game_image_urls_by_game_id,
+        primary_venue_image_blob_by_venue_id,
+    ) = load_game_card_metadata(db, page_games)
+    games = [
+        build_game_card_read(
+            game,
+            participant_count=participant_counts_by_game_id.get(game.id, 0),
+            primary_game_image_url=primary_game_image_urls_by_game_id.get(game.id),
+            primary_venue_image_blob_name=primary_venue_image_blob_by_venue_id.get(
+                game.venue_id
+            ),
+        )
+        for game in page_games
+    ]
+
+    next_cursor = None
+    if has_more and page_games:
+        next_cursor = encode_browse_game_card_cursor(
+            game=page_games[-1],
+            starts_on=starts_on,
+        )
+
+    return GameCardListRead(
+        games=games,
+        next_cursor=next_cursor,
+        has_more=has_more,
+        limit=effective_limit,
+    )
+
+
+def load_game_card_metadata(
+    db: Session,
+    games: list[Game],
+) -> tuple[dict[uuid.UUID, int], dict[uuid.UUID, str], dict[uuid.UUID, str]]:
+    if not games:
+        return {}, {}, {}
+
+    game_ids = [game.id for game in games]
+    venue_ids = {game.venue_id for game in games if game.venue_id is not None}
+    participant_counts_by_game_id: dict[uuid.UUID, int] = {}
+    primary_game_image_urls_by_game_id: dict[uuid.UUID, str] = {}
+    primary_venue_image_blob_by_venue_id: dict[uuid.UUID, str] = {}
+
+    for game_id, participant_count in db.execute(
+        select(GameParticipant.game_id, func.count(GameParticipant.id))
+        .where(
+            GameParticipant.game_id.in_(game_ids),
+            GameParticipant.participant_status.in_(ROSTER_PLAYER_STATUSES),
+        )
+        .group_by(GameParticipant.game_id)
+    ).all():
+        participant_counts_by_game_id[game_id] = int(participant_count or 0)
+
+    for game_id, image_url in db.execute(
+        select(GameImage.game_id, GameImage.image_url)
+        .where(
+            GameImage.game_id.in_(game_ids),
+            GameImage.image_status == "active",
+            GameImage.is_primary.is_(True),
+            GameImage.deleted_at.is_(None),
+        )
+        .order_by(GameImage.game_id.asc(), GameImage.sort_order.asc())
+    ).all():
+        primary_game_image_urls_by_game_id.setdefault(game_id, image_url)
+
+    if venue_ids:
+        for venue_id, blob_name in db.execute(
+            select(VenueImage.venue_id, VenueImage.blob_name)
+            .where(
+                VenueImage.venue_id.in_(venue_ids),
+                VenueImage.image_status == "active",
+                VenueImage.is_primary.is_(True),
+                VenueImage.deleted_at.is_(None),
+            )
+            .order_by(VenueImage.venue_id.asc(), VenueImage.sort_order.asc())
+        ).all():
+            primary_venue_image_blob_by_venue_id.setdefault(venue_id, blob_name)
+
+    return (
+        participant_counts_by_game_id,
+        primary_game_image_urls_by_game_id,
+        primary_venue_image_blob_by_venue_id,
+    )
+
+
+def build_game_card_read(
+    game: Game,
+    *,
+    participant_count: int,
+    primary_game_image_url: str | None,
+    primary_venue_image_blob_name: str | None,
+) -> GameCardRead:
+    primary_image_url = primary_game_image_url
+    if primary_image_url is None and primary_venue_image_blob_name is not None:
+        try:
+            primary_image_url = create_blob_read_sas_url(primary_venue_image_blob_name)
+        except AzureStorageConfigError:
+            primary_image_url = None
+
+    return GameCardRead(
+        id=game.id,
+        game_type=game.game_type,
+        game_status=game.game_status,
+        title=game.title,
+        venue_name_snapshot=game.venue_name_snapshot,
+        city_snapshot=game.city_snapshot,
+        state_snapshot=game.state_snapshot,
+        starts_at=game.starts_at,
+        ends_at=game.ends_at,
+        starts_on_local=game.starts_on_local,
+        timezone=game.timezone,
+        format_label=game.format_label,
+        game_player_group=game.game_player_group,
+        environment_type=game.environment_type,
+        total_spots=game.total_spots,
+        price_per_player_cents=game.price_per_player_cents,
+        currency=game.currency,
+        participant_count=participant_count,
+        primary_image_url=primary_image_url,
+    )
+
+
+def encode_browse_game_card_cursor(*, game: Game, starts_on: date) -> str:
+    payload = {
+        "starts_on": starts_on.isoformat(),
+        "starts_at": game.starts_at.isoformat(),
+        "created_at": game.created_at.isoformat(),
+        "id": str(game.id),
+    }
+    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return urlsafe_b64encode(serialized).decode("ascii")
+
+
+def decode_browse_game_card_cursor(cursor: str | None) -> dict[str, object] | None:
+    if cursor is None:
+        return None
+
+    try:
+        decoded = urlsafe_b64decode(cursor.encode("ascii"))
+        payload = loads(decoded.decode("utf-8"))
+    except (BinasciiError, JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    required_keys = {"starts_on", "starts_at", "created_at", "id"}
+    if not required_keys.issubset(payload.keys()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    return payload
+
+
+def validate_browse_game_card_cursor_context(
+    cursor_payload: dict[str, object] | None,
+    *,
+    starts_on: date,
+) -> None:
+    if cursor_payload is None:
+        return
+
+    if cursor_payload["starts_on"] != starts_on.isoformat():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor does not match the current query.",
+        )
+
+
+def build_browse_game_card_cursor_filter(cursor_payload: dict[str, object]):
+    starts_at = parse_browse_game_card_cursor_datetime(cursor_payload, "starts_at")
+    created_at = parse_browse_game_card_cursor_datetime(cursor_payload, "created_at")
+    game_id = parse_browse_game_card_cursor_uuid(cursor_payload)
+
+    return or_(
+        Game.starts_at > starts_at,
+        and_(Game.starts_at == starts_at, Game.created_at > created_at),
+        and_(
+            Game.starts_at == starts_at,
+            Game.created_at == created_at,
+            Game.id > game_id,
+        ),
+    )
+
+
+def parse_browse_game_card_cursor_datetime(
+    cursor_payload: dict[str, object],
+    key: str,
+) -> datetime:
+    value = cursor_payload[key]
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+
+def parse_browse_game_card_cursor_uuid(
+    cursor_payload: dict[str, object],
+) -> uuid.UUID:
+    value = cursor_payload["id"]
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    try:
+        return uuid.UUID(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+
+def list_my_game_cards(
+    db: Session,
+    current_user: User,
+    *,
+    view: str = "upcoming",
+    limit: int = MY_GAMES_CARD_DEFAULT_LIMIT,
+    cursor: str | None = None,
+) -> MyGamesListRead:
+    normalized_view = normalize_my_games_view(view)
+    effective_limit = min(limit, MY_GAMES_CARD_MAX_LIMIT)
+    sort_direction = "asc" if normalized_view == "upcoming" else "desc"
+    cursor_payload = decode_my_games_cursor(cursor) if cursor else None
+    validate_my_games_cursor_context(
+        cursor_payload,
+        view=normalized_view,
+        sort_direction=sort_direction,
+    )
+    now = datetime.now(timezone.utc)
+
+    user_participant_join = and_(
+        GameParticipant.game_id == Game.id,
+        GameParticipant.user_id == current_user.id,
+    )
+    is_host_condition = or_(
+        Game.host_user_id == current_user.id,
+        GameParticipant.participant_type == "host",
+    )
+    is_connected_condition = or_(
+        Game.host_user_id == current_user.id,
+        GameParticipant.id.is_not(None),
+    )
+
+    statement = (
+        select(Game, GameParticipant)
+        .outerjoin(GameParticipant, user_participant_join)
+        .where(
+            Game.publish_status == "published",
+            Game.deleted_at.is_(None),
+            is_connected_condition,
+        )
+    )
+
+    if normalized_view == "upcoming":
+        statement = statement.where(
+            Game.game_status.in_(OPEN_GAME_STATUSES),
+            Game.ends_at >= now,
+            or_(
+                is_host_condition,
+                GameParticipant.participant_status.in_(MY_GAMES_UPCOMING_STATUSES),
+            ),
+        )
+    else:
+        cancelled_history_condition = and_(
+            Game.game_status == "cancelled",
+            or_(
+                is_host_condition,
+                GameParticipant.participant_status.in_(MY_GAMES_UPCOMING_STATUSES),
+                and_(
+                    GameParticipant.participant_status == "cancelled",
+                    GameParticipant.cancellation_type.in_(MY_GAMES_CANCELLED_TYPES),
+                ),
+            ),
+        )
+        played_history_condition = and_(
+            or_(Game.ends_at < now, Game.game_status == "completed"),
+            or_(
+                is_host_condition,
+                GameParticipant.participant_status.in_(MY_GAMES_HISTORY_STATUSES),
+            ),
+        )
+        statement = statement.where(
+            or_(cancelled_history_condition, played_history_condition)
+        )
+
+    if cursor_payload is not None:
+        statement = statement.where(
+            build_my_games_cursor_filter(
+                cursor_payload,
+                sort_direction=sort_direction,
+            )
+        )
+
+    if sort_direction == "asc":
+        statement = statement.order_by(
+            Game.starts_at.asc(),
+            Game.created_at.asc(),
+            Game.id.asc(),
+        )
+    else:
+        statement = statement.order_by(
+            Game.starts_at.desc(),
+            Game.created_at.desc(),
+            Game.id.desc(),
+        )
+
+    rows = db.execute(statement.limit(effective_limit + 1)).all()
+    page_rows = rows[:effective_limit]
+    has_more = len(rows) > effective_limit
+    page_games = [game for game, _participant in page_rows]
+    (
+        participant_counts_by_game_id,
+        primary_game_image_urls_by_game_id,
+        primary_venue_image_blob_by_venue_id,
+    ) = load_game_card_metadata(db, page_games)
+    items = [
+        build_my_game_card_read(
+            game,
+            participant,
+            current_user=current_user,
+            participant_count=participant_counts_by_game_id.get(game.id, 0),
+            primary_game_image_url=primary_game_image_urls_by_game_id.get(game.id),
+            primary_venue_image_blob_name=primary_venue_image_blob_by_venue_id.get(
+                game.venue_id
+            ),
+            bucket=normalized_view,
+        )
+        for game, participant in page_rows
+    ]
+
+    next_cursor = None
+    if has_more and page_rows:
+        next_cursor = encode_my_games_cursor(
+            game=page_rows[-1][0],
+            view=normalized_view,
+            sort_direction=sort_direction,
+        )
+
+    return MyGamesListRead(
+        items=items,
+        next_cursor=next_cursor,
+        has_more=has_more,
+        limit=effective_limit,
+    )
+
+
+def build_my_game_card_read(
+    game: Game,
+    participant: GameParticipant | None,
+    *,
+    current_user: User,
+    participant_count: int,
+    primary_game_image_url: str | None,
+    primary_venue_image_blob_name: str | None,
+    bucket: str,
+) -> MyGameCardRead:
+    is_host = (
+        game.host_user_id == current_user.id
+        or (participant is not None and participant.participant_type == "host")
+    )
+    status_label, status_tone = get_my_game_status(game, participant, is_host, bucket)
+
+    return MyGameCardRead(
+        bucket=bucket,
+        game=build_game_card_read(
+            game,
+            participant_count=participant_count,
+            primary_game_image_url=primary_game_image_url,
+            primary_venue_image_blob_name=primary_venue_image_blob_name,
+        ),
+        is_host=is_host,
+        participant_id=participant.id if participant is not None else None,
+        participant_status=participant.participant_status if participant is not None else None,
+        cancellation_type=participant.cancellation_type if participant is not None else None,
+        status_label=status_label,
+        status_tone=status_tone,
+    )
+
+
+def get_my_game_status(
+    game: Game,
+    participant: GameParticipant | None,
+    is_host: bool,
+    bucket: str,
+) -> tuple[str, str]:
+    if game.game_status == "cancelled":
+        return "Cancelled", "cancelled"
+
+    if bucket == "history":
+        return ("Hosted", "hosted") if is_host else ("Played", "played")
+
+    if participant is not None and participant.participant_status == "waitlisted":
+        return "Waitlisted", "waitlisted"
+
+    if is_host:
+        return "Hosting", "hosting"
+
+    return "Confirmed", "confirmed"
+
+
+def normalize_my_games_view(view: str) -> str:
+    normalized_view = view.strip().lower()
+    if normalized_view not in MY_GAMES_VALID_VIEWS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="view must be 'upcoming' or 'history'.",
+        )
+
+    return normalized_view
+
+
+def encode_my_games_cursor(
+    *,
+    game: Game,
+    view: str,
+    sort_direction: str,
+) -> str:
+    payload = {
+        "view": view,
+        "sort_direction": sort_direction,
+        "starts_at": game.starts_at.isoformat(),
+        "created_at": game.created_at.isoformat(),
+        "id": str(game.id),
+    }
+    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return urlsafe_b64encode(serialized).decode("ascii")
+
+
+def decode_my_games_cursor(cursor: str | None) -> dict[str, object] | None:
+    if cursor is None:
+        return None
+
+    try:
+        decoded = urlsafe_b64decode(cursor.encode("ascii"))
+        payload = loads(decoded.decode("utf-8"))
+    except (BinasciiError, JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    required_keys = {"view", "sort_direction", "starts_at", "created_at", "id"}
+    if not required_keys.issubset(payload.keys()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    return payload
+
+
+def validate_my_games_cursor_context(
+    cursor_payload: dict[str, object] | None,
+    *,
+    view: str,
+    sort_direction: str,
+) -> None:
+    if cursor_payload is None:
+        return
+
+    if (
+        cursor_payload["view"] != view
+        or cursor_payload["sort_direction"] != sort_direction
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor does not match the current query.",
+        )
+
+
+def build_my_games_cursor_filter(
+    cursor_payload: dict[str, object],
+    *,
+    sort_direction: str,
+):
+    starts_at = parse_browse_game_card_cursor_datetime(cursor_payload, "starts_at")
+    created_at = parse_browse_game_card_cursor_datetime(cursor_payload, "created_at")
+    game_id = parse_browse_game_card_cursor_uuid(cursor_payload)
+
+    if sort_direction == "asc":
+        return or_(
+            Game.starts_at > starts_at,
+            and_(Game.starts_at == starts_at, Game.created_at > created_at),
+            and_(
+                Game.starts_at == starts_at,
+                Game.created_at == created_at,
+                Game.id > game_id,
+            ),
+        )
+
+    return or_(
+        Game.starts_at < starts_at,
+        and_(Game.starts_at == starts_at, Game.created_at < created_at),
+        and_(
+            Game.starts_at == starts_at,
+            Game.created_at == created_at,
+            Game.id < game_id,
+        ),
+    )
 
 
 def update_game_workflow(

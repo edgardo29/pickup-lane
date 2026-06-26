@@ -1,26 +1,27 @@
 import { Link } from 'react-router-dom'
 import {
   BuildingIcon,
-  CalendarIcon,
   ClockIcon,
   MapPinIcon,
   UsersIcon,
 } from '../../components/BrowseIcons.jsx'
 import {
+  GameTraitIcon,
   NeedSubFieldPlayersIcon,
   NeedSubGoalkeeperIcon,
 } from '../../components/GameFactIcons.jsx'
 import {
-  buildPostSubtitle,
-  formatDateWithYear,
   formatStatus,
   formatTimeRangeOnly,
 } from './needASubFormatters.js'
 import { NeedASubPostListSkeleton } from './NeedASubSkeleton.jsx'
 
 function NeedASubPostList({
+  hasMorePosts = false,
   isLoading,
+  isLoadingMore = false,
   isSignedIn,
+  onLoadMore,
   onOpenPost,
   postView,
   posts,
@@ -41,16 +42,56 @@ function NeedASubPostList({
           message={postView === 'mine' ? 'Create one when your team needs players.' : 'Check back soon or create your own post.'}
         />
       ) : (
-        <div className="need-sub-post-grid">
-          {posts.map((post) => (
-            <NeedASubPostCard
-              key={post.id}
-              post={post}
-              onOpenPost={onOpenPost}
-            />
-          ))}
-        </div>
+        <>
+          <div className="need-sub-results">
+            {groupPostsByHour(posts).map((group) => (
+              <NeedASubTimeSection
+                group={group}
+                key={group.label}
+                onOpenPost={onOpenPost}
+              />
+            ))}
+          </div>
+
+          {hasMorePosts && (
+            <div className="need-sub-load-more">
+              <button
+                type="button"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? 'Loading...' : 'Load More'}
+              </button>
+            </div>
+          )}
+        </>
       )}
+    </section>
+  )
+}
+
+function NeedASubTimeSection({ group, onOpenPost }) {
+  return (
+    <section className="need-sub-time-section">
+      <div className="need-sub-time-section__header">
+        <h2>
+          <ClockIcon />
+          {group.label}
+        </h2>
+        <span className="need-sub-time-section__count">
+          {group.posts.length} {group.posts.length === 1 ? 'post' : 'posts'}
+        </span>
+      </div>
+
+      <div className="need-sub-post-grid">
+        {group.posts.map((post) => (
+          <NeedASubPostCard
+            key={post.id}
+            post={post}
+            onOpenPost={onOpenPost}
+          />
+        ))}
+      </div>
     </section>
   )
 }
@@ -59,6 +100,11 @@ function NeedASubPostCard({ onOpenPost, post }) {
   const needGroups = buildNeedGroups(post)
   const cityState = [post.city, post.state].filter(Boolean).join(', ')
   const environmentLabel = post.environment_type ? formatStatus(post.environment_type) : ''
+  const postSpec = [
+    formatStatus(post.game_player_group),
+    post.format_label,
+    environmentLabel,
+  ].filter(Boolean).join(' · ')
 
   return (
     <article
@@ -78,18 +124,14 @@ function NeedASubPostCard({ onOpenPost, post }) {
           <strong>
             Need <span>{post.subs_needed}</span> {post.subs_needed === 1 ? 'Sub' : 'Subs'}
           </strong>
-          {environmentLabel && (
-            <span className="need-sub-post__environment">{environmentLabel}</span>
-          )}
         </div>
-        <small>{buildPostSubtitle(post)}</small>
       </div>
 
       <div className="need-sub-post__facts">
         <Fact icon={<BuildingIcon />} text={post.location_name || 'Pickup Lane'} />
         <Fact icon={<MapPinIcon />} text={cityState || 'Location not set'} />
-        <Fact icon={<CalendarIcon />} text={formatDateWithYear(post.starts_at)} />
         <Fact icon={<ClockIcon />} text={formatTimeRangeOnly(post)} />
+        <Fact icon={<GameTraitIcon />} text={postSpec} />
       </div>
 
       <div className="need-sub-post__needs">
@@ -196,6 +238,27 @@ function formatOpenCount(spotsLeft) {
 
 function formatPlayerLabels(rows) {
   return rows.map((row) => row.label).join(' · ')
+}
+
+function groupPostsByHour(posts) {
+  const groupedPosts = [...posts]
+    .sort((first, second) => new Date(first.starts_at) - new Date(second.starts_at))
+    .reduce((groups, post) => {
+      const date = new Date(post.starts_at)
+      const label = new Intl.DateTimeFormat('en-US', { hour: 'numeric' }).format(date)
+
+      if (!groups.has(label)) {
+        groups.set(label, [])
+      }
+
+      groups.get(label).push(post)
+      return groups
+    }, new Map())
+
+  return [...groupedPosts.entries()].map(([label, groupPosts]) => ({
+    label,
+    posts: groupPosts,
+  }))
 }
 
 function Fact({ icon, text }) {

@@ -46,21 +46,21 @@ function MyGamesPage() {
           />
         )}
 
-        {page.status === 'success' && (page.activeItems.length > 0 || page.hasMoreUpcomingItems) && (
+        {page.status === 'success' && (page.activeItems.length > 0 || page.hasMoreItems) && (
           <div className="browse-results my-games-timeline">
             {page.activeTab === 'upcoming' ? (
               <UpcomingGamesTab
                 groups={page.upcomingGroups}
-                hasMoreItems={page.hasMoreUpcomingItems}
-                imageUrlsByGameId={page.imageUrlsByGameId}
-                participantCountsByGameId={page.participantCountsByGameId}
-                onViewMore={page.showMoreUpcomingItems}
+                hasMoreItems={page.hasMoreItems}
+                isLoadingMore={page.isLoadingMore}
+                onLoadMore={page.loadMoreActiveItems}
               />
             ) : (
               <HistoryGamesTab
                 groups={page.historyGroups}
-                imageUrlsByGameId={page.imageUrlsByGameId}
-                participantCountsByGameId={page.participantCountsByGameId}
+                hasMoreItems={page.hasMoreItems}
+                isLoadingMore={page.isLoadingMore}
+                onLoadMore={page.loadMoreActiveItems}
               />
             )}
           </div>

@@ -46,6 +46,7 @@ from backend.routes.game_status_history_routes import (
     router as game_status_history_router,
 )
 from backend.routes.host_publish_fee_routes import router as host_publish_fees_router
+from backend.routes.my_game_routes import router as my_games_router
 from backend.routes.notification_routes import router as notifications_router
 from backend.routes.participant_status_history_routes import (
     router as participant_status_history_router,
@@ -121,6 +122,7 @@ __all__ = [
     "game_status_history_router",
     "participant_status_history_router",
     "host_publish_fees_router",
+    "my_games_router",
     "notifications_router",
     "waitlist_entries_router",
     "payments_router",

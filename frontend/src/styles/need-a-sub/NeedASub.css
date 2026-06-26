@@ -249,6 +249,175 @@
   text-transform: none;
 }
 
+.need-sub-date-strip-shell {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 0 18px;
+}
+
+.need-sub-date-strip {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(96px, 1fr));
+  gap: 14px;
+  overflow-x: auto;
+  padding: 2px 0 0;
+}
+
+.need-sub-date-arrow,
+.need-sub-date {
+  border: 1px solid rgba(248, 250, 252, 0.075);
+  border-radius: 10px;
+  background: var(--panel-material);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.need-sub-date-arrow {
+  min-width: 0;
+  min-height: 74px;
+  color: rgba(248, 250, 252, 0.86);
+  font-size: 1.35rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.need-sub-date-arrow:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(184, 255, 36, 0.32);
+  color: var(--lime);
+}
+
+.need-sub-date-arrow:disabled {
+  cursor: default;
+  opacity: 0.32;
+}
+
+.need-sub-date {
+  min-height: 74px;
+  color: rgba(248, 250, 252, 0.88);
+}
+
+.need-sub-date:hover {
+  transform: translateY(-1px);
+  border-color: rgba(248, 250, 252, 0.15);
+}
+
+.need-sub-date:not(.need-sub-date--active):hover {
+  background:
+    linear-gradient(115deg, rgba(248, 250, 252, 0.035), rgba(248, 250, 252, 0.01) 50%, rgba(139, 184, 230, 0.024)),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.022), transparent 68%),
+    var(--surface);
+}
+
+.need-sub-date-arrow:focus-visible,
+.need-sub-date:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
+}
+
+.need-sub-date span {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.need-sub-date strong {
+  display: block;
+  margin-top: 5px;
+  color: rgba(248, 250, 252, 0.78);
+  font-size: 0.86rem;
+  line-height: 1;
+}
+
+.need-sub-date em {
+  display: block;
+  margin-top: 2px;
+  color: rgba(248, 250, 252, 0.78);
+  font-size: 1.45rem;
+  font-style: normal;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.need-sub-date--active {
+  border-color: transparent;
+  color: #071007;
+  background: linear-gradient(135deg, var(--lime), #94ef00);
+  box-shadow: none;
+}
+
+.need-sub-date--active:focus-visible {
+  outline: 0;
+  box-shadow: inset 0 0 0 2px rgba(7, 16, 7, 0.32);
+}
+
+.need-sub-date--active strong,
+.need-sub-date--active em {
+  color: #071007;
+}
+
+.need-sub-results {
+  display: grid;
+  gap: 22px;
+}
+
+.need-sub-time-section {
+  display: grid;
+  gap: 14px;
+}
+
+.need-sub-time-section__header {
+  min-height: 56px;
+  padding: 0 18px;
+  border: 1px solid rgba(248, 250, 252, 0.09);
+  border-left: 5px solid rgba(248, 250, 252, 0.2);
+  border-radius: 10px;
+  background: var(--panel-material);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
+}
+
+.need-sub-time-section__header h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.8rem;
+  line-height: 1;
+  font-weight: 950;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.need-sub-time-section__header h2 svg {
+  width: 28px;
+  height: 28px;
+  color: rgba(248, 250, 252, 0.76);
+}
+
+.need-sub-time-section__count {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(248, 250, 252, 0.09);
+  border-radius: 7px;
+  background: rgba(5, 10, 16, 0.62);
+  color: rgba(248, 250, 252, 0.76);
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+
 .need-sub-post-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 320px));
@@ -263,12 +432,12 @@
   --need-sub-post-body-weight: 500;
 
   min-width: 0;
-  min-height: 350px;
+  height: 330px;
   overflow: hidden;
   padding: 0;
   cursor: pointer;
   display: grid;
-  grid-template-rows: 72px 112px minmax(116px, 1fr) 42px;
+  grid-template-rows: 54px 112px minmax(122px, 1fr) 42px;
   transition:
     transform 160ms ease,
     border-color 160ms ease,
@@ -277,8 +446,8 @@
 
 .need-sub-post:hover {
   transform: translateY(-1px);
-  border-color: rgba(248, 250, 252, 0.09);
-  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
+  border-color: rgba(248, 250, 252, 0.13);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.045);
 }
 
 .need-sub-post:focus-visible {
@@ -287,10 +456,10 @@
 }
 
 .need-sub-post__top {
-  padding: 13px 14px 11px;
+  padding: 13px 14px;
   position: relative;
   display: grid;
-  align-content: start;
+  align-content: center;
   gap: 5px;
 }
 
@@ -590,14 +759,55 @@
   transition: transform 160ms ease;
 }
 
+.need-sub-load-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 6px;
+}
+
+.need-sub-load-more button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--lime), #93ef00);
+  color: #071007;
+  cursor: pointer;
+  font-size: 0.92rem;
+  font-weight: 850;
+  transition:
+    transform 160ms ease,
+    filter 160ms ease,
+    opacity 160ms ease;
+}
+
+.need-sub-load-more button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+}
+
+.need-sub-load-more button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 .need-sub-post:hover .need-sub-card-arrow {
   transform: translateX(1px);
 }
 
 .need-sub-skeleton-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  justify-content: stretch;
   pointer-events: none;
+}
+
+.need-sub-skeleton-date-header {
+  justify-content: flex-start;
+}
+
+.need-sub-skeleton-date-copy {
+  min-width: 0;
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .need-sub-skeleton-post {
@@ -5444,6 +5654,29 @@
 }
 
 @media (max-width: 760px) {
+  .need-sub-date-strip-shell {
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    gap: 8px;
+  }
+
+  .need-sub-date-strip {
+    grid-template-columns: repeat(7, 86px);
+    gap: 10px;
+  }
+
+  .need-sub-date-arrow,
+  .need-sub-date {
+    min-height: 72px;
+  }
+
+  .need-sub-date strong {
+    font-size: 0.92rem;
+  }
+
+  .need-sub-date em {
+    font-size: 1.5rem;
+  }
+
   .need-sub-modal-backdrop {
     padding: 18px;
   }
@@ -5802,6 +6035,39 @@
 }
 
 @media (max-width: 760px) {
+  .need-sub-results {
+    gap: 28px;
+  }
+
+  .need-sub-time-section {
+    gap: 16px;
+  }
+
+  .need-sub-time-section__header {
+    min-height: 56px;
+    padding: 0 16px;
+    border-color: rgba(248, 250, 252, 0.09);
+    border-left-color: rgba(248, 250, 252, 0.2);
+    border-radius: 10px;
+    background: var(--panel-material);
+    box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
+  }
+
+  .need-sub-time-section__header h2 {
+    font-size: 1.85rem;
+  }
+
+  .need-sub-time-section__header h2 svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .need-sub-time-section__count {
+    min-height: 32px;
+    padding: 0 12px;
+    color: rgba(248, 250, 252, 0.72);
+  }
+
   .need-sub-post-grid {
     grid-template-columns: repeat(2, minmax(0, 320px));
     gap: 10px;
@@ -5813,6 +6079,24 @@
 }
 
 @media (max-width: 640px) {
+  .need-sub-date-strip-shell {
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    gap: 7px;
+    padding: 8px 0 16px;
+  }
+
+  .need-sub-date-strip {
+    display: flex;
+    gap: 10px;
+    margin-inline: 0;
+  }
+
+  .need-sub-date {
+    width: 88px;
+    min-width: 88px;
+    flex: 0 0 88px;
+  }
+
   .need-sub-create-card {
     padding: clamp(14px, 4vw, 16px);
   }
@@ -5934,8 +6218,8 @@
     --need-sub-post-body-size: 0.72rem;
     --need-sub-post-label-size: 0.62rem;
 
-    min-height: 350px;
-    grid-template-rows: 70px 112px minmax(116px, 1fr) 42px;
+    height: 330px;
+    grid-template-rows: 62px 112px minmax(114px, 1fr) 42px;
   }
 
   .need-sub-create-card,

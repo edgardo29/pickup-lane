@@ -1,7 +1,7 @@
 import BrowseGameCard from './BrowseGameCard.jsx'
 import { ClockIcon } from '../../components/BrowseIcons.jsx'
 
-function BrowseTimeSection({ group, imageUrlsByGameId, participantCountsByGameId }) {
+function BrowseTimeSection({ group }) {
   return (
     <section className="time-section">
       <div className="time-section__header">
@@ -18,8 +18,6 @@ function BrowseTimeSection({ group, imageUrlsByGameId, participantCountsByGameId
         {group.games.map((game) => (
           <BrowseGameCard
             game={game}
-            imageUrl={imageUrlsByGameId.get(game.id)}
-            signedUpCount={participantCountsByGameId.get(game.id) || 0}
             key={game.id}
           />
         ))}

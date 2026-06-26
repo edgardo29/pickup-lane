@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
@@ -21,6 +21,7 @@ from backend.schemas import (
     SubPostChatRead,
     SubPostChatReadStateRead,
     SubPostCreate,
+    SubPostListRead,
     SubPostPublicRead,
     SubPostRead,
     SubPostRemove,
@@ -31,6 +32,7 @@ from backend.services.need_a_sub_post_service import (
     create_sub_post_workflow,
     get_visible_sub_post_detail,
     list_owner_sub_posts,
+    list_sub_post_cards,
     list_visible_sub_posts,
     remove_sub_post_workflow,
     update_sub_post_workflow,
@@ -81,6 +83,29 @@ def list_need_a_sub_posts(
         format_label=format_label,
         environment_type=environment_type,
         sport_type=sport_type,
+    )
+
+
+@router.get(
+    "/cards",
+    response_model=SubPostListRead,
+    status_code=status.HTTP_200_OK,
+)
+def list_need_a_sub_post_cards(
+    view: str = Query(default="all"),
+    starts_on: date = Query(...),
+    limit: int = Query(default=40, ge=1),
+    cursor: str | None = Query(default=None, max_length=2000),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_app_user),
+) -> SubPostListRead:
+    return list_sub_post_cards(
+        db,
+        view=view,
+        starts_on=starts_on,
+        current_user=current_user,
+        limit=limit,
+        cursor=cursor,
     )
 
 

@@ -1,6 +1,7 @@
 import uuid
+from datetime import date
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -19,6 +20,7 @@ from backend.services.game_service import (
     create_game_workflow,
     delete_game_workflow,
     get_game_or_404,
+    list_browse_game_cards,
     list_games as list_games_workflow,
     list_public_game_participant_counts,
     list_public_game_participants,
@@ -34,6 +36,7 @@ from backend.services.game_roster_service import (
 )
 from backend.schemas import (
     GameCancelCreate,
+    GameCardListRead,
     GameCreate,
     GameGuestAddCreate,
     GameGuestAddRead,
@@ -158,6 +161,25 @@ def list_game_participant_counts(
     db: Session = Depends(get_db),
 ) -> list[dict[str, object]]:
     return list_public_game_participant_counts(db)
+
+
+@router.get(
+    "/browse",
+    response_model=GameCardListRead,
+    status_code=status.HTTP_200_OK,
+)
+def list_browse_games(
+    starts_on: date = Query(...),
+    limit: int = Query(default=40, ge=1),
+    cursor: str | None = Query(default=None, max_length=2000),
+    db: Session = Depends(get_db),
+) -> GameCardListRead:
+    return list_browse_game_cards(
+        db,
+        starts_on=starts_on,
+        limit=limit,
+        cursor=cursor,
+    )
 
 
 @router.get(

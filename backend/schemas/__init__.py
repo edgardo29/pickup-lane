@@ -105,6 +105,7 @@ from backend.schemas.admin_notification_schema import (
     AdminNotificationDebugRead,
 )
 from backend.schemas.admin_official_game_schema import (
+    AdminOfficialGameCardRead,
     AdminOfficialGameCancelExecute,
     AdminOfficialGameCancellationBookingImpactRead,
     AdminOfficialGameCancellationBookingResultRead,
@@ -187,6 +188,8 @@ from backend.schemas.game_image_schema import (
 )
 from backend.schemas.game_schema import (
     GameCancelCreate,
+    GameCardListRead,
+    GameCardRead,
     GameCreate,
     GameGuestAddCreate,
     GameGuestAddRead,
@@ -199,6 +202,8 @@ from backend.schemas.game_schema import (
     GameGuestRemoveRead,
     GameRead,
     GameUpdate,
+    MyGameCardRead,
+    MyGamesListRead,
 )
 from backend.schemas.game_participant_schema import (
     GameParticipantCountRead,
@@ -286,6 +291,7 @@ from backend.schemas.sub_post_schema import (
     MAX_SUB_POST_TOTAL_SUBS,
     SubPostCancel,
     SubPostCreate,
+    SubPostListRead,
     SubPostPublicRead,
     SubPostRead,
     SubPostRemove,
@@ -390,6 +396,7 @@ __all__ = [
     "AdminNotificationDebugListRead",
     "AdminNotificationDebugRead",
     "AdminRejectedAttemptRead",
+    "AdminOfficialGameCardRead",
     "AdminOfficialGameCancelExecute",
     "AdminOfficialGameCancellationBookingImpactRead",
     "AdminOfficialGameCancellationBookingResultRead",
@@ -465,6 +472,8 @@ __all__ = [
     "GameImageRead",
     "GameImageUpdate",
     "GameCancelCreate",
+    "GameCardListRead",
+    "GameCardRead",
     "GameCreate",
     "GameGuestAddCreate",
     "GameGuestAddRead",
@@ -477,6 +486,8 @@ __all__ = [
     "GameGuestRemoveRead",
     "GameRead",
     "GameUpdate",
+    "MyGameCardRead",
+    "MyGamesListRead",
     "GameParticipantCountRead",
     "GameParticipantCreate",
     "GameParticipantRead",
@@ -521,6 +532,7 @@ __all__ = [
     "RefundRead",
     "RefundUpdate",
     "SubPostCreate",
+    "SubPostListRead",
     "SubPostPublicRead",
     "SubPostRead",
     "SubPostUpdate",

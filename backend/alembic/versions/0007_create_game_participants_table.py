@@ -242,6 +242,12 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
+        "ix_game_participants_user_id_game_id",
+        "game_participants",
+        ["user_id", "game_id"],
+        unique=False,
+    )
+    op.create_index(
         "ux_game_participants_active_registered_user_per_game",
         "game_participants",
         ["game_id", "user_id"],
@@ -264,6 +270,7 @@ def downgrade() -> None:
         "ix_game_participants_user_id_participant_status",
         table_name="game_participants",
     )
+    op.execute("DROP INDEX IF EXISTS ix_game_participants_user_id_game_id")
     op.drop_index(
         "ix_game_participants_booking_id_participant_status",
         table_name="game_participants",

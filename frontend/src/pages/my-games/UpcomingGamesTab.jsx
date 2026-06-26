@@ -5,10 +5,12 @@ import MyGameCard from './MyGameCard.jsx'
 function UpcomingGamesTab({
   groups,
   hasMoreItems,
-  imageUrlsByGameId,
+  isLoadingMore,
+  onLoadMore,
   onViewMore,
-  participantCountsByGameId,
 }) {
+  const handleLoadMore = onLoadMore || onViewMore
+
   return (
     <>
       {groups.map((dateGroup) => (
@@ -23,10 +25,8 @@ function UpcomingGamesTab({
           <AppCardGrid className="my-games-agenda-grid">
             {dateGroup.items.map((item) => (
               <MyGameCard
-                imageUrl={imageUrlsByGameId.get(item.game.id)}
                 item={item}
-                participantCount={participantCountsByGameId.get(item.game.id) || 0}
-                key={item.participant.id}
+                key={item.participant_id || item.game.id}
               />
             ))}
           </AppCardGrid>
@@ -34,8 +34,13 @@ function UpcomingGamesTab({
       ))}
 
       {hasMoreItems && (
-        <button className="my-games-view-more" type="button" onClick={onViewMore}>
-          View more games
+        <button
+          className="my-games-view-more"
+          type="button"
+          onClick={handleLoadMore}
+          disabled={isLoadingMore}
+        >
+          {isLoadingMore ? 'Loading…' : 'Load More'}
         </button>
       )}
     </>

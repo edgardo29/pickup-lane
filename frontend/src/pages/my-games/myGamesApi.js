@@ -11,15 +11,20 @@ async function getAuthHeaders(firebaseUser) {
   }
 }
 
-export async function loadMyGamesData(firebaseUser) {
+export async function loadMyGamesPage(firebaseUser, {
+  cursor = '',
+  limit = 40,
+  view = 'upcoming',
+} = {}) {
   const authHeaders = await getAuthHeaders(firebaseUser)
-  const [games, images, venueImages, participantCounts, myParticipants] = await Promise.all([
-    apiRequest('/games'),
-    apiRequest('/game-images?image_status=active&is_primary=true'),
-    apiRequest('/venue-images').catch(() => []),
-    apiRequest('/games/participant-counts'),
-    apiRequest('/game-participants/me', { headers: authHeaders }),
-  ])
+  const params = new URLSearchParams({
+    view,
+    limit: String(limit),
+  })
 
-  return { games, images, myParticipants, participantCounts, venueImages }
+  if (cursor) {
+    params.set('cursor', cursor)
+  }
+
+  return apiRequest(`/my-games?${params.toString()}`, { headers: authHeaders })
 }

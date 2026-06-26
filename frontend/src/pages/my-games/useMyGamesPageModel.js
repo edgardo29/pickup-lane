@@ -1,129 +1,160 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth.js'
-import { buildImageUrlsByGameId } from '../browse-games/browseGamesSelectors.js'
-import { loadMyGamesData } from './myGamesApi.js'
+import { loadMyGamesPage } from './myGamesApi.js'
 import {
-  buildMyGameItems,
-  buildParticipantCounts,
-  getVisibleUpcomingItems,
   groupHistoryAgendaItems,
   groupUpcomingAgendaItems,
 } from './myGamesSelectors.js'
 
+const MY_GAMES_PAGE_LIMIT = 40
+const initialPageState = {
+  error: '',
+  hasMore: false,
+  isLoadingMore: false,
+  items: [],
+  nextCursor: null,
+  status: 'idle',
+}
+
+function createInitialPages() {
+  return {
+    history: { ...initialPageState },
+    upcoming: { ...initialPageState },
+  }
+}
+
 export function useMyGamesPageModel() {
   const { appUser, currentUser: firebaseUser, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState('upcoming')
-  const [visibleUpcomingWindows, setVisibleUpcomingWindows] = useState(1)
-  const [currentUser, setCurrentUser] = useState(null)
-  const [games, setGames] = useState([])
-  const [images, setImages] = useState([])
-  const [venueImages, setVenueImages] = useState([])
-  const [participantCounts, setParticipantCounts] = useState([])
-  const [myParticipants, setMyParticipants] = useState([])
-  const [status, setStatus] = useState('loading')
-  const [error, setError] = useState('')
-  const [nowMs, setNowMs] = useState(null)
+  const [pages, setPages] = useState(createInitialPages)
+  const activeUserIdRef = useRef(appUser?.id || '')
+  const requestVersionRef = useRef(0)
+
+  activeUserIdRef.current = appUser?.id || ''
 
   useEffect(() => {
-    function updateNow() {
-      setNowMs(Date.now())
-    }
+    requestVersionRef.current += 1
+    setPages(createInitialPages())
+  }, [appUser?.id])
 
-    updateNow()
-    const intervalId = window.setInterval(updateNow, 30000)
-
-    return () => window.clearInterval(intervalId)
-  }, [])
+  const activePage = pages[activeTab] || initialPageState
 
   useEffect(() => {
-    let ignore = false
-
-    async function loadPageData() {
-      setStatus('loading')
-      setError('')
-
-      try {
-        if (isLoading) {
-          return
-        }
-
-        if (!appUser?.id) {
-          throw new Error('Sign in to view your games.')
-        }
-
-        const pageData = await loadMyGamesData(firebaseUser)
-
-        if (!ignore) {
-          setCurrentUser(appUser)
-          setGames(pageData.games)
-          setImages(pageData.images)
-          setVenueImages(pageData.venueImages || [])
-          setParticipantCounts(pageData.participantCounts)
-          setMyParticipants(pageData.myParticipants)
-          setStatus('success')
-        }
-      } catch (requestError) {
-        if (!ignore) {
-          setError(
-            requestError instanceof Error ? requestError.message : 'Unable to load your games.',
-          )
-          setStatus('error')
-        }
-      }
+    if (isLoading || activePage.status !== 'idle') {
+      return
     }
 
-    loadPageData()
+    loadPage(activeTab)
+  }, [activePage.status, activeTab, isLoading])
 
-    return () => {
-      ignore = true
-    }
-  }, [appUser, firebaseUser, isLoading])
-
-  const gamesById = useMemo(() => new Map(games.map((game) => [game.id, game])), [games])
-  const imageUrlsByGameId = useMemo(
-    () => buildImageUrlsByGameId(games, images, venueImages),
-    [games, images, venueImages],
-  )
-  const participantCountsByGameId = useMemo(
-    () => buildParticipantCounts(participantCounts),
-    [participantCounts],
-  )
-  const myGameItems = useMemo(
-    () => (nowMs === null ? [] : buildMyGameItems(myParticipants, gamesById, currentUser, nowMs)),
-    [currentUser, gamesById, myParticipants, nowMs],
-  )
-  const upcomingItems = myGameItems.filter((item) => item.bucket === 'upcoming')
-  const historyItems = myGameItems.filter((item) => item.bucket === 'history')
-  const visibleUpcomingItems = useMemo(
-    () => (nowMs === null ? [] : getVisibleUpcomingItems(upcomingItems, visibleUpcomingWindows, nowMs)),
-    [nowMs, upcomingItems, visibleUpcomingWindows],
-  )
-  const hasMoreUpcomingItems = visibleUpcomingItems.length < upcomingItems.length
-  const activeItems = activeTab === 'history' ? historyItems : visibleUpcomingItems
-  const hasHiddenUpcomingItems =
-    activeTab === 'upcoming' && upcomingItems.length > 0 && visibleUpcomingItems.length === 0
+  const activeItems = activePage.items
   const upcomingGroups = useMemo(
-    () => groupUpcomingAgendaItems(visibleUpcomingItems),
-    [visibleUpcomingItems],
+    () => groupUpcomingAgendaItems(pages.upcoming.items),
+    [pages.upcoming.items],
   )
-  const historyGroups = useMemo(() => groupHistoryAgendaItems(historyItems), [historyItems])
+  const historyGroups = useMemo(
+    () => groupHistoryAgendaItems(pages.history.items),
+    [pages.history.items],
+  )
 
-  function showMoreUpcomingItems() {
-    setVisibleUpcomingWindows((windowCount) => windowCount + 1)
+  async function loadPage(view, { append = false } = {}) {
+    if (isLoading) {
+      return
+    }
+
+    if (!appUser?.id) {
+      setPages((currentPages) => ({
+        ...currentPages,
+        [view]: {
+          ...currentPages[view],
+          error: 'Sign in to view your games.',
+          status: 'error',
+        },
+      }))
+      return
+    }
+
+    const currentPage = pages[view] || initialPageState
+    const cursor = append ? currentPage.nextCursor : ''
+    const requestUserId = appUser.id
+    const requestVersion = requestVersionRef.current
+
+    setPages((currentPages) => ({
+      ...currentPages,
+      [view]: {
+        ...currentPages[view],
+        error: '',
+        isLoadingMore: append,
+        status: append ? currentPages[view].status : 'loading',
+      },
+    }))
+
+    try {
+      const pageData = await loadMyGamesPage(firebaseUser, {
+        cursor,
+        limit: MY_GAMES_PAGE_LIMIT,
+        view,
+      })
+
+      if (
+        requestVersion !== requestVersionRef.current
+        || requestUserId !== activeUserIdRef.current
+      ) {
+        return
+      }
+
+      setPages((currentPages) => ({
+        ...currentPages,
+        [view]: {
+          error: '',
+          hasMore: Boolean(pageData.has_more),
+          isLoadingMore: false,
+          items: append
+            ? [...currentPages[view].items, ...(pageData.items || [])]
+            : pageData.items || [],
+          nextCursor: pageData.next_cursor || null,
+          status: 'success',
+        },
+      }))
+    } catch (requestError) {
+      if (
+        requestVersion !== requestVersionRef.current
+        || requestUserId !== activeUserIdRef.current
+      ) {
+        return
+      }
+
+      setPages((currentPages) => ({
+        ...currentPages,
+        [view]: {
+          ...currentPages[view],
+          error: requestError instanceof Error ? requestError.message : 'Unable to load your games.',
+          isLoadingMore: false,
+          status: append ? currentPages[view].status : 'error',
+        },
+      }))
+    }
+  }
+
+  function loadMoreActiveItems() {
+    if (!activePage.hasMore || activePage.isLoadingMore) {
+      return
+    }
+
+    loadPage(activeTab, { append: true })
   }
 
   return {
     activeItems,
     activeTab,
-    error,
-    hasHiddenUpcomingItems,
-    hasMoreUpcomingItems,
+    error: activePage.error,
+    hasHiddenUpcomingItems: false,
+    hasMoreItems: activePage.hasMore,
     historyGroups,
-    imageUrlsByGameId,
-    participantCountsByGameId,
+    isLoadingMore: activePage.isLoadingMore,
+    loadMoreActiveItems,
     setActiveTab,
-    showMoreUpcomingItems,
-    status,
+    status: activePage.status === 'idle' ? 'loading' : activePage.status,
     upcomingGroups,
   }
 }

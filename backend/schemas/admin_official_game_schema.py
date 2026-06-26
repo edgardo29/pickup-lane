@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -276,5 +276,30 @@ class AdminOfficialGameRead(BaseModel):
     game: GameRead
 
 
+class AdminOfficialGameCardRead(BaseModel):
+    id: UUID
+    title: str
+    venue_name_snapshot: str
+    starts_at: datetime
+    ends_at: datetime
+    starts_on_local: date
+    timezone: str
+    city_snapshot: str
+    state_snapshot: str
+    format_label: str
+    game_player_group: str
+    environment_type: str
+    price_per_player_cents: int
+    currency: str
+    total_spots: int
+    booked_spots: int
+    host_user_id: UUID | None = None
+    primary_venue_image_url: str | None = None
+    issues: list[str] = Field(default_factory=list)
+
+
 class AdminOfficialGameListRead(BaseModel):
-    games: list[GameRead] = Field(default_factory=list)
+    games: list[AdminOfficialGameCardRead] = Field(default_factory=list)
+    next_cursor: str | None = None
+    has_more: bool = False
+    limit: int = 24

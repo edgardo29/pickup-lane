@@ -1,6 +1,7 @@
 import uuid
+from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -62,36 +63,29 @@ from backend.services.official_game_service import (
 )
 
 router = APIRouter(prefix="/admin/official-games", tags=["admin_official_games"])
-VALID_GAME_STATUS_FILTERS = {
-    "scheduled",
-    "full",
-    "cancelled",
-    "completed",
-    "abandoned",
-}
 
 
 @router.get("", response_model=AdminOfficialGameListRead)
 def list_admin_official_games(
-    game_status: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=100),
+    view: str = Query(default="active"),
+    search: str | None = Query(default=None, max_length=120),
+    starts_on: date | None = Query(default=None),
+    limit: int = Query(default=24, ge=1),
+    cursor: str | None = Query(default=None, max_length=2000),
     db: Session = Depends(get_db),
     current_admin: User = Depends(
         require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
     ),
 ) -> AdminOfficialGameListRead:
     del current_admin
-    if game_status is not None and game_status not in VALID_GAME_STATUS_FILTERS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "game_status must be 'scheduled', 'full', 'cancelled', "
-                "'completed', or 'abandoned'."
-            ),
-        )
-
-    games = list_official_games(db, game_status=game_status, limit=limit)
-    return AdminOfficialGameListRead(games=games)
+    return list_official_games(
+        db,
+        view=view,
+        search=search,
+        starts_on=starts_on,
+        limit=limit,
+        cursor=cursor,
+    )
 
 
 @router.post(
