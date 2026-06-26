@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth.js'
 import { loadMyGamesPage } from './myGamesApi.js'
 import {
@@ -30,22 +30,13 @@ export function useMyGamesPageModel() {
   const activeUserIdRef = useRef(appUser?.id || '')
   const requestVersionRef = useRef(0)
 
-  activeUserIdRef.current = appUser?.id || ''
-
   useEffect(() => {
+    activeUserIdRef.current = appUser?.id || ''
     requestVersionRef.current += 1
     setPages(createInitialPages())
   }, [appUser?.id])
 
   const activePage = pages[activeTab] || initialPageState
-
-  useEffect(() => {
-    if (isLoading || activePage.status !== 'idle') {
-      return
-    }
-
-    loadPage(activeTab)
-  }, [activePage.status, activeTab, isLoading])
 
   const activeItems = activePage.items
   const upcomingGroups = useMemo(
@@ -57,7 +48,7 @@ export function useMyGamesPageModel() {
     [pages.history.items],
   )
 
-  async function loadPage(view, { append = false } = {}) {
+  const loadPage = useCallback(async (view, { append = false } = {}) => {
     if (isLoading) {
       return
     }
@@ -134,7 +125,15 @@ export function useMyGamesPageModel() {
         },
       }))
     }
-  }
+  }, [appUser, firebaseUser, isLoading, pages])
+
+  useEffect(() => {
+    if (isLoading || activePage.status !== 'idle') {
+      return
+    }
+
+    loadPage(activeTab)
+  }, [activePage.status, activeTab, isLoading, loadPage])
 
   function loadMoreActiveItems() {
     if (!activePage.hasMore || activePage.isLoadingMore) {

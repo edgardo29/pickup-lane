@@ -39,25 +39,20 @@ export function useBrowseGamesPageModel() {
   const activeDateKey = dateOptions.some((date) => date.key === selectedDateKey)
     ? selectedDateKey
     : dateOptions[0]?.key || ''
-  activeDateKeyRef.current = activeDateKey
   const datePageCount = Math.ceil(dateOptions.length / DATE_PAGE_SIZE)
+  const activeDateIndex = dateOptions.findIndex((date) => date.key === activeDateKey)
+  const displayedDatePageIndex = activeDateIndex === -1
+    ? Math.min(datePageIndex, Math.max(datePageCount - 1, 0))
+    : Math.floor(activeDateIndex / DATE_PAGE_SIZE)
   const visibleDateOptions = dateOptions.slice(
-    datePageIndex * DATE_PAGE_SIZE,
-    datePageIndex * DATE_PAGE_SIZE + DATE_PAGE_SIZE,
+    displayedDatePageIndex * DATE_PAGE_SIZE,
+    displayedDatePageIndex * DATE_PAGE_SIZE + DATE_PAGE_SIZE,
   )
   const timeGroups = useMemo(() => groupGamesByHour(games), [games])
 
   useEffect(() => {
-    const activeDateIndex = dateOptions.findIndex((date) => date.key === activeDateKey)
-    if (activeDateIndex === -1) {
-      return
-    }
-
-    const activeDatePageIndex = Math.floor(activeDateIndex / DATE_PAGE_SIZE)
-    if (activeDatePageIndex !== datePageIndex) {
-      setDatePageIndex(activeDatePageIndex)
-    }
-  }, [activeDateKey, dateOptions, datePageIndex])
+    activeDateKeyRef.current = activeDateKey
+  }, [activeDateKey])
 
   useEffect(() => {
     let ignore = false
@@ -109,6 +104,7 @@ export function useBrowseGamesPageModel() {
 
     if (nextDateKey !== activeDateKey) {
       requestVersionRef.current += 1
+      activeDateKeyRef.current = nextDateKey
       setIsLoadingMore(false)
     }
     setDatePageIndex(safePageIndex)
@@ -118,6 +114,7 @@ export function useBrowseGamesPageModel() {
   function selectDate(nextDateKey) {
     if (nextDateKey !== activeDateKey) {
       requestVersionRef.current += 1
+      activeDateKeyRef.current = nextDateKey
       setIsLoadingMore(false)
     }
     setSelectedDateKey(nextDateKey)
@@ -172,9 +169,9 @@ export function useBrowseGamesPageModel() {
 
   return {
     activeDateKey,
-    canGoNextDates: datePageIndex < datePageCount - 1,
-    canGoPreviousDates: datePageIndex > 0,
-    datePageIndex,
+    canGoNextDates: displayedDatePageIndex < datePageCount - 1,
+    canGoPreviousDates: displayedDatePageIndex > 0,
+    datePageIndex: displayedDatePageIndex,
     error,
     hasMoreGames,
     isLoadingMore,

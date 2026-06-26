@@ -30,10 +30,10 @@ export function useNeedASubPostsData({
   ].join(':')
   const requestContextKeyRef = useRef(requestContextKey)
 
-  if (requestContextKeyRef.current !== requestContextKey) {
+  useEffect(() => {
     requestContextKeyRef.current = requestContextKey
     requestVersionRef.current += 1
-  }
+  }, [requestContextKey])
 
   const beginRequest = useCallback(() => {
     const requestVersion = requestVersionRef.current + 1

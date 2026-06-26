@@ -81,12 +81,6 @@ function NeedASubPage() {
     [datePageIndex],
   )
 
-  useEffect(() => {
-    if (datePageIndex > maxDatePageIndex) {
-      setDatePageIndex(maxDatePageIndex)
-    }
-  }, [datePageIndex, maxDatePageIndex])
-
   function showBrowsePanel() {
     setShowCreateDiscardModal(false)
     resetCreateForm()
