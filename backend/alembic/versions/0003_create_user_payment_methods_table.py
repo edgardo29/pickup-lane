@@ -121,8 +121,20 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Downgrade removes the payment-method table and its indexes because this
     # migration only introduces that single table.
-    op.execute("DROP INDEX IF EXISTS ix_user_payment_methods_user_card_fingerprint")
-    op.execute("DROP INDEX IF EXISTS ix_user_payment_methods_one_active_default_per_user")
-    op.execute("DROP INDEX IF EXISTS ix_user_payment_methods_user_status")
-    op.execute("DROP INDEX IF EXISTS ix_user_payment_methods_user_id")
+    op.drop_index(
+        "ix_user_payment_methods_user_card_fingerprint",
+        table_name="user_payment_methods",
+    )
+    op.drop_index(
+        "ix_user_payment_methods_one_active_default_per_user",
+        table_name="user_payment_methods",
+    )
+    op.drop_index(
+        "ix_user_payment_methods_user_status",
+        table_name="user_payment_methods",
+    )
+    op.drop_index(
+        "ix_user_payment_methods_user_id",
+        table_name="user_payment_methods",
+    )
     op.drop_table("user_payment_methods")

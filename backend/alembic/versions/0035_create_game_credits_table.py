@@ -11,6 +11,90 @@ branch_labels = None
 depends_on = None
 
 
+def _in_check(column_name: str, values: tuple[str, ...]) -> str:
+    quoted_values = ", ".join(f"'{value}'" for value in values)
+    return f"{column_name} IN ({quoted_values})"
+
+
+def _target_required_check(columns: tuple[str, ...]) -> str:
+    return " OR ".join(f"{column} IS NOT NULL" for column in columns)
+
+
+PREVIOUS_ADMIN_ACTION_TYPES = (
+    "cancel_game",
+    "refund_booking",
+    "create_refund",
+    "update_refund",
+    "mark_no_show",
+    "create_payment",
+    "update_payment",
+    "reverse_no_show",
+    "suspend_user",
+    "unsuspend_user",
+    "restrict_hosting",
+    "restore_hosting",
+    "approve_venue",
+    "delete_user",
+    "reject_venue",
+    "remove_chat_message",
+    "hide_chat_message",
+    "update_game",
+    "create_game_chat",
+    "update_game_chat",
+    "update_booking",
+    "update_participant",
+    "create_official_game",
+    "update_official_game",
+    "assign_official_host",
+    "remove_official_host",
+    "admin_add_player",
+    "admin_remove_player",
+    "waive_payment",
+    "create_notification",
+    "update_notification",
+    "change_staff_role",
+    "append_audit_note",
+    "remove_sub_post",
+    "hide_unsafe_community_payment_text",
+)
+ADMIN_ACTION_TYPES = (
+    *PREVIOUS_ADMIN_ACTION_TYPES,
+    "issue_credit",
+    "reverse_credit",
+)
+PREVIOUS_ADMIN_ACTION_TYPE_CHECK = _in_check(
+    "action_type",
+    PREVIOUS_ADMIN_ACTION_TYPES,
+)
+ADMIN_ACTION_TYPE_CHECK = _in_check("action_type", ADMIN_ACTION_TYPES)
+
+PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS = (
+    "target_user_id",
+    "target_game_id",
+    "target_booking_id",
+    "target_participant_id",
+    "target_payment_id",
+    "target_refund_id",
+    "target_venue_id",
+    "target_message_id",
+    "target_notification_id",
+    "target_admin_action_id",
+    "target_sub_post_id",
+    "target_sub_post_position_id",
+    "target_sub_post_request_id",
+)
+ADMIN_ACTION_TARGET_COLUMNS = (
+    *PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS,
+    "target_game_credit_id",
+)
+PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK = _target_required_check(
+    PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS
+)
+ADMIN_ACTION_TARGET_REQUIRED_CHECK = _target_required_check(
+    ADMIN_ACTION_TARGET_COLUMNS
+)
+
+
 def upgrade() -> None:
     op.create_table(
         "game_credits",
@@ -134,6 +218,35 @@ def upgrade() -> None:
         "game_credits",
         ["user_id", "credit_status"],
     )
+    op.add_column(
+        "admin_actions",
+        sa.Column("target_game_credit_id", postgresql.UUID(as_uuid=True), nullable=True),
+    )
+    op.create_index(
+        "ix_admin_actions_target_game_credit_id",
+        "admin_actions",
+        ["target_game_credit_id"],
+    )
+    op.drop_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        ADMIN_ACTION_TARGET_REQUIRED_CHECK,
+    )
+    op.drop_constraint(
+        "ck_admin_actions_action_type",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_action_type",
+        "admin_actions",
+        ADMIN_ACTION_TYPE_CHECK,
+    )
     op.create_foreign_key(
         "fk_admin_actions_target_game_credit_id",
         "admin_actions",
@@ -146,12 +259,40 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        "ALTER TABLE admin_actions "
-        "DROP CONSTRAINT IF EXISTS fk_admin_actions_target_game_credit_id"
+        "DELETE FROM admin_actions "
+        "WHERE action_type IN ('issue_credit', 'reverse_credit') "
+        "OR target_game_credit_id IS NOT NULL"
     )
+    op.drop_constraint(
+        "fk_admin_actions_target_game_credit_id",
+        "admin_actions",
+        type_="foreignkey",
+    )
+    op.drop_constraint(
+        "ck_admin_actions_action_type",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_action_type",
+        "admin_actions",
+        PREVIOUS_ADMIN_ACTION_TYPE_CHECK,
+    )
+    op.drop_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK,
+    )
+    op.drop_index("ix_admin_actions_target_game_credit_id", table_name="admin_actions")
+    op.drop_column("admin_actions", "target_game_credit_id")
     op.drop_index("ix_game_credits_user_id_credit_status", table_name="game_credits")
     op.drop_index("ix_game_credits_user_id", table_name="game_credits")
-    op.execute("DROP INDEX IF EXISTS ix_game_credits_source_payment_id")
+    op.drop_index("ix_game_credits_source_payment_id", table_name="game_credits")
     op.drop_index("ix_game_credits_source_game_id", table_name="game_credits")
     op.drop_index("ix_game_credits_source_booking_id", table_name="game_credits")
     op.drop_index("ix_game_credits_credit_status", table_name="game_credits")

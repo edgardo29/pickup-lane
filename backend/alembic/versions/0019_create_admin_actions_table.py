@@ -29,34 +29,10 @@ def upgrade() -> None:
         ),
         sa.Column("target_payment_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("target_refund_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column("target_game_credit_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("target_venue_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column("target_venue_image_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("target_message_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column("target_sub_post_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column(
-            "target_sub_post_request_id",
-            postgresql.UUID(as_uuid=True),
-            nullable=True,
-        ),
-        sa.Column(
-            "target_sub_post_position_id",
-            postgresql.UUID(as_uuid=True),
-            nullable=True,
-        ),
-        sa.Column(
-            "target_sub_chat_message_id",
-            postgresql.UUID(as_uuid=True),
-            nullable=True,
-        ),
         sa.Column("target_notification_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column(
-            "target_platform_notice_campaign_id",
-            postgresql.UUID(as_uuid=True),
-            nullable=True,
-        ),
         sa.Column("target_admin_action_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column("target_support_flag_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("reason", sa.Text(), nullable=True),
         sa.Column("metadata", postgresql.JSONB(), nullable=True),
         sa.Column("idempotency_key", sa.String(length=160), nullable=True),
@@ -75,22 +51,16 @@ def upgrade() -> None:
                 "'reverse_no_show', 'suspend_user', 'unsuspend_user', "
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
                 "'delete_user', "
-                "'reject_venue', 'create_venue_image', 'update_venue_image', "
-                "'remove_venue_image', 'remove_chat_message', 'hide_chat_message', "
+                "'reject_venue', "
+                "'remove_chat_message', 'hide_chat_message', "
                 "'update_game', 'create_game_chat', 'update_game_chat', "
                 "'update_booking', "
-                "'update_participant', 'issue_credit', 'reverse_credit', "
+                "'update_participant', "
                 "'create_official_game', 'update_official_game', "
                 "'assign_official_host', 'remove_official_host', "
                 "'admin_add_player', 'admin_remove_player', 'waive_payment', "
-                "'remove_sub_post', 'hide_unsafe_community_payment_text', "
                 "'create_notification', 'update_notification', "
-                "'create_platform_notice_campaign', "
-                "'update_platform_notice_campaign', "
-                "'send_platform_notice_campaign', "
-                "'retry_platform_notice_campaign', "
-                "'change_staff_role', 'append_audit_note', "
-                "'resolve_support_flag'"
+                "'change_staff_role', 'append_audit_note'"
                 ")"
             ),
             name="ck_admin_actions_action_type",
@@ -103,18 +73,10 @@ def upgrade() -> None:
                 "OR target_participant_id IS NOT NULL "
                 "OR target_payment_id IS NOT NULL "
                 "OR target_refund_id IS NOT NULL "
-                "OR target_game_credit_id IS NOT NULL "
                 "OR target_venue_id IS NOT NULL "
-                "OR target_venue_image_id IS NOT NULL "
                 "OR target_message_id IS NOT NULL "
-                "OR target_sub_post_id IS NOT NULL "
-                "OR target_sub_post_request_id IS NOT NULL "
-                "OR target_sub_post_position_id IS NOT NULL "
-                "OR target_sub_chat_message_id IS NOT NULL "
                 "OR target_notification_id IS NOT NULL "
-                "OR target_platform_notice_campaign_id IS NOT NULL "
-                "OR target_admin_action_id IS NOT NULL "
-                "OR target_support_flag_id IS NOT NULL"
+                "OR target_admin_action_id IS NOT NULL"
             ),
             name="ck_admin_actions_target_required",
         ),
@@ -230,21 +192,9 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
-        "ix_admin_actions_target_game_credit_id",
-        "admin_actions",
-        ["target_game_credit_id"],
-        unique=False,
-    )
-    op.create_index(
         "ix_admin_actions_target_venue_id",
         "admin_actions",
         ["target_venue_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_admin_actions_target_venue_image_id",
-        "admin_actions",
-        ["target_venue_image_id"],
         unique=False,
     )
     op.create_index(
@@ -254,51 +204,15 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
-        "ix_admin_actions_target_sub_post_id",
-        "admin_actions",
-        ["target_sub_post_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_admin_actions_target_sub_post_request_id",
-        "admin_actions",
-        ["target_sub_post_request_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_admin_actions_target_sub_post_position_id",
-        "admin_actions",
-        ["target_sub_post_position_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_admin_actions_target_sub_chat_message_id",
-        "admin_actions",
-        ["target_sub_chat_message_id"],
-        unique=False,
-    )
-    op.create_index(
         "ix_admin_actions_target_notification_id",
         "admin_actions",
         ["target_notification_id"],
         unique=False,
     )
     op.create_index(
-        "ix_admin_actions_target_platform_notice_campaign_id",
-        "admin_actions",
-        ["target_platform_notice_campaign_id"],
-        unique=False,
-    )
-    op.create_index(
         "ix_admin_actions_target_admin_action_id",
         "admin_actions",
         ["target_admin_action_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_admin_actions_target_support_flag_id",
-        "admin_actions",
-        ["target_support_flag_id"],
         unique=False,
     )
     op.create_index(
@@ -371,47 +285,6 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "uq_admin_actions_hide_unsafe_community_payment_text_idempotency",
-        "admin_actions",
-        ["admin_user_id", "target_game_id", "idempotency_key"],
-        unique=True,
-        postgresql_where=sa.text(
-            "action_type = 'hide_unsafe_community_payment_text' "
-            "AND idempotency_key IS NOT NULL"
-        ),
-    )
-    op.create_index(
-        "uq_admin_actions_remove_sub_post_idempotency",
-        "admin_actions",
-        ["admin_user_id", "target_sub_post_id", "idempotency_key"],
-        unique=True,
-        postgresql_where=sa.text(
-            "action_type = 'remove_sub_post' AND idempotency_key IS NOT NULL"
-        ),
-    )
-    op.create_index(
-        "uq_admin_actions_hide_sub_chat_message_idempotency",
-        "admin_actions",
-        ["admin_user_id", "target_sub_chat_message_id", "idempotency_key"],
-        unique=True,
-        postgresql_where=sa.text(
-            "action_type = 'hide_chat_message' "
-            "AND target_sub_chat_message_id IS NOT NULL "
-            "AND idempotency_key IS NOT NULL"
-        ),
-    )
-    op.create_index(
-        "uq_admin_actions_remove_sub_chat_message_idempotency",
-        "admin_actions",
-        ["admin_user_id", "target_sub_chat_message_id", "idempotency_key"],
-        unique=True,
-        postgresql_where=sa.text(
-            "action_type = 'remove_chat_message' "
-            "AND target_sub_chat_message_id IS NOT NULL "
-            "AND idempotency_key IS NOT NULL"
-        ),
-    )
-    op.create_index(
         "ix_admin_actions_admin_user_id_created_at",
         "admin_actions",
         ["admin_user_id", "created_at"],
@@ -437,121 +310,50 @@ def downgrade() -> None:
         table_name="admin_actions",
     )
     op.drop_index(
-        "uq_admin_actions_remove_sub_chat_message_idempotency",
-        table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
-        "uq_admin_actions_hide_sub_chat_message_idempotency",
-        table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
-        "uq_admin_actions_remove_sub_post_idempotency",
-        table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
         "uq_admin_actions_delete_user_idempotency",
         table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
-        "uq_admin_actions_hide_unsafe_community_payment_text_idempotency",
-        table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index(
         "uq_admin_actions_change_staff_role_idempotency",
         table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index(
         "uq_admin_actions_restore_hosting_idempotency",
         table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index(
         "uq_admin_actions_restrict_hosting_idempotency",
         table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index(
         "uq_admin_actions_unsuspend_user_idempotency",
         table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index(
         "uq_admin_actions_suspend_user_idempotency",
         table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index(
         "uq_admin_actions_audit_note_idempotency",
         table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index(
         "ix_admin_actions_idempotency_key",
         table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
-        "ix_admin_actions_target_support_flag_id",
-        table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index(
         "ix_admin_actions_target_admin_action_id",
         table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
-        "ix_admin_actions_target_platform_notice_campaign_id",
-        table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index(
         "ix_admin_actions_target_notification_id",
         table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
-        "ix_admin_actions_target_sub_chat_message_id",
-        table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
-        "ix_admin_actions_target_sub_post_position_id",
-        table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
-        "ix_admin_actions_target_sub_post_request_id",
-        table_name="admin_actions",
-        if_exists=True,
-    )
-    op.drop_index(
-        "ix_admin_actions_target_sub_post_id",
-        table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index("ix_admin_actions_target_message_id", table_name="admin_actions")
-    op.drop_index(
-        "ix_admin_actions_target_venue_image_id",
-        table_name="admin_actions",
-        if_exists=True,
-    )
     op.drop_index("ix_admin_actions_target_venue_id", table_name="admin_actions")
-    op.drop_index(
-        "ix_admin_actions_target_game_credit_id",
-        table_name="admin_actions",
-        if_exists=True,
-    )
     op.drop_index(
         "ix_admin_actions_target_refund_id",
         table_name="admin_actions",
-        if_exists=True,
     )
     op.drop_index("ix_admin_actions_target_payment_id", table_name="admin_actions")
     op.drop_index(

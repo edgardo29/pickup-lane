@@ -379,19 +379,44 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Downgrade removes the games table and its indexes because this migration
     # only introduces that single table.
-    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_state_trgm")
-    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_city_trgm")
-    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_venue_name_trgm")
-    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_title_trgm")
-    op.execute(
-        "DROP INDEX IF EXISTS ix_games_admin_official_status_local_starts_created_id"
+    op.drop_index(
+        "ix_games_admin_official_state_trgm",
+        table_name="games",
     )
-    op.execute("DROP INDEX IF EXISTS ix_games_admin_official_status_starts_created_id")
-    op.execute("DROP INDEX IF EXISTS ix_games_host_cards_starts_created_id")
-    op.execute("DROP INDEX IF EXISTS ix_games_browse_cards_local_starts_created_id")
-    op.execute("DROP INDEX IF EXISTS ux_games_one_active_community_game_per_host_date")
+    op.drop_index(
+        "ix_games_admin_official_city_trgm",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_admin_official_venue_name_trgm",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_admin_official_title_trgm",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_admin_official_status_local_starts_created_id",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_admin_official_status_starts_created_id",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_host_cards_starts_created_id",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_browse_cards_local_starts_created_id",
+        table_name="games",
+    )
+    op.drop_index(
+        "ux_games_one_active_community_game_per_host_date",
+        table_name="games",
+    )
     op.drop_index("ix_games_starts_at", table_name="games")
-    op.execute("DROP INDEX IF EXISTS ix_games_starts_on_local")
+    op.drop_index("ix_games_starts_on_local", table_name="games")
     op.drop_index("ix_games_created_by_user_id", table_name="games")
     op.drop_index("ix_games_host_user_id", table_name="games")
     op.drop_index("ix_games_venue_id", table_name="games")

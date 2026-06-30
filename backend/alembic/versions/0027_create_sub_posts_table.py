@@ -11,6 +11,81 @@ branch_labels = None
 depends_on = None
 
 
+def _in_check(column_name: str, values: tuple[str, ...]) -> str:
+    quoted_values = ", ".join(f"'{value}'" for value in values)
+    return f"{column_name} IN ({quoted_values})"
+
+
+def _target_required_check(columns: tuple[str, ...]) -> str:
+    return " OR ".join(f"{column} IS NOT NULL" for column in columns)
+
+
+PREVIOUS_ADMIN_ACTION_TYPES = (
+    "cancel_game",
+    "refund_booking",
+    "create_refund",
+    "update_refund",
+    "mark_no_show",
+    "create_payment",
+    "update_payment",
+    "reverse_no_show",
+    "suspend_user",
+    "unsuspend_user",
+    "restrict_hosting",
+    "restore_hosting",
+    "approve_venue",
+    "delete_user",
+    "reject_venue",
+    "remove_chat_message",
+    "hide_chat_message",
+    "update_game",
+    "create_game_chat",
+    "update_game_chat",
+    "update_booking",
+    "update_participant",
+    "create_official_game",
+    "update_official_game",
+    "assign_official_host",
+    "remove_official_host",
+    "admin_add_player",
+    "admin_remove_player",
+    "waive_payment",
+    "create_notification",
+    "update_notification",
+    "change_staff_role",
+    "append_audit_note",
+)
+ADMIN_ACTION_TYPES = (*PREVIOUS_ADMIN_ACTION_TYPES, "remove_sub_post")
+PREVIOUS_ADMIN_ACTION_TYPE_CHECK = _in_check(
+    "action_type",
+    PREVIOUS_ADMIN_ACTION_TYPES,
+)
+ADMIN_ACTION_TYPE_CHECK = _in_check("action_type", ADMIN_ACTION_TYPES)
+
+PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS = (
+    "target_user_id",
+    "target_game_id",
+    "target_booking_id",
+    "target_participant_id",
+    "target_payment_id",
+    "target_refund_id",
+    "target_venue_id",
+    "target_message_id",
+    "target_notification_id",
+    "target_admin_action_id",
+)
+ADMIN_ACTION_TARGET_COLUMNS = (
+    *PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS,
+    "target_sub_post_id",
+)
+PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK = _target_required_check(
+    PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS
+)
+ADMIN_ACTION_TARGET_REQUIRED_CHECK = _target_required_check(
+    ADMIN_ACTION_TARGET_COLUMNS
+)
+
+
 def upgrade() -> None:
     # Twenty-seventh schema migration: create the main Need a Sub post table.
     op.create_table(
@@ -192,6 +267,44 @@ def upgrade() -> None:
         unique=True,
         postgresql_where=sa.text("post_status IN ('active', 'filled')"),
     )
+    op.add_column(
+        "admin_actions",
+        sa.Column("target_sub_post_id", postgresql.UUID(as_uuid=True), nullable=True),
+    )
+    op.create_index(
+        "ix_admin_actions_target_sub_post_id",
+        "admin_actions",
+        ["target_sub_post_id"],
+    )
+    op.create_index(
+        "uq_admin_actions_remove_sub_post_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_sub_post_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'remove_sub_post' AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.drop_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        ADMIN_ACTION_TARGET_REQUIRED_CHECK,
+    )
+    op.drop_constraint(
+        "ck_admin_actions_action_type",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_action_type",
+        "admin_actions",
+        ADMIN_ACTION_TYPE_CHECK,
+    )
     op.create_foreign_key(
         "fk_admin_actions_target_sub_post_id",
         "admin_actions",
@@ -204,49 +317,74 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        "ALTER TABLE admin_actions "
-        "DROP CONSTRAINT IF EXISTS fk_admin_actions_target_sub_post_id"
+        "DELETE FROM admin_actions "
+        "WHERE action_type = 'remove_sub_post' "
+        "OR target_sub_post_id IS NOT NULL"
     )
+    op.drop_constraint(
+        "fk_admin_actions_target_sub_post_id",
+        "admin_actions",
+        type_="foreignkey",
+    )
+    op.drop_constraint(
+        "ck_admin_actions_action_type",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_action_type",
+        "admin_actions",
+        PREVIOUS_ADMIN_ACTION_TYPE_CHECK,
+    )
+    op.drop_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK,
+    )
+    op.drop_index(
+        "uq_admin_actions_remove_sub_post_idempotency",
+        table_name="admin_actions",
+    )
+    op.drop_index("ix_admin_actions_target_sub_post_id", table_name="admin_actions")
+    op.drop_column("admin_actions", "target_sub_post_id")
     op.drop_index(
         "ux_sub_posts_owner_live_starts_on_local",
         table_name="sub_posts",
-        if_exists=True,
     )
     op.drop_index(
         "ix_sub_posts_browse_active_filled_starts_at",
         table_name="sub_posts",
         postgresql_where=sa.text("post_status IN ('active', 'filled')"),
-        if_exists=True,
     )
     op.drop_index(
         "ix_sub_posts_owner_cards_local_starts_created_id",
         table_name="sub_posts",
         postgresql_where=sa.text("post_status IN ('active', 'filled')"),
-        if_exists=True,
     )
     op.drop_index(
         "ix_sub_posts_cards_local_starts_created_id",
         table_name="sub_posts",
         postgresql_where=sa.text("post_status IN ('active', 'filled')"),
-        if_exists=True,
     )
     op.drop_index(
         "ix_sub_posts_post_status_starts_at",
         table_name="sub_posts",
-        if_exists=True,
     )
     op.drop_index(
         "ix_sub_posts_city_state_starts_at",
         table_name="sub_posts",
-        if_exists=True,
     )
-    op.drop_index("ix_sub_posts_expires_at", table_name="sub_posts", if_exists=True)
-    op.drop_index("ix_sub_posts_starts_at", table_name="sub_posts", if_exists=True)
+    op.drop_index("ix_sub_posts_expires_at", table_name="sub_posts")
+    op.drop_index("ix_sub_posts_starts_at", table_name="sub_posts")
     op.drop_index(
         "ix_sub_posts_starts_on_local",
         table_name="sub_posts",
-        if_exists=True,
     )
-    op.drop_index("ix_sub_posts_post_status", table_name="sub_posts", if_exists=True)
-    op.drop_index("ix_sub_posts_owner_user_id", table_name="sub_posts", if_exists=True)
+    op.drop_index("ix_sub_posts_post_status", table_name="sub_posts")
+    op.drop_index("ix_sub_posts_owner_user_id", table_name="sub_posts")
     op.drop_table("sub_posts")

@@ -11,6 +11,39 @@ branch_labels = None
 depends_on = None
 
 
+def _target_required_check(columns: tuple[str, ...]) -> str:
+    return " OR ".join(f"{column} IS NOT NULL" for column in columns)
+
+
+PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS = (
+    "target_user_id",
+    "target_game_id",
+    "target_booking_id",
+    "target_participant_id",
+    "target_payment_id",
+    "target_refund_id",
+    "target_venue_id",
+    "target_message_id",
+    "target_notification_id",
+    "target_admin_action_id",
+    "target_sub_post_id",
+    "target_sub_post_position_id",
+    "target_sub_post_request_id",
+    "target_game_credit_id",
+    "target_venue_image_id",
+)
+ADMIN_ACTION_TARGET_COLUMNS = (
+    *PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS,
+    "target_sub_chat_message_id",
+)
+PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK = _target_required_check(
+    PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS
+)
+ADMIN_ACTION_TARGET_REQUIRED_CHECK = _target_required_check(
+    ADMIN_ACTION_TARGET_COLUMNS
+)
+
+
 def upgrade() -> None:
     op.create_table(
         "sub_post_chat_messages",
@@ -147,6 +180,51 @@ def upgrade() -> None:
         "sub_post_chat_messages",
         ["chat_id", "created_at"],
     )
+    op.add_column(
+        "admin_actions",
+        sa.Column(
+            "target_sub_chat_message_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+    )
+    op.create_index(
+        "ix_admin_actions_target_sub_chat_message_id",
+        "admin_actions",
+        ["target_sub_chat_message_id"],
+    )
+    op.create_index(
+        "uq_admin_actions_hide_sub_chat_message_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_sub_chat_message_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'hide_chat_message' "
+            "AND target_sub_chat_message_id IS NOT NULL "
+            "AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_remove_sub_chat_message_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_sub_chat_message_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'remove_chat_message' "
+            "AND target_sub_chat_message_id IS NOT NULL "
+            "AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.drop_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        ADMIN_ACTION_TARGET_REQUIRED_CHECK,
+    )
     op.create_foreign_key(
         "fk_admin_actions_target_sub_chat_message_id",
         "admin_actions",
@@ -166,15 +244,42 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute(
+        "DELETE FROM admin_actions WHERE target_sub_chat_message_id IS NOT NULL"
+    )
     op.drop_constraint(
         "fk_notifications_related_sub_post_chat_message_id",
         "notifications",
         type_="foreignkey",
     )
-    op.execute(
-        "ALTER TABLE admin_actions "
-        "DROP CONSTRAINT IF EXISTS fk_admin_actions_target_sub_chat_message_id"
+    op.drop_constraint(
+        "fk_admin_actions_target_sub_chat_message_id",
+        "admin_actions",
+        type_="foreignkey",
     )
+    op.drop_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK,
+    )
+    op.drop_index(
+        "uq_admin_actions_remove_sub_chat_message_idempotency",
+        table_name="admin_actions",
+    )
+    op.drop_index(
+        "uq_admin_actions_hide_sub_chat_message_idempotency",
+        table_name="admin_actions",
+    )
+    op.drop_index(
+        "ix_admin_actions_target_sub_chat_message_id",
+        table_name="admin_actions",
+    )
+    op.drop_column("admin_actions", "target_sub_chat_message_id")
     op.drop_index(
         "ix_sub_post_chat_messages_chat_id_created_at",
         table_name="sub_post_chat_messages",
