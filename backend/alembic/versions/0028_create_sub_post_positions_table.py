@@ -11,6 +11,35 @@ branch_labels = None
 depends_on = None
 
 
+def _target_required_check(columns: tuple[str, ...]) -> str:
+    return " OR ".join(f"{column} IS NOT NULL" for column in columns)
+
+
+PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS = (
+    "target_user_id",
+    "target_game_id",
+    "target_booking_id",
+    "target_participant_id",
+    "target_payment_id",
+    "target_refund_id",
+    "target_venue_id",
+    "target_message_id",
+    "target_notification_id",
+    "target_admin_action_id",
+    "target_sub_post_id",
+)
+ADMIN_ACTION_TARGET_COLUMNS = (
+    *PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS,
+    "target_sub_post_position_id",
+)
+PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK = _target_required_check(
+    PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS
+)
+ADMIN_ACTION_TARGET_REQUIRED_CHECK = _target_required_check(
+    ADMIN_ACTION_TARGET_COLUMNS
+)
+
+
 def upgrade() -> None:
     # Twenty-eighth schema migration: create exact position and group
     # requirements for each Need a Sub post.
@@ -88,6 +117,29 @@ def upgrade() -> None:
         "sub_post_positions",
         ["sub_post_id"],
     )
+    op.add_column(
+        "admin_actions",
+        sa.Column(
+            "target_sub_post_position_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+    )
+    op.create_index(
+        "ix_admin_actions_target_sub_post_position_id",
+        "admin_actions",
+        ["target_sub_post_position_id"],
+    )
+    op.drop_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        ADMIN_ACTION_TARGET_REQUIRED_CHECK,
+    )
     op.create_foreign_key(
         "fk_admin_actions_target_sub_post_position_id",
         "admin_actions",
@@ -100,9 +152,28 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        "ALTER TABLE admin_actions "
-        "DROP CONSTRAINT IF EXISTS fk_admin_actions_target_sub_post_position_id"
+        "DELETE FROM admin_actions WHERE target_sub_post_position_id IS NOT NULL"
     )
+    op.drop_constraint(
+        "fk_admin_actions_target_sub_post_position_id",
+        "admin_actions",
+        type_="foreignkey",
+    )
+    op.drop_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_sub_post_position_id",
+        table_name="admin_actions",
+    )
+    op.drop_column("admin_actions", "target_sub_post_position_id")
     op.drop_index(
         "ix_sub_post_positions_sub_post_id",
         table_name="sub_post_positions",

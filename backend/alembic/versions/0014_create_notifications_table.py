@@ -466,138 +466,111 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Downgrade removes the notifications table and indexes because this
-    # migration only introduces that single table. Some dev databases may have
-    # applied an older copy of this migration before these indexes were added.
+    # migration only introduces that single table.
     op.drop_index(
         "ix_notifications_user_category_event_at",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_user_id_is_read_event_at",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_sub_post_chat_message_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_sub_post_chat_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_sub_post_position_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_sub_post_request_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_sub_post_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_message_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_participant_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_booking_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_chat_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_related_game_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_user_id_is_read_created_at",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_user_category_created_at",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_created_at",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_aggregation_key",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ux_notifications_user_aggregation_key",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_event_at",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_is_read",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_action_key",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_source_type",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_notification_type",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_notification_domain",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_notification_category",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_actor_user_id",
         table_name="notifications",
-        if_exists=True,
     )
     op.drop_index(
         "ix_notifications_user_id",
         table_name="notifications",
-        if_exists=True,
     )
-    op.execute("DROP INDEX IF EXISTS ix_notifications_related_refund_id")
-    op.execute("DROP INDEX IF EXISTS ix_notifications_related_payment_id")
+    op.drop_index("ix_notifications_related_refund_id", table_name="notifications")
+    op.drop_index("ix_notifications_related_payment_id", table_name="notifications")
     op.drop_table("notifications")

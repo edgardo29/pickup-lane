@@ -252,7 +252,10 @@ def test_browse_game_cards_cursor_paginates_and_returns_card_metadata(
     player = create_user(client)
     second_player = create_user(client)
     venue = create_venue(client, admin["id"])
-    base_start = datetime.now(UTC).replace(microsecond=0) + timedelta(days=7)
+    base_start = (
+        datetime.now(UTC).replace(hour=18, minute=0, second=0, microsecond=0)
+        + timedelta(days=7)
+    )
 
     game_ids: list[str] = []
     for index in range(3):

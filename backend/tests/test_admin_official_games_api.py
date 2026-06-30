@@ -449,16 +449,20 @@ def test_admin_official_games_list_filters_by_view_search_and_date(
 ):
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
-    june_26 = datetime(2026, 6, 26, 23, 0, tzinfo=UTC)
-    june_27 = datetime(2026, 6, 27, 23, 0, tzinfo=UTC)
+    harrison_start = (
+        datetime.now(UTC).replace(hour=18, minute=0, second=0, microsecond=0)
+        + timedelta(days=7)
+    )
+    fleet_start = harrison_start + timedelta(days=1)
+    harrison_starts_on = harrison_start.date().isoformat()
 
     authenticate_as(admin["id"])
     harrison_response = client.post(
         "/admin/official-games",
         json=build_official_game_payload(
             title="Harrison Park 4v4",
-            starts_at=june_26.isoformat(),
-            ends_at=(june_26 + timedelta(hours=1)).isoformat(),
+            starts_at=harrison_start.isoformat(),
+            ends_at=(harrison_start + timedelta(hours=1)).isoformat(),
         ),
     )
     assert harrison_response.status_code == 201, harrison_response.text
@@ -477,8 +481,8 @@ def test_admin_official_games_list_filters_by_view_search_and_date(
                 "country_code": "US",
                 "neighborhood": "West Loop",
             },
-            starts_at=june_27.isoformat(),
-            ends_at=(june_27 + timedelta(hours=1)).isoformat(),
+            starts_at=fleet_start.isoformat(),
+            ends_at=(fleet_start + timedelta(hours=1)).isoformat(),
         ),
     )
     assert fleet_response.status_code == 201, fleet_response.text
@@ -487,8 +491,8 @@ def test_admin_official_games_list_filters_by_view_search_and_date(
         "/admin/official-games",
         json=build_official_game_payload(
             title="Harrison Completed",
-            starts_at=june_26.isoformat(),
-            ends_at=(june_26 + timedelta(hours=1)).isoformat(),
+            starts_at=harrison_start.isoformat(),
+            ends_at=(harrison_start + timedelta(hours=1)).isoformat(),
         ),
     )
     assert completed_response.status_code == 201, completed_response.text
@@ -496,7 +500,12 @@ def test_admin_official_games_list_filters_by_view_search_and_date(
     set_game_status(completed_game["id"], "completed")
 
     active_response = client.get(
-        "/admin/official-games?view=active&search=harrison&starts_on=2026-06-26"
+        "/admin/official-games",
+        params={
+            "view": "active",
+            "search": "harrison",
+            "starts_on": harrison_starts_on,
+        },
     )
     assert active_response.status_code == 200, active_response.text
     assert [item["id"] for item in active_response.json()["games"]] == [
@@ -504,7 +513,12 @@ def test_admin_official_games_list_filters_by_view_search_and_date(
     ]
 
     completed_list_response = client.get(
-        "/admin/official-games?view=completed&search=harrison&starts_on=2026-06-26"
+        "/admin/official-games",
+        params={
+            "view": "completed",
+            "search": "harrison",
+            "starts_on": harrison_starts_on,
+        },
     )
     assert completed_list_response.status_code == 200, completed_list_response.text
     completed_games = completed_list_response.json()["games"]
@@ -548,7 +562,10 @@ def test_admin_official_games_list_cursor_paginates_and_is_query_bound(
 ):
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
-    first_start = datetime(2026, 6, 26, 22, 0, tzinfo=UTC)
+    first_start = (
+        datetime.now(UTC).replace(hour=18, minute=0, second=0, microsecond=0)
+        + timedelta(days=7)
+    )
 
     authenticate_as(admin["id"])
     game_ids: list[str] = []

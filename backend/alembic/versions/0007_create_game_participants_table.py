@@ -270,7 +270,10 @@ def downgrade() -> None:
         "ix_game_participants_user_id_participant_status",
         table_name="game_participants",
     )
-    op.execute("DROP INDEX IF EXISTS ix_game_participants_user_id_game_id")
+    op.drop_index(
+        "ix_game_participants_user_id_game_id",
+        table_name="game_participants",
+    )
     op.drop_index(
         "ix_game_participants_booking_id_participant_status",
         table_name="game_participants",
@@ -287,7 +290,10 @@ def downgrade() -> None:
         "ix_game_participants_participant_status",
         table_name="game_participants",
     )
-    op.execute("DROP INDEX IF EXISTS ix_game_participants_guest_of_user_id")
+    op.drop_index(
+        "ix_game_participants_guest_of_user_id",
+        table_name="game_participants",
+    )
     op.drop_index("ix_game_participants_user_id", table_name="game_participants")
     op.drop_index("ix_game_participants_booking_id", table_name="game_participants")
     op.drop_index("ix_game_participants_game_id", table_name="game_participants")

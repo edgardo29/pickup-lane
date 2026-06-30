@@ -82,6 +82,26 @@ ADMIN_ACTION_TARGET_REQUIRED_CHECK = (
     "OR target_support_flag_id IS NOT NULL"
 )
 
+PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK = (
+    "target_user_id IS NOT NULL "
+    "OR target_game_id IS NOT NULL "
+    "OR target_booking_id IS NOT NULL "
+    "OR target_participant_id IS NOT NULL "
+    "OR target_payment_id IS NOT NULL "
+    "OR target_refund_id IS NOT NULL "
+    "OR target_game_credit_id IS NOT NULL "
+    "OR target_venue_id IS NOT NULL "
+    "OR target_venue_image_id IS NOT NULL "
+    "OR target_message_id IS NOT NULL "
+    "OR target_sub_post_id IS NOT NULL "
+    "OR target_sub_post_request_id IS NOT NULL "
+    "OR target_sub_post_position_id IS NOT NULL "
+    "OR target_sub_chat_message_id IS NOT NULL "
+    "OR target_notification_id IS NOT NULL "
+    "OR target_admin_action_id IS NOT NULL "
+    "OR target_support_flag_id IS NOT NULL"
+)
+
 
 def upgrade() -> None:
     op.create_table(
@@ -455,14 +475,18 @@ def upgrade() -> None:
         ["notification_id"],
     )
 
-    op.execute(
-        "ALTER TABLE admin_actions "
-        "ADD COLUMN IF NOT EXISTS target_platform_notice_campaign_id UUID"
+    op.add_column(
+        "admin_actions",
+        sa.Column(
+            "target_platform_notice_campaign_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
     )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS "
-        "ix_admin_actions_target_platform_notice_campaign_id "
-        "ON admin_actions (target_platform_notice_campaign_id)"
+    op.create_index(
+        "ix_admin_actions_target_platform_notice_campaign_id",
+        "admin_actions",
+        ["target_platform_notice_campaign_id"],
     )
     op.drop_constraint(
         "ck_admin_actions_target_required",
@@ -474,23 +498,13 @@ def upgrade() -> None:
         "admin_actions",
         ADMIN_ACTION_TARGET_REQUIRED_CHECK,
     )
-    op.execute(
-        """
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1
-                FROM pg_constraint
-                WHERE conname = 'fk_admin_actions_target_platform_notice_campaign_id'
-            ) THEN
-                ALTER TABLE admin_actions
-                ADD CONSTRAINT fk_admin_actions_target_platform_notice_campaign_id
-                FOREIGN KEY (target_platform_notice_campaign_id)
-                REFERENCES platform_notice_campaigns(id)
-                ON DELETE SET NULL;
-            END IF;
-        END $$;
-        """
+    op.create_foreign_key(
+        "fk_admin_actions_target_platform_notice_campaign_id",
+        "admin_actions",
+        "platform_notice_campaigns",
+        ["target_platform_notice_campaign_id"],
+        ["id"],
+        ondelete="SET NULL",
     )
     op.drop_constraint(
         "ck_admin_actions_action_type",
@@ -512,7 +526,7 @@ def downgrade() -> None:
         "'update_platform_notice_campaign', "
         "'send_platform_notice_campaign', "
         "'retry_platform_notice_campaign'"
-        ")"
+        ") OR target_platform_notice_campaign_id IS NOT NULL"
     )
     op.drop_constraint(
         "ck_admin_actions_action_type",
@@ -529,17 +543,56 @@ def downgrade() -> None:
         "admin_actions",
         type_="foreignkey",
     )
-    # Some local databases applied the earlier Phase 7.3A shape of this
-    # pre-production migration. Keep downgrade tolerant of the 7.4A tables and
-    # index not existing yet so those databases can still rebuild cleanly.
-    op.execute("DROP TABLE IF EXISTS platform_notice_campaign_deliveries")
-    op.execute("DROP TABLE IF EXISTS platform_notice_campaign_attempts")
+    op.drop_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_admin_actions_target_required",
+        "admin_actions",
+        PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK,
+    )
+    op.drop_index(
+        "ix_admin_actions_target_platform_notice_campaign_id",
+        table_name="admin_actions",
+    )
+    op.drop_column("admin_actions", "target_platform_notice_campaign_id")
+    op.drop_index(
+        "ix_platform_notice_campaign_deliveries_notification_id",
+        table_name="platform_notice_campaign_deliveries",
+    )
+    op.drop_index(
+        "ix_platform_notice_campaign_deliveries_status",
+        table_name="platform_notice_campaign_deliveries",
+    )
+    op.drop_index(
+        "ix_platform_notice_campaign_deliveries_recipient_user_id",
+        table_name="platform_notice_campaign_deliveries",
+    )
+    op.drop_index(
+        "ix_platform_notice_campaign_deliveries_campaign_id",
+        table_name="platform_notice_campaign_deliveries",
+    )
+    op.drop_table("platform_notice_campaign_deliveries")
+    op.drop_index(
+        "ix_platform_notice_campaign_attempts_created_at",
+        table_name="platform_notice_campaign_attempts",
+    )
+    op.drop_index(
+        "ix_platform_notice_campaign_attempts_campaign_id",
+        table_name="platform_notice_campaign_attempts",
+    )
+    op.drop_table("platform_notice_campaign_attempts")
     op.drop_index(
         "ix_platform_notice_campaign_target_users_user_id",
         table_name="platform_notice_campaign_target_users",
     )
     op.drop_table("platform_notice_campaign_target_users")
-    op.execute("DROP INDEX IF EXISTS ix_platform_notice_campaigns_first_sent_at")
+    op.drop_index(
+        "ix_platform_notice_campaigns_first_sent_at",
+        table_name="platform_notice_campaigns",
+    )
     op.drop_index(
         "ix_platform_notice_campaigns_created_at",
         table_name="platform_notice_campaigns",
