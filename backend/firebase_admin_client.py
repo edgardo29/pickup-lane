@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -18,18 +19,34 @@ def initialize_firebase_admin() -> None:
     if firebase_admin._apps:
         return
 
-    credentials_path = os.getenv("FIREBASE_ADMIN_CREDENTIALS")
+    cred = _load_firebase_credentials()
+    firebase_admin.initialize_app(cred)
 
+
+def _load_firebase_credentials() -> credentials.Certificate:
+    credentials_json = os.getenv("FIREBASE_ADMIN_CREDENTIALS_JSON", "").strip()
+    if credentials_json:
+        try:
+            credentials_info = json.loads(credentials_json)
+        except json.JSONDecodeError as exc:
+            raise FirebaseAdminConfigError(
+                "FIREBASE_ADMIN_CREDENTIALS_JSON must be valid JSON."
+            ) from exc
+
+        return credentials.Certificate(credentials_info)
+
+    credentials_path = os.getenv("FIREBASE_ADMIN_CREDENTIALS", "").strip()
     if not credentials_path:
-        raise FirebaseAdminConfigError("FIREBASE_ADMIN_CREDENTIALS is not configured.")
+        raise FirebaseAdminConfigError(
+            "FIREBASE_ADMIN_CREDENTIALS_JSON or FIREBASE_ADMIN_CREDENTIALS is required."
+        )
 
     if not os.path.exists(credentials_path):
         raise FirebaseAdminConfigError(
             "FIREBASE_ADMIN_CREDENTIALS does not point to a readable file."
         )
 
-    cred = credentials.Certificate(credentials_path)
-    firebase_admin.initialize_app(cred)
+    return credentials.Certificate(credentials_path)
 
 
 def verify_firebase_token(id_token: str) -> dict:
