@@ -10,7 +10,6 @@ import {
 const JOIN_WINDOW_MINUTES = 5
 
 export function buildGameCheckoutViewModel({
-  agreed,
   appUser,
   game,
   guestCount,

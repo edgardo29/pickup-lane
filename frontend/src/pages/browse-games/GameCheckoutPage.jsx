@@ -86,7 +86,6 @@ function GameCheckoutPage() {
     ? selectedPaymentMethodId
     : getPreferredPaymentMethod(checkoutData.paymentMethods)?.id || ''
   const checkout = buildGameCheckoutViewModel({
-    agreed,
     appUser,
     game: checkoutData.game,
     guestCount,
