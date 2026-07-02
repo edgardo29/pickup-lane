@@ -27,7 +27,6 @@ export function useSettingsPageModel() {
   } = useProfileContext()
   const [currentUserOverride, setCurrentUserOverride] = useState(null)
   const [settingsOverride, setSettingsOverride] = useState(null)
-  const [activeLegalPolicyId, setActiveLegalPolicyId] = useState('')
   const effectiveCurrentUser = useMemo(
     () => (currentUser ? { ...currentUser, ...(currentUserOverride || {}) } : currentUser),
     [currentUser, currentUserOverride],
@@ -56,7 +55,6 @@ export function useSettingsPageModel() {
     logout,
     navigate,
     notificationSummary: getNotificationSummary(effectiveSettings),
-    onOpenLegalPolicy: setActiveLegalPolicyId,
     onOpenDelete: deleteSettings.openDeleteModal,
     onOpenNotifications: notificationSettings.openNotificationModal,
     onOpenPassword: passwordSettings.openPasswordModal,
@@ -86,7 +84,6 @@ export function useSettingsPageModel() {
     handleProfileSaved,
     handleSaveNotifications: notificationSettings.handleSaveNotifications,
     firebaseUser: authUser,
-    activeLegalPolicyId,
     isDeleteOpen: deleteSettings.isDeleteOpen,
     isNotificationOpen: notificationSettings.isNotificationOpen,
     isPasswordOpen: passwordSettings.isPasswordOpen,
@@ -99,7 +96,6 @@ export function useSettingsPageModel() {
     setConfirmPassword: passwordSettings.setConfirmPassword,
     setDeleteConfirmation: deleteSettings.setDeleteConfirmation,
     setEmailNotificationsEnabled: notificationSettings.setEmailNotificationsEnabled,
-    setActiveLegalPolicyId,
     setIsDeleteOpen: deleteSettings.setIsDeleteOpen,
     setIsNotificationOpen: notificationSettings.setIsNotificationOpen,
     setIsPasswordOpen: passwordSettings.setIsPasswordOpen,

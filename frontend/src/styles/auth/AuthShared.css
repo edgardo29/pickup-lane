@@ -222,23 +222,11 @@
 .auth-field__label a,
 .auth-switch a,
 .auth-terms a,
-.auth-terms__button,
 .auth-text-link {
   color: var(--auth-lime);
   text-decoration: underline;
   text-underline-offset: 3px;
   font-weight: 850;
-}
-
-.auth-terms__button {
-  width: auto;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  display: inline;
-  font: inherit;
 }
 
 .auth-field__input {

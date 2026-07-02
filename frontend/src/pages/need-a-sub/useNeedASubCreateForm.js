@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { createNeedASubPost, listNeedASubPostCards } from './needASubApi.js'
+import { createNeedASubPost } from './needASubApi.js'
 import { buildAddedPositions, buildInitialNeedASubForm, getDefaultPositions } from './needASubData.js'
 import { buildNeedASubPayload } from './needASubPayloads.js'
 import { validateNeedASubForm } from './needASubValidation.js'
@@ -113,29 +113,8 @@ export function useNeedASubCreateForm({
     }
   }
 
-  async function checkDuplicateDate() {
-    if (!currentUser || !form.date) {
-      return ''
-    }
-
-    try {
-      const response = await listNeedASubPostCards(currentUser, {
-        limit: 1,
-        startsOn: form.date,
-        view: 'mine',
-      })
-
-      return response.posts?.length
-        ? 'You already have an active Need a Sub post for this date.'
-        : ''
-    } catch (error) {
-      return error instanceof Error ? error.message : 'Unable to check Need a Sub posts.'
-    }
-  }
-
   return {
     addPosition,
-    checkDuplicateDate,
     clearCreateFeedback,
     form,
     formError,

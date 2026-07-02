@@ -1,5 +1,3 @@
-import { LEGAL_POLICY_IDS } from '../../features/legal/legalPolicies.js'
-
 export function canUseGameChat(game, participants, user) {
   if (!game?.is_chat_enabled || !user?.id) {
     return false
@@ -103,48 +101,39 @@ export function buildRuleItems(game) {
     {
       title: 'Canceling Your Spot',
       kind: 'clock',
-      actionLabel: 'View full policy',
-      policyId: LEGAL_POLICY_IDS.cancellationRefunds,
       text: isCommunityGame
         ? game.custom_cancellation_text ||
-          'Review the host payment note before canceling. Pickup Lane does not refund off-app payments.'
-        : 'Cancel 24+ hours before game time to stay eligible for a refund or game credit.',
+          'Check the host payment note before canceling. Pickup Lane does not process player refunds for community games.'
+        : 'Cancel 24+ hours before game time for refund or game credit eligibility.',
     },
     {
       title: isCommunityGame ? 'If The Host Cancels' : 'If Pickup Lane Cancels',
       kind: 'shield',
       text: isCommunityGame
-        ? 'The host manages updates and next steps for off-app payments.'
-        : 'Players receive a refund or game credit for official games.',
+        ? 'The host should contact players with next steps for any off-app payments.'
+        : 'Players receive a refund or game credit when Pickup Lane cancels an official game.',
     },
     {
       title: 'Signup Window',
       kind: 'clock',
-      text: 'Signups close 5 minutes after start time. After that, the roster is locked.',
+      text: 'New signups close 5 minutes after the scheduled start time.',
     },
     {
       title: 'Waitlist',
       kind: 'players',
-      text: "Waitlisted players only pay if confirmed. You'll move up automatically when a spot opens.",
-    },
-    {
-      title: 'Code of Conduct',
-      kind: 'conduct',
-      actionLabel: 'Read code of conduct',
-      policyId: LEGAL_POLICY_IDS.codeOfConduct,
-      text: 'Respect players, hosts, venues, and posted rules. Serious issues can affect your spot or account.',
+      text: 'Waitlisted players only pay if moved to the confirmed player list.',
     },
     {
       title: 'Weather',
       kind: 'weather',
       text: isOutdoorGame
-        ? 'Outdoor games may be delayed or canceled for unsafe weather or field conditions.'
-        : 'Indoor games run unless the venue closes or conditions become unsafe.',
+        ? 'Outdoor games may be canceled for dangerous weather, including thunderstorms, lightning, or unsafe field conditions.'
+        : 'Indoor games run unless the venue has an unexpected closure or unsafe condition.',
     },
     {
       title: 'Age Requirement',
       kind: 'age',
-      text: `Players must be ${game.minimum_age || 18} years or older to play. Age rules apply to every rostered player.`,
+      text: `Players must be ${game.minimum_age || 18} years or older.`,
     },
   ]
 

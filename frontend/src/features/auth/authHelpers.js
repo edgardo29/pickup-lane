@@ -4,44 +4,6 @@ export function getPostAuthPath(user) {
   return hasCompleteProfile(user) ? '/games' : '/finish-profile'
 }
 
-export function getSafeAuthBackPath(returnPath, fallback = '/') {
-  if (!returnPath || typeof returnPath !== 'string') {
-    return fallback
-  }
-
-  if (!returnPath.startsWith('/') || returnPath.startsWith('//')) {
-    return fallback
-  }
-
-  const [pathname] = returnPath.split('?')
-
-  if (pathname === '/' || pathname === '/games' || pathname === '/need-a-sub') {
-    return pathname
-  }
-
-  if (pathname.startsWith('/games/') && pathname.endsWith('/checkout')) {
-    return pathname.replace(/\/checkout$/, '')
-  }
-
-  if (pathname.startsWith('/games/') && pathname.endsWith('/edit')) {
-    return pathname.replace(/\/edit$/, '')
-  }
-
-  if (pathname.startsWith('/games/')) {
-    return pathname
-  }
-
-  if (pathname.startsWith('/need-a-sub/posts/') && pathname.endsWith('/edit')) {
-    return pathname.replace(/\/edit$/, '')
-  }
-
-  if (pathname.startsWith('/need-a-sub/posts/')) {
-    return pathname
-  }
-
-  return fallback
-}
-
 export function hasCompleteProfile(user) {
   return Boolean(
     user?.first_name?.trim?.() &&

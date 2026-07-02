@@ -68,8 +68,6 @@ function NeedASubCreateFlow({
   mode = 'create',
   onCancel,
   onAddPosition,
-  onCheckDuplicateDate,
-  onClearFeedback,
   onRemovePosition,
   onSubmit,
   onUpdateField,
@@ -81,7 +79,6 @@ function NeedASubCreateFlow({
 }) {
   const [activeStep, setActiveStep] = useState(0)
   const [stepError, setStepError] = useState('')
-  const [isCheckingDate, setIsCheckingDate] = useState(false)
   const steps = getSubPostFlowSteps(mode)
   const isEditMode = mode === 'edit'
   const isFirstStep = activeStep === 0
@@ -95,33 +92,17 @@ function NeedASubCreateFlow({
 
   function goBack() {
     setStepError('')
-    onClearFeedback?.()
     setActiveStep((currentStep) => Math.max(0, currentStep - 1))
   }
 
-  async function goNext() {
+  function goNext() {
     const error = validateNeedASubCreateStep(activeStepConfig.key, form)
     if (error) {
       setStepError(error)
       return
     }
 
-    if (!isEditMode && activeStepConfig.key === 'game' && onCheckDuplicateDate) {
-      setIsCheckingDate(true)
-
-      try {
-        const duplicateDateError = await onCheckDuplicateDate()
-        if (duplicateDateError) {
-          setStepError(duplicateDateError)
-          return
-        }
-      } finally {
-        setIsCheckingDate(false)
-      }
-    }
-
     setStepError('')
-    onClearFeedback?.()
     setActiveStep((currentStep) => Math.min(steps.length - 1, currentStep + 1))
   }
 
@@ -174,7 +155,6 @@ function NeedASubCreateFlow({
 
   function handleCancel() {
     setStepError('')
-    onClearFeedback?.()
     onCancel()
   }
 
@@ -261,12 +241,7 @@ function NeedASubCreateFlow({
                   <span aria-hidden="true">→</span>
                 </button>
               ) : (
-                <button
-                  className="need-sub-primary"
-                  disabled={isCheckingDate}
-                  type="button"
-                  onClick={goNext}
-                >
+                <button className="need-sub-primary" type="button" onClick={goNext}>
                   <span className="need-sub-create-next-label-full">Next: {nextStep.label}</span>
                   <span className="need-sub-create-next-label-short">Next</span>
                   <span aria-hidden="true">→</span>

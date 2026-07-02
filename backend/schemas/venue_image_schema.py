@@ -50,10 +50,9 @@ class VenueImageRead(BaseModel):
     venue_id: UUID
     uploaded_by_user_id: UUID | None
     image_url: str
-    storage_provider: str
-    storage_object_key: str
-    storage_bucket: str
-    storage_account_id: str
+    blob_name: str
+    container_name: str
+    storage_account_name: str
     content_type: str
     size_bytes: int
     etag: str | None

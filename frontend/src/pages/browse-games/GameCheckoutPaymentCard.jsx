@@ -1,5 +1,3 @@
-import { CreditCard } from 'lucide-react'
-import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import {
   formatPaymentMethodExpiration,
   isPaymentMethodExpired,
@@ -36,9 +34,9 @@ export function GameCheckoutPaymentCard({
           )}
         </div>
         {stripeUnavailable && (
-          <FormErrorMessage className="checkout-payment-error">
+          <p className="checkout-payment-note checkout-payment-note--error">
             Secure payment is not configured.
-          </FormErrorMessage>
+          </p>
         )}
         {!stripeUnavailable && hasSavedCards && paymentMethod && (
           <div
@@ -62,15 +60,12 @@ export function GameCheckoutPaymentCard({
               <span>Add a card to reserve your spot.</span>
             </div>
             <button disabled={!canAddPaymentMethod} type="button" onClick={onAddPaymentMethod}>
-              <CreditCard aria-hidden="true" />
-              <span>Add card</span>
+              Add card
             </button>
           </div>
         )}
         {setupError && (
-          <FormErrorMessage className="checkout-payment-error">
-            {setupError}
-          </FormErrorMessage>
+          <p className="checkout-payment-note checkout-payment-note--error">{setupError}</p>
         )}
         {stripeStatusMessage && (
           <p className="checkout-payment-note">{stripeStatusMessage}</p>

@@ -1,5 +1,3 @@
-import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
-
 export function GameCheckoutErrors({
   existingParticipant,
   isAddGuestsBlockedByParticipant,
@@ -11,25 +9,25 @@ export function GameCheckoutErrors({
   return (
     <>
       {isAddGuestsBlockedByParticipant && (
-        <FormErrorMessage className="checkout-error">
+        <p className="checkout-error">
           Only confirmed players can add guests to an existing booking.
-        </FormErrorMessage>
+        </p>
       )}
       {isJoinWindowClosed && (
-        <FormErrorMessage className="checkout-error">
+        <p className="checkout-error">
           {isAddGuestsCheckout
             ? 'Attendance changes are closed for this game.'
             : 'Joining is closed for this game.'}
-        </FormErrorMessage>
+        </p>
       )}
       {existingParticipant && !isAddGuestsCheckout && isExistingParticipantBlocked && (
-        <FormErrorMessage className="checkout-error">
+        <p className="checkout-error">
           {existingParticipant.participant_status === 'waitlisted'
             ? 'You are already on the waitlist for this game.'
             : 'You already joined this game.'}
-        </FormErrorMessage>
+        </p>
       )}
-      <FormErrorMessage className="checkout-error">{submitError}</FormErrorMessage>
+      {submitError && <p className="checkout-error">{submitError}</p>}
     </>
   )
 }

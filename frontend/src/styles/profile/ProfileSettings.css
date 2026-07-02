@@ -527,18 +527,10 @@
   min-width: 0;
 }
 
-.settings-main--payment-methods {
-  width: 100%;
-}
-
 .settings-main > .profile-subpage-heading {
   width: min(880px, 100%);
   margin-left: auto;
   margin-right: auto;
-}
-
-.settings-main--payment-methods > .profile-subpage-heading {
-  width: 100%;
 }
 
 .settings-main > .settings-group {
@@ -595,21 +587,31 @@
 
 .settings-header-back {
   width: fit-content;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(248, 250, 252, 0.1);
+  border-radius: 999px;
+  color: rgba(248, 250, 252, 0.78);
+  background: rgba(248, 250, 252, 0.035);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.settings-header-back::before {
+  content: "←";
+}
+
+.settings-header-back:hover {
+  color: var(--lime);
+  background: rgba(184, 255, 36, 0.06);
 }
 
 .profile-subpage-heading {
   display: grid;
   gap: 14px;
-}
-
-.profile-subpage-heading--with-action {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 18px;
-}
-
-.profile-subpage-heading--with-action .settings-header-back {
-  align-self: start;
 }
 
 .settings-account-row {
@@ -1493,7 +1495,7 @@
 }
 
 .settings-main > .payment-methods-card {
-  width: 100%;
+  width: min(720px, 100%);
   margin: 36px auto 0;
 }
 
@@ -1565,35 +1567,9 @@
 }
 
 .payment-methods-empty {
-  min-height: 220px;
   color: var(--muted);
   background: rgba(5, 10, 16, 0.42);
   border-color: rgba(248, 250, 252, 0.1);
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 9px;
-  text-align: center;
-}
-
-.payment-methods-empty svg {
-  width: 42px;
-  height: 42px;
-  color: var(--lime);
-}
-
-.payment-methods-empty strong {
-  color: rgba(248, 250, 252, 0.72);
-  font-size: 1rem;
-  line-height: 1.2;
-}
-
-.payment-methods-empty span {
-  max-width: 32rem;
-  color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 500;
-  line-height: 1.45;
 }
 
 .payment-methods-list {

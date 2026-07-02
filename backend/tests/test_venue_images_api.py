@@ -1,12 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
+from azure.core.exceptions import ResourceNotFoundError
 from fastapi.testclient import TestClient
 
-from backend.services.r2_storage_service import (
-    R2ObjectNotFoundError,
-    R2ObjectProperties,
-    R2ObjectUploadTicket,
-)
+from backend.services.azure_blob_service import AzureBlobProperties, AzureBlobUploadTicket
 from backend.tests.helpers import (
     authenticate_as,
     create_user,
@@ -15,56 +12,66 @@ from backend.tests.helpers import (
 )
 
 
-def configure_r2_test_env(monkeypatch):
-    monkeypatch.setenv("R2_ACCOUNT_ID", "test-r2-account")
-    monkeypatch.setenv("R2_ACCESS_KEY_ID", "test-r2-access-key")
-    monkeypatch.setenv("R2_SECRET_ACCESS_KEY", "test-r2-secret-key")
-    monkeypatch.setenv("R2_BUCKET_NAME", "pickup-lane-dev-media")
+def configure_azure_test_env(monkeypatch):
     monkeypatch.setenv(
-        "R2_ENDPOINT_URL",
-        "https://test-r2-account.r2.cloudflarestorage.com",
+        "AZURE_STORAGE_CONNECTION_STRING",
+        (
+            "DefaultEndpointsProtocol=https;"
+            "AccountName=pickuplanetestmedia;"
+            "AccountKey=test-account-key;"
+            "EndpointSuffix=core.windows.net"
+        ),
     )
-    monkeypatch.setenv("R2_UPLOAD_URL_MINUTES", "15")
-    monkeypatch.setenv("R2_READ_URL_MINUTES", "60")
-    monkeypatch.setenv("R2_MAX_IMAGE_BYTES", "8388608")
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_NAME", "pickuplanetestmedia")
+    monkeypatch.setenv("AZURE_STORAGE_CONTAINER_VENUE_IMAGES", "venue-images")
     monkeypatch.setenv(
-        "R2_ALLOWED_IMAGE_TYPES",
+        "AZURE_STORAGE_ACCOUNT_URL",
+        "https://pickuplanetestmedia.blob.core.windows.net",
+    )
+    monkeypatch.setenv("AZURE_STORAGE_UPLOAD_SAS_MINUTES", "15")
+    monkeypatch.setenv("AZURE_STORAGE_READ_SAS_MINUTES", "60")
+    monkeypatch.setenv("AZURE_STORAGE_MAX_IMAGE_BYTES", "8388608")
+    monkeypatch.setenv(
+        "AZURE_STORAGE_ALLOWED_IMAGE_TYPES",
         "image/jpeg,image/png,image/webp",
     )
 
 
-def mock_r2_storage(monkeypatch):
-    configure_r2_test_env(monkeypatch)
+def mock_azure_storage(monkeypatch):
+    configure_azure_test_env(monkeypatch)
 
-    def fake_upload_url(*, object_key: str, content_type: str):
-        return R2ObjectUploadTicket(
-            upload_url=f"https://upload.test/{object_key}?signature=upload",
-            upload_headers={"Content-Type": content_type},
-            object_url=f"https://object.test/{object_key}",
+    def fake_upload_sas_url(*, blob_name: str, content_type: str):
+        return AzureBlobUploadTicket(
+            upload_url=f"https://upload.test/{blob_name}?sas=upload",
+            upload_headers={
+                "x-ms-blob-type": "BlockBlob",
+                "Content-Type": content_type,
+            },
+            blob_url=f"https://blob.test/{blob_name}",
             expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
         )
 
-    def fake_read_url(object_key: str):
-        return f"https://read.test/{object_key}?signature=read"
+    def fake_read_sas_url(blob_name: str):
+        return f"https://read.test/{blob_name}?sas=read"
 
-    def fake_object_properties(object_key: str):
-        return R2ObjectProperties(
+    def fake_blob_properties(blob_name: str):
+        return AzureBlobProperties(
             content_type="image/jpeg",
             size_bytes=1200,
-            etag=f"etag-{object_key.rsplit('/', maxsplit=1)[-1]}",
+            etag=f"etag-{blob_name.rsplit('/', maxsplit=1)[-1]}",
         )
 
     monkeypatch.setattr(
-        "backend.services.venue_image_service.create_object_upload_url",
-        fake_upload_url,
+        "backend.services.venue_image_service.create_blob_upload_sas_url",
+        fake_upload_sas_url,
     )
     monkeypatch.setattr(
-        "backend.services.venue_image_service.create_object_read_url",
-        fake_read_url,
+        "backend.services.venue_image_service.create_blob_read_sas_url",
+        fake_read_sas_url,
     )
     monkeypatch.setattr(
-        "backend.services.venue_image_service.get_object_properties",
-        fake_object_properties,
+        "backend.services.venue_image_service.get_blob_properties",
+        fake_blob_properties,
     )
 
 
@@ -121,25 +128,20 @@ def test_admin_can_create_and_complete_venue_image_upload(
     client: TestClient,
     monkeypatch,
 ):
-    mock_r2_storage(monkeypatch)
+    mock_azure_storage(monkeypatch)
     admin, venue = create_admin_and_venue(client)
 
     authenticate_as(admin["id"])
     upload = create_venue_image_upload(client, venue["id"], is_primary=True)
 
     assert upload["upload_url"].startswith("https://upload.test/")
-    assert upload["upload_headers"] == {"Content-Type": "image/jpeg"}
+    assert upload["upload_headers"]["x-ms-blob-type"] == "BlockBlob"
     image = upload["image"]
     assert image["venue_id"] == venue["id"]
     assert image["uploaded_by_user_id"] == admin["id"]
     assert image["image_status"] == "pending_upload"
     assert image["is_primary"] is True
-    assert image["storage_provider"] == "r2"
-    assert image["storage_object_key"] == (
-        f"venues/{venue['id']}/primary-{image['id']}.jpg"
-    )
-    assert image["storage_bucket"] == "pickup-lane-dev-media"
-    assert image["storage_account_id"] == "test-r2-account"
+    assert image["blob_name"] == f"venues/{venue['id']}/primary-{image['id']}.jpg"
 
     completed = complete_venue_image_upload(client, image["id"])
 
@@ -185,7 +187,7 @@ def test_venue_images_public_list_returns_only_active_images(
     client: TestClient,
     monkeypatch,
 ):
-    mock_r2_storage(monkeypatch)
+    mock_azure_storage(monkeypatch)
     admin, venue = create_admin_and_venue(client)
 
     authenticate_as(admin["id"])
@@ -205,7 +207,7 @@ def test_admin_primary_venue_image_completion_clears_previous_primary(
     client: TestClient,
     monkeypatch,
 ):
-    mock_r2_storage(monkeypatch)
+    mock_azure_storage(monkeypatch)
     admin, venue = create_admin_and_venue(client)
 
     authenticate_as(admin["id"])
@@ -234,7 +236,7 @@ def test_admin_primary_venue_image_completion_clears_previous_primary(
 
 
 def test_admin_can_hide_venue_image(client: TestClient, monkeypatch):
-    mock_r2_storage(monkeypatch)
+    mock_azure_storage(monkeypatch)
     admin, venue = create_admin_and_venue(client)
 
     authenticate_as(admin["id"])
@@ -284,7 +286,7 @@ def test_admin_can_remove_venue_image_with_audit_reason(
     client: TestClient,
     monkeypatch,
 ):
-    mock_r2_storage(monkeypatch)
+    mock_azure_storage(monkeypatch)
     admin, venue = create_admin_and_venue(client)
 
     authenticate_as(admin["id"])
@@ -336,7 +338,7 @@ def test_admin_venue_image_remove_requires_reason_for_audit(
     client: TestClient,
     monkeypatch,
 ):
-    mock_r2_storage(monkeypatch)
+    mock_azure_storage(monkeypatch)
     admin, venue = create_admin_and_venue(client)
 
     authenticate_as(admin["id"])
@@ -366,7 +368,7 @@ def test_venue_image_upload_rejects_bad_type_and_large_file(
     client: TestClient,
     monkeypatch,
 ):
-    mock_r2_storage(monkeypatch)
+    mock_azure_storage(monkeypatch)
     admin, venue = create_admin_and_venue(client)
 
     authenticate_as(admin["id"])
@@ -393,19 +395,19 @@ def test_venue_image_upload_rejects_bad_type_and_large_file(
     assert "larger" in large_file_response.text
 
 
-def test_venue_image_complete_rejects_missing_object(
+def test_venue_image_complete_rejects_missing_blob(
     client: TestClient,
     monkeypatch,
 ):
-    mock_r2_storage(monkeypatch)
+    mock_azure_storage(monkeypatch)
     admin, venue = create_admin_and_venue(client)
 
-    def fake_missing_object_properties(object_key: str):
-        raise R2ObjectNotFoundError(f"{object_key} was not found")
+    def fake_missing_blob_properties(blob_name: str):
+        raise ResourceNotFoundError(message=f"{blob_name} was not found")
 
     monkeypatch.setattr(
-        "backend.services.venue_image_service.get_object_properties",
-        fake_missing_object_properties,
+        "backend.services.venue_image_service.get_blob_properties",
+        fake_missing_blob_properties,
     )
 
     authenticate_as(admin["id"])
@@ -417,14 +419,14 @@ def test_venue_image_complete_rejects_missing_object(
     )
 
     assert response.status_code == 400, response.text
-    assert "object was not found" in response.text
+    assert "blob was not found" in response.text
 
 
 def test_admin_venue_image_routes_reject_non_admin(
     client: TestClient,
     monkeypatch,
 ):
-    mock_r2_storage(monkeypatch)
+    mock_azure_storage(monkeypatch)
     admin, venue = create_admin_and_venue(client)
     user = create_user(client)
 

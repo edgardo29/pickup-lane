@@ -30,10 +30,9 @@ from backend.schemas.game_schema import (
     MyGameCardRead,
     MyGamesListRead,
 )
-from backend.services.r2_storage_service import (
-    R2StorageConfigError,
-    R2StorageError,
-    create_object_read_url,
+from backend.services.azure_blob_service import (
+    AzureStorageConfigError,
+    create_blob_read_sas_url,
 )
 from backend.services.game_notification_service import (
     capture_game_updated_structural_snapshot,
@@ -195,14 +194,14 @@ def list_browse_game_cards(
     (
         participant_counts_by_game_id,
         primary_game_image_urls_by_game_id,
-        primary_venue_image_object_key_by_venue_id,
+        primary_venue_image_blob_by_venue_id,
     ) = load_game_card_metadata(db, page_games)
     games = [
         build_game_card_read(
             game,
             participant_count=participant_counts_by_game_id.get(game.id, 0),
             primary_game_image_url=primary_game_image_urls_by_game_id.get(game.id),
-            primary_venue_image_object_key=primary_venue_image_object_key_by_venue_id.get(
+            primary_venue_image_blob_name=primary_venue_image_blob_by_venue_id.get(
                 game.venue_id
             ),
         )
@@ -235,7 +234,7 @@ def load_game_card_metadata(
     venue_ids = {game.venue_id for game in games if game.venue_id is not None}
     participant_counts_by_game_id: dict[uuid.UUID, int] = {}
     primary_game_image_urls_by_game_id: dict[uuid.UUID, str] = {}
-    primary_venue_image_object_key_by_venue_id: dict[uuid.UUID, str] = {}
+    primary_venue_image_blob_by_venue_id: dict[uuid.UUID, str] = {}
 
     for game_id, participant_count in db.execute(
         select(GameParticipant.game_id, func.count(GameParticipant.id))
@@ -260,8 +259,8 @@ def load_game_card_metadata(
         primary_game_image_urls_by_game_id.setdefault(game_id, image_url)
 
     if venue_ids:
-        for venue_id, storage_object_key in db.execute(
-            select(VenueImage.venue_id, VenueImage.storage_object_key)
+        for venue_id, blob_name in db.execute(
+            select(VenueImage.venue_id, VenueImage.blob_name)
             .where(
                 VenueImage.venue_id.in_(venue_ids),
                 VenueImage.image_status == "active",
@@ -270,15 +269,12 @@ def load_game_card_metadata(
             )
             .order_by(VenueImage.venue_id.asc(), VenueImage.sort_order.asc())
         ).all():
-            primary_venue_image_object_key_by_venue_id.setdefault(
-                venue_id,
-                storage_object_key,
-            )
+            primary_venue_image_blob_by_venue_id.setdefault(venue_id, blob_name)
 
     return (
         participant_counts_by_game_id,
         primary_game_image_urls_by_game_id,
-        primary_venue_image_object_key_by_venue_id,
+        primary_venue_image_blob_by_venue_id,
     )
 
 
@@ -287,13 +283,13 @@ def build_game_card_read(
     *,
     participant_count: int,
     primary_game_image_url: str | None,
-    primary_venue_image_object_key: str | None,
+    primary_venue_image_blob_name: str | None,
 ) -> GameCardRead:
     primary_image_url = primary_game_image_url
-    if primary_image_url is None and primary_venue_image_object_key is not None:
+    if primary_image_url is None and primary_venue_image_blob_name is not None:
         try:
-            primary_image_url = create_object_read_url(primary_venue_image_object_key)
-        except (R2StorageConfigError, R2StorageError):
+            primary_image_url = create_blob_read_sas_url(primary_venue_image_blob_name)
+        except AzureStorageConfigError:
             primary_image_url = None
 
     return GameCardRead(
@@ -531,7 +527,7 @@ def list_my_game_cards(
     (
         participant_counts_by_game_id,
         primary_game_image_urls_by_game_id,
-        primary_venue_image_object_key_by_venue_id,
+        primary_venue_image_blob_by_venue_id,
     ) = load_game_card_metadata(db, page_games)
     items = [
         build_my_game_card_read(
@@ -540,7 +536,7 @@ def list_my_game_cards(
             current_user=current_user,
             participant_count=participant_counts_by_game_id.get(game.id, 0),
             primary_game_image_url=primary_game_image_urls_by_game_id.get(game.id),
-            primary_venue_image_object_key=primary_venue_image_object_key_by_venue_id.get(
+            primary_venue_image_blob_name=primary_venue_image_blob_by_venue_id.get(
                 game.venue_id
             ),
             bucket=normalized_view,
@@ -571,7 +567,7 @@ def build_my_game_card_read(
     current_user: User,
     participant_count: int,
     primary_game_image_url: str | None,
-    primary_venue_image_object_key: str | None,
+    primary_venue_image_blob_name: str | None,
     bucket: str,
 ) -> MyGameCardRead:
     is_host = (
@@ -586,7 +582,7 @@ def build_my_game_card_read(
             game,
             participant_count=participant_count,
             primary_game_image_url=primary_game_image_url,
-            primary_venue_image_object_key=primary_venue_image_object_key,
+            primary_venue_image_blob_name=primary_venue_image_blob_name,
         ),
         is_host=is_host,
         participant_id=participant.id if participant is not None else None,

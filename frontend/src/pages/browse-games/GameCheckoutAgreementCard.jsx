@@ -1,45 +1,13 @@
-import { useId } from 'react'
-import { CheckIcon } from '../../components/BrowseIcons.jsx'
-import { LEGAL_POLICY_IDS } from '../../features/legal/legalPolicies.js'
+import { Link } from 'react-router-dom'
 
-export function GameCheckoutAgreementCard({ agreed, onOpenPolicy, onSetAgreed }) {
-  const checkboxId = useId()
-  const agreementTextId = useId()
-
+export function GameCheckoutAgreementCard({ agreed, onSetAgreed }) {
   return (
-    <div className="checkout-card checkout-agree">
-      <label className="checkout-agree__control" htmlFor={checkboxId}>
-        <input
-          aria-describedby={agreementTextId}
-          aria-label="Agree to Pickup Lane terms"
-          checked={agreed}
-          className="checkout-agree__input"
-          id={checkboxId}
-          type="checkbox"
-          onChange={(event) => onSetAgreed(event.target.checked)}
-        />
-        <span className="checkout-agree__box" aria-hidden="true">
-          <CheckIcon />
-        </span>
-      </label>
-      <span id={agreementTextId}>
-        I agree to the Pickup Lane{' '}
-        <button
-          className="checkout-legal-link"
-          type="button"
-          onClick={() => onOpenPolicy(LEGAL_POLICY_IDS.terms)}
-        >
-          Terms of Service
-        </button>{' '}
-        and{' '}
-        <button
-          className="checkout-legal-link"
-          type="button"
-          onClick={() => onOpenPolicy(LEGAL_POLICY_IDS.cancellationRefunds)}
-        >
-          Cancellation Policy
-        </button>.
+    <label className="checkout-card checkout-agree">
+      <input checked={agreed} type="checkbox" onChange={(event) => onSetAgreed(event.target.checked)} />
+      <span>
+        I agree to the Pickup Lane <Link to="/terms">Terms of Service</Link> and{' '}
+        <Link to="/policies/cancellation-refunds">refund policy</Link>.
       </span>
-    </div>
+    </label>
   )
 }

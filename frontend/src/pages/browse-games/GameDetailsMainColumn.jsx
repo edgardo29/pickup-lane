@@ -46,7 +46,6 @@ export function GameDetailsMainColumn({
   onOpenChat,
   onOpenHostGuestModal,
   onOpenLeaveModal,
-  onOpenLegalPolicy,
   onOpenPlayerList,
   onPreviousImage,
   onSelectImage,
@@ -193,7 +192,7 @@ export function GameDetailsMainColumn({
         </section>
       )}
 
-      <BookingRulesCard onOpenPolicy={onOpenLegalPolicy} rules={ruleItems} />
+      <BookingRulesCard policyUrl="/policies/cancellation-refunds" rules={ruleItems} />
 
       <WhereToGoCard
         address={venueAddress}

@@ -1,7 +1,6 @@
 import { Elements } from '@stripe/react-stripe-js'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowLeftIcon } from '../../components/AuthIcons.jsx'
 import { AppPageHeader } from '../../components/app/index.js'
 import {
   PaymentMethodSetupDialog,
@@ -20,13 +19,9 @@ import {
   setDefaultPaymentMethod,
 } from '../../lib/paymentMethodsApi.js'
 import { useAuth } from '../../hooks/useAuth.js'
-import { PaymentCardIcon } from './ProfileIcons.jsx'
 import { capitalize } from './profileFormatters.js'
 import { ProfileShell } from './ProfileShell.jsx'
-import {
-  dismissOnBackdropMouseDown,
-  useDismissibleModal,
-} from '../../hooks/useDismissibleModal.js'
+import { dismissOnBackdropMouseDown, useDismissibleModal } from './useModalBodyLock.js'
 
 const MAX_SAVED_PAYMENT_METHODS = 5
 
@@ -207,19 +202,16 @@ export function PaymentMethodsPage() {
 
   return (
     <ProfileShell>
-      <section className="settings-layout settings-layout--payment-methods">
-        <div className="settings-main settings-main--payment-methods">
-          <div className="profile-subpage-heading profile-subpage-heading--with-action">
+      <section className="settings-layout">
+        <div className="settings-main">
+          <div className="profile-subpage-heading">
+            <Link className="settings-header-back" to={backTo}>
+              {backLabel}
+            </Link>
             <AppPageHeader
               title="Payment Methods"
               subtitle="Save cards for faster official game checkout."
             />
-            <Link className="settings-header-back app-back-control" to={backTo} aria-label={backLabel}>
-              <span className="app-back-control__icon">
-                <ArrowLeftIcon />
-              </span>
-              <span>Back</span>
-            </Link>
           </div>
 
           <section className="payment-methods-card">
@@ -256,15 +248,10 @@ export function PaymentMethodsPage() {
               </p>
             )}
 
-            {status === 'loading' && (
-              <PaymentMethodsEmptyState title="Loading saved cards..." />
-            )}
+            {status === 'loading' && <p className="payment-methods-empty">Loading saved cards...</p>}
 
             {status === 'success' && paymentMethods.length === 0 && (
-              <PaymentMethodsEmptyState
-                title="No saved cards yet"
-                message="Add a card to speed up official game checkout."
-              />
+              <p className="payment-methods-empty">No saved cards yet.</p>
             )}
 
             {status === 'success' && paymentMethods.length > 0 && (
@@ -331,16 +318,6 @@ export function PaymentMethodsPage() {
         </div>
       </section>
     </ProfileShell>
-  )
-}
-
-function PaymentMethodsEmptyState({ message = '', title }) {
-  return (
-    <div className="payment-methods-empty">
-      <PaymentCardIcon />
-      <strong>{title}</strong>
-      {message && <span>{message}</span>}
-    </div>
   )
 }
 

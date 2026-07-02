@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AuthHeader,
   AuthPanel,
@@ -7,18 +7,15 @@ import {
 } from '../../features/auth/AuthLayoutParts.jsx'
 import { ProviderButtons } from '../../features/auth/AuthProviderButtons.jsx'
 import { AuthShell } from '../../features/auth/AuthShell.jsx'
-import { LegalPolicyModal } from '../../features/legal/LegalPolicyModal.jsx'
-import { LEGAL_POLICY_IDS } from '../../features/legal/legalPolicies.js'
 import { CreateAccountForm } from './CreateAccountForm.jsx'
 import { useCreateAccountForm } from './useCreateAccountForm.js'
 import '../../styles/auth/CreateAccountPage.css'
 
 export function CreateAccountPage() {
   const accountForm = useCreateAccountForm()
-  const [activeLegalPolicyId, setActiveLegalPolicyId] = useState('')
 
   return (
-    <AuthShell backLabel="Back" backTo={accountForm.backPath || '/'} variant="create-account auth-page--wide">
+    <AuthShell backLabel="Back" backTo={accountForm.returnPath || '/'} variant="create-account auth-page--wide">
       <AuthPanel>
         <AuthHeader title="Create Account" subtitle="Create your Pickup Lane account to get started." />
 
@@ -42,35 +39,20 @@ export function CreateAccountPage() {
           text="Already have an account?"
           to="/sign-in"
           label="Sign In"
-          state={{ backTo: accountForm.backPath, from: accountForm.returnPath }}
+          state={{ from: accountForm.returnPath }}
         />
 
         <p className="auth-terms">
           By creating an account, you agree to our{' '}
-          <button
-            className="auth-terms__button"
-            type="button"
-            onClick={() => setActiveLegalPolicyId(LEGAL_POLICY_IDS.terms)}
-          >
+          <Link state={{ from: '/create-account', fromLabel: 'Back to Create Account' }} to="/terms">
             Terms of Service
-          </button>{' '}
+          </Link>{' '}
           and{' '}
-          <button
-            className="auth-terms__button"
-            type="button"
-            onClick={() => setActiveLegalPolicyId(LEGAL_POLICY_IDS.privacy)}
-          >
+          <Link state={{ from: '/create-account', fromLabel: 'Back to Create Account' }} to="/privacy">
             Privacy Policy
-          </button>.
+          </Link>.
         </p>
       </AuthPanel>
-
-      {activeLegalPolicyId && (
-        <LegalPolicyModal
-          policyId={activeLegalPolicyId}
-          onClose={() => setActiveLegalPolicyId('')}
-        />
-      )}
     </AuthShell>
   )
 }

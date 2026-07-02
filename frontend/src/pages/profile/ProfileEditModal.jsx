@@ -1,9 +1,6 @@
 import { CloseIcon, PencilIcon } from './ProfileIcons.jsx'
 import { ProfileEditForm } from './ProfileEditForm.jsx'
-import {
-  dismissOnBackdropMouseDown,
-  useDismissibleModal,
-} from '../../hooks/useDismissibleModal.js'
+import { dismissOnBackdropMouseDown, useDismissibleModal } from './useModalBodyLock.js'
 
 export function ProfileEditModal({
   currentUser,

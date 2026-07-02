@@ -6,7 +6,6 @@ import {
   PaymentMethodSetupDialog,
   PaymentMethodSetupForm,
 } from '../../features/payment-methods/PaymentMethodSetupDialog.jsx'
-import { LegalPolicyModal } from '../../features/legal/LegalPolicyModal.jsx'
 import {
   buildStripeElementsOptions,
   getRequestErrorMessage,
@@ -49,8 +48,6 @@ function GameCheckoutPage() {
   const [setupStatus, setSetupStatus] = useState('idle')
   const [useNewCardAsDefault, setUseNewCardAsDefault] = useState(false)
   const [isPaymentSelectorOpen, setIsPaymentSelectorOpen] = useState(false)
-  const [activeLegalPolicyId, setActiveLegalPolicyId] = useState('')
-  const [checkoutActionError, setCheckoutActionError] = useState('')
   const [nowMs, setNowMs] = useState(null)
 
   useEffect(() => {
@@ -130,7 +127,6 @@ function GameCheckoutPage() {
     const shouldSetDefault = checkoutData.paymentMethods.length === 0
     setSetupStatus('loading')
     setSetupError('')
-    setCheckoutActionError('')
     setUseNewCardAsDefault(false)
 
     try {
@@ -187,7 +183,6 @@ function GameCheckoutPage() {
     setSetupStatus('idle')
     setUseNewCardAsDefault(false)
     setIsPaymentSelectorOpen(false)
-    setCheckoutActionError('')
 
     const nextPaymentMethods = await checkoutData.reloadPaymentMethods()
     const savedPaymentMethod =
@@ -202,20 +197,13 @@ function GameCheckoutPage() {
 
   function handleOpenPaymentSelector() {
     setSetupError('')
-    setCheckoutActionError('')
     setIsPaymentSelectorOpen(true)
   }
 
   function handleSelectPaymentMethod(paymentMethodId) {
     setSelectedPaymentMethodId(paymentMethodId)
     setIsPaymentSelectorOpen(false)
-    setCheckoutActionError('')
     resetStripeCheckout()
-  }
-
-  function handleAgreementChange(nextAgreed) {
-    setAgreed(nextAgreed)
-    setCheckoutActionError('')
   }
 
   async function handleAddCardFromSelector() {
@@ -267,31 +255,24 @@ function GameCheckoutPage() {
     isStripeCheckout &&
       (stripeCheckout?.client_secret || checkout.isPaymentResume),
   )
+  const isPaymentActionBlocked = Boolean(
+    stripeUnavailable ||
+      (isStripeCheckout && !usesSavedPaymentMethod),
+  )
   const confirmLabel = getConfirmLabel({
-    isAddGuestsCheckout,
-    isWaitlistCheckout: checkout.isWaitlistCheckout,
+    fallbackLabel: checkout.confirmLabel,
+    isStripeCheckout,
+    isStripeReady,
     isSubmitting,
+    usesSavedPaymentMethod,
+    agreed,
   })
-  const checkoutActionMessage = checkoutActionError
-
   const handleConfirm = async () => {
-    if (!agreed) {
-      setCheckoutActionError('')
-      return
-    }
-
     if (isStripeCheckout) {
       if (!usesSavedPaymentMethod) {
-        setCheckoutActionError('Add a payment method to continue.')
         return
       }
 
-      if (stripeUnavailable) {
-        setCheckoutActionError('Secure payment is not configured.')
-        return
-      }
-
-      setCheckoutActionError('')
       await prepareStripeCheckout({
         agreed,
         appUser,
@@ -308,7 +289,6 @@ function GameCheckoutPage() {
       return
     }
 
-    setCheckoutActionError('')
     confirmBooking({
       agreed,
       appUser,
@@ -325,7 +305,6 @@ function GameCheckoutPage() {
       address={checkout.address}
       agreed={agreed}
       appUser={appUser}
-      checkoutActionMessage={checkoutActionMessage}
       confirmLabel={confirmLabel}
       effectiveGuestCount={checkout.effectiveGuestCount}
       existingParticipant={checkout.existingParticipant}
@@ -336,9 +315,9 @@ function GameCheckoutPage() {
       isExistingParticipantBlocked={isExistingParticipantBlocked}
       isGuestSelectionLocked={isGuestSelectionLocked}
       isJoinWindowClosed={checkout.isJoinWindowClosed}
+      isPaymentActionBlocked={isPaymentActionBlocked}
       isSubmitting={isSubmitting}
       isStripeCheckout={isStripeCheckout}
-      isStripeReady={isStripeReady}
       isWaitlistCheckout={checkout.isWaitlistCheckout}
       maxGuests={checkout.maxGuests}
       maxSelectableGuests={checkout.maxSelectableGuests}
@@ -352,8 +331,7 @@ function GameCheckoutPage() {
         setGuestCount(nextGuestCount)
         resetStripeCheckout()
       }}
-      onOpenLegalPolicy={setActiveLegalPolicyId}
-      onSetAgreed={handleAgreementChange}
+      onSetAgreed={setAgreed}
       paymentMethod={checkout.paymentMethod}
       paymentMethods={checkout.paymentMethods}
       platformFee={checkout.platformFee}
@@ -421,30 +399,39 @@ function GameCheckoutPage() {
           </Elements>
         </PaymentMethodSetupDialog>
       )}
-      {activeLegalPolicyId && (
-        <LegalPolicyModal
-          policyId={activeLegalPolicyId}
-          onClose={() => setActiveLegalPolicyId('')}
-        />
-      )}
     </>
   )
 }
 
 function getConfirmLabel({
-  isAddGuestsCheckout,
-  isWaitlistCheckout,
+  agreed,
+  fallbackLabel,
+  isStripeCheckout,
+  isStripeReady,
   isSubmitting,
+  usesSavedPaymentMethod,
 }) {
+  if (!isStripeCheckout) {
+    return fallbackLabel
+  }
+
   if (isSubmitting) {
     return 'Confirming...'
   }
 
-  if (isAddGuestsCheckout) {
-    return 'Confirm Guests'
+  if (!agreed) {
+    return 'Accept Terms to Continue'
   }
 
-  return isWaitlistCheckout ? 'Join Waitlist' : 'Confirm Spot'
+  if (!isStripeReady) {
+    return 'Payment Unavailable'
+  }
+
+  if (!usesSavedPaymentMethod) {
+    return 'Add Card to Continue'
+  }
+
+  return 'Confirm & Pay'
 }
 
 export default GameCheckoutPage

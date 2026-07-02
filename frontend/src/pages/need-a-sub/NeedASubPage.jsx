@@ -3,9 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AppPageHeader, AppPageShell, AppTabs } from '../../components/app/index.js'
 import {
   PlusCircleIcon,
-  UserIcon,
 } from '../../components/BrowseIcons.jsx'
-import { LockIcon } from '../../components/AuthIcons.jsx'
 import { useAuth } from '../../hooks/useAuth.js'
 import { NeedASubCreateDiscardModal } from './NeedASubCreateDiscardModal.jsx'
 import NeedASubCreateFlow from './NeedASubCreateFlow.jsx'
@@ -49,8 +47,6 @@ function NeedASubPage() {
     formError,
     hasCreateChanges,
     isCreating,
-    checkDuplicateDate,
-    clearCreateFeedback,
     removePosition,
     resetCreateForm,
     submitPost,
@@ -80,7 +76,6 @@ function NeedASubPage() {
   }, [location.pathname, location.state, navigate])
 
   const maxDatePageIndex = NEED_SUB_MAX_DATE_PAGE_INDEX
-  const isGuestBrowse = activePanel === 'browse' && !isAuthLoading && !currentUser
   const visibleDateOptions = useMemo(
     () => buildDateOptions(datePageIndex),
     [datePageIndex],
@@ -134,7 +129,7 @@ function NeedASubPage() {
         }
       />
 
-      {activePanel === 'browse' && !isGuestBrowse && (
+      {activePanel === 'browse' && (
         <>
           <div className="need-sub-browse-controls">
             <AppTabs
@@ -181,8 +176,6 @@ function NeedASubPage() {
               totalSpotsNeeded={totalSpotsNeeded}
               onCancel={requestCreateCancel}
               onAddPosition={addPosition}
-              onCheckDuplicateDate={checkDuplicateDate}
-              onClearFeedback={clearCreateFeedback}
               onRemovePosition={removePosition}
               onSubmit={submitPost}
               onUpdateField={updateField}
@@ -198,20 +191,16 @@ function NeedASubPage() {
           />
         )
       ) : (
-        isGuestBrowse ? (
-          <NeedASubGuestPreview />
-        ) : (
-          <NeedASubPostList
-            isLoading={isLoading}
-            isLoadingMore={isLoadingMore}
-            isSignedIn={Boolean(currentUser)}
-            hasMorePosts={hasMorePosts}
-            onLoadMore={loadMoreNeedASub}
-            onOpenPost={(post) => navigate(`/need-a-sub/posts/${post.id}`)}
-            posts={posts}
-            postView={postView}
-          />
-        )
+        <NeedASubPostList
+          isLoading={isLoading}
+          isLoadingMore={isLoadingMore}
+          isSignedIn={Boolean(currentUser)}
+          hasMorePosts={hasMorePosts}
+          onLoadMore={loadMoreNeedASub}
+          onOpenPost={(post) => navigate(`/need-a-sub/posts/${post.id}`)}
+          posts={posts}
+          postView={postView}
+        />
       )}
 
       {showCreateDiscardModal && (
@@ -221,66 +210,6 @@ function NeedASubPage() {
         />
       )}
     </AppPageShell>
-  )
-}
-
-function NeedASubGuestPreview() {
-  return (
-    <section className="need-sub-guest-preview" aria-labelledby="need-sub-guest-preview-title">
-      <div className="need-sub-guest-preview__inner">
-        <div className="need-sub-guest-lock" aria-hidden="true">
-          <LockIcon />
-        </div>
-
-        <p className="need-sub-guest-preview__eyebrow">Guest Preview</p>
-        <h2 id="need-sub-guest-preview-title">How Need a Sub works</h2>
-        <p className="need-sub-guest-preview__lede">
-          Need a Sub helps hosts fill roster gaps fast. Hosts post the exact spots they need,
-          and players can review the game details and request to fill in.
-        </p>
-
-        <div className="need-sub-guest-steps" aria-label="How Need a Sub works">
-          <GuestPreviewStep
-            icon={<PlusCircleIcon />}
-            label="For hosts"
-            title="Post who you need"
-            copy="Hosts create a post for the players they need for a specific game."
-          />
-          <GuestPreviewStep
-            icon={<UserIcon />}
-            label="For players"
-            title="Ask to fill in"
-            copy="Players find games that need a substitute and request to join."
-          />
-        </div>
-
-        <p className="need-sub-guest-note">
-          Sign in or create an account to post who you need or request to fill in.
-        </p>
-
-        <div className="need-sub-guest-actions">
-          <Link className="need-sub-guest-action need-sub-primary" to="/create-account" state={{ from: '/need-a-sub' }}>
-            <PlusCircleIcon />
-            Register
-          </Link>
-          <Link className="need-sub-guest-action need-sub-create-secondary" to="/sign-in" state={{ from: '/need-a-sub' }}>
-            <LockIcon />
-            Sign In
-          </Link>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function GuestPreviewStep({ copy, icon, label, title }) {
-  return (
-    <article className="need-sub-guest-step">
-      <div className="need-sub-guest-step__icon">{icon}</div>
-      <span>{label}</span>
-      <strong>{title}</strong>
-      <p>{copy}</p>
-    </article>
   )
 }
 

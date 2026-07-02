@@ -3,11 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import { useGoogleRedirectCompletion } from '../../features/auth/authHooks.js'
-import {
-  getPostAuthPath,
-  getSafeAuthBackPath,
-  isValidEmail,
-} from '../../features/auth/authHelpers.js'
+import { getPostAuthPath, isValidEmail } from '../../features/auth/authHelpers.js'
 
 export function useSignInForm() {
   const navigate = useNavigate()
@@ -29,9 +25,6 @@ export function useSignInForm() {
   const [error, setError] = useState('')
   const resetStatus = searchParams.get('reset')
   const returnPath = typeof location.state?.from === 'string' ? location.state.from : ''
-  const backPath = typeof location.state?.backTo === 'string'
-    ? location.state.backTo
-    : getSafeAuthBackPath(returnPath)
 
   useGoogleRedirectCompletion({
     appUser,
@@ -89,7 +82,6 @@ export function useSignInForm() {
 
   return {
     email,
-    backPath,
     error,
     handleEmailSignIn,
     handleGoogleSignIn,

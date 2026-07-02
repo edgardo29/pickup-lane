@@ -84,7 +84,7 @@ export async function createAdminVenueImageUploadUrl({
   })
 }
 
-export async function uploadVenueImageObject({ file, uploadHeaders, uploadUrl }) {
+export async function uploadVenueImageBlob({ file, uploadHeaders, uploadUrl }) {
   const response = await fetch(uploadUrl, {
     method: 'PUT',
     headers: uploadHeaders,
@@ -92,7 +92,7 @@ export async function uploadVenueImageObject({ file, uploadHeaders, uploadUrl })
   })
 
   if (!response.ok) {
-    throw new Error(`Image upload failed with status ${response.status}.`)
+    throw new Error(`Azure upload failed with status ${response.status}.`)
   }
 
   return response.headers.get('etag')
@@ -124,7 +124,7 @@ export async function uploadAdminVenueImage({
     sortOrder,
     venueId,
   })
-  const etag = await uploadVenueImageObject({
+  const etag = await uploadVenueImageBlob({
     file,
     uploadHeaders: uploadTicket.upload_headers,
     uploadUrl: uploadTicket.upload_url,

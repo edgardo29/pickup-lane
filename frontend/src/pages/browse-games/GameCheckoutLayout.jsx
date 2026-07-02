@@ -14,7 +14,6 @@ function GameCheckoutLayout({
   agreed,
   appUser,
   canAddPaymentMethod,
-  checkoutActionMessage,
   confirmLabel,
   effectiveGuestCount,
   existingParticipant,
@@ -25,9 +24,9 @@ function GameCheckoutLayout({
   isExistingParticipantBlocked,
   isGuestSelectionLocked,
   isJoinWindowClosed,
+  isPaymentActionBlocked,
   isSubmitting,
   isStripeCheckout,
-  isStripeReady,
   isWaitlistCheckout,
   maxGuests,
   maxSelectableGuests,
@@ -37,7 +36,6 @@ function GameCheckoutLayout({
   onChangePaymentMethod,
   onConfirmBooking,
   onGuestCountChange,
-  onOpenLegalPolicy,
   onSetAgreed,
   paymentMethod,
   paymentMethods,
@@ -52,21 +50,14 @@ function GameCheckoutLayout({
   title,
   total,
 }) {
-  const needsPaymentMethod = isStripeCheckout && isStripeReady && !paymentMethod
   const confirmDisabled =
     !agreed ||
-    needsPaymentMethod ||
     isSubmitting ||
     isBlockedByCapacity ||
     isJoinWindowClosed ||
     isAddGuestsBlockedByParticipant ||
+    isPaymentActionBlocked ||
     isExistingParticipantBlocked
-
-  const actionMessage = !agreed
-    ? 'Accept the terms to continue.'
-    : needsPaymentMethod
-      ? 'Add a payment method to continue.'
-      : checkoutActionMessage
 
   return (
     <div className="checkout-page">
@@ -114,13 +105,9 @@ function GameCheckoutLayout({
               stripeUnavailable={stripeUnavailable}
             />
 
-            <GameCheckoutPolicyCard />
+            <GameCheckoutPolicyCard gameId={game.id} />
 
-            <GameCheckoutAgreementCard
-              agreed={agreed}
-              onOpenPolicy={onOpenLegalPolicy}
-              onSetAgreed={onSetAgreed}
-            />
+            <GameCheckoutAgreementCard agreed={agreed} onSetAgreed={onSetAgreed} />
 
             <GameCheckoutErrors
               existingParticipant={existingParticipant}
@@ -132,7 +119,6 @@ function GameCheckoutLayout({
             />
 
             <GameCheckoutMobileAction
-              actionMessage={actionMessage}
               confirmDisabled={confirmDisabled}
               confirmLabel={confirmLabel}
               onConfirmBooking={onConfirmBooking}
@@ -140,7 +126,6 @@ function GameCheckoutLayout({
           </div>
 
           <GameCheckoutSummaryCard
-            actionMessage={actionMessage}
             confirmDisabled={confirmDisabled}
             confirmLabel={confirmLabel}
             effectiveGuestCount={effectiveGuestCount}
