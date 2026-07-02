@@ -65,6 +65,15 @@ from backend.routes import (
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+FALSE_ENV_VALUES = {"0", "false", "no", "off"}
+
+
+def get_env_flag(name: str, *, default: bool) -> bool:
+    configured_value = os.getenv(name)
+    if configured_value is None:
+        return default
+
+    return configured_value.strip().lower() not in FALSE_ENV_VALUES
 
 
 def get_cors_origins() -> list[str]:
@@ -78,7 +87,13 @@ def get_cors_origins() -> list[str]:
         if origin.strip()
     ]
 
-app = FastAPI()
+api_docs_enabled = get_env_flag("ENABLE_API_DOCS", default=True)
+
+app = FastAPI(
+    docs_url="/docs" if api_docs_enabled else None,
+    redoc_url="/redoc" if api_docs_enabled else None,
+    openapi_url="/openapi.json" if api_docs_enabled else None,
+)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.add_middleware(
@@ -95,10 +110,11 @@ def read_root():
     return {"message": "Backend is running"}
 
 
-@app.get("/db-health")
-def db_health():
-    check_database_connection()
-    return {"message": "Database connection is working"}
+if get_env_flag("ENABLE_DB_HEALTH", default=True):
+    @app.get("/db-health")
+    def db_health():
+        check_database_connection()
+        return {"message": "Database connection is working"}
 
 
 # Include feature-specific routers here so the main app stays small as the API
