@@ -1,4 +1,6 @@
+import { Minus, Plus } from 'lucide-react'
 import { UsersIcon } from '../../components/BrowseIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import { getUserDisplayName } from './gameUserSelectors.js'
 
 export function GameCheckoutPlayerCard({
@@ -49,7 +51,7 @@ export function GameCheckoutPlayerCard({
               disabled={isGuestSelectionLocked || effectiveGuestCount <= minGuestCount}
               onClick={() => onGuestCountChange((count) => Math.max(count - 1, minGuestCount))}
             >
-              -
+              <Minus aria-hidden="true" />
             </button>
             <span>{effectiveGuestCount}</span>
             <button
@@ -57,17 +59,17 @@ export function GameCheckoutPlayerCard({
               disabled={isGuestSelectionLocked || effectiveGuestCount >= maxSelectableGuests}
               onClick={() => onGuestCountChange((count) => Math.min(count + 1, maxSelectableGuests))}
             >
-              +
+              <Plus aria-hidden="true" />
             </button>
           </div>
         </div>
       )}
       {isBlockedByCapacity && (
-        <p className="checkout-error">
+        <FormErrorMessage className="checkout-error">
           {isAddGuestsCheckout
             ? 'No guest spots are available right now.'
             : 'Not enough spots are available for this join.'}
-        </p>
+        </FormErrorMessage>
       )}
     </section>
   )

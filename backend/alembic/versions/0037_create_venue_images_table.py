@@ -105,9 +105,15 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("venue_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("uploaded_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column("blob_name", sa.Text(), nullable=False),
-        sa.Column("container_name", sa.String(length=120), nullable=False),
-        sa.Column("storage_account_name", sa.String(length=120), nullable=False),
+        sa.Column(
+            "storage_provider",
+            sa.String(length=30),
+            nullable=False,
+            server_default=sa.text("'r2'"),
+        ),
+        sa.Column("storage_object_key", sa.Text(), nullable=False),
+        sa.Column("storage_bucket", sa.String(length=120), nullable=False),
+        sa.Column("storage_account_id", sa.String(length=120), nullable=False),
         sa.Column("content_type", sa.String(length=120), nullable=False),
         sa.Column("size_bytes", sa.Integer(), nullable=False),
         sa.Column("etag", sa.String(length=255), nullable=True),
@@ -166,16 +172,20 @@ def upgrade() -> None:
             name="ck_venue_images_image_status",
         ),
         sa.CheckConstraint(
-            "char_length(btrim(blob_name)) > 0",
-            name="ck_venue_images_blob_name_not_empty",
+            "char_length(btrim(storage_provider)) > 0",
+            name="ck_venue_images_storage_provider_not_empty",
         ),
         sa.CheckConstraint(
-            "char_length(btrim(container_name)) > 0",
-            name="ck_venue_images_container_name_not_empty",
+            "char_length(btrim(storage_object_key)) > 0",
+            name="ck_venue_images_storage_object_key_not_empty",
         ),
         sa.CheckConstraint(
-            "char_length(btrim(storage_account_name)) > 0",
-            name="ck_venue_images_storage_account_name_not_empty",
+            "char_length(btrim(storage_bucket)) > 0",
+            name="ck_venue_images_storage_bucket_not_empty",
+        ),
+        sa.CheckConstraint(
+            "char_length(btrim(storage_account_id)) > 0",
+            name="ck_venue_images_storage_account_id_not_empty",
         ),
         sa.CheckConstraint(
             "char_length(btrim(content_type)) > 0",
@@ -211,9 +221,9 @@ def upgrade() -> None:
         ["venue_id", "image_status", "sort_order"],
     )
     op.create_index(
-        "uq_venue_images_blob_name",
+        "uq_venue_images_storage_object_key",
         "venue_images",
-        ["blob_name"],
+        ["storage_object_key"],
         unique=True,
     )
     op.create_index(
@@ -305,7 +315,7 @@ def downgrade() -> None:
             "is_primary = true AND image_status = 'active' AND deleted_at IS NULL"
         ),
     )
-    op.drop_index("uq_venue_images_blob_name", table_name="venue_images")
+    op.drop_index("uq_venue_images_storage_object_key", table_name="venue_images")
     op.drop_index(
         "ix_venue_images_venue_id_image_status_sort_order",
         table_name="venue_images",

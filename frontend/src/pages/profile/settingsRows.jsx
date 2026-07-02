@@ -1,4 +1,5 @@
 import { ShieldCheckIcon } from '../../components/BrowseIcons.jsx'
+import { LEGAL_POLICY_IDS } from '../../features/legal/legalPolicies.js'
 import {
   BellIcon,
   DocumentIcon,
@@ -17,6 +18,7 @@ export function buildSettingsRows({
   defaultPaymentMethod,
   navigate,
   notificationSummary,
+  onOpenLegalPolicy,
   onOpenDelete,
   onOpenNotifications,
   onOpenPassword,
@@ -30,7 +32,7 @@ export function buildSettingsRows({
       notificationSummary,
       onOpenNotifications,
     }),
-    supportRows: buildSupportRows(),
+    supportRows: buildSupportRows({ onOpenLegalPolicy }),
   }
 }
 
@@ -57,7 +59,7 @@ function buildPreferenceRows({
   ]
 }
 
-function buildSupportRows() {
+function buildSupportRows({ onOpenLegalPolicy }) {
   return [
     {
       icon: <HelpIcon />,
@@ -68,15 +70,13 @@ function buildSupportRows() {
       icon: <DocumentIcon />,
       title: 'Terms & Conditions',
       text: 'Read our terms of service',
-      to: '/terms',
-      state: { from: '/profile', fromLabel: 'Back to Profile' },
+      onClick: () => onOpenLegalPolicy(LEGAL_POLICY_IDS.terms),
     },
     {
       icon: <ShieldCheckIcon />,
       title: 'Privacy Policy',
       text: 'How we handle your data',
-      to: '/privacy',
-      state: { from: '/profile', fromLabel: 'Back to Profile' },
+      onClick: () => onOpenLegalPolicy(LEGAL_POLICY_IDS.privacy),
     },
   ]
 }

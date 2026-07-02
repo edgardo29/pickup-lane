@@ -332,25 +332,25 @@
   z-index: 0;
   background:
     radial-gradient(82% 35% at 50% 105%, rgba(184, 255, 36, 0.06), transparent 72%),
-    repeating-linear-gradient(30deg, transparent 0 18px, rgba(184, 255, 36, 0.038) 18px 19px, transparent 19px 36px),
-    repeating-linear-gradient(150deg, transparent 0 18px, rgba(248, 250, 252, 0.034) 18px 19px, transparent 19px 36px),
+    repeating-linear-gradient(30deg, transparent 0 36px, rgba(184, 255, 36, 0.028) 36px 37px, transparent 37px 72px),
+    repeating-linear-gradient(150deg, transparent 0 36px, rgba(248, 250, 252, 0.024) 36px 37px, transparent 37px 72px),
     linear-gradient(130deg, rgba(255, 255, 255, 0.07), transparent 32%);
   background-position:
     left top,
-    right 24px top 18px,
-    right 24px top 18px,
+    left top,
+    left top,
     left top;
   background-size:
     100% 100%,
-    180px 132px,
-    180px 132px,
+    100% 100%,
+    100% 100%,
     100% 100%;
   background-repeat:
     no-repeat,
     no-repeat,
     no-repeat,
     no-repeat;
-  opacity: 0.86;
+  opacity: 0.68;
 }
 
 .auth-card--hero::after {
@@ -648,8 +648,10 @@
   inset: 0;
   background:
     radial-gradient(70% 34% at 50% 100%, rgba(184, 255, 36, 0.035), transparent 76%),
+    repeating-linear-gradient(30deg, transparent 0 34px, rgba(184, 255, 36, 0.025) 34px 35px, transparent 35px 68px),
+    repeating-linear-gradient(150deg, transparent 0 34px, rgba(248, 250, 252, 0.022) 34px 35px, transparent 35px 68px),
     linear-gradient(128deg, rgba(255, 255, 255, 0.055), transparent 34%);
-  opacity: 0.9;
+  opacity: 0.66;
 }
 
 .feature-item::after {
