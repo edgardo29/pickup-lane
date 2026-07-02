@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from backend.database import Base
 
 
-# Venue images store reusable official venue media in Azure Blob Storage.
+# Venue images store reusable official venue media in Cloudflare R2.
 class VenueImage(Base):
     __tablename__ = "venue_images"
     __table_args__ = (
@@ -31,16 +31,20 @@ class VenueImage(Base):
             name="ck_venue_images_image_status",
         ),
         CheckConstraint(
-            "char_length(btrim(blob_name)) > 0",
-            name="ck_venue_images_blob_name_not_empty",
+            "char_length(btrim(storage_provider)) > 0",
+            name="ck_venue_images_storage_provider_not_empty",
         ),
         CheckConstraint(
-            "char_length(btrim(container_name)) > 0",
-            name="ck_venue_images_container_name_not_empty",
+            "char_length(btrim(storage_object_key)) > 0",
+            name="ck_venue_images_storage_object_key_not_empty",
         ),
         CheckConstraint(
-            "char_length(btrim(storage_account_name)) > 0",
-            name="ck_venue_images_storage_account_name_not_empty",
+            "char_length(btrim(storage_bucket)) > 0",
+            name="ck_venue_images_storage_bucket_not_empty",
+        ),
+        CheckConstraint(
+            "char_length(btrim(storage_account_id)) > 0",
+            name="ck_venue_images_storage_account_id_not_empty",
         ),
         CheckConstraint(
             "char_length(btrim(content_type)) > 0",
@@ -65,8 +69,8 @@ class VenueImage(Base):
             "sort_order",
         ),
         Index(
-            "uq_venue_images_blob_name",
-            "blob_name",
+            "uq_venue_images_storage_object_key",
+            "storage_object_key",
             unique=True,
         ),
         Index(
@@ -93,9 +97,12 @@ class VenueImage(Base):
         nullable=True,
     )
 
-    blob_name: Mapped[str] = mapped_column(Text, nullable=False)
-    container_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    storage_account_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    storage_provider: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'r2'")
+    )
+    storage_object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    storage_bucket: Mapped[str] = mapped_column(String(120), nullable=False)
+    storage_account_id: Mapped[str] = mapped_column(String(120), nullable=False)
     content_type: Mapped[str] = mapped_column(String(120), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     etag: Mapped[str | None] = mapped_column(String(255), nullable=True)

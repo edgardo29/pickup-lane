@@ -10,7 +10,6 @@ import {
 const JOIN_WINDOW_MINUTES = 5
 
 export function buildGameCheckoutViewModel({
-  agreed,
   appUser,
   game,
   guestCount,
@@ -72,7 +71,6 @@ export function buildGameCheckoutViewModel({
     paymentMethods[0] ||
     null
   const confirmLabel = getConfirmLabel({
-    agreed,
     isAddGuestsCheckout,
     isBlockedByCapacity,
     isJoinWindowClosed,
@@ -106,7 +104,6 @@ export function buildGameCheckoutViewModel({
 }
 
 function getConfirmLabel({
-  agreed,
   isAddGuestsCheckout,
   isBlockedByCapacity,
   isJoinWindowClosed,
@@ -125,15 +122,11 @@ function getConfirmLabel({
     return 'Not Enough Spots'
   }
 
-  if (!agreed) {
-    return 'Accept Terms to Continue'
-  }
-
   if (isAddGuestsCheckout) {
-    return 'Confirm & Pay'
+    return 'Confirm Guests'
   }
 
-  return isWaitlistCheckout ? 'Join Waitlist' : 'Confirm & Pay'
+  return isWaitlistCheckout ? 'Join Waitlist' : 'Confirm Spot'
 }
 
 function getPrimaryImage(images, game) {

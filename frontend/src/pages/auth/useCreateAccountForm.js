@@ -4,7 +4,12 @@ import { useAuth } from '../../hooks/useAuth.js'
 import { checkEmailAvailability } from '../../lib/authApi.js'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import { useCleanupUnfinishedSignupOnEntry, useGoogleRedirectCompletion } from '../../features/auth/authHooks.js'
-import { getPostAuthPath, isValidEmail, isValidPassword } from '../../features/auth/authHelpers.js'
+import {
+  getPostAuthPath,
+  getSafeAuthBackPath,
+  isValidEmail,
+  isValidPassword,
+} from '../../features/auth/authHelpers.js'
 
 export function useCreateAccountForm() {
   const navigate = useNavigate()
@@ -26,6 +31,9 @@ export function useCreateAccountForm() {
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const returnPath = typeof location.state?.from === 'string' ? location.state.from : ''
+  const backPath = typeof location.state?.backTo === 'string'
+    ? location.state.backTo
+    : getSafeAuthBackPath(returnPath)
 
   useCleanupUnfinishedSignupOnEntry({
     appUser,
@@ -108,6 +116,7 @@ export function useCreateAccountForm() {
 
   return {
     email,
+    backPath,
     error,
     handleCreateAccount,
     handleGoogleSignIn,

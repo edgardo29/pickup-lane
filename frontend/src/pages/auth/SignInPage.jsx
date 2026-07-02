@@ -14,7 +14,7 @@ export function SignInPage() {
   const signInForm = useSignInForm()
 
   return (
-    <AuthShell backLabel="Back" backTo={signInForm.returnPath || '/'} variant="sign-in auth-page--wide">
+    <AuthShell backLabel="Back" backTo={signInForm.backPath || '/'} variant="sign-in auth-page--wide">
       <AuthPanel>
         <AuthHeader title="Welcome back" subtitle="Sign in to your Pickup Lane account." />
 
@@ -39,7 +39,7 @@ export function SignInPage() {
           text="Don’t have an account?"
           to="/create-account"
           label="Create Account"
-          state={{ from: signInForm.returnPath }}
+          state={{ backTo: signInForm.backPath, from: signInForm.returnPath }}
         />
       </AuthPanel>
     </AuthShell>

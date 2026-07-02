@@ -1,6 +1,9 @@
 import { PasswordField } from './ProfileFields.jsx'
 import { BellIcon, KeyIcon, TrashIcon } from './ProfileIcons.jsx'
-import { dismissOnBackdropMouseDown, useDismissibleModal } from './useModalBodyLock.js'
+import {
+  dismissOnBackdropMouseDown,
+  useDismissibleModal,
+} from '../../hooks/useDismissibleModal.js'
 
 export function DeleteAccountModal({
   deleteConfirmation,
