@@ -1,17 +1,21 @@
+import { useState } from 'react'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
+import { LegalPolicyModal } from '../../features/legal/LegalPolicyModal.jsx'
 import { GameDetailsMainColumn } from './GameDetailsMainColumn.jsx'
 import GameDetailsMobileJoinBar from './GameDetailsMobileJoinBar.jsx'
 import GameDetailsOverlays from './GameDetailsOverlays.jsx'
 import { GameDetailsSidebar } from './GameDetailsSidebar.jsx'
 
 function GameDetailsLayout(props) {
+  const [activeLegalPolicyId, setActiveLegalPolicyId] = useState('')
+
   return (
     <div className="details-page">
       <BrowseAppNav />
 
       <main className="details-shell">
         <section className="details-layout">
-          <GameDetailsMainColumn {...props} />
+          <GameDetailsMainColumn {...props} onOpenLegalPolicy={setActiveLegalPolicyId} />
           <GameDetailsSidebar {...props} />
         </section>
       </main>
@@ -72,6 +76,13 @@ function GameDetailsLayout(props) {
         participantSummary={props.participantSummary}
         playerGuestMax={props.playerGuestMax}
       />
+
+      {activeLegalPolicyId && (
+        <LegalPolicyModal
+          policyId={activeLegalPolicyId}
+          onClose={() => setActiveLegalPolicyId('')}
+        />
+      )}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom'
+import { getSafeAuthBackPath } from '../features/auth/authHelpers.js'
 import { useAuth } from '../hooks/useAuth.js'
 import {
   ADMIN_PERMISSIONS,
@@ -34,11 +35,13 @@ export function RequireAppUser({ children }) {
   }
 
   if (!appUser) {
+    const returnPath = `${location.pathname}${location.search}`
+
     return (
       <Navigate
         to="/sign-in"
         replace
-        state={{ from: `${location.pathname}${location.search}` }}
+        state={{ backTo: getSafeAuthBackPath(returnPath), from: returnPath }}
       />
     )
   }
@@ -65,11 +68,13 @@ export function RequireAdmin({
   }
 
   if (!appUser) {
+    const returnPath = `${location.pathname}${location.search}`
+
     return (
       <Navigate
         to="/admin/sign-in"
         replace
-        state={{ from: `${location.pathname}${location.search}` }}
+        state={{ backTo: getSafeAuthBackPath(returnPath), from: returnPath }}
       />
     )
   }

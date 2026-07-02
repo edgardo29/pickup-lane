@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import {
   BadgeInfo,
   CircleDollarSign,
@@ -10,7 +9,7 @@ import {
   UsersRound,
 } from 'lucide-react'
 
-export function BookingRulesCard({ policyUrl, rules }) {
+export function BookingRulesCard({ onOpenPolicy, rules }) {
   return (
     <section className="details-card details-rules">
       <div className="details-card__heading">
@@ -22,29 +21,40 @@ export function BookingRulesCard({ policyUrl, rules }) {
 
       <div className="details-rules__grid">
         {rules.map((rule) => (
-          <Rule kind={rule.kind} title={rule.title} text={rule.text} key={rule.title} />
+          <Rule
+            actionLabel={rule.actionLabel}
+            kind={rule.kind}
+            key={rule.title}
+            onOpenPolicy={onOpenPolicy}
+            policyId={rule.policyId}
+            title={rule.title}
+            text={rule.text}
+          />
         ))}
       </div>
-
-      {policyUrl && (
-        <Link className="details-policy-link" to={policyUrl} state={{ from: window.location.pathname, fromLabel: 'Back to game' }}>
-          View cancellation and refund policy
-        </Link>
-      )}
     </section>
   )
 }
 
-function Rule({ kind, title, text }) {
+function Rule({ actionLabel, kind, onOpenPolicy, policyId, title, text }) {
   return (
     <article className="details-rule">
       <div className="details-rule__icon">
         <RuleItemIcon kind={kind} />
       </div>
 
-      <div>
+      <div className="details-rule__content">
         <h3>{title}</h3>
         <p>{text}</p>
+        {actionLabel && policyId && onOpenPolicy && (
+          <button
+            className="details-rule__policy-link"
+            type="button"
+            onClick={() => onOpenPolicy(policyId)}
+          >
+            {actionLabel}
+          </button>
+        )}
       </div>
     </article>
   )
@@ -57,6 +67,7 @@ function RuleItemIcon({ kind }) {
     payment: CircleDollarSign,
     players: UsersRound,
     rules: ClipboardList,
+    conduct: ShieldCheck,
     shield: ShieldCheck,
     weather: CloudLightning,
   }

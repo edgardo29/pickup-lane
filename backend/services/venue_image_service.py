@@ -3,7 +3,6 @@
 import uuid
 from datetime import datetime, timezone
 
-from azure.core.exceptions import AzureError, ResourceNotFoundError
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, ProgrammingError
@@ -18,13 +17,15 @@ from backend.schemas.venue_image_schema import (
     VenueImageUploadRead,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.azure_blob_service import (
-    AzureStorageConfigError,
-    create_blob_read_sas_url,
-    create_blob_upload_sas_url,
-    get_azure_blob_storage_config,
-    get_blob_properties,
+from backend.services.r2_storage_service import (
+    R2ObjectNotFoundError,
+    R2StorageConfigError,
+    R2StorageError,
+    create_object_read_url,
+    create_object_upload_url,
     get_content_type_extension,
+    get_object_properties,
+    get_r2_storage_config,
 )
 from backend.services.image_rules import VALID_IMAGE_ROLES
 
@@ -38,8 +39,8 @@ def build_venue_image_conflict_detail(exc: IntegrityError) -> str:
     if "uq_venue_images_one_active_primary_per_venue" in error_text:
         return "This venue already has an active primary image."
 
-    if "uq_venue_images_blob_name" in error_text:
-        return "This venue image blob already exists."
+    if "uq_venue_images_storage_object_key" in error_text:
+        return "This venue image object already exists."
 
     if "ck_venue_images_image_role" in error_text:
         return "image_role is not supported."
@@ -56,9 +57,16 @@ def build_venue_image_conflict_detail(exc: IntegrityError) -> str:
     return error_text
 
 
-def storage_config_error_response(exc: AzureStorageConfigError) -> HTTPException:
+def storage_config_error_response(exc: R2StorageConfigError) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=str(exc),
+    )
+
+
+def storage_provider_error_response(exc: R2StorageError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
         detail=str(exc),
     )
 
@@ -138,8 +146,8 @@ def validate_upload_request(upload_request: VenueImageUploadCreate) -> None:
     validate_image_role(upload_request.image_role)
 
     try:
-        config = get_azure_blob_storage_config()
-    except AzureStorageConfigError as exc:
+        config = get_r2_storage_config()
+    except R2StorageConfigError as exc:
         raise storage_config_error_response(exc) from exc
 
     normalized_content_type = upload_request.content_type.strip().lower()
@@ -156,7 +164,7 @@ def validate_upload_request(upload_request: VenueImageUploadCreate) -> None:
         )
 
 
-def build_venue_image_blob_name(
+def build_venue_image_object_key(
     *,
     venue_id: uuid.UUID,
     venue_image_id: uuid.UUID,
@@ -195,18 +203,21 @@ def clear_other_primary_venue_images(
 
 def build_venue_image_read(venue_image: VenueImage) -> VenueImageRead:
     try:
-        image_url = create_blob_read_sas_url(venue_image.blob_name)
-    except AzureStorageConfigError as exc:
+        image_url = create_object_read_url(venue_image.storage_object_key)
+    except R2StorageConfigError as exc:
         raise storage_config_error_response(exc) from exc
+    except R2StorageError as exc:
+        raise storage_provider_error_response(exc) from exc
 
     return VenueImageRead(
         id=venue_image.id,
         venue_id=venue_image.venue_id,
         uploaded_by_user_id=venue_image.uploaded_by_user_id,
         image_url=image_url,
-        blob_name=venue_image.blob_name,
-        container_name=venue_image.container_name,
-        storage_account_name=venue_image.storage_account_name,
+        storage_provider=venue_image.storage_provider,
+        storage_object_key=venue_image.storage_object_key,
+        storage_bucket=venue_image.storage_bucket,
+        storage_account_id=venue_image.storage_account_id,
         content_type=venue_image.content_type,
         size_bytes=venue_image.size_bytes,
         etag=venue_image.etag,
@@ -265,9 +276,9 @@ def list_public_venue_images(
 
 def check_venue_image_upload_readiness(db: Session) -> dict[str, bool]:
     try:
-        get_azure_blob_storage_config()
+        get_r2_storage_config()
         db.scalars(select(VenueImage.id).limit(1)).first()
-    except AzureStorageConfigError as exc:
+    except R2StorageConfigError as exc:
         raise storage_config_error_response(exc) from exc
     except ProgrammingError as exc:
         db.rollback()
@@ -304,13 +315,13 @@ def create_venue_image_upload(
     validate_upload_request(upload_request)
 
     try:
-        storage_config = get_azure_blob_storage_config()
-    except AzureStorageConfigError as exc:
+        storage_config = get_r2_storage_config()
+    except R2StorageConfigError as exc:
         raise storage_config_error_response(exc) from exc
 
     venue_image_id = uuid.uuid4()
     content_type = upload_request.content_type.strip().lower()
-    blob_name = build_venue_image_blob_name(
+    object_key = build_venue_image_object_key(
         venue_id=venue_id,
         venue_image_id=venue_image_id,
         file_name=upload_request.file_name,
@@ -322,9 +333,10 @@ def create_venue_image_upload(
         id=venue_image_id,
         venue_id=venue_id,
         uploaded_by_user_id=current_admin.id,
-        blob_name=blob_name,
-        container_name=storage_config.venue_images_container,
-        storage_account_name=storage_config.account_name,
+        storage_provider="r2",
+        storage_object_key=object_key,
+        storage_bucket=storage_config.bucket_name,
+        storage_account_id=storage_config.account_id,
         content_type=content_type,
         size_bytes=upload_request.size_bytes,
         image_role=upload_request.image_role,
@@ -336,12 +348,14 @@ def create_venue_image_upload(
     )
 
     try:
-        upload_ticket = create_blob_upload_sas_url(
-            blob_name=blob_name,
+        upload_ticket = create_object_upload_url(
+            object_key=object_key,
             content_type=content_type,
         )
-    except AzureStorageConfigError as exc:
+    except R2StorageConfigError as exc:
         raise storage_config_error_response(exc) from exc
+    except R2StorageError as exc:
+        raise storage_provider_error_response(exc) from exc
 
     try:
         db.add(venue_image)
@@ -396,28 +410,28 @@ def complete_venue_image_upload(
         )
 
     try:
-        blob_properties = get_blob_properties(venue_image.blob_name)
-    except AzureStorageConfigError as exc:
+        object_properties = get_object_properties(venue_image.storage_object_key)
+    except R2StorageConfigError as exc:
         raise storage_config_error_response(exc) from exc
-    except ResourceNotFoundError as exc:
+    except R2ObjectNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded blob was not found for this venue image.",
+            detail="Uploaded object was not found for this venue image.",
         ) from exc
-    except AzureError as exc:
+    except R2StorageError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Azure Blob Storage could not verify the uploaded image.",
+            detail="Cloudflare R2 could not verify the uploaded image.",
         ) from exc
 
-    if blob_properties.size_bytes != venue_image.size_bytes:
+    if object_properties.size_bytes != venue_image.size_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded image size does not match the requested size.",
         )
 
-    blob_content_type = (blob_properties.content_type or "").lower()
-    if blob_content_type and blob_content_type != venue_image.content_type:
+    object_content_type = (object_properties.content_type or "").lower()
+    if object_content_type and object_content_type != venue_image.content_type:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded image content type does not match the requested type.",
@@ -435,7 +449,7 @@ def complete_venue_image_upload(
         venue_image.upload_completed_at = venue_image.upload_completed_at or now
         venue_image.etag = (
             (complete_request.etag if complete_request else None)
-            or blob_properties.etag
+            or object_properties.etag
             or venue_image.etag
         )
         venue_image.updated_at = now

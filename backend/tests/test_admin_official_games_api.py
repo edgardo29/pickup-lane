@@ -149,9 +149,10 @@ def create_active_primary_venue_image(venue_id: str, uploaded_by_user_id: str) -
                 id=image_id,
                 venue_id=UUID(venue_id),
                 uploaded_by_user_id=UUID(uploaded_by_user_id),
-                blob_name=f"venues/{venue_id}/primary-{image_id}.jpg",
-                container_name="venue-images",
-                storage_account_name="pickuplanetestmedia",
+                storage_provider="r2",
+                storage_object_key=f"venues/{venue_id}/primary-{image_id}.jpg",
+                storage_bucket="pickup-lane-dev-media",
+                storage_account_id="test-r2-account",
                 content_type="image/jpeg",
                 size_bytes=1200,
                 etag=f"etag-{image_id}",
@@ -383,8 +384,8 @@ def test_admin_official_games_list_returns_card_data_without_n_plus_one_counts(
     )
 
     monkeypatch.setattr(
-        "backend.services.official_game_query_service.create_blob_read_sas_url",
-        lambda blob_name: f"https://read.test/{blob_name}",
+        "backend.services.official_game_query_service.create_object_read_url",
+        lambda object_key: f"https://read.test/{object_key}",
     )
 
     response = client.get("/admin/official-games?view=active&search=photo")
@@ -406,11 +407,11 @@ def test_admin_official_games_list_returns_card_data_without_n_plus_one_counts(
     assert card["issues"] == []
 
 
-def test_admin_official_games_list_keeps_photo_valid_when_sas_generation_fails(
+def test_admin_official_games_list_keeps_photo_valid_when_read_url_generation_fails(
     client: TestClient,
     monkeypatch,
 ):
-    from backend.services.azure_blob_service import AzureStorageConfigError
+    from backend.services.r2_storage_service import R2StorageConfigError
 
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
@@ -418,19 +419,19 @@ def test_admin_official_games_list_keeps_photo_valid_when_sas_generation_fails(
     authenticate_as(admin["id"])
     create_response = client.post(
         "/admin/official-games",
-        json=build_official_game_payload(title="Photo Blob Official"),
+        json=build_official_game_payload(title="Photo R2 Official"),
     )
     assert create_response.status_code == 201, create_response.text
     game = create_response.json()["game"]
     create_active_primary_venue_image(game["venue_id"], admin["id"])
 
-    def raise_sas_config_error(blob_name: str) -> str:
-        del blob_name
-        raise AzureStorageConfigError("Missing Azure config in test.")
+    def raise_read_url_config_error(object_key: str) -> str:
+        del object_key
+        raise R2StorageConfigError("Missing R2 config in test.")
 
     monkeypatch.setattr(
-        "backend.services.official_game_query_service.create_blob_read_sas_url",
-        raise_sas_config_error,
+        "backend.services.official_game_query_service.create_object_read_url",
+        raise_read_url_config_error,
     )
 
     response = client.get("/admin/official-games?view=active&search=photo")

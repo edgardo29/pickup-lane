@@ -1,7 +1,10 @@
+import { CircleCheck } from 'lucide-react'
 import { ShieldCheckIcon } from '../../components/BrowseIcons.jsx'
+import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
 import { formatMoney } from './browseGameFormatters.js'
 
 export function GameCheckoutSummaryCard({
+  actionMessage,
   confirmDisabled,
   confirmLabel,
   effectiveGuestCount,
@@ -41,14 +44,21 @@ export function GameCheckoutSummaryCard({
         </p>
       )}
 
-      <button
-        className="checkout-confirm-button checkout-confirm-button--desktop"
-        type="button"
-        disabled={confirmDisabled}
-        onClick={onConfirmBooking}
-      >
-        {confirmLabel}
-      </button>
+      <div className="checkout-summary-action checkout-summary-action--desktop">
+        <button
+          className="checkout-confirm-button"
+          type="button"
+          disabled={confirmDisabled}
+          onClick={onConfirmBooking}
+        >
+          <CircleCheck aria-hidden="true" />
+          <span>{confirmLabel}</span>
+        </button>
+
+        <FormErrorMessage className="checkout-action-error">
+          {actionMessage}
+        </FormErrorMessage>
+      </div>
 
       <p className="checkout-secure-note">
         <ShieldCheckIcon />

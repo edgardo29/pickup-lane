@@ -5,8 +5,10 @@ import {
 } from './SettingsModals.jsx'
 import { SettingsRow } from './SettingsGroup.jsx'
 import { ControlsIcon } from './ProfileIcons.jsx'
+import { LegalPolicyModal } from '../../features/legal/LegalPolicyModal.jsx'
 
 function SettingsContent({
+  activeLegalPolicyId,
   accountAccessRows,
   accountRows,
   confirmPassword,
@@ -29,6 +31,7 @@ function SettingsContent({
   preferenceRows,
   setConfirmPassword,
   setDeleteConfirmation,
+  setActiveLegalPolicyId,
   setEmailNotificationsEnabled,
   setIsDeleteOpen,
   setIsNotificationOpen,
@@ -110,6 +113,13 @@ function SettingsContent({
           passwordStatus={passwordStatus}
           passwordSuccess={passwordSuccess}
           showNewPassword={showNewPassword}
+        />
+      )}
+
+      {activeLegalPolicyId && (
+        <LegalPolicyModal
+          policyId={activeLegalPolicyId}
+          onClose={() => setActiveLegalPolicyId('')}
         />
       )}
     </>

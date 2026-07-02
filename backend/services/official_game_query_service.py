@@ -24,9 +24,10 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameListRead,
     AdminOfficialGameMoneyRead,
 )
-from backend.services.azure_blob_service import (
-    AzureStorageConfigError,
-    create_blob_read_sas_url,
+from backend.services.r2_storage_service import (
+    R2StorageConfigError,
+    R2StorageError,
+    create_object_read_url,
 )
 from backend.services.game_participant_rules import ACTIVE_ROSTER_PARTICIPANT_STATUSES
 from backend.services.game_rules import OPEN_GAME_STATUSES
@@ -114,14 +115,14 @@ def list_official_games(
     has_more = len(rows) > effective_limit
     (
         booked_spots_by_game_id,
-        primary_venue_image_blob_by_venue_id,
+        primary_venue_image_object_key_by_venue_id,
     ) = load_official_game_list_card_data(db, page_games)
 
     games = [
         build_official_game_card_read(
             game,
             booked_spots=booked_spots_by_game_id.get(game.id, 0),
-            primary_venue_image_blob_name=primary_venue_image_blob_by_venue_id.get(
+            primary_venue_image_object_key=primary_venue_image_object_key_by_venue_id.get(
                 game.venue_id
             ),
             include_operational_issues=normalized_view == "active",
@@ -158,7 +159,7 @@ def load_official_game_list_card_data(
     game_ids = [game.id for game in games]
     venue_ids = {game.venue_id for game in games if game.venue_id is not None}
     booked_spots_by_game_id: dict[uuid.UUID, int] = {}
-    primary_venue_image_blob_by_venue_id: dict[uuid.UUID, str] = {}
+    primary_venue_image_object_key_by_venue_id: dict[uuid.UUID, str] = {}
 
     for game_id, booked_spots in db.execute(
         select(GameParticipant.game_id, func.count(GameParticipant.id))
@@ -173,8 +174,8 @@ def load_official_game_list_card_data(
         booked_spots_by_game_id[game_id] = int(booked_spots or 0)
 
     if venue_ids:
-        for venue_id, blob_name in db.execute(
-            select(VenueImage.venue_id, VenueImage.blob_name)
+        for venue_id, storage_object_key in db.execute(
+            select(VenueImage.venue_id, VenueImage.storage_object_key)
             .where(
                 VenueImage.venue_id.in_(venue_ids),
                 VenueImage.image_status == "active",
@@ -183,9 +184,12 @@ def load_official_game_list_card_data(
             )
             .order_by(VenueImage.venue_id.asc(), VenueImage.sort_order.asc())
         ).all():
-            primary_venue_image_blob_by_venue_id.setdefault(venue_id, blob_name)
+            primary_venue_image_object_key_by_venue_id.setdefault(
+                venue_id,
+                storage_object_key,
+            )
 
-    return booked_spots_by_game_id, primary_venue_image_blob_by_venue_id
+    return booked_spots_by_game_id, primary_venue_image_object_key_by_venue_id
 
 
 def normalize_official_game_list_view(view: str) -> str:
@@ -371,13 +375,13 @@ def build_official_game_card_read(
     game: Game,
     *,
     booked_spots: int,
-    primary_venue_image_blob_name: str | None,
+    primary_venue_image_object_key: str | None,
     include_operational_issues: bool,
 ) -> AdminOfficialGameCardRead:
     primary_venue_image_url = build_primary_venue_image_url(
-        primary_venue_image_blob_name
+        primary_venue_image_object_key
     )
-    has_primary_venue_image = primary_venue_image_blob_name is not None
+    has_primary_venue_image = primary_venue_image_object_key is not None
     issues: list[str] = []
     if include_operational_issues:
         if game.host_user_id is None:
@@ -408,13 +412,13 @@ def build_official_game_card_read(
     )
 
 
-def build_primary_venue_image_url(blob_name: str | None) -> str | None:
-    if blob_name is None:
+def build_primary_venue_image_url(storage_object_key: str | None) -> str | None:
+    if storage_object_key is None:
         return None
 
     try:
-        return create_blob_read_sas_url(blob_name)
-    except AzureStorageConfigError:
+        return create_object_read_url(storage_object_key)
+    except (R2StorageConfigError, R2StorageError):
         return None
 
 
