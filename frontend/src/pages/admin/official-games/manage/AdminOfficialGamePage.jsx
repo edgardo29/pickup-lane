@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Image as ImageIcon } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
-  CalendarIcon,
+  ArrowLeftIcon,
   ChatIcon,
-  MapPinIcon,
-  PriceTagIcon,
+  ClipboardListIcon,
+  DollarIcon,
+  PencilIcon,
   ShieldCheckIcon,
+  TrashIcon,
   UsersIcon,
 } from '../../../../components/BrowseIcons.jsx'
 import { useAuth } from '../../../../hooks/useAuth.js'
@@ -19,7 +22,6 @@ import {
 } from '../../shared/adminWorkspaceData.js'
 import { listAdminActions } from '../../shared/adminApi.js'
 import { useAdminAccess } from '../../shared/useAdminAccess.js'
-import AdminOfficialGameForm from '../shared/AdminOfficialGameForm.jsx'
 import AdminOfficialGameAuditTab from './AdminOfficialGameAuditTab.jsx'
 import AdminOfficialGameBookingsTab from './AdminOfficialGameBookingsTab.jsx'
 import AdminOfficialGameChatTab from './AdminOfficialGameChatTab.jsx'
@@ -41,47 +43,27 @@ import {
   listAdminOfficialGameChatRooms,
   listOfficialGameVenueImages,
   listAdminOfficialGameParticipants,
-  listAdminOfficialGameUsers,
   previewAdminOfficialGameCancellation,
   previewAdminOfficialGamePlayerRemoval,
   removeAdminOfficialGameHost,
   removeAdminOfficialGamePlayer,
-  updateAdminOfficialGame,
+  searchAdminOfficialGameUsers,
 } from '../shared/adminOfficialGamesApi.js'
 import {
   formatAdminGameMoney,
-  formatOfficialGameSchedule,
-  getAdminUserLabel,
 } from '../shared/adminOfficialGameForm.js'
 
 const manageTabs = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'details', label: 'Details' },
   { id: 'roster', label: 'Roster' },
   { id: 'bookings', label: 'Bookings' },
   { id: 'waitlist', label: 'Waitlist' },
   { id: 'money', label: 'Money' },
   { id: 'chat', label: 'Chat' },
   { id: 'photos', label: 'Photos' },
-  { id: 'audit', label: 'Audit' },
+  { id: 'audit', label: 'Activity' },
 ]
 
-const activeRosterStatuses = new Set(['confirmed', 'pending_payment'])
 const cancellableGameStatuses = new Set(['scheduled', 'full'])
-
-function getActiveRosterCount(participants) {
-  return participants.filter((participant) =>
-    activeRosterStatuses.has(participant.participant_status),
-  ).length
-}
-
-function getControlsLabel(game) {
-  return [
-    game.allow_guests ? 'Guests on' : 'Guests off',
-    game.waitlist_enabled ? 'Waitlist on' : 'Waitlist off',
-    game.is_chat_enabled ? 'Chat on' : 'Chat off',
-  ].join(' · ')
-}
 
 function getCancelDisabledReason(game) {
   if (!game) {
@@ -138,16 +120,6 @@ function getCancellationCreditCents(row) {
   const restoredCents = row.credit_restored_cents ?? row.credit_restorable_cents ?? 0
   const releasedCents = row.credit_released_cents ?? row.credit_releasable_cents ?? 0
   return restoredCents + releasedCents
-}
-
-function OverviewFact({ icon, label, value }) {
-  return (
-    <div className="admin-manage-fact">
-      {icon}
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
 }
 
 function AdminOfficialGameCancelModal({
@@ -327,33 +299,19 @@ function AdminOfficialGameCancelModal({
   )
 }
 
-function AdminOfficialGameOverview({ game, hostUser, participants, venueImages }) {
-  const activeRosterCount = getActiveRosterCount(participants)
-  const hostParticipant = participants.find(
-    (participant) => participant.user_id === game.host_user_id,
-  )
-  const hostLabel = game.host_user_id
-    ? (hostUser
-      ? getAdminUserLabel(hostUser)
-      : hostParticipant?.display_name_snapshot || 'Assigned host')
-    : 'Unassigned'
-
+function AdminOfficialGameLockedTab({ description, icon: Icon, label, title }) {
   return (
-    <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game overview">
-      <div className="admin-manage-overview-grid">
-        <OverviewFact icon={<CalendarIcon />} label="Schedule" value={formatOfficialGameSchedule(game)} />
-        <OverviewFact icon={<MapPinIcon />} label="Venue" value={game.venue_name_snapshot || 'Venue unavailable'} />
-        <OverviewFact icon={<UsersIcon />} label="Roster" value={`${activeRosterCount} / ${game.total_spots}`} />
-        <OverviewFact icon={<PriceTagIcon />} label="Price" value={formatAdminGameMoney(game.price_per_player_cents, game.currency)} />
-        <OverviewFact icon={<ShieldCheckIcon />} label="Host" value={hostLabel} />
-        <OverviewFact icon={<ChatIcon />} label="Controls" value={getControlsLabel(game)} />
-      </div>
-
-      <div className="admin-manage-photo-preview" aria-label="Venue photo preview">
-        {venueImages.slice(0, 3).map((image) => (
-          <img key={image.id} src={buildMediaUrl(image.image_url)} alt="" />
-        ))}
-        {venueImages.length === 0 && <span>No venue photos added.</span>}
+    <section className="admin-manage-tab-panel admin-bookings-panel" aria-label={label}>
+      <div className="admin-manage-panel-heading admin-bookings-heading">
+        <div className="admin-bookings-heading__copy">
+          <span className="admin-bookings-heading__icon">
+            <Icon />
+          </span>
+          <div>
+            <h2>{title}</h2>
+            <p>{description}</p>
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -364,18 +322,36 @@ function AdminOfficialGamePhotosTab({ venueImages }) {
   const galleryImages = venueImages.filter((image) => image.id !== primaryImage?.id)
 
   return (
-    <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game photos">
+    <section className="admin-manage-tab-panel admin-bookings-panel" aria-label="Official game photos">
+      <div className="admin-manage-panel-heading admin-bookings-heading">
+        <div className="admin-bookings-heading__copy">
+          <span className="admin-bookings-heading__icon">
+            <ImageIcon />
+          </span>
+          <div>
+            <h2>Photos</h2>
+            <p>Review venue photos shown on game pages.</p>
+          </div>
+        </div>
+      </div>
+
       <div className="admin-manage-photos">
-        <div>
+        <article className="admin-manage-photo-card admin-manage-photo-card--primary">
           <h2>Primary</h2>
           {primaryImage ? (
-            <img src={buildMediaUrl(primaryImage.image_url)} alt="" />
+            <img
+              className="admin-manage-primary-photo"
+              src={buildMediaUrl(primaryImage.image_url)}
+              alt=""
+            />
           ) : (
-            <div className="admin-manage-photo-empty">No primary photo.</div>
+            <div className="admin-manage-photo-empty">
+              No primary photo yet.
+            </div>
           )}
-        </div>
+        </article>
 
-        <div>
+        <article className="admin-manage-photo-card admin-manage-photo-card--gallery">
           <h2>Gallery</h2>
           {galleryImages.length > 0 ? (
             <div className="admin-manage-gallery-grid">
@@ -384,9 +360,11 @@ function AdminOfficialGamePhotosTab({ venueImages }) {
               ))}
             </div>
           ) : (
-            <div className="admin-manage-photo-empty">No gallery photos.</div>
+            <div className="admin-manage-photo-empty">
+              No gallery photos yet.
+            </div>
           )}
-        </div>
+        </article>
       </div>
     </section>
   )
@@ -414,9 +392,8 @@ function AdminOfficialGamePageContent({ gameId }) {
   const [auditLoadState, setAuditLoadState] = useState('loading')
   const [auditError, setAuditError] = useState('')
   const [auditRefreshCount, setAuditRefreshCount] = useState(0)
-  const [users, setUsers] = useState([])
   const [venueImages, setVenueImages] = useState([])
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('roster')
   const [loadState, setLoadState] = useState('loading')
   const [mutationState, setMutationState] = useState('idle')
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false)
@@ -444,7 +421,7 @@ function AdminOfficialGamePageContent({ gameId }) {
     adminAccess,
     ADMIN_PERMISSIONS.OFFICIAL_GAMES_ROSTER_MANAGE,
   )
-  const canUseRosterUserLookup = (
+  const canSearchRosterUsers = (
     canManageRoster
     && hasAdminPermission(adminAccess, ADMIN_PERMISSIONS.USERS_READ)
   )
@@ -453,7 +430,7 @@ function AdminOfficialGamePageContent({ gameId }) {
     && hasAdminPermission(adminAccess, ADMIN_PERMISSIONS.MONEY_READ)
   )
   const canViewMoneyData = hasAdminPermission(adminAccess, ADMIN_PERMISSIONS.MONEY_READ)
-  const currentWorkspaceContextKey = `${currentAdminDataContextKey}:${canUseRosterUserLookup}`
+  const currentWorkspaceContextKey = currentAdminDataContextKey
   const {
     bookings,
     bookingsError,
@@ -483,12 +460,10 @@ function AdminOfficialGamePageContent({ gameId }) {
     adminAccess,
     ADMIN_PERMISSIONS.OFFICIAL_GAMES_CANCEL,
   )
-  const visibleManageTabs = manageTabs.filter(
-    (tab) => tab.id !== 'details' || canEditGame,
-  )
+  const visibleManageTabs = manageTabs
   const selectedTab = visibleManageTabs.some((tab) => tab.id === activeTab)
     ? activeTab
-    : 'overview'
+    : visibleManageTabs[0]?.id || 'roster'
   const workspaceIsCurrent = workspaceContextKey === currentWorkspaceContextKey
   const chatIsCurrent = chatContextKey === currentAdminDataContextKey
   const auditIsCurrent = auditContextKey === currentAdminDataContextKey
@@ -534,13 +509,9 @@ function AdminOfficialGamePageContent({ gameId }) {
         const [
           gameResponse,
           participantResponse,
-          userResponse,
         ] = await Promise.all([
           getAdminOfficialGame({ firebaseUser: currentUser, gameId }),
           listAdminOfficialGameParticipants({ firebaseUser: currentUser, gameId }),
-          canUseRosterUserLookup
-            ? listAdminOfficialGameUsers({ firebaseUser: currentUser })
-            : Promise.resolve([]),
         ])
         if (!isMounted) {
           return
@@ -558,7 +529,6 @@ function AdminOfficialGamePageContent({ gameId }) {
 
         setGame(gameResponse.game)
         setParticipants(participantResponse ?? [])
-        setUsers(userResponse ?? [])
         setVenueImages(nextVenueImages ?? [])
         setWorkspaceContextKey(currentWorkspaceContextKey)
         setPageError('')
@@ -580,7 +550,6 @@ function AdminOfficialGamePageContent({ gameId }) {
       isMounted = false
     }
   }, [
-    canUseRosterUserLookup,
     currentUser,
     currentWorkspaceContextKey,
     gameId,
@@ -741,17 +710,6 @@ function AdminOfficialGamePageContent({ gameId }) {
     }
   }
 
-  function handleUpdateGame(payload) {
-    return runMutation(
-      () => updateAdminOfficialGame({
-        firebaseUser: currentUser,
-        gameId,
-        payload,
-      }),
-      'Official game updated.',
-    )
-  }
-
   function handleAssignHost({ hostUserId, reason }) {
     return runMutation(
       () => assignAdminOfficialGameHost({
@@ -786,6 +744,15 @@ function AdminOfficialGamePageContent({ gameId }) {
       'Player added.',
     )
   }
+
+  const handleSearchRosterUsers = useCallback(({ query, signal }) => {
+    return searchAdminOfficialGameUsers({
+      firebaseUser: currentUser,
+      gameId,
+      query,
+      signal,
+    })
+  }, [currentUser, gameId])
 
   function handleRemovePlayer({ participant, reason }) {
     return runMutation(
@@ -979,7 +946,6 @@ function AdminOfficialGamePageContent({ gameId }) {
     navigate(`/admin/official-games/new?replace_game_id=${encodeURIComponent(gameId)}`)
   }
 
-  const hostUser = users.find((user) => user.id === game?.host_user_id)
   const cancelDisabledReason = getCancelDisabledReason(game)
   const isMutating = mutationState === 'saving'
   const canExecuteRemoval = Boolean(
@@ -994,8 +960,18 @@ function AdminOfficialGamePageContent({ gameId }) {
         actions={(
           <div className="admin-official-header-actions">
             <Link className="admin-official-button" to="/admin/official-games">
+              <ArrowLeftIcon />
               Back
             </Link>
+            {workspaceIsCurrent && game?.id === gameId && canEditGame && (
+              <Link
+                className="admin-official-button"
+                to={`/admin/official-games/${gameId}/edit`}
+              >
+                <PencilIcon />
+                Edit game
+              </Link>
+            )}
             {workspaceIsCurrent && game?.id === gameId && canCancelGame && (
               <button
                 className="admin-official-button admin-official-button--danger"
@@ -1004,17 +980,14 @@ function AdminOfficialGamePageContent({ gameId }) {
                 type="button"
                 onClick={handleOpenCancelModal}
               >
+                <TrashIcon />
                 Cancel game
               </button>
             )}
           </div>
         )}
         breadcrumbs={['Admin', 'Games', 'Official Games']}
-        description={(
-          workspaceIsCurrent && game?.id === gameId
-            ? `${game.title}: review roster, host, money, and lifecycle details.`
-            : 'Review roster, host, money, and lifecycle details.'
-        )}
+        description="Review roster, host, money, and lifecycle details."
         icon={ShieldCheckIcon}
         title="Manage Official Game"
       >
@@ -1047,51 +1020,29 @@ function AdminOfficialGamePageContent({ gameId }) {
               ))}
             </nav>
 
-            {selectedTab === 'overview' && (
-              <AdminOfficialGameOverview
-                game={game}
-                hostUser={hostUser}
-                participants={participants}
-                venueImages={venueImages}
-              />
-            )}
-
-            {selectedTab === 'details' && (
-              <section className="admin-official-panel admin-manage-tab-panel" aria-label="Edit official game">
-                <AdminOfficialGameForm
-                  key={game.updated_at}
-                  game={game}
-                  isSaving={isMutating}
-                  submitLabel="Save changes"
-                  onSubmit={handleUpdateGame}
-                />
-              </section>
-            )}
-
             {selectedTab === 'roster' && (
               <section className="admin-manage-roster-layout" aria-label="Official game roster">
                 <AdminOfficialGameHostPanel
                   key={`${game.updated_at}-${game.host_user_id ?? 'unassigned'}`}
-                  canAssignHost={canUseRosterUserLookup}
+                  canAssignHost={canManageRoster}
                   canRemoveHost={canManageRoster}
                   game={game}
                   isSaving={isMutating}
                   participants={participants}
-                  users={users}
                   onAssignHost={handleAssignHost}
                   onRemoveHost={handleRemoveHost}
                 />
                 <AdminOfficialGameRosterPanel
-                  canAddPlayer={canUseRosterUserLookup}
+                  canAddPlayer={canSearchRosterUsers}
                   canManageRoster={canManageRoster}
                   canPreviewRemovals={canPreviewRemovals}
                   game={game}
                   isSaving={isMutating}
                   participants={participants}
-                  users={users}
                   onAddPlayer={handleAddPlayer}
                   onPreviewRemoval={handlePreviewRemoval}
                   onRemovePlayer={handleRemovePlayer}
+                  onSearchUsers={handleSearchRosterUsers}
                 />
               </section>
             )}
@@ -1106,15 +1057,12 @@ function AdminOfficialGamePageContent({ gameId }) {
                   participants={participants}
                 />
               ) : (
-                <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game bookings">
-                  <div className="admin-manage-panel-heading">
-                    <div>
-                      <h2>Bookings</h2>
-                      <p>Money read permission is required for booking details.</p>
-                    </div>
-                    <strong>Locked</strong>
-                  </div>
-                </section>
+                <AdminOfficialGameLockedTab
+                  description="Money read permission is required for booking details."
+                  icon={ClipboardListIcon}
+                  label="Official game bookings"
+                  title="Bookings"
+                />
               )
             )}
 
@@ -1129,15 +1077,12 @@ function AdminOfficialGamePageContent({ gameId }) {
                   waitlistEntries={waitlistEntries}
                 />
               ) : (
-                <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game waitlist">
-                  <div className="admin-manage-panel-heading">
-                    <div>
-                      <h2>Waitlist</h2>
-                      <p>Money read permission is required for waitlist details.</p>
-                    </div>
-                    <strong>Locked</strong>
-                  </div>
-                </section>
+                <AdminOfficialGameLockedTab
+                  description="Money read permission is required for waitlist details."
+                  icon={UsersIcon}
+                  label="Official game waitlist"
+                  title="Waitlist"
+                />
               )
             )}
 
@@ -1152,15 +1097,12 @@ function AdminOfficialGamePageContent({ gameId }) {
                   participants={participants}
                 />
               ) : (
-                <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game money ledger">
-                  <div className="admin-manage-panel-heading">
-                    <div>
-                      <h2>Payments, Refunds, Credits</h2>
-                      <p>Money read permission is required for money ledger details.</p>
-                    </div>
-                    <strong>Locked</strong>
-                  </div>
-                </section>
+                <AdminOfficialGameLockedTab
+                  description="Money read permission is required for money ledger details."
+                  icon={DollarIcon}
+                  label="Official game money ledger"
+                  title="Payments, Refunds, Credits"
+                />
               )
             )}
 
@@ -1173,18 +1115,14 @@ function AdminOfficialGamePageContent({ gameId }) {
                   error={visibleChatError}
                   game={game}
                   participants={participants}
-                  users={users}
                 />
               ) : (
-                <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game chat">
-                  <div className="admin-manage-panel-heading">
-                    <div>
-                      <h2>Chat</h2>
-                      <p>Content moderation permission is required for chat inspection.</p>
-                    </div>
-                    <strong>Locked</strong>
-                  </div>
-                </section>
+                <AdminOfficialGameLockedTab
+                  description="Content moderation permission is required for chat inspection."
+                  icon={ChatIcon}
+                  label="Official game chat"
+                  title="Chat"
+                />
               )
             )}
 
@@ -1198,17 +1136,15 @@ function AdminOfficialGamePageContent({ gameId }) {
                   actions={visibleAuditActions}
                   error={visibleAuditError}
                   loadState={visibleAuditLoadState}
+                  participants={participants}
                 />
               ) : (
-                <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game audit log">
-                  <div className="admin-manage-panel-heading">
-                    <div>
-                      <h2>Audit</h2>
-                      <p>Audit permission is required for game action history.</p>
-                    </div>
-                    <strong>Locked</strong>
-                  </div>
-                </section>
+                <AdminOfficialGameLockedTab
+                  description="Audit permission is required for game action history."
+                  icon={ClipboardListIcon}
+                  label="Official game activity"
+                  title="Activity"
+                />
               )
             )}
           </div>

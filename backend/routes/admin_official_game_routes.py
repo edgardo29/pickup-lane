@@ -2,10 +2,11 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Booking, GameParticipant, User, WaitlistEntry
+from backend.models import Booking, User, WaitlistEntry
 from backend.schemas import (
     AdminOfficialGameCancelExecute,
     AdminOfficialGameCancellationPreviewRead,
@@ -15,6 +16,7 @@ from backend.schemas import (
     AdminOfficialGameHostRemove,
     AdminOfficialGameListRead,
     AdminOfficialGameMoneyRead,
+    AdminOfficialGameParticipantRead,
     AdminOfficialGamePlayerAdd,
     AdminOfficialGamePlayerRemovalExecute,
     AdminOfficialGamePlayerRemove,
@@ -22,6 +24,7 @@ from backend.schemas import (
     AdminOfficialGamePlayerRemovalResultRead,
     AdminOfficialGameRead,
     AdminOfficialGameUpdate,
+    AdminOfficialGameUserSearchRead,
     BookingRead,
     CurrentUserWaitlistEntryRead,
     GameParticipantRead,
@@ -32,6 +35,7 @@ from backend.services.admin_permission_service import (
     PERMISSION_OFFICIAL_GAMES_READ,
     PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
     PERMISSION_OFFICIAL_GAMES_WRITE,
+    PERMISSION_USERS_READ,
     require_user_admin_permission,
 )
 from backend.services.auth_service import require_admin_permission
@@ -55,6 +59,7 @@ from backend.services.official_game_roster_service import (
     assign_official_game_host,
     remove_official_game_host,
     remove_official_game_player,
+    search_official_game_add_player_users,
 )
 from backend.services.official_game_service import (
     create_official_game,
@@ -123,7 +128,7 @@ def get_admin_official_game(
 
 @router.get(
     "/{game_id}/participants",
-    response_model=list[GameParticipantRead],
+    response_model=list[AdminOfficialGameParticipantRead],
 )
 def list_admin_official_game_participants(
     game_id: uuid.UUID,
@@ -131,9 +136,29 @@ def list_admin_official_game_participants(
     current_admin: User = Depends(
         require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
     ),
-) -> list[GameParticipant]:
+) -> list[AdminOfficialGameParticipantRead]:
     del current_admin
-    return list_official_game_participants(db, game_id)
+    participants = list_official_game_participants(db, game_id)
+    user_ids = {
+        participant.user_id
+        for participant in participants
+        if participant.user_id is not None
+    }
+    emails_by_user_id = {}
+    if user_ids:
+        emails_by_user_id = dict(
+            db.execute(select(User.id, User.email).where(User.id.in_(user_ids))).all()
+        )
+
+    return [
+        AdminOfficialGameParticipantRead.model_validate(participant).model_copy(
+            update={
+                "user_email": participant.guest_email
+                or emails_by_user_id.get(participant.user_id),
+            }
+        )
+        for participant in participants
+    ]
 
 
 @router.get(
@@ -179,6 +204,28 @@ def get_admin_official_game_money(
 ) -> AdminOfficialGameMoneyRead:
     require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
     return get_official_game_money(db, game_id)
+
+
+@router.get(
+    "/{game_id}/user-search",
+    response_model=AdminOfficialGameUserSearchRead,
+)
+def search_admin_official_game_add_player_users(
+    game_id: uuid.UUID,
+    q: str = Query(..., min_length=3, max_length=100),
+    limit: int = Query(default=10, ge=1, le=25),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
+    ),
+) -> AdminOfficialGameUserSearchRead:
+    require_user_admin_permission(current_admin, PERMISSION_USERS_READ)
+    return search_official_game_add_player_users(
+        db,
+        game_id=game_id,
+        query=q,
+        limit=limit,
+    )
 
 
 @router.patch("/{game_id}", response_model=AdminOfficialGameRead)

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import AdminAction, User
+from backend.models import User
 from backend.schemas import AdminActionCreate, AdminActionNoteCreate, AdminActionRead
 from backend.services.admin_action_policy import ADMIN_ACTION_TARGET_FIELDS
 from backend.services.admin_permission_service import (
@@ -16,6 +16,7 @@ from backend.services.admin_action_service import (
     create_admin_action,
     get_admin_action_for_viewer_or_404,
     list_admin_actions,
+    serialize_admin_action_reads,
 )
 from backend.services.auth_service import (
     require_admin_permission,
@@ -30,8 +31,13 @@ def create_admin_action_route(
     admin_action: AdminActionCreate,
     current_user: User = Depends(require_admin_permission(PERMISSION_AUDIT_READ)),
     db: Session = Depends(get_db),
-) -> AdminAction:
-    return create_admin_action(db, admin_user=current_user, payload=admin_action)
+) -> AdminActionRead:
+    created_action = create_admin_action(
+        db,
+        admin_user=current_user,
+        payload=admin_action,
+    )
+    return serialize_admin_action_reads(db, [created_action])[0]
 
 
 @router.get(
@@ -48,8 +54,13 @@ def get_admin_action_route(
         )
     ),
     db: Session = Depends(get_db),
-) -> AdminAction:
-    return get_admin_action_for_viewer_or_404(db, admin_action_id, current_user)
+) -> AdminActionRead:
+    admin_action = get_admin_action_for_viewer_or_404(
+        db,
+        admin_action_id,
+        current_user,
+    )
+    return serialize_admin_action_reads(db, [admin_action])[0]
 
 
 @router.post(
@@ -62,13 +73,14 @@ def append_admin_action_note_route(
     note: AdminActionNoteCreate,
     current_user: User = Depends(require_admin_permission(PERMISSION_AUDIT_READ)),
     db: Session = Depends(get_db),
-) -> AdminAction:
-    return append_admin_action_note(
+) -> AdminActionRead:
+    admin_action = append_admin_action_note(
         db,
         admin_user=current_user,
         target_admin_action_id=admin_action_id,
         payload=note,
     )
+    return serialize_admin_action_reads(db, [admin_action])[0]
 
 
 @router.get("", response_model=list[AdminActionRead], status_code=status.HTTP_200_OK)
@@ -101,7 +113,7 @@ def list_admin_actions_route(
         )
     ),
     db: Session = Depends(get_db),
-) -> list[AdminAction]:
+) -> list[AdminActionRead]:
     target_filter_values = {
         "target_user_id": target_user_id,
         "target_game_id": target_game_id,
@@ -126,7 +138,7 @@ def list_admin_actions_route(
         field_name: target_filter_values[field_name]
         for field_name in ADMIN_ACTION_TARGET_FIELDS
     }
-    return list_admin_actions(
+    admin_actions = list_admin_actions(
         db,
         viewer_user=current_user,
         admin_user_id=admin_user_id,
@@ -134,3 +146,4 @@ def list_admin_actions_route(
         target_filters=target_filters,
         limit=limit,
     )
+    return serialize_admin_action_reads(db, admin_actions)

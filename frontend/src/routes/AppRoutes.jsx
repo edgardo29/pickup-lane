@@ -28,6 +28,7 @@ import {
   AdminNotificationsPage,
   AdminPlatformNoticesPage,
   AdminOfficialGamePage,
+  AdminEditOfficialGamePage,
   AdminOfficialGamesPage,
   AdminSignInPage,
   AdminStaffPage,
@@ -335,6 +336,14 @@ export function AppRoutes() {
           element={
             <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE}>
               <AdminCreateOfficialGamePage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="official-games/:gameId/edit"
+          element={
+            <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE}>
+              <AdminEditOfficialGamePage />
             </RequireAdmin>
           }
         />

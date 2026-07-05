@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
+import { DollarIcon } from '../../../../components/BrowseIcons.jsx'
 import { formatAdminGameMoney } from '../shared/adminOfficialGameForm.js'
+import AdminOfficialGameEmptyState from './AdminOfficialGameEmptyState.jsx'
 import {
   formatAdminDateTime,
   getCreditUsageTimelineLabel,
@@ -8,9 +10,6 @@ import {
   getRefundTimelineLabel,
   getStatusLabel,
 } from './adminOfficialGameManageDisplay.js'
-
-const attentionPaymentStatuses = new Set(['processing', 'failed', 'disputed'])
-const attentionRefundStatuses = new Set(['pending', 'approved', 'processing', 'failed'])
 
 function AdminOfficialGameMoneyTab({
   error,
@@ -36,10 +35,6 @@ function AdminOfficialGameMoneyTab({
     (total, usage) => total + Number(usage.amount_cents || 0),
     0,
   )
-  const attentionCount = (
-    payments.filter((payment) => attentionPaymentStatuses.has(payment.payment_status)).length
-    + refunds.filter((refund) => attentionRefundStatuses.has(refund.refund_status)).length
-  )
   const hasLedgerRows = (
     payments.length > 0
     || refunds.length > 0
@@ -48,13 +43,17 @@ function AdminOfficialGameMoneyTab({
   )
 
   return (
-    <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game money ledger">
-      <div className="admin-manage-panel-heading">
-        <div>
-          <h2>Payments, Refunds, Credits</h2>
-          <p>Read-only money ledger for this official game.</p>
+    <section className="admin-manage-tab-panel admin-bookings-panel" aria-label="Official game money ledger">
+      <div className="admin-manage-panel-heading admin-bookings-heading">
+        <div className="admin-bookings-heading__copy">
+          <span className="admin-bookings-heading__icon">
+            <DollarIcon />
+          </span>
+          <div>
+            <h2>Payments, Refunds, Credits</h2>
+            <p>Review payments, refunds, and credits for this game.</p>
+          </div>
         </div>
-        <strong>{attentionCount}</strong>
       </div>
 
       {error && (
@@ -97,7 +96,12 @@ function AdminOfficialGameMoneyTab({
           </div>
 
           {!hasLedgerRows && (
-            <p className="admin-official-empty">No money ledger rows yet.</p>
+            <AdminOfficialGameEmptyState
+              icon={DollarIcon}
+              title="No money ledger rows yet"
+            >
+              Payments, refunds, and credits will appear here once recorded.
+            </AdminOfficialGameEmptyState>
           )}
 
           {payments.length > 0 && (

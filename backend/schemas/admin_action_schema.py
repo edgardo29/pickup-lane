@@ -42,8 +42,12 @@ class AdminActionRead(BaseModel):
 
     id: UUID
     admin_user_id: UUID
+    admin_user_display_name: str | None = None
+    admin_user_email: str | None = None
     action_type: str
     target_user_id: UUID | None
+    target_user_display_name: str | None = None
+    target_user_email: str | None = None
     target_game_id: UUID | None
     target_booking_id: UUID | None
     target_participant_id: UUID | None

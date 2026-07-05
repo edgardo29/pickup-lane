@@ -1,3 +1,5 @@
+import { ChatIcon } from '../../../../components/BrowseIcons.jsx'
+import AdminOfficialGameEmptyState from './AdminOfficialGameEmptyState.jsx'
 import {
   formatAdminDateTime,
   getChatMessageTimelineLabel,
@@ -13,7 +15,6 @@ function AdminOfficialGameChatTab({
   error,
   game,
   participants,
-  users,
 }) {
   const activeChat = getPrimaryGameChat(chatRooms)
   const visibleCount = chatMessages.filter(
@@ -30,13 +31,17 @@ function AdminOfficialGameChatTab({
   ).length
 
   return (
-    <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game chat">
-      <div className="admin-manage-panel-heading">
-        <div>
-          <h2>Chat</h2>
-          <p>Read-only room and message inspection for this official game.</p>
+    <section className="admin-manage-tab-panel admin-bookings-panel" aria-label="Official game chat">
+      <div className="admin-manage-panel-heading admin-bookings-heading">
+        <div className="admin-bookings-heading__copy">
+          <span className="admin-bookings-heading__icon">
+            <ChatIcon />
+          </span>
+          <div>
+            <h2>Chat</h2>
+            <p>Inspect room status and moderation activity.</p>
+          </div>
         </div>
-        <strong>{activeChat ? getTitleLabel(activeChat.chat_status) : 'No room'}</strong>
       </div>
 
       <div className="admin-bookings-summary" aria-label="Chat summary">
@@ -75,10 +80,14 @@ function AdminOfficialGameChatTab({
         <p className="admin-official-empty">Loading chat.</p>
       )}
       {chatLoadState === 'ready' && !activeChat && (
-        <p className="admin-official-empty">No chat room has been created yet.</p>
+        <AdminOfficialGameEmptyState icon={ChatIcon} title="No chat room yet">
+          A room will appear here when chat is created for this game.
+        </AdminOfficialGameEmptyState>
       )}
       {chatLoadState === 'ready' && activeChat && chatMessages.length === 0 && (
-        <p className="admin-official-empty">No messages yet.</p>
+        <AdminOfficialGameEmptyState icon={ChatIcon} title="No messages yet">
+          New messages will appear here once players start chatting.
+        </AdminOfficialGameEmptyState>
       )}
 
       {chatLoadState === 'ready' && chatMessages.length > 0 && (
@@ -86,7 +95,7 @@ function AdminOfficialGameChatTab({
           {chatMessages.map((message) => (
             <article key={message.id} className="admin-chat-message">
               <header>
-                <strong>{getChatSenderLabel(message, participants, users)}</strong>
+                <strong>{getChatSenderLabel(message, participants)}</strong>
                 <span>{formatAdminDateTime(message.created_at)}</span>
                 <em>{getTitleLabel(message.moderation_status)}</em>
               </header>

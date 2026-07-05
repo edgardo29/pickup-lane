@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,11 +21,15 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameHostRemove,
     AdminOfficialGamePlayerAdd,
     AdminOfficialGamePlayerRemove,
+    AdminOfficialGameUserSearchEligibilityRead,
+    AdminOfficialGameUserSearchRead,
+    AdminOfficialGameUserSearchResultRead,
 )
 from backend.services.admin_action_service import record_admin_action
 from backend.services.game_rules import (
     ACTIVE_JOIN_STATUSES,
     build_game_conflict_detail,
+    ensure_timezone,
     require_game_not_started,
 )
 from backend.services.game_participant_rules import (
@@ -70,6 +74,7 @@ IMMEDIATE_REMOVAL_CREDIT_USAGE_STATUSES = {"reserved", "released"}
 REMOVAL_PREVIEW_REQUIRED_DETAIL = (
     "Removal impact preview is required before removing this player."
 )
+USER_SEARCH_MAX_TERMS = 5
 
 
 def get_active_user_or_404(
@@ -180,6 +185,144 @@ def require_official_host_change_allowed(game: Game, *, action: str) -> None:
     )
 
 
+def escape_like_search_term(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def normalize_user_search_terms(query: str) -> list[str]:
+    return [
+        term
+        for term in query.strip().split()[:USER_SEARCH_MAX_TERMS]
+        if len(term) >= 3
+    ]
+
+
+def user_search_condition(term: str):
+    pattern = f"%{escape_like_search_term(term)}%"
+    return or_(
+        User.email.ilike(pattern, escape="\\"),
+        User.first_name.ilike(pattern, escape="\\"),
+        User.last_name.ilike(pattern, escape="\\"),
+    )
+
+
+def get_add_player_eligibility_reason(
+    *,
+    game: Game,
+    user: User,
+    active_participant_user_ids: set[uuid.UUID],
+    roster_count: int,
+    now: datetime,
+) -> str | None:
+    if (
+        game.publish_status != "published"
+        or game.game_status not in {"scheduled", "full"}
+    ):
+        return "game_not_addable"
+
+    if now >= ensure_timezone(game.starts_at):
+        return "game_started"
+
+    if user.account_status != "active":
+        return "inactive_user"
+
+    if game.host_user_id == user.id:
+        return "current_host"
+
+    if user.id in active_participant_user_ids:
+        return "already_on_roster"
+
+    if roster_count >= game.total_spots:
+        return "game_full"
+
+    return None
+
+
+def build_user_search_result(
+    *,
+    game: Game,
+    user: User,
+    active_participant_user_ids: set[uuid.UUID],
+    roster_count: int,
+    now: datetime,
+) -> AdminOfficialGameUserSearchResultRead:
+    reason = get_add_player_eligibility_reason(
+        game=game,
+        user=user,
+        active_participant_user_ids=active_participant_user_ids,
+        roster_count=roster_count,
+        now=now,
+    )
+    return AdminOfficialGameUserSearchResultRead(
+        user_id=user.id,
+        display_name=get_user_display_name(user, fallback="User"),
+        email=user.email,
+        status=user.account_status,
+        eligibility=AdminOfficialGameUserSearchEligibilityRead(
+            can_add=reason is None,
+            reason=reason,
+        ),
+    )
+
+
+def search_official_game_add_player_users(
+    db: Session,
+    *,
+    game_id: uuid.UUID,
+    query: str,
+    limit: int,
+) -> AdminOfficialGameUserSearchRead:
+    game = get_official_game_or_404(db, game_id)
+    terms = normalize_user_search_terms(query)
+    if not terms:
+        return AdminOfficialGameUserSearchRead()
+
+    statement = (
+        select(User)
+        .where(
+            User.deleted_at.is_(None),
+            *(user_search_condition(term) for term in terms),
+        )
+        .order_by(
+            case((User.account_status == "active", 0), else_=1),
+            User.last_name.asc().nulls_last(),
+            User.first_name.asc().nulls_last(),
+            User.email.asc().nulls_last(),
+            User.id.asc(),
+        )
+        .limit(limit)
+    )
+    users = list(db.scalars(statement).all())
+    if not users:
+        return AdminOfficialGameUserSearchRead()
+
+    user_ids = [user.id for user in users]
+    active_participant_user_ids = set(
+        db.scalars(
+            select(GameParticipant.user_id).where(
+                GameParticipant.game_id == game.id,
+                GameParticipant.user_id.in_(user_ids),
+                GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
+            )
+        ).all()
+    )
+    roster_count = count_roster_players(db, game.id)
+    now = datetime.now(timezone.utc)
+
+    return AdminOfficialGameUserSearchRead(
+        results=[
+            build_user_search_result(
+                game=game,
+                user=user,
+                active_participant_user_ids=active_participant_user_ids,
+                roster_count=roster_count,
+                now=now,
+            )
+            for user in users
+        ]
+    )
+
+
 def add_official_game_player(
     db: Session,
     *,
@@ -196,6 +339,12 @@ def add_official_game_player(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Players can only be added to published scheduled or full official games.",
         )
+
+    require_game_not_started(
+        game,
+        datetime.now(timezone.utc),
+        "Players can only be added before the game starts.",
+    )
 
     player = get_active_user_or_404(db, add_request.user_id, "Player not found.")
     if game.host_user_id == player.id:

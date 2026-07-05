@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.schemas.game_schema import GameRead
 from backend.schemas.game_credit_schema import GameCreditRead, GameCreditUsageRead
+from backend.schemas.game_participant_schema import GameParticipantRead
 from backend.schemas.payment_schema import PaymentRead
 from backend.schemas.refund_schema import RefundRead
 
@@ -94,6 +95,27 @@ class AdminOfficialGamePlayerRemove(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     reason: str | None = None
+
+
+class AdminOfficialGameUserSearchEligibilityRead(BaseModel):
+    can_add: bool
+    reason: str | None = None
+
+
+class AdminOfficialGameUserSearchResultRead(BaseModel):
+    user_id: UUID
+    display_name: str
+    email: str | None = None
+    status: str
+    eligibility: AdminOfficialGameUserSearchEligibilityRead
+
+
+class AdminOfficialGameUserSearchRead(BaseModel):
+    results: list[AdminOfficialGameUserSearchResultRead] = Field(default_factory=list)
+
+
+class AdminOfficialGameParticipantRead(GameParticipantRead):
+    user_email: str | None = None
 
 
 class AdminOfficialGamePlayerRemovalExecute(BaseModel):

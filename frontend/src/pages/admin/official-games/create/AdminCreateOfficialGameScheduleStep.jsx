@@ -16,7 +16,12 @@ import {
 } from './adminCreateOfficialGameData.js'
 import { getMinimumAdminOfficialSpots } from './adminCreateOfficialGameValidation.js'
 
-function AdminCreateOfficialGameScheduleStep({ form, updateField }) {
+function AdminCreateOfficialGameScheduleStep({
+  form,
+  headingText = 'Set the schedule, player group, skill level, and price.',
+  headingTitle = "Let's start with the game",
+  updateField,
+}) {
   const hasSelectedFormat = Boolean(form.formatLabel)
   const minimumSpots = hasSelectedFormat
     ? getMinimumAdminOfficialSpots(form.formatLabel)
@@ -42,8 +47,8 @@ function AdminCreateOfficialGameScheduleStep({ form, updateField }) {
   return (
     <>
       <AdminCreateStepHeading
-        title="Let's start with the game"
-        text="Set the schedule, player group, skill level, and price."
+        title={headingTitle}
+        text={headingText}
       />
 
       <div className="admin-create-grid admin-create-grid--basics">

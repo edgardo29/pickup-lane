@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ClipboardListIcon } from '../../../../components/BrowseIcons.jsx'
+import {
+  CheckIcon,
+  ClipboardListIcon,
+  DollarIcon,
+  PlusCircleIcon,
+  ShieldCheckIcon,
+  UsersIcon,
+} from '../../../../components/BrowseIcons.jsx'
 import { FormErrorMessage } from '../../../../components/FormErrorMessage.jsx'
 import { formatAdminGameMoney } from '../shared/adminOfficialGameForm.js'
 
@@ -37,6 +44,31 @@ function PreviewFact({ label, value }) {
       <strong>{value}</strong>
     </div>
   )
+}
+
+function PreviewSectionHeading({ children, icon }) {
+  return (
+    <div className="admin-removal-preview__section-heading">
+      <span>{icon}</span>
+      <h3>{children}</h3>
+    </div>
+  )
+}
+
+function formatExactDateTime(value) {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
 }
 
 function AdminOfficialGameRemovalPreviewModal({
@@ -95,6 +127,16 @@ function AdminOfficialGameRemovalPreviewModal({
         aria-labelledby="admin-removal-preview-title"
         onClick={(event) => event.stopPropagation()}
       >
+        <button
+          aria-label="Close removal impact"
+          className="admin-official-modal-close"
+          disabled={isExecuting}
+          type="button"
+          onClick={onClose}
+        >
+          <span aria-hidden="true">X</span>
+        </button>
+
         <div className="admin-removal-preview__header">
           <span className="admin-removal-preview__icon">
             <ClipboardListIcon />
@@ -120,24 +162,31 @@ function AdminOfficialGameRemovalPreviewModal({
 
         {preview && !executionResult && (
           <div className="admin-removal-preview__body">
-            <div className="admin-removal-preview__facts">
-              <PreviewFact label="Scope" value={formatState(preview.removal_scope)} />
-              <PreviewFact label="Outcome" value={formatState(preview.classification)} />
-              <PreviewFact label="Booking" value={formatState(preview.booking_status)} />
-              <PreviewFact label="Payment" value={formatState(preview.booking_payment_status)} />
-            </div>
-
             {preview.blocking_reasons.length > 0 && (
-              <div className="admin-removal-preview__warning">
-                <strong>Cannot proceed automatically</strong>
-                {preview.blocking_reasons.map((reason) => (
-                  <p key={reason}>{reason}</p>
-                ))}
-              </div>
+              <FormErrorMessage className="admin-removal-preview__warning">
+                {[
+                  'Cannot proceed automatically.',
+                  ...preview.blocking_reasons,
+                ].join(' ')}
+              </FormErrorMessage>
             )}
 
+            <section className="admin-removal-preview__section admin-removal-preview__section--summary">
+              <PreviewSectionHeading icon={<ShieldCheckIcon />}>
+                Removal summary
+              </PreviewSectionHeading>
+              <div className="admin-removal-preview__facts">
+                <PreviewFact label="Scope" value={formatState(preview.removal_scope)} />
+                <PreviewFact label="Outcome" value={formatState(preview.classification)} />
+                <PreviewFact label="Booking" value={formatState(preview.booking_status)} />
+                <PreviewFact label="Payment" value={formatState(preview.booking_payment_status)} />
+              </div>
+            </section>
+
             <section className="admin-removal-preview__section">
-              <h3>Money impact</h3>
+              <PreviewSectionHeading icon={<DollarIcon />}>
+                Money impact
+              </PreviewSectionHeading>
               {preview.removal_scope === 'single_participant' && (
                 <p className="admin-removal-preview__waitlist-note">
                   Amounts are for the whole booking. This player has no separate payment allocation.
@@ -172,17 +221,20 @@ function AdminOfficialGameRemovalPreviewModal({
             </section>
 
             <section className="admin-removal-preview__section">
-              <h3>Affected roster</h3>
+              <PreviewSectionHeading icon={<UsersIcon />}>
+                Affected roster
+              </PreviewSectionHeading>
               <div className="admin-removal-preview__participants">
                 {preview.affected_participants.map((participant) => (
                   <div key={participant.id}>
                     <span>
                       <strong>{participant.display_name}</strong>
-                      <small>
-                        {formatState(participant.participant_type)}
-                        {' / '}
-                        {formatState(participant.participant_status)}
-                      </small>
+                      {participant.id === selectedParticipant.id
+                        && formatExactDateTime(selectedParticipant.joined_at) && (
+                          <small>
+                            Added {formatExactDateTime(selectedParticipant.joined_at)}
+                          </small>
+                        )}
                     </span>
                     <em>{formatAdminGameMoney(participant.price_cents, currency)}</em>
                   </div>
@@ -191,8 +243,10 @@ function AdminOfficialGameRemovalPreviewModal({
             </section>
 
             <section className="admin-removal-preview__section">
-              <h3>Capacity and waitlist</h3>
-              <div className="admin-removal-preview__money">
+              <PreviewSectionHeading icon={<PlusCircleIcon />}>
+                Capacity and waitlist
+              </PreviewSectionHeading>
+              <div className="admin-removal-preview__money admin-removal-preview__money--capacity">
                 <PreviewFact label="Spots opened" value={preview.spots_opened} />
                 <PreviewFact
                   label="Spots available after"
@@ -216,7 +270,9 @@ function AdminOfficialGameRemovalPreviewModal({
 
             {preview.allowed_outcomes.length > 0 && (
               <section className="admin-removal-preview__section">
-                <h3>Removal outcome</h3>
+                <PreviewSectionHeading icon={<CheckIcon />}>
+                  Removal outcome
+                </PreviewSectionHeading>
                 <p className="admin-removal-preview__outcome">
                   {preview.allowed_outcomes
                     .map((outcome) => outcomeLabels[outcome] || formatState(outcome))
@@ -321,29 +377,15 @@ function AdminOfficialGameRemovalPreviewModal({
             )}
 
             {executionResult.refund_follow_up_required && (
-              <div className="admin-removal-preview__warning">
-                <strong>Money support follow-up created</strong>
-                <p>
-                  The booking was removed, but at least one refund did not
-                  finish. The payment remains in its truthful state.
-                </p>
-              </div>
+              <FormErrorMessage className="admin-removal-preview__warning">
+                Money support follow-up created. The booking was removed, but at
+                least one refund did not finish. The payment remains in its
+                truthful state.
+              </FormErrorMessage>
             )}
           </div>
         )}
 
-        {(!canConfirm || executionResult) && (
-          <div className="admin-official-confirm-modal__actions">
-            <button
-              className="admin-official-button"
-              disabled={isExecuting}
-              type="button"
-              onClick={onClose}
-            >
-              Close
-            </button>
-          </div>
-        )}
       </section>
     </div>
   )

@@ -1881,6 +1881,88 @@ def test_admin_can_add_player_with_waived_payment(client: TestClient):
     assert audit_rows[0]["metadata"]["created_payment"] is False
 
 
+def test_admin_official_game_user_search_returns_safe_eligible_candidates(
+    client: TestClient,
+):
+    admin = create_user(client)
+    candidate = create_user(
+        client,
+        first_name="Edgardo",
+        last_name="Infante",
+        email="edgardo.search@example.com",
+    )
+    roster_player = create_user(
+        client,
+        first_name="Roster",
+        last_name="Player",
+        email="roster.search@example.com",
+    )
+    inactive_player = create_user(
+        client,
+        first_name="Inactive",
+        last_name="Player",
+        email="inactive.search@example.com",
+    )
+    set_user_role(admin["id"], "admin")
+    set_user_account_status(inactive_player["id"], "suspended")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    create_game_participant(
+        client,
+        roster_player["id"],
+        game["id"],
+        price_cents=1500,
+    )
+
+    response = client.get(
+        f"/admin/official-games/{game['id']}/user-search?q=Edgardo%20Infante"
+    )
+
+    assert response.status_code == 200, response.text
+    results = response.json()["results"]
+    assert len(results) == 1
+    result = results[0]
+    assert result == {
+        "user_id": candidate["id"],
+        "display_name": "Edgardo Infante",
+        "email": "edgardo.search@example.com",
+        "status": "active",
+        "eligibility": {
+            "can_add": True,
+            "reason": None,
+        },
+    }
+    assert "phone" not in result
+
+    roster_response = client.get(
+        f"/admin/official-games/{game['id']}/user-search?q=Roster"
+    )
+    assert roster_response.status_code == 200, roster_response.text
+    roster_result = roster_response.json()["results"][0]
+    assert roster_result["user_id"] == roster_player["id"]
+    assert roster_result["eligibility"] == {
+        "can_add": False,
+        "reason": "already_on_roster",
+    }
+
+    inactive_response = client.get(
+        f"/admin/official-games/{game['id']}/user-search?q=Inactive"
+    )
+    assert inactive_response.status_code == 200, inactive_response.text
+    inactive_result = inactive_response.json()["results"][0]
+    assert inactive_result["user_id"] == inactive_player["id"]
+    assert inactive_result["eligibility"] == {
+        "can_add": False,
+        "reason": "inactive_user",
+    }
+
+
 def test_admin_official_game_add_player_rejects_duplicate_and_full_game(
     client: TestClient,
 ):
@@ -1925,6 +2007,31 @@ def test_admin_official_game_add_player_rejects_duplicate_and_full_game(
     )
     assert full_response.status_code == 400, full_response.text
     assert "already full" in full_response.text
+
+
+def test_admin_official_game_add_player_rejects_started_game(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    create_response = client.post(
+        "/admin/official-games",
+        json=build_official_game_payload(),
+    )
+    assert create_response.status_code == 201, create_response.text
+    game = create_response.json()["game"]
+    set_game_starts_at(game["id"], datetime.now(UTC) - timedelta(minutes=5))
+
+    response = client.post(
+        f"/admin/official-games/{game['id']}/players",
+        json={"user_id": player["id"]},
+    )
+
+    assert response.status_code == 400, response.text
+    assert "before the game starts" in response.text
 
 
 def test_admin_can_remove_admin_added_player(client: TestClient):

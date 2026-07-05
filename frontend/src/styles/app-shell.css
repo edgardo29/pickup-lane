@@ -10,6 +10,8 @@
   --text: #f8fafc;
 
   min-height: 100svh;
+  max-width: 100%;
+  overflow-wrap: break-word;
   color: var(--text);
   background: #010409;
   box-shadow: 0 100vh 0 100vh #010409;
@@ -64,7 +66,9 @@
   --app-page-header-subtitle-size: 0.96rem;
   --app-page-header-subtitle-mobile-size: 0.92rem;
 
-  width: var(--app-page-shell-width);
+  width: min(var(--app-page-shell-width), 100%);
+  max-width: 100%;
+  min-width: 0;
   margin: 0 auto;
   padding: var(--app-page-shell-padding-top) 0 var(--app-page-shell-padding-bottom);
 }
@@ -132,6 +136,8 @@
 }
 
 .app-page-header {
+  min-width: 0;
+  max-width: 100%;
   display: grid;
   gap: 20px;
 }
@@ -216,6 +222,7 @@
 .app-tabs {
   width: fit-content;
   max-width: 100%;
+  min-width: 0;
   padding: 3px;
   border: 1px solid rgba(248, 250, 252, 0.1);
   border-radius: 10px;
@@ -228,6 +235,7 @@
 }
 
 .app-tabs button {
+  min-width: 0;
   min-height: 32px;
   padding: 0 12px;
   border: 1px solid transparent;
@@ -276,6 +284,8 @@
 }
 
 .app-footer {
+  max-width: 100%;
+  min-width: 0;
   --footer-width: min(1640px, calc(100% - 56px));
   --lime: var(--pl-lime, #b8ff24);
 
@@ -446,6 +456,7 @@
   top: 0;
   z-index: 20;
   min-width: 0;
+  max-width: 100%;
 }
 
 .app-nav__brand {
@@ -667,6 +678,7 @@
 
 .app-nav__actions {
   min-width: 0;
+  max-width: 100%;
   justify-self: end;
   display: inline-flex;
   align-items: center;
@@ -808,6 +820,8 @@
 
   .app-nav__links {
     width: auto;
+    min-width: 0;
+    max-width: calc(100% - 28px);
     display: grid;
     justify-content: stretch;
     justify-items: stretch;
@@ -1143,7 +1157,9 @@
   }
 
   .app-nav {
-    padding: 10px 14px;
+    padding:
+      10px max(14px, env(safe-area-inset-right))
+      10px max(14px, env(safe-area-inset-left));
   }
 
   .app-nav__brand {

@@ -14,6 +14,7 @@ depends_on = None
 def upgrade() -> None:
     # First schema migration: create the core users table that ties Firebase
     # auth identities to Pickup Lane's internal user records.
+    op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
     op.create_table(
         "users",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
@@ -94,6 +95,34 @@ def upgrade() -> None:
             "stripe_customer_id",
             name="uq_users_stripe_customer_id",
         ),
+    )
+    active_user_where = sa.text("deleted_at IS NULL")
+    op.create_index(
+        "ix_users_email_trgm",
+        "users",
+        ["email"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"email": "gin_trgm_ops"},
+        postgresql_where=active_user_where,
+    )
+    op.create_index(
+        "ix_users_first_name_trgm",
+        "users",
+        ["first_name"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"first_name": "gin_trgm_ops"},
+        postgresql_where=active_user_where,
+    )
+    op.create_index(
+        "ix_users_last_name_trgm",
+        "users",
+        ["last_name"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"last_name": "gin_trgm_ops"},
+        postgresql_where=active_user_where,
     )
 
 
