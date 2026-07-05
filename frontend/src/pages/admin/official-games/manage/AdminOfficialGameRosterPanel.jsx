@@ -200,26 +200,21 @@ function AdminOfficialGameRosterPanel({
 
     const query = searchQuery.trim()
     if (selectedUser && query === selectedUser.display_name) {
-      setSearchResults([])
-      setSearchState('idle')
-      setSearchError('')
       return undefined
     }
 
     if (query.length < USER_SEARCH_MIN_LENGTH) {
-      setSearchResults([])
-      setSearchState('idle')
-      setSearchError('')
       return undefined
     }
 
     const requestId = searchRequestIdRef.current + 1
     const abortController = new AbortController()
     searchRequestIdRef.current = requestId
-    setSearchState('loading')
-    setSearchError('')
 
     const timeoutId = window.setTimeout(async () => {
+      setSearchState('loading')
+      setSearchError('')
+
       try {
         const response = await onSearchUsers({
           query,
@@ -253,8 +248,24 @@ function AdminOfficialGameRosterPanel({
   }, [canAddPlayer, onSearchUsers, searchQuery, selectedUser])
 
   function handleSearchQueryChange(event) {
-    setSearchQuery(event.target.value)
+    const nextQuery = event.target.value
+    const shouldSearch =
+      canAddPlayer
+      && onSearchUsers
+      && nextQuery.trim().length >= USER_SEARCH_MIN_LENGTH
+
+    setSearchQuery(nextQuery)
     setSelectedUser(null)
+
+    if (shouldSearch) {
+      setSearchState('loading')
+      setSearchError('')
+      return
+    }
+
+    setSearchResults([])
+    setSearchState('idle')
+    setSearchError('')
   }
 
   function handleSelectUser(user) {
