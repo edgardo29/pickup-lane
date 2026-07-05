@@ -266,12 +266,25 @@ export async function executeAdminOfficialGamePlayerRemoval({
   )
 }
 
-export async function listAdminOfficialGameUsers({ firebaseUser, query = '' }) {
-  const search = query ? `?query=${encodeURIComponent(query)}` : ''
-
-  return apiRequest(`/admin/lookups/users${search}`, {
-    headers: await getAdminHeaders(firebaseUser),
+export async function searchAdminOfficialGameUsers({
+  firebaseUser,
+  gameId,
+  limit = 10,
+  query,
+  signal,
+}) {
+  const searchParams = new URLSearchParams({
+    q: query,
+    limit: String(limit),
   })
+
+  return apiRequest(
+    `/admin/official-games/${gameId}/user-search?${searchParams.toString()}`,
+    {
+      headers: await getAdminHeaders(firebaseUser),
+      signal,
+    },
+  )
 }
 
 export async function listOfficialGameVenueImages({ venueId }) {

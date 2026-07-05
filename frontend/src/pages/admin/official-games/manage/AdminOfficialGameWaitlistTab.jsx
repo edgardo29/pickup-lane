@@ -1,4 +1,6 @@
+import { UsersIcon } from '../../../../components/BrowseIcons.jsx'
 import { formatAdminGameMoney } from '../shared/adminOfficialGameForm.js'
+import AdminOfficialGameEmptyState from './AdminOfficialGameEmptyState.jsx'
 import {
   formatAdminDateTime,
   getStatusLabel,
@@ -39,13 +41,17 @@ function AdminOfficialGameWaitlistTab({
   )
 
   return (
-    <section className="admin-official-panel admin-manage-tab-panel" aria-label="Official game waitlist">
-      <div className="admin-manage-panel-heading">
-        <div>
-          <h2>Waitlist</h2>
-          <p>Read-only waitlist ledger for this official game.</p>
+    <section className="admin-manage-tab-panel admin-bookings-panel" aria-label="Official game waitlist">
+      <div className="admin-manage-panel-heading admin-bookings-heading">
+        <div className="admin-bookings-heading__copy">
+          <span className="admin-bookings-heading__icon">
+            <UsersIcon />
+          </span>
+          <div>
+            <h2>Waitlist</h2>
+            <p>Review pending parties waiting for a spot.</p>
+          </div>
         </div>
-        <strong>{waitlistEntries.length}</strong>
       </div>
 
       {error && (
@@ -84,7 +90,12 @@ function AdminOfficialGameWaitlistTab({
           </div>
 
           {waitlistEntries.length === 0 ? (
-            <p className="admin-official-empty">No waitlist entries yet.</p>
+            <AdminOfficialGameEmptyState
+              icon={UsersIcon}
+              title="No waitlist entries yet"
+            >
+              Players waiting for an open spot will appear here.
+            </AdminOfficialGameEmptyState>
           ) : (
             <div className="admin-bookings-table admin-waitlist-table" role="table" aria-label="Waitlist">
               <div className="admin-bookings-table__header" role="row">

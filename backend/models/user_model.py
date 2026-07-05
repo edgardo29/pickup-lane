@@ -1,7 +1,16 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, Date, DateTime, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,6 +54,27 @@ class User(Base):
         UniqueConstraint(
             "stripe_customer_id",
             name="uq_users_stripe_customer_id",
+        ),
+        Index(
+            "ix_users_email_trgm",
+            "email",
+            postgresql_using="gin",
+            postgresql_ops={"email": "gin_trgm_ops"},
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_users_first_name_trgm",
+            "first_name",
+            postgresql_using="gin",
+            postgresql_ops={"first_name": "gin_trgm_ops"},
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_users_last_name_trgm",
+            "last_name",
+            postgresql_using="gin",
+            postgresql_ops={"last_name": "gin_trgm_ops"},
+            postgresql_where=text("deleted_at IS NULL"),
         ),
     )
 

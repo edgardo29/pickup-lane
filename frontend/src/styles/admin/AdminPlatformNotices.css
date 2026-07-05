@@ -9,7 +9,8 @@
   min-width: 0;
   border: 1px solid rgba(248, 250, 252, 0.1);
   border-radius: 8px;
-  background: #0c141d;
+  background: var(--admin-panel-material);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
   overflow: hidden;
 }
 

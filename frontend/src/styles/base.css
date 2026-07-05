@@ -24,20 +24,18 @@
 
 html {
   min-width: 320px;
+  max-width: 100%;
   min-height: 100%;
   background: var(--app-bg);
-  overflow-x: hidden;
-  overflow-x: clip;
 }
 
 body {
   min-width: 320px;
+  max-width: 100%;
   min-height: 100svh;
   min-height: 100vh;
   margin: 0;
   background: var(--app-bg);
-  overflow-x: hidden;
-  overflow-x: clip;
 }
 
 a {
@@ -62,6 +60,7 @@ img {
 
 #root {
   width: 100%;
+  max-width: 100%;
   min-height: 100svh;
   min-height: 100vh;
   background: var(--app-bg);

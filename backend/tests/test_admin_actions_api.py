@@ -30,12 +30,18 @@ def test_admin_action_create_get_list_and_append_note(client: TestClient):
         target_user_id=target_user["id"],
     )
     assert admin_action["admin_user_id"] == admin_user["id"]
+    assert admin_action["admin_user_display_name"] == "Test User"
+    assert admin_action["admin_user_email"] == admin_user["email"]
     assert admin_action["target_user_id"] == target_user["id"]
+    assert admin_action["target_user_display_name"] == "Test User"
+    assert admin_action["target_user_email"] == target_user["email"]
     assert admin_action["target_admin_action_id"] is None
 
     get_response = client.get(f"/admin/actions/{admin_action['id']}")
     assert get_response.status_code == 200, get_response.text
     assert get_response.json()["id"] == admin_action["id"]
+    assert get_response.json()["admin_user_email"] == admin_user["email"]
+    assert get_response.json()["target_user_email"] == target_user["email"]
 
     list_by_admin_response = client.get(
         f"/admin/actions?admin_user_id={admin_user['id']}"
@@ -44,6 +50,13 @@ def test_admin_action_create_get_list_and_append_note(client: TestClient):
     assert any(
         item["id"] == admin_action["id"] for item in list_by_admin_response.json()
     )
+    listed_action = next(
+        item
+        for item in list_by_admin_response.json()
+        if item["id"] == admin_action["id"]
+    )
+    assert listed_action["admin_user_email"] == admin_user["email"]
+    assert listed_action["target_user_email"] == target_user["email"]
 
     list_by_action_type_response = client.get("/admin/actions?action_type=suspend_user")
     assert list_by_action_type_response.status_code == 200

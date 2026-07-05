@@ -1,9 +1,13 @@
 import { adminCreateOfficialGameSteps } from './adminCreateOfficialGameData.js'
 
-function AdminCreateOfficialGameStepRail({ activeStep }) {
+function AdminCreateOfficialGameStepRail({
+  activeStep,
+  ariaLabel = 'Create official game progress',
+  steps = adminCreateOfficialGameSteps,
+}) {
   return (
-    <ol className="admin-create-steps" aria-label="Create official game progress">
-      {adminCreateOfficialGameSteps.map((step) => (
+    <ol className="admin-create-steps" aria-label={ariaLabel}>
+      {steps.map((step) => (
         <li
           className={`admin-create-step ${step.id === activeStep ? 'active' : step.id < activeStep ? 'complete' : ''}`.trim()}
           key={step.id}

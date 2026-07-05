@@ -29,7 +29,11 @@ from backend.models import (
     Venue,
     VenueImage,
 )
-from backend.schemas.admin_action_schema import AdminActionCreate, AdminActionNoteCreate
+from backend.schemas.admin_action_schema import (
+    AdminActionCreate,
+    AdminActionNoteCreate,
+    AdminActionRead,
+)
 from backend.services.admin_action_policy import (
     ADMIN_ACTION_TARGET_FIELDS,
     TARGET_ADMIN_ACTION_ID,
@@ -65,7 +69,10 @@ from backend.services.admin_record_rules import (
     normalize_metadata_value,
     normalize_optional_text,
 )
-from backend.services.user_service import build_user_conflict_detail
+from backend.services.user_service import (
+    build_user_conflict_detail,
+    get_user_display_name,
+)
 
 METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
     "audit_note": frozenset({"note_length"}),
@@ -660,3 +667,63 @@ def list_admin_actions(
                 break
 
     return visible_actions
+
+
+def build_admin_action_user_lookup(
+    db: Session,
+    actions: list[AdminAction],
+) -> dict[uuid.UUID, User]:
+    user_ids = {action.admin_user_id for action in actions}
+    user_ids.update(
+        action.target_user_id
+        for action in actions
+        if action.target_user_id is not None
+    )
+
+    if not user_ids:
+        return {}
+
+    users = db.scalars(select(User).where(User.id.in_(list(user_ids)))).all()
+    return {user.id: user for user in users}
+
+
+def serialize_admin_action_read(
+    admin_action: AdminAction,
+    *,
+    users_by_id: dict[uuid.UUID, User] | None = None,
+) -> AdminActionRead:
+    users_by_id = users_by_id or {}
+    admin_user = users_by_id.get(admin_action.admin_user_id)
+    target_user = (
+        users_by_id.get(admin_action.target_user_id)
+        if admin_action.target_user_id is not None
+        else None
+    )
+
+    return AdminActionRead.model_validate(admin_action).model_copy(
+        update={
+            "admin_user_display_name": (
+                get_user_display_name(admin_user, fallback="Admin")
+                if admin_user is not None
+                else None
+            ),
+            "admin_user_email": admin_user.email if admin_user is not None else None,
+            "target_user_display_name": (
+                get_user_display_name(target_user, fallback="User")
+                if target_user is not None
+                else None
+            ),
+            "target_user_email": target_user.email if target_user is not None else None,
+        }
+    )
+
+
+def serialize_admin_action_reads(
+    db: Session,
+    admin_actions: list[AdminAction],
+) -> list[AdminActionRead]:
+    users_by_id = build_admin_action_user_lookup(db, admin_actions)
+    return [
+        serialize_admin_action_read(admin_action, users_by_id=users_by_id)
+        for admin_action in admin_actions
+    ]

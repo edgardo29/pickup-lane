@@ -1,5 +1,3 @@
-import { getAdminUserLabel } from '../shared/adminOfficialGameForm.js'
-
 const auditRelatedTargetFields = [
   ['target_user_id', 'User'],
   ['target_booking_id', 'Booking'],
@@ -142,7 +140,7 @@ export function getPrimaryGameChat(chatRooms) {
   return chatRooms.find((chatRoom) => chatRoom.chat_status === 'active') || chatRooms[0] || null
 }
 
-export function getChatSenderLabel(message, participants, users) {
+export function getChatSenderLabel(message, participants) {
   if (message.message_type === 'system' || message.message_type === 'pinned_update') {
     return 'Pickup Lane'
   }
@@ -152,11 +150,6 @@ export function getChatSenderLabel(message, participants, users) {
   )
   if (participant) {
     return participant.display_name_snapshot
-  }
-
-  const user = users.find((item) => item.id === message.sender_user_id)
-  if (user) {
-    return getAdminUserLabel(user)
   }
 
   return message.sender_user_id

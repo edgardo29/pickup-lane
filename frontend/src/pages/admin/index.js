@@ -17,6 +17,7 @@ export { default as AdminNeedASubPostPage } from './need-a-sub/AdminNeedASubPost
 export { default as AdminNotificationsPage } from './notifications/AdminNotificationsPage.jsx'
 export { default as AdminPlatformNoticesPage } from './platform-notices/AdminPlatformNoticesPage.jsx'
 export { default as AdminCreateOfficialGamePage } from './official-games/create/AdminCreateOfficialGamePage.jsx'
+export { default as AdminEditOfficialGamePage } from './official-games/edit/AdminEditOfficialGamePage.jsx'
 export { default as AdminOfficialGamePage } from './official-games/manage/AdminOfficialGamePage.jsx'
 export { default as AdminOfficialGamesPage } from './official-games/list/AdminOfficialGamesPage.jsx'
 export { default as AdminSignInPage } from './sign-in/AdminSignInPage.jsx'

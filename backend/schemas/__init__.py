@@ -117,6 +117,7 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameHostRemove,
     AdminOfficialGameListRead,
     AdminOfficialGameMoneyRead,
+    AdminOfficialGameParticipantRead,
     AdminOfficialGamePlayerAdd,
     AdminOfficialGamePlayerRemovalExecute,
     AdminOfficialGamePlayerRemove,
@@ -126,6 +127,9 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameRemovalRefundRead,
     AdminOfficialGameRemovalParticipantRead,
     AdminOfficialGameUpdate,
+    AdminOfficialGameUserSearchEligibilityRead,
+    AdminOfficialGameUserSearchRead,
+    AdminOfficialGameUserSearchResultRead,
     AdminOfficialGameVenuePayload,
 )
 from backend.schemas.auth_schema import (
@@ -408,6 +412,7 @@ __all__ = [
     "AdminOfficialGameHostRemove",
     "AdminOfficialGameListRead",
     "AdminOfficialGameMoneyRead",
+    "AdminOfficialGameParticipantRead",
     "AdminOfficialGamePlayerAdd",
     "AdminOfficialGamePlayerRemovalExecute",
     "AdminOfficialGamePlayerRemove",
