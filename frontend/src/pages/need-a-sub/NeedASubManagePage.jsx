@@ -51,7 +51,7 @@ function NeedASubManagePage() {
     setError,
     setNotice,
   })
-  const canCancelPost = post && ['active', 'filled'].includes(post.post_status)
+  const canCancelPost = post?.post_status === 'active'
   const isOwner = Boolean(appUser?.id && post?.owner_user_id === appUser.id)
 
   useEffect(() => {

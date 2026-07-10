@@ -20,7 +20,10 @@ import {
   hasAnyAdminPermission,
   hasAdminPermission,
 } from '../../shared/adminWorkspaceData.js'
-import { listAdminActions } from '../../shared/adminApi.js'
+import {
+  getAdminOfficialGameChatSummary,
+  listAdminActions,
+} from '../../shared/adminApi.js'
 import { useAdminAccess } from '../../shared/useAdminAccess.js'
 import AdminOfficialGameAuditTab from './AdminOfficialGameAuditTab.jsx'
 import AdminOfficialGameBookingsTab from './AdminOfficialGameBookingsTab.jsx'
@@ -31,7 +34,6 @@ import AdminOfficialGameRemovalPreviewModal from './AdminOfficialGameRemovalPrev
 import AdminOfficialGameRosterPanel from './AdminOfficialGameRosterPanel.jsx'
 import AdminOfficialGameSummary from './AdminOfficialGameSummary.jsx'
 import AdminOfficialGameWaitlistTab from './AdminOfficialGameWaitlistTab.jsx'
-import { getPrimaryGameChat } from './adminOfficialGameManageDisplay.js'
 import { useAdminOfficialGameLedgers } from './useAdminOfficialGameLedgers.js'
 import {
   addAdminOfficialGamePlayer,
@@ -39,8 +41,6 @@ import {
   cancelAdminOfficialGame,
   executeAdminOfficialGamePlayerRemoval,
   getAdminOfficialGame,
-  listAdminOfficialGameChatMessages,
-  listAdminOfficialGameChatRooms,
   listOfficialGameVenueImages,
   listAdminOfficialGameParticipants,
   previewAdminOfficialGameCancellation,
@@ -54,6 +54,7 @@ import {
 } from '../shared/adminOfficialGameForm.js'
 
 const manageTabs = [
+  { id: 'overview', label: 'Overview' },
   { id: 'roster', label: 'Roster' },
   { id: 'bookings', label: 'Bookings' },
   { id: 'waitlist', label: 'Waitlist' },
@@ -63,7 +64,8 @@ const manageTabs = [
   { id: 'audit', label: 'Activity' },
 ]
 
-const cancellableGameStatuses = new Set(['scheduled', 'full'])
+const cancellableGameStatuses = new Set(['active'])
+const officialActiveRosterStatuses = new Set(['confirmed', 'pending_payment'])
 
 function getCancelDisabledReason(game) {
   if (!game) {
@@ -75,7 +77,7 @@ function getCancelDisabledReason(game) {
   }
 
   if (!cancellableGameStatuses.has(game.game_status)) {
-    return 'Only scheduled or full games can be cancelled.'
+    return 'Only active games can be cancelled.'
   }
 
   if (new Date(game.starts_at).getTime() <= Date.now()) {
@@ -370,6 +372,125 @@ function AdminOfficialGamePhotosTab({ venueImages }) {
   )
 }
 
+function formatOfficialOverviewValue(value, fallback = 'None') {
+  return value === null || value === undefined || value === '' ? fallback : value
+}
+
+function formatOfficialStatusValue(value) {
+  const normalizedValue = String(value || '')
+  if (!normalizedValue) return 'None'
+
+  return normalizedValue
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function formatOfficialOverviewStatus(game) {
+  const lifecycleStatus = formatOfficialStatusValue(game.game_status)
+
+  if (game.publish_status === 'published') {
+    return lifecycleStatus
+  }
+
+  return `${lifecycleStatus} · ${formatOfficialStatusValue(game.publish_status)}`
+}
+
+function getOfficialActiveParticipants(participants) {
+  return participants.filter((participant) =>
+    officialActiveRosterStatuses.has(participant.participant_status),
+  )
+}
+
+function getOfficialHostLabel(game, participants) {
+  const hostParticipant = participants.find((participant) =>
+    participant.user_id === game.host_user_id
+    && participant.participant_status === 'confirmed',
+  )
+
+  return hostParticipant?.display_name_snapshot || 'No host assigned'
+}
+
+function OfficialOverviewField({ label, value }) {
+  return (
+    <div className="admin-official-overview-field">
+      <span>{label}</span>
+      <strong>{formatOfficialOverviewValue(value)}</strong>
+    </div>
+  )
+}
+
+function AdminOfficialGameOverviewTab({
+  canViewMoneyData,
+  game,
+  participants,
+  waitlistEntries,
+}) {
+  const activeParticipants = getOfficialActiveParticipants(participants)
+  const guestCount = activeParticipants.filter(
+    (participant) => participant.participant_type === 'guest',
+  ).length
+  const playerCount = activeParticipants.length - guestCount
+  const waitlistCount = canViewMoneyData ? waitlistEntries.length : 'Not available'
+
+  return (
+    <section className="admin-manage-tab-panel admin-bookings-panel" aria-label="Official game overview">
+      <section className="admin-official-panel admin-official-overview-card">
+        <div className="admin-official-panel__heading">
+          <div className="admin-official-panel-title">
+            <ClipboardListIcon />
+            <h2>Overview</h2>
+          </div>
+        </div>
+
+        <div className="admin-official-overview-fields">
+          <OfficialOverviewField
+            label="Status"
+            value={formatOfficialOverviewStatus(game)}
+          />
+          <OfficialOverviewField
+            label="Host"
+            value={getOfficialHostLabel(game, participants)}
+          />
+          <OfficialOverviewField
+            label="Address"
+            value={game.address_snapshot}
+          />
+          <OfficialOverviewField
+            label="Neighborhood"
+            value={game.neighborhood_snapshot || 'None'}
+          />
+          <OfficialOverviewField
+            label="Roster"
+            value={`${activeParticipants.length}/${game.total_spots}`}
+          />
+          <OfficialOverviewField
+            label="Players"
+            value={playerCount}
+          />
+          <OfficialOverviewField
+            label="Guests"
+            value={guestCount}
+          />
+          <OfficialOverviewField
+            label="Waitlist"
+            value={waitlistCount}
+          />
+          <OfficialOverviewField
+            label="Payment"
+            value={`${formatAdminGameMoney(game.price_per_player_cents, game.currency)} per player · In-app checkout`}
+          />
+          {game.cancel_reason && (
+            <OfficialOverviewField
+              label="Cancellation reason"
+              value={game.cancel_reason}
+            />
+          )}
+        </div>
+      </section>
+    </section>
+  )
+}
+
 function AdminOfficialGamePageContent({ gameId }) {
   const { currentUser } = useAuth()
   const {
@@ -381,8 +502,7 @@ function AdminOfficialGamePageContent({ gameId }) {
   const [game, setGame] = useState(null)
   const [workspaceContextKey, setWorkspaceContextKey] = useState('')
   const [participants, setParticipants] = useState([])
-  const [chatRooms, setChatRooms] = useState([])
-  const [chatMessages, setChatMessages] = useState([])
+  const [chatSummary, setChatSummary] = useState(null)
   const [chatContextKey, setChatContextKey] = useState('')
   const [chatLoadState, setChatLoadState] = useState('loading')
   const [chatError, setChatError] = useState('')
@@ -393,7 +513,7 @@ function AdminOfficialGamePageContent({ gameId }) {
   const [auditError, setAuditError] = useState('')
   const [auditRefreshCount, setAuditRefreshCount] = useState(0)
   const [venueImages, setVenueImages] = useState([])
-  const [activeTab, setActiveTab] = useState('roster')
+  const [activeTab, setActiveTab] = useState('overview')
   const [loadState, setLoadState] = useState('loading')
   const [mutationState, setMutationState] = useState('idle')
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false)
@@ -463,12 +583,11 @@ function AdminOfficialGamePageContent({ gameId }) {
   const visibleManageTabs = manageTabs
   const selectedTab = visibleManageTabs.some((tab) => tab.id === activeTab)
     ? activeTab
-    : visibleManageTabs[0]?.id || 'roster'
+    : visibleManageTabs[0]?.id || 'overview'
   const workspaceIsCurrent = workspaceContextKey === currentWorkspaceContextKey
   const chatIsCurrent = chatContextKey === currentAdminDataContextKey
   const auditIsCurrent = auditContextKey === currentAdminDataContextKey
-  const visibleChatRooms = chatIsCurrent ? chatRooms : []
-  const visibleChatMessages = chatIsCurrent ? chatMessages : []
+  const visibleChatSummary = chatIsCurrent ? chatSummary : null
   const visibleChatError = chatIsCurrent ? chatError : ''
   const visibleChatLoadState = chatIsCurrent ? chatLoadState : 'loading'
   const visibleAuditActions = auditIsCurrent ? auditActions : []
@@ -568,35 +687,21 @@ function AdminOfficialGamePageContent({ gameId }) {
     let isMounted = true
 
     async function loadChat() {
-      setChatRooms([])
-      setChatMessages([])
+      setChatSummary(null)
       setChatError('')
       setChatLoadState('loading')
 
       try {
-        const nextChatRooms = await listAdminOfficialGameChatRooms({
+        const nextChatSummary = await getAdminOfficialGameChatSummary({
           firebaseUser: currentUser,
           gameId,
         })
-        const safeChatRooms = nextChatRooms ?? []
-        const activeChat = getPrimaryGameChat(safeChatRooms)
-        if (!isMounted) {
-          return
-        }
-        const nextChatMessages = activeChat
-          ? await listAdminOfficialGameChatMessages({
-            chatId: activeChat.id,
-            firebaseUser: currentUser,
-            limit: 50,
-          })
-          : []
 
         if (!isMounted) {
           return
         }
 
-        setChatRooms(safeChatRooms)
-        setChatMessages(nextChatMessages ?? [])
+        setChatSummary(nextChatSummary)
         setChatContextKey(currentAdminDataContextKey)
         setChatError('')
         setChatLoadState('ready')
@@ -605,8 +710,7 @@ function AdminOfficialGamePageContent({ gameId }) {
           return
         }
 
-        setChatRooms([])
-        setChatMessages([])
+        setChatSummary(null)
         setChatContextKey(currentAdminDataContextKey)
         setChatError(error.message || 'Chat could not be loaded.')
         setChatLoadState('error')
@@ -1017,8 +1121,17 @@ function AdminOfficialGamePageContent({ gameId }) {
                 >
                   {tab.label}
                 </button>
-              ))}
+                ))}
             </nav>
+
+            {selectedTab === 'overview' && (
+              <AdminOfficialGameOverviewTab
+                canViewMoneyData={canViewMoneyData}
+                game={game}
+                participants={participants}
+                waitlistEntries={waitlistEntries}
+              />
+            )}
 
             {selectedTab === 'roster' && (
               <section className="admin-manage-roster-layout" aria-label="Official game roster">
@@ -1110,11 +1223,12 @@ function AdminOfficialGamePageContent({ gameId }) {
               canViewChat ? (
                 <AdminOfficialGameChatTab
                   chatLoadState={visibleChatLoadState}
-                  chatMessages={visibleChatMessages}
-                  chatRooms={visibleChatRooms}
+                  chatSummary={visibleChatSummary}
                   error={visibleChatError}
+                  firebaseUser={currentUser}
                   game={game}
-                  participants={participants}
+                  onRetry={() => setChatRefreshCount((count) => count + 1)}
+                  refreshToken={chatRefreshCount}
                 />
               ) : (
                 <AdminOfficialGameLockedTab

@@ -96,7 +96,7 @@ export function buildGameDetailsViewModel({
     game.game_type === 'community' &&
     currentUser?.id === game.host_user_id &&
     game.publish_status === 'published' &&
-    ['scheduled', 'full'].includes(game.game_status)
+    game.game_status === 'active'
   const canEditGame = canShowEditGame && !isGameStarted
   const isHost = currentUser?.id && currentUser.id === game.host_user_id
   const canShowOfficialAdminCancel =
@@ -105,7 +105,7 @@ export function buildGameDetailsViewModel({
     game.game_type === 'community' && (isHost || canAdminCancelCommunityGame)
   const canShowCancelGame =
     game.publish_status === 'published' &&
-    ['scheduled', 'full'].includes(game.game_status) &&
+    game.game_status === 'active' &&
     (
       canShowOfficialAdminCancel ||
       canShowCommunityCancel
@@ -122,7 +122,7 @@ export function buildGameDetailsViewModel({
     nowMs >= scheduledStartMs + JOIN_WINDOW_MINUTES * 60 * 1000
   const isGameClosed =
     !['published'].includes(game.publish_status) ||
-    !['scheduled', 'full'].includes(game.game_status) ||
+    game.game_status !== 'active' ||
     isJoinWindowClosed
   const playerGuestMax = game.allow_guests ? game.max_guests_per_booking || 0 : 0
   const isConfirmedPlayer =

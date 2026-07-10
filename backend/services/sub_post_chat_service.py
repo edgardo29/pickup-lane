@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from backend.models import (
     Notification,
     SubPost,
     SubPostChat,
+    SubPostChatMessageDetection,
     SubPostChatMessage,
     SubPostChatRead,
     SubPostRequest,
@@ -31,6 +32,10 @@ from backend.services.notification_event_service import (
     reopen_aggregated_notification,
     resolve_aggregated_notification,
 )
+from backend.services.chat_moderation_service import (
+    build_safe_message_preview,
+    detect_chat_message,
+)
 from backend.services.need_a_sub_rules import CHAT_ALLOWED_POST_STATUSES
 
 MAX_SUB_CHAT_MESSAGE_LENGTH = 300
@@ -38,7 +43,7 @@ MAX_SUB_CHAT_MESSAGES_PER_PAGE = 50
 MAX_SUB_CHAT_MESSAGES_TOTAL = 200
 MAX_SUB_CHAT_MESSAGES_PER_MINUTE = 5
 SUB_CHAT_ACCESS_GRACE_HOURS = 24
-VISIBLE_MESSAGE_STATUSES = {"visible", "flagged"}
+VISIBLE_MESSAGE_STATUS = "visible"
 NO_LONGER_IN_GAME_LABEL = "No longer in game"
 
 
@@ -119,6 +124,22 @@ def get_or_create_active_sub_post_chat(
     return db_chat
 
 
+def close_sub_post_chat_for_post(
+    db: Session,
+    *,
+    sub_post_id: uuid.UUID,
+    closed_at: datetime,
+) -> None:
+    db_chat = get_sub_post_chat_for_post(db, sub_post_id)
+    if db_chat is None:
+        return
+
+    db_chat.chat_status = "closed"
+    db_chat.closed_at = db_chat.closed_at or closed_at
+    db_chat.updated_at = closed_at
+    db.add(db_chat)
+
+
 def get_sub_post_for_chat(db: Session, db_chat: SubPostChat) -> SubPost:
     return get_sub_post_or_404(db, db_chat.sub_post_id)
 
@@ -140,6 +161,23 @@ def is_confirmed_sub_post_requester(
     )
 
 
+def is_current_or_former_confirmed_sub_post_requester(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> bool:
+    return (
+        db.scalar(
+            select(SubPostRequest.id).where(
+                SubPostRequest.sub_post_id == sub_post_id,
+                SubPostRequest.requester_user_id == user_id,
+                SubPostRequest.confirmed_at.is_not(None),
+            )
+        )
+        is not None
+    )
+
+
 def is_sub_post_chat_member(
     db: Session,
     sub_post: SubPost,
@@ -149,6 +187,21 @@ def is_sub_post_chat_member(
         return True
 
     return is_confirmed_sub_post_requester(db, sub_post.id, user_id)
+
+
+def is_sub_post_chat_write_participant(
+    db: Session,
+    sub_post: SubPost,
+    user_id: uuid.UUID,
+) -> bool:
+    if sub_post.owner_user_id == user_id:
+        return True
+
+    return is_current_or_former_confirmed_sub_post_requester(
+        db,
+        sub_post.id,
+        user_id,
+    )
 
 
 def validate_sub_post_chat_access(
@@ -190,13 +243,21 @@ def require_sub_post_chat_can_write(
     db_chat: SubPostChat,
     user: User,
 ) -> SubPost:
+    sub_post = get_sub_post_for_chat(db, db_chat)
+    if not is_sub_post_chat_write_participant(db, sub_post, user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the post owner and confirmed players can use this chat.",
+        )
+
     if db_chat.chat_status != "active":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This Need a Sub chat cannot receive messages.",
         )
 
-    return require_sub_post_chat_member(db, db_chat, user)
+    validate_sub_post_chat_access(db, sub_post, user)
+    return sub_post
 
 
 def list_sub_post_chat_member_user_ids(
@@ -257,6 +318,123 @@ def normalize_message_body(message_body: str) -> str:
     return normalized
 
 
+def sender_repeated_sub_chat_message(
+    db: Session,
+    chat_id: uuid.UUID,
+    sender_user_id: uuid.UUID,
+    message_body: str,
+    *,
+    exclude_message_id: uuid.UUID | None = None,
+) -> bool:
+    statement = select(SubPostChatMessage.message_body).where(
+        SubPostChatMessage.chat_id == chat_id,
+        SubPostChatMessage.sender_user_id == sender_user_id,
+        SubPostChatMessage.message_type == "text",
+        SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
+    )
+    if exclude_message_id is not None:
+        statement = statement.where(SubPostChatMessage.id != exclude_message_id)
+
+    latest_body = db.scalar(
+        statement.order_by(
+            SubPostChatMessage.created_at.desc(),
+            SubPostChatMessage.id.desc(),
+        ).limit(1)
+    )
+    return (
+        latest_body is not None
+        and latest_body.strip().casefold() == message_body.strip().casefold()
+    )
+
+
+def replace_sub_chat_message_detections(
+    db: Session,
+    message: SubPostChatMessage,
+    *,
+    is_repeated_message: bool,
+) -> None:
+    db.execute(
+        delete(SubPostChatMessageDetection).where(
+            SubPostChatMessageDetection.message_id == message.id
+        )
+    )
+    detections = detect_chat_message(
+        message.message_body,
+        is_repeated_message=is_repeated_message,
+    )
+    message.review_status = "needs_review" if detections else "clear"
+    message.reviewed_at = None
+    message.reviewed_by_user_id = None
+    for detection in detections:
+        db.add(
+            SubPostChatMessageDetection(
+                id=uuid.uuid4(),
+                message_id=message.id,
+                category=detection.category,
+                severity=detection.severity,
+                rule_key=detection.rule_key,
+                matched_preview=detection.matched_preview,
+            )
+        )
+
+
+def refresh_sub_post_chat_summary(db: Session, db_chat: SubPostChat) -> None:
+    db_chat.message_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(SubPostChatMessage)
+            .where(
+                SubPostChatMessage.chat_id == db_chat.id,
+                SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
+            )
+        )
+        or 0
+    )
+    db_chat.needs_review_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(SubPostChatMessage)
+            .where(
+                SubPostChatMessage.chat_id == db_chat.id,
+                SubPostChatMessage.review_status == "needs_review",
+            )
+        )
+        or 0
+    )
+    db_chat.removed_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(SubPostChatMessage)
+            .where(
+                SubPostChatMessage.chat_id == db_chat.id,
+                SubPostChatMessage.visibility_status == "removed",
+            )
+        )
+        or 0
+    )
+    latest_visible_message = db.scalar(
+        select(SubPostChatMessage)
+        .where(
+            SubPostChatMessage.chat_id == db_chat.id,
+            SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
+        )
+        .order_by(SubPostChatMessage.created_at.desc(), SubPostChatMessage.id.desc())
+        .limit(1)
+    )
+    if latest_visible_message is None:
+        db_chat.latest_message_id = None
+        db_chat.latest_message_preview = None
+        db_chat.latest_message_at = None
+    else:
+        db_chat.latest_message_id = latest_visible_message.id
+        db_chat.latest_message_preview = build_safe_message_preview(
+            latest_visible_message.message_body
+        )
+        db_chat.latest_message_at = latest_visible_message.created_at
+    db_chat.updated_at = now_utc()
+    db.add(db_chat)
+
+
 def validate_sender_rate_limit(
     db: Session,
     chat_id: uuid.UUID,
@@ -271,7 +449,7 @@ def validate_sender_rate_limit(
             SubPostChatMessage.chat_id == chat_id,
             SubPostChatMessage.sender_user_id == sender_user_id,
             SubPostChatMessage.message_type == "text",
-            SubPostChatMessage.moderation_status.in_(VISIBLE_MESSAGE_STATUSES),
+            SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
             SubPostChatMessage.created_at >= window_start,
         )
     ) or 0
@@ -290,7 +468,7 @@ def validate_total_message_limit(db: Session, chat_id: uuid.UUID) -> None:
         .where(
             SubPostChatMessage.chat_id == chat_id,
             SubPostChatMessage.message_type == "text",
-            SubPostChatMessage.moderation_status.in_(VISIBLE_MESSAGE_STATUSES),
+            SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
         )
     ) or 0
 
@@ -311,7 +489,7 @@ def get_latest_visible_sub_chat_messages(
     page_limit = max(1, min(limit, MAX_SUB_CHAT_MESSAGES_PER_PAGE))
     statement = select(SubPostChatMessage).where(
         SubPostChatMessage.chat_id == chat_id,
-        SubPostChatMessage.moderation_status.in_(VISIBLE_MESSAGE_STATUSES),
+        SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
     )
 
     if before_created_at is not None:
@@ -337,7 +515,7 @@ def get_latest_visible_sub_chat_message(
         select(SubPostChatMessage)
         .where(
             SubPostChatMessage.chat_id == chat_id,
-            SubPostChatMessage.moderation_status.in_(VISIBLE_MESSAGE_STATUSES),
+            SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
         )
         .order_by(SubPostChatMessage.created_at.desc(), SubPostChatMessage.id.desc())
         .limit(1)
@@ -355,7 +533,7 @@ def count_unread_sub_chat_messages(
         .select_from(SubPostChatMessage)
         .where(
             SubPostChatMessage.chat_id == chat_id,
-            SubPostChatMessage.moderation_status.in_(VISIBLE_MESSAGE_STATUSES),
+            SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
             SubPostChatMessage.sender_user_id != user.id,
         )
     )
@@ -570,7 +748,7 @@ def reconcile_sub_chat_notifications_after_moderation(
         )
         unread_filters = [
             SubPostChatMessage.chat_id == db_chat.id,
-            SubPostChatMessage.moderation_status.in_(VISIBLE_MESSAGE_STATUSES),
+            SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
             SubPostChatMessage.sender_user_id != notification.user_id,
         ]
         if read_state is not None:
@@ -647,12 +825,18 @@ def serialize_sub_chat_message(
         "sender_status_label": None if is_current_member else NO_LONGER_IN_GAME_LABEL,
         "message_type": message.message_type,
         "message_body": message.message_body,
-        "moderation_status": message.moderation_status,
+        "visibility_status": message.visibility_status,
+        "review_status": message.review_status,
         "created_at": message.created_at,
         "updated_at": message.updated_at,
         "edited_at": message.edited_at,
-        "deleted_at": message.deleted_at,
-        "deleted_by_user_id": message.deleted_by_user_id,
+        "reviewed_at": message.reviewed_at,
+        "reviewed_by_user_id": message.reviewed_by_user_id,
+        "removed_at": message.removed_at,
+        "removed_by_user_id": message.removed_by_user_id,
+        "removed_source": message.removed_source,
+        "restored_at": message.restored_at,
+        "restored_by_user_id": message.restored_by_user_id,
     }
 
 
@@ -668,6 +852,12 @@ def serialize_sub_post_chat(
         created_at=db_chat.created_at,
         updated_at=db_chat.updated_at,
         closed_at=db_chat.closed_at,
+        message_count=db_chat.message_count,
+        needs_review_count=db_chat.needs_review_count,
+        removed_count=db_chat.removed_count,
+        latest_message_id=db_chat.latest_message_id,
+        latest_message_preview=db_chat.latest_message_preview,
+        latest_message_at=db_chat.latest_message_at,
         unread_count=unread_count,
         last_read_at=last_read_at,
     )
@@ -801,6 +991,16 @@ def list_sub_post_chat_messages_workflow(
         limit=limit,
         before_created_at=before_created_at,
     )
+    if before_created_at is None:
+        mark_sub_chat_read(db, db_chat, current_user)
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc.orig),
+            ) from exc
     return [serialize_sub_chat_message(db, message, sub_post) for message in messages]
 
 
@@ -811,13 +1011,14 @@ def create_sub_post_chat_message_workflow(
     current_user: User,
 ) -> dict:
     current_time = now_utc()
-    sub_post, db_chat = get_accessible_sub_post_chat_or_404(
-        db,
-        sub_post_id,
-        current_user,
-        lock_post_for_update=True,
-    )
-    require_sub_post_chat_can_write(db, db_chat, current_user)
+    sub_post = get_sub_post_or_404(db, sub_post_id, lock_for_update=True)
+    db_chat = get_sub_post_chat_for_post(db, sub_post.id)
+    if db_chat is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub chat not found.",
+        )
+    sub_post = require_sub_post_chat_can_write(db, db_chat, current_user)
 
     if payload.chat_id != db_chat.id:
         raise HTTPException(
@@ -828,6 +1029,12 @@ def create_sub_post_chat_message_workflow(
     message_body = normalize_message_body(payload.message_body)
     validate_sender_rate_limit(db, db_chat.id, current_user.id, current_time)
     validate_total_message_limit(db, db_chat.id)
+    is_repeated_message = sender_repeated_sub_chat_message(
+        db,
+        db_chat.id,
+        current_user.id,
+        message_body,
+    )
     sender_display_name, sender_initials = build_sender_snapshot(current_user)
     new_message = SubPostChatMessage(
         id=uuid.uuid4(),
@@ -837,12 +1044,20 @@ def create_sub_post_chat_message_workflow(
         sender_initials_snapshot=sender_initials,
         message_type="text",
         message_body=message_body,
-        moderation_status="visible",
+        visibility_status=VISIBLE_MESSAGE_STATUS,
     )
 
     try:
         db.add(new_message)
         db.flush()
+        replace_sub_chat_message_detections(
+            db,
+            new_message,
+            is_repeated_message=is_repeated_message,
+        )
+        db.add(new_message)
+        db.flush()
+        refresh_sub_post_chat_summary(db, db_chat)
         create_or_update_sub_chat_notifications(
             db,
             sub_post=sub_post,
@@ -879,7 +1094,7 @@ def update_sub_post_chat_message_workflow(
             detail="Need a Sub chat not found.",
         )
 
-    require_sub_post_chat_member(db, db_chat, current_user)
+    require_sub_post_chat_can_write(db, db_chat, current_user)
     db_message = db.get(SubPostChatMessage, message_id)
     if db_message is None or db_message.chat_id != db_chat.id:
         raise HTTPException(
@@ -893,35 +1108,57 @@ def update_sub_post_chat_message_workflow(
             detail="Only the sender can update this Need a Sub chat message.",
         )
 
-    if db_message.moderation_status in {
-        "hidden_by_admin",
-        "removed_by_admin",
-        "deleted_by_sender",
-    }:
+    if db_message.visibility_status == "removed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Hidden or deleted Need a Sub chat messages cannot be updated.",
+            detail="Removed Need a Sub chat messages cannot be updated.",
         )
 
     update_data = payload.model_dump(exclude_unset=True)
+    did_remove_message = False
     if "message_body" in update_data:
         db_message.message_body = normalize_message_body(update_data["message_body"])
         db_message.edited_at = now_utc()
+        is_repeated_message = sender_repeated_sub_chat_message(
+            db,
+            db_chat.id,
+            current_user.id,
+            db_message.message_body,
+            exclude_message_id=db_message.id,
+        )
+        replace_sub_chat_message_detections(
+            db,
+            db_message,
+            is_repeated_message=is_repeated_message,
+        )
 
-    if "moderation_status" in update_data:
-        if update_data["moderation_status"] != "deleted_by_sender":
+    if "visibility_status" in update_data:
+        if update_data["visibility_status"] != "removed":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only sender deletion is supported for this message.",
+                detail="Only sender removal is supported for this message.",
             )
-        db_message.moderation_status = "deleted_by_sender"
-        db_message.deleted_at = now_utc()
-        db_message.deleted_by_user_id = current_user.id
+        current_time = now_utc()
+        db_message.visibility_status = "removed"
+        db_message.removed_source = "sender"
+        db_message.removed_at = current_time
+        db_message.removed_by_user_id = current_user.id
+        db_message.removed_reason = "Sender removed message."
+        did_remove_message = True
 
     db_message.updated_at = now_utc()
 
     try:
         db.add(db_message)
+        db.flush()
+        refresh_sub_post_chat_summary(db, db_chat)
+        if did_remove_message:
+            reconcile_sub_chat_notifications_after_moderation(
+                db,
+                db_chat=db_chat,
+                moderated_at=db_message.updated_at,
+            )
+        db.flush()
         db.commit()
         db.refresh(db_message)
     except IntegrityError as exc:

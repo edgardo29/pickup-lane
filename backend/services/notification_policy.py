@@ -336,9 +336,9 @@ NOTIFICATION_TYPE_CONFIG = {
     "sub_post_canceled": NotificationTypeConfig(
         notification_category="game_activity",
         notification_domains=frozenset({"need_a_sub"}),
-        title="Post canceled",
-        summary="This Need a Sub post was canceled.",
-        body="This Need a Sub post was canceled by the host.",
+        title="Post cancelled",
+        summary="This Need a Sub post was cancelled.",
+        body="This Need a Sub post was cancelled by the host.",
         action_key=None,
         icon="MapPin",
         severity="danger",

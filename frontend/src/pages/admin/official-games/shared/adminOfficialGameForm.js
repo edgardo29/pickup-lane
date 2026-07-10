@@ -6,16 +6,17 @@ import {
   buildOfficialGameIsoDateTime,
   getOfficialGameDateTimeInputs,
 } from './adminOfficialGameDateTime.js'
+import { formatAdminMoney } from '../../shared/adminMoneyFormatters.js'
 
 const MAX_OFFICIAL_GUESTS = 2
 
 export const officialGameStatusOptions = [
   { label: 'All statuses', value: '' },
-  { label: 'Scheduled', value: 'scheduled' },
-  { label: 'Full', value: 'full' },
-  { label: 'Cancelled', value: 'cancelled' },
+  { label: 'Active', value: 'active' },
   { label: 'Completed', value: 'completed' },
-  { label: 'Abandoned', value: 'abandoned' },
+  { label: 'Cancelled', value: 'cancelled' },
+  { label: 'Expired', value: 'expired' },
+  { label: 'Removed', value: 'removed' },
 ]
 
 export const officialGameFormatOptions = ['3v3', '4v4', '5v5', '6v6', '7v7', '8v8', '9v9', '10v10', '11v11']
@@ -207,10 +208,7 @@ export function formatOfficialGameSchedule(game) {
 }
 
 export function formatAdminGameMoney(cents, currency = 'USD') {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-  }).format((Number(cents) || 0) / 100)
+  return formatAdminMoney(cents, currency)
 }
 
 export function getAdminUserLabel(user) {

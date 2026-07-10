@@ -1155,8 +1155,4 @@ def build_booking_participants(
 
 
 def sync_game_capacity_status(db: Session, db_game: Game) -> None:
-    roster_count = count_roster_players(db, db_game.id)
-    if roster_count >= db_game.total_spots:
-        db_game.game_status = "full"
-    elif db_game.game_status == "full":
-        db_game.game_status = "scheduled"
+    db.flush()

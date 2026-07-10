@@ -1,6 +1,7 @@
 import { ArrowRight } from 'lucide-react'
 import { InfoIcon, UserIcon } from '../../components/AuthIcons.jsx'
 import { FormErrorMessage } from '../../components/FormErrorMessage.jsx'
+import { minimumSignupAge } from '../../features/auth/authConstants.js'
 import { AuthField } from '../../features/auth/AuthFields.jsx'
 import { BirthdayField } from '../../features/auth/BirthdayField.jsx'
 
@@ -57,7 +58,7 @@ export function FinishProfileForm({
 
       <p className="auth-inline-note">
         <InfoIcon />
-        You must be at least 13 years old to use Pickup Lane.
+        You must be at least {minimumSignupAge} years old to use Pickup Lane.
       </p>
 
       <FormErrorMessage>{error}</FormErrorMessage>

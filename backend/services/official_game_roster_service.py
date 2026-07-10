@@ -28,6 +28,7 @@ from backend.schemas.admin_official_game_schema import (
 from backend.services.admin_action_service import record_admin_action
 from backend.services.game_rules import (
     ACTIVE_JOIN_STATUSES,
+    OPEN_GAME_STATUSES,
     build_game_conflict_detail,
     ensure_timezone,
     require_game_not_started,
@@ -171,11 +172,11 @@ def get_official_host_roster_participant(
 def require_official_host_change_allowed(game: Game, *, action: str) -> None:
     if (
         game.publish_status != "published"
-        or game.game_status not in {"scheduled", "full"}
+        or game.game_status not in OPEN_GAME_STATUSES
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Host can only be {action} for published scheduled or full official games.",
+            detail=f"Host can only be {action} for published active official games.",
         )
 
     require_game_not_started(
@@ -216,7 +217,7 @@ def get_add_player_eligibility_reason(
 ) -> str | None:
     if (
         game.publish_status != "published"
-        or game.game_status not in {"scheduled", "full"}
+        or game.game_status not in OPEN_GAME_STATUSES
     ):
         return "game_not_addable"
 
@@ -333,11 +334,11 @@ def add_official_game_player(
     game = get_official_game_or_404(db, game_id, for_update=True)
     if (
         game.publish_status != "published"
-        or game.game_status not in {"scheduled", "full"}
+        or game.game_status not in OPEN_GAME_STATUSES
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Players can only be added to published scheduled or full official games.",
+            detail="Players can only be added to published active official games.",
         )
 
     require_game_not_started(
@@ -578,11 +579,11 @@ def remove_official_game_player(
     game = get_official_game_or_404(db, game_id, for_update=True)
     if (
         game.publish_status != "published"
-        or game.game_status not in {"scheduled", "full"}
+        or game.game_status not in OPEN_GAME_STATUSES
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Players can only be removed from published scheduled or full official games.",
+            detail="Players can only be removed from published active official games.",
         )
 
     participant = db.scalar(

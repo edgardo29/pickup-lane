@@ -1,3 +1,5 @@
+import { formatAdminMoney } from '../shared/adminMoneyFormatters.js'
+
 export function formatAdminNeedASubDateTime(value, timeZone = undefined) {
   if (!value) return 'Not recorded'
 
@@ -16,10 +18,7 @@ export function formatAdminNeedASubDateTime(value, timeZone = undefined) {
 }
 
 export function formatAdminNeedASubMoney(cents, currency = 'USD') {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: currency || 'USD',
-  }).format(Number(cents || 0) / 100)
+  return formatAdminMoney(cents, currency)
 }
 
 export function formatAdminNeedASubStatus(value) {

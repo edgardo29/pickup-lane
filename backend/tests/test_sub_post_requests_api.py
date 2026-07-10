@@ -37,6 +37,16 @@ def notification_types(notifications: list[dict]) -> set[str]:
     return {notification["notification_type"] for notification in notifications}
 
 
+def get_stored_filled_at(post_id: str):
+    from backend.database import SessionLocal
+    from backend.models import SubPost
+
+    with SessionLocal() as db:
+        post = db.get(SubPost, UUID(post_id))
+        assert post is not None
+        return post.filled_at
+
+
 def test_sub_post_request_routes_reject_suspended_user(client: TestClient):
     user = create_user(client)
     set_user_account_status(user["id"], "suspended")
@@ -64,7 +74,9 @@ def test_sub_post_request_routes_reject_suspended_user(client: TestClient):
         assert response.json()["detail"] == "Active account required."
 
 
-def test_sub_post_request_owner_accept_marks_confirmed_and_filled(client: TestClient):
+def test_sub_post_request_owner_accept_marks_confirmed_and_tracks_filled_at(
+    client: TestClient,
+):
     owner = create_user(client)
     requester_one = create_user(client)
     requester_two = create_user(client)
@@ -127,8 +139,10 @@ def test_sub_post_request_owner_accept_marks_confirmed_and_filled(client: TestCl
 
     get_post_after_full = client.get(f"/need-a-sub/posts/{post['id']}")
     assert get_post_after_full.status_code == 200
-    assert get_post_after_full.json()["post_status"] == "filled"
-    assert get_post_after_full.json()["confirmed_count"] == 2
+    post_after_full = get_post_after_full.json()
+    assert post_after_full["post_status"] == "active"
+    assert post_after_full["confirmed_count"] == 2
+    assert get_stored_filled_at(post["id"]) is not None
 
 
 def test_sub_post_request_blocks_owner_and_duplicate_requests(client: TestClient):
@@ -353,7 +367,7 @@ def test_sub_post_request_blocks_when_post_waitlist_is_full(client: TestClient):
     assert "waitlist is full" in blocked_response.text
 
 
-def test_sub_post_request_filled_post_accepts_new_waitlist_requests(client: TestClient):
+def test_sub_post_request_full_post_accepts_new_waitlist_requests(client: TestClient):
     owner = create_user(client)
     first = create_user(client)
     second = create_user(client)
@@ -365,9 +379,10 @@ def test_sub_post_request_filled_post_accepts_new_waitlist_requests(client: Test
     authenticate_as(owner["id"])
     assert client.patch(f"/need-a-sub/requests/{first_request['id']}/accept").status_code == 200
     assert client.patch(f"/need-a-sub/requests/{second_request['id']}/accept").status_code == 200
-    filled_post = client.get(f"/need-a-sub/posts/{post['id']}")
-    assert filled_post.status_code == 200
-    assert filled_post.json()["post_status"] == "filled"
+    full_post = client.get(f"/need-a-sub/posts/{post['id']}")
+    assert full_post.status_code == 200
+    assert full_post.json()["post_status"] == "active"
+    assert get_stored_filled_at(post["id"]) is not None
 
     waitlist_response = request_spot(client, waitlisted["id"], post, 0)
     assert waitlist_response.status_code == 201, waitlist_response.text
@@ -405,7 +420,7 @@ def test_sub_post_request_actions_reject_canceled_post_even_with_stale_request(
 
     with SessionLocal() as db:
         db_post = db.get(SubPost, UUID(post["id"]))
-        db_post.post_status = "canceled"
+        db_post.post_status = "cancelled"
         db_post.canceled_at = datetime.now(UTC)
         db_post.canceled_by_user_id = UUID(owner["id"])
         db.commit()
@@ -420,21 +435,21 @@ def test_sub_post_request_actions_reject_canceled_post_even_with_stale_request(
         json={},
     )
     assert decline_response.status_code == 400, decline_response.text
-    assert "Only active or filled posts can be reviewed" in decline_response.text
+    assert "Only active posts can be reviewed" in decline_response.text
 
     owner_cancel_response = client.patch(
         f"/need-a-sub/requests/{sub_request['id']}/cancel-by-owner",
         json={},
     )
     assert owner_cancel_response.status_code == 400, owner_cancel_response.text
-    assert "Only active or filled posts can be reviewed" in owner_cancel_response.text
+    assert "Only active posts can be reviewed" in owner_cancel_response.text
 
     authenticate_as(requester["id"])
     requester_cancel_response = client.patch(
         f"/need-a-sub/requests/{sub_request['id']}/cancel"
     )
     assert requester_cancel_response.status_code == 400, requester_cancel_response.text
-    assert "Only active or filled posts can be updated" in requester_cancel_response.text
+    assert "Only active posts can be updated" in requester_cancel_response.text
 
 
 def test_sub_post_request_wrong_position_does_not_fill_post(client: TestClient):
@@ -473,7 +488,7 @@ def test_sub_post_request_wrong_position_does_not_fill_post(client: TestClient):
     assert response.json()["post_status"] == "active"
 
 
-def test_sub_post_request_cancel_reopens_filled_post(client: TestClient):
+def test_sub_post_request_cancel_clears_full_state(client: TestClient):
     owner = create_user(client)
     first = create_user(client)
     second = create_user(client)
@@ -484,13 +499,17 @@ def test_sub_post_request_cancel_reopens_filled_post(client: TestClient):
     authenticate_as(owner["id"])
     client.patch(f"/need-a-sub/requests/{first_request['id']}/accept")
     client.patch(f"/need-a-sub/requests/{second_request['id']}/accept")
-    assert client.get(f"/need-a-sub/posts/{post['id']}").json()["post_status"] == "filled"
+    full_post = client.get(f"/need-a-sub/posts/{post['id']}").json()
+    assert full_post["post_status"] == "active"
+    assert get_stored_filled_at(post["id"]) is not None
 
     authenticate_as(second["id"])
     cancel_response = client.patch(f"/need-a-sub/requests/{second_request['id']}/cancel")
     assert cancel_response.status_code == 200, cancel_response.text
     assert cancel_response.json()["request_status"] == "canceled_by_player"
-    assert client.get(f"/need-a-sub/posts/{post['id']}").json()["post_status"] == "active"
+    reopened_post = client.get(f"/need-a-sub/posts/{post['id']}").json()
+    assert reopened_post["post_status"] == "active"
+    assert get_stored_filled_at(post["id"]) is None
 
 
 def test_sub_post_request_expiration_resolves_owner_request_activity(

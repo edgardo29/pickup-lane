@@ -11,12 +11,16 @@ import { listAdminOfficialGames } from '../shared/adminOfficialGamesApi.js'
 
 const OFFICIAL_GAMES_LIST_LIMIT = 24
 const SEARCH_DEBOUNCE_MS = 300
+const SEARCH_MIN_LENGTH = 3
 const SEARCH_MAX_LENGTH = 120
 
 const officialGameViewTabs = [
   { key: 'active', label: 'Active' },
+  { key: 'full', label: 'Full' },
   { key: 'completed', label: 'Completed' },
   { key: 'cancelled', label: 'Cancelled' },
+  { key: 'expired', label: 'Expired' },
+  { key: 'removed', label: 'Removed' },
 ]
 
 function useDebouncedValue(value, delayMs) {
@@ -79,45 +83,63 @@ function AdminOfficialGamesPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const dateInputRef = useRef(null)
   const requestIdRef = useRef(0)
-  const debouncedSearch = useDebouncedValue(searchInput.trim(), SEARCH_DEBOUNCE_MS)
+  const debouncedSearchInput = useDebouncedValue(
+    searchInput.trim(),
+    SEARCH_DEBOUNCE_MS,
+  )
+  const activeSearch =
+    debouncedSearchInput.length >= SEARCH_MIN_LENGTH ? debouncedSearchInput : ''
 
   useEffect(() => {
     let isMounted = true
     const requestId = requestIdRef.current + 1
     requestIdRef.current = requestId
+    const loadTimer = window.setTimeout(() => {
+      if (!isMounted || requestId !== requestIdRef.current) {
+        return
+      }
 
-    listAdminOfficialGames({
-      firebaseUser: currentUser,
-      limit: OFFICIAL_GAMES_LIST_LIMIT,
-      search: debouncedSearch,
-      startsOn: selectedDate,
-      view: activeView,
-    })
-      .then((gameResponse) => {
-        if (!isMounted || requestId !== requestIdRef.current) {
-          return
-        }
+      setLoadState('loading')
+      setIsLoadingMore(false)
+      setPageError('')
+      setGames([])
+      setNextCursor(null)
+      setHasMore(false)
 
-        setGames(gameResponse.games ?? [])
-        setNextCursor(gameResponse.next_cursor ?? null)
-        setHasMore(Boolean(gameResponse.has_more))
-        setLoadState('ready')
+      listAdminOfficialGames({
+        firebaseUser: currentUser,
+        limit: OFFICIAL_GAMES_LIST_LIMIT,
+        search: activeSearch,
+        startsOn: selectedDate,
+        view: activeView,
       })
-      .catch((error) => {
-        if (!isMounted || requestId !== requestIdRef.current) {
-          return
-        }
+        .then((gameResponse) => {
+          if (!isMounted || requestId !== requestIdRef.current) {
+            return
+          }
 
-        setPageError(error.message || 'Official games could not be loaded.')
-        setLoadState('error')
-      })
+          setGames(gameResponse.games ?? [])
+          setNextCursor(gameResponse.next_cursor ?? null)
+          setHasMore(Boolean(gameResponse.has_more))
+          setLoadState('ready')
+        })
+        .catch((error) => {
+          if (!isMounted || requestId !== requestIdRef.current) {
+            return
+          }
+
+          setPageError(error.message || 'Official games could not be loaded.')
+          setLoadState('error')
+        })
+    }, 0)
 
     return () => {
       isMounted = false
+      window.clearTimeout(loadTimer)
     }
-  }, [activeView, currentUser, debouncedSearch, refreshKey, selectedDate])
+  }, [activeSearch, activeView, currentUser, refreshKey, selectedDate])
 
-  const hasFilters = Boolean(debouncedSearch || selectedDate)
+  const hasFilters = Boolean(activeSearch || selectedDate)
   const gameCountLabel = useMemo(() => {
     const count = games.length
     return `${count} ${count === 1 ? 'game' : 'games'}`
@@ -139,7 +161,6 @@ function AdminOfficialGamesPage() {
   }
 
   function clearSearch() {
-    prepareFreshLoad()
     setSearchInput('')
   }
 
@@ -171,7 +192,7 @@ function AdminOfficialGamesPage() {
       cursor: nextCursor,
       firebaseUser: currentUser,
       limit: OFFICIAL_GAMES_LIST_LIMIT,
-      search: debouncedSearch,
+      search: activeSearch,
       startsOn: selectedDate,
       view: activeView,
     })
@@ -237,7 +258,6 @@ function AdminOfficialGamesPage() {
             <Search aria-hidden="true" />
             <input
               onChange={(event) => {
-                prepareFreshLoad()
                 setSearchInput(event.target.value)
               }}
               maxLength={SEARCH_MAX_LENGTH}

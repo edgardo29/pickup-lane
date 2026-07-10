@@ -141,7 +141,7 @@ def list_owner_sub_post_requests(
     expire_due_posts_and_requests(db)
     sub_post = get_sub_post_or_404(db, sub_post_id)
     require_owner(sub_post, owner)
-    require_live_sub_post(sub_post, "Only active or filled posts can be reviewed.")
+    require_live_sub_post(sub_post, "Only active posts can be reviewed.")
     requests = list(
         db.scalars(
             select(SubPostRequest)
@@ -206,7 +206,7 @@ def create_request(
     position = get_position_or_404(db, sub_post_position_id, lock_for_update=True)
     current_time = now_utc()
 
-    if sub_post.post_status not in {"active", "filled"}:
+    if sub_post.post_status != "active":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Requests can only be created for open posts.",
@@ -387,7 +387,7 @@ def owner_decline_request(
     expire_due_posts_and_requests(db)
     sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
     require_owner(sub_post, owner)
-    require_live_sub_post(sub_post, "Only active or filled posts can be reviewed.")
+    require_live_sub_post(sub_post, "Only active posts can be reviewed.")
     require_before_post_start(sub_post, "Requests cannot be declined after the game starts.")
 
     if sub_request.request_status not in {"pending", "sub_waitlist"}:
@@ -456,7 +456,7 @@ def requester_cancel_request(
             detail="Only the requester can cancel this request.",
         )
     require_before_post_start(sub_post, "Requests cannot be canceled after the game starts.")
-    require_live_sub_post(sub_post, "Only active or filled posts can be updated.")
+    require_live_sub_post(sub_post, "Only active posts can be updated.")
 
     if sub_request.request_status not in ACTIVE_REQUEST_STATUSES:
         raise HTTPException(
@@ -532,7 +532,7 @@ def owner_cancel_request(
     sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
     require_owner(sub_post, owner)
     require_before_post_start(sub_post, "Confirmed players cannot be removed after the game starts.")
-    require_live_sub_post(sub_post, "Only active or filled posts can be reviewed.")
+    require_live_sub_post(sub_post, "Only active posts can be reviewed.")
 
     if sub_request.request_status != "confirmed":
         raise HTTPException(

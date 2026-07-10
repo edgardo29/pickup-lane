@@ -178,7 +178,7 @@ def host_edit_game_workflow(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only published scheduled or full games can be edited.",
+            detail="Only published active games can be edited.",
         )
 
     now = datetime.now(timezone.utc)

@@ -13,7 +13,7 @@ class GameChatCreate(BaseModel):
 
     game_id: UUID
     chat_status: str = "active"
-    locked_at: datetime | None = None
+    closed_at: datetime | None = None
 
 
 class GameChatEnsureCreate(BaseModel):
@@ -31,7 +31,13 @@ class GameChatRead(BaseModel):
     chat_status: str
     created_at: datetime
     updated_at: datetime
-    locked_at: datetime | None
+    closed_at: datetime | None
+    message_count: int = 0
+    needs_review_count: int = 0
+    removed_count: int = 0
+    latest_message_id: UUID | None = None
+    latest_message_preview: str | None = None
+    latest_message_at: datetime | None = None
     unread_count: int = 0
     last_read_at: datetime | None = None
 
@@ -43,4 +49,4 @@ class GameChatUpdate(BaseModel):
 
     game_id: UUID | None = None
     chat_status: str | None = None
-    locked_at: datetime | None = None
+    closed_at: datetime | None = None

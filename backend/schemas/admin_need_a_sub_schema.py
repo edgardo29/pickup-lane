@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,6 +28,8 @@ class AdminNeedASubPostListItemRead(BaseModel):
     environment_type: str
     game_player_group: str
     starts_at: datetime
+    ends_at: datetime
+    starts_on_local: date
     timezone: str
     location_name: str
     city: str
@@ -44,6 +46,8 @@ class AdminNeedASubPostListRead(BaseModel):
     total_count: int = 0
     offset: int = 0
     limit: int = 50
+    next_cursor: str | None = None
+    has_more: bool = False
 
 
 class AdminNeedASubPostRead(BaseModel):
@@ -123,48 +127,6 @@ class AdminNeedASubAuditActionRead(BaseModel):
     action_type: str
     reason: str | None = None
     created_at: datetime
-
-
-class AdminNeedASubChatMessageRead(BaseModel):
-    id: UUID
-    sender_user_id: UUID | None = None
-    sender_display_name_snapshot: str
-    sender_initials_snapshot: str
-    message_body: str
-    moderation_status: str
-    created_at: datetime
-    updated_at: datetime
-    edited_at: datetime | None = None
-    deleted_at: datetime | None = None
-    deleted_by_user_id: UUID | None = None
-
-
-class AdminNeedASubChatRead(BaseModel):
-    post_id: UUID
-    chat_id: UUID | None = None
-    chat_status: str
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-    closed_at: datetime | None = None
-    total_message_count: int = 0
-    offset: int = 0
-    limit: int = 50
-    messages: list[AdminNeedASubChatMessageRead] = Field(default_factory=list)
-
-
-class AdminNeedASubChatModerationCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    reason: str = Field(min_length=1, max_length=1000)
-    idempotency_key: str = Field(min_length=8, max_length=160)
-
-
-class AdminNeedASubChatModerationResultRead(BaseModel):
-    post_id: UUID
-    chat_id: UUID
-    message: AdminNeedASubChatMessageRead
-    audit_action_id: UUID
-    idempotent_replay: bool = False
 
 
 class AdminNeedASubPostDetailRead(BaseModel):

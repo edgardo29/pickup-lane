@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi import HTTPException
@@ -17,8 +18,10 @@ from backend.services.support_flag_service import create_support_flag
 from backend.tests.helpers import (
     authenticate_as,
     create_admin_action,
+    create_chat_message,
     create_community_game_detail,
     create_game,
+    create_game_chat,
     create_game_participant,
     create_host_publish_fee,
     create_sub_post,
@@ -27,6 +30,15 @@ from backend.tests.helpers import (
     set_user_role,
     unique_suffix,
 )
+
+
+def get_expected_local_date(payload: dict) -> str:
+    return (
+        datetime.fromisoformat(payload["starts_at"])
+        .astimezone(ZoneInfo(payload["timezone"]))
+        .date()
+        .isoformat()
+    )
 
 
 def create_community_game(client: TestClient, host: dict, **overrides: object) -> dict:
@@ -75,9 +87,13 @@ def test_admin_community_games_list_returns_support_safe_shape(
     assert body["total_count"] == 1
     assert body["offset"] == 0
     assert body["limit"] == 50
+    assert body["has_more"] is False
+    assert body["next_cursor"] is None
     assert [item["id"] for item in body["games"]] == [game["id"]]
     listed_game = body["games"][0]
     assert listed_game["title"] == "Sunday Community 5v5"
+    assert listed_game["venue_name"] == game["venue_name_snapshot"]
+    assert listed_game["starts_on_local"] == game["starts_on_local"]
     assert listed_game["payment_collection_type"] == "external_host"
     assert listed_game["timezone"] == game["timezone"]
     assert listed_game["host"] == {
@@ -255,7 +271,7 @@ def test_admin_community_games_batches_participant_summary_queries(
         executemany,
     ):
         del connection, cursor, parameters, context, executemany
-        if "FROM game_participants" in statement:
+        if "WHERE game_participants.game_id IN" in statement:
             participant_statements.append(statement)
 
     authenticate_as(moderator["id"])
@@ -294,14 +310,25 @@ def test_admin_community_games_list_supports_offset_pagination(
     assert second_response.status_code == 200, second_response.text
     first_body = first_response.json()
     second_body = second_response.json()
+    cursor_response = client.get(
+        "/admin/community-games",
+        params={"limit": 1, "cursor": first_body["next_cursor"]},
+    )
+
+    assert cursor_response.status_code == 200, cursor_response.text
+    cursor_body = cursor_response.json()
     assert first_body["total_count"] == 2
     assert second_body["total_count"] == 2
     assert first_body["offset"] == 0
     assert second_body["offset"] == 1
+    assert first_body["has_more"] is True
+    assert first_body["next_cursor"]
+    assert cursor_body["total_count"] == 2
     assert {
         first_body["games"][0]["id"],
         second_body["games"][0]["id"],
     } == {first_game["id"], second_game["id"]}
+    assert cursor_body["games"][0]["id"] == second_body["games"][0]["id"]
 
 
 def test_moderator_support_flag_limit_counts_only_visible_flags(
@@ -927,6 +954,58 @@ def test_admin_community_game_detail_rejects_official_game(
     assert response.json()["detail"] == "Community game not found."
 
 
+def test_admin_community_game_chat_moderation_is_scoped_to_game_detail(
+    client: TestClient,
+):
+    moderator = create_user(client)
+    set_user_role(moderator["id"], "moderator")
+    host = create_user(client, first_name="Community", last_name="Host")
+    game = create_community_game(client, host, title="Community Chat Moderation")
+    game_chat = create_game_chat(client, game["id"])
+    chat_message = create_chat_message(
+        client,
+        game_chat["id"],
+        host["id"],
+        message_body="Community game chat message for moderation.",
+    )
+
+    authenticate_as(moderator["id"])
+    summary_response = client.get(
+        f"/admin/community-games/{game['id']}/chat/summary"
+    )
+    assert summary_response.status_code == 200, summary_response.text
+    assert summary_response.json()["message_count"] == 1
+    assert summary_response.json()["removed_count"] == 0
+
+    history_response = client.get(
+        f"/admin/community-games/{game['id']}/chat/messages",
+        params={"view": "all"},
+    )
+    assert history_response.status_code == 200, history_response.text
+    assert [message["id"] for message in history_response.json()["messages"]] == [
+        chat_message["id"]
+    ]
+
+    remove_response = client.post(
+        f"/admin/community-games/{game['id']}/chat/messages/{chat_message['id']}/remove",
+        json={
+            "reason": "Remove community chat content.",
+            "idempotency_key": "community-chat-moderation-test",
+        },
+    )
+    assert remove_response.status_code == 200, remove_response.text
+    assert remove_response.json()["message"]["visibility_status"] == "removed"
+
+    removed_response = client.get(
+        f"/admin/community-games/{game['id']}/chat/messages",
+        params={"view": "removed"},
+    )
+    assert removed_response.status_code == 200, removed_response.text
+    assert [message["id"] for message in removed_response.json()["messages"]] == [
+        chat_message["id"]
+    ]
+
+
 def test_admin_need_a_sub_list_and_detail_include_removed_history(
     client: TestClient,
 ):
@@ -962,7 +1041,7 @@ def test_admin_need_a_sub_list_and_detail_include_removed_history(
 
     list_response = client.get(
         "/admin/need-a-sub",
-        params={"post_status": "removed", "query": "Lakefront"},
+        params={"view": "removed", "query": "Lakefront"},
     )
 
     assert list_response.status_code == 200, list_response.text
@@ -970,8 +1049,12 @@ def test_admin_need_a_sub_list_and_detail_include_removed_history(
     assert list_body["total_count"] == 1
     assert list_body["offset"] == 0
     assert list_body["limit"] == 50
+    assert list_body["has_more"] is False
+    assert list_body["next_cursor"] is None
     assert [item["id"] for item in list_body["posts"]] == [post["id"]]
     listed_post = list_body["posts"][0]
+    assert listed_post["ends_at"] == post["ends_at"]
+    assert listed_post["starts_on_local"] == get_expected_local_date(post)
     assert listed_post["owner"]["display_name"] == "Morgan Owner"
     assert listed_post["request_counts"] == {
         "total_count": 1,
@@ -1100,6 +1183,10 @@ def test_admin_need_a_sub_list_and_detail_are_paginated(
         "/admin/need-a-sub",
         params={"limit": 1, "offset": 1},
     )
+    first_list_response = client.get(
+        "/admin/need-a-sub",
+        params={"limit": 1, "offset": 0},
+    )
     detail_response = client.get(
         f"/admin/need-a-sub/{first_post['id']}",
         params={
@@ -1111,10 +1198,25 @@ def test_admin_need_a_sub_list_and_detail_are_paginated(
     )
 
     assert list_response.status_code == 200, list_response.text
+    assert first_list_response.status_code == 200, first_list_response.text
+    first_list_body = first_list_response.json()
+    cursor_list_response = client.get(
+        "/admin/need-a-sub",
+        params={"limit": 1, "cursor": first_list_body["next_cursor"]},
+    )
+
+    assert cursor_list_response.status_code == 200, cursor_list_response.text
     assert list_response.json()["total_count"] == 2
     assert list_response.json()["offset"] == 1
     assert list_response.json()["limit"] == 1
     assert len(list_response.json()["posts"]) == 1
+    assert first_list_body["has_more"] is True
+    assert first_list_body["next_cursor"]
+    assert cursor_list_response.json()["total_count"] == 2
+    assert (
+        cursor_list_response.json()["posts"][0]["id"]
+        == list_response.json()["posts"][0]["id"]
+    )
 
     assert detail_response.status_code == 200, detail_response.text
     detail = detail_response.json()
@@ -1157,7 +1259,7 @@ def test_admin_need_a_sub_reads_expire_due_posts_and_requests(
     authenticate_as(moderator["id"])
     list_response = client.get(
         "/admin/need-a-sub",
-        params={"query": post["id"]},
+        params={"view": "expired", "query": post["id"]},
     )
     detail_response = client.get(f"/admin/need-a-sub/{post['id']}")
 
@@ -1351,7 +1453,7 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     owner = create_user(client, first_name="Chat", last_name="Owner")
     requester = create_user(client, first_name="Chat", last_name="Player")
     regular_user = create_user(client)
-    post = create_sub_post(client, owner["id"], team_name="Chat Review FC")
+    post = create_sub_post(client, owner["id"], team_name="Chat Moderation FC")
 
     authenticate_as(requester["id"])
     request_response = client.post(
@@ -1369,84 +1471,83 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     assert chat_response.status_code == 200, chat_response.text
     chat_id = chat_response.json()["id"]
 
-    hidden_text = "Unsafe message that must not enter audit metadata."
-    removed_text = "Second unsafe message retained only for support."
-    hidden_message_response = client.post(
+    review_text = "Text me at 312-555-0199 so we can move this off platform."
+    removed_text = "Pay me on Venmo before I approve the sub request."
+    review_message_response = client.post(
         f"/need-a-sub/posts/{post['id']}/chat/messages",
-        json={"chat_id": chat_id, "message_body": hidden_text},
+        json={"chat_id": chat_id, "message_body": review_text},
     )
     removed_message_response = client.post(
         f"/need-a-sub/posts/{post['id']}/chat/messages",
         json={"chat_id": chat_id, "message_body": removed_text},
     )
-    assert hidden_message_response.status_code == 201, hidden_message_response.text
+    assert review_message_response.status_code == 201, review_message_response.text
     assert removed_message_response.status_code == 201, removed_message_response.text
-    hidden_message = hidden_message_response.json()
+    review_message = review_message_response.json()
     removed_message = removed_message_response.json()
 
     authenticate_as(moderator["id"])
+    summary_response = client.get(
+        f"/admin/need-a-sub/{post['id']}/chat/summary"
+    )
+    assert summary_response.status_code == 200, summary_response.text
+    assert summary_response.json()["message_count"] == 2
+    assert summary_response.json()["needs_review_count"] == 2
+    assert summary_response.json()["removed_count"] == 0
+
     chat_history_response = client.get(
-        f"/admin/need-a-sub/{post['id']}/chat",
-        params={"offset": 0, "limit": 1},
+        f"/admin/need-a-sub/{post['id']}/chat/messages",
+        params={
+            "view": "all",
+            "offset": 0,
+            "limit": 1,
+        },
     )
     assert chat_history_response.status_code == 200, chat_history_response.text
     chat_history = chat_history_response.json()
-    assert chat_history["total_message_count"] == 2
+    assert chat_history["total_count"] == 2
     assert chat_history["offset"] == 0
     assert chat_history["limit"] == 1
     assert [message["id"] for message in chat_history["messages"]] == [
         removed_message["id"]
     ]
     older_history_response = client.get(
-        f"/admin/need-a-sub/{post['id']}/chat",
-        params={"offset": 1, "limit": 1},
+        f"/admin/need-a-sub/{post['id']}/chat/messages",
+        params={
+            "view": "all",
+            "offset": 1,
+            "limit": 1,
+        },
     )
     assert older_history_response.status_code == 200, older_history_response.text
     assert older_history_response.json()["offset"] == 1
     assert [
         message["id"] for message in older_history_response.json()["messages"]
-    ] == [hidden_message["id"]]
+    ] == [review_message["id"]]
 
-    hide_payload = {
-        "reason": "Hide unsafe scoped chat content.",
-        "idempotency_key": "admin-sub-chat-hide-test",
+    review_payload = {
+        "idempotency_key": "admin-sub-chat-moderation-test",
     }
-    hide_response = client.post(
-        (
-            f"/admin/need-a-sub/{post['id']}/chat/messages/"
-            f"{hidden_message['id']}/hide"
-        ),
-        json=hide_payload,
+    review_response = client.post(
+        f"/admin/need-a-sub/{post['id']}/chat/messages/{review_message['id']}/review",
+        json=review_payload,
     )
-    assert hide_response.status_code == 200, hide_response.text
-    assert hide_response.json()["message"]["moderation_status"] == "hidden_by_admin"
-    assert hide_response.json()["message"]["message_body"] == hidden_text
-    assert hide_response.json()["idempotent_replay"] is False
+    assert review_response.status_code == 200, review_response.text
+    assert review_response.json()["message"]["visibility_status"] == "visible"
+    assert review_response.json()["message"]["review_status"] == "reviewed"
+    assert review_response.json()["message"]["message_body"] == review_text
+    assert review_response.json()["idempotent_replay"] is False
 
-    hide_replay_response = client.post(
-        (
-            f"/admin/need-a-sub/{post['id']}/chat/messages/"
-            f"{hidden_message['id']}/hide"
-        ),
-        json=hide_payload,
+    review_replay_response = client.post(
+        f"/admin/need-a-sub/{post['id']}/chat/messages/{review_message['id']}/review",
+        json=review_payload,
     )
-    assert hide_replay_response.status_code == 200, hide_replay_response.text
-    assert hide_replay_response.json()["idempotent_replay"] is True
+    assert review_replay_response.status_code == 200, review_replay_response.text
+    assert review_replay_response.json()["idempotent_replay"] is True
     assert (
-        hide_replay_response.json()["audit_action_id"]
-        == hide_response.json()["audit_action_id"]
+        review_replay_response.json()["audit_action_id"]
+        == review_response.json()["audit_action_id"]
     )
-    hide_conflict_response = client.post(
-        (
-            f"/admin/need-a-sub/{post['id']}/chat/messages/"
-            f"{hidden_message['id']}/hide"
-        ),
-        json={
-            **hide_payload,
-            "reason": "A different moderation request.",
-        },
-    )
-    assert hide_conflict_response.status_code == 409, hide_conflict_response.text
 
     authenticate_as(requester["id"])
     requester_notifications_response = client.get(
@@ -1462,7 +1563,7 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
         if notification["notification_type"] == "sub_chat_message"
     )
     assert chat_notification["is_read"] is False
-    assert chat_notification["aggregate_count"] == 1
+    assert chat_notification["aggregate_count"] == 2
     assert (
         chat_notification["related_sub_post_chat_message_id"]
         == removed_message["id"]
@@ -1474,47 +1575,56 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
         "idempotency_key": "admin-sub-chat-remove-test",
     }
     remove_response = client.post(
-        (
-            f"/admin/need-a-sub/{post['id']}/chat/messages/"
-            f"{removed_message['id']}/remove"
-        ),
+        f"/admin/need-a-sub/{post['id']}/chat/messages/{removed_message['id']}/remove",
         json=remove_payload,
     )
     assert remove_response.status_code == 200, remove_response.text
-    assert remove_response.json()["message"]["moderation_status"] == "removed_by_admin"
+    assert remove_response.json()["message"]["visibility_status"] == "removed"
+    assert remove_response.json()["message"]["review_status"] == "reviewed"
+    assert remove_response.json()["message"]["removed_source"] == "admin"
     assert remove_response.json()["message"]["message_body"] == removed_text
     assert remove_response.json()["idempotent_replay"] is False
 
     remove_replay_response = client.post(
-        (
-            f"/admin/need-a-sub/{post['id']}/chat/messages/"
-            f"{removed_message['id']}/remove"
-        ),
+        f"/admin/need-a-sub/{post['id']}/chat/messages/{removed_message['id']}/remove",
         json=remove_payload,
     )
     assert remove_replay_response.status_code == 200, remove_replay_response.text
     assert remove_replay_response.json()["idempotent_replay"] is True
 
-    history_after_response = client.get(f"/admin/need-a-sub/{post['id']}/chat")
+    remove_conflict_response = client.post(
+        f"/admin/need-a-sub/{post['id']}/chat/messages/{removed_message['id']}/remove",
+        json={
+            **remove_payload,
+            "reason": "A different moderation request.",
+        },
+    )
+    assert remove_conflict_response.status_code == 409, remove_conflict_response.text
+
+    history_after_response = client.get(
+        f"/admin/need-a-sub/{post['id']}/chat/messages",
+        params={
+            "view": "all",
+        },
+    )
     assert history_after_response.status_code == 200, history_after_response.text
     messages_by_id = {
         message["id"]: message for message in history_after_response.json()["messages"]
     }
-    assert messages_by_id[hidden_message["id"]]["message_body"] == hidden_text
-    assert messages_by_id[hidden_message["id"]]["moderation_status"] == (
-        "hidden_by_admin"
-    )
+    assert messages_by_id[review_message["id"]]["message_body"] == review_text
+    assert messages_by_id[review_message["id"]]["visibility_status"] == "visible"
+    assert messages_by_id[review_message["id"]]["review_status"] == "reviewed"
     assert messages_by_id[removed_message["id"]]["message_body"] == removed_text
-    assert messages_by_id[removed_message["id"]]["moderation_status"] == (
-        "removed_by_admin"
-    )
+    assert messages_by_id[removed_message["id"]]["visibility_status"] == "removed"
 
-    authenticate_as(owner["id"])
+    authenticate_as(requester["id"])
     member_messages_response = client.get(
         f"/need-a-sub/posts/{post['id']}/chat/messages"
     )
     assert member_messages_response.status_code == 200, member_messages_response.text
-    assert member_messages_response.json() == []
+    assert [message["id"] for message in member_messages_response.json()] == [
+        review_message["id"]
+    ]
 
     authenticate_as(requester["id"])
     requester_notifications_response = client.get(
@@ -1534,6 +1644,14 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     assert chat_notification["aggregate_count"] is None
 
     authenticate_as(moderator["id"])
+    summary_after_response = client.get(
+        f"/admin/need-a-sub/{post['id']}/chat/summary"
+    )
+    assert summary_after_response.status_code == 200, summary_after_response.text
+    assert summary_after_response.json()["message_count"] == 1
+    assert summary_after_response.json()["needs_review_count"] == 0
+    assert summary_after_response.json()["removed_count"] == 1
+
     audit_response = client.get(
         "/admin/actions",
         params={"target_sub_post_id": post["id"]},
@@ -1542,21 +1660,39 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     moderation_actions = [
         action
         for action in audit_response.json()
-        if action["action_type"] in {"hide_chat_message", "remove_chat_message"}
+        if action["action_type"]
+        in {"mark_chat_message_reviewed", "remove_chat_message"}
     ]
     assert {action["action_type"] for action in moderation_actions} == {
-        "hide_chat_message",
+        "mark_chat_message_reviewed",
         "remove_chat_message",
     }
     for action in moderation_actions:
         assert action["target_sub_chat_message_id"] in {
-            hidden_message["id"],
+            review_message["id"],
             removed_message["id"],
         }
         assert "message_body" not in str(action["metadata"])
-        assert hidden_text not in str(action["metadata"])
+        assert review_text not in str(action["metadata"])
         assert removed_text not in str(action["metadata"])
-        assert action["metadata"]["source"] == "admin_need_a_sub_chat"
+        assert action["metadata"]["source"] == "chat_moderation"
+
+    other_owner = create_user(client, first_name="Wrong", last_name="Owner")
+    wrong_parent_post = create_sub_post(
+        client,
+        other_owner["id"],
+        team_name="Wrong Chat Parent FC",
+    )
+    authenticate_as(moderator["id"])
+    wrong_parent_response = client.post(
+        f"/admin/need-a-sub/{wrong_parent_post['id']}/chat/messages/{review_message['id']}/remove",
+        json={
+            "reason": "Wrong scoped parent test.",
+            "idempotency_key": "wrong-sub-chat-message-test",
+        },
+    )
+    assert wrong_parent_response.status_code == 404, wrong_parent_response.text
+    assert "this post" in wrong_parent_response.text
 
     authenticate_as(owner["id"])
     cancel_response = client.patch(
@@ -1566,7 +1702,9 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     assert cancel_response.status_code == 200, cancel_response.text
 
     authenticate_as(moderator["id"])
-    closed_chat_response = client.get(f"/admin/need-a-sub/{post['id']}/chat")
+    closed_chat_response = client.get(
+        f"/admin/need-a-sub/{post['id']}/chat/summary"
+    )
     assert closed_chat_response.status_code == 200, closed_chat_response.text
     assert closed_chat_response.json()["chat_status"] == "closed"
     assert closed_chat_response.json()["closed_at"] == cancel_response.json()[
@@ -1574,12 +1712,14 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     ]
 
     authenticate_as(regular_user["id"])
-    denied_history_response = client.get(f"/admin/need-a-sub/{post['id']}/chat")
+    denied_history_response = client.get(
+        f"/admin/need-a-sub/{post['id']}/chat/messages",
+        params={
+            "view": "all",
+        },
+    )
     denied_moderation_response = client.post(
-        (
-            f"/admin/need-a-sub/{post['id']}/chat/messages/"
-            f"{hidden_message['id']}/remove"
-        ),
+        f"/admin/need-a-sub/{post['id']}/chat/messages/{review_message['id']}/remove",
         json={
             "reason": "Should not run.",
             "idempotency_key": "denied-admin-sub-chat-test",

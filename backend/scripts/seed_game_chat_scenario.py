@@ -123,7 +123,7 @@ def seed_game_chat_scenario() -> dict[str, UUID]:
                 "game_type": "official",
                 "payment_collection_type": "in_app",
                 "publish_status": "published",
-                "game_status": "scheduled",
+                "game_status": "active",
                 "title": "Dev Game Ready For Chat",
                 "venue_id": venue.id,
                 "venue_name_snapshot": venue.name,

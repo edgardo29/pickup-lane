@@ -41,27 +41,32 @@ export async function fetchAdminActionCenter({ firebaseUser }) {
 }
 
 export async function listAdminCommunityGames({
+  cursor = '',
   firebaseUser,
-  gameStatus = '',
   limit = 50,
   offset = 0,
   publishStatus = '',
   query = '',
+  view = 'active',
 } = {}) {
   const searchParams = new URLSearchParams()
 
   if (query.trim()) {
     searchParams.set('query', query.trim())
   }
-  if (gameStatus) {
-    searchParams.set('game_status', gameStatus)
+  if (view) {
+    searchParams.set('view', view)
   }
   if (publishStatus) {
     searchParams.set('publish_status', publishStatus)
   }
 
   searchParams.set('limit', String(limit))
-  searchParams.set('offset', String(offset))
+  if (cursor) {
+    searchParams.set('cursor', cursor)
+  } else {
+    searchParams.set('offset', String(offset))
+  }
 
   return apiRequest(`/admin/community-games?${searchParams.toString()}`, {
     headers: await getAdminHeaders(firebaseUser),
@@ -138,20 +143,25 @@ export async function resolveAdminSupportFlag({
 }
 
 export async function listAdminNeedASubPosts({
+  cursor = '',
   firebaseUser,
   limit = 50,
   offset = 0,
-  postStatus = '',
   query = '',
+  view = 'active',
 } = {}) {
   const searchParams = new URLSearchParams()
   if (query.trim()) {
     searchParams.set('query', query.trim())
   }
-  if (postStatus) {
-    searchParams.set('post_status', postStatus)
+  if (view) {
+    searchParams.set('view', view)
   }
-  searchParams.set('offset', String(offset))
+  if (cursor) {
+    searchParams.set('cursor', cursor)
+  } else {
+    searchParams.set('offset', String(offset))
+  }
   searchParams.set('limit', String(limit))
 
   return apiRequest(`/admin/need-a-sub?${searchParams.toString()}`, {
@@ -194,18 +204,149 @@ export async function removeAdminNeedASubPost({
   })
 }
 
-export async function getAdminNeedASubChat({
+export async function getAdminOfficialGameChatSummary({
   firebaseUser,
-  limit = 50,
-  offset = 0,
+  gameId,
+} = {}) {
+  return apiRequest(`/admin/official-games/${gameId}/chat/summary`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getAdminCommunityGameChatSummary({
+  firebaseUser,
+  gameId,
+} = {}) {
+  return apiRequest(`/admin/community-games/${gameId}/chat/summary`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getAdminNeedASubChatSummary({
+  firebaseUser,
   postId,
 } = {}) {
+  return apiRequest(`/admin/need-a-sub/${postId}/chat/summary`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+async function listAdminScopedChatMessages({
+  endpointBase,
+  firebaseUser,
+  limit = 20,
+  offset = 0,
+  view = 'needs_review',
+} = {}) {
   const searchParams = new URLSearchParams()
+  searchParams.set('view', view)
   searchParams.set('offset', String(offset))
   searchParams.set('limit', String(limit))
 
-  return apiRequest(`/admin/need-a-sub/${postId}/chat?${searchParams.toString()}`, {
+  return apiRequest(`${endpointBase}/messages?${searchParams.toString()}`, {
     headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function listAdminOfficialGameChatModerationMessages({
+  firebaseUser,
+  gameId,
+  limit,
+  offset,
+  view,
+} = {}) {
+  return listAdminScopedChatMessages({
+    endpointBase: `/admin/official-games/${gameId}/chat`,
+    firebaseUser,
+    limit,
+    offset,
+    view,
+  })
+}
+
+export async function listAdminCommunityGameChatModerationMessages({
+  firebaseUser,
+  gameId,
+  limit,
+  offset,
+  view,
+} = {}) {
+  return listAdminScopedChatMessages({
+    endpointBase: `/admin/community-games/${gameId}/chat`,
+    firebaseUser,
+    limit,
+    offset,
+    view,
+  })
+}
+
+export async function listAdminNeedASubChatModerationMessages({
+  firebaseUser,
+  limit,
+  offset,
+  postId,
+  view,
+} = {}) {
+  return listAdminScopedChatMessages({
+    endpointBase: `/admin/need-a-sub/${postId}/chat`,
+    firebaseUser,
+    limit,
+    offset,
+    view,
+  })
+}
+
+async function moderateAdminScopedChatMessage({
+  action,
+  endpointBase,
+  firebaseUser,
+  idempotencyKey,
+  messageId,
+  reason,
+} = {}) {
+  return apiRequest(`${endpointBase}/messages/${messageId}/${action}`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      ...(reason ? { reason } : {}),
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function moderateAdminOfficialGameChatMessage({
+  action,
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  messageId,
+  reason,
+} = {}) {
+  return moderateAdminScopedChatMessage({
+    action,
+    endpointBase: `/admin/official-games/${gameId}/chat`,
+    firebaseUser,
+    idempotencyKey,
+    messageId,
+    reason,
+  })
+}
+
+export async function moderateAdminCommunityGameChatMessage({
+  action,
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  messageId,
+  reason,
+} = {}) {
+  return moderateAdminScopedChatMessage({
+    action,
+    endpointBase: `/admin/community-games/${gameId}/chat`,
+    firebaseUser,
+    idempotencyKey,
+    messageId,
+    reason,
   })
 }
 
@@ -217,17 +358,14 @@ export async function moderateAdminNeedASubChatMessage({
   postId,
   reason,
 } = {}) {
-  return apiRequest(
-    `/admin/need-a-sub/${postId}/chat/messages/${messageId}/${action}`,
-    {
-      method: 'POST',
-      headers: await getAdminHeaders(firebaseUser, true),
-      body: JSON.stringify({
-        reason,
-        idempotency_key: idempotencyKey,
-      }),
-    },
-  )
+  return moderateAdminScopedChatMessage({
+    action,
+    endpointBase: `/admin/need-a-sub/${postId}/chat`,
+    firebaseUser,
+    idempotencyKey,
+    messageId,
+    reason,
+  })
 }
 
 const adminNotificationFilterParams = [

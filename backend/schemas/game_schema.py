@@ -14,7 +14,7 @@ class GameCreate(BaseModel):
     game_type: str
     payment_collection_type: str
     publish_status: str = "draft"
-    game_status: str = "scheduled"
+    game_status: str = "active"
     title: str
     description: str | None = None
     venue_id: UUID

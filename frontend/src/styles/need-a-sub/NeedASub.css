@@ -529,6 +529,7 @@
   font-weight: 950;
 }
 
+.need-sub-status-pill--completed,
 .need-sub-status-pill--filled {
   border-color: rgba(51, 148, 255, 0.34);
   color: #72d4ff;

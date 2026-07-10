@@ -1,3 +1,5 @@
+import { formatAdminMoney } from '../shared/adminMoneyFormatters.js'
+
 export function formatAdminCommunityDateTime(value, timeZone = undefined) {
   if (!value) {
     return 'No date'
@@ -16,10 +18,7 @@ export function formatAdminCommunityDateTime(value, timeZone = undefined) {
 }
 
 export function formatAdminCommunityMoney(cents, currency = 'USD') {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: currency || 'USD',
-  }).format(Number(cents || 0) / 100)
+  return formatAdminMoney(cents, currency)
 }
 
 export function formatAdminCommunityStatus(value) {

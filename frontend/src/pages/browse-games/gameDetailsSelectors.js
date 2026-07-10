@@ -5,7 +5,7 @@ export function canUseGameChat(game, participants, user) {
     return false
   }
 
-  if (!['scheduled', 'full'].includes(game.game_status)) {
+  if (game.game_status !== 'active') {
     return false
   }
 

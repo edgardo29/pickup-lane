@@ -23,7 +23,8 @@ class AdminAction(Base):
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
                 "'delete_user', "
                 "'reject_venue', 'create_venue_image', 'update_venue_image', "
-                "'remove_venue_image', 'remove_chat_message', 'hide_chat_message', "
+                "'remove_venue_image', 'mark_chat_message_reviewed', "
+                "'remove_chat_message', 'restore_chat_message', "
                 "'update_game', 'create_game_chat', 'update_game_chat', "
                 "'update_booking', "
                 "'update_participant', 'issue_credit', 'reverse_credit', "
@@ -191,13 +192,49 @@ class AdminAction(Base):
             ),
         ),
         Index(
-            "uq_admin_actions_hide_sub_chat_message_idempotency",
+            "uq_admin_actions_mark_reviewed_chat_message_idempotency",
+            "admin_user_id",
+            "target_message_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'mark_chat_message_reviewed' "
+                "AND target_message_id IS NOT NULL "
+                "AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_remove_chat_message_idempotency",
+            "admin_user_id",
+            "target_message_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'remove_chat_message' "
+                "AND target_message_id IS NOT NULL "
+                "AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_restore_chat_message_idempotency",
+            "admin_user_id",
+            "target_message_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'restore_chat_message' "
+                "AND target_message_id IS NOT NULL "
+                "AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_mark_reviewed_sub_chat_message_idempotency",
             "admin_user_id",
             "target_sub_chat_message_id",
             "idempotency_key",
             unique=True,
             postgresql_where=text(
-                "action_type = 'hide_chat_message' "
+                "action_type = 'mark_chat_message_reviewed' "
                 "AND target_sub_chat_message_id IS NOT NULL "
                 "AND idempotency_key IS NOT NULL"
             ),
@@ -210,6 +247,18 @@ class AdminAction(Base):
             unique=True,
             postgresql_where=text(
                 "action_type = 'remove_chat_message' "
+                "AND target_sub_chat_message_id IS NOT NULL "
+                "AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_restore_sub_chat_message_idempotency",
+            "admin_user_id",
+            "target_sub_chat_message_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'restore_chat_message' "
                 "AND target_sub_chat_message_id IS NOT NULL "
                 "AND idempotency_key IS NOT NULL"
             ),

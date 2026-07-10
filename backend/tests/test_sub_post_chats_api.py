@@ -120,7 +120,8 @@ def insert_visible_sub_chat_messages(
                     sender_initials_snapshot="TS",
                     message_type="text",
                     message_body=f"Seeded message {index}",
-                    moderation_status="visible",
+                    visibility_status="visible",
+                    review_status="clear",
                     created_at=created_at,
                     updated_at=created_at,
                 )
@@ -171,6 +172,30 @@ def test_need_a_sub_chat_owner_can_open_before_confirmed_players(client: TestCli
     assert chat["sub_post_id"] == post["id"]
     assert chat["chat_status"] == "active"
     assert chat["unread_count"] == 0
+
+
+def test_need_a_sub_chat_noop_edit_does_not_flag_repeated_message(
+    client: TestClient,
+):
+    owner, _confirmed_player, post, _sub_request, chat = create_confirmed_sub_chat_setup(
+        client
+    )
+    message = send_sub_chat_message(
+        client,
+        owner["id"],
+        post["id"],
+        chat["id"],
+        "Normal sub logistics update",
+    )
+    authenticate_as(owner["id"])
+
+    response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/chat/messages/{message['id']}",
+        json={"message_body": "Normal sub logistics update"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["review_status"] == "clear"
 
 
 def test_need_a_sub_chat_rejects_request_supplied_actor_fields(client: TestClient):
@@ -271,6 +296,75 @@ def test_need_a_sub_chat_access_is_confirmed_only(client: TestClient):
     accept_request(client, owner["id"], pending_request["id"])
     chat = ensure_sub_post_chat(client, pending_player["id"], post["id"])
     assert chat["sub_post_id"] == post["id"]
+
+
+def test_need_a_sub_closed_chat_rejects_message_changes(client: TestClient):
+    owner, confirmed_player, post, _sub_request, chat = create_confirmed_sub_chat_setup(
+        client
+    )
+    message = send_sub_chat_message(
+        client,
+        owner["id"],
+        post["id"],
+        chat["id"],
+        "This message is visible before cancellation.",
+    )
+    authenticate_as(owner["id"])
+    cancel_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/cancel",
+        json={"cancel_reason": "Close this chat."},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    authenticate_as(confirmed_player["id"])
+    create_response = client.post(
+        f"/need-a-sub/posts/{post['id']}/chat/messages",
+        json={
+            "chat_id": chat["id"],
+            "message_body": "This should not send.",
+        },
+    )
+    edit_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/chat/messages/{message['id']}",
+        json={"message_body": "This should not edit."},
+    )
+    remove_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/chat/messages/{message['id']}",
+        json={"visibility_status": "removed"},
+    )
+
+    for response in (create_response, edit_response, remove_response):
+        assert response.status_code == 400, response.text
+        assert "cannot receive messages" in response.text
+
+
+def test_need_a_sub_closed_chat_still_hides_write_access_from_non_members(
+    client: TestClient,
+):
+    owner, _confirmed_player, post, _sub_request, chat = create_confirmed_sub_chat_setup(
+        client
+    )
+    unrelated_user = create_user(client)
+    authenticate_as(owner["id"])
+    cancel_response = client.patch(
+        f"/need-a-sub/posts/{post['id']}/cancel",
+        json={"cancel_reason": "Close this chat."},
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+
+    authenticate_as(unrelated_user["id"])
+    response = client.post(
+        f"/need-a-sub/posts/{post['id']}/chat/messages",
+        json={
+            "chat_id": chat["id"],
+            "message_body": "This should still be hidden from me.",
+        },
+    )
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == (
+        "Only the post owner and confirmed players can use this chat."
+    )
 
 
 def test_need_a_sub_chat_notifies_current_members_and_marks_read(client: TestClient):

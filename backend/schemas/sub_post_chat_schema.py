@@ -27,6 +27,12 @@ class SubPostChatRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
+    message_count: int = 0
+    needs_review_count: int = 0
+    removed_count: int = 0
+    latest_message_id: UUID | None = None
+    latest_message_preview: str | None = None
+    latest_message_at: datetime | None = None
     unread_count: int = 0
     last_read_at: datetime | None = None
 

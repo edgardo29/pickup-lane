@@ -36,14 +36,38 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.Column("locked_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "message_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "needs_review_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "removed_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column("latest_message_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("latest_message_preview", sa.Text(), nullable=True),
+        sa.Column("latest_message_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
-            "chat_status IN ('active', 'locked', 'archived')",
+            "chat_status IN ('active', 'closed')",
             name="ck_game_chats_chat_status",
         ),
         sa.CheckConstraint(
-            "(chat_status <> 'locked' OR locked_at IS NOT NULL)",
-            name="ck_game_chats_locked_requires_locked_at",
+            (
+                "(chat_status = 'active' AND closed_at IS NULL) "
+                "OR (chat_status = 'closed' AND closed_at IS NOT NULL)"
+            ),
+            name="ck_game_chats_closed_requires_closed_at",
         ),
         sa.ForeignKeyConstraint(
             ["game_id"],
@@ -59,10 +83,24 @@ def upgrade() -> None:
         ["chat_status"],
         unique=False,
     )
+    op.create_index(
+        "ix_game_chats_latest_message_at",
+        "game_chats",
+        ["latest_message_at"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_game_chats_needs_review_count",
+        "game_chats",
+        ["needs_review_count"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
     # Downgrade removes the game_chats table and index because this migration
     # only introduces that single table.
+    op.drop_index("ix_game_chats_needs_review_count", table_name="game_chats")
+    op.drop_index("ix_game_chats_latest_message_at", table_name="game_chats")
     op.drop_index("ix_game_chats_chat_status", table_name="game_chats")
     op.drop_table("game_chats")

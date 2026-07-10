@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { EyeOff } from 'lucide-react'
+import { EyeOff, X } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
 import { hideAdminCommunityGamePaymentText } from '../shared/adminApi.js'
+
+const REASON_MAX_LENGTH = 100
 
 function createHidePaymentTextIdempotencyKey(gameId) {
   const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
@@ -88,25 +90,35 @@ function AdminCommunityGameHidePaymentTextModal({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="admin-community-modal__header">
-          <span><EyeOff /></span>
           <div>
-            <h2 id="admin-community-hide-payment-title">Hide payment text</h2>
-            <p>{detail.game.title}</p>
+            <span className="admin-community-modal__icon"><EyeOff /></span>
+            <div>
+              <h2 id="admin-community-hide-payment-title">Hide payment info</h2>
+            </div>
           </div>
+          <button
+            aria-label="Close hide payment info"
+            className="admin-community-modal__close"
+            disabled={isSubmitting}
+            type="button"
+            onClick={onClose}
+          >
+            <X />
+          </button>
         </header>
 
         <form className="admin-community-modal__form" onSubmit={handleSubmit}>
-          <p>Hides this host payment snapshot from player-facing game details.</p>
+          <p>Hides this host payment info from player-facing game details.</p>
           <label>
             <span>Internal reason</span>
             <textarea
               disabled={isSubmitting}
-              maxLength={1000}
+              maxLength={REASON_MAX_LENGTH}
               placeholder="Required moderation reason"
               value={reason}
               onChange={handleReasonChange}
             />
-            <small>{reason.length}/1000</small>
+            <small>{reason.length}/{REASON_MAX_LENGTH}</small>
           </label>
           {executionError && (
             <div className="admin-community-modal__message">
@@ -115,19 +127,12 @@ function AdminCommunityGameHidePaymentTextModal({
           )}
           <div className="admin-community-modal__actions">
             <button
-              className="admin-community-modal__secondary"
-              disabled={isSubmitting}
-              type="button"
-              onClick={onClose}
-            >
-              Back
-            </button>
-            <button
               className="admin-community-modal__danger"
               disabled={isSubmitting || !reason.trim()}
               type="submit"
             >
-              {isSubmitting ? 'Hiding' : 'Hide text'}
+              <EyeOff aria-hidden="true" />
+              {isSubmitting ? 'Hiding' : 'Hide payment info'}
             </button>
           </div>
         </form>

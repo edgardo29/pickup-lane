@@ -20,7 +20,7 @@ function NeedASubEditPage() {
   const isOwner = Boolean(appUser?.id && post?.owner_user_id === appUser.id)
   const canEditPost = Boolean(
     post &&
-    ['active', 'filled'].includes(post.post_status) &&
+    post.post_status === 'active' &&
     new Date(post.starts_at) > new Date(),
   )
 
@@ -101,7 +101,7 @@ function NeedASubEditPage() {
           <NeedASubEditHeader onBack={() => navigate(detailPath)} />
           <div className="need-sub-empty">
             <strong>This post cannot be edited.</strong>
-            <span>Only active or filled posts can be edited before the game starts.</span>
+            <span>Only active posts can be edited before the game starts.</span>
           </div>
         </>
       ) : (

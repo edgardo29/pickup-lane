@@ -52,7 +52,8 @@ def upgrade() -> None:
                 "'restrict_hosting', 'restore_hosting', 'approve_venue', "
                 "'delete_user', "
                 "'reject_venue', "
-                "'remove_chat_message', 'hide_chat_message', "
+                "'mark_chat_message_reviewed', 'remove_chat_message', "
+                "'restore_chat_message', "
                 "'update_game', 'create_game_chat', 'update_game_chat', "
                 "'update_booking', "
                 "'update_participant', "
@@ -285,6 +286,39 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
+        "uq_admin_actions_mark_reviewed_chat_message_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_message_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'mark_chat_message_reviewed' "
+            "AND target_message_id IS NOT NULL "
+            "AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_remove_chat_message_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_message_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'remove_chat_message' "
+            "AND target_message_id IS NOT NULL "
+            "AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_restore_chat_message_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_message_id", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type = 'restore_chat_message' "
+            "AND target_message_id IS NOT NULL "
+            "AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
         "ix_admin_actions_admin_user_id_created_at",
         "admin_actions",
         ["admin_user_id", "created_at"],
@@ -307,6 +341,18 @@ def downgrade() -> None:
     )
     op.drop_index(
         "ix_admin_actions_admin_user_id_created_at",
+        table_name="admin_actions",
+    )
+    op.drop_index(
+        "uq_admin_actions_restore_chat_message_idempotency",
+        table_name="admin_actions",
+    )
+    op.drop_index(
+        "uq_admin_actions_remove_chat_message_idempotency",
+        table_name="admin_actions",
+    )
+    op.drop_index(
+        "uq_admin_actions_mark_reviewed_chat_message_idempotency",
         table_name="admin_actions",
     )
     op.drop_index(

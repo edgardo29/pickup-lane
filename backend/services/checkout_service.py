@@ -643,10 +643,6 @@ def create_game_checkout_payment_intent_workflow(
         payment_required=credit_application.payment_required,
         credit_application=credit_application,
     )
-    if roster_count + party_size >= db_game.total_spots:
-        db_game.game_status = "full"
-        db_game.updated_at = now
-
     try:
         db.add(booking)
         if payment is not None:

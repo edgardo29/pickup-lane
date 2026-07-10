@@ -41,6 +41,7 @@ from backend.services.game_notification_service import (
 )
 from backend.services.game_rules import (
     ACTIVE_JOIN_STATUSES,
+    OPEN_GAME_STATUSES,
     build_game_conflict_detail,
 )
 from backend.services.game_waitlist_service import promote_waitlist_entries
@@ -436,11 +437,11 @@ def preview_official_game_player_removal(
 
     if (
         game.publish_status != "published"
-        or game.game_status not in {"scheduled", "full"}
+        or game.game_status not in OPEN_GAME_STATUSES
     ):
         classification = "blocked_game_state"
         blocking_reasons.append(
-            "Players can only be removed from published scheduled or full official games."
+            "Players can only be removed from published active official games."
         )
     elif participant.participant_status not in ADMIN_REMOVABLE_PLAYER_STATUSES:
         classification = "blocked_participant_status"

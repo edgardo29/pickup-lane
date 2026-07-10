@@ -5,6 +5,7 @@ function AdminWorkspaceLayout({
   breadcrumbs,
   children,
   description,
+  headerClassName,
   icon,
   title,
 }) {
@@ -13,6 +14,7 @@ function AdminWorkspaceLayout({
       <AdminPageHeader
         actions={actions}
         breadcrumbs={breadcrumbs}
+        className={headerClassName}
         description={description}
         icon={icon}
         title={title}

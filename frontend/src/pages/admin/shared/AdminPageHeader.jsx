@@ -3,10 +3,15 @@ import '../../../styles/admin/AdminWorkspace.css'
 function AdminPageHeader({
   actions,
   breadcrumbs = ['Admin'],
+  className = '',
   description,
   icon: Icon,
   title,
 }) {
+  const headerClassName = [
+    'admin-page-header',
+    className,
+  ].filter(Boolean).join(' ')
   const sectionLabel = breadcrumbs.length > 2
     ? breadcrumbs[breadcrumbs.length - 2]
     : breadcrumbs.length === 2
@@ -14,7 +19,7 @@ function AdminPageHeader({
       : ''
 
   return (
-    <header className="admin-page-header">
+    <header className={headerClassName}>
       <div className="admin-page-header__copy">
         {sectionLabel && (
           <span className="admin-page-header__section">{sectionLabel}</span>

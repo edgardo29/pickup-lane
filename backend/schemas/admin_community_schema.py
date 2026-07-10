@@ -144,7 +144,9 @@ class AdminCommunityGameListItemRead(BaseModel):
     payment_collection_type: str
     starts_at: datetime
     ends_at: datetime
+    starts_on_local: date
     timezone: str
+    venue_name: str
     city: str
     state: str
     price_per_player_cents: int
@@ -161,6 +163,8 @@ class AdminCommunityGameListRead(BaseModel):
     total_count: int = 0
     offset: int = 0
     limit: int = 50
+    next_cursor: str | None = None
+    has_more: bool = False
 
 
 class AdminCommunityGameDetailRead(BaseModel):
@@ -188,7 +192,7 @@ class AdminCommunityGameDetailRead(BaseModel):
 class AdminCommunityGameHidePaymentTextCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    reason: str = Field(min_length=1, max_length=1000)
+    reason: str = Field(min_length=1, max_length=100)
     idempotency_key: str = Field(min_length=8, max_length=160)
 
 
@@ -203,7 +207,7 @@ class AdminCommunityGameHidePaymentTextResultRead(BaseModel):
 class AdminCommunityGameReviewFlagCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    reason: str = Field(min_length=1, max_length=1000)
+    reason: str = Field(min_length=1, max_length=100)
     idempotency_key: str = Field(min_length=8, max_length=160)
 
 

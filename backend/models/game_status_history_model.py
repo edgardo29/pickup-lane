@@ -27,14 +27,14 @@ class GameStatusHistory(Base):
         CheckConstraint(
             (
                 "(old_game_status IS NULL OR old_game_status IN "
-                "('scheduled', 'full', 'cancelled', 'completed', 'abandoned'))"
+                "('active', 'completed', 'cancelled', 'expired', 'removed'))"
             ),
             name="ck_game_status_history_old_game_status",
         ),
         CheckConstraint(
             (
                 "new_game_status IN "
-                "('scheduled', 'full', 'cancelled', 'completed', 'abandoned')"
+                "('active', 'completed', 'cancelled', 'expired', 'removed')"
             ),
             name="ck_game_status_history_new_game_status",
         ),

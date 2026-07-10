@@ -121,7 +121,7 @@ def test_sub_posts_create_get_list_cancel_and_remove(client: TestClient):
         json={"cancel_reason": "Weather issue."},
     )
     assert cancel_response.status_code == 200, cancel_response.text
-    assert cancel_response.json()["post_status"] == "canceled"
+    assert cancel_response.json()["post_status"] == "cancelled"
     assert cancel_response.json()["canceled_at"] is not None
 
     list_after_cancel = client.get("/need-a-sub/posts?city=Chicago&state=IL")
@@ -142,7 +142,7 @@ def test_sub_posts_create_get_list_cancel_and_remove(client: TestClient):
     history_response = client.get(f"/need-a-sub/posts/{post['id']}/status-history")
     assert history_response.status_code == 200, history_response.text
     status_history = history_response.json()
-    assert [row["new_status"] for row in status_history] == ["active", "canceled"]
+    assert [row["new_status"] for row in status_history] == ["active", "cancelled"]
     assert status_history[-1]["change_source"] == "owner"
     assert status_history[-1]["change_reason"] == "Weather issue."
 
@@ -171,7 +171,7 @@ def test_sub_posts_create_get_list_cancel_and_remove(client: TestClient):
     assert audit_action["reason"] == "Moderation cleanup."
     assert audit_action["metadata"] == {
         "source": "need_a_sub",
-        "old_status": "canceled",
+        "old_status": "cancelled",
         "new_status": "removed",
         "removed_by": "admin",
     }
@@ -307,7 +307,7 @@ def test_sub_posts_cancel_cancels_active_requests_and_blocks_review(client: Test
 
     review_response = client.get(f"/need-a-sub/posts/{post['id']}/requests")
     assert review_response.status_code == 400, review_response.text
-    assert "Only active or filled posts can be reviewed" in review_response.text
+    assert "Only active posts can be reviewed" in review_response.text
 
     for player, sub_request in (
         (pending_player, pending_request),
@@ -349,10 +349,10 @@ def test_sub_posts_cancel_rejects_non_owner_and_second_cancel(client: TestClient
         json={"cancel_reason": "Again."},
     )
     assert second_cancel.status_code == 400, second_cancel.text
-    assert "Only active or filled posts can be canceled" in second_cancel.text
+    assert "Only active posts can be cancelled" in second_cancel.text
 
 
-def test_sub_posts_canceled_post_cannot_be_edited(client: TestClient):
+def test_sub_posts_cancelled_post_cannot_be_edited(client: TestClient):
     owner = create_user(client)
     post = create_sub_post(client, owner["id"])
 
@@ -368,7 +368,7 @@ def test_sub_posts_canceled_post_cannot_be_edited(client: TestClient):
         json=build_sub_post_payload(format_label="3v3"),
     )
     assert edit_response.status_code == 400, edit_response.text
-    assert "Only active or filled posts can be edited" in edit_response.text
+    assert "Only active posts can be edited" in edit_response.text
 
 
 def test_sub_posts_cancel_notifies_active_requesters_and_resolves_owner_row(
@@ -1285,14 +1285,14 @@ def test_sub_posts_edit_cancel_and_remove_expire_due_post_before_action(client: 
         json=build_sub_post_payload(format_label="11v11"),
     )
     assert edit_response.status_code == 400, edit_response.text
-    assert "Only active or filled posts can be edited" in edit_response.text
+    assert "Only active posts can be edited" in edit_response.text
 
     cancel_response = client.patch(
         f"/need-a-sub/posts/{post['id']}/cancel",
         json={"cancel_reason": "Too late."},
     )
     assert cancel_response.status_code == 400, cancel_response.text
-    assert "Only active or filled posts can be canceled" in cancel_response.text
+    assert "Only active posts can be cancelled" in cancel_response.text
 
     authenticate_as(admin["id"])
     remove_response = client.patch(
@@ -1517,7 +1517,11 @@ def test_sub_posts_expiration_service_expires_posts_and_open_requests(client: Te
         db.refresh(db_post)
         db_request = db.get(SubPostRequest, UUID(request_response.json()["id"]))
 
-    assert counts == {"posts_expired": 1, "requests_expired": 1}
+    assert counts == {
+        "posts_completed": 0,
+        "posts_expired": 1,
+        "requests_expired": 1,
+    }
     assert db_post.post_status == "expired"
     assert db_request.request_status == "expired"
 

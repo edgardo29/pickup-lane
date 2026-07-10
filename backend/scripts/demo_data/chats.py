@@ -24,7 +24,7 @@ def seed_game_chats(db: Session, users: dict[str, User], games: dict[str, Game])
             {
                 "game_id": game.id,
                 "chat_status": "active",
-                "locked_at": None,
+                "closed_at": None,
                 "updated_at": timestamp,
             },
         )
@@ -47,12 +47,18 @@ def seed_game_chats(db: Session, users: dict[str, User], games: dict[str, Game])
                     "is_pinned": message["is_pinned"],
                     "pinned_at": message_timestamp if message["is_pinned"] else None,
                     "pinned_by_user_id": message["sender_user_id"] if message["is_pinned"] else None,
-                    "moderation_status": "visible",
+                    "visibility_status": "visible",
+                    "review_status": "clear",
                     "created_at": message_timestamp,
                     "updated_at": message_timestamp,
                     "edited_at": None,
-                    "deleted_at": None,
-                    "deleted_by_user_id": None,
+                    "reviewed_at": None,
+                    "reviewed_by_user_id": None,
+                    "removed_at": None,
+                    "removed_by_user_id": None,
+                    "removed_source": None,
+                    "restored_at": None,
+                    "restored_by_user_id": None,
                 },
             )
 
