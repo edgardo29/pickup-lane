@@ -101,7 +101,7 @@ def seed_game_status_history_scenario() -> dict[str, UUID]:
                 "game_type": "official",
                 "payment_collection_type": "in_app",
                 "publish_status": "published",
-                "game_status": "scheduled",
+                "game_status": "active",
                 "title": "Dev Game Ready For Status History",
                 "venue_id": venue.id,
                 "venue_name_snapshot": venue.name,
@@ -155,8 +155,8 @@ def main() -> None:
     print(f'  "game_id": "{ids["status_history_game_id"]}",')
     print('  "old_publish_status": "draft",')
     print('  "new_publish_status": "published",')
-    print('  "old_game_status": "scheduled",')
-    print('  "new_game_status": "scheduled",')
+    print('  "old_game_status": "active",')
+    print('  "new_game_status": "active",')
     print(f'  "changed_by_user_id": "{ids["status_history_admin_id"]}",')
     print('  "change_source": "admin",')
     print('  "change_reason": "Published the game for players to book."')

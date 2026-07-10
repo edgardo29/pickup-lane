@@ -1,7 +1,10 @@
 """Admin community game support workflows."""
 
 import uuid
+from base64 import urlsafe_b64decode, urlsafe_b64encode
+from binascii import Error as BinasciiError
 from datetime import datetime, timezone
+from json import JSONDecodeError, dumps, loads
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, case, func, or_, select
@@ -55,6 +58,7 @@ from backend.services.admin_record_rules import (
     normalize_optional_text,
 )
 from backend.services.game_participant_rules import (
+    ACTIVE_ROSTER_PARTICIPANT_STATUSES,
     CANCELLED_PARTICIPANT_STATUSES,
     ROSTER_USER_PARTICIPANT_TYPES,
 )
@@ -68,6 +72,21 @@ PAYMENT_TEXT_STATUS_HIDDEN = "hidden"
 PAYMENT_TEXT_STATUS_VISIBLE = "visible"
 HIDE_PAYMENT_TEXT_ACTION_TYPE = "hide_unsafe_community_payment_text"
 COMMUNITY_REVIEW_FLAG_TYPE = "community_game_review_required"
+COMMUNITY_GAME_LIST_CURSOR_CONTEXT_KEYS = {
+    "query",
+    "view",
+    "publish_status",
+    "sort",
+}
+COMMUNITY_GAME_LIST_ASCENDING_VIEWS = {"active", "full"}
+COMMUNITY_GAME_LIST_VIEWS = {
+    "active",
+    "full",
+    "completed",
+    "cancelled",
+    "expired",
+    "removed",
+}
 
 
 def parse_uuid(value: str) -> uuid.UUID | None:
@@ -80,6 +99,207 @@ def parse_uuid(value: str) -> uuid.UUID | None:
 def normalize_search_query(value: str | None) -> str | None:
     normalized = " ".join((value or "").strip().lower().split())
     return normalized or None
+
+
+def escape_like_search(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def build_user_full_name_search_expression(user_model: type[User]):
+    return func.concat(
+        func.coalesce(user_model.first_name, ""),
+        " ",
+        func.coalesce(user_model.last_name, ""),
+    )
+
+
+def encode_admin_community_game_list_cursor(
+    *,
+    game: Game,
+    query: str | None,
+    view: str,
+    publish_status: str | None,
+) -> str:
+    payload = {
+        "query": query,
+        "view": view,
+        "publish_status": publish_status,
+        "sort": get_admin_community_game_list_sort(view),
+        "starts_at": game.starts_at.isoformat(),
+        "created_at": game.created_at.isoformat(),
+        "id": str(game.id),
+    }
+    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return urlsafe_b64encode(serialized).decode("ascii")
+
+
+def decode_admin_community_game_list_cursor(
+    cursor: str | None,
+) -> dict[str, object] | None:
+    if cursor is None:
+        return None
+
+    try:
+        decoded = urlsafe_b64decode(cursor.encode("ascii"))
+        payload = loads(decoded.decode("utf-8"))
+    except (BinasciiError, UnicodeDecodeError, ValueError, JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    required_keys = {
+        *COMMUNITY_GAME_LIST_CURSOR_CONTEXT_KEYS,
+        "starts_at",
+        "created_at",
+        "id",
+    }
+    if not required_keys.issubset(payload):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    return payload
+
+
+def validate_admin_community_game_list_cursor_context(
+    cursor_payload: dict[str, object] | None,
+    *,
+    query: str | None,
+    view: str,
+    publish_status: str | None,
+) -> None:
+    if cursor_payload is None:
+        return
+
+    if (
+        cursor_payload["query"] != query
+        or cursor_payload["view"] != view
+        or cursor_payload["publish_status"] != publish_status
+        or cursor_payload["sort"] != get_admin_community_game_list_sort(view)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor does not match the current query.",
+        )
+
+
+def parse_admin_community_game_list_cursor_datetime(
+    cursor_payload: dict[str, object],
+    key: str,
+) -> datetime:
+    value = cursor_payload[key]
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+
+def parse_admin_community_game_list_cursor_uuid(
+    cursor_payload: dict[str, object],
+) -> uuid.UUID:
+    value = cursor_payload["id"]
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    try:
+        return uuid.UUID(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+
+def build_admin_community_game_list_cursor_filter(
+    cursor_payload: dict[str, object],
+    *,
+    view: str,
+):
+    starts_at = parse_admin_community_game_list_cursor_datetime(
+        cursor_payload,
+        "starts_at",
+    )
+    created_at = parse_admin_community_game_list_cursor_datetime(
+        cursor_payload,
+        "created_at",
+    )
+    game_id = parse_admin_community_game_list_cursor_uuid(cursor_payload)
+
+    if get_admin_community_game_list_sort(view) == "starts_at_asc":
+        return or_(
+            Game.starts_at > starts_at,
+            and_(Game.starts_at == starts_at, Game.created_at > created_at),
+            and_(
+                Game.starts_at == starts_at,
+                Game.created_at == created_at,
+                Game.id > game_id,
+            ),
+        )
+
+    return or_(
+        Game.starts_at < starts_at,
+        and_(Game.starts_at == starts_at, Game.created_at < created_at),
+        and_(
+            Game.starts_at == starts_at,
+            Game.created_at == created_at,
+            Game.id < game_id,
+        ),
+    )
+
+
+def get_admin_community_game_list_sort(view: str) -> str:
+    return "starts_at_asc" if view in COMMUNITY_GAME_LIST_ASCENDING_VIEWS else "starts_at_desc"
+
+
+def build_community_game_active_roster_count_subquery():
+    return (
+        select(
+            GameParticipant.game_id.label("game_id"),
+            func.count(GameParticipant.id).label("roster_count"),
+        )
+        .where(
+            GameParticipant.participant_status.in_(
+                ACTIVE_ROSTER_PARTICIPANT_STATUSES
+            ),
+        )
+        .group_by(GameParticipant.game_id)
+        .subquery()
+    )
+
+
+def apply_admin_community_game_view_filter(statement, view: str):
+    if view in {"active", "full"}:
+        roster_counts = build_community_game_active_roster_count_subquery()
+        roster_count = func.coalesce(roster_counts.c.roster_count, 0)
+        statement = statement.outerjoin(
+            roster_counts,
+            roster_counts.c.game_id == Game.id,
+        ).where(Game.game_status == "active")
+        if view == "full":
+            return statement.where(roster_count >= Game.total_spots)
+        return statement.where(roster_count < Game.total_spots)
+
+    return statement.where(Game.game_status == view)
 
 
 def build_user_display_name(user: User) -> str:
@@ -891,7 +1111,9 @@ def serialize_list_item(
         payment_collection_type=game.payment_collection_type,
         starts_at=game.starts_at,
         ends_at=game.ends_at,
+        starts_on_local=game.starts_on_local,
         timezone=game.timezone,
+        venue_name=game.venue_name_snapshot,
         city=game.city_snapshot,
         state=game.state_snapshot,
         price_per_player_cents=game.price_per_player_cents,
@@ -912,38 +1134,50 @@ def list_admin_community_games(
     *,
     viewer_user: User,
     query: str | None = None,
-    game_status: str | None = None,
+    view: str = "active",
     publish_status: str | None = None,
     offset: int = 0,
     limit: int = 50,
-) -> tuple[list[AdminCommunityGameListItemRead], int]:
+    cursor: str | None = None,
+) -> tuple[list[AdminCommunityGameListItemRead], int, str | None, bool]:
+    normalized_query = normalize_search_query(query)
+    cursor_payload = decode_admin_community_game_list_cursor(cursor)
+    validate_admin_community_game_list_cursor_context(
+        cursor_payload,
+        query=normalized_query,
+        view=view,
+        publish_status=publish_status,
+    )
+
     statement = (
         select(Game, User, CommunityGameDetail)
         .outerjoin(User, Game.host_user_id == User.id)
         .outerjoin(CommunityGameDetail, CommunityGameDetail.game_id == Game.id)
         .where(Game.game_type == "community", Game.deleted_at.is_(None))
     )
-
-    if game_status is not None:
-        statement = statement.where(Game.game_status == game_status)
+    statement = apply_admin_community_game_view_filter(statement, view)
 
     if publish_status is not None:
         statement = statement.where(Game.publish_status == publish_status)
 
-    normalized_query = normalize_search_query(query)
     if normalized_query is not None:
         query_uuid = parse_uuid(normalized_query)
-        text_match = f"%{normalized_query}%"
+        text_match = f"%{escape_like_search(normalized_query)}%"
         search_conditions = [
-            func.lower(Game.title).like(text_match),
-            func.lower(Game.city_snapshot).like(text_match),
-            func.lower(Game.state_snapshot).like(text_match),
-            func.lower(func.coalesce(User.first_name, "")).like(text_match),
-            func.lower(func.coalesce(User.last_name, "")).like(text_match),
+            Game.title.ilike(text_match, escape="\\"),
+            Game.venue_name_snapshot.ilike(text_match, escape="\\"),
+            Game.city_snapshot.ilike(text_match, escape="\\"),
+            Game.state_snapshot.ilike(text_match, escape="\\"),
+            func.coalesce(User.first_name, "").ilike(text_match, escape="\\"),
+            func.coalesce(User.last_name, "").ilike(text_match, escape="\\"),
+            build_user_full_name_search_expression(User).ilike(
+                text_match,
+                escape="\\",
+            ),
         ]
         if user_has_admin_permission(viewer_user, PERMISSION_USERS_READ):
             search_conditions.append(
-                func.lower(func.coalesce(User.email, "")).like(text_match)
+                func.coalesce(User.email, "").ilike(text_match, escape="\\")
             )
         if query_uuid is not None:
             search_conditions.append(Game.id == query_uuid)
@@ -954,36 +1188,68 @@ def list_admin_community_games(
         statement.with_only_columns(Game.id).order_by(None).subquery()
     )
     total_count = int(db.scalar(count_statement) or 0)
+
+    if cursor_payload is not None:
+        statement = statement.where(
+            build_admin_community_game_list_cursor_filter(
+                cursor_payload,
+                view=view,
+            )
+        )
+
+    if get_admin_community_game_list_sort(view) == "starts_at_asc":
+        statement = statement.order_by(
+            Game.starts_at.asc(),
+            Game.created_at.asc(),
+            Game.id.asc(),
+        )
+    else:
+        statement = statement.order_by(
+            Game.starts_at.desc(),
+            Game.created_at.desc(),
+            Game.id.desc(),
+        )
+    if cursor_payload is None:
+        statement = statement.offset(offset)
+
     rows = db.execute(
-        statement.order_by(Game.starts_at.desc(), Game.id.desc())
-        .offset(offset)
-        .limit(limit)
+        statement.limit(limit + 1)
     ).all()
+    page_rows = rows[:limit]
+    has_more = len(rows) > limit
     review_statuses = get_community_review_flag_statuses(
         db,
-        [game.id for game, _, _ in rows],
+        [game.id for game, _, _ in page_rows],
     )
     participant_summaries = summarize_game_participants_by_game(
         db,
-        [game.id for game, _, _ in rows],
+        [game.id for game, _, _ in page_rows],
     )
 
-    return (
-        [
-            serialize_list_item(
-                game=game,
-                host=host,
-                participant_summary=participant_summaries.get(
-                    game.id,
-                    empty_participant_summary(),
-                ),
-                review_flag_status=review_statuses.get(game.id, "not_flagged"),
-                snapshot=snapshot,
-            )
-            for game, host, snapshot in rows
-        ],
-        total_count,
-    )
+    games = [
+        serialize_list_item(
+            game=game,
+            host=host,
+            participant_summary=participant_summaries.get(
+                game.id,
+                empty_participant_summary(),
+            ),
+            review_flag_status=review_statuses.get(game.id, "not_flagged"),
+            snapshot=snapshot,
+        )
+        for game, host, snapshot in page_rows
+    ]
+    next_cursor = None
+    if has_more and page_rows:
+        last_game = page_rows[-1][0]
+        next_cursor = encode_admin_community_game_list_cursor(
+            game=last_game,
+            query=normalized_query,
+            view=view,
+            publish_status=publish_status,
+        )
+
+    return games, total_count, next_cursor, has_more
 
 
 def get_admin_community_game_detail(

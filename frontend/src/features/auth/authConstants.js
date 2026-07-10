@@ -1,5 +1,7 @@
 export const securityText = 'Your information is secure and will never be shared.'
 
+export const minimumSignupAge = 18
+
 export const monthOptions = [
   ['01', 'January'],
   ['02', 'February'],

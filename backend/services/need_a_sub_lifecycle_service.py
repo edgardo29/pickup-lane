@@ -26,7 +26,6 @@ from backend.services.need_a_sub_rules import (
     ACTIVE_VISIBLE_POST_STATUSES,
     EXPIRABLE_REQUEST_STATUSES,
     ensure_aware,
-    normalize_post_status_change_source,
     now_utc,
 )
 
@@ -139,6 +138,13 @@ def position_is_filled(db: Session, position: SubPostPosition) -> bool:
     return confirmed_count >= position.spots_needed
 
 
+def sub_post_is_full(db: Session, sub_post: SubPost) -> bool:
+    positions = list_lifecycle_positions(db, sub_post.id)
+    return bool(positions) and all(
+        position_is_filled(db, position) for position in positions
+    )
+
+
 def recalculate_filled_status(
     db: Session,
     sub_post: SubPost,
@@ -146,45 +152,22 @@ def recalculate_filled_status(
     change_source: str,
 ) -> None:
     db.flush()
-    positions = list_lifecycle_positions(db, sub_post.id)
-    is_filled = bool(positions) and all(
-        position_is_filled(db, position) for position in positions
-    )
+    is_filled = sub_post_is_full(db, sub_post)
     current_time = now_utc()
-    post_change_source = normalize_post_status_change_source(change_source)
 
-    if is_filled and sub_post.post_status == "active":
-        old_status = sub_post.post_status
-        sub_post.post_status = "filled"
+    if sub_post.post_status != "active":
+        return
+
+    if is_filled and sub_post.filled_at is None:
         sub_post.filled_at = current_time
         sub_post.updated_at = current_time
         db.add(sub_post)
-        add_post_status_history(
-            db,
-            sub_post,
-            old_status,
-            "filled",
-            changed_by_user_id,
-            post_change_source,
-        )
-    elif (
-        not is_filled
-        and sub_post.post_status == "filled"
-        and current_time < ensure_aware(sub_post.starts_at)
+    elif not is_filled and sub_post.filled_at is not None and current_time < ensure_aware(
+        sub_post.starts_at
     ):
-        old_status = sub_post.post_status
-        sub_post.post_status = "active"
         sub_post.filled_at = None
         sub_post.updated_at = current_time
         db.add(sub_post)
-        add_post_status_history(
-            db,
-            sub_post,
-            old_status,
-            "active",
-            changed_by_user_id,
-            post_change_source,
-        )
 
 
 def get_sub_post_for_history_or_404(db: Session, sub_post_id: uuid.UUID) -> SubPost:
@@ -270,6 +253,7 @@ def list_sub_post_request_status_history(
 def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
     current_time = now_utc()
     expired_posts_count = 0
+    completed_posts_count = 0
     expired_requests_count = 0
 
     posts = db.scalars(
@@ -281,18 +265,24 @@ def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
 
     for sub_post in posts:
         old_status = sub_post.post_status
-        sub_post.post_status = "expired"
+        new_status = "completed" if sub_post_is_full(db, sub_post) else "expired"
+        sub_post.post_status = new_status
+        if new_status == "completed" and sub_post.filled_at is None:
+            sub_post.filled_at = current_time
         sub_post.updated_at = current_time
         db.add(sub_post)
         add_post_status_history(
             db,
             sub_post,
             old_status,
-            "expired",
+            new_status,
             None,
             "scheduled_job",
         )
-        expired_posts_count += 1
+        if new_status == "completed":
+            completed_posts_count += 1
+        else:
+            expired_posts_count += 1
 
     requests = db.scalars(
         select(SubPostRequest)
@@ -326,6 +316,7 @@ def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
 
     db.commit()
     return {
+        "posts_completed": completed_posts_count,
         "posts_expired": expired_posts_count,
         "requests_expired": expired_requests_count,
     }

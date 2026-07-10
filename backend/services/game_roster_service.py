@@ -311,9 +311,6 @@ def join_game_roster_workflow(
             first_roster_order=get_next_roster_order(db, db_game.id),
         )
 
-        if roster_count + party_size >= db_game.total_spots:
-            db_game.game_status = "full"
-
         try:
             db.add(booking)
             if game_requires_app_player_payment(db_game):
@@ -372,9 +369,6 @@ def join_game_roster_workflow(
         participant_status="waitlisted",
         first_roster_order=None,
     )
-    if spots_left <= 0:
-        db_game.game_status = "full"
-
     try:
         db.add(booking)
         db.add(waitlist_entry)
@@ -485,9 +479,6 @@ def leave_game_roster_workflow(
         if app_refund_eligible and not was_waitlisted:
             update_booking_payment_status(db, booking.id, "refunded", now)
 
-    if db_game.game_status == "full" and not was_waitlisted:
-        db_game.game_status = "scheduled"
-
     db_game.updated_at = now
     if not was_waitlisted:
         db.flush()
@@ -541,7 +532,7 @@ def add_booking_game_guests_workflow(
     if db_game.publish_status != "published" or db_game.game_status not in JOINABLE_GAME_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only published scheduled or full games can add guests.",
+            detail="Only published active games can add guests.",
         )
 
     now = datetime.now(timezone.utc)
@@ -676,7 +667,7 @@ def add_host_game_guests_workflow(
     if db_game.publish_status != "published" or db_game.game_status not in HOST_EDITABLE_GAME_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only published scheduled or full games can be updated.",
+            detail="Only published active games can be updated.",
         )
 
     now = datetime.now(timezone.utc)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, ClipboardList } from 'lucide-react'
+import { CheckCircle2, ClipboardList, X } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
 import {
   flagAdminCommunityGameForReview,
@@ -12,6 +12,7 @@ const RESOLUTION_OPTIONS = [
   { label: 'Duplicate flag', value: 'duplicate' },
   { label: 'Invalid flag', value: 'invalid_flag' },
 ]
+const REASON_MAX_LENGTH = 100
 
 function createReviewFlagIdempotencyKey(gameId) {
   const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
@@ -128,11 +129,21 @@ function AdminCommunityGameReviewModal({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="admin-community-modal__header admin-community-modal__header--review">
-          <span><Icon /></span>
           <div>
-            <h2 id="admin-community-review-title">{title}</h2>
-            <p>{detail.game.title}</p>
+            <span className="admin-community-modal__icon"><Icon /></span>
+            <div>
+              <h2 id="admin-community-review-title">{title}</h2>
+            </div>
           </div>
+          <button
+            aria-label={`Close ${title}`}
+            className="admin-community-modal__close"
+            disabled={isSubmitting}
+            type="button"
+            onClick={onClose}
+          >
+            <X />
+          </button>
         </header>
 
         <form className="admin-community-modal__form" onSubmit={handleSubmit}>
@@ -161,12 +172,12 @@ function AdminCommunityGameReviewModal({
             <span>{isResolving ? 'Resolution reason' : 'Review reason'}</span>
             <textarea
               disabled={isSubmitting}
-              maxLength={1000}
+              maxLength={REASON_MAX_LENGTH}
               placeholder="Required internal reason"
               value={reason}
               onChange={handleReasonChange}
             />
-            <small>{reason.length}/1000</small>
+            <small>{reason.length}/{REASON_MAX_LENGTH}</small>
           </label>
           {executionError && (
             <div className="admin-community-modal__message">
@@ -175,18 +186,11 @@ function AdminCommunityGameReviewModal({
           )}
           <div className="admin-community-modal__actions">
             <button
-              className="admin-community-modal__secondary"
-              disabled={isSubmitting}
-              type="button"
-              onClick={onClose}
-            >
-              Back
-            </button>
-            <button
               className="admin-community-modal__primary"
               disabled={isSubmitting || !reason.trim()}
               type="submit"
             >
+              <Icon aria-hidden="true" />
               {isSubmitting
                 ? isResolving ? 'Resolving' : 'Flagging'
                 : isResolving ? 'Resolve flag' : 'Flag game'}

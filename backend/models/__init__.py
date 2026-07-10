@@ -8,6 +8,7 @@ from backend.models.booking_status_history_model import BookingStatusHistory
 from backend.models.chat_message_model import ChatMessage
 from backend.models.community_game_detail_model import CommunityGameDetail
 from backend.models.game_chat_model import GameChat
+from backend.models.game_chat_message_detection_model import GameChatMessageDetection
 from backend.models.game_chat_read_model import GameChatRead
 from backend.models.game_credit_model import GameCredit
 from backend.models.game_credit_usage_model import GameCreditUsage
@@ -30,6 +31,9 @@ from backend.models.platform_notice_campaign_model import (
 )
 from backend.models.refund_model import Refund
 from backend.models.sub_post_model import SubPost
+from backend.models.sub_post_chat_message_detection_model import (
+    SubPostChatMessageDetection,
+)
 from backend.models.sub_post_chat_message_model import SubPostChatMessage
 from backend.models.sub_post_chat_model import SubPostChat
 from backend.models.sub_post_chat_read_model import SubPostChatRead
@@ -61,6 +65,7 @@ __all__ = [
     "CommunityGameDetail",
     "GameImage",
     "GameChat",
+    "GameChatMessageDetection",
     "GameChatRead",
     "GameCredit",
     "GameCreditUsage",
@@ -87,6 +92,7 @@ __all__ = [
     "Refund",
     "SubPost",
     "SubPostChat",
+    "SubPostChatMessageDetection",
     "SubPostChatMessage",
     "SubPostChatRead",
     "SubPostPosition",

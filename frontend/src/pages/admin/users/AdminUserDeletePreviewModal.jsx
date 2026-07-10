@@ -36,7 +36,7 @@ function buildImpactRows(preview) {
     {
       label: 'Need a Sub posts',
       value: preview.active_owned_sub_post_count,
-      description: 'Active or filled posts owned by this user',
+      description: 'Active posts owned by this user',
     },
     {
       label: 'Need a Sub requests',

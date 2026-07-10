@@ -451,7 +451,7 @@ def validate_game_cancellation_request(
     if db_game.game_status not in CANCELLABLE_GAME_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only scheduled or full games can be cancelled.",
+            detail="Only active games can be cancelled.",
         )
 
     require_game_not_started(db_game, now, "Games cannot be cancelled after start time.")
@@ -1044,16 +1044,17 @@ def mark_booking_cancelled_for_game_cancellation(
     db.add(booking)
 
 
-def archive_game_chats(db: Session, db_game: Game, now: datetime) -> None:
+def close_game_chats(db: Session, db_game: Game, now: datetime) -> None:
     game_chats = db.scalars(
         select(GameChat).where(
             GameChat.game_id == db_game.id,
-            GameChat.chat_status.in_({"active", "locked"}),
+            GameChat.chat_status == "active",
         )
     ).all()
 
     for game_chat in game_chats:
-        game_chat.chat_status = "archived"
+        game_chat.chat_status = "closed"
+        game_chat.closed_at = now
         game_chat.updated_at = now
         db.add(game_chat)
 
@@ -1366,7 +1367,7 @@ def apply_game_cancellation_state(
     payment_summary = cancel_game_bookings(
         db, db_game, current_user, now, cancellation_type
     )
-    archive_game_chats(db, db_game, now)
+    close_game_chats(db, db_game, now)
     create_game_cancelled_notifications(
         db,
         db_game,

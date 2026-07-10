@@ -140,7 +140,7 @@ def build_community_game_payload(
         "game_type": "community",
         "payment_collection_type": "external_host",
         "publish_status": "published",
-        "game_status": "scheduled",
+        "game_status": "active",
         "title": "Community Game",
         "venue_id": venue["id"],
         "venue_name_snapshot": venue["name"],
@@ -1215,7 +1215,7 @@ def test_cancel_official_game_refunds_paid_payment_and_writes_audit_rows(
     assert history_response.status_code == 200, history_response.text
     history = history_response.json()
     assert len(history) == 1
-    assert history[0]["old_game_status"] == "scheduled"
+    assert history[0]["old_game_status"] == "active"
     assert history[0]["new_game_status"] == "cancelled"
     assert history[0]["change_source"] == "admin"
 
@@ -1895,11 +1895,11 @@ def test_cancel_game_archives_chat_and_blocks_chat_reads(client: TestClient):
         lambda: client.get(f"/game-chats/{chat['id']}"),
     )
     assert get_chat_response.status_code == 200, get_chat_response.text
-    assert get_chat_response.json()["chat_status"] == "archived"
+    assert get_chat_response.json()["chat_status"] == "closed"
 
     authenticate_as(player["id"])
     messages_response = client.get(
-        f"/chat-messages?chat_id={chat['id']}&moderation_status=visible"
+        f"/chat-messages?chat_id={chat['id']}&visibility_status=visible"
     )
     assert messages_response.status_code == 403, messages_response.text
 
@@ -1936,7 +1936,7 @@ def test_games_reject_invalid_schedule(client: TestClient):
                 "game_type": "official",
                 "payment_collection_type": "in_app",
                 "publish_status": "draft",
-                "game_status": "scheduled",
+                "game_status": "active",
                 "title": "Bad Schedule",
                 "venue_id": venue["id"],
                 "venue_name_snapshot": venue["name"],
@@ -1973,7 +1973,7 @@ def test_games_reject_past_start_time(client: TestClient):
                 "game_type": "official",
                 "payment_collection_type": "in_app",
                 "publish_status": "published",
-                "game_status": "scheduled",
+                "game_status": "active",
                 "title": "Past Start",
                 "venue_id": venue["id"],
                 "venue_name_snapshot": venue["name"],
@@ -2010,7 +2010,7 @@ def test_games_reject_total_spots_below_format_minimum(client: TestClient):
                 "game_type": "official",
                 "payment_collection_type": "in_app",
                 "publish_status": "published",
-                "game_status": "scheduled",
+                "game_status": "active",
                 "title": "Too Few Spots",
                 "venue_id": venue["id"],
                 "venue_name_snapshot": venue["name"],
@@ -2059,7 +2059,7 @@ def test_community_host_can_only_publish_one_active_game_per_local_date(client: 
                 "game_type": "community",
                 "payment_collection_type": "external_host",
                 "publish_status": "published",
-                "game_status": "scheduled",
+                "game_status": "active",
                 "title": "Second Community Game",
                 "venue_id": venue["id"],
                 "venue_name_snapshot": venue["name"],
@@ -2286,7 +2286,7 @@ def test_cancelled_community_game_does_not_block_same_day_publish(client: TestCl
         ends_at=(starts_at + timedelta(hours=5)).isoformat(),
     )
 
-    assert allowed_game["game_status"] == "scheduled"
+    assert allowed_game["game_status"] == "active"
 
 
 def test_community_host_edit_rejects_same_local_date_collision(client: TestClient):

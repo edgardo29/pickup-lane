@@ -261,6 +261,8 @@
   width: 18px;
   height: 18px;
   color: rgba(248, 250, 252, 0.55);
+  display: block;
+  justify-self: center;
 }
 
 .auth-field__input:focus-within {
@@ -451,11 +453,13 @@ a.auth-primary-button {
 .auth-secure-note,
 .auth-inline-note {
   margin: 4px 0 0;
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, auto);
   align-items: center;
   justify-content: center;
   gap: 9px;
   line-height: 1.4;
+  text-align: left;
 }
 
 .auth-secure-note {
@@ -674,9 +678,13 @@ a.auth-primary-button {
   }
 
   .auth-provider-grid,
-  .auth-two-column,
-  .auth-birthday-grid {
+  .auth-two-column {
     grid-template-columns: 1fr;
+  }
+
+  .auth-birthday-grid {
+    grid-template-columns: minmax(0, 1.25fr) minmax(58px, 0.75fr) minmax(70px, 0.9fr);
+    gap: 8px;
   }
 
   .auth-field__input {

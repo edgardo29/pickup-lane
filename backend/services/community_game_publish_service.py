@@ -142,7 +142,7 @@ def build_game_data(
             "external_host" if publish_data.price_per_player_cents > 0 else "none"
         ),
         "publish_status": "published",
-        "game_status": "scheduled",
+        "game_status": "active",
         "title": f"{venue.name} {publish_data.format_label}",
         "description": publish_data.game_notes,
         "venue_id": venue.id,

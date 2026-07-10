@@ -8,7 +8,7 @@ export async function getChatAuthHeaders(firebaseUser) {
 export function buildChatMessagesPath(chatId, afterCreatedAt = '') {
   const query = new URLSearchParams({
     chat_id: chatId,
-    moderation_status: 'visible',
+    visibility_status: 'visible',
     limit: '50',
   })
 

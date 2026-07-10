@@ -47,7 +47,7 @@ def test_sub_post_status_history_records_create_and_cancel(client: TestClient):
     )
     assert updated_history_response.status_code == 200, updated_history_response.text
     updated_history = updated_history_response.json()
-    assert [row["new_status"] for row in updated_history] == ["active", "canceled"]
+    assert [row["new_status"] for row in updated_history] == ["active", "cancelled"]
 
 
 def test_sub_post_status_history_blocks_non_owner(client: TestClient):

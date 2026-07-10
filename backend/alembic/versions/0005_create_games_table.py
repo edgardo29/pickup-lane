@@ -30,7 +30,7 @@ def upgrade() -> None:
             "game_status",
             sa.String(length=20),
             nullable=False,
-            server_default=sa.text("'scheduled'"),
+            server_default=sa.text("'active'"),
         ),
         sa.Column("title", sa.String(length=150), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
@@ -147,7 +147,7 @@ def upgrade() -> None:
             name="ck_games_publish_status",
         ),
         sa.CheckConstraint(
-            "game_status IN ('scheduled', 'full', 'cancelled', 'completed', 'abandoned')",
+            "game_status IN ('active', 'completed', 'cancelled', 'expired', 'removed')",
             name="ck_games_game_status",
         ),
         sa.CheckConstraint(
@@ -294,7 +294,7 @@ def upgrade() -> None:
         postgresql_where=sa.text(
             "game_type = 'community' "
             "AND publish_status = 'published' "
-            "AND game_status IN ('scheduled', 'full') "
+            "AND game_status = 'active' "
             "AND deleted_at IS NULL"
         ),
     )
@@ -305,7 +305,7 @@ def upgrade() -> None:
         unique=False,
         postgresql_where=sa.text(
             "publish_status = 'published' "
-            "AND game_status IN ('scheduled', 'full') "
+            "AND game_status = 'active' "
             "AND deleted_at IS NULL"
         ),
     )
@@ -374,11 +374,85 @@ def upgrade() -> None:
         postgresql_ops={"state_snapshot": "gin_trgm_ops"},
         postgresql_where=admin_official_index_where,
     )
+    admin_community_index_where = sa.text(
+        "game_type = 'community' "
+        "AND deleted_at IS NULL"
+    )
+    op.create_index(
+        "ix_games_admin_community_status_local_starts_created_id",
+        "games",
+        [
+            "game_status",
+            "publish_status",
+            "starts_on_local",
+            "starts_at",
+            "created_at",
+            "id",
+        ],
+        unique=False,
+        postgresql_where=admin_community_index_where,
+    )
+    op.create_index(
+        "ix_games_admin_community_title_trgm",
+        "games",
+        ["title"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"title": "gin_trgm_ops"},
+        postgresql_where=admin_community_index_where,
+    )
+    op.create_index(
+        "ix_games_admin_community_venue_name_trgm",
+        "games",
+        ["venue_name_snapshot"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"venue_name_snapshot": "gin_trgm_ops"},
+        postgresql_where=admin_community_index_where,
+    )
+    op.create_index(
+        "ix_games_admin_community_city_trgm",
+        "games",
+        ["city_snapshot"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"city_snapshot": "gin_trgm_ops"},
+        postgresql_where=admin_community_index_where,
+    )
+    op.create_index(
+        "ix_games_admin_community_state_trgm",
+        "games",
+        ["state_snapshot"],
+        unique=False,
+        postgresql_using="gin",
+        postgresql_ops={"state_snapshot": "gin_trgm_ops"},
+        postgresql_where=admin_community_index_where,
+    )
 
 
 def downgrade() -> None:
     # Downgrade removes the games table and its indexes because this migration
     # only introduces that single table.
+    op.drop_index(
+        "ix_games_admin_community_state_trgm",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_admin_community_city_trgm",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_admin_community_venue_name_trgm",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_admin_community_title_trgm",
+        table_name="games",
+    )
+    op.drop_index(
+        "ix_games_admin_community_status_local_starts_created_id",
+        table_name="games",
+    )
     op.drop_index(
         "ix_games_admin_official_state_trgm",
         table_name="games",

@@ -1376,7 +1376,7 @@
 }
 
 .admin-official-view-tabs {
-  width: fit-content;
+  width: min(100%, 640px);
   max-width: 100%;
   min-height: 0;
   margin: 18px 0 0;
@@ -1385,14 +1385,14 @@
   border-radius: 10px;
   background: rgba(5, 10, 16, 0.44);
   display: grid;
-  grid-template-columns: repeat(3, minmax(108px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
   align-items: center;
 }
 
 .admin-official-view-tabs button {
   min-height: 32px;
-  padding: 0 12px;
+  padding: 0 8px;
   border: 1px solid transparent;
   border-radius: 7px;
   color: rgba(248, 250, 252, 0.72);
@@ -1402,7 +1402,7 @@
   align-items: center;
   justify-content: center;
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 650;
   box-shadow: none;
 }
@@ -1797,9 +1797,9 @@
   min-width: 0;
   overflow: hidden;
   color: #ffffff;
-  font-size: 0.92rem;
-  line-height: 1.12;
-  font-weight: 850;
+  font-size: 0.95rem;
+  line-height: 1.15;
+  font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1808,13 +1808,11 @@
   min-width: 0;
   overflow: hidden;
   margin-top: 7px;
-  color: rgba(248, 250, 252, 0.66);
+  color: rgba(248, 250, 252, 0.76);
   display: flex;
   gap: 7px;
   align-items: center;
-  font-size: 0.74rem;
-  line-height: 1.24;
-  font-weight: 500;
+  font-size: 0.78rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1828,12 +1826,13 @@
   min-height: 34px;
   margin-top: auto;
   padding: 0 14px;
-  border-top: 1px solid rgba(248, 250, 252, 0.07);
+  border-top: 1px solid rgba(248, 250, 252, 0.06);
   display: flex;
+  gap: 10px;
   align-items: center;
   justify-content: space-between;
   color: rgba(248, 250, 252, 0.86);
-  font-size: 0.74rem;
+  font-size: 0.82rem;
 }
 
 .admin-official-game-card__footer span {
@@ -1841,13 +1840,26 @@
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  line-height: 1;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
 .admin-official-game-card__footer strong {
   color: var(--lime);
-  font-weight: 850;
+}
+
+.admin-official-game-card__footer > span:last-child {
+  color: rgba(248, 250, 252, 0.92);
+}
+
+.admin-official-game-card__capacity {
+  flex: 1 1 auto;
+}
+
+.admin-official-game-card__capacity-copy {
+  gap: 3px;
+  align-items: baseline;
+  color: rgba(248, 250, 252, 0.86);
 }
 
 .admin-official-game-card__footer span.is-full strong {
@@ -1862,9 +1874,13 @@
 }
 
 .admin-official-empty-state {
-  min-height: 240px;
-  padding: 34px 22px;
+  min-height: 220px;
+  padding: 30px 22px;
+  border: 1px dashed rgba(248, 250, 252, 0.2);
+  border-radius: 8px;
   color: var(--admin-muted);
+  background: var(--admin-panel-material);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
   display: grid;
   gap: 10px;
   align-content: center;
@@ -1872,17 +1888,28 @@
   text-align: center;
 }
 
+.admin-official-empty-state svg {
+  width: 42px;
+  height: 42px;
+  color: var(--lime);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .admin-official-empty-state strong {
   color: #ffffff;
-  font-size: 1.16rem;
+  font-size: 1.12rem;
   font-weight: 950;
 }
 
 .admin-official-empty-state span {
   max-width: 360px;
   color: var(--admin-muted);
-  font-size: 0.9rem;
-  font-weight: 820;
+  font-size: 0.88rem;
+  font-weight: 650;
   line-height: 1.35;
 }
 
@@ -2638,11 +2665,78 @@
   justify-content: flex-start;
 }
 
+.admin-chat-heading {
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .admin-bookings-panel {
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.admin-official-overview-card {
+  overflow: hidden;
+}
+
+.admin-official-overview-card > .admin-official-panel__heading {
+  min-height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(248, 250, 252, 0.1);
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.admin-official-overview-card .admin-official-panel-title {
+  gap: 10px;
+}
+
+.admin-official-overview-card .admin-official-panel-title svg {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-official-overview-card .admin-official-panel-title h2 {
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.admin-official-overview-fields {
+  padding: 14px 16px 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.admin-official-overview-field {
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 0;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+}
+
+.admin-official-overview-field span {
+  min-width: 0;
+  color: rgba(248, 250, 252, 0.38);
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.admin-official-overview-field strong {
+  min-width: 0;
+  color: rgba(248, 250, 252, 0.94);
+  font-size: 0.86rem;
+  font-weight: 400;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .admin-bookings-heading__copy {
@@ -3390,6 +3484,10 @@
 }
 
 @media (max-width: 1199px) {
+  .admin-official-overview-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .admin-bookings-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3496,10 +3594,20 @@
   }
 
   .admin-official-toolbar,
+  .admin-official-view-tabs,
   .admin-official-count-row,
   .admin-official-error-row {
     align-items: flex-start;
+  }
+
+  .admin-official-toolbar,
+  .admin-official-count-row,
+  .admin-official-error-row {
     flex-direction: column;
+  }
+
+  .admin-official-view-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .admin-official-card-grid {
@@ -3703,6 +3811,7 @@
   }
 
   .admin-official-summary__grid,
+  .admin-official-overview-fields,
   .admin-bookings-table__row,
   .admin-waitlist-table .admin-bookings-table__row,
   .admin-money-table .admin-bookings-table__row,

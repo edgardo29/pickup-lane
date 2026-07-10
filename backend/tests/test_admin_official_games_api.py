@@ -527,35 +527,26 @@ def test_admin_official_games_list_filters_by_view_search_and_date(
     assert completed_games[0]["issues"] == []
 
 
-def test_admin_official_games_cancelled_view_includes_abandoned_games(
+def test_admin_official_games_expired_view_includes_expired_games(
     client: TestClient,
 ):
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
 
     authenticate_as(admin["id"])
-    cancelled_response = client.post(
+    expired_response = client.post(
         "/admin/official-games",
-        json=build_official_game_payload(title="Cancelled Official"),
+        json=build_official_game_payload(title="Expired Official"),
     )
-    assert cancelled_response.status_code == 201, cancelled_response.text
-    cancelled_game = cancelled_response.json()["game"]
-    set_game_status(cancelled_game["id"], "cancelled")
+    assert expired_response.status_code == 201, expired_response.text
+    expired_game = expired_response.json()["game"]
+    set_game_status(expired_game["id"], "expired")
 
-    abandoned_response = client.post(
-        "/admin/official-games",
-        json=build_official_game_payload(title="Abandoned Official"),
-    )
-    assert abandoned_response.status_code == 201, abandoned_response.text
-    abandoned_game = abandoned_response.json()["game"]
-    set_game_status(abandoned_game["id"], "abandoned")
-
-    response = client.get("/admin/official-games?view=cancelled")
+    response = client.get("/admin/official-games?view=expired")
 
     assert response.status_code == 200, response.text
     returned_ids = {item["id"] for item in response.json()["games"]}
-    assert cancelled_game["id"] in returned_ids
-    assert abandoned_game["id"] in returned_ids
+    assert expired_game["id"] in returned_ids
 
 
 def test_admin_official_games_list_cursor_paginates_and_is_query_bound(
@@ -1040,7 +1031,7 @@ def test_admin_official_game_cancel_preview_reports_money_without_mutation(
 
     get_response = client.get(f"/admin/official-games/{game['id']}")
     assert get_response.status_code == 200, get_response.text
-    assert get_response.json()["game"]["game_status"] == "scheduled"
+    assert get_response.json()["game"]["game_status"] == "active"
 
     refunds_response = get_money_as_admin(client, f"/refunds?booking_id={booking['id']}")
     assert refunds_response.status_code == 200, refunds_response.text
@@ -1274,7 +1265,7 @@ def test_admin_official_game_cancel_rejects_reason_over_500_characters(
     assert execute_response.status_code == 422, execute_response.text
     get_response = client.get(f"/admin/official-games/{game['id']}")
     assert get_response.status_code == 200, get_response.text
-    assert get_response.json()["game"]["game_status"] == "scheduled"
+    assert get_response.json()["game"]["game_status"] == "active"
 
 
 def test_admin_official_game_cancel_partial_failure_returns_support_follow_up(
@@ -1427,7 +1418,7 @@ def test_admin_official_game_cancel_credit_failure_happens_before_stripe(
 
     game_response = client.get(f"/admin/official-games/{game['id']}")
     assert game_response.status_code == 200, game_response.text
-    assert game_response.json()["game"]["game_status"] == "scheduled"
+    assert game_response.json()["game"]["game_status"] == "active"
 
     with SessionLocal() as db:
         support_flag = db.scalars(
@@ -1555,7 +1546,7 @@ def test_admin_official_game_cancel_execution_rejects_stale_preview(
 
     get_response = client.get(f"/admin/official-games/{game['id']}")
     assert get_response.status_code == 200, get_response.text
-    assert get_response.json()["game"]["game_status"] == "scheduled"
+    assert get_response.json()["game"]["game_status"] == "active"
 
 
 def test_admin_lookup_routes_return_users_and_venues(client: TestClient):
@@ -4019,7 +4010,7 @@ def test_admin_official_game_host_rejects_invalid_game_state_and_started_game(
         json={"host_user_id": player["id"]},
     )
     assert cancelled_response.status_code == 400, cancelled_response.text
-    assert "published scheduled or full" in cancelled_response.text
+    assert "published active official games" in cancelled_response.text
 
     create_response = client.post(
         "/admin/official-games",
@@ -4189,7 +4180,7 @@ def test_account_delete_clears_future_official_host_without_cancelling_game(
     assert game_response.status_code == 200
     updated_game = game_response.json()["game"]
     assert updated_game["host_user_id"] is None
-    assert updated_game["game_status"] == "scheduled"
+    assert updated_game["game_status"] == "active"
     participant_response = client.get(f"/game-participants/{participant['id']}")
     assert participant_response.status_code == 200
     updated_participant = participant_response.json()

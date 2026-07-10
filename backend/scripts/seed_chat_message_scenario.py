@@ -124,7 +124,7 @@ def seed_chat_message_scenario() -> dict[str, UUID]:
                 "game_type": "official",
                 "payment_collection_type": "in_app",
                 "publish_status": "published",
-                "game_status": "scheduled",
+                "game_status": "active",
                 "title": "Dev Game Ready For Chat Messages",
                 "venue_id": venue.id,
                 "venue_name_snapshot": venue.name,
@@ -163,7 +163,7 @@ def seed_chat_message_scenario() -> dict[str, UUID]:
             {
                 "game_id": game.id,
                 "chat_status": "active",
-                "locked_at": None,
+                "closed_at": None,
                 "updated_at": now,
             },
         )
@@ -191,11 +191,7 @@ def main() -> None:
     print("POST /chat-messages body:")
     print("{")
     print(f'  "chat_id": "{ids["chat_message_ready_chat_id"]}",')
-    print(f'  "sender_user_id": "{ids["message_sender_user_id"]}",')
-    print('  "message_type": "text",')
-    print('  "message_body": "See you all at the field.",')
-    print('  "is_pinned": false,')
-    print('  "moderation_status": "visible"')
+    print('  "message_body": "See you all at the field."')
     print("}")
 
 

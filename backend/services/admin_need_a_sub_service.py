@@ -1,9 +1,13 @@
 """Read-only admin support views for Need a Sub."""
 
 import uuid
+from base64 import urlsafe_b64decode, urlsafe_b64encode
+from binascii import Error as BinasciiError
+from datetime import datetime
+from json import JSONDecodeError, dumps, loads
 
 from fastapi import HTTPException, status
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.models import (
@@ -32,6 +36,8 @@ from backend.services.admin_permission_service import (
 from backend.services.need_a_sub_lifecycle_service import expire_due_posts_and_requests
 from backend.services.need_a_sub_post_service import serialize_sub_post
 
+NEED_A_SUB_LIST_ASCENDING_VIEWS = {"active", "full"}
+
 
 def parse_uuid(value: str) -> uuid.UUID | None:
     try:
@@ -43,6 +49,221 @@ def parse_uuid(value: str) -> uuid.UUID | None:
 def normalize_search_query(value: str | None) -> str | None:
     normalized = " ".join((value or "").strip().lower().split())
     return normalized or None
+
+
+def escape_like_search(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def build_user_full_name_search_expression(user_model: type[User]):
+    return func.concat(
+        func.coalesce(user_model.first_name, ""),
+        " ",
+        func.coalesce(user_model.last_name, ""),
+    )
+
+
+def build_need_a_sub_label_search_expressions(post_model: type[SubPost]):
+    return (
+        func.concat("need ", post_model.subs_needed, " sub"),
+        func.concat("need ", post_model.subs_needed, " subs"),
+    )
+
+
+def encode_admin_need_a_sub_list_cursor(
+    *,
+    post: SubPost,
+    query: str | None,
+    view: str,
+) -> str:
+    payload = {
+        "query": query,
+        "view": view,
+        "sort": get_admin_need_a_sub_list_sort(view),
+        "starts_at": post.starts_at.isoformat(),
+        "created_at": post.created_at.isoformat(),
+        "id": str(post.id),
+    }
+    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return urlsafe_b64encode(serialized).decode("ascii")
+
+
+def decode_admin_need_a_sub_list_cursor(
+    cursor: str | None,
+) -> dict[str, object] | None:
+    if cursor is None:
+        return None
+
+    try:
+        decoded = urlsafe_b64decode(cursor.encode("ascii"))
+        payload = loads(decoded.decode("utf-8"))
+    except (BinasciiError, UnicodeDecodeError, ValueError, JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    required_keys = {
+        "query",
+        "view",
+        "sort",
+        "starts_at",
+        "created_at",
+        "id",
+    }
+    if not required_keys.issubset(payload):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    return payload
+
+
+def validate_admin_need_a_sub_list_cursor_context(
+    cursor_payload: dict[str, object] | None,
+    *,
+    query: str | None,
+    view: str,
+) -> None:
+    if cursor_payload is None:
+        return
+
+    if (
+        cursor_payload["query"] != query
+        or cursor_payload["view"] != view
+        or cursor_payload["sort"] != get_admin_need_a_sub_list_sort(view)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor does not match the current query.",
+        )
+
+
+def parse_admin_need_a_sub_list_cursor_datetime(
+    cursor_payload: dict[str, object],
+    key: str,
+) -> datetime:
+    value = cursor_payload[key]
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+
+def parse_admin_need_a_sub_list_cursor_uuid(
+    cursor_payload: dict[str, object],
+) -> uuid.UUID:
+    value = cursor_payload["id"]
+    if not isinstance(value, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    try:
+        return uuid.UUID(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+
+def build_admin_need_a_sub_list_cursor_filter(
+    cursor_payload: dict[str, object],
+    *,
+    view: str,
+):
+    starts_at = parse_admin_need_a_sub_list_cursor_datetime(
+        cursor_payload,
+        "starts_at",
+    )
+    created_at = parse_admin_need_a_sub_list_cursor_datetime(
+        cursor_payload,
+        "created_at",
+    )
+    post_id = parse_admin_need_a_sub_list_cursor_uuid(cursor_payload)
+
+    if get_admin_need_a_sub_list_sort(view) == "starts_at_asc":
+        return or_(
+            SubPost.starts_at > starts_at,
+            and_(SubPost.starts_at == starts_at, SubPost.created_at > created_at),
+            and_(
+                SubPost.starts_at == starts_at,
+                SubPost.created_at == created_at,
+                SubPost.id > post_id,
+            ),
+        )
+
+    return or_(
+        SubPost.starts_at < starts_at,
+        and_(SubPost.starts_at == starts_at, SubPost.created_at < created_at),
+        and_(
+            SubPost.starts_at == starts_at,
+            SubPost.created_at == created_at,
+            SubPost.id < post_id,
+        ),
+    )
+
+
+def get_admin_need_a_sub_list_sort(view: str) -> str:
+    return "starts_at_asc" if view in NEED_A_SUB_LIST_ASCENDING_VIEWS else "starts_at_desc"
+
+
+def build_need_a_sub_full_condition():
+    position_exists = (
+        select(SubPostPosition.id)
+        .where(SubPostPosition.sub_post_id == SubPost.id)
+        .exists()
+    )
+    unfilled_position_exists = (
+        select(SubPostPosition.id)
+        .outerjoin(
+            SubPostRequest,
+            and_(
+                SubPostRequest.sub_post_position_id == SubPostPosition.id,
+                SubPostRequest.request_status == "confirmed",
+            ),
+        )
+        .where(SubPostPosition.sub_post_id == SubPost.id)
+        .group_by(SubPostPosition.id, SubPostPosition.spots_needed)
+        .having(func.count(SubPostRequest.id) < SubPostPosition.spots_needed)
+        .exists()
+    )
+    return and_(
+        SubPost.post_status == "active",
+        position_exists,
+        ~unfilled_position_exists,
+    )
+
+
+def apply_admin_need_a_sub_view_filter(statement, view: str):
+    if view in {"active", "full"}:
+        full_condition = build_need_a_sub_full_condition()
+        if view == "full":
+            return statement.where(full_condition)
+        return statement.where(
+            SubPost.post_status == "active",
+            ~full_condition,
+        )
+
+    return statement.where(SubPost.post_status == view)
 
 
 def build_display_name(user: User) -> str:
@@ -131,31 +352,52 @@ def list_admin_need_a_sub_posts(
     *,
     viewer_user: User,
     query: str | None = None,
-    post_status: str | None = None,
+    view: str = "active",
     offset: int = 0,
     limit: int = 50,
-) -> tuple[list[AdminNeedASubPostListItemRead], int]:
+    cursor: str | None = None,
+) -> tuple[list[AdminNeedASubPostListItemRead], int, str | None, bool]:
     expire_due_posts_and_requests(db)
-    statement = select(SubPost, User).join(User, SubPost.owner_user_id == User.id)
-
-    if post_status is not None:
-        statement = statement.where(SubPost.post_status == post_status)
-
     normalized_query = normalize_search_query(query)
+    cursor_payload = decode_admin_need_a_sub_list_cursor(cursor)
+    validate_admin_need_a_sub_list_cursor_context(
+        cursor_payload,
+        query=normalized_query,
+        view=view,
+    )
+
+    statement = select(SubPost, User).join(User, SubPost.owner_user_id == User.id)
+    statement = apply_admin_need_a_sub_view_filter(statement, view)
+
     if normalized_query is not None:
         query_uuid = parse_uuid(normalized_query)
-        text_match = f"%{normalized_query}%"
+        text_match = f"%{escape_like_search(normalized_query)}%"
+        need_label_expression, need_label_plural_expression = (
+            build_need_a_sub_label_search_expressions(SubPost)
+        )
         search_conditions = [
-            func.lower(func.coalesce(SubPost.team_name, "")).like(text_match),
-            func.lower(SubPost.location_name).like(text_match),
-            func.lower(SubPost.city).like(text_match),
-            func.lower(SubPost.state).like(text_match),
-            func.lower(func.coalesce(User.first_name, "")).like(text_match),
-            func.lower(func.coalesce(User.last_name, "")).like(text_match),
+            func.coalesce(SubPost.team_name, "").ilike(text_match, escape="\\"),
+            need_label_expression.ilike(
+                text_match,
+                escape="\\",
+            ),
+            need_label_plural_expression.ilike(
+                text_match,
+                escape="\\",
+            ),
+            SubPost.location_name.ilike(text_match, escape="\\"),
+            SubPost.city.ilike(text_match, escape="\\"),
+            SubPost.state.ilike(text_match, escape="\\"),
+            func.coalesce(User.first_name, "").ilike(text_match, escape="\\"),
+            func.coalesce(User.last_name, "").ilike(text_match, escape="\\"),
+            build_user_full_name_search_expression(User).ilike(
+                text_match,
+                escape="\\",
+            ),
         ]
         if user_has_admin_permission(viewer_user, PERMISSION_USERS_READ):
             search_conditions.append(
-                func.lower(func.coalesce(User.email, "")).like(text_match)
+                func.coalesce(User.email, "").ilike(text_match, escape="\\")
             )
         if query_uuid is not None:
             search_conditions.extend(
@@ -167,37 +409,70 @@ def list_admin_need_a_sub_posts(
         statement.with_only_columns(SubPost.id).order_by(None).subquery()
     )
     total_count = int(db.scalar(count_statement) or 0)
-    rows = db.execute(
-        statement.order_by(SubPost.starts_at.desc(), SubPost.id.desc())
-        .offset(offset)
-        .limit(limit)
-    ).all()
-    counts_by_post = get_request_count_rows(db, [post.id for post, _ in rows])
 
-    return (
-        [
-            AdminNeedASubPostListItemRead(
-                id=post.id,
-                post_status=post.post_status,
-                team_name=post.team_name,
-                format_label=post.format_label,
-                environment_type=post.environment_type,
-                game_player_group=post.game_player_group,
-                starts_at=post.starts_at,
-                timezone=post.timezone,
-                location_name=post.location_name,
-                city=post.city,
-                state=post.state,
-                subs_needed=post.subs_needed,
-                owner=serialize_user(owner),
-                request_counts=counts_by_post.get(post.id, build_request_counts()),
-                created_at=post.created_at,
-                updated_at=post.updated_at,
+    if cursor_payload is not None:
+        statement = statement.where(
+            build_admin_need_a_sub_list_cursor_filter(
+                cursor_payload,
+                view=view,
             )
-            for post, owner in rows
-        ],
-        total_count,
-    )
+        )
+
+    if get_admin_need_a_sub_list_sort(view) == "starts_at_asc":
+        statement = statement.order_by(
+            SubPost.starts_at.asc(),
+            SubPost.created_at.asc(),
+            SubPost.id.asc(),
+        )
+    else:
+        statement = statement.order_by(
+            SubPost.starts_at.desc(),
+            SubPost.created_at.desc(),
+            SubPost.id.desc(),
+        )
+    if cursor_payload is None:
+        statement = statement.offset(offset)
+
+    rows = db.execute(
+        statement.limit(limit + 1)
+    ).all()
+    page_rows = rows[:limit]
+    has_more = len(rows) > limit
+    counts_by_post = get_request_count_rows(db, [post.id for post, _ in page_rows])
+
+    posts = [
+        AdminNeedASubPostListItemRead(
+            id=post.id,
+            post_status=post.post_status,
+            team_name=post.team_name,
+            format_label=post.format_label,
+            environment_type=post.environment_type,
+            game_player_group=post.game_player_group,
+            starts_at=post.starts_at,
+            ends_at=post.ends_at,
+            starts_on_local=post.starts_on_local,
+            timezone=post.timezone,
+            location_name=post.location_name,
+            city=post.city,
+            state=post.state,
+            subs_needed=post.subs_needed,
+            owner=serialize_user(owner),
+            request_counts=counts_by_post.get(post.id, build_request_counts()),
+            created_at=post.created_at,
+            updated_at=post.updated_at,
+        )
+        for post, owner in page_rows
+    ]
+    next_cursor = None
+    if has_more and page_rows:
+        last_post = page_rows[-1][0]
+        next_cursor = encode_admin_need_a_sub_list_cursor(
+            post=last_post,
+            query=normalized_query,
+            view=view,
+        )
+
+    return posts, total_count, next_cursor, has_more
 
 
 def get_admin_need_a_sub_post_or_404(db: Session, post_id: uuid.UUID) -> SubPost:

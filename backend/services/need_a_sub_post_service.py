@@ -58,6 +58,7 @@ from backend.services.need_a_sub_rules import (
     require_before_post_start,
 )
 from backend.services.sub_post_chat_service import (
+    close_sub_post_chat_for_post,
     resolve_sub_chat_notifications_for_post,
 )
 
@@ -576,10 +577,10 @@ def update_sub_post(
     sub_post = get_sub_post_for_update_or_404(db, sub_post_id)
     require_owner(sub_post, owner)
 
-    if sub_post.post_status not in {"active", "filled"}:
+    if sub_post.post_status != "active":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only active or filled posts can be edited.",
+            detail="Only active posts can be edited.",
         )
 
     require_before_post_start(sub_post, "Posts cannot be edited after the game starts.")
@@ -754,7 +755,7 @@ def user_can_view_private_sub_post(
     if is_publicly_visible_sub_post(sub_post):
         return True
 
-    if sub_post.post_status not in {"active", "filled", "expired"}:
+    if sub_post.post_status not in {"active", "completed", "expired"}:
         return False
 
     chat_access_closes_at = ensure_aware(sub_post.ends_at) + timedelta(hours=24)
@@ -1211,23 +1212,28 @@ def cancel_sub_post(
     sub_post = get_sub_post_for_update_or_404(db, sub_post_id)
     require_owner(sub_post, owner)
 
-    if sub_post.post_status not in {"active", "filled"}:
+    if sub_post.post_status != "active":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only active or filled posts can be canceled.",
+            detail="Only active posts can be cancelled.",
         )
 
-    require_before_post_start(sub_post, "Posts cannot be canceled after the game starts.")
+    require_before_post_start(sub_post, "Posts cannot be cancelled after the game starts.")
 
     current_time = now_utc()
     old_status = sub_post.post_status
-    sub_post.post_status = "canceled"
+    sub_post.post_status = "cancelled"
     sub_post.canceled_at = current_time
     sub_post.canceled_by_user_id = owner.id
     sub_post.cancel_reason = reason
     sub_post.updated_at = current_time
     db.add(sub_post)
-    add_post_status_history(db, sub_post, old_status, "canceled", owner.id, "owner", reason)
+    add_post_status_history(db, sub_post, old_status, "cancelled", owner.id, "owner", reason)
+    close_sub_post_chat_for_post(
+        db,
+        sub_post_id=sub_post.id,
+        closed_at=current_time,
+    )
     resolve_sub_chat_notifications_for_post(
         db,
         sub_post_id=sub_post.id,
@@ -1248,7 +1254,7 @@ def cancel_sub_post(
             "canceled_by_owner",
             owner.id,
             "owner",
-            "Post canceled by owner.",
+            "Post cancelled by owner.",
             current_time,
         )
         if previous_status == "pending":
@@ -1425,6 +1431,11 @@ def remove_sub_post(
         admin_user.id,
         "admin",
         normalized_reason,
+    )
+    close_sub_post_chat_for_post(
+        db,
+        sub_post_id=sub_post.id,
+        closed_at=current_time,
     )
     resolve_sub_chat_notifications_for_post(
         db,

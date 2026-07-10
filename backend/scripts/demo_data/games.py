@@ -369,7 +369,7 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
         is_community = game_data["game_type"] == "community"
         host = users[get_demo_game_host_key(game_data, game_index)]
         details = DEFAULT_GAME_DETAILS | GAME_DETAILS_BY_KEY.get(game_data["key"], {})
-        game_status = game_data.get("game_status", "scheduled")
+        game_status = game_data.get("game_status", "active")
 
         seeded_games[game_data["key"]] = upsert_by_id(
             db,

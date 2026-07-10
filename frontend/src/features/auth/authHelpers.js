@@ -1,4 +1,5 @@
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
+import { minimumSignupAge } from './authConstants.js'
 
 export function getPostAuthPath(user) {
   return hasCompleteProfile(user) ? '/games' : '/finish-profile'
@@ -121,13 +122,13 @@ export function getBirthdayValidation(month, day, year) {
     return { isValid: false, message: 'Birthday cannot be in the future.' }
   }
 
-  const thirteenthBirthday = new Date(dateOfBirth)
-  thirteenthBirthday.setFullYear(thirteenthBirthday.getFullYear() + 13)
+  const minimumBirthday = new Date(dateOfBirth)
+  minimumBirthday.setFullYear(minimumBirthday.getFullYear() + minimumSignupAge)
 
-  if (thirteenthBirthday > todayStart) {
+  if (minimumBirthday > todayStart) {
     return {
       isValid: false,
-      message: 'You must be at least 13 years old to use Pickup Lane.',
+      message: `You must be at least ${minimumSignupAge} years old to use Pickup Lane.`,
     }
   }
 

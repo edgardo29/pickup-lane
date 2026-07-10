@@ -33,7 +33,7 @@ export function useNeedASubManageActions({
       await cancelNeedASubPost(currentUser, post.id, 'Canceled by host.')
       navigate('/need-a-sub', {
         replace: true,
-        state: { needASubNotice: 'Post canceled.' },
+        state: { needASubNotice: 'Post cancelled.' },
       })
     } catch (cancelError) {
       setError(cancelError instanceof Error ? cancelError.message : 'Unable to cancel post.')

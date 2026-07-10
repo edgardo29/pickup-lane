@@ -125,7 +125,7 @@ def seed_payment_event_scenario() -> dict[str, UUID]:
                 "game_type": "official",
                 "payment_collection_type": "in_app",
                 "publish_status": "published",
-                "game_status": "scheduled",
+                "game_status": "active",
                 "title": "Dev Game Ready For Payment Events",
                 "venue_id": venue.id,
                 "venue_name_snapshot": venue.name,

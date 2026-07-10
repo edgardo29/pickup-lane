@@ -313,6 +313,23 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         metadata_builder_key="support",
         requires_reason=True,
     ),
+    "mark_chat_message_reviewed": AdminActionPolicy(
+        action_type="mark_chat_message_reviewed",
+        sensitivity_scope=DATA_SCOPE_SUPPORT_SAFE,
+        read_permission=PERMISSION_AUDIT_READ,
+        mutation_permission=PERMISSION_CONTENT_MODERATE,
+        required_target_rules=(
+            TargetRule(one_of=(TARGET_MESSAGE_ID, TARGET_SUB_CHAT_MESSAGE_ID)),
+        ),
+        allowed_target_fields=target_set(
+            TARGET_USER_ID,
+            TARGET_GAME_ID,
+            TARGET_MESSAGE_ID,
+            TARGET_SUB_POST_ID,
+            TARGET_SUB_CHAT_MESSAGE_ID,
+        ),
+        metadata_builder_key="moderation",
+    ),
     "remove_chat_message": AdminActionPolicy(
         action_type="remove_chat_message",
         sensitivity_scope=DATA_SCOPE_SUPPORT_SAFE,
@@ -331,8 +348,8 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         metadata_builder_key="moderation",
         requires_reason=True,
     ),
-    "hide_chat_message": AdminActionPolicy(
-        action_type="hide_chat_message",
+    "restore_chat_message": AdminActionPolicy(
+        action_type="restore_chat_message",
         sensitivity_scope=DATA_SCOPE_SUPPORT_SAFE,
         read_permission=PERMISSION_AUDIT_READ,
         mutation_permission=PERMISSION_CONTENT_MODERATE,

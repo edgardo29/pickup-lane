@@ -30,18 +30,25 @@ from backend.services.r2_storage_service import (
     create_object_read_url,
 )
 from backend.services.game_participant_rules import ACTIVE_ROSTER_PARTICIPANT_STATUSES
-from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.official_game_service import get_official_game_or_404
 
 OFFICIAL_GAME_LIST_DEFAULT_LIMIT = 24
 OFFICIAL_GAME_LIST_MAX_LIMIT = 100
-OFFICIAL_GAME_LIST_VALID_VIEWS = {"active", "completed", "cancelled"}
-OFFICIAL_GAME_LIST_VIEW_STATUSES = {
-    "active": OPEN_GAME_STATUSES,
-    "completed": {"completed"},
-    "cancelled": {"cancelled", "abandoned"},
+OFFICIAL_GAME_LIST_VALID_VIEWS = {
+    "active",
+    "full",
+    "completed",
+    "cancelled",
+    "expired",
+    "removed",
 }
-OFFICIAL_GAME_LIST_ASCENDING_VIEWS = {"active"}
+OFFICIAL_GAME_LIST_VIEW_STATUSES = {
+    "completed": {"completed"},
+    "cancelled": {"cancelled"},
+    "expired": {"expired"},
+    "removed": {"removed"},
+}
+OFFICIAL_GAME_LIST_ASCENDING_VIEWS = {"active", "full"}
 OFFICIAL_GAME_LIST_ISSUE_MISSING_HOST = "missing_host"
 OFFICIAL_GAME_LIST_ISSUE_MISSING_PHOTO = "missing_photo"
 
@@ -72,8 +79,8 @@ def list_official_games(
         Game.game_type == "official",
         Game.publish_status == "published",
         Game.deleted_at.is_(None),
-        Game.game_status.in_(OFFICIAL_GAME_LIST_VIEW_STATUSES[normalized_view]),
     )
+    statement = apply_official_game_list_view_filter(statement, normalized_view)
 
     if starts_on is not None:
         statement = statement.where(Game.starts_on_local == starts_on)
@@ -125,7 +132,7 @@ def list_official_games(
             primary_venue_image_object_key=primary_venue_image_object_key_by_venue_id.get(
                 game.venue_id
             ),
-            include_operational_issues=normalized_view == "active",
+            include_operational_issues=normalized_view in {"active", "full"},
         )
         for game in page_games
     ]
@@ -192,12 +199,46 @@ def load_official_game_list_card_data(
     return booked_spots_by_game_id, primary_venue_image_object_key_by_venue_id
 
 
+def build_official_game_active_roster_count_subquery():
+    return (
+        select(
+            GameParticipant.game_id.label("game_id"),
+            func.count(GameParticipant.id).label("booked_spots"),
+        )
+        .where(
+            GameParticipant.participant_status.in_(
+                ACTIVE_ROSTER_PARTICIPANT_STATUSES
+            ),
+        )
+        .group_by(GameParticipant.game_id)
+        .subquery()
+    )
+
+
+def apply_official_game_list_view_filter(statement, view: str):
+    if view in {"active", "full"}:
+        roster_counts = build_official_game_active_roster_count_subquery()
+        booked_spots = func.coalesce(roster_counts.c.booked_spots, 0)
+        statement = statement.outerjoin(
+            roster_counts,
+            roster_counts.c.game_id == Game.id,
+        ).where(Game.game_status == "active")
+        if view == "full":
+            return statement.where(booked_spots >= Game.total_spots)
+        return statement.where(booked_spots < Game.total_spots)
+
+    return statement.where(Game.game_status.in_(OFFICIAL_GAME_LIST_VIEW_STATUSES[view]))
+
+
 def normalize_official_game_list_view(view: str) -> str:
     normalized_view = view.strip().lower()
     if normalized_view not in OFFICIAL_GAME_LIST_VALID_VIEWS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="view must be 'active', 'completed', or 'cancelled'.",
+            detail=(
+                "view must be 'active', 'full', 'completed', 'cancelled', "
+                "'expired', or 'removed'."
+            ),
         )
 
     return normalized_view

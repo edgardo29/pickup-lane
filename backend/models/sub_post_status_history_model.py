@@ -12,13 +12,13 @@ class SubPostStatusHistory(Base):
     __tablename__ = "sub_post_status_history"
     __table_args__ = (
         CheckConstraint(
-            "new_status IN ('active', 'filled', 'expired', 'canceled', 'removed')",
+            "new_status IN ('active', 'completed', 'cancelled', 'expired', 'removed')",
             name="ck_sub_post_status_history_new_status",
         ),
         CheckConstraint(
             (
-                "old_status IS NULL OR old_status IN ('active', 'filled', "
-                "'expired', 'canceled', 'removed')"
+                "old_status IS NULL OR old_status IN ('active', 'completed', "
+                "'cancelled', 'expired', 'removed')"
             ),
             name="ck_sub_post_status_history_old_status",
         ),

@@ -23,6 +23,7 @@ from backend.schemas.admin_official_game_schema import (
 from backend.services.admin_action_service import record_admin_action
 from backend.services.game_rules import (
     OFFICIAL_FORCED_FIELDS,
+    OPEN_GAME_STATUSES,
     build_game_conflict_detail,
     normalize_game_lifecycle_fields,
     normalize_official_game_invariants,
@@ -218,7 +219,7 @@ def build_official_game_data(
         "game_type": "official",
         "payment_collection_type": "in_app",
         "publish_status": "published",
-        "game_status": "scheduled",
+        "game_status": "active",
         "title": clean_required_text(title, "title"),
         "description": None,
         "venue_id": venue.id,
@@ -581,11 +582,11 @@ def update_official_game(
     game = get_official_game_or_404(db, game_id, for_update=True)
     if (
         game.publish_status != "published"
-        or game.game_status not in {"scheduled", "full"}
+        or game.game_status not in OPEN_GAME_STATUSES
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only published scheduled or full official games can be edited.",
+            detail="Only published active official games can be edited.",
         )
 
     request_data = update_request.model_dump(exclude_unset=True)

@@ -3,3 +3,18 @@
   max-width: 440px;
   margin-inline: auto;
 }
+
+.auth-page--profile .auth-field__label,
+.auth-page--profile .auth-select-field span {
+  color: rgba(248, 250, 252, 0.38);
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.auth-page--profile .auth-birthday-field > .auth-field__label {
+  display: block;
+  margin-bottom: 8px;
+}

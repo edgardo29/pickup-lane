@@ -27,12 +27,18 @@ class ChatMessageRead(BaseModel):
     is_pinned: bool
     pinned_at: datetime | None
     pinned_by_user_id: UUID | None
-    moderation_status: str
+    visibility_status: str
+    review_status: str
     created_at: datetime
     updated_at: datetime
     edited_at: datetime | None
-    deleted_at: datetime | None
-    deleted_by_user_id: UUID | None
+    reviewed_at: datetime | None = None
+    reviewed_by_user_id: UUID | None = None
+    removed_at: datetime | None = None
+    removed_by_user_id: UUID | None = None
+    removed_source: str | None = None
+    restored_at: datetime | None = None
+    restored_by_user_id: UUID | None = None
 
 
 # ChatMessageUpdate supports partial message updates, so every field is optional
@@ -41,5 +47,5 @@ class ChatMessageUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     message_body: str | None = None
-    moderation_status: str | None = None
+    visibility_status: str | None = None
     reason: str | None = None

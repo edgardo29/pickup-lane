@@ -94,7 +94,7 @@ def build_sub_chat_message_action(
     if notification.related_sub_post_chat_id is None:
         return None
 
-    if sub_post.post_status in {"canceled", "removed"}:
+    if sub_post.post_status in {"cancelled", "removed"}:
         return build_disabled_action_payload(
             action_key,
             "This Need a Sub post is no longer available.",

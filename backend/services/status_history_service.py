@@ -325,8 +325,8 @@ def validate_game_status_history_business_rules(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "old_game_status must be 'scheduled', 'full', 'cancelled', "
-                "'completed', or 'abandoned'."
+                "old_game_status must be 'active', 'completed', 'cancelled', "
+                "'expired', or 'removed'."
             ),
         )
 
@@ -334,8 +334,8 @@ def validate_game_status_history_business_rules(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "new_game_status must be 'scheduled', 'full', 'cancelled', "
-                "'completed', or 'abandoned'."
+                "new_game_status must be 'active', 'completed', 'cancelled', "
+                "'expired', or 'removed'."
             ),
         )
 

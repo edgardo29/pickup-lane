@@ -269,7 +269,8 @@ def create_sub_post_chat_message_record(
                 sender_initials_snapshot="TU",
                 message_type="text",
                 message_body=message_body,
-                moderation_status="visible",
+                visibility_status="visible",
+                review_status="clear",
             )
         )
         db.commit()

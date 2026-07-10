@@ -40,7 +40,7 @@ class Game(Base):
             name="ck_games_publish_status",
         ),
         CheckConstraint(
-            "game_status IN ('scheduled', 'full', 'cancelled', 'completed', 'abandoned')",
+            "game_status IN ('active', 'completed', 'cancelled', 'expired', 'removed')",
             name="ck_games_game_status",
         ),
         CheckConstraint(
@@ -160,7 +160,7 @@ class Game(Base):
             postgresql_where=text(
                 "game_type = 'community' "
                 "AND publish_status = 'published' "
-                "AND game_status IN ('scheduled', 'full') "
+                "AND game_status = 'active' "
                 "AND deleted_at IS NULL"
             ),
         ),
@@ -172,7 +172,7 @@ class Game(Base):
             "id",
             postgresql_where=text(
                 "publish_status = 'published' "
-                "AND game_status IN ('scheduled', 'full') "
+                "AND game_status = 'active' "
                 "AND deleted_at IS NULL"
             ),
         ),
@@ -256,6 +256,59 @@ class Game(Base):
                 "AND deleted_at IS NULL"
             ),
         ),
+        Index(
+            "ix_games_admin_community_status_local_starts_created_id",
+            "game_status",
+            "publish_status",
+            "starts_on_local",
+            "starts_at",
+            "created_at",
+            "id",
+            postgresql_where=text(
+                "game_type = 'community' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_community_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+            postgresql_where=text(
+                "game_type = 'community' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_community_venue_name_trgm",
+            "venue_name_snapshot",
+            postgresql_using="gin",
+            postgresql_ops={"venue_name_snapshot": "gin_trgm_ops"},
+            postgresql_where=text(
+                "game_type = 'community' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_community_city_trgm",
+            "city_snapshot",
+            postgresql_using="gin",
+            postgresql_ops={"city_snapshot": "gin_trgm_ops"},
+            postgresql_where=text(
+                "game_type = 'community' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
+        Index(
+            "ix_games_admin_community_state_trgm",
+            "state_snapshot",
+            postgresql_using="gin",
+            postgresql_ops={"state_snapshot": "gin_trgm_ops"},
+            postgresql_where=text(
+                "game_type = 'community' "
+                "AND deleted_at IS NULL"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -265,7 +318,7 @@ class Game(Base):
         String(20), nullable=False, server_default=text("'draft'")
     )
     game_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default=text("'scheduled'")
+        String(20), nullable=False, server_default=text("'active'")
     )
     title: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

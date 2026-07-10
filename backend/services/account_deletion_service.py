@@ -614,7 +614,7 @@ def cancel_future_community_hosted_games(
     now: datetime,
 ) -> None:
     from backend.services.game_cancellation_service import (
-        archive_game_chats,
+        close_game_chats,
         cancel_game_bookings,
         cancel_game_participants,
         cancel_game_waitlist_entries,
@@ -644,7 +644,7 @@ def cancel_future_community_hosted_games(
         )
         cancel_game_waitlist_entries(db, game, now)
         cancel_game_bookings(db, game, user, now, "host_cancelled")
-        archive_game_chats(db, game, now)
+        close_game_chats(db, game, now)
         create_game_cancelled_notifications(
             db,
             game,
@@ -687,6 +687,7 @@ def cancel_owned_need_a_sub_posts(
         resolve_owner_request_activity_notification,
     )
     from backend.services.sub_post_chat_service import (
+        close_sub_post_chat_for_post,
         resolve_sub_chat_notifications_for_post,
     )
 
@@ -701,7 +702,7 @@ def cancel_owned_need_a_sub_posts(
 
     for sub_post in posts:
         old_status = sub_post.post_status
-        sub_post.post_status = "canceled"
+        sub_post.post_status = "cancelled"
         sub_post.canceled_at = sub_post.canceled_at or now
         sub_post.canceled_by_user_id = user_id
         sub_post.cancel_reason = "Owner account deleted."
@@ -711,10 +712,15 @@ def cancel_owned_need_a_sub_posts(
             db,
             sub_post,
             old_status,
-            "canceled",
+            "cancelled",
             changed_by_user_id,
             "system",
             "Owner account deleted.",
+        )
+        close_sub_post_chat_for_post(
+            db,
+            sub_post_id=sub_post.id,
+            closed_at=now,
         )
         resolve_sub_chat_notifications_for_post(
             db,

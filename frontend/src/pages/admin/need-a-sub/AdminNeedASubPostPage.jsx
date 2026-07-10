@@ -6,18 +6,31 @@ import {
   ChevronRight,
   ClipboardList,
   FileClock,
-  MapPin,
-  RefreshCw,
+  MessageSquareText,
   Trash2,
   UserRound,
-  UsersRound,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
+import {
+  GameDateIcon,
+  GameEnvironmentIcon,
+  GameFormatIcon,
+  GamePlayerGroupIcon,
+  GameSkillIcon,
+  GameTimeIcon,
+  PriceIcon,
+  VenueIcon,
+} from '../../../components/GameFactIcons.jsx'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminNeedASub.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
 import { getAdminNeedASubPost } from '../shared/adminApi.js'
+import {
+  ADMIN_PERMISSIONS,
+  hasAdminPermission,
+} from '../shared/adminWorkspaceData.js'
+import { useAdminAccess } from '../shared/useAdminAccess.js'
 import AdminNeedASubChatPanel from './AdminNeedASubChatPanel.jsx'
 import AdminNeedASubRemovalModal from './AdminNeedASubRemovalModal.jsx'
 import {
@@ -25,15 +38,21 @@ import {
   formatAdminNeedASubMoney,
   formatAdminNeedASubPosition,
   formatAdminNeedASubStatus,
-  shortAdminNeedASubId,
 } from './adminNeedASubFormatters.js'
 
 const DETAIL_PAGE_SIZE = 50
+const DETAIL_TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'requests', label: 'Requests' },
+  { id: 'chat', label: 'Chat' },
+  { id: 'status', label: 'Status' },
+  { id: 'audit', label: 'Audit' },
+]
 
 function AdminSubSection({ children, count, icon: Icon, title }) {
   return (
-    <section className="admin-sub-detail-panel">
-      <div className="admin-sub-detail-panel__heading">
+    <section className="admin-sub-section">
+      <div className="admin-sub-section__heading">
         <div>
           <Icon />
           <h2>{title}</h2>
@@ -47,6 +66,27 @@ function AdminSubSection({ children, count, icon: Icon, title }) {
 
 function EmptyLine({ children }) {
   return <p className="admin-sub-empty-line">{children}</p>
+}
+
+function AdminSubEmptyState({ children, className = '', icon: Icon, title }) {
+  const stateClassName = [
+    'admin-sub-empty-state',
+    className,
+  ].filter(Boolean).join(' ')
+
+  return (
+    <div className={stateClassName}>
+      {Icon && (
+        <span className="admin-sub-empty-state__icon">
+          <Icon />
+        </span>
+      )}
+      <div>
+        <strong>{title}</strong>
+        {children && <p>{children}</p>}
+      </div>
+    </div>
+  )
 }
 
 function CollectionPagination({
@@ -103,161 +143,269 @@ function DetailLoading() {
   )
 }
 
-function FieldGrid({ fields }) {
+function formatAdminNeedASubDate(value, timeZone = undefined) {
+  if (!value) return 'Not recorded'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Invalid date'
+
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      ...(timeZone ? { timeZone } : {}),
+    }).format(date)
+  } catch {
+    return 'Invalid date'
+  }
+}
+
+function formatAdminNeedASubTime(value, timeZone = undefined) {
+  if (!value) return 'Not recorded'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Invalid time'
+
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      timeStyle: 'short',
+      ...(timeZone ? { timeZone } : {}),
+    }).format(date)
+  } catch {
+    return 'Invalid time'
+  }
+}
+
+function formatAdminNeedASubTimeRange(post) {
+  const start = formatAdminNeedASubTime(post.starts_at, post.timezone)
+  const end = formatAdminNeedASubTime(post.ends_at, post.timezone)
+  if (start === 'Not recorded' || start === 'Invalid time') return start
+  if (end === 'Not recorded' || end === 'Invalid time') return start
+  return `${start} - ${end}`
+}
+
+function formatNeedASubTitle(post) {
+  if (!post?.subs_needed) return 'Need a Sub Post'
+  return `Need ${post.subs_needed} Sub${post.subs_needed === 1 ? '' : 's'}`
+}
+
+function formatNeedASubOwner(owner) {
+  return owner.display_name || owner.email || 'Unknown owner'
+}
+
+function getNeedASubAddressLines(post) {
+  const cityState = [post.city, post.state].filter(Boolean).join(', ')
+  const locality = [cityState, post.postal_code].filter(Boolean).join(' ')
+  const lines = [post.address_line_1, locality].filter(Boolean)
+  return lines.length ? lines : ['Not recorded']
+}
+
+function getNeedASubClosureReason(post) {
+  return post.remove_reason || post.cancel_reason || 'No closure reason recorded.'
+}
+
+function SummaryItem({ children, icon: Icon, label }) {
   return (
-    <div className="admin-sub-fields">
-      {fields.map((field) => (
-        <div key={field.label}>
-          <span>{field.label}</span>
-          {field.code ? <code>{field.value}</code> : <strong>{field.value}</strong>}
-        </div>
-      ))}
+    <div className="admin-sub-summary__item">
+      <Icon />
+      <span className="admin-sub-summary__copy">
+        <small>{label}</small>
+        <span className="admin-sub-summary__value">{children}</span>
+      </span>
     </div>
   )
 }
 
-function PostSummary({ detail, onRemove }) {
-  const { owner, post, request_counts: counts } = detail
-  const canRemove = post.post_status !== 'removed'
+function PostSummary({ detail }) {
+  const { post } = detail
+
   return (
-    <AdminSubSection icon={ClipboardList} title="Post Summary">
+    <section className="admin-sub-summary" aria-label="Need a Sub summary">
+      <div className="admin-sub-summary__header">
+        <div className="admin-sub-summary__identity">
+          <span>Need a Sub</span>
+          <h2>{formatNeedASubTitle(post)}</h2>
+        </div>
+      </div>
+
+      <div className="admin-sub-summary__grid">
+        <SummaryItem icon={GameDateIcon} label="Date">
+          {formatAdminNeedASubDate(post.starts_at, post.timezone)}
+        </SummaryItem>
+        <SummaryItem icon={GameTimeIcon} label="Time">
+          {formatAdminNeedASubTimeRange(post)}
+        </SummaryItem>
+        <SummaryItem icon={VenueIcon} label="Venue">
+          {post.location_name || 'Not recorded'}
+        </SummaryItem>
+        <SummaryItem icon={GameFormatIcon} label="Format">
+          {post.format_label || 'Pickup'}
+        </SummaryItem>
+        <SummaryItem icon={GamePlayerGroupIcon} label="Player group">
+          {formatAdminNeedASubStatus(post.game_player_group)}
+        </SummaryItem>
+        <SummaryItem icon={GameSkillIcon} label="Skill">
+          {formatAdminNeedASubStatus(post.skill_level)}
+        </SummaryItem>
+        <SummaryItem icon={GameEnvironmentIcon} label="Environment">
+          {formatAdminNeedASubStatus(post.environment_type)}
+        </SummaryItem>
+        <SummaryItem icon={PriceIcon} label="Price">
+          {formatAdminNeedASubMoney(post.price_due_at_venue_cents, post.currency)}
+        </SummaryItem>
+      </div>
+    </section>
+  )
+}
+
+function OverviewField({ children, label, span = 'single' }) {
+  const className = [
+    'admin-sub-overview-field',
+    span === 'full' ? 'admin-sub-overview-field--full' : '',
+  ].filter(Boolean).join(' ')
+
+  return (
+    <div className={className}>
+      <span className="admin-sub-overview-field__label">{label}</span>
+      <div className="admin-sub-overview-field__value">{children}</div>
+    </div>
+  )
+}
+
+function SubNeedsOverviewValue({ positions }) {
+  if (!positions.length) return 'No sub needs found.'
+
+  return positions.map((position) => (
+    <span className="admin-sub-overview-need" key={position.id}>
+      <span className="admin-sub-overview-need__name">
+        {formatAdminNeedASubPosition(position.position_label, position.player_group)}
+      </span>
+      <span className="admin-sub-overview-need__counts">
+        {position.spots_needed} needed / {position.confirmed_count} confirmed / {position.pending_count} pending / {position.sub_waitlist_count} waitlisted
+      </span>
+    </span>
+  ))
+}
+
+function PostOverview({ detail }) {
+  const { owner, post } = detail
+  return (
+    <section className="admin-sub-detail-panel admin-sub-record-panel admin-sub-overview-card">
+      <div className="admin-sub-detail-panel__heading">
+        <div>
+          <ClipboardList />
+          <h2>Overview</h2>
+        </div>
+      </div>
       {post.post_status === 'removed' && (
         <div className="admin-sub-removed-banner">
           <strong>Removed by Pickup Lane</strong>
           <span>{post.remove_reason || 'No removal reason recorded.'}</span>
         </div>
       )}
-      <div className="admin-sub-kpis">
-        <div>
-          <span>Status</span>
-          <strong>{formatAdminNeedASubStatus(post.post_status)}</strong>
-        </div>
-        <div>
-          <span>Needed</span>
-          <strong>{post.subs_needed}</strong>
-        </div>
-        <div>
-          <span>Confirmed</span>
-          <strong>{counts.confirmed_count}</strong>
-        </div>
-        <div>
-          <span>Pending</span>
-          <strong>{counts.pending_count}</strong>
-        </div>
-        <div>
-          <span>Waitlist</span>
-          <strong>{counts.waitlisted_count}</strong>
-        </div>
-      </div>
-      <FieldGrid fields={[
-        { label: 'Post ID', value: post.id, code: true },
-        { label: 'Owner', value: owner.display_name },
-        { label: 'Owner account', value: formatAdminNeedASubStatus(owner.account_status) },
-        { label: 'Team', value: post.team_name || 'Not provided' },
-        { label: 'Format', value: post.format_label },
-        { label: 'Player group', value: formatAdminNeedASubStatus(post.game_player_group) },
-        { label: 'Skill', value: formatAdminNeedASubStatus(post.skill_level) },
-        { label: 'Environment', value: formatAdminNeedASubStatus(post.environment_type) },
-      ]} />
-      {canRemove && (
-        <div className="admin-sub-action-strip">
-          <button
-            className="admin-sub-button admin-sub-button--danger"
-            type="button"
-            onClick={onRemove}
-          >
-            <Trash2 />
-            Remove post
-          </button>
-        </div>
-      )}
-    </AdminSubSection>
-  )
-}
-
-function ScheduleLocation({ post }) {
-  return (
-    <AdminSubSection icon={MapPin} title="Schedule And Location">
-      <FieldGrid fields={[
-        { label: 'Starts', value: formatAdminNeedASubDateTime(post.starts_at, post.timezone) },
-        { label: 'Ends', value: formatAdminNeedASubDateTime(post.ends_at, post.timezone) },
-        { label: 'Timezone', value: post.timezone },
-        { label: 'Location', value: post.location_name },
-        { label: 'Address', value: post.address_line_1 },
-        { label: 'City / State', value: `${post.city}, ${post.state} ${post.postal_code}` },
-        {
-          label: 'Price',
-          value: formatAdminNeedASubMoney(
-            post.price_due_at_venue_cents,
-            post.currency,
-          ),
-        },
-        { label: 'Expires', value: formatAdminNeedASubDateTime(post.expires_at, post.timezone) },
-      ]} />
-      <div className="admin-sub-text-grid">
-        <div>
-          <span>Notes</span>
-          <p>{post.notes || 'No notes recorded.'}</p>
-        </div>
-        <div>
-          <span>Payment note</span>
-          <p>{post.payment_note || 'No payment note recorded.'}</p>
-        </div>
-        {(post.cancel_reason || post.remove_reason) && (
-          <div className="admin-sub-text-grid__wide">
-            <span>Closure reason</span>
-            <p>{post.remove_reason || post.cancel_reason}</p>
-          </div>
-        )}
-      </div>
-    </AdminSubSection>
-  )
-}
-
-function Positions({ positions }) {
-  return (
-    <AdminSubSection count={positions.length} icon={UsersRound} title="Sub Needs">
-      {!positions.length ? (
-        <EmptyLine>No sub needs found.</EmptyLine>
-      ) : (
-        <div className="admin-sub-position-list">
-          {positions.map((position) => (
-            <div key={position.id}>
-              <strong>
-                {formatAdminNeedASubPosition(
-                  position.position_label,
-                  position.player_group,
-                )}
-              </strong>
-              <span>{position.spots_needed} needed</span>
-              <span>{position.confirmed_count} confirmed</span>
-              <span>{position.pending_count} pending</span>
-              <span>{position.sub_waitlist_count} waitlisted</span>
-            </div>
+      <div className="admin-sub-overview-fields">
+        <OverviewField label="Status">
+          {formatAdminNeedASubStatus(post.post_status)}
+        </OverviewField>
+        <OverviewField label="Owner">
+          {formatNeedASubOwner(owner)}
+        </OverviewField>
+        <OverviewField label="Sub Needs">
+          <SubNeedsOverviewValue positions={post.positions ?? []} />
+        </OverviewField>
+        <OverviewField label="Address">
+          {getNeedASubAddressLines(post).map((line) => (
+            <span key={line}>{line}</span>
           ))}
-        </div>
-      )}
+        </OverviewField>
+        <OverviewField label="Closure Reason" span="full">
+          {getNeedASubClosureReason(post)}
+        </OverviewField>
+        <OverviewField label="Notes" span="full">
+          {post.notes || 'No additional notes were provided.'}
+        </OverviewField>
+      </div>
+    </section>
+  )
+}
+
+function AdminNeedASubChatLocked({ isLoading }) {
+  return (
+    <AdminSubSection icon={MessageSquareText} title="Post Chat">
+      <AdminSubEmptyState
+        icon={MessageSquareText}
+        title={isLoading ? 'Loading chat access' : 'Chat access required'}
+      >
+        {isLoading
+          ? 'Loading chat access.'
+          : 'Content moderation permission is required for chat inspection.'}
+      </AdminSubEmptyState>
     </AdminSubSection>
   )
 }
 
-function HistoryRows({ history, timeZone }) {
+function formatHistoryAction(item, type = 'post') {
+  if (!item.old_status) {
+    return type === 'request' ? 'Request created' : 'Post created'
+  }
+  return formatAdminNeedASubStatus(item.new_status)
+}
+
+function formatHistoryChangedBy(item) {
+  if (item.changed_by?.display_name) return item.changed_by.display_name
+
+  if (item.change_source === 'scheduled_job') return 'Scheduled job'
+  if (item.change_source === 'system') return 'System'
+  if (item.change_source === 'admin') return 'Admin'
+  if (item.change_source === 'owner') return 'Owner'
+  if (item.change_source === 'requester') return 'Requester'
+
+  return 'System'
+}
+
+function HistoryField({ children, label }) {
+  return (
+    <div className="admin-sub-history-field">
+      <span>{label}</span>
+      {children}
+    </div>
+  )
+}
+
+function HistoryRows({ history, timeZone, type = 'post' }) {
   if (!history.length) return <EmptyLine>No status history found.</EmptyLine>
   return (
     <div className="admin-sub-history-list">
       {history.map((item) => (
-        <div key={item.id}>
-          <strong>
-            {formatAdminNeedASubStatus(item.old_status)} to{' '}
-            {formatAdminNeedASubStatus(item.new_status)}
-          </strong>
-          <span>{formatAdminNeedASubStatus(item.change_source)}</span>
-          <span>{item.changed_by?.display_name || 'System'}</span>
-          <span>{item.change_reason || 'No reason recorded'}</span>
-          <time>{formatAdminNeedASubDateTime(item.created_at, timeZone)}</time>
+        <div className="admin-sub-history-row" key={item.id}>
+          <HistoryField label="Action">
+            <strong>{formatHistoryAction(item, type)}</strong>
+          </HistoryField>
+          <HistoryField label="Changed by">
+            <strong>{formatHistoryChangedBy(item)}</strong>
+          </HistoryField>
+          <HistoryField label="Reason">
+            <strong>{item.change_reason || 'No reason recorded'}</strong>
+          </HistoryField>
+          <HistoryField label="Date">
+            <time>{formatAdminNeedASubDateTime(item.created_at, timeZone)}</time>
+          </HistoryField>
         </div>
       ))}
     </div>
+  )
+}
+
+function StatusHistory({ history, timeZone }) {
+  return (
+    <AdminSubSection count={history.length} icon={FileClock} title="Status History">
+      {!history.length ? (
+        <AdminSubEmptyState icon={FileClock} title="No status history yet">
+          Status changes will appear here once the post moves through its lifecycle.
+        </AdminSubEmptyState>
+      ) : (
+        <HistoryRows history={history} timeZone={timeZone} />
+      )}
+    </AdminSubSection>
   )
 }
 
@@ -272,7 +420,9 @@ function Requests({
   return (
     <AdminSubSection count={totalCount} icon={UserRound} title="Requests">
       {!requests.length ? (
-        <EmptyLine>No requests found.</EmptyLine>
+        <AdminSubEmptyState icon={UserRound} title="No requests yet">
+          Sub requests will appear here once players respond to this post.
+        </AdminSubEmptyState>
       ) : (
         <div className="admin-sub-request-list">
           {requests.map((request) => (
@@ -292,10 +442,13 @@ function Requests({
                     {formatAdminNeedASubStatus(request.request_status)}
                   </span>
                   <time>{formatAdminNeedASubDateTime(request.created_at, timeZone)}</time>
-                  <code>{shortAdminNeedASubId(request.id)}</code>
                 </div>
               </summary>
-              <HistoryRows history={request.status_history} timeZone={timeZone} />
+              <HistoryRows
+                history={request.status_history}
+                timeZone={timeZone}
+                type="request"
+              />
             </details>
           ))}
         </div>
@@ -323,7 +476,9 @@ function AuditActions({
   return (
     <AdminSubSection count={totalCount} icon={FileClock} title="Audit History">
       {!actions.length ? (
-        <EmptyLine>No visible audit actions.</EmptyLine>
+        <AdminSubEmptyState icon={FileClock} title="No visible audit actions">
+          Staff-visible audit entries will appear here once recorded.
+        </AdminSubEmptyState>
       ) : (
         <div className="admin-sub-audit-list">
           {actions.map((action) => (
@@ -331,7 +486,6 @@ function AuditActions({
               <strong>{formatAdminNeedASubStatus(action.action_type)}</strong>
               <span>{action.reason || 'No reason recorded'}</span>
               <span>{formatAdminNeedASubDateTime(action.created_at, timeZone)}</span>
-              <code>{shortAdminNeedASubId(action.id)}</code>
             </div>
           ))}
         </div>
@@ -351,6 +505,7 @@ function AuditActions({
 function AdminNeedASubPostPage() {
   const { postId } = useParams()
   const { currentUser } = useAuth()
+  const { adminAccess, isLoading: isAdminAccessLoading } = useAdminAccess()
   const [detail, setDetail] = useState(null)
   const [loadState, setLoadState] = useState('loading')
   const [pageError, setPageError] = useState('')
@@ -358,6 +513,7 @@ function AdminNeedASubPostPage() {
   const [isRemovalModalOpen, setIsRemovalModalOpen] = useState(false)
   const [requestOffset, setRequestOffset] = useState(0)
   const [auditOffset, setAuditOffset] = useState(0)
+  const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
     let isMounted = true
@@ -403,7 +559,12 @@ function AdminNeedASubPostPage() {
     }
   }, [auditOffset, currentUser, postId, refreshCount, requestOffset])
 
-  const title = detail?.post?.team_name || 'Need a Sub Post'
+  const title = 'Manage Need a Sub Post'
+  const canViewChat = hasAdminPermission(
+    adminAccess,
+    ADMIN_PERMISSIONS.CONTENT_MODERATE,
+  )
+  const canRemovePost = detail?.post && detail.post.post_status !== 'removed'
 
   return (
     <>
@@ -414,18 +575,21 @@ function AdminNeedASubPostPage() {
               <ArrowLeft />
               Back
             </Link>
-            <button
-              aria-label="Refresh Need a Sub post"
-              className="admin-sub-button admin-sub-button--icon"
-              type="button"
-              onClick={() => setRefreshCount((count) => count + 1)}
-            >
-              <RefreshCw />
-            </button>
+            {canRemovePost && (
+              <button
+                className="admin-sub-button admin-sub-button--danger"
+                type="button"
+                onClick={() => setIsRemovalModalOpen(true)}
+              >
+                <Trash2 />
+                Remove post
+              </button>
+            )}
           </div>
         )}
         breadcrumbs={['Admin', 'Games', 'Need a Sub']}
-        description="Review post, requests, chat, and moderation context."
+        description="Review sub needs, requests, chat, and moderation context."
+        headerClassName="admin-sub-page-header"
         icon={ClipboardList}
         title={title}
       >
@@ -439,46 +603,75 @@ function AdminNeedASubPostPage() {
             <DetailLoading />
           ) : detail ? (
             <>
-              <div className="admin-sub-detail-grid">
-                <PostSummary
-                  detail={detail}
-                  onRemove={() => setIsRemovalModalOpen(true)}
-                />
-                <Positions positions={detail.post.positions ?? []} />
-              </div>
-              <ScheduleLocation post={detail.post} />
-              <Requests
-                limit={detail.request_limit ?? DETAIL_PAGE_SIZE}
-                offset={detail.request_offset ?? requestOffset}
-                onOffsetChange={setRequestOffset}
-                requests={detail.requests ?? []}
-                timeZone={detail.post.timezone}
-                totalCount={detail.request_total_count ?? detail.requests?.length ?? 0}
-              />
-              <AdminNeedASubChatPanel
-                firebaseUser={currentUser}
-                postId={detail.post.id}
-                timeZone={detail.post.timezone}
-                onModerated={() => setRefreshCount((count) => count + 1)}
-              />
-              <AdminSubSection
-                count={detail.post_status_history?.length ?? 0}
-                icon={FileClock}
-                title="Post Status History"
-              >
-                <HistoryRows
-                  history={detail.post_status_history ?? []}
-                  timeZone={detail.post.timezone}
-                />
-              </AdminSubSection>
-              <AuditActions
-                actions={detail.audit_actions ?? []}
-                limit={detail.audit_limit ?? DETAIL_PAGE_SIZE}
-                offset={detail.audit_offset ?? auditOffset}
-                onOffsetChange={setAuditOffset}
-                timeZone={detail.post.timezone}
-                totalCount={detail.audit_total_count ?? detail.audit_actions?.length ?? 0}
-              />
+              <PostSummary detail={detail} />
+              <nav className="admin-sub-detail-tabs" aria-label="Need a Sub management">
+                {DETAIL_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    aria-selected={activeTab === tab.id}
+                    className={activeTab === tab.id ? 'is-active' : ''}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+
+              {activeTab === 'overview' && (
+                <div className="admin-sub-tab-panel">
+                  <PostOverview detail={detail} />
+                </div>
+              )}
+
+              {activeTab === 'requests' && (
+                <div className="admin-sub-tab-panel">
+                  <Requests
+                    limit={detail.request_limit ?? DETAIL_PAGE_SIZE}
+                    offset={detail.request_offset ?? requestOffset}
+                    onOffsetChange={setRequestOffset}
+                    requests={detail.requests ?? []}
+                    timeZone={detail.post.timezone}
+                    totalCount={detail.request_total_count ?? detail.requests?.length ?? 0}
+                  />
+                </div>
+              )}
+
+              {activeTab === 'chat' && (
+                <div className="admin-sub-tab-panel">
+                  {canViewChat ? (
+                    <AdminNeedASubChatPanel
+                      firebaseUser={currentUser}
+                      postId={detail.post.id}
+                      timeZone={detail.post.timezone}
+                    />
+                  ) : (
+                    <AdminNeedASubChatLocked isLoading={isAdminAccessLoading} />
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'status' && (
+                <div className="admin-sub-tab-panel">
+                  <StatusHistory
+                    history={detail.post_status_history ?? []}
+                    timeZone={detail.post.timezone}
+                  />
+                </div>
+              )}
+
+              {activeTab === 'audit' && (
+                <div className="admin-sub-tab-panel">
+                  <AuditActions
+                    actions={detail.audit_actions ?? []}
+                    limit={detail.audit_limit ?? DETAIL_PAGE_SIZE}
+                    offset={detail.audit_offset ?? auditOffset}
+                    onOffsetChange={setAuditOffset}
+                    timeZone={detail.post.timezone}
+                    totalCount={detail.audit_total_count ?? detail.audit_actions?.length ?? 0}
+                  />
+                </div>
+              )}
             </>
           ) : null}
         </div>

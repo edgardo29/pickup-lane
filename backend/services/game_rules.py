@@ -19,7 +19,7 @@ from backend.services.payment_rules import (
 VALID_GAME_TYPES = {"official", "community"}
 VALID_PAYMENT_COLLECTION_TYPES = {"in_app", "external_host", "none"}
 VALID_PUBLISH_STATUSES = {"draft", "published", "archived"}
-VALID_GAME_STATUSES = {"scheduled", "full", "cancelled", "completed", "abandoned"}
+VALID_GAME_STATUSES = {"active", "completed", "cancelled", "expired", "removed"}
 VALID_ENVIRONMENT_TYPES = {"indoor", "outdoor"}
 VALID_GAME_PLAYER_GROUPS = {"men", "women", "coed"}
 VALID_SKILL_LEVELS = {
@@ -32,10 +32,10 @@ VALID_SKILL_LEVELS = {
 }
 VALID_POLICY_MODES = {"official_standard", "custom_hosted"}
 VALID_CURRENCY = "USD"
-OPEN_GAME_STATUSES = {"scheduled", "full"}
+OPEN_GAME_STATUSES = {"active"}
 HOST_EDITABLE_GAME_STATUSES = OPEN_GAME_STATUSES
 CANCELLABLE_GAME_STATUSES = OPEN_GAME_STATUSES
-GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS = {"cancelled", "abandoned"}
+GAME_STATUSES_WITH_DISABLED_INBOX_ACTIONS = {"cancelled", "expired", "removed"}
 ACTIVE_JOIN_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
 ACTIVE_PLAYER_STATUSES = ACTIVE_JOIN_STATUSES
 RESERVED_PLAYER_STATUSES = ACTIVE_ROSTER_PARTICIPANT_STATUSES
@@ -262,8 +262,8 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "game_status must be 'scheduled', 'full', 'cancelled', "
-                "'completed', or 'abandoned'."
+                "game_status must be 'active', 'completed', 'cancelled', "
+                "'expired', or 'removed'."
             ),
         )
 
@@ -310,7 +310,7 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
             detail="ends_at must be greater than starts_at.",
         )
 
-    if game_data["game_status"] in {"scheduled", "full"} and starts_at <= datetime.now(
+    if game_data["game_status"] == "active" and starts_at <= datetime.now(
         timezone.utc
     ):
         raise HTTPException(

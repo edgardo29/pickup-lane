@@ -6,25 +6,40 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.schemas import (
-    AdminNeedASubChatModerationCreate,
-    AdminNeedASubChatModerationResultRead,
-    AdminNeedASubChatRead,
+    AdminChatMessageListRead,
+    AdminChatModerationActionCreate,
+    AdminChatModerationActionResultRead,
+    AdminChatSummaryRead,
     AdminNeedASubPostDetailRead,
     AdminNeedASubPostListRead,
 )
-from backend.services.admin_need_a_sub_chat_service import (
-    get_admin_need_a_sub_chat,
-    moderate_admin_need_a_sub_chat_message,
-)
 from backend.services.admin_need_a_sub_service import (
     get_admin_need_a_sub_post_detail,
+    get_admin_need_a_sub_post_or_404,
     list_admin_need_a_sub_posts,
 )
 from backend.services.admin_permission_service import (
+    PERMISSION_CONTENT_MODERATE,
     PERMISSION_NEED_A_SUB_MODERATE,
+    require_user_admin_permission,
 )
 from backend.services.auth_service import require_admin_permission
-from backend.services.need_a_sub_rules import POST_STATUSES
+from backend.services.chat_moderation_admin_service import (
+    get_admin_need_a_sub_chat_summary,
+    list_admin_need_a_sub_chat_messages,
+    mark_need_a_sub_chat_message_reviewed,
+    remove_need_a_sub_chat_message,
+    restore_need_a_sub_chat_message,
+)
+
+VALID_NEED_A_SUB_LIST_VIEWS = {
+    "active",
+    "full",
+    "completed",
+    "cancelled",
+    "expired",
+    "removed",
+}
 
 router = APIRouter(prefix="/admin/need-a-sub", tags=["admin_need_a_sub"])
 
@@ -32,33 +47,37 @@ router = APIRouter(prefix="/admin/need-a-sub", tags=["admin_need_a_sub"])
 @router.get("", response_model=AdminNeedASubPostListRead)
 def list_admin_need_a_sub_posts_route(
     query: str | None = Query(default=None),
-    post_status: str | None = Query(default=None),
+    view: str = Query(default="active"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, max_length=2000),
     db: Session = Depends(get_db),
     current_admin: User = Depends(
         require_admin_permission(PERMISSION_NEED_A_SUB_MODERATE)
     ),
 ) -> AdminNeedASubPostListRead:
-    normalized_status = post_status.strip().lower() if post_status else None
-    if normalized_status and normalized_status not in POST_STATUSES:
+    normalized_view = view.strip().lower()
+    if normalized_view not in VALID_NEED_A_SUB_LIST_VIEWS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="post_status is not supported.",
+            detail="view is not supported.",
         )
-    posts, total_count = list_admin_need_a_sub_posts(
+    posts, total_count, next_cursor, has_more = list_admin_need_a_sub_posts(
         db,
         viewer_user=current_admin,
         query=query,
-        post_status=normalized_status or None,
+        view=normalized_view,
         offset=offset,
         limit=limit,
+        cursor=cursor,
     )
     return AdminNeedASubPostListRead(
         posts=posts,
         total_count=total_count,
         offset=offset,
         limit=limit,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
 
@@ -85,66 +104,115 @@ def get_admin_need_a_sub_post_route(
     )
 
 
-@router.get("/{post_id}/chat", response_model=AdminNeedASubChatRead)
-def get_admin_need_a_sub_chat_route(
+@router.get("/{post_id}/chat/summary", response_model=AdminChatSummaryRead)
+def get_admin_need_a_sub_chat_summary_route(
     post_id: uuid.UUID,
-    offset: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
     current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NEED_A_SUB_MODERATE)
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
     ),
-) -> AdminNeedASubChatRead:
-    return get_admin_need_a_sub_chat(
+) -> AdminChatSummaryRead:
+    require_user_admin_permission(current_admin, PERMISSION_NEED_A_SUB_MODERATE)
+    return get_admin_need_a_sub_chat_summary(
         db,
         post_id=post_id,
         viewer_user=current_admin,
+    )
+
+
+@router.get("/{post_id}/chat/messages", response_model=AdminChatMessageListRead)
+def list_admin_need_a_sub_chat_messages_route(
+    post_id: uuid.UUID,
+    view: str = Query(default="needs_review"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
+    ),
+) -> AdminChatMessageListRead:
+    require_user_admin_permission(current_admin, PERMISSION_NEED_A_SUB_MODERATE)
+    get_admin_need_a_sub_post_or_404(db, post_id)
+    return list_admin_need_a_sub_chat_messages(
+        db,
+        post_id=post_id,
+        viewer_user=current_admin,
+        view=view,
         offset=offset,
         limit=limit,
     )
 
 
 @router.post(
-    "/{post_id}/chat/messages/{message_id}/hide",
-    response_model=AdminNeedASubChatModerationResultRead,
+    "/{post_id}/chat/messages/{message_id}/review",
+    response_model=AdminChatModerationActionResultRead,
+    status_code=status.HTTP_200_OK,
 )
-def hide_admin_need_a_sub_chat_message_route(
+def mark_admin_need_a_sub_chat_message_reviewed_route(
     post_id: uuid.UUID,
     message_id: uuid.UUID,
-    payload: AdminNeedASubChatModerationCreate,
+    payload: AdminChatModerationActionCreate,
     db: Session = Depends(get_db),
     current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NEED_A_SUB_MODERATE)
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
     ),
-) -> AdminNeedASubChatModerationResultRead:
-    return moderate_admin_need_a_sub_chat_message(
+) -> AdminChatModerationActionResultRead:
+    require_user_admin_permission(current_admin, PERMISSION_NEED_A_SUB_MODERATE)
+    get_admin_need_a_sub_post_or_404(db, post_id)
+    return mark_need_a_sub_chat_message_reviewed(
         db,
         post_id=post_id,
         message_id=message_id,
-        moderator_user=current_admin,
+        admin_user=current_admin,
         payload=payload,
-        moderation_action="hide",
     )
 
 
 @router.post(
     "/{post_id}/chat/messages/{message_id}/remove",
-    response_model=AdminNeedASubChatModerationResultRead,
+    response_model=AdminChatModerationActionResultRead,
+    status_code=status.HTTP_200_OK,
 )
 def remove_admin_need_a_sub_chat_message_route(
     post_id: uuid.UUID,
     message_id: uuid.UUID,
-    payload: AdminNeedASubChatModerationCreate,
+    payload: AdminChatModerationActionCreate,
     db: Session = Depends(get_db),
     current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NEED_A_SUB_MODERATE)
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
     ),
-) -> AdminNeedASubChatModerationResultRead:
-    return moderate_admin_need_a_sub_chat_message(
+) -> AdminChatModerationActionResultRead:
+    require_user_admin_permission(current_admin, PERMISSION_NEED_A_SUB_MODERATE)
+    get_admin_need_a_sub_post_or_404(db, post_id)
+    return remove_need_a_sub_chat_message(
         db,
         post_id=post_id,
         message_id=message_id,
-        moderator_user=current_admin,
+        admin_user=current_admin,
         payload=payload,
-        moderation_action="remove",
+    )
+
+
+@router.post(
+    "/{post_id}/chat/messages/{message_id}/restore",
+    response_model=AdminChatModerationActionResultRead,
+    status_code=status.HTTP_200_OK,
+)
+def restore_admin_need_a_sub_chat_message_route(
+    post_id: uuid.UUID,
+    message_id: uuid.UUID,
+    payload: AdminChatModerationActionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
+    ),
+) -> AdminChatModerationActionResultRead:
+    require_user_admin_permission(current_admin, PERMISSION_NEED_A_SUB_MODERATE)
+    get_admin_need_a_sub_post_or_404(db, post_id)
+    return restore_need_a_sub_chat_message(
+        db,
+        post_id=post_id,
+        message_id=message_id,
+        admin_user=current_admin,
+        payload=payload,
     )

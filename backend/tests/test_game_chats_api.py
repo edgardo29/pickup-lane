@@ -54,12 +54,12 @@ def test_game_chats_create_get_list_and_update(client: TestClient):
         client,
         lambda: client.patch(
             f"/game-chats/{game_chat['id']}",
-            json={"chat_status": "locked"},
+            json={"chat_status": "closed"},
         ),
     )
     assert patch_response.status_code == 200, patch_response.text
-    assert patch_response.json()["chat_status"] == "locked"
-    assert patch_response.json()["locked_at"] is not None
+    assert patch_response.json()["chat_status"] == "closed"
+    assert patch_response.json()["closed_at"] is not None
 
     audit_response = run_as_temporary_admin(
         client,
@@ -141,20 +141,20 @@ def test_game_chats_reject_invalid_status_filter(client: TestClient):
     assert "chat_status" in response.text
 
 
-def test_game_chats_reject_update_after_archived(client: TestClient):
+def test_game_chats_reject_update_after_closed(client: TestClient):
     user = create_user(client)
     venue = create_venue(client, user["id"])
     game = create_game(client, user["id"], venue)
     game_chat = create_game_chat(client, game["id"])
 
-    archive_response = run_as_temporary_admin(
+    close_response = run_as_temporary_admin(
         client,
         lambda: client.patch(
             f"/game-chats/{game_chat['id']}",
-            json={"chat_status": "archived"},
+            json={"chat_status": "closed"},
         ),
     )
-    assert archive_response.status_code == 200, archive_response.text
+    assert close_response.status_code == 200, close_response.text
 
     response = run_as_temporary_admin(
         client,
@@ -165,7 +165,7 @@ def test_game_chats_reject_update_after_archived(client: TestClient):
     )
 
     assert response.status_code == 400, response.text
-    assert "Archived game chats cannot be updated" in response.text
+    assert "Closed game chats cannot be updated" in response.text
 
 
 def test_generic_game_chat_routes_require_staff_permission(client: TestClient):
@@ -183,7 +183,7 @@ def test_generic_game_chat_routes_require_staff_permission(client: TestClient):
     )
     patch_response = client.patch(
         f"/game-chats/{game_chat['id']}",
-        json={"chat_status": "locked"},
+        json={"chat_status": "closed"},
     )
 
     assert get_response.status_code == 403, get_response.text
@@ -211,7 +211,7 @@ def test_moderator_can_read_but_cannot_manage_generic_game_chats(
     )
     patch_response = client.patch(
         f"/game-chats/{game_chat['id']}",
-        json={"chat_status": "locked"},
+        json={"chat_status": "closed"},
     )
 
     assert get_response.status_code == 200, get_response.text

@@ -12,7 +12,7 @@ class SubPost(Base):
     __tablename__ = "sub_posts"
     __table_args__ = (
         CheckConstraint(
-            "post_status IN ('active', 'filled', 'expired', 'canceled', 'removed')",
+            "post_status IN ('active', 'completed', 'cancelled', 'expired', 'removed')",
             name="ck_sub_posts_post_status",
         ),
         CheckConstraint("sport_type IN ('soccer')", name="ck_sub_posts_sport_type"),
@@ -43,11 +43,11 @@ class SubPost(Base):
             name="ck_sub_posts_expires_not_after_starts",
         ),
         CheckConstraint(
-            "post_status != 'filled' OR filled_at IS NOT NULL",
-            name="ck_sub_posts_filled_requires_filled_at",
+            "post_status != 'completed' OR filled_at IS NOT NULL",
+            name="ck_sub_posts_completed_requires_filled_at",
         ),
         CheckConstraint(
-            "post_status != 'canceled' OR canceled_at IS NOT NULL",
+            "post_status != 'cancelled' OR canceled_at IS NOT NULL",
             name="ck_sub_posts_canceled_requires_canceled_at",
         ),
         CheckConstraint(
@@ -62,33 +62,65 @@ class SubPost(Base):
         Index("ix_sub_posts_city_state_starts_at", "city", "state", "starts_at"),
         Index("ix_sub_posts_post_status_starts_at", "post_status", "starts_at"),
         Index(
-            "ix_sub_posts_browse_active_filled_starts_at",
+            "ix_sub_posts_browse_active_starts_at",
             "starts_at",
-            postgresql_where=text("post_status IN ('active', 'filled')"),
+            postgresql_where=text("post_status = 'active'"),
         ),
         Index(
-            "ix_sub_posts_cards_local_starts_created_id",
+            "ix_sub_posts_cards_active_local_starts_created_id",
             "starts_on_local",
             "starts_at",
             "created_at",
             "id",
-            postgresql_where=text("post_status IN ('active', 'filled')"),
+            postgresql_where=text("post_status = 'active'"),
         ),
         Index(
-            "ix_sub_posts_owner_cards_local_starts_created_id",
+            "ix_sub_posts_owner_cards_active_local_starts_created_id",
             "owner_user_id",
             "starts_on_local",
             "starts_at",
             "created_at",
             "id",
-            postgresql_where=text("post_status IN ('active', 'filled')"),
+            postgresql_where=text("post_status = 'active'"),
         ),
         Index(
-            "ux_sub_posts_owner_live_starts_on_local",
+            "ux_sub_posts_owner_active_starts_on_local",
             "owner_user_id",
             "starts_on_local",
             unique=True,
-            postgresql_where=text("post_status IN ('active', 'filled')"),
+            postgresql_where=text("post_status = 'active'"),
+        ),
+        Index(
+            "ix_sub_posts_admin_status_local_starts_created_id",
+            "post_status",
+            "starts_on_local",
+            "starts_at",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_sub_posts_admin_location_name_trgm",
+            "location_name",
+            postgresql_using="gin",
+            postgresql_ops={"location_name": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_sub_posts_admin_team_name_trgm",
+            "team_name",
+            postgresql_using="gin",
+            postgresql_ops={"team_name": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_sub_posts_admin_city_trgm",
+            "city",
+            postgresql_using="gin",
+            postgresql_ops={"city": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_sub_posts_admin_state_trgm",
+            "state",
+            postgresql_using="gin",
+            postgresql_ops={"state": "gin_trgm_ops"},
         ),
     )
 

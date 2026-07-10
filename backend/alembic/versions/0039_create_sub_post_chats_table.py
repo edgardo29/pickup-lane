@@ -35,12 +35,36 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
         sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "message_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "needs_review_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "removed_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column("latest_message_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("latest_message_preview", sa.Text(), nullable=True),
+        sa.Column("latest_message_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
-            "chat_status IN ('active', 'closed', 'archived')",
+            "chat_status IN ('active', 'closed')",
             name="ck_sub_post_chats_chat_status",
         ),
         sa.CheckConstraint(
-            "(chat_status = 'active' OR closed_at IS NOT NULL)",
+            (
+                "(chat_status = 'active' AND closed_at IS NULL) "
+                "OR (chat_status = 'closed' AND closed_at IS NOT NULL)"
+            ),
             name="ck_sub_post_chats_closed_requires_closed_at",
         ),
         sa.ForeignKeyConstraint(
@@ -61,6 +85,16 @@ def upgrade() -> None:
         "sub_post_chats",
         ["chat_status"],
     )
+    op.create_index(
+        "ix_sub_post_chats_latest_message_at",
+        "sub_post_chats",
+        ["latest_message_at"],
+    )
+    op.create_index(
+        "ix_sub_post_chats_needs_review_count",
+        "sub_post_chats",
+        ["needs_review_count"],
+    )
     op.create_foreign_key(
         "fk_notifications_related_sub_post_chat_id",
         "notifications",
@@ -77,6 +111,8 @@ def downgrade() -> None:
         "notifications",
         type_="foreignkey",
     )
+    op.drop_index("ix_sub_post_chats_needs_review_count", table_name="sub_post_chats")
+    op.drop_index("ix_sub_post_chats_latest_message_at", table_name="sub_post_chats")
     op.drop_index("ix_sub_post_chats_chat_status", table_name="sub_post_chats")
     op.drop_index("ix_sub_post_chats_sub_post_id", table_name="sub_post_chats")
     op.drop_table("sub_post_chats")

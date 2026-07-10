@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { Trophy } from 'lucide-react'
 import {
   AddressIcon,
   GameDateIcon,
@@ -166,9 +167,11 @@ function AdminOfficialGameCard({ game }) {
       </div>
 
       <div className="admin-official-game-card__footer">
-        <span className={getSpotsClass(game)}>
+        <span className={`admin-official-game-card__capacity ${getSpotsClass(game)}`.trim()}>
           <GameSpotsIcon />
-          <strong>{game.booked_spots}/{game.total_spots}</strong> spots
+          <span className="admin-official-game-card__capacity-copy">
+            <strong>{game.booked_spots}/{game.total_spots}</strong> spots
+          </span>
         </span>
         <span>{formatAdminGameMoney(game.price_per_player_cents, game.currency)}</span>
       </div>
@@ -180,10 +183,11 @@ function AdminOfficialGamesList({ games, hasFilters = false }) {
   if (!games.length) {
     return (
       <div className="admin-official-empty-state">
-        <strong>No games found.</strong>
+        <Trophy aria-hidden="true" />
+        <strong>No official games found</strong>
         <span>
           {hasFilters
-            ? 'Try clearing the search or date.'
+            ? 'Try clearing the search, date, or changing views.'
             : 'Official games will appear here after they are created.'}
         </span>
       </div>

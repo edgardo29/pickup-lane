@@ -11,7 +11,7 @@ from backend.services.game_rules import (
     VALID_SKILL_LEVELS as GAME_VALID_SKILL_LEVELS,
 )
 
-POST_STATUSES = {"active", "filled", "expired", "canceled", "removed"}
+POST_STATUSES = {"active", "completed", "cancelled", "expired", "removed"}
 REQUEST_STATUSES = {
     "pending",
     "confirmed",
@@ -22,8 +22,8 @@ REQUEST_STATUSES = {
     "no_show_reported",
     "expired",
 }
-ACTIVE_VISIBLE_POST_STATUSES = {"active", "filled"}
-CHAT_ALLOWED_POST_STATUSES = {"active", "filled", "expired"}
+ACTIVE_VISIBLE_POST_STATUSES = {"active"}
+CHAT_ALLOWED_POST_STATUSES = {"active", "completed", "expired"}
 ACTIVE_REQUEST_STATUSES = {"pending", "confirmed", "sub_waitlist"}
 QUEUE_HOLD_REQUEST_STATUSES = {"pending", "confirmed"}
 EXPIRABLE_REQUEST_STATUSES = {"pending", "sub_waitlist"}

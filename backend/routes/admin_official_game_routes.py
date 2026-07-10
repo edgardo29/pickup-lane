@@ -25,11 +25,16 @@ from backend.schemas import (
     AdminOfficialGameRead,
     AdminOfficialGameUpdate,
     AdminOfficialGameUserSearchRead,
+    AdminChatMessageListRead,
+    AdminChatModerationActionCreate,
+    AdminChatModerationActionResultRead,
+    AdminChatSummaryRead,
     BookingRead,
     CurrentUserWaitlistEntryRead,
     GameParticipantRead,
 )
 from backend.services.admin_permission_service import (
+    PERMISSION_CONTENT_MODERATE,
     PERMISSION_MONEY_READ,
     PERMISSION_OFFICIAL_GAMES_CANCEL,
     PERMISSION_OFFICIAL_GAMES_READ,
@@ -65,6 +70,13 @@ from backend.services.official_game_service import (
     create_official_game,
     get_official_game_or_404,
     update_official_game,
+)
+from backend.services.chat_moderation_admin_service import (
+    get_admin_game_chat_summary,
+    list_admin_game_chat_messages,
+    mark_game_chat_message_reviewed,
+    remove_game_chat_message,
+    restore_game_chat_message,
 )
 
 router = APIRouter(prefix="/admin/official-games", tags=["admin_official_games"])
@@ -124,6 +136,121 @@ def get_admin_official_game(
     del current_admin
     game = get_official_game_or_404(db, game_id)
     return AdminOfficialGameRead(game=game)
+
+
+@router.get("/{game_id}/chat/summary", response_model=AdminChatSummaryRead)
+def get_admin_official_game_chat_summary_route(
+    game_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
+    ),
+) -> AdminChatSummaryRead:
+    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
+    get_official_game_or_404(db, game_id)
+    return get_admin_game_chat_summary(
+        db,
+        game_id=game_id,
+        viewer_user=current_admin,
+    )
+
+
+@router.get("/{game_id}/chat/messages", response_model=AdminChatMessageListRead)
+def list_admin_official_game_chat_messages_route(
+    game_id: uuid.UUID,
+    view: str = Query(default="needs_review"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
+    ),
+) -> AdminChatMessageListRead:
+    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
+    get_official_game_or_404(db, game_id)
+    return list_admin_game_chat_messages(
+        db,
+        game_id=game_id,
+        viewer_user=current_admin,
+        view=view,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/{game_id}/chat/messages/{message_id}/review",
+    response_model=AdminChatModerationActionResultRead,
+    status_code=status.HTTP_200_OK,
+)
+def mark_admin_official_game_chat_message_reviewed_route(
+    game_id: uuid.UUID,
+    message_id: uuid.UUID,
+    payload: AdminChatModerationActionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
+    ),
+) -> AdminChatModerationActionResultRead:
+    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
+    get_official_game_or_404(db, game_id)
+    return mark_game_chat_message_reviewed(
+        db,
+        game_id=game_id,
+        message_id=message_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{game_id}/chat/messages/{message_id}/remove",
+    response_model=AdminChatModerationActionResultRead,
+    status_code=status.HTTP_200_OK,
+)
+def remove_admin_official_game_chat_message_route(
+    game_id: uuid.UUID,
+    message_id: uuid.UUID,
+    payload: AdminChatModerationActionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
+    ),
+) -> AdminChatModerationActionResultRead:
+    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
+    get_official_game_or_404(db, game_id)
+    return remove_game_chat_message(
+        db,
+        game_id=game_id,
+        message_id=message_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{game_id}/chat/messages/{message_id}/restore",
+    response_model=AdminChatModerationActionResultRead,
+    status_code=status.HTTP_200_OK,
+)
+def restore_admin_official_game_chat_message_route(
+    game_id: uuid.UUID,
+    message_id: uuid.UUID,
+    payload: AdminChatModerationActionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(
+        require_admin_permission(PERMISSION_CONTENT_MODERATE)
+    ),
+) -> AdminChatModerationActionResultRead:
+    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
+    get_official_game_or_404(db, game_id)
+    return restore_game_chat_message(
+        db,
+        game_id=game_id,
+        message_id=message_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
 
 
 @router.get(

@@ -36,8 +36,9 @@ PREVIOUS_ADMIN_ACTION_TYPES = (
     "approve_venue",
     "delete_user",
     "reject_venue",
+    "mark_chat_message_reviewed",
     "remove_chat_message",
-    "hide_chat_message",
+    "restore_chat_message",
     "update_game",
     "create_game_chat",
     "update_game_chat",
@@ -88,6 +89,7 @@ ADMIN_ACTION_TARGET_REQUIRED_CHECK = _target_required_check(
 
 def upgrade() -> None:
     # Twenty-seventh schema migration: create the main Need a Sub post table.
+    op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
     op.create_table(
         "sub_posts",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -161,7 +163,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
         sa.CheckConstraint(
-            "post_status IN ('active', 'filled', 'expired', 'canceled', 'removed')",
+            "post_status IN ('active', 'completed', 'cancelled', 'expired', 'removed')",
             name="ck_sub_posts_post_status",
         ),
         sa.CheckConstraint(
@@ -195,11 +197,11 @@ def upgrade() -> None:
             name="ck_sub_posts_expires_not_after_starts",
         ),
         sa.CheckConstraint(
-            "post_status != 'filled' OR filled_at IS NOT NULL",
-            name="ck_sub_posts_filled_requires_filled_at",
+            "post_status != 'completed' OR filled_at IS NOT NULL",
+            name="ck_sub_posts_completed_requires_filled_at",
         ),
         sa.CheckConstraint(
-            "post_status != 'canceled' OR canceled_at IS NOT NULL",
+            "post_status != 'cancelled' OR canceled_at IS NOT NULL",
             name="ck_sub_posts_canceled_requires_canceled_at",
         ),
         sa.CheckConstraint(
@@ -243,29 +245,62 @@ def upgrade() -> None:
         ["post_status", "starts_at"],
     )
     op.create_index(
-        "ix_sub_posts_browse_active_filled_starts_at",
+        "ix_sub_posts_browse_active_starts_at",
         "sub_posts",
         ["starts_at"],
-        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        postgresql_where=sa.text("post_status = 'active'"),
     )
     op.create_index(
-        "ix_sub_posts_cards_local_starts_created_id",
+        "ix_sub_posts_cards_active_local_starts_created_id",
         "sub_posts",
         ["starts_on_local", "starts_at", "created_at", "id"],
-        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        postgresql_where=sa.text("post_status = 'active'"),
     )
     op.create_index(
-        "ix_sub_posts_owner_cards_local_starts_created_id",
+        "ix_sub_posts_owner_cards_active_local_starts_created_id",
         "sub_posts",
         ["owner_user_id", "starts_on_local", "starts_at", "created_at", "id"],
-        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        postgresql_where=sa.text("post_status = 'active'"),
     )
     op.create_index(
-        "ux_sub_posts_owner_live_starts_on_local",
+        "ux_sub_posts_owner_active_starts_on_local",
         "sub_posts",
         ["owner_user_id", "starts_on_local"],
         unique=True,
-        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        postgresql_where=sa.text("post_status = 'active'"),
+    )
+    op.create_index(
+        "ix_sub_posts_admin_status_local_starts_created_id",
+        "sub_posts",
+        ["post_status", "starts_on_local", "starts_at", "created_at", "id"],
+    )
+    op.create_index(
+        "ix_sub_posts_admin_location_name_trgm",
+        "sub_posts",
+        ["location_name"],
+        postgresql_using="gin",
+        postgresql_ops={"location_name": "gin_trgm_ops"},
+    )
+    op.create_index(
+        "ix_sub_posts_admin_team_name_trgm",
+        "sub_posts",
+        ["team_name"],
+        postgresql_using="gin",
+        postgresql_ops={"team_name": "gin_trgm_ops"},
+    )
+    op.create_index(
+        "ix_sub_posts_admin_city_trgm",
+        "sub_posts",
+        ["city"],
+        postgresql_using="gin",
+        postgresql_ops={"city": "gin_trgm_ops"},
+    )
+    op.create_index(
+        "ix_sub_posts_admin_state_trgm",
+        "sub_posts",
+        ["state"],
+        postgresql_using="gin",
+        postgresql_ops={"state": "gin_trgm_ops"},
     )
     op.add_column(
         "admin_actions",
@@ -353,23 +388,31 @@ def downgrade() -> None:
     op.drop_index("ix_admin_actions_target_sub_post_id", table_name="admin_actions")
     op.drop_column("admin_actions", "target_sub_post_id")
     op.drop_index(
-        "ux_sub_posts_owner_live_starts_on_local",
+        "ux_sub_posts_owner_active_starts_on_local",
+        table_name="sub_posts",
+    )
+    op.drop_index("ix_sub_posts_admin_state_trgm", table_name="sub_posts")
+    op.drop_index("ix_sub_posts_admin_city_trgm", table_name="sub_posts")
+    op.drop_index("ix_sub_posts_admin_team_name_trgm", table_name="sub_posts")
+    op.drop_index("ix_sub_posts_admin_location_name_trgm", table_name="sub_posts")
+    op.drop_index(
+        "ix_sub_posts_admin_status_local_starts_created_id",
         table_name="sub_posts",
     )
     op.drop_index(
-        "ix_sub_posts_browse_active_filled_starts_at",
+        "ix_sub_posts_browse_active_starts_at",
         table_name="sub_posts",
-        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        postgresql_where=sa.text("post_status = 'active'"),
     )
     op.drop_index(
-        "ix_sub_posts_owner_cards_local_starts_created_id",
+        "ix_sub_posts_owner_cards_active_local_starts_created_id",
         table_name="sub_posts",
-        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        postgresql_where=sa.text("post_status = 'active'"),
     )
     op.drop_index(
-        "ix_sub_posts_cards_local_starts_created_id",
+        "ix_sub_posts_cards_active_local_starts_created_id",
         table_name="sub_posts",
-        postgresql_where=sa.text("post_status IN ('active', 'filled')"),
+        postgresql_where=sa.text("post_status = 'active'"),
     )
     op.drop_index(
         "ix_sub_posts_post_status_starts_at",

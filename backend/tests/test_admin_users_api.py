@@ -20,6 +20,7 @@ from backend.models import (
     GameStatusHistory,
     Notification,
     SubPost,
+    SubPostChat,
     SubPostRequest,
     SupportFlag,
     User,
@@ -1114,7 +1115,7 @@ def test_admin_user_delete_preview_reports_blocking_official_host_and_impacts(
             "id": official_game["id"],
             "title": "Future Official Delete Blocker",
             "game_type": "official",
-            "game_status": "scheduled",
+            "game_status": "active",
             "starts_at": official_game["starts_at"],
             "city": venue["city"],
             "state": venue["state"],
@@ -1126,7 +1127,7 @@ def test_admin_user_delete_preview_reports_blocking_official_host_and_impacts(
             "id": community_game["id"],
             "title": "Future Community Hosted Impact",
             "game_type": "community",
-            "game_status": "scheduled",
+            "game_status": "active",
             "starts_at": community_game["starts_at"],
             "city": venue["city"],
             "state": venue["state"],
@@ -1593,12 +1594,12 @@ def test_admin_user_delete_updates_account_activity_and_audit_once(
         assert db_community_waitlist_entry is not None
         assert db_community_waitlist_entry.waitlist_status == "cancelled"
         assert db_community_chat is not None
-        assert db_community_chat.chat_status == "archived"
+        assert db_community_chat.chat_status == "closed"
         assert community_game_history is not None
         assert community_game_history.change_source == "system"
         assert len(community_player_notifications) == 1
         assert db_owned_sub_post is not None
-        assert db_owned_sub_post.post_status == "canceled"
+        assert db_owned_sub_post.post_status == "cancelled"
         assert db_owned_sub_post.canceled_at is not None
         assert db_sub_request is not None
         assert db_sub_request.request_status == "canceled_by_player"
@@ -1836,6 +1837,7 @@ def test_admin_user_delete_emits_need_a_sub_owner_cancellation_notification(
     assert response.status_code == 200, response.text
     with SessionLocal() as db:
         db_request = db.get(SubPostRequest, UUID(sub_request["id"]))
+        db_chat = db.get(SubPostChat, UUID(chat_response.json()["id"]))
         notification = db.scalar(
             select(Notification).where(
                 Notification.user_id == UUID(requester["id"]),
@@ -1847,6 +1849,9 @@ def test_admin_user_delete_emits_need_a_sub_owner_cancellation_notification(
         db_chat_notification = db.get(Notification, chat_notification_id)
         assert db_request is not None
         assert db_request.request_status == "canceled_by_owner"
+        assert db_chat is not None
+        assert db_chat.chat_status == "closed"
+        assert db_chat.closed_at is not None
         assert notification is not None
         assert db_chat_notification is not None
         assert db_chat_notification.is_read is True
@@ -2645,7 +2650,7 @@ def test_admin_user_suspension_preview_reports_only_blocking_official_hosts(
         {
             "id": blocking_game["id"],
             "title": "Future Official Host Assignment",
-            "game_status": "scheduled",
+            "game_status": "active",
             "starts_at": blocking_game["starts_at"],
             "city": venue["city"],
             "state": venue["state"],
@@ -3306,7 +3311,7 @@ def test_admin_user_hosting_restriction_preview_reports_future_games_without_mut
         assert db_target.account_status == "suspended"
         assert db_target.hosting_status == "eligible"
         assert db_future_game is not None
-        assert db_future_game.game_status == "scheduled"
+        assert db_future_game.game_status == "active"
         assert audit_count == 0
 
 
@@ -3505,7 +3510,7 @@ def test_admin_user_restrict_hosting_updates_status_audit_and_notification_once(
         assert db_target.hosting_status == "restricted"
         assert db_target.hosting_suspended_until is None
         assert db_future_game is not None
-        assert db_future_game.game_status == "scheduled"
+        assert db_future_game.game_status == "active"
         assert db_future_game.publish_status == "published"
         assert db_future_game.host_user_id == UUID(target["id"])
         assert len(audit_actions) == 1

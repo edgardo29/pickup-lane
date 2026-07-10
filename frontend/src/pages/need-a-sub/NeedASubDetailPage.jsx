@@ -79,7 +79,7 @@ function NeedASubDetailPage() {
     : false
   const canUseOwnerActions = Boolean(
     isOwner &&
-    ['active', 'filled'].includes(post?.post_status) &&
+    post?.post_status === 'active' &&
     isUpcomingPost,
   )
   const canCancelPost = canUseOwnerActions
@@ -87,12 +87,12 @@ function NeedASubDetailPage() {
   const canManageRequests = canUseOwnerActions
   const canRequest = Boolean(
     currentUser &&
-    ['active', 'filled'].includes(post?.post_status) &&
+    post?.post_status === 'active' &&
     !isOwner &&
     !activeRequest,
   )
   const canSelectSpot = Boolean(
-    ['active', 'filled'].includes(post?.post_status) &&
+    post?.post_status === 'active' &&
     !isOwner &&
     !activeRequest,
   )
@@ -321,7 +321,7 @@ function getNeedASubChatAccessState({
 }
 
 function isNeedASubChatWindowOpen(post) {
-  if (!post || ['canceled', 'removed'].includes(post.post_status)) {
+  if (!post || ['cancelled', 'removed'].includes(post.post_status)) {
     return false
   }
 
