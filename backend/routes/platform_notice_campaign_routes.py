@@ -15,8 +15,7 @@ from backend.schemas import (
     PlatformNoticeCampaignRead,
     PlatformNoticeCampaignUpdate,
 )
-from backend.services.admin_permission_service import PERMISSION_NOTIFICATIONS_MANAGE
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.platform_notice_campaign_service import (
     create_platform_notice_campaign,
     get_platform_notice_campaign,
@@ -43,9 +42,7 @@ router = APIRouter(
 )
 def create_platform_notice_campaign_route(
     payload: PlatformNoticeCampaignCreate,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeCampaignRead:
     return create_platform_notice_campaign(
@@ -67,9 +64,7 @@ def list_platform_notice_campaigns_route(
     search: str | None = None,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeCampaignListRead:
     return list_platform_notice_campaigns(
@@ -91,9 +86,7 @@ def list_platform_notice_campaigns_route(
 )
 def get_platform_notice_campaign_route(
     campaign_id: uuid.UUID,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeCampaignRead:
     return get_platform_notice_campaign(
@@ -111,9 +104,7 @@ def get_platform_notice_campaign_route(
 def update_platform_notice_campaign_route(
     campaign_id: uuid.UUID,
     payload: PlatformNoticeCampaignUpdate,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeCampaignRead:
     return update_platform_notice_campaign(
@@ -132,9 +123,7 @@ def update_platform_notice_campaign_route(
 def send_platform_notice_campaign_route(
     campaign_id: uuid.UUID,
     payload: PlatformNoticeCampaignDeliveryRequest,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeCampaignDeliveryResult:
     return send_platform_notice_campaign(
@@ -153,9 +142,7 @@ def send_platform_notice_campaign_route(
 def retry_failed_platform_notice_campaign_route(
     campaign_id: uuid.UUID,
     payload: PlatformNoticeCampaignDeliveryRequest,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeCampaignDeliveryResult:
     return retry_failed_platform_notice_campaign(
@@ -176,9 +163,7 @@ def list_platform_notice_campaign_deliveries_route(
     delivery_status: str | None = None,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeCampaignDeliveryListRead:
     return list_platform_notice_campaign_deliveries(
@@ -202,9 +187,7 @@ def list_platform_notice_campaign_attempts_route(
     attempt_status: str | None = None,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeCampaignAttemptListRead:
     return list_platform_notice_campaign_attempts(

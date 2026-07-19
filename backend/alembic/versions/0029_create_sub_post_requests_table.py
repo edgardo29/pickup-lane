@@ -78,7 +78,8 @@ def upgrade() -> None:
             (
                 "request_status IN ('pending', 'confirmed', 'declined', "
                 "'sub_waitlist', 'canceled_by_player', "
-                "'canceled_by_owner', 'no_show_reported', 'expired')"
+                "'canceled_by_owner', 'no_show_reported', 'expired', "
+                "'closed_by_admin')"
             ),
             name="ck_sub_post_requests_request_status",
         ),

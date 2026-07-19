@@ -6,18 +6,12 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User
-from backend.services.admin_permission_service import PERMISSION_NEED_A_SUB_MODERATE
-from backend.services.auth_service import (
-    get_optional_current_app_user,
-    require_admin_permission,
-    require_active_user,
-)
+from backend.services.auth_service import get_optional_current_app_user, require_active_admin, require_active_user
 from backend.schemas import (
     SubPostCancel,
     SubPostChatEnsureCreate,
     SubPostChatMessageCreate,
     SubPostChatMessageRead,
-    SubPostChatMessageUpdate,
     SubPostChatRead,
     SubPostChatReadStateRead,
     SubPostCreate,
@@ -44,7 +38,6 @@ from backend.services.sub_post_chat_service import (
     get_sub_post_chat_workflow,
     list_sub_post_chat_messages_workflow,
     mark_sub_post_chat_read_workflow,
-    update_sub_post_chat_message_workflow,
 )
 
 router = APIRouter(prefix="/need-a-sub/posts", tags=["need_a_sub_posts"])
@@ -211,27 +204,6 @@ def create_need_a_sub_chat_message(
     )
 
 
-@router.patch(
-    "/{sub_post_id}/chat/messages/{message_id}",
-    response_model=SubPostChatMessageRead,
-    status_code=status.HTTP_200_OK,
-)
-def update_need_a_sub_chat_message(
-    sub_post_id: uuid.UUID,
-    message_id: uuid.UUID,
-    payload: SubPostChatMessageUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
-) -> dict:
-    return update_sub_post_chat_message_workflow(
-        db,
-        sub_post_id,
-        message_id,
-        payload,
-        current_user,
-    )
-
-
 @router.get(
     "/{sub_post_id}",
     response_model=SubPostRead | SubPostPublicRead,
@@ -283,9 +255,7 @@ def remove_need_a_sub_post(
     sub_post_id: uuid.UUID,
     payload: SubPostRemove,
     db: Session = Depends(get_db),
-    current_user: User = Depends(
-        require_admin_permission(PERMISSION_NEED_A_SUB_MODERATE)
-    ),
+    current_user: User = Depends(require_active_admin),
 ) -> dict:
     return remove_sub_post_workflow(
         db,

@@ -165,6 +165,10 @@ function groupPostsByDate(posts) {
 function getPostSignals(post) {
   const signals = []
 
+  if (post.public_visibility_status === 'hidden') {
+    signals.push('Hidden')
+  }
+
   if (post.post_status && post.post_status !== 'active') {
     signals.push(formatAdminNeedASubStatus(post.post_status))
   }

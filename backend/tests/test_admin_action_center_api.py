@@ -137,22 +137,6 @@ def test_action_center_lists_and_clears_missing_primary_venue_photo(
     assert cleared_response.json()["sections"] == []
 
 
-def test_action_center_moderator_sees_only_permitted_items(client: TestClient):
-    admin = create_user(client)
-    set_user_role(admin["id"], "admin")
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    venue = create_venue(client, admin["id"])
-    create_game(client, admin["id"], venue)
-
-    authenticate_as(moderator["id"])
-    response = client.get("/admin/action-center")
-
-    assert response.status_code == 200, response.text
-    assert response.json()["total_count"] == 0
-    assert response.json()["sections"] == []
-
-
 def test_action_center_rejects_regular_user(client: TestClient):
     user = create_user(client)
 
@@ -172,4 +156,4 @@ def test_action_center_rejects_suspended_admin(client: TestClient):
     response = client.get("/admin/action-center")
 
     assert response.status_code == 403, response.text
-    assert "Active account required" in response.text
+    assert "Admin access required" in response.text

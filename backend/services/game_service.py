@@ -30,6 +30,9 @@ from backend.schemas.game_schema import (
     MyGameCardRead,
     MyGamesListRead,
 )
+from backend.services.admin_review_service import (
+    close_open_content_moderation_case_for_game_lifecycle,
+)
 from backend.services.r2_storage_service import (
     R2StorageConfigError,
     R2StorageError,
@@ -47,11 +50,13 @@ from backend.services.game_rules import (
     OPEN_GAME_STATUSES,
     ROSTER_PLAYER_STATUSES,
     build_game_conflict_detail,
+    community_game_is_publicly_visible,
     get_default_host_guest_max,
     normalize_game_lifecycle_fields,
     normalize_official_game_invariants,
     reject_direct_official_host_change,
     reject_official_location_change,
+    require_publicly_visible_game,
     require_game_not_started,
     validate_game_business_rules,
 )
@@ -65,6 +70,11 @@ MY_GAMES_VALID_VIEWS = {"upcoming", "history"}
 MY_GAMES_UPCOMING_STATUSES = {"pending_payment", "confirmed", "waitlisted"}
 MY_GAMES_HISTORY_STATUSES = {"confirmed"}
 MY_GAMES_CANCELLED_TYPES = {"host_cancelled", "admin_cancelled"}
+COMMUNITY_CONTENT_REVIEW_AUTO_CLOSE_STATUSES = {"completed", "expired"}
+COMMUNITY_CONTENT_REVIEW_AUTO_CLOSE_REASONS = {
+    "completed": "Community Game was completed before moderation review was completed.",
+    "expired": "Community Game expired before moderation review was completed.",
+}
 
 
 def get_active_venue_or_404(db: Session, venue_id: uuid.UUID) -> Venue:
@@ -149,10 +159,19 @@ def get_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
     return db_game
 
 
+def get_public_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
+    db_game = get_game_or_404(db, game_id)
+    require_publicly_visible_game(db_game)
+    return db_game
+
+
 def list_games(db: Session) -> list[Game]:
     games = db.scalars(
         select(Game)
-        .where(Game.deleted_at.is_(None))
+        .where(
+            Game.deleted_at.is_(None),
+            or_(Game.game_type != "community", Game.public_visibility_status == "visible"),
+        )
         .order_by(Game.starts_at.asc(), Game.created_at.asc())
     ).all()
     return list(games)
@@ -175,6 +194,7 @@ def list_browse_game_cards(
     statement = select(Game).where(
         Game.publish_status == "published",
         Game.deleted_at.is_(None),
+        or_(Game.game_type != "community", Game.public_visibility_status == "visible"),
         Game.game_status.in_(OPEN_GAME_STATUSES),
         Game.starts_on_local == starts_on,
         Game.starts_at > visible_after_start_cutoff,
@@ -300,6 +320,8 @@ def build_game_card_read(
         id=game.id,
         game_type=game.game_type,
         game_status=game.game_status,
+        public_visibility_status=game.public_visibility_status,
+        join_enforcement_status=game.join_enforcement_status,
         title=game.title,
         venue_name_snapshot=game.venue_name_snapshot,
         city_snapshot=game.city_snapshot,
@@ -729,8 +751,10 @@ def update_game_workflow(
     db: Session,
     game_id: uuid.UUID,
     game_update: GameUpdate,
+    admin_user: User | None = None,
 ) -> Game:
     db_game = get_game_or_404(db, game_id)
+    old_game_status = db_game.game_status
 
     update_data = game_update.model_dump(exclude_unset=True)
     if "game_type" in update_data and update_data["game_type"] != db_game.game_type:
@@ -779,6 +803,14 @@ def update_game_workflow(
         ),
         "publish_status": update_data.get("publish_status", db_game.publish_status),
         "game_status": update_data.get("game_status", db_game.game_status),
+        "public_visibility_status": update_data.get(
+            "public_visibility_status",
+            db_game.public_visibility_status,
+        ),
+        "join_enforcement_status": update_data.get(
+            "join_enforcement_status",
+            db_game.join_enforcement_status,
+        ),
         "title": update_data.get("title", db_game.title),
         "description": update_data.get("description", db_game.description),
         "venue_id": update_data.get("venue_id", db_game.venue_id),
@@ -840,6 +872,10 @@ def update_game_workflow(
         "cancelled_by_user_id": update_data.get(
             "cancelled_by_user_id", db_game.cancelled_by_user_id
         ),
+        "cancellation_source": update_data.get(
+            "cancellation_source",
+            db_game.cancellation_source,
+        ),
         "cancel_reason": update_data.get("cancel_reason", db_game.cancel_reason),
         "completed_at": update_data.get("completed_at", db_game.completed_at),
         "completed_by_user_id": update_data.get(
@@ -855,6 +891,7 @@ def update_game_workflow(
         "published_at",
         "cancelled_at",
         "cancelled_by_user_id",
+        "cancellation_source",
         "cancel_reason",
         "completed_at",
         "completed_by_user_id",
@@ -876,6 +913,26 @@ def update_game_workflow(
         setattr(db_game, field_name, field_value)
 
     db_game.updated_at = now
+    if (
+        db_game.game_type == "community"
+        and old_game_status != db_game.game_status
+        and db_game.game_status in COMMUNITY_CONTENT_REVIEW_AUTO_CLOSE_STATUSES
+    ):
+        close_open_content_moderation_case_for_game_lifecycle(
+            db,
+            game_id=db_game.id,
+            closure_outcome="no_action_needed",
+            closure_reason=COMMUNITY_CONTENT_REVIEW_AUTO_CLOSE_REASONS[
+                db_game.game_status
+            ],
+            lifecycle_action=f"game_{db_game.game_status}",
+            trigger_actor_type="admin" if admin_user is not None else "system",
+            trigger_actor_user_id=admin_user.id if admin_user is not None else None,
+            closed_by_user_id=admin_user.id if admin_user is not None else None,
+            previous_game_status=old_game_status,
+            new_game_status=db_game.game_status,
+            closed_at=now,
+        )
     if game_updated_structural_snapshot_changed(structural_snapshot_before, db_game):
         notify_connected_users_game_updated(
             db,
@@ -898,7 +955,11 @@ def update_game_workflow(
     return db_game
 
 
-def delete_game_workflow(db: Session, game_id: uuid.UUID) -> Game:
+def delete_game_workflow(
+    db: Session,
+    game_id: uuid.UUID,
+    admin_user: User,
+) -> Game:
     db_game = get_game_or_404(db, game_id)
 
     if db_game.game_type == "official":
@@ -908,11 +969,29 @@ def delete_game_workflow(db: Session, game_id: uuid.UUID) -> Game:
         )
 
     now = datetime.now(timezone.utc)
+    old_game_status = db_game.game_status
     db_game.updated_at = now
     db_game.deleted_at = now
 
     try:
         db.add(db_game)
+        if db_game.game_type == "community":
+            close_open_content_moderation_case_for_game_lifecycle(
+                db,
+                game_id=db_game.id,
+                closure_outcome="enforcement_applied",
+                closure_reason=(
+                    "Community Game was deleted by an admin before moderation "
+                    "review was completed."
+                ),
+                lifecycle_action="admin_soft_deleted",
+                trigger_actor_type="admin",
+                trigger_actor_user_id=admin_user.id,
+                closed_by_user_id=admin_user.id,
+                previous_game_status=old_game_status,
+                new_game_status=old_game_status,
+                closed_at=now,
+            )
         db.commit()
         db.refresh(db_game)
     except IntegrityError as exc:
@@ -1051,6 +1130,7 @@ def list_public_game_participants(db: Session, game_id: uuid.UUID) -> list[GameP
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Game not found.",
         )
+    require_publicly_visible_game(db_game)
 
     return list(
         db.scalars(
@@ -1070,7 +1150,12 @@ def list_public_game_participant_counts(db: Session) -> list[dict[str, object]]:
             GameParticipant.game_id,
             func.count(GameParticipant.id).label("participant_count"),
         )
+        .join(Game, GameParticipant.game_id == Game.id)
         .where(GameParticipant.participant_status.in_(ROSTER_PLAYER_STATUSES))
+        .where(
+            Game.deleted_at.is_(None),
+            or_(Game.game_type != "community", Game.public_visibility_status == "visible"),
+        )
         .group_by(GameParticipant.game_id)
     ).all()
 

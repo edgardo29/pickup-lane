@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   ArrowRight,
   CalendarClock,
+  ClipboardList,
   Image,
   MapPin,
   ShieldCheck,
@@ -14,11 +15,13 @@ import { fetchAdminActionCenter } from '../shared/adminApi.js'
 
 const sectionIconByKey = {
   official_games: ShieldCheck,
+  review_cases: ClipboardList,
 }
 
 const itemIconByType = {
   official_game_missing_host: ShieldCheck,
   official_game_missing_primary_venue_photo: Image,
+  review_case: ClipboardList,
 }
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {

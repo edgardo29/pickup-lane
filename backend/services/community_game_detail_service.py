@@ -16,7 +16,9 @@ from backend.schemas.community_game_detail_schema import (
 from backend.services.game_rules import (
     HOST_EDITABLE_GAME_STATUSES,
     require_game_not_started,
+    require_publicly_visible_game,
 )
+from backend.services.moderation_surfacing_service import surface_community_game_text
 
 
 def build_community_game_detail_conflict_detail(exc: IntegrityError) -> str:
@@ -103,6 +105,7 @@ def create_community_game_detail_workflow(
             detail=build_community_game_detail_conflict_detail(exc),
         ) from exc
 
+    surface_community_game_text(db, game_id=new_community_game_detail.game_id)
     return new_community_game_detail
 
 
@@ -120,6 +123,14 @@ def get_public_community_game_detail(
             detail="Community game details not found.",
         )
 
+    db_game = db.get(Game, db_community_game_detail.game_id)
+    if db_game is None or db_game.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Community game details not found.",
+        )
+    require_publicly_visible_game(db_game)
+
     return serialize_public_community_game_detail(db_community_game_detail)
 
 
@@ -128,10 +139,18 @@ def list_public_community_game_details(
     *,
     game_id: uuid.UUID | None = None,
 ) -> list[CommunityGameDetailPublicRead]:
-    statement = select(CommunityGameDetail)
+    statement = (
+        select(CommunityGameDetail)
+        .join(Game, CommunityGameDetail.game_id == Game.id)
+        .where(Game.deleted_at.is_(None))
+    )
 
     if game_id is not None:
         statement = statement.where(CommunityGameDetail.game_id == game_id)
+
+    statement = statement.where(
+        (Game.game_type != "community") | (Game.public_visibility_status == "visible")
+    )
 
     community_game_details = db.scalars(
         statement.order_by(CommunityGameDetail.created_at.desc())
@@ -188,6 +207,7 @@ def update_community_game_detail_workflow(
             detail=build_community_game_detail_conflict_detail(exc),
         ) from exc
 
+    surface_community_game_text(db, game_id=db_community_game_detail.game_id)
     return db_community_game_detail
 
 
@@ -278,4 +298,5 @@ def upsert_host_community_game_detail_workflow(
             detail=build_community_game_detail_conflict_detail(exc),
         ) from exc
 
+    surface_community_game_text(db, game_id=db_community_game_detail.game_id)
     return db_community_game_detail

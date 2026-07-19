@@ -61,13 +61,13 @@ def test_sub_post_status_history_blocks_non_owner(client: TestClient):
     assert response.status_code == 403, response.text
 
 
-def test_sub_post_status_history_allows_moderator(client: TestClient):
+def test_sub_post_status_history_allows_admin(client: TestClient):
     owner = create_user(client)
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
     post = create_sub_post(client, owner["id"])
 
-    authenticate_as(moderator["id"])
+    authenticate_as(admin["id"])
     response = client.get(f"/need-a-sub/posts/{post['id']}/status-history")
 
     assert response.status_code == 200, response.text

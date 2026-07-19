@@ -217,7 +217,7 @@ def test_policy_document_public_reads_hide_inactive_retired_and_future_documents
     assert future_get_response.status_code == 404, future_get_response.text
 
 
-def test_policy_document_mutations_require_admin_permission(client: TestClient):
+def test_policy_document_mutations_require_admin_access(client: TestClient):
     user = create_user(client)
     policy_document = create_policy_document(client)
     authenticate_as(user["id"])
@@ -242,15 +242,14 @@ def test_policy_document_mutations_require_admin_permission(client: TestClient):
     assert patch_response.status_code == 403, patch_response.text
 
 
-def test_policy_document_mutations_reject_moderator(client: TestClient):
+def test_policy_document_mutations_reject_player(client: TestClient):
     policy_document = create_policy_document(client)
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
 
     patch_response = client.patch(
         f"/policy-documents/{policy_document['id']}",
-        json={"title": "Denied Moderator Update"},
+        json={"title": "Denied Player Update"},
     )
 
     assert patch_response.status_code == 403, patch_response.text

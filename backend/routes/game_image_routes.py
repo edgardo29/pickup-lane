@@ -6,11 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import GameImage, User
 from backend.schemas import GameImageCreate, GameImageRead, GameImageUpdate
-from backend.services.admin_permission_service import (
-    PERMISSION_OFFICIAL_GAMES_READ,
-    PERMISSION_OFFICIAL_GAMES_WRITE,
-)
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.game_image_service import (
     create_game_image_record,
     get_admin_game_image_record,
@@ -28,9 +24,7 @@ admin_router = APIRouter(prefix="/admin/game-images", tags=["admin_game_images"]
 def create_game_image(
     game_image: GameImageCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_WRITE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> GameImage:
     del current_admin
     return create_game_image_record(db, game_image)
@@ -74,9 +68,7 @@ def update_game_image(
     game_image_id: uuid.UUID,
     game_image_update: GameImageUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_WRITE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> GameImage:
     del current_admin
     return update_game_image_record(db, game_image_id, game_image_update)
@@ -90,9 +82,7 @@ def update_game_image(
 def get_admin_game_image(
     game_image_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> GameImage:
     del current_admin
     return get_admin_game_image_record(db, game_image_id)
@@ -109,9 +99,7 @@ def list_admin_game_images(
     image_status: str | None = None,
     is_primary: bool | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[GameImage]:
     del current_admin
     return list_admin_game_image_records(

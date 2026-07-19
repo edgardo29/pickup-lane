@@ -15,6 +15,7 @@ import {
   AdminCreateOfficialGamePage,
   AdminMoneyCreditPage,
   AdminMoneyCreditsPage,
+  AdminMoneyFinancialOutcomePage,
   AdminMoneyPaymentPage,
   AdminMoneyPaymentMethodsPage,
   AdminMoneyPaymentsPage,
@@ -25,11 +26,14 @@ import {
   AdminMoneyUserPage,
   AdminNeedASubPage,
   AdminNeedASubPostPage,
+  AdminNeedASubRequestPage,
   AdminNotificationsPage,
   AdminPlatformNoticesPage,
   AdminOfficialGamePage,
   AdminEditOfficialGamePage,
   AdminOfficialGamesPage,
+  AdminReviewCasePage,
+  AdminReviewCasesPage,
   AdminSignInPage,
   AdminStaffPage,
   AdminUserPage,
@@ -37,10 +41,7 @@ import {
 } from '../pages/admin/index.js'
 import AdminWorkspaceShell from '../pages/admin/shared/AdminWorkspaceShell.jsx'
 import AdminAccessProvider from '../pages/admin/shared/AdminAccessProvider.jsx'
-import {
-  ADMIN_PERMISSIONS,
-  getDefaultAdminPath,
-} from '../pages/admin/shared/adminWorkspaceData.js'
+import { getDefaultAdminPath } from '../pages/admin/shared/adminWorkspaceData.js'
 import { useAdminAccess } from '../pages/admin/shared/useAdminAccess.js'
 import {
   BrowseGamesPage,
@@ -135,7 +136,7 @@ export function AppRoutes() {
         path="/admin"
         element={
           <AdminAccessProvider>
-            <RequireAdmin permissions={Object.values(ADMIN_PERMISSIONS)}>
+            <RequireAdmin>
               <AdminWorkspaceShell />
             </RequireAdmin>
           </AdminAccessProvider>
@@ -145,7 +146,7 @@ export function AppRoutes() {
         <Route
           path="action-center"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.ACTION_CENTER_VIEW}>
+            <RequireAdmin>
               <AdminActionCenterPage />
             </RequireAdmin>
           }
@@ -153,20 +154,31 @@ export function AppRoutes() {
         <Route
           path="audit"
           element={
-            <RequireAdmin
-              permissions={[
-                ADMIN_PERMISSIONS.AUDIT_READ,
-                ADMIN_PERMISSIONS.AUDIT_SUPPORT_READ,
-              ]}
-            >
+            <RequireAdmin>
               <AdminAuditLogPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="review-cases"
+          element={
+            <RequireAdmin>
+              <AdminReviewCasesPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="review-cases/:reviewCaseId"
+          element={
+            <RequireAdmin>
+              <AdminReviewCasePage />
             </RequireAdmin>
           }
         />
         <Route
           path="users"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.USERS_READ}>
+            <RequireAdmin>
               <AdminUsersPage />
             </RequireAdmin>
           }
@@ -174,7 +186,7 @@ export function AppRoutes() {
         <Route
           path="users/staff"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.STAFF_MANAGE}>
+            <RequireAdmin>
               <AdminStaffPage />
             </RequireAdmin>
           }
@@ -182,7 +194,7 @@ export function AppRoutes() {
         <Route
           path="users/:userId"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.USERS_READ}>
+            <RequireAdmin>
               <AdminUserPage />
             </RequireAdmin>
           }
@@ -190,7 +202,7 @@ export function AppRoutes() {
         <Route
           path="community-games"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ}>
+            <RequireAdmin>
               <AdminCommunityGamesPage />
             </RequireAdmin>
           }
@@ -198,7 +210,7 @@ export function AppRoutes() {
         <Route
           path="community-games/:gameId"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ}>
+            <RequireAdmin>
               <AdminCommunityGamePage />
             </RequireAdmin>
           }
@@ -206,15 +218,23 @@ export function AppRoutes() {
         <Route
           path="need-a-sub"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE}>
+            <RequireAdmin>
               <AdminNeedASubPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="need-a-sub/requests/:requestId"
+          element={
+            <RequireAdmin>
+              <AdminNeedASubRequestPage />
             </RequireAdmin>
           }
         />
         <Route
           path="need-a-sub/:postId"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.NEED_A_SUB_MODERATE}>
+            <RequireAdmin>
               <AdminNeedASubPostPage />
             </RequireAdmin>
           }
@@ -222,7 +242,7 @@ export function AppRoutes() {
         <Route
           path="notifications"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.NOTIFICATIONS_READ}>
+            <RequireAdmin>
               <AdminNotificationsPage />
             </RequireAdmin>
           }
@@ -230,7 +250,7 @@ export function AppRoutes() {
         <Route
           path="platform-notices"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.NOTIFICATIONS_MANAGE}>
+            <RequireAdmin>
               <AdminPlatformNoticesPage />
             </RequireAdmin>
           }
@@ -238,7 +258,7 @@ export function AppRoutes() {
         <Route
           path="money/payments"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneyPaymentsPage />
             </RequireAdmin>
           }
@@ -246,7 +266,7 @@ export function AppRoutes() {
         <Route
           path="money/users"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneyUserPage />
             </RequireAdmin>
           }
@@ -254,7 +274,7 @@ export function AppRoutes() {
         <Route
           path="money/users/:userId"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneyUserPage />
             </RequireAdmin>
           }
@@ -262,7 +282,7 @@ export function AppRoutes() {
         <Route
           path="money/payment-methods"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneyPaymentMethodsPage />
             </RequireAdmin>
           }
@@ -270,7 +290,7 @@ export function AppRoutes() {
         <Route
           path="money/credits"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneyCreditsPage />
             </RequireAdmin>
           }
@@ -278,7 +298,7 @@ export function AppRoutes() {
         <Route
           path="money/credits/:creditId"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneyCreditPage />
             </RequireAdmin>
           }
@@ -286,7 +306,7 @@ export function AppRoutes() {
         <Route
           path="money/support-flags"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneySupportFlagsPage />
             </RequireAdmin>
           }
@@ -294,7 +314,7 @@ export function AppRoutes() {
         <Route
           path="money/support-flags/:supportFlagId"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneySupportFlagPage />
             </RequireAdmin>
           }
@@ -302,15 +322,23 @@ export function AppRoutes() {
         <Route
           path="money/payments/:paymentId"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneyPaymentPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="money/financial-outcomes/:financialOutcomeId"
+          element={
+            <RequireAdmin>
+              <AdminMoneyFinancialOutcomePage />
             </RequireAdmin>
           }
         />
         <Route
           path="money/refunds"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneyRefundsPage />
             </RequireAdmin>
           }
@@ -318,7 +346,7 @@ export function AppRoutes() {
         <Route
           path="money/refunds/:refundId"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.MONEY_READ}>
+            <RequireAdmin>
               <AdminMoneyRefundPage />
             </RequireAdmin>
           }
@@ -326,7 +354,7 @@ export function AppRoutes() {
         <Route
           path="official-games"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ}>
+            <RequireAdmin>
               <AdminOfficialGamesPage />
             </RequireAdmin>
           }
@@ -334,7 +362,7 @@ export function AppRoutes() {
         <Route
           path="official-games/new"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE}>
+            <RequireAdmin>
               <AdminCreateOfficialGamePage />
             </RequireAdmin>
           }
@@ -342,7 +370,7 @@ export function AppRoutes() {
         <Route
           path="official-games/:gameId/edit"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE}>
+            <RequireAdmin>
               <AdminEditOfficialGamePage />
             </RequireAdmin>
           }
@@ -350,7 +378,7 @@ export function AppRoutes() {
         <Route
           path="official-games/:gameId"
           element={
-            <RequireAdmin permission={ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ}>
+            <RequireAdmin>
               <AdminOfficialGamePage />
             </RequireAdmin>
           }

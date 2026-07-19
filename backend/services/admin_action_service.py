@@ -11,11 +11,15 @@ from sqlalchemy.orm import Session
 
 from backend.models import (
     AdminAction,
+    AdminFinancialOutcome,
+    AdminReviewCase,
     Booking,
     ChatMessage,
     Game,
     GameCredit,
     GameParticipant,
+    HostPublishEntitlement,
+    HostPublishFee,
     Notification,
     Payment,
     PlatformNoticeCampaign,
@@ -38,14 +42,18 @@ from backend.services.admin_action_policy import (
     ADMIN_ACTION_TARGET_FIELDS,
     TARGET_ADMIN_ACTION_ID,
     TARGET_BOOKING_ID,
+    TARGET_FINANCIAL_OUTCOME_ID,
     TARGET_GAME_CREDIT_ID,
     TARGET_GAME_ID,
+    TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
+    TARGET_HOST_PUBLISH_FEE_ID,
     TARGET_MESSAGE_ID,
     TARGET_NOTIFICATION_ID,
     TARGET_PARTICIPANT_ID,
     TARGET_PAYMENT_ID,
     TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,
     TARGET_REFUND_ID,
+    TARGET_REVIEW_CASE_ID,
     TARGET_SUB_CHAT_MESSAGE_ID,
     TARGET_SUB_POST_ID,
     TARGET_SUB_POST_POSITION_ID,
@@ -57,10 +65,6 @@ from backend.services.admin_action_policy import (
     AdminActionPolicy,
     TargetRule,
     get_admin_action_policy,
-)
-from backend.services.admin_permission_service import (
-    get_admin_data_scopes_for_user,
-    require_user_admin_permission,
 )
 from backend.services.admin_record_rules import (
     SENSITIVE_NOTE_PATTERNS,
@@ -81,7 +85,9 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
         {
             "old_game_status",
             "new_game_status",
+            "cancellation_source",
             "notified_user_count",
+            "notice_ids",
             "cancelled_at",
             "cancelled_booking_count",
             "paid_booking_count",
@@ -110,14 +116,23 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
             "new_status",
             "removed_by",
             "hidden_by",
+            "notice_ids",
+            "closed_request_ids",
+            "cancellation_source",
         }
     ),
     "money": frozenset(
         {
             "amount_cents",
+            "applied_status",
             "before",
             "currency",
             "after",
+            "failure_reason",
+            "financial_outcome_id",
+            "host_publish_entitlement_id",
+            "host_publish_fee_id",
+            "outcome",
             "refund_reason",
             "refund_status",
             "old_refund_status",
@@ -185,6 +200,20 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
             "status",
         }
     ),
+    "review_workflow": frozenset(
+        {
+            "source",
+            "signal_id",
+            "note_id",
+            "event_id",
+            "created_case",
+            "note_hash",
+            "note_length",
+            "before",
+            "after",
+            "closure_outcome",
+        }
+    ),
 }
 
 TARGET_MODEL_BY_FIELD = {
@@ -206,6 +235,10 @@ TARGET_MODEL_BY_FIELD = {
     TARGET_PLATFORM_NOTICE_CAMPAIGN_ID: PlatformNoticeCampaign,
     TARGET_ADMIN_ACTION_ID: AdminAction,
     TARGET_SUPPORT_FLAG_ID: SupportFlag,
+    TARGET_REVIEW_CASE_ID: AdminReviewCase,
+    TARGET_FINANCIAL_OUTCOME_ID: AdminFinancialOutcome,
+    TARGET_HOST_PUBLISH_FEE_ID: HostPublishFee,
+    TARGET_HOST_PUBLISH_ENTITLEMENT_ID: HostPublishEntitlement,
 }
 
 TARGET_NOT_FOUND_DETAIL = {
@@ -229,6 +262,10 @@ TARGET_NOT_FOUND_DETAIL = {
     ),
     TARGET_ADMIN_ACTION_ID: "Target admin action not found.",
     TARGET_SUPPORT_FLAG_ID: "Target support flag not found.",
+    TARGET_REVIEW_CASE_ID: "Target review case not found.",
+    TARGET_FINANCIAL_OUTCOME_ID: "Target financial outcome not found.",
+    TARGET_HOST_PUBLISH_FEE_ID: "Target host publish fee not found.",
+    TARGET_HOST_PUBLISH_ENTITLEMENT_ID: "Target publish entitlement not found.",
 }
 
 
@@ -243,6 +280,18 @@ def build_admin_action_conflict_detail(exc: IntegrityError) -> str:
 
     if "uq_admin_actions_audit_note_idempotency" in error_text:
         return "Audit note with this idempotency key already exists."
+
+    if "uq_admin_actions_create_financial_outcome_idempotency" in error_text:
+        return "Financial outcome with this idempotency key already exists."
+
+    if "uq_admin_actions_review_case_idempotency" in error_text:
+        return "Review case action with this idempotency key already exists."
+
+    if "uq_admin_actions_community_game_enforcement_idempotency" in error_text:
+        return "Community game action with this idempotency key already exists."
+
+    if "uq_admin_actions_need_sub_enforcement_idempotency" in error_text:
+        return "Need a Sub action with this idempotency key already exists."
 
     return build_user_conflict_detail(exc)
 
@@ -444,7 +493,6 @@ def create_admin_action(
             detail="Use the audit note endpoint to append audit notes.",
         )
 
-    require_user_admin_permission(admin_user, policy.mutation_permission)
     validate_target_policy(policy, action_data, client_targets_only=True)
     validate_target_references(db, action_data)
     admin_action = build_admin_action_instance(
@@ -519,11 +567,9 @@ def get_admin_action_or_404(db: Session, admin_action_id: uuid.UUID) -> AdminAct
 
 
 def user_can_read_admin_action(user: User, admin_action: AdminAction) -> bool:
+    del user
     policy = get_admin_action_policy(admin_action.action_type)
-    if policy is None:
-        return False
-
-    return policy.sensitivity_scope in get_admin_data_scopes_for_user(user)
+    return policy is not None
 
 
 def get_admin_action_for_viewer_or_404(
@@ -592,7 +638,6 @@ def append_admin_action_note(
             detail="Audit notes are not allowed for this action.",
         )
 
-    require_user_admin_permission(admin_user, original_policy.effective_note_permission)
     note_text = validate_note_text(payload.note)
     idempotency_key = normalize_idempotency_key(payload.idempotency_key)
     if idempotency_key is not None:

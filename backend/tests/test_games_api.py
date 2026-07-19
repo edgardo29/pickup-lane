@@ -5,15 +5,18 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from backend.database import SessionLocal
 from backend.models import (
     Booking,
+    CommunityPublishAttempt,
     Game,
     GameCredit,
     GameCreditUsage,
     GameParticipant,
+    HostPublishEntitlement,
+    HostPublishFee,
     Payment,
     User,
 )
@@ -451,7 +454,7 @@ def test_my_games_history_cards_sort_newest_first_and_cap_limit(
     assert all(item["bucket"] == "history" for item in body["items"])
 
 
-def test_generic_game_mutations_require_admin_permission(client: TestClient):
+def test_generic_game_mutations_require_admin_access(client: TestClient):
     user = create_user(client)
     venue = create_venue(client, user["id"])
     starts_at = datetime.now(UTC) + timedelta(days=7)
@@ -857,7 +860,10 @@ def test_admin_can_cancel_community_game_and_notify_host(client: TestClient):
     assert body["cancelled_by_user_id"] == admin["id"]
     assert body["cancel_reason"] == "Support intervention"
 
-    participants_response = get_roster_as_admin(client, f"/game-participants?game_id={game['id']}")
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?game_id={game['id']}",
+    )
     assert participants_response.status_code == 200, participants_response.text
     assert all(
         item["cancellation_type"] == "admin_cancelled"
@@ -2470,7 +2476,11 @@ def test_publish_community_game_endpoint_creates_publish_records_transactionally
     )
 
     assert response.status_code == 201, response.text
-    game = response.json()["game"]
+    body = response.json()
+    assert body["status"] == "published"
+    assert body["attempt_id"] is None
+    assert body["payment_id"] is None
+    game = body["game"]
     assert game["game_type"] == "community"
     assert game["host_user_id"] == host["id"]
     assert game["custom_rules_text"] == "Please cancel early if you cannot make it."
@@ -2487,6 +2497,25 @@ def test_publish_community_game_endpoint_creates_publish_records_transactionally
     assert details_response.json()[0]["payment_methods_snapshot"] == [
         {"type": "venmo", "value": "@host"}
     ]
+
+    with SessionLocal() as db:
+        entitlement = db.scalars(
+            select(HostPublishEntitlement).where(
+                HostPublishEntitlement.host_user_id == UUID(host["id"]),
+                HostPublishEntitlement.entitlement_type == "first_free",
+            )
+        ).one()
+        host_publish_fee = db.scalars(
+            select(HostPublishFee).where(
+                HostPublishFee.game_id == UUID(game["id"])
+            )
+        ).one()
+
+    assert entitlement.status == "used"
+    assert entitlement.used_by_game_id == UUID(game["id"])
+    assert entitlement.used_by_host_publish_fee_id == host_publish_fee.id
+    assert host_publish_fee.fee_status == "waived"
+    assert host_publish_fee.waiver_reason == "first_game_free"
 
 
 def test_publish_community_game_rejects_request_host_user_id(client: TestClient):
@@ -2615,11 +2644,17 @@ def test_publish_community_game_rechecks_locked_host_account_status(
     assert game_ids == []
 
 
-def test_second_community_publish_creates_paid_publish_fee(client: TestClient):
+def test_second_community_publish_creates_paid_publish_attempt(
+    client: TestClient,
+    monkeypatch,
+):
     host = create_user(client)
     mark_user_email_verified(host["id"])
     authenticate_as(host["id"])
     starts_at = datetime.now(UTC) + timedelta(days=13)
+    payment_method = create_user_payment_method(client, host["id"])
+    mock_checkout_payment_method_verification(monkeypatch, payment_method)
+    payment_intent_id = f"pi_publish_fee_{unique_suffix()}"
 
     base_payload = {
         "starts_at": starts_at.isoformat(),
@@ -2644,34 +2679,206 @@ def test_second_community_publish_creates_paid_publish_fee(client: TestClient):
     first_response = client.post("/community-games/publish", json=base_payload)
     assert first_response.status_code == 201, first_response.text
 
-    second_starts_at = starts_at + timedelta(days=1)
-    second_response = client.post(
-        "/community-games/publish",
-        json={
-            **base_payload,
-            "starts_at": second_starts_at.isoformat(),
-            "ends_at": (second_starts_at + timedelta(hours=2)).isoformat(),
-            "venue": {
-                **base_payload["venue"],
-                "address_line_1": "456 Paid Publish Ave",
-                "postal_code": "60602",
-            },
-        },
+    def fake_create_payment_intent(**kwargs):
+        assert kwargs["amount_cents"] == 499
+        assert kwargs["metadata"]["source"] == "community_publish_fee"
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret=f"{payment_intent_id}_secret",
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(provider_payment_intent_id, **kwargs):
+        assert provider_payment_intent_id == payment_intent_id
+        assert kwargs["payment_method_id"] == payment_method["stripe_payment_method_id"]
+        return StripePaymentIntentResult(
+            id=provider_payment_intent_id,
+            client_secret=f"{payment_intent_id}_secret_confirmed",
+            status="processing",
+        )
+
+    monkeypatch.setattr(
+        "backend.services.community_game_publish_service.create_payment_intent",
+        fake_create_payment_intent,
     )
+    monkeypatch.setattr(
+        "backend.services.community_game_publish_service.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
+    second_starts_at = starts_at + timedelta(days=1)
+    paid_payload = {
+        **base_payload,
+        "starts_at": second_starts_at.isoformat(),
+        "ends_at": (second_starts_at + timedelta(hours=2)).isoformat(),
+        "venue": {
+            **base_payload["venue"],
+            "address_line_1": "456 Paid Publish Ave",
+            "postal_code": "60602",
+        },
+        "payment_method_id": payment_method["id"],
+    }
+    second_response = client.post("/community-games/publish", json=paid_payload)
 
     assert second_response.status_code == 201, second_response.text
-    second_game = second_response.json()["game"]
+    second_body = second_response.json()
+    assert second_body["status"] == "processing"
+    assert second_body["game"] is None
+    assert second_body["attempt_id"] is not None
+    assert second_body["payment_id"] is not None
+    assert second_body["attempt_status"] == "processing"
+    assert second_body["payment_status"] == "processing"
+    assert second_body["stripe_status"] == "processing"
+    assert second_body["created_game_id"] is None
 
-    fees_response = get_money_as_admin(
-        client,
-        f"/host-publish-fees?game_id={second_game['id']}",
+    attempt_response = client.get(
+        f"/community-games/publish-attempts/{second_body['attempt_id']}"
     )
-    assert fees_response.status_code == 200, fees_response.text
-    paid_fee = fees_response.json()[0]
-    assert paid_fee["amount_cents"] == 499
-    assert paid_fee["fee_status"] == "paid"
-    assert paid_fee["payment_id"] is not None
-    assert paid_fee["paid_at"] is not None
+    assert attempt_response.status_code == 200, attempt_response.text
+    assert attempt_response.json()["status"] == "processing"
+
+    payment_response = client.get(f"/payments/{second_body['payment_id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    payment = payment_response.json()
+    assert payment["payment_type"] == "community_publish_fee"
+    assert payment["provider_payment_intent_id"] == payment_intent_id
+    assert payment["game_id"] is None
+
+    with SessionLocal() as db:
+        attempt = db.get(CommunityPublishAttempt, UUID(second_body["attempt_id"]))
+        paid_fee_count = db.scalar(
+            select(func.count())
+            .select_from(HostPublishFee)
+            .where(
+                HostPublishFee.host_user_id == UUID(host["id"]),
+                HostPublishFee.fee_status == "paid",
+            )
+        )
+
+    assert attempt is not None
+    assert attempt.created_game_id is None
+    assert attempt.starts_on_local == second_starts_at.astimezone(
+        ZoneInfo("America/Chicago")
+    ).date()
+    assert paid_fee_count == 0
+
+    duplicate_response = client.post("/community-games/publish", json=paid_payload)
+    assert duplicate_response.status_code == 409, duplicate_response.text
+    assert "publish payment in progress" in duplicate_response.json()["detail"]
+
+
+def test_paid_community_publish_can_require_stripe_action(
+    client: TestClient,
+    monkeypatch,
+):
+    host = create_user(client)
+    mark_user_email_verified(host["id"])
+    authenticate_as(host["id"])
+    starts_at = datetime.now(UTC) + timedelta(days=13)
+    payment_method = create_user_payment_method(client, host["id"])
+    mock_checkout_payment_method_verification(monkeypatch, payment_method)
+    payment_intent_ids: list[str] = []
+
+    first_payload = {
+        "starts_at": starts_at.isoformat(),
+        "ends_at": (starts_at + timedelta(hours=2)).isoformat(),
+        "timezone": "America/Chicago",
+        "format_label": "7v7",
+        "environment_type": "outdoor",
+        "total_spots": 14,
+        "price_per_player_cents": 2500,
+        "venue": {
+            "name": "Community Action Field",
+            "address_line_1": "123 Action Ave",
+            "city": "Chicago",
+            "state": "IL",
+            "postal_code": "60601",
+            "country_code": "US",
+        },
+        "payment_methods_snapshot": [{"type": "venmo", "value": "@host"}],
+    }
+    first_response = client.post("/community-games/publish", json=first_payload)
+    assert first_response.status_code == 201, first_response.text
+
+    def fake_create_payment_intent(**kwargs):
+        provider_payment_intent_id = f"pi_publish_action_{unique_suffix()}"
+        payment_intent_ids.append(provider_payment_intent_id)
+        return StripePaymentIntentResult(
+            id=provider_payment_intent_id,
+            client_secret=f"{provider_payment_intent_id}_secret",
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(provider_payment_intent_id, **kwargs):
+        assert provider_payment_intent_id in payment_intent_ids
+        assert kwargs["payment_method_id"] == payment_method["stripe_payment_method_id"]
+        return StripePaymentIntentResult(
+            id=provider_payment_intent_id,
+            client_secret=f"{provider_payment_intent_id}_secret_action",
+            status="requires_action",
+        )
+
+    monkeypatch.setattr(
+        "backend.services.community_game_publish_service.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.services.community_game_publish_service.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
+    paid_starts_at = starts_at + timedelta(days=1)
+    paid_payload = {
+        **first_payload,
+        "starts_at": paid_starts_at.isoformat(),
+        "ends_at": (paid_starts_at + timedelta(hours=2)).isoformat(),
+        "venue": {
+            **first_payload["venue"],
+            "address_line_1": "456 Action Auth Ave",
+            "postal_code": "60602",
+        },
+        "payment_method_id": payment_method["id"],
+    }
+    response = client.post("/community-games/publish", json=paid_payload)
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    first_payment_intent_id = payment_intent_ids[0]
+    assert body["status"] == "requires_action"
+    assert body["game"] is None
+    assert body["attempt_status"] == "requires_action"
+    assert body["payment_status"] == "requires_action"
+    assert body["client_secret"] == f"{first_payment_intent_id}_secret_action"
+
+    attempt_response = client.get(
+        f"/community-games/publish-attempts/{body['attempt_id']}"
+    )
+    assert attempt_response.status_code == 200, attempt_response.text
+    assert attempt_response.json()["status"] == "requires_action"
+
+    with SessionLocal() as db:
+        attempt = db.get(CommunityPublishAttempt, UUID(body["attempt_id"]))
+        assert attempt is not None
+        attempt.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        db.add(attempt)
+        db.commit()
+
+    expired_response = client.get(
+        f"/community-games/publish-attempts/{body['attempt_id']}"
+    )
+    assert expired_response.status_code == 200, expired_response.text
+    expired_body = expired_response.json()
+    assert expired_body["status"] == "failed"
+    assert expired_body["attempt_status"] == "expired"
+    assert expired_body["payment_status"] == "canceled"
+    assert expired_body["created_game_id"] is None
+
+    retry_response = client.post("/community-games/publish", json=paid_payload)
+    assert retry_response.status_code == 201, retry_response.text
+    retry_body = retry_response.json()
+    assert retry_body["status"] == "requires_action"
+    assert retry_body["attempt_id"] != body["attempt_id"]
+    assert len(payment_intent_ids) == 2
 
 
 def test_host_edit_allows_host_to_update_empty_community_game(client: TestClient):

@@ -6,14 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Payment, User
 from backend.schemas import PaymentCreate, PaymentRead, PaymentUpdate
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_PAYMENT_MANAGE,
-)
-from backend.services.auth_service import (
-    get_current_app_user,
-    require_active_account,
-    require_admin_permission,
-)
+from backend.services.auth_service import get_current_app_user, require_active_account, require_active_admin
 from backend.services.payment_service import (
     create_payment_record,
     get_payment_for_user_or_404,
@@ -30,9 +23,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 def create_payment(
     payment: PaymentCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> Payment:
     return create_payment_record(db, admin_user=current_admin, payload=payment)
 
@@ -80,9 +71,7 @@ def update_payment(
     payment_id: uuid.UUID,
     payment_update: PaymentUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> Payment:
     return update_payment_record(
         db,

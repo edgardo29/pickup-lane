@@ -27,11 +27,7 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameRemovalRefundRead,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_CREDIT_MANAGE,
-    PERMISSION_MONEY_REFUND,
-    require_user_admin_permission,
-)
+from backend.services.auth_service import require_active_admin_user
 from backend.services.game_credit_service import (
     GameCreditLedgerError,
     restore_redeemed_game_credits,
@@ -433,7 +429,6 @@ def preview_official_game_player_removal(
     automatic_outcome_available = True
     blocking_reasons: list[str] = []
     allowed_outcomes = ["remove_only"]
-    required_permissions: list[str] = []
 
     if (
         game.publish_status != "published"
@@ -540,18 +535,12 @@ def preview_official_game_player_removal(
     elif cash_refundable_cents > 0 and credit_restorable_cents > 0:
         classification = "refund_cash_and_restore_credit"
         allowed_outcomes = ["refund_cash_restore_credit_and_remove_party"]
-        required_permissions = [
-            PERMISSION_MONEY_REFUND,
-            PERMISSION_MONEY_CREDIT_MANAGE,
-        ]
     elif cash_refundable_cents > 0:
         classification = "refund_cash"
         allowed_outcomes = ["refund_cash_and_remove_party"]
-        required_permissions = [PERMISSION_MONEY_REFUND]
     elif credit_restorable_cents > 0:
         classification = "restore_credit"
         allowed_outcomes = ["restore_credit_and_remove_party"]
-        required_permissions = [PERMISSION_MONEY_CREDIT_MANAGE]
     elif (
         booking.payment_status
         in {"paid", "partially_refunded", "refunded", "credit_restored", "disputed"}
@@ -566,7 +555,6 @@ def preview_official_game_player_removal(
     if blocking_reasons:
         automatic_outcome_available = False
         allowed_outcomes = []
-        required_permissions = []
 
     next_waitlist_party_size = (
         next_active_waitlist_entry.party_size
@@ -595,7 +583,6 @@ def preview_official_game_player_removal(
         preview_token=preview_token,
         blocking_reasons=blocking_reasons,
         allowed_outcomes=allowed_outcomes,
-        required_permissions=required_permissions,
         affected_participants=[
             build_removal_preview_participant(
                 item,
@@ -869,6 +856,7 @@ def execute_official_game_player_removal(
     participant_id: uuid.UUID,
     execute_request: AdminOfficialGamePlayerRemovalExecute,
 ) -> AdminOfficialGamePlayerRemovalResultRead:
+    require_active_admin_user(admin_user)
     reason = clean_required_text(execute_request.reason, "reason")
     if len(reason) > 1000:
         raise HTTPException(
@@ -902,9 +890,6 @@ def execute_official_game_player_removal(
             status_code=status.HTTP_409_CONFLICT,
             detail="This removal outcome cannot be executed automatically.",
         )
-
-    for permission in preview.required_permissions:
-        require_user_admin_permission(admin_user, permission)
 
     if preview.booking_id is None or preview.removal_scope != "booking_party":
         raise HTTPException(

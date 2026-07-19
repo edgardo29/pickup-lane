@@ -42,4 +42,13 @@ class CommunityGamePublishCreate(BaseModel):
 
 
 class CommunityGamePublishRead(BaseModel):
-    game: GameRead
+    status: str
+    game: GameRead | None = None
+    attempt_id: UUID | None = None
+    payment_id: UUID | None = None
+    attempt_status: str | None = None
+    payment_status: str | None = None
+    stripe_status: str | None = None
+    client_secret: str | None = None
+    created_game_id: UUID | None = None
+    error_message: str | None = None

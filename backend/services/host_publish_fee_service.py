@@ -14,7 +14,7 @@ from backend.schemas.host_publish_fee_schema import (
     HostPublishFeeUpdate,
 )
 
-VALID_FEE_STATUSES = {"paid", "waived"}
+VALID_FEE_STATUSES = {"pending", "paid", "waived", "failed", "refunded"}
 VALID_WAIVER_REASONS = {"none", "first_game_free", "admin_comp"}
 VALID_CURRENCY = "USD"
 
@@ -27,9 +27,6 @@ def build_host_publish_fee_conflict_detail(exc: IntegrityError) -> str:
 
     if "uq_host_publish_fees_payment_id" in error_text:
         return "This payment is already attached to a host publish fee."
-
-    if "ux_host_publish_fees_one_first_free_per_host" in error_text:
-        return "This host has already used their first free game."
 
     return error_text
 
@@ -136,7 +133,10 @@ def validate_host_publish_fee_business_rules(
     if fee_data["fee_status"] not in VALID_FEE_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="fee_status must be 'paid' or 'waived'.",
+            detail=(
+                "fee_status must be 'pending', 'paid', 'waived', 'failed', "
+                "or 'refunded'."
+            ),
         )
 
     if fee_data["waiver_reason"] not in VALID_WAIVER_REASONS:

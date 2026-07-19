@@ -21,10 +21,6 @@ from backend.services.admin_action_service import user_can_read_admin_action
 from backend.services.admin_money_support_flag_read_service import (
     MONEY_SUPPORT_FLAG_TYPES,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_AUDIT_READ,
-    user_has_admin_permission,
-)
 from backend.services.support_flag_service import user_can_read_support_flag
 
 ADMIN_MONEY_DETAIL_RELATED_LIMIT = 100
@@ -204,9 +200,6 @@ def list_user_audit_actions(
     support_flags: list[SupportFlag],
     limit: int,
 ) -> list[AdminAction]:
-    if not user_has_admin_permission(viewer_user, PERMISSION_AUDIT_READ):
-        return []
-
     filters = [AdminAction.target_user_id == user_id]
 
     payment_ids = [payment.id for payment in payments]

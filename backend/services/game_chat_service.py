@@ -1,6 +1,7 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -16,7 +17,7 @@ from backend.models import (
     Notification,
     User,
 )
-from backend.schemas.chat_message_schema import ChatMessageCreate, ChatMessageUpdate
+from backend.schemas.chat_message_schema import ChatMessageCreate
 from backend.schemas.game_chat_schema import (
     GameChatCreate,
     GameChatEnsureCreate,
@@ -25,21 +26,21 @@ from backend.schemas.game_chat_schema import (
 )
 from backend.schemas.game_chat_read_schema import GameChatReadStateRead
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_CONTENT_MODERATE,
-    user_has_admin_permission,
-)
+from backend.services.auth_service import user_is_active_admin
 from backend.services.chat_moderation_service import (
     build_safe_message_preview,
     detect_chat_message,
 )
 from backend.services.game_participant_rules import ROSTER_USER_PARTICIPANT_TYPES
 from backend.services.game_rules import OPEN_GAME_STATUSES
+from backend.services.moderation_surfacing_service import surface_game_chat_message_text
 from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
     resolve_aggregated_notification,
 )
+
+logger = logging.getLogger(__name__)
 
 CHAT_MEMBER_STATUSES = {"confirmed"}
 VALID_CHAT_STATUSES = {"active", "closed"}
@@ -50,8 +51,6 @@ MAX_CHAT_MESSAGES_TOTAL = 200
 MAX_CHAT_MESSAGES_PER_MINUTE = 5
 VALID_VISIBILITY_STATUSES = {"visible", "removed"}
 VALID_REVIEW_STATUSES = {"clear", "needs_review", "reviewed"}
-SENDER_BODY_UPDATE_FIELDS = {"message_body"}
-SENDER_DELETE_UPDATE_FIELDS = {"visibility_status"}
 
 
 def build_game_chat_conflict_detail(exc: IntegrityError) -> str:
@@ -962,10 +961,17 @@ def replace_game_chat_message_detections(
             GameChatMessageDetection.message_id == db_chat_message.id
         )
     )
-    detections = detect_chat_message(
-        db_chat_message.message_body,
-        is_repeated_message=is_repeated_message,
-    )
+    try:
+        detections = detect_chat_message(
+            db_chat_message.message_body,
+            is_repeated_message=is_repeated_message,
+        )
+    except Exception:
+        logger.exception(
+            "Game chat moderation detector failed for message %s.",
+            db_chat_message.id,
+        )
+        detections = []
     db_chat_message.review_status = "needs_review" if detections else "clear"
     db_chat_message.reviewed_at = None
     db_chat_message.reviewed_by_user_id = None
@@ -998,15 +1004,7 @@ def get_chat_message_or_404(
 
 
 def can_moderate_chat_messages(user: User) -> bool:
-    return user_has_admin_permission(user, PERMISSION_CONTENT_MODERATE)
-
-
-def validate_chat_message_is_editable(db_chat_message: ChatMessage) -> None:
-    if db_chat_message.visibility_status == "removed":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Removed chat messages cannot be updated.",
-        )
+    return user_is_active_admin(user)
 
 
 def create_chat_message_record(
@@ -1071,6 +1069,7 @@ def create_chat_message_record(
             detail=build_chat_message_conflict_detail(exc),
         ) from exc
 
+    surface_game_chat_message_text(db, message_id=new_chat_message.id)
     return new_chat_message
 
 
@@ -1114,13 +1113,13 @@ def list_chat_message_records(
         )
 
     db_game_chat = get_game_chat_or_404(db, chat_id)
-    is_moderator = can_moderate_chat_messages(current_user)
-    if not is_moderator:
+    can_moderate = can_moderate_chat_messages(current_user)
+    if not can_moderate:
         require_chat_member(db, db_game_chat, current_user)
         if visibility_status not in {None, "visible"} or review_status is not None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Content moderation permission required.",
+                detail="Admin access required.",
             )
 
     if visibility_status is not None and visibility_status not in VALID_VISIBILITY_STATUSES:
@@ -1136,7 +1135,7 @@ def list_chat_message_records(
         )
 
     if (
-        not is_moderator
+        not can_moderate
         and sender_user_id is None
         and visibility_status in {None, "visible"}
         and review_status is None
@@ -1147,12 +1146,12 @@ def list_chat_message_records(
 
     statement = select(ChatMessage).where(ChatMessage.chat_id == chat_id)
 
-    if not is_moderator:
+    if not can_moderate:
         statement = statement.where(ChatMessage.visibility_status == "visible")
     elif visibility_status is not None:
         statement = statement.where(ChatMessage.visibility_status == visibility_status)
 
-    if is_moderator and review_status is not None:
+    if can_moderate and review_status is not None:
         statement = statement.where(ChatMessage.review_status == review_status)
 
     if after_created_at is not None:
@@ -1172,104 +1171,3 @@ def list_chat_message_records(
         ).limit(page_limit)
     ).all()
     return list(reversed(chat_messages))
-
-
-def update_chat_message_record(
-    db: Session,
-    chat_message_id: uuid.UUID,
-    chat_message_update: ChatMessageUpdate,
-    current_user: User,
-) -> ChatMessage:
-    db_chat_message = get_chat_message_or_404(db, chat_message_id)
-    update_data = chat_message_update.model_dump(exclude_unset=True)
-
-    return update_sender_chat_message_record(
-        db,
-        db_chat_message,
-        update_data,
-        current_user,
-    )
-
-
-def update_sender_chat_message_record(
-    db: Session,
-    db_chat_message: ChatMessage,
-    update_data: dict[str, Any],
-    current_user: User,
-) -> ChatMessage:
-    db_game_chat = get_game_chat_or_404(db, db_chat_message.chat_id)
-    require_chat_member_for_message_change(db, db_game_chat, current_user)
-
-    if db_chat_message.sender_user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the sender can update this chat message.",
-        )
-
-    validate_chat_message_is_editable(db_chat_message)
-
-    update_fields = set(update_data)
-    is_body_update = (
-        update_fields == SENDER_BODY_UPDATE_FIELDS
-        and update_data.get("message_body") is not None
-    )
-    is_sender_delete = (
-        update_fields == SENDER_DELETE_UPDATE_FIELDS
-        and update_data.get("visibility_status") == "removed"
-    )
-    if not is_body_update and not is_sender_delete:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Senders can only edit message_body or delete their own message.",
-        )
-
-    now = datetime.now(timezone.utc)
-    did_remove_message = False
-    if is_body_update:
-        db_chat_message.message_body = normalize_message_body(
-            update_data["message_body"]
-        )
-        db_chat_message.edited_at = now
-        is_repeated_message = sender_repeated_message(
-            db,
-            db_game_chat.id,
-            current_user.id,
-            db_chat_message.message_body,
-            exclude_message_id=db_chat_message.id,
-        )
-        replace_game_chat_message_detections(
-            db,
-            db_chat_message,
-            is_repeated_message=is_repeated_message,
-        )
-    else:
-        db_chat_message.visibility_status = "removed"
-        db_chat_message.removed_source = "sender"
-        db_chat_message.removed_by_user_id = current_user.id
-        db_chat_message.removed_at = now
-        db_chat_message.removed_reason = "Sender removed message."
-        did_remove_message = True
-
-    db_chat_message.updated_at = now
-
-    try:
-        db.add(db_chat_message)
-        db.flush()
-        refresh_game_chat_summary(db, db_game_chat)
-        if did_remove_message:
-            reconcile_game_chat_notifications_after_moderation(
-                db,
-                db_chat=db_game_chat,
-                moderated_at=now,
-            )
-        db.flush()
-        db.commit()
-        db.refresh(db_chat_message)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_chat_message_conflict_detail(exc),
-        ) from exc
-
-    return db_chat_message

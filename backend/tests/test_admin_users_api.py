@@ -120,7 +120,7 @@ def test_admin_users_list_filters_role_account_and_hosting_status(
 ):
     authenticate_admin(client)
     target = create_user(client, first_name="Filtered", last_name="User")
-    set_user_role(target["id"], "moderator")
+    set_user_role(target["id"], "admin")
     set_user_account_status(target["id"], "suspended")
     set_user_hosting_status(target["id"], "restricted")
     create_user(client)
@@ -128,7 +128,7 @@ def test_admin_users_list_filters_role_account_and_hosting_status(
     response = client.get(
         "/admin/users",
         params={
-            "role": "moderator",
+            "role": "admin",
             "account_status": "suspended",
             "hosting_status": "restricted",
         },
@@ -272,16 +272,14 @@ def test_admin_users_list_rejects_unsupported_filters(client: TestClient):
     assert response.json()["detail"] == "account_status is not supported."
 
 
-def test_admin_users_list_rejects_regular_user_and_moderator(client: TestClient):
-    for role in ("player", "moderator"):
-        user = create_user(client)
-        set_user_role(user["id"], role)
-        authenticate_as(user["id"])
+def test_admin_users_list_rejects_player(client: TestClient):
+    user = create_user(client)
+    authenticate_as(user["id"])
 
-        response = client.get("/admin/users")
+    response = client.get("/admin/users")
 
-        assert response.status_code == 403, response.text
-        assert "Admin access required" in response.text
+    assert response.status_code == 403, response.text
+    assert "Admin access required" in response.text
 
 
 def test_admin_users_list_rejects_suspended_admin(client: TestClient):
@@ -291,30 +289,30 @@ def test_admin_users_list_rejects_suspended_admin(client: TestClient):
     response = client.get("/admin/users")
 
     assert response.status_code == 403, response.text
-    assert "Active account required" in response.text
+    assert "Admin access required" in response.text
 
 
 def test_admin_staff_list_returns_staff_only_safe_shape(client: TestClient):
     admin = authenticate_admin(client)
-    moderator = create_user(
+    second_admin = create_user(
         client,
-        first_name="Mod",
+        first_name="Admin",
         last_name="Helper",
-        email="mod.helper@example.com",
+        email="admin.helper@example.com",
     )
-    set_user_role(moderator["id"], "moderator")
+    set_user_role(second_admin["id"], "admin")
     suspended_admin = create_user(client)
     set_user_role(suspended_admin["id"], "admin")
     set_user_account_status(suspended_admin["id"], "suspended")
     player = create_user(client)
-    deleted_moderator = create_user(
+    deleted_admin = create_user(
         client,
         first_name="Deleted",
-        last_name="Moderator",
-        email="deleted.moderator@example.com",
+        last_name="Admin",
+        email="deleted.admin@example.com",
     )
-    set_user_role(deleted_moderator["id"], "moderator")
-    soft_delete_user(deleted_moderator["id"])
+    set_user_role(deleted_admin["id"], "admin")
+    soft_delete_user(deleted_admin["id"])
 
     response = client.get("/admin/users/staff")
 
@@ -323,24 +321,20 @@ def test_admin_staff_list_returns_staff_only_safe_shape(client: TestClient):
     body_by_id = {item["id"]: item for item in body}
     assert set(body_by_id) == {
         admin["id"],
-        moderator["id"],
+        second_admin["id"],
         suspended_admin["id"],
     }
     assert player["id"] not in body_by_id
-    assert deleted_moderator["id"] not in body_by_id
-    assert body_by_id[moderator["id"]]["display_name"] == "Mod Helper"
-    assert body_by_id[moderator["id"]]["email"] == "mod.helper@example.com"
-    assert body_by_id[moderator["id"]]["role"] == "moderator"
-    assert body_by_id[moderator["id"]]["account_status"] == "active"
-    assert "admin.content.moderate" in body_by_id[moderator["id"]]["permissions"]
-    assert "admin.staff.manage" not in body_by_id[moderator["id"]]["permissions"]
-    assert body_by_id[moderator["id"]]["data_scopes"] == [
-        "public-safe",
-        "support-safe",
-    ]
-    assert "auth_user_id" not in body_by_id[moderator["id"]]
-    assert "stripe_customer_id" not in body_by_id[moderator["id"]]
-    assert "date_of_birth" not in body_by_id[moderator["id"]]
+    assert deleted_admin["id"] not in body_by_id
+    assert body_by_id[second_admin["id"]]["display_name"] == "Admin Helper"
+    assert body_by_id[second_admin["id"]]["email"] == "admin.helper@example.com"
+    assert body_by_id[second_admin["id"]]["role"] == "admin"
+    assert body_by_id[second_admin["id"]]["account_status"] == "active"
+    assert "permissions" not in body_by_id[second_admin["id"]]
+    assert "data_scopes" not in body_by_id[second_admin["id"]]
+    assert "auth_user_id" not in body_by_id[second_admin["id"]]
+    assert "stripe_customer_id" not in body_by_id[second_admin["id"]]
+    assert "date_of_birth" not in body_by_id[second_admin["id"]]
 
     included_response = client.get(
         "/admin/users/staff",
@@ -348,16 +342,16 @@ def test_admin_staff_list_returns_staff_only_safe_shape(client: TestClient):
     )
     assert included_response.status_code == 200, included_response.text
     included_by_id = {item["id"]: item for item in included_response.json()}
-    assert deleted_moderator["id"] in included_by_id
-    assert included_by_id[deleted_moderator["id"]]["display_name"] == "Deleted User"
-    assert included_by_id[deleted_moderator["id"]]["email"] is None
-    assert included_by_id[deleted_moderator["id"]]["phone"] is None
-    assert included_by_id[deleted_moderator["id"]]["deleted_at"] is not None
+    assert deleted_admin["id"] in included_by_id
+    assert included_by_id[deleted_admin["id"]]["display_name"] == "Deleted User"
+    assert included_by_id[deleted_admin["id"]]["email"] is None
+    assert included_by_id[deleted_admin["id"]]["phone"] is None
+    assert included_by_id[deleted_admin["id"]]["deleted_at"] is not None
 
 
 def test_admin_staff_list_redacts_inconsistent_deleted_states(client: TestClient):
     authenticate_admin(client)
-    status_deleted_moderator = create_user(
+    status_deleted_admin = create_user(
         client,
         first_name="Status",
         last_name="Deleted",
@@ -366,7 +360,7 @@ def test_admin_staff_list_redacts_inconsistent_deleted_states(client: TestClient
         home_city="Chicago",
         home_state="IL",
     )
-    timestamp_deleted_moderator = create_user(
+    timestamp_deleted_admin = create_user(
         client,
         first_name="Timestamp",
         last_name="Deleted",
@@ -375,24 +369,24 @@ def test_admin_staff_list_redacts_inconsistent_deleted_states(client: TestClient
         home_city="Evanston",
         home_state="IL",
     )
-    for staff_user in (status_deleted_moderator, timestamp_deleted_moderator):
-        set_user_role(staff_user["id"], "moderator")
+    for staff_user in (status_deleted_admin, timestamp_deleted_admin):
+        set_user_role(staff_user["id"], "admin")
 
-    set_user_account_status(status_deleted_moderator["id"], "deleted")
+    set_user_account_status(status_deleted_admin["id"], "deleted")
     with SessionLocal() as db:
-        db_timestamp_deleted_moderator = db.get(
+        db_timestamp_deleted_admin = db.get(
             User,
-            UUID(timestamp_deleted_moderator["id"]),
+            UUID(timestamp_deleted_admin["id"]),
         )
-        assert db_timestamp_deleted_moderator is not None
-        db_timestamp_deleted_moderator.deleted_at = datetime.now(UTC)
+        assert db_timestamp_deleted_admin is not None
+        db_timestamp_deleted_admin.deleted_at = datetime.now(UTC)
         db.commit()
 
     default_response = client.get("/admin/users/staff")
     assert default_response.status_code == 200, default_response.text
     default_ids = {item["id"] for item in default_response.json()}
-    assert status_deleted_moderator["id"] not in default_ids
-    assert timestamp_deleted_moderator["id"] not in default_ids
+    assert status_deleted_admin["id"] not in default_ids
+    assert timestamp_deleted_admin["id"] not in default_ids
 
     included_response = client.get(
         "/admin/users/staff",
@@ -401,7 +395,7 @@ def test_admin_staff_list_redacts_inconsistent_deleted_states(client: TestClient
     assert included_response.status_code == 200, included_response.text
     included_by_id = {item["id"]: item for item in included_response.json()}
 
-    for staff_user in (status_deleted_moderator, timestamp_deleted_moderator):
+    for staff_user in (status_deleted_admin, timestamp_deleted_admin):
         body = included_by_id[staff_user["id"]]
         assert body["display_name"] == "Deleted User"
         assert body["email"] is None
@@ -412,18 +406,16 @@ def test_admin_staff_list_redacts_inconsistent_deleted_states(client: TestClient
         assert body["account_status"] == "deleted"
 
 
-def test_admin_staff_list_rejects_regular_user_moderator_and_suspended_admin(
+def test_admin_staff_list_rejects_player_and_suspended_admin(
     client: TestClient,
 ):
-    for role in ("player", "moderator"):
-        user = create_user(client)
-        set_user_role(user["id"], role)
-        authenticate_as(user["id"])
+    user = create_user(client)
+    authenticate_as(user["id"])
 
-        response = client.get("/admin/users/staff")
+    response = client.get("/admin/users/staff")
 
-        assert response.status_code == 403, response.text
-        assert "Admin access required" in response.text
+    assert response.status_code == 403, response.text
+    assert "Admin access required" in response.text
 
     suspended_admin = create_user(client)
     set_user_role(suspended_admin["id"], "admin")
@@ -433,16 +425,14 @@ def test_admin_staff_list_rejects_regular_user_moderator_and_suspended_admin(
     response = client.get("/admin/users/staff")
 
     assert response.status_code == 403, response.text
-    assert "Active account required" in response.text
+    assert "Admin access required" in response.text
 
 
 @pytest.mark.parametrize(
     ("initial_role", "next_role"),
     [
-        ("player", "moderator"),
         ("player", "admin"),
-        ("moderator", "player"),
-        ("admin", "moderator"),
+        ("admin", "player"),
     ],
 )
 def test_admin_user_staff_role_change_updates_role_and_audit_once(
@@ -517,8 +507,8 @@ def test_admin_user_staff_role_change_rejects_idempotency_request_mismatch(
     authenticate_admin(client)
     target = create_user(client)
     payload = {
-        "role": "moderator",
-        "reason": "Promote this player to moderator.",
+        "role": "admin",
+        "reason": "Promote this player to admin.",
         "idempotency_key": "change-staff-role-request-mismatch",
     }
 
@@ -528,7 +518,7 @@ def test_admin_user_staff_role_change_rejects_idempotency_request_mismatch(
     )
     role_mismatch_response = client.post(
         f"/admin/users/{target['id']}/staff-role",
-        json={**payload, "role": "admin"},
+        json={**payload, "role": "player"},
     )
     reason_mismatch_response = client.post(
         f"/admin/users/{target['id']}/staff-role",
@@ -554,7 +544,7 @@ def test_admin_user_staff_role_change_rejects_idempotency_request_mismatch(
             )
         )
         assert db_target is not None
-        assert db_target.role == "moderator"
+        assert db_target.role == "admin"
         assert audit_count == 1
 
 
@@ -617,7 +607,7 @@ def test_admin_user_staff_role_change_rejects_ineligible_target_without_mutation
     response = client.post(
         f"/admin/users/{target['id']}/staff-role",
         json={
-            "role": "moderator",
+            "role": "admin",
             "reason": "This target cannot have staff changed.",
             "idempotency_key": (
                 f"change-staff-role-invalid-{account_status}-{has_deleted_at}"
@@ -653,7 +643,7 @@ def test_admin_user_staff_role_change_validates_target_reason_and_authorization(
     missing_response = client.post(
         "/admin/users/00000000-0000-4000-8000-000000000000/staff-role",
         json={
-            "role": "moderator",
+            "role": "admin",
             "reason": "Change missing user staff role.",
             "idempotency_key": "change-staff-role-missing-user",
         },
@@ -675,7 +665,7 @@ def test_admin_user_staff_role_change_validates_target_reason_and_authorization(
     blank_reason_response = client.post(
         f"/admin/users/{target['id']}/staff-role",
         json={
-            "role": "moderator",
+            "role": "admin",
             "reason": "   ",
             "idempotency_key": "change-staff-role-blank-reason",
         },
@@ -683,14 +673,13 @@ def test_admin_user_staff_role_change_validates_target_reason_and_authorization(
     assert blank_reason_response.status_code == 400, blank_reason_response.text
     assert blank_reason_response.json()["detail"] == "reason is required."
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
     denied_response = client.post(
         f"/admin/users/{target['id']}/staff-role",
         json={
-            "role": "moderator",
-            "reason": "Moderator must not change staff roles.",
+            "role": "admin",
+            "reason": "Player must not change staff roles.",
             "idempotency_key": "change-staff-role-denied",
         },
     )
@@ -817,10 +806,7 @@ def test_admin_user_detail_returns_scoped_support_context(client: TestClient):
     assert str(unrelated_flag_id) not in {
         item["id"] for item in body["support_flags"]
     }
-    assert body["capabilities"] == {
-        "can_view_audit": True,
-        "can_view_money": True,
-    }
+    assert "capabilities" not in body
     assert "auth_user_id" not in body["user"]
     assert "date_of_birth" not in body["user"]
     assert "stripe_customer_id" not in body["user"]
@@ -965,11 +951,10 @@ def test_admin_user_detail_returns_404_for_missing_user(client: TestClient):
     assert response.json()["detail"] == "User not found."
 
 
-def test_admin_user_detail_rejects_moderator(client: TestClient):
-    moderator = create_user(client)
+def test_admin_user_detail_rejects_player(client: TestClient):
+    player = create_user(client)
     target = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    authenticate_as(player["id"])
 
     response = client.get(f"/admin/users/{target['id']}")
 
@@ -1342,9 +1327,8 @@ def test_admin_user_delete_preview_validates_target_and_authorization(
     assert missing_response.status_code == 404, missing_response.text
     assert missing_response.json()["detail"] == "User not found."
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
     denied_response = client.post(f"/admin/users/{target['id']}/delete-preview")
     assert denied_response.status_code == 403, denied_response.text
     assert "Admin access required" in denied_response.text
@@ -1357,7 +1341,7 @@ def test_admin_user_delete_preview_validates_target_and_authorization(
         f"/admin/users/{target['id']}/delete-preview"
     )
     assert suspended_admin_response.status_code == 403
-    assert "Active account required" in suspended_admin_response.text
+    assert "Admin access required" in suspended_admin_response.text
 
 
 def test_admin_user_delete_updates_account_activity_and_audit_once(
@@ -2550,14 +2534,13 @@ def test_admin_user_delete_validates_target_reason_and_authorization(
     assert blank_reason_response.status_code == 400, blank_reason_response.text
     assert blank_reason_response.json()["detail"] == "reason is required."
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
     denied_response = client.post(
         f"/admin/users/{target['id']}/delete",
         json={
             "preview_token": preview_token,
-            "reason": "Moderator must not delete users.",
+            "reason": "Player must not delete users.",
             "idempotency_key": "delete-user-denied",
         },
     )
@@ -2741,17 +2724,15 @@ def test_admin_user_suspension_preview_rejects_unauthorized_staff(
 ):
     target = create_user(client)
 
-    for role in ("player", "moderator"):
-        actor = create_user(client)
-        set_user_role(actor["id"], role)
-        authenticate_as(actor["id"])
+    actor = create_user(client)
+    authenticate_as(actor["id"])
 
-        response = client.post(
-            f"/admin/users/{target['id']}/suspension-preview"
-        )
+    response = client.post(
+        f"/admin/users/{target['id']}/suspension-preview"
+    )
 
-        assert response.status_code == 403, response.text
-        assert "Admin access required" in response.text
+    assert response.status_code == 403, response.text
+    assert "Admin access required" in response.text
 
     suspended_admin = create_user(client)
     set_user_role(suspended_admin["id"], "admin")
@@ -2763,7 +2744,7 @@ def test_admin_user_suspension_preview_rejects_unauthorized_staff(
     )
 
     assert response.status_code == 403, response.text
-    assert "Active account required" in response.text
+    assert "Admin access required" in response.text
 
 
 def test_admin_user_suspend_updates_status_audit_and_notification_once(
@@ -3011,14 +2992,13 @@ def test_admin_user_suspend_validates_reason_and_rejects_unauthorized_staff(
     assert blank_reason_response.status_code == 400, blank_reason_response.text
     assert blank_reason_response.json()["detail"] == "reason is required."
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
     denied_response = client.post(
         f"/admin/users/{target['id']}/suspend",
         json={
             "preview_token": preview_token,
-            "reason": "Moderator must not suspend users.",
+            "reason": "Player must not suspend users.",
             "idempotency_key": "suspend-user-denied",
         },
     )
@@ -3236,13 +3216,12 @@ def test_admin_user_unsuspend_validates_target_reason_and_authorization(
     assert blank_reason_response.status_code == 400, blank_reason_response.text
     assert blank_reason_response.json()["detail"] == "reason is required."
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
     denied_response = client.post(
         f"/admin/users/{target['id']}/unsuspend",
         json={
-            "reason": "Moderator must not unsuspend users.",
+            "reason": "Player must not unsuspend users.",
             "idempotency_key": "unsuspend-user-denied",
         },
     )
@@ -3401,9 +3380,8 @@ def test_admin_user_hosting_restriction_preview_validates_target_and_authorizati
     assert missing_response.status_code == 404, missing_response.text
     assert missing_response.json()["detail"] == "User not found."
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
     denied_response = client.post(
         f"/admin/users/{target['id']}/hosting-restriction-preview"
     )
@@ -3736,14 +3714,13 @@ def test_admin_user_restrict_hosting_validates_target_reason_and_authorization(
     assert blank_reason_response.status_code == 400, blank_reason_response.text
     assert blank_reason_response.json()["detail"] == "reason is required."
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
     denied_response = client.post(
         f"/admin/users/{target['id']}/restrict-hosting",
         json={
             "preview_token": preview_token,
-            "reason": "Moderator must not restrict hosting.",
+            "reason": "Player must not restrict hosting.",
             "idempotency_key": "restrict-hosting-denied",
         },
     )
@@ -3980,13 +3957,12 @@ def test_admin_user_restore_hosting_validates_target_reason_and_authorization(
     assert blank_reason_response.status_code == 400, blank_reason_response.text
     assert blank_reason_response.json()["detail"] == "reason is required."
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
     denied_response = client.post(
         f"/admin/users/{target['id']}/restore-hosting",
         json={
-            "reason": "Moderator must not restore hosting.",
+            "reason": "Player must not restore hosting.",
             "idempotency_key": "restore-hosting-denied",
         },
     )

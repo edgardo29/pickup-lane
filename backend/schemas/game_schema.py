@@ -15,6 +15,8 @@ class GameCreate(BaseModel):
     payment_collection_type: str
     publish_status: str = "draft"
     game_status: str = "active"
+    public_visibility_status: str = "visible"
+    join_enforcement_status: str = "open"
     title: str
     description: str | None = None
     venue_id: UUID
@@ -51,6 +53,7 @@ class GameCreate(BaseModel):
     published_at: datetime | None = None
     cancelled_at: datetime | None = None
     cancelled_by_user_id: UUID | None = None
+    cancellation_source: str | None = None
     cancel_reason: str | None = None
     completed_at: datetime | None = None
     completed_by_user_id: UUID | None = None
@@ -66,6 +69,8 @@ class GameRead(BaseModel):
     payment_collection_type: str
     publish_status: str
     game_status: str
+    public_visibility_status: str
+    join_enforcement_status: str
     title: str
     description: str | None
     venue_id: UUID
@@ -102,6 +107,7 @@ class GameRead(BaseModel):
     published_at: datetime | None
     cancelled_at: datetime | None
     cancelled_by_user_id: UUID | None
+    cancellation_source: str | None
     cancel_reason: str | None
     completed_at: datetime | None
     completed_by_user_id: UUID | None
@@ -114,6 +120,8 @@ class GameCardRead(BaseModel):
     id: UUID
     game_type: str
     game_status: str
+    public_visibility_status: str = "visible"
+    join_enforcement_status: str = "open"
     title: str
     venue_name_snapshot: str
     city_snapshot: str
@@ -166,6 +174,8 @@ class GameUpdate(BaseModel):
     payment_collection_type: str | None = None
     publish_status: str | None = None
     game_status: str | None = None
+    public_visibility_status: str | None = None
+    join_enforcement_status: str | None = None
     title: str | None = None
     description: str | None = None
     venue_id: UUID | None = None
@@ -202,6 +212,7 @@ class GameUpdate(BaseModel):
     published_at: datetime | None = None
     cancelled_at: datetime | None = None
     cancelled_by_user_id: UUID | None = None
+    cancellation_source: str | None = None
     cancel_reason: str | None = None
     completed_at: datetime | None = None
     completed_by_user_id: UUID | None = None

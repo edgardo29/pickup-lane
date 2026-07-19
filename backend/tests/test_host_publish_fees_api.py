@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-from datetime import UTC, datetime, timedelta
 
 from backend.tests.helpers import (
     authenticate_as,
@@ -131,55 +130,29 @@ def test_host_publish_fee_rejects_official_game(client: TestClient):
     assert "require a community game" in response.text
 
 
-def test_host_publish_fee_rejects_second_first_free_game(client: TestClient):
-    host = create_user(client)
-    venue = create_venue(client, host["id"])
-    first_start = (datetime.now(UTC) + timedelta(days=7)).replace(
-        hour=18, minute=0, second=0, microsecond=0
-    )
-    second_start = first_start + timedelta(days=1)
-    first_game = create_game(
-        client,
-        host["id"],
-        venue,
-        game_type="community",
-        host_user_id=host["id"],
-        policy_mode="custom_hosted",
-        starts_at=first_start.isoformat(),
-        ends_at=(first_start + timedelta(hours=1)).isoformat(),
-    )
-    second_game = create_game(
-        client,
-        host["id"],
-        venue,
-        game_type="community",
-        host_user_id=host["id"],
-        policy_mode="custom_hosted",
-        title="Second Community Game",
-        starts_at=second_start.isoformat(),
-        ends_at=(second_start + timedelta(hours=1)).isoformat(),
-    )
-    create_host_publish_fee(client, first_game["id"], host["id"])
+def test_host_publish_fee_rejects_duplicate_game_fee(client: TestClient):
+    host, game = create_community_game_setup(client)
+    create_host_publish_fee(client, game["id"], host["id"])
 
     response = run_as_temporary_admin(
         client,
         lambda: client.post(
             "/host-publish-fees",
             json={
-                "game_id": second_game["id"],
+                "game_id": game["id"],
                 "host_user_id": host["id"],
                 "amount_cents": 0,
                 "fee_status": "waived",
-                "waiver_reason": "first_game_free",
+                "waiver_reason": "admin_comp",
             },
         ),
     )
 
     assert response.status_code == 409, response.text
-    assert "already used their first free game" in response.text
+    assert "already has a host publish fee" in response.text
 
 
-def test_host_publish_fee_generic_routes_require_admin_permission(
+def test_host_publish_fee_generic_routes_require_admin_access(
     client: TestClient,
 ):
     host, game = create_community_game_setup(client)
@@ -209,12 +182,11 @@ def test_host_publish_fee_generic_routes_require_admin_permission(
     assert patch_response.status_code == 403, patch_response.text
 
 
-def test_host_publish_fee_generic_routes_reject_moderator(client: TestClient):
+def test_host_publish_fee_generic_routes_reject_player(client: TestClient):
     host, game = create_community_game_setup(client)
     host_publish_fee = create_host_publish_fee(client, game["id"], host["id"])
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
 
     get_response = client.get(f"/host-publish-fees/{host_publish_fee['id']}")
     patch_response = client.patch(

@@ -1,31 +1,67 @@
 import { useEffect, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Eye, EyeOff, Trash2, X } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
-import { removeAdminNeedASubPost } from '../shared/adminApi.js'
-import { formatAdminNeedASubStatus } from './adminNeedASubFormatters.js'
+import {
+  hideAdminNeedASubPost,
+  removeAdminNeedASubPost,
+  restoreAdminNeedASubPost,
+} from '../shared/adminApi.js'
 
-function createRemovalIdempotencyKey(postId) {
+const REASON_MAX_LENGTH = 100
+
+const ACTION_CONFIG = {
+  hide: {
+    api: hideAdminNeedASubPost,
+    icon: EyeOff,
+    keyPrefix: 'admin-need-a-sub-hide',
+    submitLabel: 'Hide post',
+    submittingLabel: 'Hiding',
+    title: 'Hide post',
+    tone: 'danger',
+    summary: 'Hide this post from players and stop new requests.',
+  },
+  restore: {
+    api: restoreAdminNeedASubPost,
+    icon: Eye,
+    keyPrefix: 'admin-need-a-sub-restore',
+    submitLabel: 'Restore post',
+    submittingLabel: 'Restoring',
+    title: 'Restore post',
+    tone: 'primary',
+    summary: 'Show this post to players again.',
+  },
+  remove: {
+    api: removeAdminNeedASubPost,
+    icon: Trash2,
+    keyPrefix: 'admin-need-a-sub-remove',
+    submitLabel: 'Remove post',
+    submittingLabel: 'Removing',
+    title: 'Remove post',
+    tone: 'danger',
+    summary: 'Remove this post and close active requests.',
+  },
+}
+
+function createActionIdempotencyKey(prefix, postId) {
   const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
-  return `admin-need-a-sub-remove:${postId}:${suffix}`
+  return `${prefix}:${postId}:${suffix}`
 }
 
 function AdminNeedASubRemovalModal({
+  action = 'remove',
   detail,
   firebaseUser,
   onClose,
-  onRemoved,
+  onCompleted,
 }) {
+  const config = ACTION_CONFIG[action]
   const [reason, setReason] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [executionError, setExecutionError] = useState('')
   const [idempotencyKey, setIdempotencyKey] = useState(
-    () => createRemovalIdempotencyKey(detail.post.id),
+    () => createActionIdempotencyKey(config.keyPrefix, detail.post.id),
   )
-  const activeRequestCount = (
-    detail.request_counts.pending_count
-    + detail.request_counts.confirmed_count
-    + detail.request_counts.waitlisted_count
-  )
+  const Icon = config.icon
 
   useEffect(() => {
     const originalOverflow = document.body.style.overflow
@@ -54,16 +90,16 @@ function AdminNeedASubRemovalModal({
     setExecutionError('')
 
     try {
-      const result = await removeAdminNeedASubPost({
+      const result = await config.api({
         firebaseUser,
         idempotencyKey,
         postId: detail.post.id,
         reason: reason.trim(),
       })
-      onRemoved(result)
+      onCompleted(result)
       onClose()
     } catch (error) {
-      setExecutionError(error.message || 'Need a Sub post could not be removed.')
+      setExecutionError(error.message || 'Need a Sub post action could not be completed.')
     } finally {
       setIsSubmitting(false)
     }
@@ -71,7 +107,7 @@ function AdminNeedASubRemovalModal({
 
   function handleReasonChange(event) {
     setReason(event.target.value)
-    setIdempotencyKey(createRemovalIdempotencyKey(detail.post.id))
+    setIdempotencyKey(createActionIdempotencyKey(config.keyPrefix, detail.post.id))
   }
 
   function handleBackdropClick() {
@@ -93,39 +129,36 @@ function AdminNeedASubRemovalModal({
         role="dialog"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="admin-sub-modal__header">
-          <span><Trash2 /></span>
+        <header className={`admin-sub-modal__header admin-sub-modal__header--${config.tone}`}>
           <div>
-            <h2 id="admin-sub-remove-title">Remove post?</h2>
-            <p>{detail.post.team_name || 'Need a Sub post'}</p>
+            <span className="admin-sub-modal__icon"><Icon /></span>
+            <div>
+              <h2 id="admin-sub-remove-title">{config.title}</h2>
+            </div>
           </div>
+          <button
+            aria-label={`Close ${config.title}`}
+            className="admin-sub-modal__close"
+            disabled={isSubmitting}
+            type="button"
+            onClick={onClose}
+          >
+            <X />
+          </button>
         </header>
 
         <form className="admin-sub-modal__form" onSubmit={handleSubmit}>
-          <p>
-            The post will leave normal user views. Its owner and affected
-            requesters will receive a Pickup Lane removal notice.
-          </p>
-          <div className="admin-sub-modal__facts">
-            <div>
-              <span>Current status</span>
-              <strong>{formatAdminNeedASubStatus(detail.post.post_status)}</strong>
-            </div>
-            <div>
-              <span>Active requests closed</span>
-              <strong>{activeRequestCount}</strong>
-            </div>
-          </div>
+          <p>{config.summary}</p>
           <label>
             <span>Internal reason</span>
             <textarea
               disabled={isSubmitting}
-              maxLength={500}
-              placeholder="Required removal reason"
+              maxLength={REASON_MAX_LENGTH}
+              placeholder="Required admin reason"
               value={reason}
               onChange={handleReasonChange}
             />
-            <small>{reason.length}/500</small>
+            <small>{reason.length}/{REASON_MAX_LENGTH}</small>
           </label>
           {executionError && (
             <div className="admin-sub-modal__message">
@@ -134,19 +167,16 @@ function AdminNeedASubRemovalModal({
           )}
           <div className="admin-sub-modal__actions">
             <button
-              className="admin-sub-modal__secondary"
-              disabled={isSubmitting}
-              type="button"
-              onClick={onClose}
-            >
-              Back
-            </button>
-            <button
-              className="admin-sub-modal__danger"
+              className={
+                config.tone === 'danger'
+                  ? 'admin-sub-modal__danger'
+                  : 'admin-sub-modal__primary'
+              }
               disabled={isSubmitting || !reason.trim()}
               type="submit"
             >
-              {isSubmitting ? 'Removing' : 'Remove post'}
+              <Icon aria-hidden="true" />
+              {isSubmitting ? config.submittingLabel : config.submitLabel}
             </button>
           </div>
         </form>

@@ -6,12 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.schemas import UserRead, UserUpdate
-from backend.services.admin_permission_service import (
-    PERMISSION_USERS_DELETE,
-    PERMISSION_USERS_MANAGE,
-    PERMISSION_USERS_READ,
-)
-from backend.services.auth_service import get_current_app_user, require_admin_permission
+from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.user_service import (
     get_current_user_profile,
     get_user_profile_or_404,
@@ -27,7 +22,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("", response_model=list[UserRead], status_code=status.HTTP_200_OK)
 def list_users(
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[User]:
     return list_user_profiles(db)
 
@@ -37,7 +32,7 @@ def list_users(
 # instead of client-supplied identity CRUD.
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def create_user(
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> User:
     del current_admin
     reject_generic_user_mutation()
@@ -69,7 +64,7 @@ def update_my_user_profile(
 def get_user(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+    current_admin: User = Depends(require_active_admin),
 ) -> User:
     return get_user_profile_or_404(db, user_id)
 
@@ -77,7 +72,7 @@ def get_user(
 @router.patch("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
 def update_user(
     user_id: uuid.UUID,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> User:
     del user_id, current_admin
     reject_generic_user_mutation()
@@ -86,7 +81,7 @@ def update_user(
 @router.delete("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
 def delete_user(
     user_id: uuid.UUID,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_DELETE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> User:
     del user_id, current_admin
     reject_generic_user_mutation()

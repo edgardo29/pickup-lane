@@ -28,17 +28,26 @@ class AdminAction(Base):
                 "'update_game', 'create_game_chat', 'update_game_chat', "
                 "'update_booking', "
                 "'update_participant', 'issue_credit', 'reverse_credit', "
+                "'create_financial_outcome', 'apply_financial_outcome', "
                 "'create_official_game', 'update_official_game', "
                 "'assign_official_host', 'remove_official_host', "
                 "'admin_add_player', 'admin_remove_player', 'waive_payment', "
                 "'remove_sub_post', 'hide_unsafe_community_payment_text', "
+                "'hide_need_sub_post', 'restore_need_sub_post', "
+                "'hide_community_game', 'restore_community_game', "
+                "'pause_community_game_joining', "
+                "'resume_community_game_joining', "
+                "'admin_cancel_community_game', "
+                "'restore_community_payment_text', "
                 "'create_notification', 'update_notification', "
                 "'create_platform_notice_campaign', "
                 "'update_platform_notice_campaign', "
                 "'send_platform_notice_campaign', "
                 "'retry_platform_notice_campaign', "
                 "'change_staff_role', 'append_audit_note', "
-                "'resolve_support_flag'"
+                "'resolve_support_flag', "
+                "'create_review_case', 'close_review_case', "
+                "'add_review_case_note'"
                 ")"
             ),
             name="ck_admin_actions_action_type",
@@ -62,7 +71,11 @@ class AdminAction(Base):
                 "OR target_notification_id IS NOT NULL "
                 "OR target_platform_notice_campaign_id IS NOT NULL "
                 "OR target_admin_action_id IS NOT NULL "
-                "OR target_support_flag_id IS NOT NULL"
+                "OR target_support_flag_id IS NOT NULL "
+                "OR target_review_case_id IS NOT NULL "
+                "OR target_financial_outcome_id IS NOT NULL "
+                "OR target_host_publish_fee_id IS NOT NULL "
+                "OR target_host_publish_entitlement_id IS NOT NULL"
             ),
             name="ck_admin_actions_target_required",
         ),
@@ -99,6 +112,19 @@ class AdminAction(Base):
         ),
         Index("ix_admin_actions_target_admin_action_id", "target_admin_action_id"),
         Index("ix_admin_actions_target_support_flag_id", "target_support_flag_id"),
+        Index("ix_admin_actions_target_review_case_id", "target_review_case_id"),
+        Index(
+            "ix_admin_actions_target_financial_outcome_id",
+            "target_financial_outcome_id",
+        ),
+        Index(
+            "ix_admin_actions_target_host_publish_fee_id",
+            "target_host_publish_fee_id",
+        ),
+        Index(
+            "ix_admin_actions_target_host_publish_entitlement_id",
+            "target_host_publish_entitlement_id",
+        ),
         Index("ix_admin_actions_idempotency_key", "idempotency_key"),
         Index(
             "uq_admin_actions_audit_note_idempotency",
@@ -171,6 +197,30 @@ class AdminAction(Base):
             ),
         ),
         Index(
+            "uq_admin_actions_create_financial_outcome_idempotency",
+            "admin_user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'create_financial_outcome' "
+                "AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_review_case_idempotency",
+            "admin_user_id",
+            "target_review_case_id",
+            "action_type",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type IN ("
+                "'create_review_case', 'close_review_case', "
+                "'add_review_case_note'"
+                ") AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
             "uq_admin_actions_hide_unsafe_community_payment_text_idempotency",
             "admin_user_id",
             "target_game_id",
@@ -182,6 +232,23 @@ class AdminAction(Base):
             ),
         ),
         Index(
+            "uq_admin_actions_community_game_enforcement_idempotency",
+            "admin_user_id",
+            "target_game_id",
+            "action_type",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type IN ("
+                "'hide_community_game', 'restore_community_game', "
+                "'pause_community_game_joining', "
+                "'resume_community_game_joining', "
+                "'admin_cancel_community_game', "
+                "'restore_community_payment_text'"
+                ") AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
             "uq_admin_actions_remove_sub_post_idempotency",
             "admin_user_id",
             "target_sub_post_id",
@@ -189,6 +256,18 @@ class AdminAction(Base):
             unique=True,
             postgresql_where=text(
                 "action_type = 'remove_sub_post' AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_need_sub_enforcement_idempotency",
+            "admin_user_id",
+            "target_sub_post_id",
+            "action_type",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type IN ('hide_need_sub_post', 'restore_need_sub_post') "
+                "AND idempotency_key IS NOT NULL"
             ),
         ),
         Index(
@@ -390,6 +469,30 @@ class AdminAction(Base):
     target_support_flag_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support_flags.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    target_review_case_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("admin_review_cases.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    target_financial_outcome_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("admin_financial_outcomes.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    target_host_publish_fee_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("host_publish_fees.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    target_host_publish_entitlement_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("host_publish_entitlements.id", ondelete="SET NULL"),
         nullable=True,
     )
 

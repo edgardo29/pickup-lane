@@ -17,7 +17,7 @@ export function useAppNavState({
   preferPublicWhileLoading = false,
 }) {
   const { appUser, currentUser, isLoading: isAuthLoading } = useAuth()
-  const shouldLoadAdminAccess = ['admin', 'moderator'].includes(appUser?.role)
+  const shouldLoadAdminAccess = appUser?.role === 'admin'
   const {
     adminAccess,
     isLoading: isAdminAccessLoading,

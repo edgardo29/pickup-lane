@@ -11,6 +11,8 @@ from backend.schemas import (
     AdminChatModerationActionResultRead,
     AdminChatSummaryRead,
     AdminCommunityGameDetailRead,
+    AdminCommunityGameEnforcementActionCreate,
+    AdminCommunityGameEnforcementActionResultRead,
     AdminCommunityGameHidePaymentTextCreate,
     AdminCommunityGameHidePaymentTextResultRead,
     AdminCommunityGameListRead,
@@ -23,15 +25,16 @@ from backend.services.admin_community_service import (
     get_community_game_or_404,
     hide_admin_community_game_payment_text,
     list_admin_community_games,
+    restore_admin_community_game_payment_text,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_COMMUNITY_GAMES_FLAG,
-    PERMISSION_COMMUNITY_GAMES_HIDE_UNSAFE_CONTENT,
-    PERMISSION_COMMUNITY_GAMES_READ,
-    PERMISSION_CONTENT_MODERATE,
-    require_user_admin_permission,
+from backend.services.community_game_enforcement_service import (
+    admin_cancel_community_game,
+    hide_community_game,
+    pause_community_game_joining,
+    restore_community_game,
+    resume_community_game_joining,
 )
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.chat_moderation_admin_service import (
     get_admin_game_chat_summary,
     list_admin_game_chat_messages,
@@ -83,9 +86,7 @@ def list_admin_community_games_route(
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = Query(default=None, max_length=2000),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_COMMUNITY_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminCommunityGameListRead:
     normalized_view = view.strip().lower()
     if normalized_view not in VALID_GAME_LIST_VIEWS:
@@ -126,9 +127,7 @@ def get_admin_community_game_route(
     audit_offset: int = Query(default=0, ge=0),
     audit_limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_COMMUNITY_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminCommunityGameDetailRead:
     return get_admin_community_game_detail(
         db,
@@ -145,11 +144,8 @@ def get_admin_community_game_route(
 def get_admin_community_game_chat_summary_route(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatSummaryRead:
-    require_user_admin_permission(current_admin, PERMISSION_COMMUNITY_GAMES_READ)
     get_community_game_or_404(db, game_id)
     return get_admin_game_chat_summary(
         db,
@@ -165,11 +161,8 @@ def list_admin_community_game_chat_messages_route(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=20),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatMessageListRead:
-    require_user_admin_permission(current_admin, PERMISSION_COMMUNITY_GAMES_READ)
     get_community_game_or_404(db, game_id)
     return list_admin_game_chat_messages(
         db,
@@ -191,11 +184,8 @@ def mark_admin_community_game_chat_message_reviewed_route(
     message_id: uuid.UUID,
     payload: AdminChatModerationActionCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatModerationActionResultRead:
-    require_user_admin_permission(current_admin, PERMISSION_COMMUNITY_GAMES_READ)
     get_community_game_or_404(db, game_id)
     return mark_game_chat_message_reviewed(
         db,
@@ -216,11 +206,8 @@ def remove_admin_community_game_chat_message_route(
     message_id: uuid.UUID,
     payload: AdminChatModerationActionCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatModerationActionResultRead:
-    require_user_admin_permission(current_admin, PERMISSION_COMMUNITY_GAMES_READ)
     get_community_game_or_404(db, game_id)
     return remove_game_chat_message(
         db,
@@ -241,11 +228,8 @@ def restore_admin_community_game_chat_message_route(
     message_id: uuid.UUID,
     payload: AdminChatModerationActionCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatModerationActionResultRead:
-    require_user_admin_permission(current_admin, PERMISSION_COMMUNITY_GAMES_READ)
     get_community_game_or_404(db, game_id)
     return restore_game_chat_message(
         db,
@@ -264,11 +248,117 @@ def hide_admin_community_game_payment_text_route(
     game_id: uuid.UUID,
     payload: AdminCommunityGameHidePaymentTextCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_COMMUNITY_GAMES_HIDE_UNSAFE_CONTENT)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminCommunityGameHidePaymentTextResultRead:
     return hide_admin_community_game_payment_text(
+        db,
+        game_id=game_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{game_id}/restore-payment-text",
+    response_model=AdminCommunityGameHidePaymentTextResultRead,
+)
+def restore_admin_community_game_payment_text_route(
+    game_id: uuid.UUID,
+    payload: AdminCommunityGameHidePaymentTextCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminCommunityGameHidePaymentTextResultRead:
+    return restore_admin_community_game_payment_text(
+        db,
+        game_id=game_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{game_id}/hide",
+    response_model=AdminCommunityGameEnforcementActionResultRead,
+)
+def hide_admin_community_game_route(
+    game_id: uuid.UUID,
+    payload: AdminCommunityGameEnforcementActionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminCommunityGameEnforcementActionResultRead:
+    return hide_community_game(
+        db,
+        game_id=game_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{game_id}/restore",
+    response_model=AdminCommunityGameEnforcementActionResultRead,
+)
+def restore_admin_community_game_route(
+    game_id: uuid.UUID,
+    payload: AdminCommunityGameEnforcementActionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminCommunityGameEnforcementActionResultRead:
+    return restore_community_game(
+        db,
+        game_id=game_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{game_id}/pause-joining",
+    response_model=AdminCommunityGameEnforcementActionResultRead,
+)
+def pause_admin_community_game_joining_route(
+    game_id: uuid.UUID,
+    payload: AdminCommunityGameEnforcementActionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminCommunityGameEnforcementActionResultRead:
+    return pause_community_game_joining(
+        db,
+        game_id=game_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{game_id}/resume-joining",
+    response_model=AdminCommunityGameEnforcementActionResultRead,
+)
+def resume_admin_community_game_joining_route(
+    game_id: uuid.UUID,
+    payload: AdminCommunityGameEnforcementActionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminCommunityGameEnforcementActionResultRead:
+    return resume_community_game_joining(
+        db,
+        game_id=game_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{game_id}/cancel",
+    response_model=AdminCommunityGameEnforcementActionResultRead,
+)
+def cancel_admin_community_game_route(
+    game_id: uuid.UUID,
+    payload: AdminCommunityGameEnforcementActionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminCommunityGameEnforcementActionResultRead:
+    return admin_cancel_community_game(
         db,
         game_id=game_id,
         admin_user=current_admin,
@@ -284,9 +374,7 @@ def flag_admin_community_game_for_review_route(
     game_id: uuid.UUID,
     payload: AdminCommunityGameReviewFlagCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_COMMUNITY_GAMES_FLAG)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminCommunityGameReviewFlagResultRead:
     return flag_admin_community_game_for_review(
         db,

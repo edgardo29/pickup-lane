@@ -31,7 +31,7 @@ class HostPublishFee(Base):
             name="ck_host_publish_fees_currency",
         ),
         CheckConstraint(
-            "fee_status IN ('paid', 'waived')",
+            "fee_status IN ('pending', 'paid', 'waived', 'failed', 'refunded')",
             name="ck_host_publish_fees_fee_status",
         ),
         CheckConstraint(
@@ -60,12 +60,6 @@ class HostPublishFee(Base):
         Index("ix_host_publish_fees_host_user_id", "host_user_id"),
         Index("ix_host_publish_fees_fee_status", "fee_status"),
         Index("ix_host_publish_fees_payment_id", "payment_id"),
-        Index(
-            "ux_host_publish_fees_one_first_free_per_host",
-            "host_user_id",
-            unique=True,
-            postgresql_where=text("waiver_reason = 'first_game_free'"),
-        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)

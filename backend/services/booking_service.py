@@ -10,11 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, User
 from backend.schemas.booking_schema import BookingCreate, BookingUpdate
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_READ,
-    require_user_admin_permission,
-    user_has_admin_permission,
-)
+from backend.services.auth_service import require_active_admin_user, user_is_active_admin
 from backend.services.booking_rules import (
     build_booking_conflict_detail,
     normalize_booking_lifecycle_fields,
@@ -93,7 +89,7 @@ def get_booking_for_user_or_404(
         )
 
     if db_booking.buyer_user_id != current_user.id:
-        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+        require_active_admin_user(current_user)
 
     return db_booking
 
@@ -118,10 +114,10 @@ def list_bookings(
     payment_status: str | None = None,
 ) -> list[Booking]:
     statement = select(Booking)
-    can_read_all_bookings = user_has_admin_permission(current_user, PERMISSION_MONEY_READ)
+    can_read_all_bookings = user_is_active_admin(current_user)
 
     if buyer_user_id is not None and buyer_user_id != current_user.id:
-        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+        require_active_admin_user(current_user)
         can_read_all_bookings = True
 
     if not can_read_all_bookings:

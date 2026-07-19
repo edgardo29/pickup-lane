@@ -12,8 +12,7 @@ from backend.schemas import (
     VenueImageUploadCreate,
     VenueImageUploadRead,
 )
-from backend.services.admin_permission_service import PERMISSION_VENUE_IMAGES_MANAGE
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.venue_image_service import (
     check_venue_image_upload_readiness,
     complete_venue_image_upload,
@@ -38,9 +37,7 @@ def list_venue_images(
 @admin_router.get("/admin/venue-images/upload-readiness")
 def check_admin_venue_image_upload_readiness(
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> dict[str, bool]:
     del current_admin
     return check_venue_image_upload_readiness(db)
@@ -54,9 +51,7 @@ def list_admin_venue_images(
     venue_id: uuid.UUID,
     image_status: str | None = Query(default=None),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[VenueImageRead]:
     del current_admin
     return list_admin_venue_images_workflow(
@@ -75,9 +70,7 @@ def create_admin_venue_image_upload_url(
     venue_id: uuid.UUID,
     upload_request: VenueImageUploadCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> VenueImageUploadRead:
     return create_venue_image_upload(
         db,
@@ -95,9 +88,7 @@ def complete_admin_venue_image_upload(
     venue_image_id: uuid.UUID,
     complete_request: VenueImageCompleteUpload | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> VenueImageRead:
     return complete_venue_image_upload(
         db,
@@ -115,9 +106,7 @@ def update_admin_venue_image(
     venue_image_id: uuid.UUID,
     image_update: VenueImageUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_VENUE_IMAGES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> VenueImageRead:
     return update_venue_image(
         db,

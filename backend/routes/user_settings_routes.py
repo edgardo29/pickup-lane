@@ -6,11 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import UserSettings, User
 from backend.schemas import UserSettingsCreate, UserSettingsRead, UserSettingsUpdate
-from backend.services.admin_permission_service import (
-    PERMISSION_USERS_MANAGE,
-    PERMISSION_USERS_READ,
-)
-from backend.services.auth_service import get_current_app_user, require_admin_permission
+from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.user_settings_service import (
     create_user_settings_workflow,
     get_current_user_settings,
@@ -27,7 +23,7 @@ router = APIRouter(prefix="/user-settings", tags=["user-settings"])
 def create_user_settings(
     user_settings: UserSettingsCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> UserSettings:
     return create_user_settings_workflow(db, user_settings)
 
@@ -56,7 +52,7 @@ def update_my_user_settings(
 def get_user_settings(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+    current_admin: User = Depends(require_active_admin),
 ) -> UserSettings:
     return get_user_settings_or_404(db, user_id)
 
@@ -69,6 +65,6 @@ def update_user_settings(
     user_id: uuid.UUID,
     user_settings_update: UserSettingsUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> UserSettings:
     return update_user_settings_workflow(db, user_id, user_settings_update)

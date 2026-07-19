@@ -33,6 +33,7 @@ from backend.services.game_service import (
     count_non_host_participants,
     game_has_paid_booking_payment,
 )
+from backend.services.moderation_surfacing_service import surface_community_game_text
 from backend.services.venue_service import find_matching_active_venue
 
 
@@ -295,6 +296,8 @@ def host_edit_game_workflow(
         "payment_collection_type": db_game.payment_collection_type,
         "publish_status": db_game.publish_status,
         "game_status": db_game.game_status,
+        "public_visibility_status": db_game.public_visibility_status,
+        "join_enforcement_status": db_game.join_enforcement_status,
         "title": update_data.get("title", db_game.title),
         "description": update_data.get("description", db_game.description),
         "venue_id": update_data.get("venue_id", db_game.venue_id),
@@ -344,6 +347,7 @@ def host_edit_game_workflow(
         "published_at": db_game.published_at,
         "cancelled_at": db_game.cancelled_at,
         "cancelled_by_user_id": db_game.cancelled_by_user_id,
+        "cancellation_source": db_game.cancellation_source,
         "cancel_reason": db_game.cancel_reason,
         "completed_at": db_game.completed_at,
         "completed_by_user_id": db_game.completed_by_user_id,
@@ -380,4 +384,5 @@ def host_edit_game_workflow(
             detail=build_game_conflict_detail(exc),
         ) from exc
 
+    surface_community_game_text(db, game_id=db_game.id)
     return db_game

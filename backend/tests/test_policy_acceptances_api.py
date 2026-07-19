@@ -248,7 +248,7 @@ def test_policy_acceptance_reject_null_accepted_at_update(client: TestClient):
     assert "accepted_at cannot be null" in response.text
 
 
-def test_policy_acceptance_generic_routes_require_admin_permission(
+def test_policy_acceptance_generic_routes_require_admin_access(
     client: TestClient,
 ):
     user, policy_document = create_policy_acceptance_setup(client)
@@ -279,21 +279,20 @@ def test_policy_acceptance_generic_routes_require_admin_permission(
     assert patch_response.status_code == 403, patch_response.text
 
 
-def test_policy_acceptance_generic_routes_reject_moderator(client: TestClient):
+def test_policy_acceptance_generic_routes_reject_player(client: TestClient):
     user, policy_document = create_policy_acceptance_setup(client)
     policy_acceptance = create_policy_acceptance(
         client,
         user["id"],
         policy_document["id"],
     )
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
 
     get_response = client.get(f"/policy-acceptances/{policy_acceptance['id']}")
     patch_response = client.patch(
         f"/policy-acceptances/{policy_acceptance['id']}",
-        json={"user_agent": "Denied moderator update"},
+        json={"user_agent": "Denied player update"},
     )
 
     assert get_response.status_code == 403, get_response.text

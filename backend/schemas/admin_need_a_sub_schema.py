@@ -23,6 +23,7 @@ class AdminNeedASubRequestCountsRead(BaseModel):
 class AdminNeedASubPostListItemRead(BaseModel):
     id: UUID
     post_status: str
+    public_visibility_status: str
     team_name: str | None = None
     format_label: str
     environment_type: str
@@ -56,6 +57,7 @@ class AdminNeedASubPostRead(BaseModel):
     id: UUID
     owner_user_id: UUID
     post_status: str
+    public_visibility_status: str
     sport_type: str
     format_label: str
     environment_type: str
@@ -144,3 +146,26 @@ class AdminNeedASubPostDetailRead(BaseModel):
     audit_total_count: int = 0
     audit_offset: int = 0
     audit_limit: int = 50
+
+
+class AdminNeedASubRequestDetailRead(BaseModel):
+    post: AdminNeedASubPostRead
+    owner: AdminNeedASubUserRead
+    request: AdminNeedASubRequestRead
+
+
+class AdminNeedASubEnforcementActionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=100)
+    idempotency_key: str = Field(min_length=8, max_length=160)
+
+
+class AdminNeedASubEnforcementActionResultRead(BaseModel):
+    post_id: UUID
+    post_status: str
+    public_visibility_status: str
+    audit_action_id: UUID
+    notice_ids: list[UUID] = Field(default_factory=list)
+    closed_request_ids: list[UUID] = Field(default_factory=list)
+    idempotent_replay: bool = False

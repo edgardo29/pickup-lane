@@ -158,11 +158,8 @@ export function getChatSenderLabel(message, participants) {
 }
 
 export function getChatMessageTimelineLabel(message) {
-  if (message.deleted_at) {
-    return `Removed ${formatAdminDateTime(message.deleted_at)}`
-  }
-  if (message.edited_at) {
-    return `Edited ${formatAdminDateTime(message.edited_at)}`
+  if (message.removed_at) {
+    return `Removed ${formatAdminDateTime(message.removed_at)}`
   }
   return `Sent ${formatAdminDateTime(message.created_at)}`
 }

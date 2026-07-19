@@ -56,6 +56,14 @@ PREVIOUS_ADMIN_ACTION_TYPES = (
 ADMIN_ACTION_TYPES = (
     *PREVIOUS_ADMIN_ACTION_TYPES,
     "hide_unsafe_community_payment_text",
+    "restore_community_payment_text",
+    "hide_community_game",
+    "restore_community_game",
+    "pause_community_game_joining",
+    "resume_community_game_joining",
+    "admin_cancel_community_game",
+    "hide_need_sub_post",
+    "restore_need_sub_post",
 )
 PREVIOUS_ADMIN_ACTION_TYPE_CHECK = _in_check(
     "action_type",
@@ -169,7 +177,17 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute(
         "DELETE FROM admin_actions "
-        "WHERE action_type = 'hide_unsafe_community_payment_text'"
+        "WHERE action_type IN ("
+        "'hide_unsafe_community_payment_text', "
+        "'restore_community_payment_text', "
+        "'hide_community_game', "
+        "'restore_community_game', "
+        "'pause_community_game_joining', "
+        "'resume_community_game_joining', "
+        "'admin_cancel_community_game', "
+        "'hide_need_sub_post', "
+        "'restore_need_sub_post'"
+        ")"
     )
     op.drop_index(
         "uq_admin_actions_hide_unsafe_community_payment_text_idempotency",

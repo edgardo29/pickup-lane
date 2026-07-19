@@ -68,7 +68,7 @@ def upgrade() -> None:
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
-            "role IN ('player', 'admin', 'moderator')",
+            "role IN ('player', 'admin')",
             name="ck_users_role",
         ),
         sa.CheckConstraint(

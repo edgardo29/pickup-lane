@@ -57,6 +57,16 @@ PREVIOUS_ADMIN_ACTION_TYPES = (
     "append_audit_note",
     "remove_sub_post",
     "hide_unsafe_community_payment_text",
+    "restore_community_payment_text",
+    "hide_community_game",
+    "restore_community_game",
+    "pause_community_game_joining",
+    "resume_community_game_joining",
+    "admin_cancel_community_game",
+    "hide_need_sub_post",
+    "restore_need_sub_post",
+    "create_financial_outcome",
+    "apply_financial_outcome",
     "issue_credit",
     "reverse_credit",
 )
@@ -86,6 +96,9 @@ PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS = (
     "target_sub_post_id",
     "target_sub_post_position_id",
     "target_sub_post_request_id",
+    "target_financial_outcome_id",
+    "target_host_publish_fee_id",
+    "target_host_publish_entitlement_id",
     "target_game_credit_id",
 )
 ADMIN_ACTION_TARGET_COLUMNS = (

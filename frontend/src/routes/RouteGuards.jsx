@@ -2,8 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { getSafeAuthBackPath } from '../features/auth/authHelpers.js'
 import { useAuth } from '../hooks/useAuth.js'
 import {
-  ADMIN_PERMISSIONS,
-  hasAnyAdminPermission,
+  hasAdminWorkspaceAccess,
 } from '../pages/admin/shared/adminWorkspaceData.js'
 import { useAdminAccess } from '../pages/admin/shared/useAdminAccess.js'
 import '../styles/admin/AdminWorkspace.css'
@@ -49,11 +48,7 @@ export function RequireAppUser({ children }) {
   return children
 }
 
-export function RequireAdmin({
-  children,
-  permission = ADMIN_PERMISSIONS.ACTION_CENTER_VIEW,
-  permissions = null,
-}) {
+export function RequireAdmin({ children }) {
   const { appUser, isLoading } = useAuth()
   const {
     adminAccess,
@@ -83,8 +78,6 @@ export function RequireAdmin({
     return null
   }
 
-  const requiredPermissions = permissions || [permission]
-
   if (error) {
     if (!isAdminAccessDeniedError(error)) {
       return <AdminAccessRetryState onRetry={reload} />
@@ -102,7 +95,7 @@ export function RequireAdmin({
     )
   }
 
-  if (!hasAnyAdminPermission(adminAccess, requiredPermissions)) {
+  if (!hasAdminWorkspaceAccess(adminAccess)) {
     return (
       <Navigate
         to="/admin/sign-in"

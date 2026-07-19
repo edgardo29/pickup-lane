@@ -154,7 +154,6 @@ class AdminOfficialGamePlayerRemovalPreviewRead(BaseModel):
     preview_token: str
     blocking_reasons: list[str] = Field(default_factory=list)
     allowed_outcomes: list[str] = Field(default_factory=list)
-    required_permissions: list[str] = Field(default_factory=list)
     affected_participants: list[AdminOfficialGameRemovalParticipantRead] = Field(
         default_factory=list
     )
@@ -226,7 +225,6 @@ class AdminOfficialGameCancellationPreviewRead(BaseModel):
     game_id: UUID
     game_status: str
     preview_token: str
-    required_permissions: list[str] = Field(default_factory=list)
     booking_count: int = 0
     participant_count: int = 0
     waitlist_entry_count: int = 0

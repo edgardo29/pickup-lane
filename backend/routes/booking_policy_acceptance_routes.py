@@ -10,8 +10,7 @@ from backend.schemas import (
     BookingPolicyAcceptanceRead,
     BookingPolicyAcceptanceUpdate,
 )
-from backend.services.admin_permission_service import PERMISSION_POLICIES_MANAGE
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.booking_policy_acceptance_service import (
     create_booking_policy_acceptance_record,
     get_booking_policy_acceptance_record,
@@ -33,9 +32,7 @@ router = APIRouter(
 def create_booking_policy_acceptance(
     booking_policy_acceptance: BookingPolicyAcceptanceCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_POLICIES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> BookingPolicyAcceptance:
     del current_admin
     return create_booking_policy_acceptance_record(db, booking_policy_acceptance)
@@ -49,9 +46,7 @@ def create_booking_policy_acceptance(
 def get_booking_policy_acceptance(
     booking_policy_acceptance_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_POLICIES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> BookingPolicyAcceptance:
     del current_admin
     return get_booking_policy_acceptance_record(db, booking_policy_acceptance_id)
@@ -66,9 +61,7 @@ def list_booking_policy_acceptances(
     booking_id: uuid.UUID | None = None,
     policy_document_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_POLICIES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[BookingPolicyAcceptance]:
     del current_admin
     return list_booking_policy_acceptance_records(
@@ -87,9 +80,7 @@ def update_booking_policy_acceptance(
     booking_policy_acceptance_id: uuid.UUID,
     booking_policy_acceptance_update: BookingPolicyAcceptanceUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_POLICIES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> BookingPolicyAcceptance:
     del current_admin
     return update_booking_policy_acceptance_record(

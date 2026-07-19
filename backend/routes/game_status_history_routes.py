@@ -10,11 +10,7 @@ from backend.schemas import (
     GameStatusHistoryRead,
     GameStatusHistoryUpdate,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_OFFICIAL_GAMES_READ,
-    PERMISSION_OFFICIAL_GAMES_WRITE,
-)
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.status_history_service import (
     create_game_status_history_record,
     get_game_status_history_record,
@@ -33,9 +29,7 @@ router = APIRouter(prefix="/game-status-history", tags=["game_status_history"])
 def create_game_status_history(
     game_status_history: GameStatusHistoryCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_WRITE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> GameStatusHistory:
     del current_admin
     return create_game_status_history_record(db, game_status_history)
@@ -49,9 +43,7 @@ def create_game_status_history(
 def get_game_status_history(
     history_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> GameStatusHistory:
     del current_admin
     return get_game_status_history_record(db, history_id)
@@ -67,9 +59,7 @@ def list_game_status_history(
     changed_by_user_id: uuid.UUID | None = None,
     change_source: str | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[GameStatusHistory]:
     del current_admin
     return list_game_status_history_records(
@@ -89,9 +79,7 @@ def update_game_status_history(
     history_id: uuid.UUID,
     history_update: GameStatusHistoryUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_WRITE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> GameStatusHistory:
     del current_admin
     return update_game_status_history_record(db, history_id, history_update)

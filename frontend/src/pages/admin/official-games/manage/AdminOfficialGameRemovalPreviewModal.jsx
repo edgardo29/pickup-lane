@@ -299,12 +299,6 @@ function AdminOfficialGameRemovalPreviewModal({
                     <small>{reason.length}/1000</small>
                   </label>
 
-                  {!canExecute && (
-                    <p className="admin-removal-preview__permission">
-                      Your staff permissions do not allow this money outcome.
-                    </p>
-                  )}
-
                   <FormErrorMessage className="admin-removal-preview__error">
                     {executionError}
                   </FormErrorMessage>

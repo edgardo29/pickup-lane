@@ -1340,14 +1340,6 @@
   min-height: 78px;
 }
 
-.admin-removal-preview__permission {
-  margin: 0;
-  color: #ffd8a4;
-  font-size: 0.8rem;
-  line-height: 1.35;
-  font-weight: 600;
-}
-
 .admin-removal-preview__error {
   margin: 0;
 }

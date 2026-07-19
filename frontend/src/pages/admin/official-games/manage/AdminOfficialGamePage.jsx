@@ -16,11 +16,6 @@ import { buildMediaUrl } from '../../../../lib/apiClient.js'
 import '../../../../styles/admin/AdminOfficialGames.css'
 import AdminWorkspaceLayout from '../../shared/AdminWorkspaceLayout.jsx'
 import {
-  ADMIN_PERMISSIONS,
-  hasAnyAdminPermission,
-  hasAdminPermission,
-} from '../../shared/adminWorkspaceData.js'
-import {
   getAdminOfficialGameChatSummary,
   listAdminActions,
 } from '../../shared/adminApi.js'
@@ -494,7 +489,7 @@ function AdminOfficialGameOverviewTab({
 function AdminOfficialGamePageContent({ gameId }) {
   const { currentUser } = useAuth()
   const {
-    adminAccess,
+    hasAdminAccess,
     isLoading: isAdminAccessLoading,
   } = useAdminAccess()
   const navigate = useNavigate()
@@ -533,23 +528,11 @@ function AdminOfficialGamePageContent({ gameId }) {
   const [pageNotice, setPageNotice] = useState('')
   const removalPreviewRequestIdRef = useRef(0)
   const cancelPreviewRequestIdRef = useRef(0)
-  const canEditGame = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.OFFICIAL_GAMES_WRITE,
-  )
-  const canManageRoster = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.OFFICIAL_GAMES_ROSTER_MANAGE,
-  )
-  const canSearchRosterUsers = (
-    canManageRoster
-    && hasAdminPermission(adminAccess, ADMIN_PERMISSIONS.USERS_READ)
-  )
-  const canPreviewRemovals = (
-    canManageRoster
-    && hasAdminPermission(adminAccess, ADMIN_PERMISSIONS.MONEY_READ)
-  )
-  const canViewMoneyData = hasAdminPermission(adminAccess, ADMIN_PERMISSIONS.MONEY_READ)
+  const canEditGame = hasAdminAccess
+  const canManageRoster = hasAdminAccess
+  const canSearchRosterUsers = hasAdminAccess
+  const canPreviewRemovals = hasAdminAccess
+  const canViewMoneyData = hasAdminAccess
   const currentWorkspaceContextKey = currentAdminDataContextKey
   const {
     bookings,
@@ -571,15 +554,9 @@ function AdminOfficialGamePageContent({ gameId }) {
     gameId,
     isAdminAccessLoading,
   })
-  const canViewChat = hasAdminPermission(adminAccess, ADMIN_PERMISSIONS.CONTENT_MODERATE)
-  const canViewAudit = hasAnyAdminPermission(adminAccess, [
-    ADMIN_PERMISSIONS.AUDIT_READ,
-    ADMIN_PERMISSIONS.AUDIT_SUPPORT_READ,
-  ])
-  const canCancelGame = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.OFFICIAL_GAMES_CANCEL,
-  )
+  const canViewChat = hasAdminAccess
+  const canViewAudit = hasAdminAccess
+  const canCancelGame = hasAdminAccess
   const visibleManageTabs = manageTabs
   const selectedTab = visibleManageTabs.some((tab) => tab.id === activeTab)
     ? activeTab
@@ -1052,11 +1029,7 @@ function AdminOfficialGamePageContent({ gameId }) {
 
   const cancelDisabledReason = getCancelDisabledReason(game)
   const isMutating = mutationState === 'saving'
-  const canExecuteRemoval = Boolean(
-    removalPreview?.required_permissions?.every((permission) =>
-      hasAdminPermission(adminAccess, permission),
-    ),
-  )
+  const canExecuteRemoval = Boolean(removalPreview?.automatic_outcome_available)
 
   return (
     <>
@@ -1171,7 +1144,7 @@ function AdminOfficialGamePageContent({ gameId }) {
                 />
               ) : (
                 <AdminOfficialGameLockedTab
-                  description="Money read permission is required for booking details."
+                  description="Admin access is required for booking details."
                   icon={ClipboardListIcon}
                   label="Official game bookings"
                   title="Bookings"
@@ -1191,7 +1164,7 @@ function AdminOfficialGamePageContent({ gameId }) {
                 />
               ) : (
                 <AdminOfficialGameLockedTab
-                  description="Money read permission is required for waitlist details."
+                  description="Admin access is required for waitlist details."
                   icon={UsersIcon}
                   label="Official game waitlist"
                   title="Waitlist"
@@ -1211,7 +1184,7 @@ function AdminOfficialGamePageContent({ gameId }) {
                 />
               ) : (
                 <AdminOfficialGameLockedTab
-                  description="Money read permission is required for money ledger details."
+                  description="Admin access is required for money ledger details."
                   icon={DollarIcon}
                   label="Official game money ledger"
                   title="Payments, Refunds, Credits"
@@ -1232,7 +1205,7 @@ function AdminOfficialGamePageContent({ gameId }) {
                 />
               ) : (
                 <AdminOfficialGameLockedTab
-                  description="Content moderation permission is required for chat inspection."
+                  description="Admin access is required for chat inspection."
                   icon={ChatIcon}
                   label="Official game chat"
                   title="Chat"
@@ -1254,7 +1227,7 @@ function AdminOfficialGamePageContent({ gameId }) {
                 />
               ) : (
                 <AdminOfficialGameLockedTab
-                  description="Audit permission is required for game action history."
+                  description="Admin access is required for game action history."
                   icon={ClipboardListIcon}
                   label="Official game activity"
                   title="Activity"

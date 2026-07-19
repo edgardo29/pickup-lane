@@ -23,10 +23,6 @@ from backend.schemas.platform_notice_campaign_schema import (
     PlatformNoticeCampaignUpdate,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_NOTIFICATIONS_MANAGE,
-    require_user_admin_permission,
-)
 from backend.services.platform_notice_campaign_read_service import (
     campaign_delivery_summaries,
     campaign_delivery_summary,
@@ -267,7 +263,6 @@ def create_platform_notice_campaign(
     creator_user: User,
     payload: PlatformNoticeCampaignCreate,
 ) -> PlatformNoticeCampaignRead:
-    require_user_admin_permission(creator_user, PERMISSION_NOTIFICATIONS_MANAGE)
     values, target_user_ids = normalized_create_values(payload)
 
     existing_campaign = get_existing_campaign_by_idempotency_key(
@@ -355,7 +350,6 @@ def list_platform_notice_campaigns(
     offset: int = 0,
     limit: int = 50,
 ) -> PlatformNoticeCampaignListRead:
-    require_user_admin_permission(viewer_user, PERMISSION_NOTIFICATIONS_MANAGE)
     filters = []
     if campaign_status is not None:
         filters.append(
@@ -460,7 +454,6 @@ def get_platform_notice_campaign(
     campaign_id: uuid.UUID,
     viewer_user: User,
 ) -> PlatformNoticeCampaignRead:
-    require_user_admin_permission(viewer_user, PERMISSION_NOTIFICATIONS_MANAGE)
     campaign = get_campaign_or_404(db, campaign_id)
     return serialize_campaign(
         campaign,
@@ -489,7 +482,6 @@ def update_platform_notice_campaign(
     editor_user: User,
     payload: PlatformNoticeCampaignUpdate,
 ) -> PlatformNoticeCampaignRead:
-    require_user_admin_permission(editor_user, PERMISSION_NOTIFICATIONS_MANAGE)
     campaign = get_campaign_or_404(db, campaign_id)
     if campaign.campaign_status != "draft":
         raise HTTPException(

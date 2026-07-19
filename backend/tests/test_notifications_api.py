@@ -1006,7 +1006,7 @@ def test_notifications_are_scoped_to_owner_unless_admin(client: TestClient):
     assert [item["id"] for item in admin_list_response.json()] == [notification["id"]]
 
 
-def test_notification_admin_scaffolds_require_named_admin_permissions(
+def test_notification_admin_scaffolds_require_admin_access(
     client: TestClient,
 ):
     owner = create_user(client)
@@ -1028,24 +1028,8 @@ def test_notification_admin_scaffolds_require_named_admin_permissions(
     )
     assert player_update_response.status_code == 403, player_update_response.text
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
 
-    moderator_create_response = client.post(
-        "/notifications",
-        json=admin_notice_payload(owner["id"]),
-    )
-    assert moderator_create_response.status_code == 403, moderator_create_response.text
-
-    moderator_list_response = client.get(f"/notifications?user_id={owner['id']}")
-    assert moderator_list_response.status_code == 403, moderator_list_response.text
-
-    moderator_get_response = client.get(f"/notifications/{notification['id']}")
-    assert moderator_get_response.status_code == 404, moderator_get_response.text
-
-
-def test_admin_notification_debug_routes_require_admin_read_permission(
+def test_admin_notification_debug_routes_require_admin_access(
     client: TestClient,
 ):
     owner = create_user(client)
@@ -1057,18 +1041,6 @@ def test_admin_notification_debug_routes_require_admin_read_permission(
 
     player_detail_response = client.get(f"/admin/notifications/{notification['id']}")
     assert player_detail_response.status_code == 403, player_detail_response.text
-
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
-
-    moderator_list_response = client.get("/admin/notifications")
-    assert moderator_list_response.status_code == 403, moderator_list_response.text
-
-    moderator_detail_response = client.get(
-        f"/admin/notifications/{notification['id']}"
-    )
-    assert moderator_detail_response.status_code == 403, moderator_detail_response.text
 
     admin = create_user(client)
     set_user_role(admin["id"], "admin")

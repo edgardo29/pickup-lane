@@ -13,8 +13,7 @@ from backend.schemas import (
     CommunityGameDetailStaffRead,
     CommunityGameDetailUpdate,
 )
-from backend.services.admin_permission_service import PERMISSION_COMMUNITY_GAMES_WRITE
-from backend.services.auth_service import require_active_user, require_admin_permission
+from backend.services.auth_service import require_active_user, require_active_admin
 from backend.services.community_game_detail_service import (
     create_community_game_detail_workflow,
     get_host_community_game_detail_workflow,
@@ -35,9 +34,7 @@ router = APIRouter(prefix="/community-game-details", tags=["community_game_detai
 def create_community_game_detail(
     community_game_detail: CommunityGameDetailCreate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_admin_permission(PERMISSION_COMMUNITY_GAMES_WRITE)
-    ),
+    _current_admin: User = Depends(require_active_admin),
 ) -> CommunityGameDetail:
     return create_community_game_detail_workflow(db, community_game_detail)
 
@@ -102,9 +99,7 @@ def update_community_game_detail(
     community_game_detail_id: uuid.UUID,
     community_game_detail_update: CommunityGameDetailUpdate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_admin_permission(PERMISSION_COMMUNITY_GAMES_WRITE)
-    ),
+    _current_admin: User = Depends(require_active_admin),
 ) -> CommunityGameDetail:
     return update_community_game_detail_workflow(
         db, community_game_detail_id, community_game_detail_update

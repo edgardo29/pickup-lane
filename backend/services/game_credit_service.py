@@ -7,10 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.models import GameCredit, GameCreditUsage, User
 from backend.schemas.game_credit_schema import GameCreditBalanceRead
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_READ,
-    require_user_admin_permission,
-)
+from backend.services.auth_service import require_active_admin_user
 
 REDEEM_USAGE_TYPE = "redeem"
 REVERSE_USAGE_TYPE = "reverse"
@@ -134,7 +131,7 @@ def get_game_credit_balance_for_user(
     effective_user_id = user_id or current_user.id
 
     if effective_user_id != current_user.id:
-        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+        require_active_admin_user(current_user)
 
     balance = get_available_game_credit_balance(
         db,
@@ -157,7 +154,7 @@ def list_game_credits_for_user(
     effective_user_id = user_id or current_user.id
 
     if effective_user_id != current_user.id:
-        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+        require_active_admin_user(current_user)
 
     statement = (
         select(GameCredit)

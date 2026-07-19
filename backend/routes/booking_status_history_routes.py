@@ -10,11 +10,7 @@ from backend.schemas import (
     BookingStatusHistoryRead,
     BookingStatusHistoryUpdate,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_PAYMENT_MANAGE,
-    PERMISSION_MONEY_READ,
-)
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.status_history_service import (
     create_booking_status_history_record,
     get_booking_status_history_record,
@@ -33,9 +29,7 @@ router = APIRouter(prefix="/booking-status-history", tags=["booking_status_histo
 def create_booking_status_history(
     booking_status_history: BookingStatusHistoryCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> BookingStatusHistory:
     del current_admin
     return create_booking_status_history_record(db, booking_status_history)
@@ -49,7 +43,7 @@ def create_booking_status_history(
 def get_booking_status_history(
     history_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
 ) -> BookingStatusHistory:
     del current_admin
     return get_booking_status_history_record(db, history_id)
@@ -65,7 +59,7 @@ def list_booking_status_history(
     changed_by_user_id: uuid.UUID | None = None,
     change_source: str | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[BookingStatusHistory]:
     del current_admin
     return list_booking_status_history_records(
@@ -85,9 +79,7 @@ def update_booking_status_history(
     history_id: uuid.UUID,
     history_update: BookingStatusHistoryUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> BookingStatusHistory:
     del current_admin
     return update_booking_status_history_record(db, history_id, history_update)

@@ -10,8 +10,7 @@ from backend.schemas import (
     PolicyDocumentRead,
     PolicyDocumentUpdate,
 )
-from backend.services.admin_permission_service import PERMISSION_POLICIES_MANAGE
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.policy_document_service import (
     create_policy_document_record,
     get_public_policy_document_record,
@@ -26,9 +25,7 @@ router = APIRouter(prefix="/policy-documents", tags=["policy_documents"])
 def create_policy_document(
     policy_document: PolicyDocumentCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_POLICIES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> PolicyDocument:
     del current_admin
     return create_policy_document_record(db, policy_document)
@@ -68,9 +65,7 @@ def update_policy_document(
     policy_document_id: uuid.UUID,
     policy_document_update: PolicyDocumentUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_POLICIES_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> PolicyDocument:
     del current_admin
     return update_policy_document_record(

@@ -19,7 +19,6 @@ from backend.models import (
 from backend.schemas.admin_user_schema import (
     AdminUserAuditActionSummaryRead,
     AdminUserBookingSummaryRead,
-    AdminUserCapabilitiesRead,
     AdminUserDetailRead,
     AdminUserHostedGameSummaryRead,
     AdminUserListRead,
@@ -32,15 +31,7 @@ from backend.schemas.admin_user_schema import (
     AdminUserSupportFlagSummaryRead,
 )
 from backend.services.admin_action_service import list_admin_actions
-from backend.services.admin_permission_service import (
-    ADMIN_ROLE,
-    MODERATOR_ROLE,
-    PERMISSION_AUDIT_READ,
-    PERMISSION_MONEY_READ,
-    get_admin_data_scopes_for_user,
-    get_admin_permissions_for_role,
-    user_has_admin_permission,
-)
+from backend.services.auth_service import ADMIN_ROLE
 from backend.services.support_flag_service import user_can_read_support_flag
 
 ADMIN_USER_ACCOUNT_STATUSES = (
@@ -57,8 +48,8 @@ ADMIN_USER_HOSTING_STATUSES = (
     "suspended",
     "banned_from_hosting",
 )
-ADMIN_USER_ROLES = ("player", "admin", "moderator")
-ADMIN_USER_STAFF_ROLES = (ADMIN_ROLE, MODERATOR_ROLE)
+ADMIN_USER_ROLES = ("player", "admin")
+ADMIN_USER_STAFF_ROLES = (ADMIN_ROLE,)
 
 
 def is_admin_user_deleted(user: User) -> bool:
@@ -127,8 +118,6 @@ def serialize_admin_user_list_item(user: User) -> AdminUserListRead:
 def serialize_admin_user_staff_item(user: User) -> AdminUserStaffRead:
     return AdminUserStaffRead(
         **serialize_admin_user_list_item(user).model_dump(),
-        permissions=list(get_admin_permissions_for_role(user.role)),
-        data_scopes=list(get_admin_data_scopes_for_user(user)),
     )
 
 
@@ -333,9 +322,6 @@ def list_admin_user_audit_actions(
     viewer_user: User,
     limit: int,
 ) -> list[AdminUserAuditActionSummaryRead]:
-    if not user_has_admin_permission(viewer_user, PERMISSION_AUDIT_READ):
-        return []
-
     actions = list_admin_actions(
         db,
         viewer_user=viewer_user,
@@ -443,16 +429,6 @@ def get_admin_user_detail(
             user_id=user.id,
             viewer_user=viewer_user,
             limit=limit,
-        ),
-        capabilities=AdminUserCapabilitiesRead(
-            can_view_audit=user_has_admin_permission(
-                viewer_user,
-                PERMISSION_AUDIT_READ,
-            ),
-            can_view_money=user_has_admin_permission(
-                viewer_user,
-                PERMISSION_MONEY_READ,
-            ),
         ),
     )
 

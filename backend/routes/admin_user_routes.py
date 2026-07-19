@@ -25,13 +25,6 @@ from backend.schemas import (
     AdminUserUnsuspendCreate,
     AdminUserUnsuspendResultRead,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_STAFF_MANAGE,
-    PERMISSION_USERS_DELETE,
-    PERMISSION_USERS_HOSTING_MANAGE,
-    PERMISSION_USERS_READ,
-    PERMISSION_USERS_SUSPEND,
-)
 from backend.services.admin_user_account_service import (
     preview_admin_user_suspension,
     suspend_admin_user,
@@ -52,7 +45,7 @@ from backend.services.admin_user_hosting_service import (
     restore_admin_user_hosting,
 )
 from backend.services.admin_user_staff_service import change_admin_user_staff_role
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 
 router = APIRouter(prefix="/admin/users", tags=["admin_users"])
 
@@ -65,7 +58,7 @@ def list_admin_users_route(
     role: str | None = None,
     include_deleted: bool = False,
     limit: int = Query(default=100, ge=1, le=200),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[AdminUserListRead]:
     del current_admin
@@ -88,7 +81,7 @@ def list_admin_users_route(
 def list_admin_staff_route(
     include_deleted: bool = False,
     limit: int = Query(default=100, ge=1, le=200),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_STAFF_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[AdminUserStaffRead]:
     del current_admin
@@ -107,7 +100,7 @@ def list_admin_staff_route(
 def get_admin_user_detail_route(
     user_id: uuid.UUID,
     limit: int = Query(default=50, ge=1, le=100),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserDetailRead:
     return get_admin_user_detail(
@@ -125,7 +118,7 @@ def get_admin_user_detail_route(
 )
 def preview_admin_user_delete_impact_route(
     user_id: uuid.UUID,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_DELETE)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserDeleteImpactPreviewRead:
     del current_admin
@@ -141,7 +134,7 @@ def delete_admin_user_route(
     user_id: uuid.UUID,
     payload: AdminUserDeleteCreate,
     request: Request,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_DELETE)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserDeleteResultRead:
     route = request.scope.get("route")
@@ -164,7 +157,7 @@ def delete_admin_user_route(
 def change_admin_user_staff_role_route(
     user_id: uuid.UUID,
     payload: AdminUserStaffRoleChangeCreate,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_STAFF_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserStaffRoleChangeResultRead:
     return change_admin_user_staff_role(
@@ -182,9 +175,7 @@ def change_admin_user_staff_role_route(
 )
 def preview_admin_user_suspension_route(
     user_id: uuid.UUID,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_USERS_SUSPEND)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserSuspensionPreviewRead:
     del current_admin
@@ -198,9 +189,7 @@ def preview_admin_user_suspension_route(
 )
 def preview_admin_user_hosting_restriction_route(
     user_id: uuid.UUID,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_USERS_HOSTING_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserHostingRestrictionPreviewRead:
     del current_admin
@@ -215,9 +204,7 @@ def preview_admin_user_hosting_restriction_route(
 def restrict_admin_user_hosting_route(
     user_id: uuid.UUID,
     payload: AdminUserRestrictHostingCreate,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_USERS_HOSTING_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserRestrictHostingResultRead:
     return restrict_admin_user_hosting(
@@ -236,9 +223,7 @@ def restrict_admin_user_hosting_route(
 def restore_admin_user_hosting_route(
     user_id: uuid.UUID,
     payload: AdminUserRestoreHostingCreate,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_USERS_HOSTING_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserRestoreHostingResultRead:
     return restore_admin_user_hosting(
@@ -258,9 +243,7 @@ def suspend_admin_user_route(
     user_id: uuid.UUID,
     payload: AdminUserSuspendCreate,
     request: Request,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_USERS_SUSPEND)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserSuspendResultRead:
     route = request.scope.get("route")
@@ -283,9 +266,7 @@ def suspend_admin_user_route(
 def unsuspend_admin_user_route(
     user_id: uuid.UUID,
     payload: AdminUserUnsuspendCreate,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_USERS_SUSPEND)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserUnsuspendResultRead:
     return unsuspend_admin_user(

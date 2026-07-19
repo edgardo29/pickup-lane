@@ -125,11 +125,9 @@ def test_admin_action_read_rejects_regular_user(client: TestClient):
     assert "Admin access required" in response.text
 
 
-def test_moderator_reads_only_support_safe_admin_actions(client: TestClient):
+def test_admin_action_read_includes_all_admin_actions(client: TestClient):
     admin_user = create_user(client)
     set_user_role(admin_user["id"], "admin")
-    moderator_user = create_user(client)
-    set_user_role(moderator_user["id"], "moderator")
     target_user = create_user(client)
     venue = create_venue(client, target_user["id"])
     game = create_game(client, target_user["id"], venue)
@@ -156,46 +154,48 @@ def test_moderator_reads_only_support_safe_admin_actions(client: TestClient):
         },
     )
 
-    authenticate_as(moderator_user["id"])
+    authenticate_as(admin_user["id"])
     list_response = client.get("/admin/actions")
     assert list_response.status_code == 200, list_response.text
     listed_ids = {item["id"] for item in list_response.json()}
     assert support_action["id"] in listed_ids
-    assert money_action["id"] not in listed_ids
+    assert money_action["id"] in listed_ids
 
     support_get_response = client.get(f"/admin/actions/{support_action['id']}")
     money_get_response = client.get(f"/admin/actions/{money_action['id']}")
     assert support_get_response.status_code == 200, support_get_response.text
     assert support_get_response.json()["id"] == support_action["id"]
-    assert money_get_response.status_code == 404, money_get_response.text
+    assert money_get_response.status_code == 200, money_get_response.text
+    assert money_get_response.json()["id"] == money_action["id"]
 
     money_filter_response = client.get("/admin/actions?action_type=issue_credit")
     assert money_filter_response.status_code == 200, money_filter_response.text
-    assert money_filter_response.json() == []
+    assert [item["id"] for item in money_filter_response.json()] == [
+        money_action["id"]
+    ]
 
 
-def test_moderator_cannot_use_generic_audit_write_routes(client: TestClient):
+def test_player_cannot_use_generic_audit_write_routes(client: TestClient):
     admin_user, target_user = create_admin_action_setup(client)
-    moderator_user = create_user(client)
-    set_user_role(moderator_user["id"], "moderator")
+    player = create_user(client)
     admin_action = create_admin_action(
         client,
         admin_user["id"],
         target_user_id=target_user["id"],
     )
 
-    authenticate_as(moderator_user["id"])
+    authenticate_as(player["id"])
     create_response = client.post(
         "/admin/actions",
         json={
             "action_type": "remove_sub_post",
             "target_sub_post_id": "00000000-0000-4000-8000-000000000000",
-            "reason": "Moderators cannot manually create audit rows.",
+            "reason": "Players cannot manually create audit rows.",
         },
     )
     note_response = client.post(
         f"/admin/actions/{admin_action['id']}/notes",
-        json={"note": "Moderator note should be rejected."},
+        json={"note": "Player note should be rejected."},
     )
 
     assert create_response.status_code == 403, create_response.text
@@ -446,7 +446,20 @@ def test_admin_action_policy_includes_expected_core_types():
     assert "send_platform_notice_campaign" in ADMIN_ACTION_TYPES
     assert "retry_platform_notice_campaign" in ADMIN_ACTION_TYPES
     assert "issue_credit" in ADMIN_ACTION_TYPES
+    assert "create_financial_outcome" in ADMIN_ACTION_TYPES
+    assert "apply_financial_outcome" in ADMIN_ACTION_TYPES
     assert "remove_sub_post" in ADMIN_ACTION_TYPES
+    assert "hide_need_sub_post" in ADMIN_ACTION_TYPES
+    assert "restore_need_sub_post" in ADMIN_ACTION_TYPES
+    assert "hide_community_game" in ADMIN_ACTION_TYPES
+    assert "restore_community_game" in ADMIN_ACTION_TYPES
+    assert "pause_community_game_joining" in ADMIN_ACTION_TYPES
+    assert "resume_community_game_joining" in ADMIN_ACTION_TYPES
+    assert "admin_cancel_community_game" in ADMIN_ACTION_TYPES
+    assert "restore_community_payment_text" in ADMIN_ACTION_TYPES
+    assert "create_review_case" in ADMIN_ACTION_TYPES
+    assert "close_review_case" in ADMIN_ACTION_TYPES
+    assert "add_review_case_note" in ADMIN_ACTION_TYPES
     assert "append_audit_note" in ADMIN_ACTION_TYPES
 
 

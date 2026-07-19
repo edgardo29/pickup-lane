@@ -193,6 +193,7 @@ class SubPostRead(BaseModel):
     id: UUID
     owner_user_id: UUID
     post_status: str
+    public_visibility_status: str
     sport_type: str
     format_label: str
     environment_type: str
@@ -235,6 +236,7 @@ class SubPostPublicRead(BaseModel):
 
     id: UUID
     post_status: str
+    public_visibility_status: str
     sport_type: str
     format_label: str
     environment_type: str

@@ -25,12 +25,7 @@ from backend.models import (
 )
 from backend.schemas.notification_schema import NotificationCreate, NotificationUpdate
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_NOTIFICATIONS_MANAGE,
-    PERMISSION_NOTIFICATIONS_READ,
-    require_user_admin_permission,
-    user_has_admin_permission,
-)
+from backend.services.auth_service import require_active_admin_user, user_is_active_admin
 from backend.services.notification_display_service import serialize_notification
 from backend.services.notification_event_service import (
     ensure_aware_utc,
@@ -137,11 +132,7 @@ def get_visible_notification_or_404(
     if db_notification.user_id == current_user.id:
         return db_notification
 
-    if allow_admin_read and user_has_admin_permission(
-        current_user,
-        PERMISSION_NOTIFICATIONS_READ,
-    ):
-        require_user_admin_permission(current_user, PERMISSION_NOTIFICATIONS_READ)
+    if allow_admin_read and user_is_active_admin(current_user):
         return db_notification
 
     raise HTTPException(
@@ -753,7 +744,7 @@ def validate_notification_references(
 
 
 def require_notification_create_access(current_user: User) -> None:
-    require_user_admin_permission(current_user, PERMISSION_NOTIFICATIONS_MANAGE)
+    require_active_admin_user(current_user)
 
 
 def validate_notification_update_fields(update_data: dict[str, object]) -> None:
@@ -1000,7 +991,7 @@ def list_notifications_workflow(
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
 ) -> list[dict[str, object]]:
-    require_user_admin_permission(current_user, PERMISSION_NOTIFICATIONS_READ)
+    require_active_admin_user(current_user)
     effective_user_id = current_user.id
     if user_id is not None:
         effective_user_id = user_id
@@ -1173,7 +1164,7 @@ def update_notification_workflow(
     notification_update: NotificationUpdate,
     current_user: User,
 ) -> dict[str, object]:
-    require_user_admin_permission(current_user, PERMISSION_NOTIFICATIONS_MANAGE)
+    require_active_admin_user(current_user)
     db_notification = get_visible_notification_or_404(
         db,
         notification_id,

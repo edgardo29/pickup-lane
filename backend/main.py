@@ -10,6 +10,7 @@ from backend.routes import (
     admin_action_center_router,
     admin_actions_router,
     admin_rejected_attempts_router,
+    admin_review_cases_router,
     admin_community_games_router,
     admin_game_credits_router,
     admin_game_images_router,
@@ -134,6 +135,7 @@ app.include_router(admin_users_router)
 app.include_router(admin_action_center_router)
 app.include_router(admin_community_games_router)
 app.include_router(admin_rejected_attempts_router)
+app.include_router(admin_review_cases_router)
 app.include_router(admin_game_credits_router)
 app.include_router(admin_game_images_router)
 app.include_router(admin_lookups_router)

@@ -14,6 +14,7 @@ class RefundCreate(BaseModel):
     payment_id: UUID
     booking_id: UUID | None = None
     participant_id: UUID | None = None
+    host_publish_fee_id: UUID | None = None
     provider_refund_id: str | None = None
     amount_cents: int
     currency: str = "USD"
@@ -34,6 +35,7 @@ class RefundRead(BaseModel):
     payment_id: UUID
     booking_id: UUID | None
     participant_id: UUID | None
+    host_publish_fee_id: UUID | None
     provider_refund_id: str | None
     amount_cents: int
     currency: str
@@ -56,6 +58,7 @@ class RefundUpdate(BaseModel):
     payment_id: UUID | None = None
     booking_id: UUID | None = None
     participant_id: UUID | None = None
+    host_publish_fee_id: UUID | None = None
     provider_refund_id: str | None = None
     amount_cents: int | None = None
     currency: str | None = None

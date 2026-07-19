@@ -234,8 +234,8 @@ def test_community_game_detail_host_upsert_rejects_request_game_id(
 def test_hidden_community_payment_text_uses_scoped_public_and_host_responses(
     client: TestClient,
 ):
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
     host = create_user(client)
     venue = create_venue(client, host["id"])
     game = create_game(
@@ -253,7 +253,7 @@ def test_hidden_community_payment_text_uses_scoped_public_and_host_responses(
         payment_instructions_snapshot="Pay after joining.",
     )
 
-    authenticate_as(moderator["id"])
+    authenticate_as(admin["id"])
     hide_response = client.post(
         f"/admin/community-games/{game['id']}/hide-payment-text",
         json={

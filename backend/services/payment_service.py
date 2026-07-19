@@ -12,11 +12,7 @@ from sqlalchemy.orm import Session
 from backend.models import Booking, Game, Payment, User
 from backend.schemas.payment_schema import PaymentCreate, PaymentUpdate
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_READ,
-    require_user_admin_permission,
-    user_has_admin_permission,
-)
+from backend.services.auth_service import require_active_admin_user, user_is_active_admin
 from backend.services.payment_rules import (
     COLLECTED_PAYMENT_STATUSES,
     FAILED_PAYMENT_STATUSES,
@@ -139,15 +135,6 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Booking payments cannot include game_id.",
-        )
-
-    if (
-        payment_data["payment_type"] == "community_publish_fee"
-        and payment_data["game_id"] is None
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Community publish fee payments require game_id.",
         )
 
     if (
@@ -363,7 +350,7 @@ def get_payment_for_user_or_404(
         )
 
     if db_payment.payer_user_id != current_user.id:
-        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+        require_active_admin_user(current_user)
 
     return db_payment
 
@@ -378,11 +365,11 @@ def list_payments(
     payment_type: str | None = None,
     payment_status: str | None = None,
 ) -> list[Payment]:
-    can_read_all_money = user_has_admin_permission(current_user, PERMISSION_MONEY_READ)
+    can_read_all_money = user_is_active_admin(current_user)
     statement = select(Payment)
 
     if payer_user_id is not None and payer_user_id != current_user.id:
-        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+        require_active_admin_user(current_user)
         can_read_all_money = True
 
     if not can_read_all_money:

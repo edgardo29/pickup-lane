@@ -10,14 +10,7 @@ from backend.schemas.notification_schema import (
     NotificationRead,
     NotificationUpdate,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_NOTIFICATIONS_MANAGE,
-    PERMISSION_NOTIFICATIONS_READ,
-)
-from backend.services.auth_service import (
-    get_current_app_user,
-    require_admin_permission,
-)
+from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.notification_service import (
     create_notification_workflow,
     get_notification_workflow,
@@ -33,9 +26,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 @router.post("", response_model=NotificationRead, status_code=status.HTTP_201_CREATED)
 def create_notification(
     notification: NotificationCreate,
-    current_user: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     return create_notification_workflow(db, notification, current_user)
@@ -116,9 +107,7 @@ def list_notifications(
     related_sub_post_chat_message_id: uuid.UUID | None = None,
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
-    current_user: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_READ)
-    ),
+    current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[dict[str, object]]:
     return list_notifications_workflow(
@@ -165,9 +154,7 @@ def mark_notification_read(
 def update_notification(
     notification_id: uuid.UUID,
     notification_update: NotificationUpdate,
-    current_user: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_MANAGE)
-    ),
+    current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     return update_notification_workflow(

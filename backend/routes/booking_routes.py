@@ -6,13 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Booking, User
 from backend.schemas import BookingCreate, BookingRead, BookingUpdate
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_PAYMENT_MANAGE,
-)
-from backend.services.auth_service import (
-    get_current_app_user,
-    require_admin_permission,
-)
+from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.booking_service import (
     create_booking_workflow,
     get_booking_for_user_or_404,
@@ -29,9 +23,7 @@ router = APIRouter(prefix="/bookings", tags=["bookings"])
 def create_booking(
     booking: BookingCreate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    _current_admin: User = Depends(require_active_admin),
 ) -> Booking:
     return create_booking_workflow(db, booking)
 
@@ -54,7 +46,7 @@ def get_booking(
     return get_booking_for_user_or_404(db, booking_id, current_user)
 
 
-# Lists bookings using the current user's money-read permissions.
+# Lists own bookings, or all matching bookings for active admins.
 @router.get("", response_model=list[BookingRead], status_code=status.HTTP_200_OK)
 def list_bookings(
     buyer_user_id: uuid.UUID | None = None,
@@ -80,8 +72,6 @@ def update_booking(
     booking_id: uuid.UUID,
     booking_update: BookingUpdate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    _current_admin: User = Depends(require_active_admin),
 ) -> Booking:
     return update_booking_workflow(db, booking_id, booking_update)

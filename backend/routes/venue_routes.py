@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User, Venue
 from backend.schemas import VenueCreate, VenueRead, VenueUpdate
-from backend.services.admin_permission_service import PERMISSION_VENUES_MANAGE
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.venue_service import (
     create_venue_record,
     delete_venue_record,
@@ -23,7 +22,7 @@ router = APIRouter(prefix="/venues", tags=["venues"])
 def create_venue(
     venue: VenueCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_VENUES_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> Venue:
     del current_admin
     return create_venue_record(db, venue)
@@ -47,7 +46,7 @@ def update_venue(
     venue_id: uuid.UUID,
     venue_update: VenueUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_VENUES_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> Venue:
     del current_admin
     return update_venue_record(db, venue_id, venue_update)
@@ -57,7 +56,7 @@ def update_venue(
 def delete_venue(
     venue_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_VENUES_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> Venue:
     del current_admin
     return delete_venue_record(db, venue_id)

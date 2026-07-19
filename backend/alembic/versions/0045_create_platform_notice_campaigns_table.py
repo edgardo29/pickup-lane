@@ -25,10 +25,17 @@ ADMIN_ACTION_TYPE_CHECK = (
     "'update_game', 'create_game_chat', 'update_game_chat', "
     "'update_booking', "
     "'update_participant', 'issue_credit', 'reverse_credit', "
+    "'create_financial_outcome', 'apply_financial_outcome', "
     "'create_official_game', 'update_official_game', "
     "'assign_official_host', 'remove_official_host', "
     "'admin_add_player', 'admin_remove_player', 'waive_payment', "
     "'remove_sub_post', 'hide_unsafe_community_payment_text', "
+    "'hide_need_sub_post', 'restore_need_sub_post', "
+    "'hide_community_game', 'restore_community_game', "
+    "'pause_community_game_joining', "
+    "'resume_community_game_joining', "
+    "'admin_cancel_community_game', "
+    "'restore_community_payment_text', "
     "'create_notification', 'update_notification', "
     "'create_platform_notice_campaign', "
     "'update_platform_notice_campaign', "
@@ -53,10 +60,17 @@ PREVIOUS_ADMIN_ACTION_TYPE_CHECK = (
     "'update_game', 'create_game_chat', 'update_game_chat', "
     "'update_booking', "
     "'update_participant', 'issue_credit', 'reverse_credit', "
+    "'create_financial_outcome', 'apply_financial_outcome', "
     "'create_official_game', 'update_official_game', "
     "'assign_official_host', 'remove_official_host', "
     "'admin_add_player', 'admin_remove_player', 'waive_payment', "
     "'remove_sub_post', 'hide_unsafe_community_payment_text', "
+    "'hide_need_sub_post', 'restore_need_sub_post', "
+    "'hide_community_game', 'restore_community_game', "
+    "'pause_community_game_joining', "
+    "'resume_community_game_joining', "
+    "'admin_cancel_community_game', "
+    "'restore_community_payment_text', "
     "'create_notification', 'update_notification', "
     "'change_staff_role', 'append_audit_note', "
     "'resolve_support_flag'"
@@ -71,6 +85,9 @@ ADMIN_ACTION_TARGET_REQUIRED_CHECK = (
     "OR target_payment_id IS NOT NULL "
     "OR target_refund_id IS NOT NULL "
     "OR target_game_credit_id IS NOT NULL "
+    "OR target_financial_outcome_id IS NOT NULL "
+    "OR target_host_publish_fee_id IS NOT NULL "
+    "OR target_host_publish_entitlement_id IS NOT NULL "
     "OR target_venue_id IS NOT NULL "
     "OR target_venue_image_id IS NOT NULL "
     "OR target_message_id IS NOT NULL "
@@ -92,6 +109,9 @@ PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK = (
     "OR target_payment_id IS NOT NULL "
     "OR target_refund_id IS NOT NULL "
     "OR target_game_credit_id IS NOT NULL "
+    "OR target_financial_outcome_id IS NOT NULL "
+    "OR target_host_publish_fee_id IS NOT NULL "
+    "OR target_host_publish_entitlement_id IS NOT NULL "
     "OR target_venue_id IS NOT NULL "
     "OR target_venue_image_id IS NOT NULL "
     "OR target_message_id IS NOT NULL "
@@ -477,6 +497,151 @@ def upgrade() -> None:
         ["notification_id"],
     )
 
+    op.create_table(
+        "admin_target_notices",
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("recipient_user_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("target_user_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("target_game_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("target_sub_post_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column(
+            "target_sub_post_request_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column("admin_action_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("notice_type", sa.String(length=60), nullable=False),
+        sa.Column(
+            "notice_status",
+            sa.String(length=20),
+            nullable=False,
+            server_default=sa.text("'active'"),
+        ),
+        sa.Column("title", sa.String(length=160), nullable=False),
+        sa.Column("body", sa.Text(), nullable=False),
+        sa.Column("user_safe_reason", sa.Text(), nullable=True),
+        sa.Column("notice_metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("read_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("dismissed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.CheckConstraint(
+            (
+                "notice_type IN ("
+                "'community_game_hidden', 'community_game_restored', "
+                "'community_game_joining_paused', "
+                "'community_game_joining_resumed', "
+                "'community_game_payment_info_hidden', "
+                "'community_game_payment_info_restored', "
+                "'community_game_cancelled', 'need_sub_post_hidden', "
+                "'need_sub_post_restored', 'need_sub_post_removed', "
+                "'publish_fee_refunded', 'publish_credit_added'"
+                ")"
+            ),
+            name="ck_admin_target_notices_notice_type",
+        ),
+        sa.CheckConstraint(
+            "notice_status IN ('active', 'dismissed')",
+            name="ck_admin_target_notices_notice_status",
+        ),
+        sa.CheckConstraint(
+            (
+                "target_game_id IS NOT NULL "
+                "OR target_sub_post_id IS NOT NULL "
+                "OR target_sub_post_request_id IS NOT NULL "
+                "OR target_user_id IS NOT NULL"
+            ),
+            name="ck_admin_target_notices_target_required",
+        ),
+        sa.ForeignKeyConstraint(
+            ["recipient_user_id"],
+            ["users.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_user_id"],
+            ["users.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_game_id"],
+            ["games.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_sub_post_id"],
+            ["sub_posts.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_sub_post_request_id"],
+            ["sub_post_requests.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["admin_action_id"],
+            ["admin_actions.id"],
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["created_by_user_id"],
+            ["users.id"],
+            ondelete="SET NULL",
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        "ix_admin_target_notices_recipient_user_id",
+        "admin_target_notices",
+        ["recipient_user_id"],
+    )
+    op.create_index(
+        "ix_admin_target_notices_target_user_id",
+        "admin_target_notices",
+        ["target_user_id"],
+    )
+    op.create_index(
+        "ix_admin_target_notices_target_game_id",
+        "admin_target_notices",
+        ["target_game_id"],
+    )
+    op.create_index(
+        "ix_admin_target_notices_target_sub_post_id",
+        "admin_target_notices",
+        ["target_sub_post_id"],
+    )
+    op.create_index(
+        "ix_admin_target_notices_target_sub_post_request_id",
+        "admin_target_notices",
+        ["target_sub_post_request_id"],
+    )
+    op.create_index(
+        "ix_admin_target_notices_admin_action_id",
+        "admin_target_notices",
+        ["admin_action_id"],
+    )
+    op.create_index(
+        "ix_admin_target_notices_notice_type",
+        "admin_target_notices",
+        ["notice_type"],
+    )
+    op.create_index(
+        "ix_admin_target_notices_created_at",
+        "admin_target_notices",
+        ["created_at"],
+    )
+
     op.add_column(
         "admin_actions",
         sa.Column(
@@ -518,9 +683,42 @@ def upgrade() -> None:
         "admin_actions",
         ADMIN_ACTION_TYPE_CHECK,
     )
+    op.create_index(
+        "uq_admin_actions_community_game_enforcement_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_game_id", "action_type", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type IN ("
+            "'hide_community_game', 'restore_community_game', "
+            "'pause_community_game_joining', "
+            "'resume_community_game_joining', "
+            "'admin_cancel_community_game', "
+            "'restore_community_payment_text'"
+            ") AND idempotency_key IS NOT NULL"
+        ),
+    )
+    op.create_index(
+        "uq_admin_actions_need_sub_enforcement_idempotency",
+        "admin_actions",
+        ["admin_user_id", "target_sub_post_id", "action_type", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text(
+            "action_type IN ('hide_need_sub_post', 'restore_need_sub_post') "
+            "AND idempotency_key IS NOT NULL"
+        ),
+    )
 
 
 def downgrade() -> None:
+    op.drop_index(
+        "uq_admin_actions_need_sub_enforcement_idempotency",
+        table_name="admin_actions",
+    )
+    op.drop_index(
+        "uq_admin_actions_community_game_enforcement_idempotency",
+        table_name="admin_actions",
+    )
     op.execute(
         "DELETE FROM admin_actions "
         "WHERE action_type IN ("
@@ -560,6 +758,39 @@ def downgrade() -> None:
         table_name="admin_actions",
     )
     op.drop_column("admin_actions", "target_platform_notice_campaign_id")
+    op.drop_index(
+        "ix_admin_target_notices_created_at",
+        table_name="admin_target_notices",
+    )
+    op.drop_index(
+        "ix_admin_target_notices_notice_type",
+        table_name="admin_target_notices",
+    )
+    op.drop_index(
+        "ix_admin_target_notices_admin_action_id",
+        table_name="admin_target_notices",
+    )
+    op.drop_index(
+        "ix_admin_target_notices_target_sub_post_request_id",
+        table_name="admin_target_notices",
+    )
+    op.drop_index(
+        "ix_admin_target_notices_target_sub_post_id",
+        table_name="admin_target_notices",
+    )
+    op.drop_index(
+        "ix_admin_target_notices_target_game_id",
+        table_name="admin_target_notices",
+    )
+    op.drop_index(
+        "ix_admin_target_notices_target_user_id",
+        table_name="admin_target_notices",
+    )
+    op.drop_index(
+        "ix_admin_target_notices_recipient_user_id",
+        table_name="admin_target_notices",
+    )
+    op.drop_table("admin_target_notices")
     op.drop_index(
         "ix_platform_notice_campaign_deliveries_notification_id",
         table_name="platform_notice_campaign_deliveries",

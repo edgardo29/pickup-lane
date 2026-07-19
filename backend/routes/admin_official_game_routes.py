@@ -33,17 +33,7 @@ from backend.schemas import (
     CurrentUserWaitlistEntryRead,
     GameParticipantRead,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_CONTENT_MODERATE,
-    PERMISSION_MONEY_READ,
-    PERMISSION_OFFICIAL_GAMES_CANCEL,
-    PERMISSION_OFFICIAL_GAMES_READ,
-    PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-    PERMISSION_OFFICIAL_GAMES_WRITE,
-    PERMISSION_USERS_READ,
-    require_user_admin_permission,
-)
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.game_cancellation_service import (
     build_official_game_cancellation_preview as preview_official_game_cancellation,
     execute_official_game_cancellation,
@@ -90,9 +80,7 @@ def list_admin_official_games(
     limit: int = Query(default=24, ge=1),
     cursor: str | None = Query(default=None, max_length=2000),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameListRead:
     del current_admin
     return list_official_games(
@@ -113,9 +101,7 @@ def list_admin_official_games(
 def create_admin_official_game(
     create_request: AdminOfficialGameCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_WRITE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameRead:
     game = create_official_game(
         db,
@@ -129,9 +115,7 @@ def create_admin_official_game(
 def get_admin_official_game(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameRead:
     del current_admin
     game = get_official_game_or_404(db, game_id)
@@ -142,11 +126,8 @@ def get_admin_official_game(
 def get_admin_official_game_chat_summary_route(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatSummaryRead:
-    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
     get_official_game_or_404(db, game_id)
     return get_admin_game_chat_summary(
         db,
@@ -162,11 +143,8 @@ def list_admin_official_game_chat_messages_route(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=20),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatMessageListRead:
-    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
     get_official_game_or_404(db, game_id)
     return list_admin_game_chat_messages(
         db,
@@ -188,11 +166,8 @@ def mark_admin_official_game_chat_message_reviewed_route(
     message_id: uuid.UUID,
     payload: AdminChatModerationActionCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatModerationActionResultRead:
-    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
     get_official_game_or_404(db, game_id)
     return mark_game_chat_message_reviewed(
         db,
@@ -213,11 +188,8 @@ def remove_admin_official_game_chat_message_route(
     message_id: uuid.UUID,
     payload: AdminChatModerationActionCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatModerationActionResultRead:
-    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
     get_official_game_or_404(db, game_id)
     return remove_game_chat_message(
         db,
@@ -238,11 +210,8 @@ def restore_admin_official_game_chat_message_route(
     message_id: uuid.UUID,
     payload: AdminChatModerationActionCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminChatModerationActionResultRead:
-    require_user_admin_permission(current_admin, PERMISSION_OFFICIAL_GAMES_READ)
     get_official_game_or_404(db, game_id)
     return restore_game_chat_message(
         db,
@@ -260,9 +229,7 @@ def restore_admin_official_game_chat_message_route(
 def list_admin_official_game_participants(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[AdminOfficialGameParticipantRead]:
     del current_admin
     participants = list_official_game_participants(db, game_id)
@@ -295,11 +262,9 @@ def list_admin_official_game_participants(
 def list_admin_official_game_bookings(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[Booking]:
-    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
+    del current_admin
     return list_official_game_bookings(db, game_id)
 
 
@@ -310,11 +275,9 @@ def list_admin_official_game_bookings(
 def list_admin_official_game_waitlist(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[WaitlistEntry]:
-    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
+    del current_admin
     return list_official_game_waitlist_entries(db, game_id)
 
 
@@ -325,11 +288,9 @@ def list_admin_official_game_waitlist(
 def get_admin_official_game_money(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameMoneyRead:
-    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
+    del current_admin
     return get_official_game_money(db, game_id)
 
 
@@ -342,11 +303,9 @@ def search_admin_official_game_add_player_users(
     q: str = Query(..., min_length=3, max_length=100),
     limit: int = Query(default=10, ge=1, le=25),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameUserSearchRead:
-    require_user_admin_permission(current_admin, PERMISSION_USERS_READ)
+    del current_admin
     return search_official_game_add_player_users(
         db,
         game_id=game_id,
@@ -360,9 +319,7 @@ def update_admin_official_game(
     game_id: uuid.UUID,
     update_request: AdminOfficialGameUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_WRITE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameRead:
     game = update_official_game(
         db,
@@ -380,9 +337,7 @@ def update_admin_official_game(
 def preview_admin_official_game_cancellation(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_CANCEL)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameCancellationPreviewRead:
     return preview_official_game_cancellation(
         db,
@@ -399,9 +354,7 @@ def execute_admin_official_game_cancellation(
     game_id: uuid.UUID,
     cancel_request: AdminOfficialGameCancelExecute,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_CANCEL)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameCancellationResultRead:
     return execute_official_game_cancellation(
         db,
@@ -416,9 +369,7 @@ def assign_admin_official_game_host(
     game_id: uuid.UUID,
     host_request: AdminOfficialGameHostAssign,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameRead:
     game = assign_official_game_host(
         db,
@@ -438,9 +389,7 @@ def add_admin_official_game_player(
     game_id: uuid.UUID,
     add_request: AdminOfficialGamePlayerAdd,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> GameParticipantRead:
     participant = add_official_game_player(
         db,
@@ -460,9 +409,7 @@ def remove_admin_official_game_player(
     participant_id: uuid.UUID,
     remove_request: AdminOfficialGamePlayerRemove | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> GameParticipantRead:
     participant = remove_official_game_player(
         db,
@@ -482,11 +429,9 @@ def preview_admin_official_game_player_removal(
     game_id: uuid.UUID,
     participant_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGamePlayerRemovalPreviewRead:
-    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
+    del current_admin
     return preview_official_game_player_removal(
         db,
         game_id=game_id,
@@ -503,11 +448,8 @@ def execute_admin_official_game_player_removal(
     participant_id: uuid.UUID,
     execute_request: AdminOfficialGamePlayerRemovalExecute,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGamePlayerRemovalResultRead:
-    require_user_admin_permission(current_admin, PERMISSION_MONEY_READ)
     return execute_official_game_player_removal(
         db,
         admin_user=current_admin,
@@ -522,9 +464,7 @@ def remove_admin_official_game_host(
     game_id: uuid.UUID,
     remove_request: AdminOfficialGameHostRemove | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameRead:
     game = remove_official_game_host(
         db,

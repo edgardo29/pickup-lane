@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.models import (
     AdminAction,
+    AdminTargetNotice,
     CommunityGameDetail,
     Game,
     GameParticipant,
@@ -23,8 +24,8 @@ from backend.models import (
 )
 from backend.schemas.admin_community_schema import (
     AdminCommunityGameAuditActionSummaryRead,
-    AdminCommunityGameCapabilitiesRead,
     AdminCommunityGameDetailRead,
+    AdminCommunityGameEnforcementStateRead,
     AdminCommunityGameHidePaymentTextCreate,
     AdminCommunityGameHidePaymentTextResultRead,
     AdminCommunityGameHostRead,
@@ -41,22 +42,13 @@ from backend.services.admin_action_service import (
     list_admin_actions,
     record_admin_action,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_AUDIT_READ,
-    PERMISSION_AUDIT_SUPPORT_READ,
-    PERMISSION_COMMUNITY_GAMES_CANCEL,
-    PERMISSION_COMMUNITY_GAMES_FLAG,
-    PERMISSION_COMMUNITY_GAMES_HIDE_UNSAFE_CONTENT,
-    PERMISSION_COMMUNITY_GAMES_WRITE,
-    PERMISSION_MONEY_READ,
-    PERMISSION_USERS_READ,
-    require_user_admin_permission,
-    user_has_admin_permission,
-)
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
 )
+from backend.services.admin_review_service import link_admin_action_to_open_review_case
+from backend.services.admin_target_notice_service import create_admin_target_notice
+from backend.services.auth_service import require_active_admin_user
 from backend.services.game_participant_rules import (
     ACTIVE_ROSTER_PARTICIPANT_STATUSES,
     CANCELLED_PARTICIPANT_STATUSES,
@@ -71,6 +63,7 @@ from backend.services.support_flag_service import (
 PAYMENT_TEXT_STATUS_HIDDEN = "hidden"
 PAYMENT_TEXT_STATUS_VISIBLE = "visible"
 HIDE_PAYMENT_TEXT_ACTION_TYPE = "hide_unsafe_community_payment_text"
+RESTORE_PAYMENT_TEXT_ACTION_TYPE = "restore_community_payment_text"
 COMMUNITY_REVIEW_FLAG_TYPE = "community_game_review_required"
 COMMUNITY_GAME_LIST_CURSOR_CONTEXT_KEYS = {
     "query",
@@ -381,6 +374,15 @@ def build_moderation_state(
     )
 
 
+def build_enforcement_state(game: Game) -> AdminCommunityGameEnforcementStateRead:
+    return AdminCommunityGameEnforcementStateRead(
+        public_visibility_status=game.public_visibility_status,
+        join_enforcement_status=game.join_enforcement_status,
+        game_status=game.game_status,
+        cancellation_source=game.cancellation_source,
+    )
+
+
 def get_community_review_flag_statuses(
     db: Session,
     game_ids: list[uuid.UUID],
@@ -616,7 +618,7 @@ def flag_admin_community_game_for_review(
     admin_user: User,
     payload: AdminCommunityGameReviewFlagCreate,
 ) -> AdminCommunityGameReviewFlagResultRead:
-    require_user_admin_permission(admin_user, PERMISSION_COMMUNITY_GAMES_FLAG)
+    require_active_admin_user(admin_user)
     reason, idempotency_key = normalize_review_flag_request(payload)
     game = get_community_game_or_404(db, game_id)
     db.execute(
@@ -746,6 +748,26 @@ def get_existing_hide_payment_text_action(
     )
 
 
+def get_existing_restore_payment_text_action(
+    db: Session,
+    *,
+    admin_user_id: uuid.UUID,
+    game_id: uuid.UUID,
+    idempotency_key: str,
+) -> AdminAction | None:
+    return db.scalar(
+        select(AdminAction)
+        .where(
+            AdminAction.action_type == RESTORE_PAYMENT_TEXT_ACTION_TYPE,
+            AdminAction.admin_user_id == admin_user_id,
+            AdminAction.target_game_id == game_id,
+            AdminAction.idempotency_key == idempotency_key,
+        )
+        .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
+        .limit(1)
+    )
+
+
 def validate_existing_hide_payment_text_action(
     action: AdminAction,
     *,
@@ -759,6 +781,55 @@ def validate_existing_hide_payment_text_action(
                 "payment text moderation request."
             ),
         )
+
+
+def get_payment_text_notice_ids_for_action(
+    db: Session,
+    action_id: uuid.UUID,
+) -> list[uuid.UUID]:
+    return list(
+        db.scalars(
+            select(AdminTargetNotice.id)
+            .where(AdminTargetNotice.admin_action_id == action_id)
+            .order_by(AdminTargetNotice.created_at.asc(), AdminTargetNotice.id.asc())
+        ).all()
+    )
+
+
+def create_payment_text_notice(
+    db: Session,
+    *,
+    game: Game,
+    audit_action: AdminAction,
+    admin_user: User,
+    notice_type: str,
+    reason: str,
+) -> AdminTargetNotice | None:
+    if game.host_user_id is None:
+        return None
+
+    if notice_type == "community_game_payment_info_hidden":
+        title = "Payment information hidden"
+        body = (
+            "Payment information on your community game is hidden while "
+            "an admin review is active."
+        )
+    else:
+        title = "Payment information restored"
+        body = "Payment information on your community game is visible again."
+
+    return create_admin_target_notice(
+        db,
+        notice_type=notice_type,
+        title=title,
+        body=body,
+        recipient_user_id=game.host_user_id,
+        target_user_id=game.host_user_id,
+        target_game_id=game.id,
+        admin_action=audit_action,
+        created_by_user_id=admin_user.id,
+        user_safe_reason=reason,
+    )
 
 
 def build_hide_payment_text_metadata(
@@ -813,6 +884,7 @@ def build_hide_payment_text_result(
             review_flag_status=get_community_review_flag_status(db, game_id),
         ),
         audit_action_id=audit_action.id,
+        notice_ids=get_payment_text_notice_ids_for_action(db, audit_action.id),
         idempotent_replay=idempotent_replay,
     )
 
@@ -824,10 +896,7 @@ def hide_admin_community_game_payment_text(
     admin_user: User,
     payload: AdminCommunityGameHidePaymentTextCreate,
 ) -> AdminCommunityGameHidePaymentTextResultRead:
-    require_user_admin_permission(
-        admin_user,
-        PERMISSION_COMMUNITY_GAMES_HIDE_UNSAFE_CONTENT,
-    )
+    require_active_admin_user(admin_user)
     reason, idempotency_key = normalize_hide_payment_text_request(payload)
     game = get_community_game_or_404(db, game_id)
 
@@ -920,9 +989,24 @@ def hide_admin_community_game_payment_text(
         idempotency_key=idempotency_key,
         created_at=now,
     )
+    link_admin_action_to_open_review_case(db, audit_action)
+    notice = create_payment_text_notice(
+        db,
+        game=game,
+        audit_action=audit_action,
+        admin_user=admin_user,
+        notice_type="community_game_payment_info_hidden",
+        reason=reason,
+    )
+    db.flush()
+    notice_ids = [str(notice.id)] if notice is not None else []
+    metadata = dict(audit_action.metadata_ or {})
+    metadata["notice_ids"] = notice_ids
+    audit_action.metadata_ = metadata
 
     try:
         db.add(snapshot)
+        db.add(audit_action)
         db.commit()
         db.refresh(snapshot)
         db.refresh(audit_action)
@@ -955,6 +1039,167 @@ def hide_admin_community_game_payment_text(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Host payment text could not be hidden.",
+        ) from exc
+
+    return build_hide_payment_text_result(
+        db,
+        game_id=game.id,
+        snapshot=snapshot,
+        audit_action=audit_action,
+        idempotent_replay=False,
+    )
+
+
+def restore_admin_community_game_payment_text(
+    db: Session,
+    *,
+    game_id: uuid.UUID,
+    admin_user: User,
+    payload: AdminCommunityGameHidePaymentTextCreate,
+) -> AdminCommunityGameHidePaymentTextResultRead:
+    require_active_admin_user(admin_user)
+    reason, idempotency_key = normalize_hide_payment_text_request(payload)
+    game = get_community_game_or_404(db, game_id)
+
+    existing_action = get_existing_restore_payment_text_action(
+        db,
+        admin_user_id=admin_user.id,
+        game_id=game.id,
+        idempotency_key=idempotency_key,
+    )
+    if existing_action is not None:
+        validate_existing_hide_payment_text_action(
+            existing_action,
+            expected_reason=reason,
+        )
+        snapshot = get_community_payment_snapshot(db, game.id)
+        if snapshot is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Moderation audit exists but payment snapshot is missing.",
+            )
+        return build_hide_payment_text_result(
+            db,
+            game_id=game.id,
+            snapshot=snapshot,
+            audit_action=existing_action,
+            idempotent_replay=True,
+        )
+
+    snapshot = db.scalar(
+        select(CommunityGameDetail)
+        .where(CommunityGameDetail.game_id == game.id)
+        .with_for_update()
+    )
+
+    existing_action = get_existing_restore_payment_text_action(
+        db,
+        admin_user_id=admin_user.id,
+        game_id=game.id,
+        idempotency_key=idempotency_key,
+    )
+    if existing_action is not None:
+        validate_existing_hide_payment_text_action(
+            existing_action,
+            expected_reason=reason,
+        )
+        if snapshot is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Moderation audit exists but payment snapshot is missing.",
+            )
+        return build_hide_payment_text_result(
+            db,
+            game_id=game.id,
+            snapshot=snapshot,
+            audit_action=existing_action,
+            idempotent_replay=True,
+        )
+
+    if snapshot is None or not payment_snapshot_present(snapshot):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No host payment text is available to restore.",
+        )
+
+    if snapshot.payment_text_moderation_status != PAYMENT_TEXT_STATUS_HIDDEN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Host payment text is already visible.",
+        )
+
+    now = datetime.now(timezone.utc)
+    old_status = snapshot.payment_text_moderation_status
+    snapshot.payment_text_moderation_status = PAYMENT_TEXT_STATUS_VISIBLE
+    snapshot.payment_text_hidden_at = None
+    snapshot.payment_text_hidden_by_user_id = None
+    snapshot.payment_text_hidden_reason = None
+    snapshot.updated_at = now
+    audit_action = record_admin_action(
+        db,
+        admin_user_id=admin_user.id,
+        action_type=RESTORE_PAYMENT_TEXT_ACTION_TYPE,
+        target_game_id=game.id,
+        target_user_id=game.host_user_id,
+        reason=reason,
+        metadata=build_hide_payment_text_metadata(
+            snapshot,
+            old_status=old_status,
+            new_status=PAYMENT_TEXT_STATUS_VISIBLE,
+        ),
+        idempotency_key=idempotency_key,
+        created_at=now,
+    )
+    link_admin_action_to_open_review_case(db, audit_action)
+    notice = create_payment_text_notice(
+        db,
+        game=game,
+        audit_action=audit_action,
+        admin_user=admin_user,
+        notice_type="community_game_payment_info_restored",
+        reason=reason,
+    )
+    db.flush()
+    notice_ids = [str(notice.id)] if notice is not None else []
+    metadata = dict(audit_action.metadata_ or {})
+    metadata["notice_ids"] = notice_ids
+    audit_action.metadata_ = metadata
+
+    try:
+        db.add(snapshot)
+        db.add(audit_action)
+        db.commit()
+        db.refresh(snapshot)
+        db.refresh(audit_action)
+    except IntegrityError as exc:
+        db.rollback()
+        existing_action = get_existing_restore_payment_text_action(
+            db,
+            admin_user_id=admin_user.id,
+            game_id=game.id,
+            idempotency_key=idempotency_key,
+        )
+        if existing_action is not None:
+            validate_existing_hide_payment_text_action(
+                existing_action,
+                expected_reason=reason,
+            )
+            snapshot = get_community_payment_snapshot(db, game.id)
+            if snapshot is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Moderation audit exists but payment snapshot is missing.",
+                ) from exc
+            return build_hide_payment_text_result(
+                db,
+                game_id=game.id,
+                snapshot=snapshot,
+                audit_action=existing_action,
+                idempotent_replay=True,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Host payment text could not be restored.",
         ) from exc
 
     return build_hide_payment_text_result(
@@ -1039,13 +1284,6 @@ def list_community_game_audit_actions(
     offset: int,
     limit: int,
 ) -> tuple[list[AdminCommunityGameAuditActionSummaryRead], int]:
-    can_read_audit = user_has_admin_permission(
-        viewer_user,
-        PERMISSION_AUDIT_READ,
-    ) or user_has_admin_permission(viewer_user, PERMISSION_AUDIT_SUPPORT_READ)
-    if not can_read_audit:
-        return [], 0
-
     all_actions = list_admin_actions(
         db,
         viewer_user=viewer_user,
@@ -1066,35 +1304,6 @@ def list_community_game_audit_actions(
     ], total_count
 
 
-def build_capabilities(viewer_user: User) -> AdminCommunityGameCapabilitiesRead:
-    return AdminCommunityGameCapabilitiesRead(
-        can_read_audit=(
-            user_has_admin_permission(viewer_user, PERMISSION_AUDIT_READ)
-            or user_has_admin_permission(viewer_user, PERMISSION_AUDIT_SUPPORT_READ)
-        ),
-        can_read_publish_fee=user_has_admin_permission(
-            viewer_user,
-            PERMISSION_MONEY_READ,
-        ),
-        can_flag_game=user_has_admin_permission(
-            viewer_user,
-            PERMISSION_COMMUNITY_GAMES_FLAG,
-        ),
-        can_resolve_review_flags=user_has_admin_permission(
-            viewer_user,
-            PERMISSION_COMMUNITY_GAMES_WRITE,
-        ),
-        can_hide_unsafe_payment_text=user_has_admin_permission(
-            viewer_user,
-            PERMISSION_COMMUNITY_GAMES_HIDE_UNSAFE_CONTENT,
-        ),
-        can_cancel_game=user_has_admin_permission(
-            viewer_user,
-            PERMISSION_COMMUNITY_GAMES_CANCEL,
-        ),
-    )
-
-
 def serialize_list_item(
     *,
     game: Game,
@@ -1108,6 +1317,8 @@ def serialize_list_item(
         title=game.title,
         publish_status=game.publish_status,
         game_status=game.game_status,
+        public_visibility_status=game.public_visibility_status,
+        join_enforcement_status=game.join_enforcement_status,
         payment_collection_type=game.payment_collection_type,
         starts_at=game.starts_at,
         ends_at=game.ends_at,
@@ -1124,6 +1335,7 @@ def serialize_list_item(
             snapshot,
             review_flag_status=review_flag_status,
         ),
+        enforcement_state=build_enforcement_state(game),
         created_at=game.created_at,
         updated_at=game.updated_at,
     )
@@ -1175,10 +1387,9 @@ def list_admin_community_games(
                 escape="\\",
             ),
         ]
-        if user_has_admin_permission(viewer_user, PERMISSION_USERS_READ):
-            search_conditions.append(
-                func.coalesce(User.email, "").ilike(text_match, escape="\\")
-            )
+        search_conditions.append(
+            func.coalesce(User.email, "").ilike(text_match, escape="\\")
+        )
         if query_uuid is not None:
             search_conditions.append(Game.id == query_uuid)
             search_conditions.append(Game.host_user_id == query_uuid)
@@ -1265,7 +1476,6 @@ def get_admin_community_game_detail(
     game = get_community_game_or_404(db, game_id)
     host = db.get(User, game.host_user_id) if game.host_user_id is not None else None
     payment_snapshot = get_community_payment_snapshot(db, game.id)
-    capabilities = build_capabilities(viewer_user)
 
     support_flags, support_flag_total_count = list_community_game_support_flags(
         db,
@@ -1287,11 +1497,7 @@ def get_admin_community_game_detail(
         host=serialize_host(host),
         participant_summary=summarize_game_participants(db, game.id),
         payment_snapshot=serialize_payment_snapshot(payment_snapshot),
-        publish_fee=(
-            serialize_publish_fee(get_publish_fee_row(db, game.id))
-            if capabilities.can_read_publish_fee
-            else None
-        ),
+        publish_fee=serialize_publish_fee(get_publish_fee_row(db, game.id)),
         support_flags=support_flags,
         support_flag_total_count=support_flag_total_count,
         support_flag_offset=support_flag_offset,
@@ -1304,5 +1510,5 @@ def get_admin_community_game_detail(
             payment_snapshot,
             review_flag_status=get_community_review_flag_status(db, game.id),
         ),
-        capabilities=capabilities,
+        enforcement_state=build_enforcement_state(game),
     )

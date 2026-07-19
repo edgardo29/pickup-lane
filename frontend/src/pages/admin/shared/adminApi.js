@@ -40,6 +40,77 @@ export async function fetchAdminActionCenter({ firebaseUser }) {
   })
 }
 
+export async function listAdminReviewCases({
+  caseCategory = '',
+  caseStatus = 'open',
+  cursor = '',
+  firebaseUser,
+  limit = 50,
+  offset = 0,
+  targetType = 'content_targets',
+} = {}) {
+  const searchParams = new URLSearchParams()
+  if (caseStatus) {
+    searchParams.set('case_status', caseStatus)
+  }
+  if (caseCategory) {
+    searchParams.set('case_category', caseCategory)
+  }
+  if (targetType) {
+    searchParams.set('target_type', targetType)
+  }
+  if (cursor) {
+    searchParams.set('cursor', cursor)
+  } else {
+    searchParams.set('offset', String(offset))
+  }
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/review-cases?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getAdminReviewCase({ firebaseUser, reviewCaseId }) {
+  return apiRequest(`/admin/review-cases/${reviewCaseId}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function addAdminReviewCaseNote({
+  body,
+  firebaseUser,
+  idempotencyKey,
+  reviewCaseId,
+}) {
+  return apiRequest(`/admin/review-cases/${reviewCaseId}/notes`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      body,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function closeAdminReviewCase({
+  firebaseUser,
+  idempotencyKey,
+  outcome,
+  reason,
+  reviewCaseId,
+}) {
+  return apiRequest(`/admin/review-cases/${reviewCaseId}/close`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      outcome,
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
 export async function listAdminCommunityGames({
   cursor = '',
   firebaseUser,
@@ -105,6 +176,114 @@ export async function hideAdminCommunityGamePaymentText({
       reason,
       idempotency_key: idempotencyKey,
     }),
+  })
+}
+
+export async function restoreAdminCommunityGamePaymentText({
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  reason,
+} = {}) {
+  return apiRequest(`/admin/community-games/${gameId}/restore-payment-text`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+async function performAdminCommunityGameAction({
+  action,
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  reason,
+} = {}) {
+  return apiRequest(`/admin/community-games/${gameId}/${action}`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function hideAdminCommunityGame({
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  reason,
+} = {}) {
+  return performAdminCommunityGameAction({
+    action: 'hide',
+    firebaseUser,
+    gameId,
+    idempotencyKey,
+    reason,
+  })
+}
+
+export async function restoreAdminCommunityGame({
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  reason,
+} = {}) {
+  return performAdminCommunityGameAction({
+    action: 'restore',
+    firebaseUser,
+    gameId,
+    idempotencyKey,
+    reason,
+  })
+}
+
+export async function pauseAdminCommunityGameJoining({
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  reason,
+} = {}) {
+  return performAdminCommunityGameAction({
+    action: 'pause-joining',
+    firebaseUser,
+    gameId,
+    idempotencyKey,
+    reason,
+  })
+}
+
+export async function resumeAdminCommunityGameJoining({
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  reason,
+} = {}) {
+  return performAdminCommunityGameAction({
+    action: 'resume-joining',
+    firebaseUser,
+    gameId,
+    idempotencyKey,
+    reason,
+  })
+}
+
+export async function cancelAdminCommunityGame({
+  firebaseUser,
+  gameId,
+  idempotencyKey,
+  reason,
+} = {}) {
+  return performAdminCommunityGameAction({
+    action: 'cancel',
+    firebaseUser,
+    gameId,
+    idempotencyKey,
+    reason,
   })
 }
 
@@ -188,19 +367,75 @@ export async function getAdminNeedASubPost({
   })
 }
 
+export async function getAdminNeedASubRequest({
+  firebaseUser,
+  requestId,
+} = {}) {
+  return apiRequest(`/admin/need-a-sub/requests/${requestId}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
 export async function removeAdminNeedASubPost({
   firebaseUser,
   idempotencyKey,
   postId,
   reason,
 } = {}) {
-  return apiRequest(`/need-a-sub/posts/${postId}/remove`, {
-    method: 'PATCH',
+  return apiRequest(`/admin/need-a-sub/${postId}/remove`, {
+    method: 'POST',
     headers: await getAdminHeaders(firebaseUser, true),
     body: JSON.stringify({
-      remove_reason: reason,
+      reason,
       idempotency_key: idempotencyKey,
     }),
+  })
+}
+
+async function performAdminNeedASubPostAction({
+  action,
+  firebaseUser,
+  idempotencyKey,
+  postId,
+  reason,
+} = {}) {
+  return apiRequest(`/admin/need-a-sub/${postId}/${action}`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function hideAdminNeedASubPost({
+  firebaseUser,
+  idempotencyKey,
+  postId,
+  reason,
+} = {}) {
+  return performAdminNeedASubPostAction({
+    action: 'hide',
+    firebaseUser,
+    idempotencyKey,
+    postId,
+    reason,
+  })
+}
+
+export async function restoreAdminNeedASubPost({
+  firebaseUser,
+  idempotencyKey,
+  postId,
+  reason,
+} = {}) {
+  return performAdminNeedASubPostAction({
+    action: 'restore',
+    firebaseUser,
+    idempotencyKey,
+    postId,
+    reason,
   })
 }
 
@@ -777,6 +1012,15 @@ export async function getAdminMoneyPayment({ firebaseUser, paymentId }) {
   })
 }
 
+export async function getAdminMoneyFinancialOutcome({
+  financialOutcomeId,
+  firebaseUser,
+}) {
+  return apiRequest(`/admin/money/financial-outcomes/${financialOutcomeId}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
 export async function listAdminMoneyPayments({
   bookingId = '',
   firebaseUser,
@@ -856,6 +1100,17 @@ export async function retryAdminMoneyRefund({
       reason,
       idempotency_key: idempotencyKey,
     }),
+  })
+}
+
+export async function createAdminMoneyFinancialOutcome({
+  firebaseUser,
+  payload,
+}) {
+  return apiRequest('/admin/money/financial-outcomes', {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify(payload),
   })
 }
 

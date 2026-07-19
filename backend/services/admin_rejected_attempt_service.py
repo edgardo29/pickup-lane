@@ -15,18 +15,14 @@ from backend.services.admin_record_rules import (
 )
 from backend.services.admin_rejected_attempt_policy import (
     ADMIN_REJECTED_ATTEMPT_TARGET_FIELDS,
-    PERMISSION_DENIED_ATTEMPTED_REF_FIELDS,
     REJECTION_MODES,
-    REJECTION_PERMISSION_DENIED_PRELOAD,
     AdminRejectedAttemptPolicy,
     get_admin_rejected_attempt_policy,
 )
-from backend.services.admin_permission_service import require_user_admin_permission
 from backend.services.user_service import build_user_conflict_detail
 
 MAX_ROUTE_METHOD_LENGTH = 10
 MAX_ROUTE_PATH_LENGTH = 240
-MAX_UNVERIFIED_REF_VALUE_LENGTH = 160
 
 
 def admin_rejected_attempt_conflict_detail(exc: IntegrityError) -> str:
@@ -115,70 +111,6 @@ def normalize_response_status_code(response_status_code: int) -> int:
     return response_status_code
 
 
-def normalize_unverified_ref_value(value: Any) -> str | int | bool:
-    if isinstance(value, uuid.UUID):
-        return str(value)
-
-    if isinstance(value, bool):
-        return value
-
-    if isinstance(value, int):
-        return value
-
-    if isinstance(value, str):
-        normalized = value.strip()
-        if not normalized:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="attempted reference values cannot be blank.",
-            )
-
-        if len(normalized) > MAX_UNVERIFIED_REF_VALUE_LENGTH:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "attempted reference values must be "
-                    f"{MAX_UNVERIFIED_REF_VALUE_LENGTH} characters or fewer."
-                ),
-            )
-
-        return normalized
-
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="attempted reference values must be primitive identifiers.",
-    )
-
-
-def build_permission_denied_metadata(
-    *,
-    attempted_refs: dict[str, Any],
-    required_permission: str,
-) -> dict[str, Any]:
-    unknown_ref_fields = set(attempted_refs) - PERMISSION_DENIED_ATTEMPTED_REF_FIELDS
-    if unknown_ref_fields:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "attempted_refs does not allow field(s): "
-                f"{describe_fields(unknown_ref_fields)}."
-            ),
-        )
-
-    normalized_refs = {
-        field_name: normalize_unverified_ref_value(value)
-        for field_name, value in attempted_refs.items()
-        if value is not None
-    }
-
-    return normalize_metadata_value(
-        {
-            "required_permission": required_permission,
-            "attempted_refs_unverified": normalized_refs,
-        }
-    )
-
-
 def normalize_rejected_attempt_metadata(
     metadata: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
@@ -217,12 +149,6 @@ def validate_target_policy(
                 f"{policy.attempt_type} does not allow target field(s): "
                 f"{describe_fields(unexpected_targets)}."
             ),
-        )
-
-    if rejection_mode == REJECTION_PERMISSION_DENIED_PRELOAD and targets:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="permission_denied_preload attempts cannot store target refs.",
         )
 
 
@@ -278,16 +204,9 @@ def user_can_read_rejected_attempt(
     user: User,
     rejected_attempt: AdminRejectedAttempt,
 ) -> bool:
+    del user
     policy = get_admin_rejected_attempt_policy(rejected_attempt.attempt_type)
-    if policy is None:
-        return False
-
-    try:
-        require_user_admin_permission(user, policy.read_permission)
-    except HTTPException:
-        return False
-
-    return True
+    return policy is not None
 
 
 def list_admin_rejected_attempts(

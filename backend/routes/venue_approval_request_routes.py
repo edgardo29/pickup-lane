@@ -10,8 +10,7 @@ from backend.schemas import (
     VenueApprovalRequestRead,
     VenueApprovalRequestUpdate,
 )
-from backend.services.admin_permission_service import PERMISSION_VENUES_MANAGE
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.venue_approval_request_service import (
     create_venue_approval_request_record,
     get_venue_approval_request_record,
@@ -33,7 +32,7 @@ router = APIRouter(
 def create_venue_approval_request(
     venue_approval_request: VenueApprovalRequestCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_VENUES_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> VenueApprovalRequest:
     del current_admin
     return create_venue_approval_request_record(db, venue_approval_request)
@@ -47,7 +46,7 @@ def create_venue_approval_request(
 def get_venue_approval_request(
     venue_approval_request_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_VENUES_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> VenueApprovalRequest:
     del current_admin
     return get_venue_approval_request_record(db, venue_approval_request_id)
@@ -64,7 +63,7 @@ def list_venue_approval_requests(
     reviewed_by_user_id: uuid.UUID | None = None,
     request_status: str | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_VENUES_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[VenueApprovalRequest]:
     del current_admin
     return list_venue_approval_request_records(
@@ -85,7 +84,7 @@ def update_venue_approval_request(
     venue_approval_request_id: uuid.UUID,
     venue_approval_request_update: VenueApprovalRequestUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_VENUES_MANAGE)),
+    current_admin: User = Depends(require_active_admin),
 ) -> VenueApprovalRequest:
     del current_admin
     return update_venue_approval_request_record(

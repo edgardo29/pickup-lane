@@ -42,7 +42,6 @@ class AdminChatMessageRead(BaseModel):
     review_status: str
     created_at: datetime
     updated_at: datetime
-    edited_at: datetime | None = None
     reviewed_at: datetime | None = None
     reviewed_by_user_id: UUID | None = None
     removed_at: datetime | None = None

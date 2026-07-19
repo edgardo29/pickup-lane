@@ -13,8 +13,7 @@ from backend.services.admin_notification_service import (
     get_admin_notification_debug_detail,
     list_admin_notification_debug,
 )
-from backend.services.admin_permission_service import PERMISSION_NOTIFICATIONS_READ
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 
 router = APIRouter(prefix="/admin/notifications", tags=["admin_notifications"])
 
@@ -48,9 +47,7 @@ def list_admin_notifications_route(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminNotificationDebugListRead:
     return list_admin_notification_debug(
         db,
@@ -88,9 +85,7 @@ def list_admin_notifications_route(
 def get_admin_notification_route(
     notification_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_NOTIFICATIONS_READ)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> AdminNotificationDebugRead:
     return get_admin_notification_debug_detail(
         db,

@@ -5,11 +5,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.services.admin_permission_service import (
-    PERMISSION_COMMUNITY_GAMES_WRITE,
-    PERMISSION_OFFICIAL_GAMES_WRITE,
-)
-from backend.services.auth_service import require_active_user, require_any_admin_permission
+from backend.services.auth_service import require_active_user, require_active_admin
 from backend.models import (
     Game,
     GameParticipant,
@@ -20,6 +16,7 @@ from backend.services.game_service import (
     create_game_workflow,
     delete_game_workflow,
     get_game_or_404,
+    get_public_game_or_404,
     list_browse_game_cards,
     list_games as list_games_workflow,
     list_public_game_participant_counts,
@@ -62,12 +59,7 @@ router = APIRouter(prefix="/games", tags=["games"])
 def create_game(
     game: GameCreate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_any_admin_permission(
-            PERMISSION_OFFICIAL_GAMES_WRITE,
-            PERMISSION_COMMUNITY_GAMES_WRITE,
-        )
-    ),
+    _current_admin: User = Depends(require_active_admin),
 ) -> Game:
     return create_game_workflow(db, game)
 
@@ -197,7 +189,7 @@ def list_game_roster_participants(
 # This route fetches a single game record by its internal UUID.
 @router.get("/{game_id}", response_model=GameRead, status_code=status.HTTP_200_OK)
 def get_game(game_id: uuid.UUID, db: Session = Depends(get_db)) -> Game:
-    return get_game_or_404(db, game_id)
+    return get_public_game_or_404(db, game_id)
 
 
 # This route returns game records currently stored in the app database.
@@ -212,14 +204,9 @@ def update_game(
     game_id: uuid.UUID,
     game_update: GameUpdate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_any_admin_permission(
-            PERMISSION_OFFICIAL_GAMES_WRITE,
-            PERMISSION_COMMUNITY_GAMES_WRITE,
-        )
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> Game:
-    return update_game_workflow(db, game_id, game_update)
+    return update_game_workflow(db, game_id, game_update, current_admin)
 
 
 @router.patch(
@@ -240,11 +227,6 @@ def host_edit_game(
 def delete_game(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_any_admin_permission(
-            PERMISSION_OFFICIAL_GAMES_WRITE,
-            PERMISSION_COMMUNITY_GAMES_WRITE,
-        )
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> Game:
-    return delete_game_workflow(db, game_id)
+    return delete_game_workflow(db, game_id, current_admin)

@@ -19,7 +19,7 @@ from backend.database import Base
 
 
 # Refunds track Stripe refund records against a payment, optionally scoped to
-# either a full booking or one specific participant.
+# a full booking, one specific participant, or a host publish fee.
 class Refund(Base):
     __tablename__ = "refunds"
     __table_args__ = (
@@ -28,7 +28,8 @@ class Refund(Base):
                 "refund_reason IN ("
                 "'player_cancelled', 'late_cancel', 'host_cancelled', "
                 "'game_cancelled', 'weather', 'admin_refund', "
-                "'duplicate_payment', 'dispute_resolution'"
+                "'duplicate_payment', 'dispute_resolution', "
+                "'publish_fee_refund'"
                 ")"
             ),
             name="ck_refunds_refund_reason",
@@ -59,8 +60,12 @@ class Refund(Base):
             name="ck_refunds_succeeded_requires_refunded_at",
         ),
         CheckConstraint(
-            "(booking_id IS NOT NULL OR participant_id IS NOT NULL)",
-            name="ck_refunds_booking_or_participant_required",
+            (
+                "booking_id IS NOT NULL "
+                "OR participant_id IS NOT NULL "
+                "OR host_publish_fee_id IS NOT NULL"
+            ),
+            name="ck_refunds_target_required",
         ),
         UniqueConstraint(
             "provider_refund_id",
@@ -69,6 +74,7 @@ class Refund(Base):
         Index("ix_refunds_payment_id", "payment_id"),
         Index("ix_refunds_booking_id", "booking_id"),
         Index("ix_refunds_participant_id", "participant_id"),
+        Index("ix_refunds_host_publish_fee_id", "host_publish_fee_id"),
         Index("ix_refunds_refund_status", "refund_status"),
         Index("ix_refunds_refund_reason", "refund_reason"),
         Index("ix_refunds_requested_by_user_id", "requested_by_user_id"),
@@ -89,6 +95,11 @@ class Refund(Base):
     participant_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("game_participants.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    host_publish_fee_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("host_publish_fees.id", ondelete="RESTRICT"),
         nullable=True,
     )
     provider_refund_id: Mapped[str | None] = mapped_column(

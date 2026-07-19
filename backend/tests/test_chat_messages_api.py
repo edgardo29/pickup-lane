@@ -78,10 +78,6 @@ def test_chat_message_routes_reject_suspended_user(client: TestClient):
         ),
         client.get(f"/chat-messages/{message_id}"),
         client.get(f"/chat-messages?chat_id={chat_id}"),
-        client.patch(
-            f"/chat-messages/{message_id}",
-            json={"message_body": "Suspended user should not edit."},
-        ),
     ]
 
     for response in responses:
@@ -89,7 +85,7 @@ def test_chat_message_routes_reject_suspended_user(client: TestClient):
         assert response.json()["detail"] == "Active account required."
 
 
-def test_chat_messages_create_get_list_and_update(client: TestClient):
+def test_chat_messages_create_get_and_list(client: TestClient):
     user, _venue, _game, game_chat = create_chat_message_setup(client)
     chat_message = create_chat_message(client, game_chat["id"], user["id"])
     authenticate_as(user["id"])
@@ -101,57 +97,6 @@ def test_chat_messages_create_get_list_and_update(client: TestClient):
     list_response = client.get(f"/chat-messages?chat_id={game_chat['id']}")
     assert list_response.status_code == 200, list_response.text
     assert any(item["id"] == chat_message["id"] for item in list_response.json())
-
-    patch_response = client.patch(
-        f"/chat-messages/{chat_message['id']}",
-        json={"message_body": "Updated CI chat message"},
-    )
-    assert patch_response.status_code == 200, patch_response.text
-    assert patch_response.json()["message_body"] == "Updated CI chat message"
-    assert patch_response.json()["edited_at"] is not None
-
-
-def test_chat_message_noop_edit_does_not_flag_repeated_message(
-    client: TestClient,
-):
-    user, _venue, _game, game_chat = create_chat_message_setup(client)
-    chat_message = create_chat_message(
-        client,
-        game_chat["id"],
-        user["id"],
-        message_body="Normal practice update",
-    )
-    authenticate_as(user["id"])
-
-    patch_response = client.patch(
-        f"/chat-messages/{chat_message['id']}",
-        json={"message_body": "Normal practice update"},
-    )
-
-    assert patch_response.status_code == 200, patch_response.text
-    assert patch_response.json()["review_status"] == "clear"
-
-
-def test_chat_message_removed_message_update_stays_forbidden_to_non_sender(
-    client: TestClient,
-):
-    host, player, _game, game_chat = create_two_member_chat_message_setup(client)
-    chat_message = create_chat_message(client, game_chat["id"], host["id"])
-    authenticate_as(host["id"])
-    remove_response = client.patch(
-        f"/chat-messages/{chat_message['id']}",
-        json={"visibility_status": "removed"},
-    )
-    assert remove_response.status_code == 200, remove_response.text
-
-    authenticate_as(player["id"])
-    response = client.patch(
-        f"/chat-messages/{chat_message['id']}",
-        json={"message_body": "Trying to learn about a removed message"},
-    )
-
-    assert response.status_code == 403, response.text
-    assert "Only the sender can update" in response.text
 
 
 def test_chat_messages_list_after_created_at_returns_newer_messages(client: TestClient):
@@ -270,47 +215,6 @@ def test_chat_messages_reject_player_system_and_pinned_fields(client: TestClient
 
     assert system_response.status_code == 422, system_response.text
     assert pinned_response.status_code == 422, pinned_response.text
-
-
-def test_chat_message_sender_can_delete_own_message(client: TestClient):
-    user, _venue, _game, game_chat = create_chat_message_setup(client)
-    chat_message = create_chat_message(client, game_chat["id"], user["id"])
-    authenticate_as(user["id"])
-
-    delete_response = client.patch(
-        f"/chat-messages/{chat_message['id']}",
-        json={"visibility_status": "removed"},
-    )
-    assert delete_response.status_code == 200, delete_response.text
-    assert delete_response.json()["visibility_status"] == "removed"
-    assert delete_response.json()["removed_source"] == "sender"
-    assert delete_response.json()["removed_by_user_id"] == user["id"]
-    assert delete_response.json()["removed_at"] is not None
-
-    get_response = client.get(f"/chat-messages/{chat_message['id']}")
-    assert get_response.status_code == 404, get_response.text
-
-    list_response = client.get(f"/chat-messages?chat_id={game_chat['id']}")
-    assert list_response.status_code == 200, list_response.text
-    assert chat_message["id"] not in {
-        item["id"] for item in list_response.json()
-    }
-
-
-def test_chat_message_sender_cannot_set_moderation_actor_fields(client: TestClient):
-    user, _venue, _game, game_chat = create_chat_message_setup(client)
-    chat_message = create_chat_message(client, game_chat["id"], user["id"])
-    authenticate_as(user["id"])
-
-    response = client.patch(
-        f"/chat-messages/{chat_message['id']}",
-        json={
-            "visibility_status": "removed",
-            "removed_by_user_id": user["id"],
-        },
-    )
-
-    assert response.status_code == 422, response.text
 
 
 def test_chat_messages_notify_other_confirmed_members_and_mark_read(client: TestClient):
@@ -596,14 +500,6 @@ def test_chat_messages_remove_by_admin_is_audited_and_terminal(
         assert "message_body" not in (audit_action.metadata_ or {})
 
     authenticate_as(user["id"])
-    response = client.patch(
-        f"/chat-messages/{chat_message['id']}",
-        json={"message_body": "Trying to edit hidden message"},
-    )
-
-    assert response.status_code == 400, response.text
-    assert "cannot be updated" in response.text
-
     member_get_response = client.get(f"/chat-messages/{chat_message['id']}")
     member_list_response = client.get(
         f"/chat-messages?chat_id={game_chat['id']}"

@@ -258,7 +258,7 @@ def test_booking_policy_acceptance_reject_null_accepted_at_update(
     assert "accepted_at cannot be null" in response.text
 
 
-def test_booking_policy_acceptance_generic_routes_require_admin_permission(
+def test_booking_policy_acceptance_generic_routes_require_admin_access(
     client: TestClient,
 ):
     user, _game, booking, policy_document = create_booking_policy_acceptance_setup(
@@ -295,7 +295,7 @@ def test_booking_policy_acceptance_generic_routes_require_admin_permission(
     assert patch_response.status_code == 403, patch_response.text
 
 
-def test_booking_policy_acceptance_generic_routes_reject_moderator(
+def test_booking_policy_acceptance_generic_routes_reject_player(
     client: TestClient,
 ):
     _user, _game, booking, policy_document = create_booking_policy_acceptance_setup(
@@ -306,9 +306,8 @@ def test_booking_policy_acceptance_generic_routes_reject_moderator(
         booking["id"],
         policy_document["id"],
     )
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
 
     get_response = client.get(
         f"/booking-policy-acceptances/{booking_policy_acceptance['id']}"

@@ -14,6 +14,7 @@ from backend.models import (
     Booking,
     Game,
     GameCredit,
+    HostPublishFee,
     Payment,
     Refund,
     SupportFlag,
@@ -34,10 +35,6 @@ from backend.services.admin_money_payment_service import (
 )
 from backend.services.admin_money_support_flag_read_service import (
     MONEY_SUPPORT_FLAG_TYPES,
-)
-from backend.services.admin_permission_service import (
-    PERMISSION_AUDIT_READ,
-    user_has_admin_permission,
 )
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
@@ -165,11 +162,26 @@ def get_booking_for_retry(db: Session, booking_id: uuid.UUID | None) -> Booking 
     ).first()
 
 
+def get_host_publish_fee_for_retry(
+    db: Session,
+    host_publish_fee_id: uuid.UUID | None,
+) -> HostPublishFee | None:
+    if host_publish_fee_id is None:
+        return None
+
+    return db.scalars(
+        select(HostPublishFee)
+        .where(HostPublishFee.id == host_publish_fee_id)
+        .with_for_update()
+    ).first()
+
+
 def validate_refund_retry(
     db: Session,
     *,
     refund: Refund,
     payment: Payment,
+    host_publish_fee: HostPublishFee | None,
 ) -> None:
     if refund.refund_status not in RETRYABLE_REFUND_STATUSES:
         raise HTTPException(
@@ -189,7 +201,31 @@ def validate_refund_retry(
             detail="Refund retry requires a Stripe charge id.",
         )
 
-    if payment.booking_id is None:
+    if refund.host_publish_fee_id is not None:
+        if host_publish_fee is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Refund retry requires a host publish fee.",
+            )
+
+        if payment.payment_type != "community_publish_fee":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Refund retry requires a community publish fee payment.",
+            )
+
+        if host_publish_fee.payment_id != payment.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Host publish fee payment must match the refund payment.",
+            )
+
+        if host_publish_fee.host_user_id != payment.payer_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Host publish fee payment must use the host as payer.",
+            )
+    elif payment.booking_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Refund retry requires a booking payment.",
@@ -237,6 +273,7 @@ def sync_refunded_payment_state(
     payment: Payment,
     refund: Refund,
     booking: Booking | None,
+    host_publish_fee: HostPublishFee | None = None,
     now: datetime,
 ) -> None:
     succeeded_total = (
@@ -254,6 +291,11 @@ def sync_refunded_payment_state(
     )
     payment.updated_at = now
     db.add(payment)
+
+    if host_publish_fee is not None and payment.payment_status == "refunded":
+        host_publish_fee.fee_status = "refunded"
+        host_publish_fee.updated_at = now
+        db.add(host_publish_fee)
 
     if booking is None:
         return
@@ -384,6 +426,7 @@ def apply_refund_retry_result(
     refund: Refund,
     payment: Payment,
     booking: Booking | None,
+    host_publish_fee: HostPublishFee | None,
     admin_user: User,
     reason: str,
     idempotency_key: str,
@@ -411,6 +454,7 @@ def apply_refund_retry_result(
             payment=payment,
             refund=refund,
             booking=booking,
+            host_publish_fee=host_publish_fee,
             now=now,
         )
         maybe_notify_refund_processed(
@@ -430,6 +474,7 @@ def apply_refund_retry_result(
         target_participant_id=refund.participant_id,
         target_payment_id=payment.id,
         target_refund_id=refund.id,
+        target_host_publish_fee_id=refund.host_publish_fee_id,
         reason=reason,
         idempotency_key=idempotency_key,
         metadata=refund_audit_metadata(
@@ -514,7 +559,16 @@ def retry_admin_money_refund(
         db,
         refund.booking_id or payment.booking_id,
     )
-    validate_refund_retry(db, refund=refund, payment=payment)
+    host_publish_fee = get_host_publish_fee_for_retry(
+        db,
+        refund.host_publish_fee_id,
+    )
+    validate_refund_retry(
+        db,
+        refund=refund,
+        payment=payment,
+        host_publish_fee=host_publish_fee,
+    )
 
     try:
         provider_refund = call_stripe_refund_retry(
@@ -545,6 +599,7 @@ def retry_admin_money_refund(
             refund=refund,
             payment=payment,
             booking=booking,
+            host_publish_fee=host_publish_fee,
             admin_user=admin_user,
             reason=reason,
             idempotency_key=idempotency_key,
@@ -592,6 +647,7 @@ def list_admin_money_refunds(
     refund_status: str = "all",
     payment_id: uuid.UUID | None = None,
     booking_id: uuid.UUID | None = None,
+    host_publish_fee_id: uuid.UUID | None = None,
     game_id: uuid.UUID | None = None,
     limit: int = 100,
 ) -> list[Refund]:
@@ -608,6 +664,8 @@ def list_admin_money_refunds(
         query = query.where(
             or_(Refund.booking_id == booking_id, Payment.booking_id == booking_id)
         )
+    if host_publish_fee_id is not None:
+        query = query.where(Refund.host_publish_fee_id == host_publish_fee_id)
     if game_id is not None:
         query = query.outerjoin(
             Booking,
@@ -687,9 +745,6 @@ def list_refund_audit_actions(
     credit_grants: list[GameCredit],
     support_flags: list[SupportFlag],
 ) -> list[AdminAction]:
-    if not user_has_admin_permission(viewer_user, PERMISSION_AUDIT_READ):
-        return []
-
     filters = [AdminAction.target_refund_id == refund.id]
 
     if payment is not None:

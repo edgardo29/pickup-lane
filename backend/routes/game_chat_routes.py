@@ -12,11 +12,7 @@ from backend.schemas import (
     GameChatReadStateRead,
     GameChatUpdate,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_CHAT_ROOMS_MANAGE,
-    PERMISSION_CONTENT_MODERATE,
-)
-from backend.services.auth_service import require_active_user, require_admin_permission
+from backend.services.auth_service import require_active_user, require_active_admin
 from backend.services.game_chat_service import (
     create_game_chat_record,
     get_game_chat_or_404,
@@ -35,9 +31,7 @@ router = APIRouter(prefix="/game-chats", tags=["game_chats"])
 @router.post("", response_model=GameChatRead, status_code=status.HTTP_201_CREATED)
 def create_game_chat(
     game_chat: GameChatCreate,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CHAT_ROOMS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> GameChat:
     return create_game_chat_record(db, game_chat, current_admin)
@@ -61,9 +55,7 @@ def ensure_game_chat_for_game(
 @router.get("/{game_chat_id}", response_model=GameChatRead, status_code=status.HTTP_200_OK)
 def get_game_chat(
     game_chat_id: uuid.UUID,
-    current_staff: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_staff: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> GameChat:
     del current_staff
@@ -108,9 +100,7 @@ def mark_game_chat_read(
 def list_game_chats(
     game_id: uuid.UUID | None = None,
     chat_status: str | None = None,
-    current_staff: User = Depends(
-        require_admin_permission(PERMISSION_CONTENT_MODERATE)
-    ),
+    current_staff: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[GameChat]:
     del current_staff
@@ -131,9 +121,7 @@ def list_game_chats(
 def update_game_chat(
     game_chat_id: uuid.UUID,
     game_chat_update: GameChatUpdate,
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_CHAT_ROOMS_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> GameChat:
     return update_game_chat_record(

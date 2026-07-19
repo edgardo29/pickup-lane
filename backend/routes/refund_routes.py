@@ -6,14 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Refund, User
 from backend.schemas import RefundCreate, RefundRead, RefundUpdate
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_REFUND,
-)
-from backend.services.auth_service import (
-    get_current_app_user,
-    require_active_account,
-    require_admin_permission,
-)
+from backend.services.auth_service import get_current_app_user, require_active_account, require_active_admin
 from backend.services.refund_service import (
     create_refund_record,
     get_refund_for_user_or_404,
@@ -30,7 +23,7 @@ router = APIRouter(prefix="/refunds", tags=["refunds"])
 def create_refund(
     refund: RefundCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_REFUND)),
+    current_admin: User = Depends(require_active_admin),
 ) -> Refund:
     return create_refund_record(db, admin_user=current_admin, payload=refund)
 
@@ -52,6 +45,7 @@ def list_refunds(
     payment_id: uuid.UUID | None = None,
     booking_id: uuid.UUID | None = None,
     participant_id: uuid.UUID | None = None,
+    host_publish_fee_id: uuid.UUID | None = None,
     refund_status: str | None = None,
     refund_reason: str | None = None,
     requested_by_user_id: uuid.UUID | None = None,
@@ -66,6 +60,7 @@ def list_refunds(
         payment_id=payment_id,
         booking_id=booking_id,
         participant_id=participant_id,
+        host_publish_fee_id=host_publish_fee_id,
         refund_status=refund_status,
         refund_reason=refund_reason,
         requested_by_user_id=requested_by_user_id,
@@ -80,7 +75,7 @@ def update_refund(
     refund_id: uuid.UUID,
     refund_update: RefundUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_REFUND)),
+    current_admin: User = Depends(require_active_admin),
 ) -> Refund:
     return update_refund_record(
         db,
