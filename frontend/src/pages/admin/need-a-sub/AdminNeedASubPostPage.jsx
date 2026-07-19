@@ -5,6 +5,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Eye,
+  EyeOff,
   FileClock,
   MessageSquareText,
   Trash2,
@@ -26,10 +28,6 @@ import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminNeedASub.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
 import { getAdminNeedASubPost } from '../shared/adminApi.js'
-import {
-  ADMIN_PERMISSIONS,
-  hasAdminPermission,
-} from '../shared/adminWorkspaceData.js'
 import { useAdminAccess } from '../shared/useAdminAccess.js'
 import AdminNeedASubChatPanel from './AdminNeedASubChatPanel.jsx'
 import AdminNeedASubRemovalModal from './AdminNeedASubRemovalModal.jsx'
@@ -306,6 +304,9 @@ function PostOverview({ detail }) {
         <OverviewField label="Status">
           {formatAdminNeedASubStatus(post.post_status)}
         </OverviewField>
+        <OverviewField label="Visibility">
+          {formatAdminNeedASubStatus(post.public_visibility_status)}
+        </OverviewField>
         <OverviewField label="Owner">
           {formatNeedASubOwner(owner)}
         </OverviewField>
@@ -337,7 +338,7 @@ function AdminNeedASubChatLocked({ isLoading }) {
       >
         {isLoading
           ? 'Loading chat access.'
-          : 'Content moderation permission is required for chat inspection.'}
+          : 'Admin access is required for chat inspection.'}
       </AdminSubEmptyState>
     </AdminSubSection>
   )
@@ -505,12 +506,12 @@ function AuditActions({
 function AdminNeedASubPostPage() {
   const { postId } = useParams()
   const { currentUser } = useAuth()
-  const { adminAccess, isLoading: isAdminAccessLoading } = useAdminAccess()
+  const { hasAdminAccess, isLoading: isAdminAccessLoading } = useAdminAccess()
   const [detail, setDetail] = useState(null)
   const [loadState, setLoadState] = useState('loading')
   const [pageError, setPageError] = useState('')
   const [refreshCount, setRefreshCount] = useState(0)
-  const [isRemovalModalOpen, setIsRemovalModalOpen] = useState(false)
+  const [postAction, setPostAction] = useState(null)
   const [requestOffset, setRequestOffset] = useState(0)
   const [auditOffset, setAuditOffset] = useState(0)
   const [activeTab, setActiveTab] = useState('overview')
@@ -560,11 +561,36 @@ function AdminNeedASubPostPage() {
   }, [auditOffset, currentUser, postId, refreshCount, requestOffset])
 
   const title = 'Manage Need a Sub Post'
-  const canViewChat = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.CONTENT_MODERATE,
+  const canViewChat = hasAdminAccess
+  const isTerminalPost = Boolean(
+    detail?.post && ['removed'].includes(detail.post.post_status),
   )
-  const canRemovePost = detail?.post && detail.post.post_status !== 'removed'
+  const canHidePost = Boolean(
+    detail?.post &&
+    !isTerminalPost &&
+    detail.post.public_visibility_status === 'visible',
+  )
+  const canRestorePost = Boolean(
+    detail?.post &&
+    !isTerminalPost &&
+    detail.post.public_visibility_status === 'hidden',
+  )
+  const canRemovePost = detail?.post && !isTerminalPost
+
+  function handlePostActionCompleted(result) {
+    setDetail((currentDetail) => {
+      if (!currentDetail) return currentDetail
+      return {
+        ...currentDetail,
+        post: {
+          ...currentDetail.post,
+          post_status: result.post_status,
+          public_visibility_status: result.public_visibility_status,
+        },
+      }
+    })
+    setRefreshCount((count) => count + 1)
+  }
 
   return (
     <>
@@ -575,11 +601,31 @@ function AdminNeedASubPostPage() {
               <ArrowLeft />
               Back
             </Link>
+            {canHidePost && (
+              <button
+                className="admin-sub-button admin-sub-button--danger"
+                type="button"
+                onClick={() => setPostAction('hide')}
+              >
+                <EyeOff />
+                Hide post
+              </button>
+            )}
+            {canRestorePost && (
+              <button
+                className="admin-sub-button admin-sub-button--primary"
+                type="button"
+                onClick={() => setPostAction('restore')}
+              >
+                <Eye />
+                Restore post
+              </button>
+            )}
             {canRemovePost && (
               <button
                 className="admin-sub-button admin-sub-button--danger"
                 type="button"
-                onClick={() => setIsRemovalModalOpen(true)}
+                onClick={() => setPostAction('remove')}
               >
                 <Trash2 />
                 Remove post
@@ -676,12 +722,13 @@ function AdminNeedASubPostPage() {
           ) : null}
         </div>
       </AdminWorkspaceLayout>
-      {detail && isRemovalModalOpen && (
+      {detail && postAction && (
         <AdminNeedASubRemovalModal
+          action={postAction}
           detail={detail}
           firebaseUser={currentUser}
-          onClose={() => setIsRemovalModalOpen(false)}
-          onRemoved={() => setRefreshCount((count) => count + 1)}
+          onClose={() => setPostAction(null)}
+          onCompleted={handlePostActionCompleted}
         />
       )}
     </>

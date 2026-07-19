@@ -1,7 +1,18 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import CHAR, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import (
+    CHAR,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,6 +25,10 @@ class SubPost(Base):
         CheckConstraint(
             "post_status IN ('active', 'completed', 'cancelled', 'expired', 'removed')",
             name="ck_sub_posts_post_status",
+        ),
+        CheckConstraint(
+            "public_visibility_status IN ('visible', 'hidden')",
+            name="ck_sub_posts_public_visibility_status",
         ),
         CheckConstraint("sport_type IN ('soccer')", name="ck_sub_posts_sport_type"),
         CheckConstraint(
@@ -64,7 +79,9 @@ class SubPost(Base):
         Index(
             "ix_sub_posts_browse_active_starts_at",
             "starts_at",
-            postgresql_where=text("post_status = 'active'"),
+            postgresql_where=text(
+                "post_status = 'active' AND public_visibility_status = 'visible'"
+            ),
         ),
         Index(
             "ix_sub_posts_cards_active_local_starts_created_id",
@@ -72,7 +89,9 @@ class SubPost(Base):
             "starts_at",
             "created_at",
             "id",
-            postgresql_where=text("post_status = 'active'"),
+            postgresql_where=text(
+                "post_status = 'active' AND public_visibility_status = 'visible'"
+            ),
         ),
         Index(
             "ix_sub_posts_owner_cards_active_local_starts_created_id",
@@ -81,7 +100,9 @@ class SubPost(Base):
             "starts_at",
             "created_at",
             "id",
-            postgresql_where=text("post_status = 'active'"),
+            postgresql_where=text(
+                "post_status = 'active' AND public_visibility_status = 'visible'"
+            ),
         ),
         Index(
             "ux_sub_posts_owner_active_starts_on_local",
@@ -131,6 +152,9 @@ class SubPost(Base):
         nullable=False,
     )
     post_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    public_visibility_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'visible'")
+    )
     sport_type: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default=text("'soccer'")
     )

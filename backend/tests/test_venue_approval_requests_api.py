@@ -93,7 +93,7 @@ def test_venue_approval_request_create_get_list_and_approve(client: TestClient):
     assert patch_response.json()["reviewed_by_user_id"] == reviewer["id"]
 
 
-def test_venue_approval_request_routes_require_admin_permission(client: TestClient):
+def test_venue_approval_request_routes_require_admin_access(client: TestClient):
     user, reviewer, venue = create_venue_approval_request_setup(client)
     payload = {
         "submitted_by_user_id": user["id"],

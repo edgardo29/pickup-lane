@@ -33,7 +33,7 @@ def upgrade() -> None:
             (
                 "new_status IN ('pending', 'confirmed', 'declined', "
                 "'sub_waitlist', 'canceled_by_player', 'canceled_by_owner', "
-                "'no_show_reported', 'expired')"
+                "'no_show_reported', 'expired', 'closed_by_admin')"
             ),
             name="ck_sub_post_request_status_history_new_status",
         ),
@@ -41,7 +41,8 @@ def upgrade() -> None:
             (
                 "old_status IS NULL OR old_status IN ('pending', 'confirmed', "
                 "'declined', 'sub_waitlist', 'canceled_by_player', "
-                "'canceled_by_owner', 'no_show_reported', 'expired')"
+                "'canceled_by_owner', 'no_show_reported', 'expired', "
+                "'closed_by_admin')"
             ),
             name="ck_sub_post_request_status_history_old_status",
         ),

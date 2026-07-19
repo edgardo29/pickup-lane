@@ -26,7 +26,7 @@ class User(Base):
         # These checks enforce the allowed role and account state values at the
         # database level so invalid values cannot be inserted accidentally.
         CheckConstraint(
-            "role IN ('player', 'admin', 'moderator')",
+            "role IN ('player', 'admin')",
             name="ck_users_role",
         ),
         CheckConstraint(

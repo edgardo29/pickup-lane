@@ -10,11 +10,7 @@ from backend.schemas import (
     HostPublishFeeRead,
     HostPublishFeeUpdate,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_PAYMENT_MANAGE,
-    PERMISSION_MONEY_READ,
-)
-from backend.services.auth_service import require_active_user, require_admin_permission
+from backend.services.auth_service import require_active_user, require_active_admin
 from backend.services.host_publish_fee_service import (
     create_host_publish_fee_record,
     get_host_publish_fee_record,
@@ -34,9 +30,7 @@ router = APIRouter(prefix="/host-publish-fees", tags=["host_publish_fees"])
 def create_host_publish_fee(
     host_publish_fee: HostPublishFeeCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> HostPublishFee:
     del current_admin
     return create_host_publish_fee_record(db, host_publish_fee)
@@ -62,7 +56,7 @@ def list_my_host_publish_fees(
 def get_host_publish_fee(
     host_publish_fee_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
 ) -> HostPublishFee:
     del current_admin
     return get_host_publish_fee_record(db, host_publish_fee_id)
@@ -78,7 +72,7 @@ def list_host_publish_fees(
     host_user_id: uuid.UUID | None = None,
     fee_status: str | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[HostPublishFee]:
     del current_admin
     return list_host_publish_fee_records(
@@ -98,9 +92,7 @@ def update_host_publish_fee(
     host_publish_fee_id: uuid.UUID,
     host_publish_fee_update: HostPublishFeeUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> HostPublishFee:
     del current_admin
     return update_host_publish_fee_record(

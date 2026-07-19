@@ -20,6 +20,9 @@ VALID_GAME_TYPES = {"official", "community"}
 VALID_PAYMENT_COLLECTION_TYPES = {"in_app", "external_host", "none"}
 VALID_PUBLISH_STATUSES = {"draft", "published", "archived"}
 VALID_GAME_STATUSES = {"active", "completed", "cancelled", "expired", "removed"}
+VALID_PUBLIC_VISIBILITY_STATUSES = {"visible", "hidden"}
+VALID_JOIN_ENFORCEMENT_STATUSES = {"open", "paused"}
+VALID_CANCELLATION_SOURCES = {"host", "admin", "system"}
 VALID_ENVIRONMENT_TYPES = {"indoor", "outdoor"}
 VALID_GAME_PLAYER_GROUPS = {"men", "women", "coed"}
 VALID_SKILL_LEVELS = {
@@ -267,6 +270,34 @@ def validate_game_business_rules(game_data: dict[str, object]) -> None:
             ),
         )
 
+    if game_data.get("public_visibility_status") not in VALID_PUBLIC_VISIBILITY_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="public_visibility_status must be 'visible' or 'hidden'.",
+        )
+
+    if game_data.get("join_enforcement_status") not in VALID_JOIN_ENFORCEMENT_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="join_enforcement_status must be 'open' or 'paused'.",
+        )
+
+    cancellation_source = game_data.get("cancellation_source")
+    if (
+        cancellation_source is not None
+        and cancellation_source not in VALID_CANCELLATION_SOURCES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cancellation_source must be 'host', 'admin', or 'system'.",
+        )
+
+    if cancellation_source is not None and game_data["game_status"] != "cancelled":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cancellation_source can only be set on cancelled games.",
+        )
+
     if game_data["environment_type"] not in VALID_ENVIRONMENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -484,6 +515,11 @@ def normalize_game_lifecycle_fields(
             or (existing_game.cancelled_at if existing_game is not None else None)
             or now
         )
+        normalized_data["cancellation_source"] = (
+            normalized_data.get("cancellation_source")
+            or (existing_game.cancellation_source if existing_game is not None else None)
+            or "host"
+        )
         normalized_data["completed_at"] = None
         normalized_data["completed_by_user_id"] = None
     elif normalized_data["game_status"] == "completed":
@@ -494,15 +530,43 @@ def normalize_game_lifecycle_fields(
         )
         normalized_data["cancelled_at"] = None
         normalized_data["cancelled_by_user_id"] = None
+        normalized_data["cancellation_source"] = None
         normalized_data["cancel_reason"] = None
     else:
         normalized_data["cancelled_at"] = None
         normalized_data["cancelled_by_user_id"] = None
+        normalized_data["cancellation_source"] = None
         normalized_data["cancel_reason"] = None
         normalized_data["completed_at"] = None
         normalized_data["completed_by_user_id"] = None
 
     return normalized_data
+
+
+def community_game_is_publicly_visible(db_game: Game) -> bool:
+    return db_game.game_type != "community" or db_game.public_visibility_status == "visible"
+
+
+def require_publicly_visible_game(db_game: Game) -> None:
+    if not community_game_is_publicly_visible(db_game):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
+        )
+
+
+def require_community_game_joining_open(db_game: Game) -> None:
+    if (
+        db_game.game_type == "community"
+        and (
+            db_game.public_visibility_status != "visible"
+            or db_game.join_enforcement_status != "open"
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This game is not open for joining.",
+        )
 
 
 def reject_official_location_change(

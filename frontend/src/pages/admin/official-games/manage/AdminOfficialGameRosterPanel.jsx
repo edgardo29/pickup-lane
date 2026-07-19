@@ -70,7 +70,7 @@ function getRemovalState(participant, hostUserId, canPreviewRemovals) {
     action: canPreviewRemovals ? 'preview' : 'disabled',
     title: canPreviewRemovals
       ? 'Preview removal impact'
-      : 'Money read permission is required to preview removal impact',
+      : 'Admin access is required to preview removal impact',
   }
 }
 

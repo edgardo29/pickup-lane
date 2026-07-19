@@ -15,9 +15,9 @@ from backend.models import (
     SubPostStatusHistory,
     User,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_NEED_A_SUB_MODERATE,
-    user_has_admin_permission,
+from backend.services.auth_service import user_is_active_admin
+from backend.services.admin_review_service import (
+    close_open_content_moderation_case_for_sub_post_lifecycle,
 )
 from backend.services.need_a_sub_notification_service import (
     resolve_owner_request_activity_notification,
@@ -206,7 +206,7 @@ def list_sub_post_status_history(
 
     if (
         sub_post.owner_user_id != current_user.id
-        and not user_has_admin_permission(current_user, PERMISSION_NEED_A_SUB_MODERATE)
+        and not user_is_active_admin(current_user)
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -232,7 +232,7 @@ def list_sub_post_request_status_history(
     can_view = (
         sub_request.requester_user_id == current_user.id
         or sub_post.owner_user_id == current_user.id
-        or user_has_admin_permission(current_user, PERMISSION_NEED_A_SUB_MODERATE)
+        or user_is_active_admin(current_user)
     )
 
     if not can_view:
@@ -278,6 +278,23 @@ def expire_due_posts_and_requests(db: Session) -> dict[str, int]:
             new_status,
             None,
             "scheduled_job",
+        )
+        close_open_content_moderation_case_for_sub_post_lifecycle(
+            db,
+            sub_post_id=sub_post.id,
+            closure_outcome="no_action_needed",
+            closure_reason=(
+                "Need a Sub post was completed before moderation review was completed."
+                if new_status == "completed"
+                else "Need a Sub post expired before moderation review was completed."
+            ),
+            lifecycle_action=(
+                "post_completed" if new_status == "completed" else "post_expired"
+            ),
+            trigger_actor_type="scheduled_job",
+            previous_post_status=old_status,
+            new_post_status=new_status,
+            closed_at=current_time,
         )
         if new_status == "completed":
             completed_posts_count += 1

@@ -24,15 +24,12 @@ from backend.schemas.admin_need_a_sub_schema import (
     AdminNeedASubPostListItemRead,
     AdminNeedASubPostRead,
     AdminNeedASubRequestCountsRead,
+    AdminNeedASubRequestDetailRead,
     AdminNeedASubRequestRead,
     AdminNeedASubStatusHistoryRead,
     AdminNeedASubUserRead,
 )
 from backend.services.admin_action_service import list_admin_actions
-from backend.services.admin_permission_service import (
-    PERMISSION_USERS_READ,
-    user_has_admin_permission,
-)
 from backend.services.need_a_sub_lifecycle_service import expire_due_posts_and_requests
 from backend.services.need_a_sub_post_service import serialize_sub_post
 
@@ -395,10 +392,9 @@ def list_admin_need_a_sub_posts(
                 escape="\\",
             ),
         ]
-        if user_has_admin_permission(viewer_user, PERMISSION_USERS_READ):
-            search_conditions.append(
-                func.coalesce(User.email, "").ilike(text_match, escape="\\")
-            )
+        search_conditions.append(
+            func.coalesce(User.email, "").ilike(text_match, escape="\\")
+        )
         if query_uuid is not None:
             search_conditions.extend(
                 (SubPost.id == query_uuid, SubPost.owner_user_id == query_uuid)
@@ -444,6 +440,7 @@ def list_admin_need_a_sub_posts(
         AdminNeedASubPostListItemRead(
             id=post.id,
             post_status=post.post_status,
+            public_visibility_status=post.public_visibility_status,
             team_name=post.team_name,
             format_label=post.format_label,
             environment_type=post.environment_type,
@@ -497,6 +494,95 @@ def serialize_history(
         change_reason=history.change_reason,
         changed_by=serialize_user(users_by_id.get(history.changed_by_user_id)),
         created_at=history.created_at,
+    )
+
+
+def serialize_request(
+    *,
+    request: SubPostRequest,
+    position: SubPostPosition,
+    requester: User,
+    status_history: list[AdminNeedASubStatusHistoryRead],
+) -> AdminNeedASubRequestRead:
+    return AdminNeedASubRequestRead(
+        id=request.id,
+        sub_post_position_id=request.sub_post_position_id,
+        position_label=position.position_label,
+        player_group=position.player_group,
+        requester=serialize_user(requester),
+        request_status=request.request_status,
+        confirmed_at=request.confirmed_at,
+        declined_at=request.declined_at,
+        sub_waitlisted_at=request.sub_waitlisted_at,
+        canceled_at=request.canceled_at,
+        expired_at=request.expired_at,
+        no_show_reported_at=request.no_show_reported_at,
+        created_at=request.created_at,
+        updated_at=request.updated_at,
+        status_history=status_history,
+    )
+
+
+def get_admin_need_a_sub_request_detail(
+    db: Session,
+    *,
+    request_id: uuid.UUID,
+    viewer_user: User,
+) -> AdminNeedASubRequestDetailRead:
+    expire_due_posts_and_requests(db)
+    request = db.get(SubPostRequest, request_id)
+    if request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub request not found.",
+        )
+    post = get_admin_need_a_sub_post_or_404(db, request.sub_post_id)
+    owner = db.get(User, post.owner_user_id)
+    position = db.get(SubPostPosition, request.sub_post_position_id)
+    requester = db.get(User, request.requester_user_id)
+    if owner is None or position is None or requester is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub request context not found.",
+        )
+
+    request_histories = list(
+        db.scalars(
+            select(SubPostRequestStatusHistory)
+            .where(SubPostRequestStatusHistory.sub_post_request_id == request.id)
+            .order_by(
+                SubPostRequestStatusHistory.created_at.asc(),
+                SubPostRequestStatusHistory.id.asc(),
+            )
+        ).all()
+    )
+    user_ids = {
+        history.changed_by_user_id
+        for history in request_histories
+        if history.changed_by_user_id is not None
+    }
+    users_by_id = (
+        {
+            user.id: user
+            for user in db.scalars(select(User).where(User.id.in_(user_ids))).all()
+        }
+        if user_ids
+        else {}
+    )
+    status_history = [
+        serialize_history(history, users_by_id)
+        for history in request_histories
+    ]
+    serialized_post = AdminNeedASubPostRead.model_validate(serialize_sub_post(db, post))
+    return AdminNeedASubRequestDetailRead(
+        post=serialized_post,
+        owner=serialize_user(owner),
+        request=serialize_request(
+            request=request,
+            position=position,
+            requester=requester,
+            status_history=status_history,
+        ),
     )
 
 
@@ -597,21 +683,10 @@ def get_admin_need_a_sub_post_detail(
         if position is None or requester is None:
             continue
         serialized_requests.append(
-            AdminNeedASubRequestRead(
-                id=request.id,
-                sub_post_position_id=request.sub_post_position_id,
-                position_label=position.position_label,
-                player_group=position.player_group,
-                requester=serialize_user(requester),
-                request_status=request.request_status,
-                confirmed_at=request.confirmed_at,
-                declined_at=request.declined_at,
-                sub_waitlisted_at=request.sub_waitlisted_at,
-                canceled_at=request.canceled_at,
-                expired_at=request.expired_at,
-                no_show_reported_at=request.no_show_reported_at,
-                created_at=request.created_at,
-                updated_at=request.updated_at,
+            serialize_request(
+                request=request,
+                position=position,
+                requester=requester,
                 status_history=histories_by_request.get(request.id, []),
             )
         )

@@ -31,7 +31,7 @@ function AdminStaffList({ staff }) {
     return (
       <div className="admin-users-empty">
         <strong>No staff accounts found</strong>
-        <span>Admins and moderators will appear here.</span>
+        <span>Admins will appear here.</span>
       </div>
     )
   }
@@ -81,8 +81,8 @@ function AdminStaffList({ staff }) {
             )}
           </div>
           <div data-label="Access" role="cell">
-            <span>{staffUser.permissions.length} permissions</span>
-            <span>{staffUser.data_scopes.length} scopes</span>
+            <span>Full admin access</span>
+            <span>{staffUser.account_status === 'active' ? 'Active access' : 'Access inactive'}</span>
             <code>{shortAdminUserId(staffUser.id)}</code>
           </div>
         </Link>
@@ -144,7 +144,7 @@ function AdminStaffPage() {
     <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'People', 'Staff']}
-        description="Review staff accounts, permissions, and role assignments."
+        description="Review admin accounts and role assignments."
         icon={UsersRound}
         title="Staff"
       >

@@ -6,13 +6,12 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import ChatMessage, User
-from backend.schemas import ChatMessageCreate, ChatMessageRead, ChatMessageUpdate
+from backend.schemas import ChatMessageCreate, ChatMessageRead
 from backend.services.auth_service import require_active_user
 from backend.services.game_chat_service import (
     create_chat_message_record,
     get_chat_message_record,
     list_chat_message_records,
-    update_chat_message_record,
 )
 
 router = APIRouter(prefix="/chat-messages", tags=["chat_messages"])
@@ -62,23 +61,4 @@ def list_chat_messages(
         is_pinned=is_pinned,
         after_created_at=after_created_at,
         limit=limit,
-    )
-
-
-@router.patch(
-    "/{chat_message_id}",
-    response_model=ChatMessageRead,
-    status_code=status.HTTP_200_OK,
-)
-def update_chat_message(
-    chat_message_id: uuid.UUID,
-    chat_message_update: ChatMessageUpdate,
-    current_user: User = Depends(require_active_user),
-    db: Session = Depends(get_db),
-) -> ChatMessage:
-    return update_chat_message_record(
-        db,
-        chat_message_id,
-        chat_message_update,
-        current_user,
     )

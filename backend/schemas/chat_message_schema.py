@@ -31,7 +31,6 @@ class ChatMessageRead(BaseModel):
     review_status: str
     created_at: datetime
     updated_at: datetime
-    edited_at: datetime | None
     reviewed_at: datetime | None = None
     reviewed_by_user_id: UUID | None = None
     removed_at: datetime | None = None
@@ -39,13 +38,3 @@ class ChatMessageRead(BaseModel):
     removed_source: str | None = None
     restored_at: datetime | None = None
     restored_by_user_id: UUID | None = None
-
-
-# ChatMessageUpdate supports partial message updates, so every field is optional
-# and only provided values should be applied by the route.
-class ChatMessageUpdate(BaseModel):
-    model_config = REQUEST_MODEL_CONFIG
-
-    message_body: str | None = None
-    visibility_status: str | None = None
-    reason: str | None = None

@@ -156,10 +156,6 @@ class ChatMessage(Base):
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
-    edited_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-
     reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

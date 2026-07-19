@@ -97,9 +97,9 @@ def upgrade() -> None:
         sa.CheckConstraint(
             (
                 "(payment_type <> 'community_publish_fee' "
-                "OR (game_id IS NOT NULL AND booking_id IS NULL))"
+                "OR booking_id IS NULL)"
             ),
-            name="ck_payments_community_publish_fee_game_only",
+            name="ck_payments_community_publish_fee_no_booking",
         ),
         sa.CheckConstraint(
             "(payment_status <> 'succeeded' OR paid_at IS NOT NULL)",

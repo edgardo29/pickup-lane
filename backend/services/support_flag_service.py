@@ -29,11 +29,6 @@ from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_metadata_value,
 )
-from backend.services.admin_permission_service import (
-    get_admin_data_scopes_for_user,
-    require_user_admin_permission,
-    user_has_admin_permission,
-)
 from backend.services.support_flag_policy import (
     SUPPORT_FLAG_POLICIES,
     SUPPORT_FLAG_TARGET_FIELDS,
@@ -217,23 +212,16 @@ def normalize_support_flag_metadata(metadata: dict[str, Any] | None) -> dict[str
 
 
 def user_can_read_support_flag(user: User, support_flag: SupportFlag) -> bool:
+    del user
     policy = get_support_flag_policy(support_flag.flag_type)
-    if policy is None:
-        return False
-
-    return (
-        policy.sensitivity_scope in get_admin_data_scopes_for_user(user)
-        and user_has_admin_permission(user, policy.read_permission)
-    )
+    return policy is not None
 
 
 def readable_support_flag_types(user: User) -> tuple[str, ...]:
-    data_scopes = get_admin_data_scopes_for_user(user)
+    del user
     return tuple(
         flag_type
-        for flag_type, policy in SUPPORT_FLAG_POLICIES.items()
-        if policy.sensitivity_scope in data_scopes
-        and user_has_admin_permission(user, policy.read_permission)
+        for flag_type in SUPPORT_FLAG_POLICIES
     )
 
 
@@ -531,7 +519,6 @@ def resolve_support_flag(
         resolver_user,
     )
     policy = get_policy_or_400(visible_flag.flag_type)
-    require_user_admin_permission(resolver_user, policy.resolve_permission)
 
     resolution_reason = normalize_limited_text(payload.reason, "reason", 1000)
     idempotency_key = normalize_idempotency_key(payload.idempotency_key)

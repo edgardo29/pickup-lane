@@ -15,6 +15,46 @@ class AdminMoneyRefundRetryCreate(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=160)
 
 
+class AdminMoneyFinancialOutcomeCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    outcome: str
+    reason: str = Field(min_length=3, max_length=1000)
+    internal_note: str | None = Field(default=None, max_length=1000)
+    idempotency_key: str = Field(min_length=8, max_length=160)
+    host_publish_fee_id: UUID | None = None
+    host_user_id: UUID | None = None
+    target_game_id: UUID | None = None
+    amount_cents: int | None = None
+
+
+class AdminMoneyFinancialOutcomeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    target_game_id: UUID | None
+    target_sub_post_id: UUID | None
+    host_user_id: UUID
+    host_publish_fee_id: UUID | None
+    payment_id: UUID | None
+    refund_id: UUID | None
+    host_publish_entitlement_id: UUID | None
+    admin_action_id: UUID | None
+    review_case_id: UUID | None
+    outcome: str
+    applied_status: str
+    amount_cents: int
+    currency: str
+    reason: str
+    internal_note: str | None
+    failure_reason: str | None
+    created_by_user_id: UUID
+    applied_by_user_id: UUID | None
+    applied_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class AdminMoneyPaymentListRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -86,6 +126,7 @@ class AdminMoneyRefundListRead(BaseModel):
     payment_id: UUID
     booking_id: UUID | None
     participant_id: UUID | None
+    host_publish_fee_id: UUID | None
     amount_cents: int
     currency: str
     refund_reason: str
@@ -182,6 +223,9 @@ class AdminMoneyAuditActionSummaryRead(BaseModel):
     target_refund_id: UUID | None
     target_game_credit_id: UUID | None
     target_support_flag_id: UUID | None
+    target_financial_outcome_id: UUID | None
+    target_host_publish_fee_id: UUID | None
+    target_host_publish_entitlement_id: UUID | None
     reason: str | None
     metadata: dict[str, Any] | None = Field(
         validation_alias="metadata_",

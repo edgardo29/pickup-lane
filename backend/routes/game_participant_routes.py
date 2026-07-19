@@ -11,13 +11,7 @@ from backend.schemas import (
     GameParticipantUpdate,
     PublicGameParticipantRead,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-)
-from backend.services.auth_service import (
-    get_current_app_user,
-    require_admin_permission,
-)
+from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.game_participant_service import (
     create_game_participant_workflow,
     get_game_participant_for_user_or_404,
@@ -36,9 +30,7 @@ router = APIRouter(prefix="/game-participants", tags=["game_participants"])
 def create_game_participant(
     participant: GameParticipantCreate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    _current_admin: User = Depends(require_active_admin),
 ) -> GameParticipant:
     return create_game_participant_workflow(db, participant)
 
@@ -78,9 +70,7 @@ def list_game_participants(
     participant_status: str | None = None,
     attendance_status: str | None = None,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    _current_admin: User = Depends(require_active_admin),
 ) -> list[GameParticipant]:
     return list_game_participants_workflow(
         db,
@@ -102,8 +92,6 @@ def update_game_participant(
     participant_id: uuid.UUID,
     participant_update: GameParticipantUpdate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    _current_admin: User = Depends(require_active_admin),
 ) -> GameParticipant:
     return update_game_participant_workflow(db, participant_id, participant_update)

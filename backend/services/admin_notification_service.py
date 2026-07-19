@@ -12,10 +12,6 @@ from backend.schemas.admin_notification_schema import (
     AdminNotificationDebugListRead,
     AdminNotificationDebugRead,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_NOTIFICATIONS_READ,
-    require_user_admin_permission,
-)
 from backend.services.notification_display_service import serialize_notification
 from backend.services.notification_policy import (
     VALID_ACTION_KEYS,
@@ -270,8 +266,6 @@ def list_admin_notification_debug(
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
 ) -> AdminNotificationDebugListRead:
-    require_user_admin_permission(viewer_user, PERMISSION_NOTIFICATIONS_READ)
-
     filters = build_admin_notification_filters(
         user_id=user_id,
         notification_type=notification_type,
@@ -341,8 +335,6 @@ def get_admin_notification_debug_detail(
     notification_id: uuid.UUID,
     viewer_user: User,
 ) -> AdminNotificationDebugRead:
-    require_user_admin_permission(viewer_user, PERMISSION_NOTIFICATIONS_READ)
-
     notification = db.get(Notification, notification_id)
     if notification is None:
         raise HTTPException(

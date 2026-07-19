@@ -13,10 +13,7 @@ from backend.schemas.waitlist_entry_schema import (
     WaitlistEntryCreate,
     WaitlistEntryUpdate,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-    require_user_admin_permission,
-)
+from backend.services.auth_service import require_active_admin_user
 from backend.services.waitlist_rules import (
     build_waitlist_entry_conflict_detail,
     normalize_waitlist_entry_lifecycle_fields,
@@ -150,10 +147,7 @@ def get_waitlist_entry_for_user_or_404(
         )
 
     if db_waitlist_entry.user_id != current_user.id:
-        require_user_admin_permission(
-            current_user,
-            PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-        )
+        require_active_admin_user(current_user)
 
     return db_waitlist_entry
 

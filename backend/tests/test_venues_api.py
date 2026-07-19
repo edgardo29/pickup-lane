@@ -117,7 +117,7 @@ def test_public_venues_reject_inactive_listing_and_hide_inactive_detail(
     assert get_response.status_code == 404, get_response.text
 
 
-def test_venue_mutations_require_admin_permission(client: TestClient):
+def test_venue_mutations_require_admin_access(client: TestClient):
     user = create_user(client)
     venue = create_venue(client, user["id"])
     authenticate_as(user["id"])
@@ -144,16 +144,15 @@ def test_venue_mutations_require_admin_permission(client: TestClient):
     assert delete_response.status_code == 403, delete_response.text
 
 
-def test_venue_mutations_reject_moderator(client: TestClient):
+def test_venue_mutations_reject_player(client: TestClient):
     user = create_user(client)
     venue = create_venue(client, user["id"])
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
 
     patch_response = client.patch(
         f"/venues/{venue['id']}",
-        json={"name": "Denied Moderator Update"},
+        json={"name": "Denied Player Update"},
     )
     delete_response = client.delete(f"/venues/{venue['id']}")
 

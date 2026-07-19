@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.schemas import (
+    AdminMoneyFinancialOutcomeCreate,
+    AdminMoneyFinancialOutcomeRead,
     AdminMoneyCreditDetailRead,
     AdminMoneyCreditGrantSummaryRead,
     AdminMoneyPaymentDetailRead,
@@ -22,6 +24,10 @@ from backend.schemas import (
 from backend.services.admin_money_credit_service import (
     get_admin_money_credit_detail,
     list_admin_money_credits,
+)
+from backend.services.admin_financial_outcome_service import (
+    create_admin_financial_outcome,
+    get_admin_financial_outcome_detail,
 )
 from backend.services.admin_money_payment_service import (
     get_admin_money_payment_detail,
@@ -43,13 +49,42 @@ from backend.services.admin_money_user_service import (
     get_admin_money_user_detail,
     list_admin_money_payment_methods,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_READ,
-    PERMISSION_MONEY_REFUND,
-)
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 
 router = APIRouter(prefix="/admin/money", tags=["admin_money"])
+
+
+@router.post(
+    "/financial-outcomes",
+    response_model=AdminMoneyFinancialOutcomeRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_admin_money_financial_outcome_route(
+    payload: AdminMoneyFinancialOutcomeCreate,
+    current_admin: User = Depends(require_active_admin),
+    db: Session = Depends(get_db),
+) -> AdminMoneyFinancialOutcomeRead:
+    return create_admin_financial_outcome(
+        db,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.get(
+    "/financial-outcomes/{financial_outcome_id}",
+    response_model=AdminMoneyFinancialOutcomeRead,
+    status_code=status.HTTP_200_OK,
+)
+def get_admin_money_financial_outcome_route(
+    financial_outcome_id: uuid.UUID,
+    current_admin: User = Depends(require_active_admin),
+    db: Session = Depends(get_db),
+) -> AdminMoneyFinancialOutcomeRead:
+    return get_admin_financial_outcome_detail(
+        db,
+        financial_outcome_id=financial_outcome_id,
+    )
 
 
 @router.get(
@@ -60,7 +95,7 @@ router = APIRouter(prefix="/admin/money", tags=["admin_money"])
 def list_admin_money_payment_methods_route(
     user_id: uuid.UUID = Query(...),
     include_inactive: bool = Query(default=False),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[AdminMoneyPaymentMethodRead]:
     return list_admin_money_payment_methods(
@@ -79,7 +114,7 @@ def get_admin_money_user(
     user_id: uuid.UUID,
     include_inactive_payment_methods: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=250),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyUserDetailRead:
     return get_admin_money_user_detail(
@@ -103,7 +138,7 @@ def list_admin_money_credits_route(
     source_booking_id: uuid.UUID | None = None,
     source_payment_id: uuid.UUID | None = None,
     limit: int = Query(default=100, ge=1, le=250),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[AdminMoneyCreditGrantSummaryRead]:
     return list_admin_money_credits(
@@ -124,7 +159,7 @@ def list_admin_money_credits_route(
 )
 def get_admin_money_credit(
     game_credit_id: uuid.UUID,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyCreditDetailRead:
     return get_admin_money_credit_detail(
@@ -145,7 +180,7 @@ def list_admin_money_payments_route(
     booking_id: uuid.UUID | None = None,
     game_id: uuid.UUID | None = None,
     limit: int = Query(default=100, ge=1, le=250),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[AdminMoneyPaymentListRead]:
     return list_admin_money_payments(
@@ -165,7 +200,7 @@ def list_admin_money_payments_route(
 )
 def get_admin_money_payment(
     payment_id: uuid.UUID,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyPaymentDetailRead:
     return get_admin_money_payment_detail(
@@ -185,9 +220,10 @@ def list_admin_money_refunds_route(
     refund_status: str = Query(default="all"),
     payment_id: uuid.UUID | None = None,
     booking_id: uuid.UUID | None = None,
+    host_publish_fee_id: uuid.UUID | None = None,
     game_id: uuid.UUID | None = None,
     limit: int = Query(default=100, ge=1, le=250),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[AdminMoneyRefundListRead]:
     return list_admin_money_refunds(
@@ -196,6 +232,7 @@ def list_admin_money_refunds_route(
         refund_status=refund_status,
         payment_id=payment_id,
         booking_id=booking_id,
+        host_publish_fee_id=host_publish_fee_id,
         game_id=game_id,
         limit=limit,
     )
@@ -208,7 +245,7 @@ def list_admin_money_refunds_route(
 )
 def get_admin_money_refund(
     refund_id: uuid.UUID,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyRefundDetailRead:
     return get_admin_money_refund_detail(
@@ -226,7 +263,7 @@ def get_admin_money_refund(
 def retry_admin_money_refund_route(
     refund_id: uuid.UUID,
     payload: AdminMoneyRefundRetryCreate,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_REFUND)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyRefundDetailRead:
     return retry_admin_money_refund(
@@ -245,7 +282,7 @@ def retry_admin_money_refund_route(
 def list_admin_money_support_flags_route(
     flag_status: str = Query(default="open"),
     limit: int = Query(default=100, ge=1, le=250),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[AdminMoneySupportFlagSummaryRead]:
     return list_admin_money_support_flags(
@@ -263,7 +300,7 @@ def list_admin_money_support_flags_route(
 )
 def get_admin_money_support_flag(
     support_flag_id: uuid.UUID,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneySupportFlagDetailRead:
     return get_admin_money_support_flag_detail(
@@ -281,7 +318,7 @@ def get_admin_money_support_flag(
 def resolve_admin_money_support_flag_route(
     support_flag_id: uuid.UUID,
     payload: SupportFlagResolve,
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneySupportFlagDetailRead:
     return resolve_admin_money_support_flag(

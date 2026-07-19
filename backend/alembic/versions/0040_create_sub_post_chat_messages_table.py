@@ -36,6 +36,9 @@ PREVIOUS_ADMIN_ACTION_TARGET_COLUMNS = (
     "target_sub_post_id",
     "target_sub_post_position_id",
     "target_sub_post_request_id",
+    "target_financial_outcome_id",
+    "target_host_publish_fee_id",
+    "target_host_publish_entitlement_id",
     "target_game_credit_id",
     "target_venue_image_id",
 )
@@ -98,7 +101,6 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.Column("edited_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("reviewed_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("removed_at", sa.DateTime(timezone=True), nullable=True),

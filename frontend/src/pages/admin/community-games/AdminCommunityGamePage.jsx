@@ -2,13 +2,18 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  Ban,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Eye,
   EyeOff,
   FileClock,
   Flag,
   MessageSquareText,
+  PauseCircle,
+  PlayCircle,
+  RotateCcw,
   ShieldAlert,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
@@ -37,23 +42,20 @@ import {
   listAdminCommunityGameChatModerationMessages,
   moderateAdminCommunityGameChatMessage,
 } from '../shared/adminApi.js'
-import {
-  ADMIN_PERMISSIONS,
-  hasAdminPermission,
-} from '../shared/adminWorkspaceData.js'
 import { useAdminAccess } from '../shared/useAdminAccess.js'
 import {
   formatAdminCommunityDateTime,
   formatAdminCommunityMoney,
   formatAdminCommunityStatus,
 } from './adminCommunityGameFormatters.js'
+import AdminCommunityGameActionModal from './AdminCommunityGameActionModal.jsx'
 import AdminCommunityGameHidePaymentTextModal from './AdminCommunityGameHidePaymentTextModal.jsx'
 import AdminCommunityGameReviewModal from './AdminCommunityGameReviewModal.jsx'
 
 const DETAIL_PAGE_SIZE = 50
 const COMMUNITY_DETAIL_TABS = [
   { id: 'overview', label: 'Overview' },
-  { id: 'review', label: 'Review' },
+  { id: 'review', label: 'Enforcement' },
   { id: 'chat', label: 'Chat' },
   { id: 'audit', label: 'Audit' },
 ]
@@ -208,7 +210,7 @@ function AdminCommunityChatLocked({ isLoading }) {
       >
         {isLoading
           ? 'Loading chat access.'
-          : 'Content moderation permission is required for chat inspection.'}
+          : 'Admin access is required for chat inspection.'}
       </AdminCommunityEmptyState>
     </AdminCommunitySection>
   )
@@ -385,8 +387,7 @@ function formatReviewStatus(value) {
   return labels[value] || formatAdminCommunityStatus(value)
 }
 
-function formatPublishFeeResult(publishFee, canRead) {
-  if (!canRead) return 'Not available'
+function formatPublishFeeResult(publishFee) {
   if (!publishFee) return 'No publish fee record'
   if (publishFee.waiver_reason === 'first_game_free') return 'Free first community game'
   if (publishFee.waiver_reason === 'admin_comp') return 'Waived by admin'
@@ -397,9 +398,18 @@ function formatPublishFeeResult(publishFee, canRead) {
 
 function formatAdminCommunityActionLabel(value) {
   const labels = {
+    admin_cancel_community_game: 'Admin cancel game',
     append_audit_note: 'Audit note',
     cancel_game: 'Cancel game',
+    create_financial_outcome: 'Financial outcome',
+    forfeit_publish_fee: 'Forfeit publish fee',
+    hide_community_game: 'Hide community game',
     hide_unsafe_community_payment_text: 'Hide payment info',
+    pause_community_game_joining: 'Pause joining',
+    refund_publish_fee: 'Refund publish fee',
+    restore_community_game: 'Restore community game',
+    restore_community_payment_text: 'Restore payment info',
+    resume_community_game_joining: 'Resume joining',
     resolve_support_flag: 'Resolve review flag',
   }
   return labels[value] || formatAdminCommunityStatus(value)
@@ -434,11 +444,10 @@ function formatCommunityHostPaymentMethods(game, snapshot) {
   return 'No payment methods provided'
 }
 
-function formatCommunityPublishFeeSummary(publishFee, canRead) {
-  if (!canRead) return null
+function formatCommunityPublishFeeSummary(publishFee) {
   if (!publishFee) return 'No publish fee record'
 
-  const statusLabel = formatPublishFeeResult(publishFee, canRead)
+  const statusLabel = formatPublishFeeResult(publishFee)
   const amountLabel = formatAdminCommunityMoney(publishFee.amount_cents, publishFee.currency)
   return `${statusLabel} · ${amountLabel}`
 }
@@ -539,17 +548,13 @@ function FieldList({ className = '', fields, layout }) {
 
 function CommunityOverview({ detail }) {
   const {
-    capabilities,
     game,
     host,
     participant_summary: participantSummary,
     payment_snapshot: paymentSnapshot,
     publish_fee: publishFee,
   } = detail
-  const publishFeeSummary = formatCommunityPublishFeeSummary(
-    publishFee,
-    capabilities.can_read_publish_fee,
-  )
+  const publishFeeSummary = formatCommunityPublishFeeSummary(publishFee)
   const overviewFields = [
     { label: 'Status', value: formatCommunityOverviewStatus(game) },
     { label: 'Host', value: host?.display_name || 'No host' },
@@ -709,26 +714,75 @@ function AuditActions({
   )
 }
 
-function ModerationState({ detail, onFlagForReview, onHidePaymentText }) {
-  const { capabilities, moderation_state: moderationState } = detail
+function CommunityTargetState({
+  detail,
+  onAction,
+  onFlagForReview,
+  onHidePaymentText,
+}) {
+  const {
+    enforcement_state: enforcementState,
+    game,
+    moderation_state: moderationState,
+    publish_fee: publishFee,
+  } = detail
+  const gameStatus = enforcementState.game_status || game.game_status
+  const isTerminalGame = ['cancelled', 'removed'].includes(gameStatus)
   const canHidePaymentText = Boolean(
-    capabilities.can_hide_unsafe_payment_text &&
     moderationState.host_payment_snapshot_present &&
     !moderationState.unsafe_payment_text_hidden,
   )
+  const canRestorePaymentText = Boolean(
+    moderationState.unsafe_payment_text_hidden,
+  )
   const canFlagForReview = Boolean(
-    capabilities.can_flag_game &&
     moderationState.review_flag_status !== 'open',
+  )
+  const canHideGame = Boolean(
+    !isTerminalGame &&
+    enforcementState.public_visibility_status === 'visible',
+  )
+  const canRestoreGame = Boolean(
+    !isTerminalGame &&
+    enforcementState.public_visibility_status === 'hidden',
+  )
+  const canPauseJoining = Boolean(
+    !isTerminalGame &&
+    enforcementState.join_enforcement_status === 'open',
+  )
+  const canResumeJoining = Boolean(
+    !isTerminalGame &&
+    enforcementState.join_enforcement_status === 'paused',
+  )
+  const canCancelGame = Boolean(
+    !isTerminalGame,
+  )
+  const hasTargetActions = (
+    canFlagForReview ||
+    canHidePaymentText ||
+    canRestorePaymentText ||
+    canHideGame ||
+    canRestoreGame ||
+    canPauseJoining ||
+    canResumeJoining ||
+    canCancelGame
   )
 
   return (
-    <AdminCommunitySection icon={ClipboardList} title="Safety Review">
+    <AdminCommunitySection icon={ClipboardList} title="Target State">
       <FieldList
         className="admin-community-review-facts"
         layout="four"
         fields={[
-          { label: 'Review status', value: formatReviewStatus(moderationState.review_flag_status) },
+          { label: 'Public visibility', value: formatAdminCommunityStatus(enforcementState.public_visibility_status) },
+          { label: 'Joining', value: formatAdminCommunityStatus(enforcementState.join_enforcement_status) },
+          { label: 'Game status', value: formatAdminCommunityStatus(gameStatus) },
           { label: 'Payment info', value: formatPaymentInfoState(moderationState) },
+          { label: 'Review status', value: formatReviewStatus(moderationState.review_flag_status) },
+          {
+            label: 'Publish fee',
+            value: formatPublishFeeResult(publishFee),
+          },
           {
             label: 'Hidden date',
             value: formatAdminCommunityOptionalDateTime(
@@ -741,7 +795,7 @@ function ModerationState({ detail, onFlagForReview, onHidePaymentText }) {
           },
         ]}
       />
-      {(canHidePaymentText || canFlagForReview) && (
+      {hasTargetActions && (
         <div className="admin-community-action-strip">
           {canFlagForReview && (
             <button
@@ -751,6 +805,46 @@ function ModerationState({ detail, onFlagForReview, onHidePaymentText }) {
             >
               <ClipboardList />
               Flag for review
+            </button>
+          )}
+          {canHideGame && (
+            <button
+              className="admin-community-button admin-community-button--danger"
+              type="button"
+              onClick={() => onAction('hide')}
+            >
+              <EyeOff />
+              Hide game
+            </button>
+          )}
+          {canRestoreGame && (
+            <button
+              className="admin-community-button admin-community-button--primary"
+              type="button"
+              onClick={() => onAction('restore')}
+            >
+              <Eye />
+              Restore game
+            </button>
+          )}
+          {canPauseJoining && (
+            <button
+              className="admin-community-button admin-community-button--danger"
+              type="button"
+              onClick={() => onAction('pauseJoining')}
+            >
+              <PauseCircle />
+              Pause joining
+            </button>
+          )}
+          {canResumeJoining && (
+            <button
+              className="admin-community-button admin-community-button--primary"
+              type="button"
+              onClick={() => onAction('resumeJoining')}
+            >
+              <PlayCircle />
+              Resume joining
             </button>
           )}
           {canHidePaymentText && (
@@ -763,6 +857,26 @@ function ModerationState({ detail, onFlagForReview, onHidePaymentText }) {
               Hide payment info
             </button>
           )}
+          {canRestorePaymentText && (
+            <button
+              className="admin-community-button admin-community-button--primary"
+              type="button"
+              onClick={() => onAction('restorePaymentText')}
+            >
+              <RotateCcw />
+              Restore payment info
+            </button>
+          )}
+          {canCancelGame && (
+            <button
+              className="admin-community-button admin-community-button--danger"
+              type="button"
+              onClick={() => onAction('cancel')}
+            >
+              <Ban />
+              Cancel game
+            </button>
+          )}
         </div>
       )}
     </AdminCommunitySection>
@@ -772,12 +886,13 @@ function ModerationState({ detail, onFlagForReview, onHidePaymentText }) {
 function AdminCommunityGamePage() {
   const { gameId } = useParams()
   const { currentUser } = useAuth()
-  const { adminAccess, isLoading: isAdminAccessLoading } = useAdminAccess()
+  const { hasAdminAccess, isLoading: isAdminAccessLoading } = useAdminAccess()
   const [detail, setDetail] = useState(null)
   const [loadState, setLoadState] = useState('loading')
   const [pageError, setPageError] = useState('')
   const [refreshCount, setRefreshCount] = useState(0)
   const [isHidePaymentModalOpen, setIsHidePaymentModalOpen] = useState(false)
+  const [communityAction, setCommunityAction] = useState(null)
   const [reviewModalFlag, setReviewModalFlag] = useState(undefined)
   const [supportFlagOffset, setSupportFlagOffset] = useState(0)
   const [auditOffset, setAuditOffset] = useState(0)
@@ -855,10 +970,8 @@ function AdminCommunityGamePage() {
   }, [auditOffset, currentUser, gameId, refreshCount, supportFlagOffset])
 
   const title = 'Manage Community Game'
-  const canViewChat = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.CONTENT_MODERATE,
-  )
+  const canViewChat = hasAdminAccess
+  const canRecordFinancialOutcome = hasAdminAccess
 
   function handlePaymentTextHidden(result) {
     setDetail((currentDetail) => {
@@ -875,6 +988,39 @@ function AdminCommunityGamePage() {
     setRefreshCount((count) => count + 1)
   }
 
+  function handleCommunityActionCompleted(result) {
+    setDetail((currentDetail) => {
+      if (!currentDetail) {
+        return currentDetail
+      }
+
+      if (result.payment_snapshot && result.moderation_state) {
+        return {
+          ...currentDetail,
+          payment_snapshot: result.payment_snapshot,
+          moderation_state: result.moderation_state,
+        }
+      }
+
+      if (result.enforcement_state) {
+        return {
+          ...currentDetail,
+          enforcement_state: result.enforcement_state,
+          game: {
+            ...currentDetail.game,
+            cancellation_source: result.enforcement_state.cancellation_source,
+            game_status: result.enforcement_state.game_status,
+            join_enforcement_status: result.enforcement_state.join_enforcement_status,
+            public_visibility_status: result.enforcement_state.public_visibility_status,
+          },
+        }
+      }
+
+      return currentDetail
+    })
+    setRefreshCount((count) => count + 1)
+  }
+
   return (
     <>
       <AdminWorkspaceLayout
@@ -887,7 +1033,7 @@ function AdminCommunityGamePage() {
           </div>
         )}
         breadcrumbs={['Admin', 'Games', 'Community Games']}
-        description="Review community game status, roster, payment info, safety review, and audit history."
+        description="Review community game status, roster, payment info, enforcement, and audit history."
         headerClassName="admin-community-page-header"
         icon={ShieldAlert}
         title={title}
@@ -928,13 +1074,14 @@ function AdminCommunityGamePage() {
 
               {activeTab === 'review' && (
                 <div className="admin-community-main-stack admin-community-tab-panel">
-                  <ModerationState
+                  <CommunityTargetState
                     detail={detail}
+                    onAction={setCommunityAction}
                     onFlagForReview={() => setReviewModalFlag(null)}
                     onHidePaymentText={() => setIsHidePaymentModalOpen(true)}
                   />
                   <SupportFlags
-                    canResolve={detail.capabilities.can_resolve_review_flags}
+                    canResolve
                     flags={detail.support_flags ?? []}
                     limit={detail.support_flag_limit ?? DETAIL_PAGE_SIZE}
                     offset={detail.support_flag_offset ?? supportFlagOffset}
@@ -983,6 +1130,16 @@ function AdminCommunityGamePage() {
           firebaseUser={currentUser}
           onClose={() => setIsHidePaymentModalOpen(false)}
           onHidden={handlePaymentTextHidden}
+        />
+      )}
+      {detail && communityAction && (
+        <AdminCommunityGameActionModal
+          action={communityAction}
+          canRecordFinancialOutcome={canRecordFinancialOutcome}
+          detail={detail}
+          firebaseUser={currentUser}
+          onClose={() => setCommunityAction(null)}
+          onCompleted={handleCommunityActionCompleted}
         />
       )}
       {detail && reviewModalFlag !== undefined && (

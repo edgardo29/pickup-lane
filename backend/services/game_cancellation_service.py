@@ -36,11 +36,10 @@ from backend.schemas.game_schema import (
     GameCancelCreate,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_COMMUNITY_GAMES_CANCEL,
-    PERMISSION_OFFICIAL_GAMES_CANCEL,
-    user_has_admin_permission,
+from backend.services.admin_review_service import (
+    close_open_content_moderation_case_for_game_lifecycle,
 )
+from backend.services.auth_service import user_is_active_admin
 from backend.services.game_rules import (
     ACTIVE_BOOKING_STATUSES,
     ACTIVE_JOIN_STATUSES,
@@ -76,9 +75,6 @@ from backend.services.stripe_service import (
     StripeConfigError,
     create_refund as create_stripe_refund,
 )
-
-
-OFFICIAL_CANCEL_REQUIRED_PERMISSIONS = [PERMISSION_OFFICIAL_GAMES_CANCEL]
 
 
 class OfficialCancellationCreditFailure(Exception):
@@ -120,7 +116,7 @@ def require_cancel_permission(db_game: Game, current_user: User) -> str:
         )
 
     if db_game.game_type == "community":
-        if user_has_admin_permission(current_user, PERMISSION_COMMUNITY_GAMES_CANCEL):
+        if user_is_active_admin(current_user):
             return "admin_cancelled"
 
         if db_game.host_user_id == current_user.id:
@@ -132,7 +128,7 @@ def require_cancel_permission(db_game: Game, current_user: User) -> str:
         )
 
     if db_game.game_type == "official":
-        if user_has_admin_permission(current_user, PERMISSION_OFFICIAL_GAMES_CANCEL):
+        if user_is_active_admin(current_user):
             return "admin_cancelled"
 
         raise HTTPException(
@@ -661,7 +657,6 @@ def build_official_game_cancellation_preview(
         game_id=db_game.id,
         game_status=db_game.game_status,
         preview_token=preview_token,
-        required_permissions=OFFICIAL_CANCEL_REQUIRED_PERMISSIONS,
         booking_count=len(bookings),
         participant_count=len(list_cancellable_game_participants(db, db_game)),
         waitlist_entry_count=len(list_cancellable_waitlist_entries(db, db_game)),
@@ -1177,24 +1172,66 @@ def create_game_cancellation_admin_action(
     notified_user_ids: list[uuid.UUID],
     payment_summary: dict[str, object],
     now: datetime,
+    idempotency_key: str | None = None,
+    action_type: str = "cancel_game",
 ) -> AdminAction | None:
     if cancellation_type != "admin_cancelled":
         return None
 
+    cancellation_source = "admin" if cancellation_type == "admin_cancelled" else "host"
     return record_admin_action(
         db,
         admin_user_id=current_user.id,
-        action_type="cancel_game",
+        action_type=action_type,
         target_game_id=db_game.id,
+        target_user_id=db_game.host_user_id,
         reason=cancel_reason,
         metadata={
             "old_game_status": old_game_status,
             "new_game_status": "cancelled",
+            "cancellation_source": cancellation_source,
             "notified_user_count": len(set(notified_user_ids)),
             "cancelled_at": now,
             **payment_summary,
         },
+        idempotency_key=idempotency_key,
         created_at=now,
+    )
+
+
+def build_community_game_review_case_closure(
+    *,
+    cancellation_type: str,
+    admin_action_type: str,
+) -> tuple[str, str, str, str]:
+    if cancellation_type == "admin_cancelled":
+        if admin_action_type == "admin_cancel_community_game":
+            return (
+                "enforcement_applied",
+                "admin_moderation_cancelled",
+                "admin",
+                (
+                    "Community Game was cancelled by an admin enforcement "
+                    "action before moderation review was completed."
+                ),
+            )
+        return (
+            "no_action_needed",
+            "admin_operational_cancelled",
+            "admin",
+            (
+                "Community Game was cancelled by an admin operational action "
+                "before moderation review was completed."
+            ),
+        )
+    return (
+        "no_action_needed",
+        "host_cancelled",
+        "host",
+        (
+            "Community Game was cancelled by its host before moderation review "
+            "was completed."
+        ),
     )
 
 
@@ -1341,6 +1378,8 @@ def apply_game_cancellation_state(
     db_game: Game,
     cancel_request: GameCancelCreate,
     current_user: User,
+    admin_action_idempotency_key: str | None = None,
+    admin_action_type: str = "cancel_game",
 ) -> tuple[Game, dict[str, object], list[uuid.UUID], AdminAction | None, list[uuid.UUID]]:
     now = datetime.now(timezone.utc)
     cancellation_type = validate_game_cancellation_request(
@@ -1394,6 +1433,8 @@ def apply_game_cancellation_state(
         notified_user_ids,
         payment_summary,
         now,
+        admin_action_idempotency_key,
+        admin_action_type,
     )
     support_flag_ids = stage_official_cancellation_followup_flag(
         db,
@@ -1406,12 +1447,41 @@ def apply_game_cancellation_state(
     db_game.game_status = "cancelled"
     db_game.cancelled_at = now
     db_game.cancelled_by_user_id = current_user.id
+    db_game.cancellation_source = (
+        "admin" if cancellation_type == "admin_cancelled" else "host"
+    )
     db_game.cancel_reason = cancel_reason
     db_game.completed_at = None
     db_game.completed_by_user_id = None
     db_game.updated_at = now
 
     db.add(db_game)
+    if db_game.game_type == "community":
+        (
+            closure_outcome,
+            lifecycle_action,
+            trigger_actor_type,
+            closure_reason,
+        ) = build_community_game_review_case_closure(
+            cancellation_type=cancellation_type,
+            admin_action_type=admin_action_type,
+        )
+        close_open_content_moderation_case_for_game_lifecycle(
+            db,
+            game_id=db_game.id,
+            closure_outcome=closure_outcome,
+            closure_reason=closure_reason,
+            lifecycle_action=lifecycle_action,
+            trigger_actor_type=trigger_actor_type,
+            trigger_actor_user_id=current_user.id,
+            closed_by_user_id=(
+                current_user.id if trigger_actor_type == "admin" else None
+            ),
+            admin_action=admin_action,
+            previous_game_status=old_game_status,
+            new_game_status="cancelled",
+            closed_at=now,
+        )
     return db_game, payment_summary, notified_user_ids, admin_action, support_flag_ids
 
 

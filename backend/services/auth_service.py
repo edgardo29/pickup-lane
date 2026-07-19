@@ -13,12 +13,10 @@ from backend.firebase_admin_client import (
     verify_firebase_token,
 )
 from backend.models import User
-from backend.services.admin_permission_service import (
-    require_user_admin_permission,
-    require_user_any_admin_permission,
-)
 from backend.services.hosting_access_service import apply_verified_hosting_eligibility
 from backend.services.user_service import build_user_conflict_detail
+
+ADMIN_ROLE = "admin"
 
 
 def get_active_user_by_auth_id(auth_user_id: str, db: Session) -> User | None:
@@ -181,17 +179,24 @@ def require_active_user(
     return current_user
 
 
-def require_admin_permission(permission: str):
-    def dependency(current_user: User = Depends(get_current_app_user)) -> User:
-        require_user_admin_permission(current_user, permission)
-        return current_user
+def user_is_active_admin(user: User) -> bool:
+    return (
+        user.role == ADMIN_ROLE
+        and user.account_status == "active"
+        and user.deleted_at is None
+    )
 
-    return dependency
+
+def require_active_admin_user(user: User) -> None:
+    if not user_is_active_admin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        )
 
 
-def require_any_admin_permission(*permissions: str):
-    def dependency(current_user: User = Depends(get_current_app_user)) -> User:
-        require_user_any_admin_permission(current_user, permissions)
-        return current_user
-
-    return dependency
+def require_active_admin(
+    current_user: User = Depends(get_current_app_user),
+) -> User:
+    require_active_admin_user(current_user)
+    return current_user

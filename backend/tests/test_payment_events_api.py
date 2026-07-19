@@ -233,14 +233,13 @@ def test_payment_event_scaffold_routes_reject_regular_user(client: TestClient):
     assert patch_response.status_code == 403, patch_response.text
 
 
-def test_payment_event_scaffold_routes_reject_moderator(client: TestClient):
-    moderator = create_user(client)
+def test_payment_event_scaffold_routes_reject_player(client: TestClient):
+    player = create_user(client)
     payment_event = create_payment_event(
         client,
-        provider_event_id="evt_ci_moderator_denied",
+        provider_event_id="evt_ci_player_denied",
     )
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    authenticate_as(player["id"])
 
     get_response = client.get(f"/payment-events/{payment_event['id']}")
     assert get_response.status_code == 403, get_response.text
@@ -250,9 +249,9 @@ def test_payment_event_scaffold_routes_reject_moderator(client: TestClient):
         json={
             "payment_id": None,
             "provider": "stripe",
-            "provider_event_id": "evt_ci_moderator_create_denied",
+            "provider_event_id": "evt_ci_player_create_denied",
             "event_type": "payment_intent.succeeded",
-            "raw_payload": {"id": "evt_ci_moderator_create_denied"},
+            "raw_payload": {"id": "evt_ci_player_create_denied"},
             "processing_status": "pending",
         },
     )

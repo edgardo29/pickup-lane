@@ -51,7 +51,6 @@ def seed_game_chats(db: Session, users: dict[str, User], games: dict[str, Game])
                     "review_status": "clear",
                     "created_at": message_timestamp,
                     "updated_at": message_timestamp,
-                    "edited_at": None,
                     "reviewed_at": None,
                     "reviewed_by_user_id": None,
                     "removed_at": None,

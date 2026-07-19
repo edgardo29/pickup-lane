@@ -19,10 +19,6 @@ from backend.models import (
 )
 from backend.schemas.admin_money_schema import AdminMoneySupportFlagDetailRead
 from backend.services.admin_action_service import user_can_read_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_AUDIT_READ,
-    user_has_admin_permission,
-)
 from backend.services.support_flag_service import user_can_read_support_flag
 
 ADMIN_MONEY_DETAIL_RELATED_LIMIT = 100
@@ -317,9 +313,6 @@ def list_support_flag_audit_actions(
     booking_id: uuid.UUID | None,
     credit_grants: list[GameCredit],
 ) -> list[AdminAction]:
-    if not user_has_admin_permission(viewer_user, PERMISSION_AUDIT_READ):
-        return []
-
     filters = [AdminAction.target_support_flag_id == support_flag.id]
     action_ids = [
         action_id

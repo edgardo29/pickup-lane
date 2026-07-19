@@ -44,6 +44,18 @@ class Game(Base):
             name="ck_games_game_status",
         ),
         CheckConstraint(
+            "public_visibility_status IN ('visible', 'hidden')",
+            name="ck_games_public_visibility_status",
+        ),
+        CheckConstraint(
+            "join_enforcement_status IN ('open', 'paused')",
+            name="ck_games_join_enforcement_status",
+        ),
+        CheckConstraint(
+            "(cancellation_source IS NULL OR cancellation_source IN ('host', 'admin', 'system'))",
+            name="ck_games_cancellation_source",
+        ),
+        CheckConstraint(
             "environment_type IN ('indoor', 'outdoor')",
             name="ck_games_environment_type",
         ),
@@ -142,6 +154,10 @@ class Game(Base):
             name="ck_games_cancelled_requires_cancelled_at",
         ),
         CheckConstraint(
+            "(cancellation_source IS NULL OR game_status = 'cancelled')",
+            name="ck_games_cancellation_source_requires_cancelled",
+        ),
+        CheckConstraint(
             "(game_status <> 'completed' OR completed_at IS NOT NULL)",
             name="ck_games_completed_requires_completed_at",
         ),
@@ -173,6 +189,7 @@ class Game(Base):
             postgresql_where=text(
                 "publish_status = 'published' "
                 "AND game_status = 'active' "
+                "AND public_visibility_status = 'visible' "
                 "AND deleted_at IS NULL"
             ),
         ),
@@ -259,6 +276,8 @@ class Game(Base):
         Index(
             "ix_games_admin_community_status_local_starts_created_id",
             "game_status",
+            "public_visibility_status",
+            "join_enforcement_status",
             "publish_status",
             "starts_on_local",
             "starts_at",
@@ -319,6 +338,12 @@ class Game(Base):
     )
     game_status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'active'")
+    )
+    public_visibility_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'visible'")
+    )
+    join_enforcement_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'open'")
     )
     title: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -398,6 +423,7 @@ class Game(Base):
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=True,
     )
+    cancellation_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

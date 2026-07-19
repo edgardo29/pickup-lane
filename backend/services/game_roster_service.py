@@ -27,6 +27,7 @@ from backend.services.game_rules import (
     ensure_timezone,
     game_requires_app_player_payment,
     require_join_ready_user,
+    require_community_game_joining_open,
     require_minimum_age,
     require_roster_window_open,
     validate_guest_count,
@@ -266,6 +267,7 @@ def join_game_roster_workflow(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This game is not open for joining.",
         )
+    require_community_game_joining_open(db_game)
 
     now = datetime.now(timezone.utc)
     require_roster_window_open(db_game, now, "Joining is closed for this game.")
@@ -534,6 +536,7 @@ def add_booking_game_guests_workflow(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only published active games can add guests.",
         )
+    require_community_game_joining_open(db_game)
 
     now = datetime.now(timezone.utc)
     require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
@@ -664,11 +667,15 @@ def add_host_game_guests_workflow(
             detail="Only the game host can add host guests.",
         )
 
-    if db_game.publish_status != "published" or db_game.game_status not in HOST_EDITABLE_GAME_STATUSES:
+    if (
+        db_game.publish_status != "published"
+        or db_game.game_status not in HOST_EDITABLE_GAME_STATUSES
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only published active games can be updated.",
         )
+    require_community_game_joining_open(db_game)
 
     now = datetime.now(timezone.utc)
     require_roster_window_open(db_game, now, "Attendance changes are closed for this game.")
@@ -759,6 +766,13 @@ def remove_game_guests_workflow(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="remove_count must be greater than 0.",
         )
+
+    if db_game.publish_status != "published" or db_game.game_status not in JOINABLE_GAME_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only published active games can update guests.",
+        )
+    require_community_game_joining_open(db_game)
 
     participant = get_existing_active_participant(db, db_game.id, acting_user.id)
     if participant is None:

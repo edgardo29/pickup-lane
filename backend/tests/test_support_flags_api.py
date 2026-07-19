@@ -76,19 +76,17 @@ def test_admin_lists_gets_and_resolves_support_flag(client: TestClient):
     assert any(row["action_type"] == "resolve_support_flag" for row in audit_rows)
 
 
-def test_moderator_cannot_read_staff_sensitive_support_flag(client: TestClient):
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
+def test_player_cannot_read_staff_sensitive_support_flag(client: TestClient):
+    player = create_user(client)
     target_user = create_user(client)
     support_flag_id = create_account_delete_support_flag(target_user["id"])
 
-    authenticate_as(moderator["id"])
+    authenticate_as(player["id"])
     list_response = client.get("/admin/support-flags")
     get_response = client.get(f"/admin/support-flags/{support_flag_id}")
 
-    assert list_response.status_code == 200, list_response.text
-    assert list_response.json() == []
-    assert get_response.status_code == 404, get_response.text
+    assert list_response.status_code == 403, list_response.text
+    assert get_response.status_code == 403, get_response.text
 
 
 def test_idempotent_support_flag_duplicate_keeps_resolved_state_by_default(

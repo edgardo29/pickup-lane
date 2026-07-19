@@ -1,5 +1,5 @@
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -24,6 +24,7 @@ from backend.tests.helpers import (
     create_venue,
     get_money_as_admin,
     get_roster_as_admin,
+    mark_user_email_verified,
     mock_checkout_payment_method_verification,
     set_user_role,
     unique_suffix,
@@ -153,6 +154,149 @@ def build_payment_intent_event(
         "status": status,
         "metadata": intent_metadata,
         "latest_charge": "ch_test_webhook",
+    }
+    if last_payment_error is not None:
+        intent["last_payment_error"] = last_payment_error
+
+    return {
+        "id": event_id,
+        "object": "event",
+        "type": event_type,
+        "data": {"object": intent},
+    }
+
+
+def create_pending_community_publish(
+    client: TestClient,
+    monkeypatch,
+    *,
+    confirm_status: str = "processing",
+) -> dict:
+    host = create_user(client)
+    mark_user_email_verified(host["id"])
+    authenticate_as(host["id"])
+    starts_at = datetime.now(timezone.utc) + timedelta(days=13)
+    first_payload = {
+        "starts_at": starts_at.isoformat(),
+        "ends_at": (starts_at + timedelta(hours=2)).isoformat(),
+        "timezone": "America/Chicago",
+        "format_label": "7v7",
+        "environment_type": "outdoor",
+        "total_spots": 14,
+        "price_per_player_cents": 2500,
+        "venue": {
+            "name": "Community Webhook Field",
+            "address_line_1": "123 Webhook Ave",
+            "city": "Chicago",
+            "state": "IL",
+            "postal_code": "60601",
+            "country_code": "US",
+        },
+        "payment_methods_snapshot": [{"type": "venmo", "value": "@host"}],
+    }
+    first_response = client.post("/community-games/publish", json=first_payload)
+    assert first_response.status_code == 201, first_response.text
+
+    payment_method = create_user_payment_method(client, host["id"])
+    mock_checkout_payment_method_verification(monkeypatch, payment_method)
+    payment_intent_id = f"pi_publish_webhook_{unique_suffix()}"
+
+    def fake_create_payment_intent(**kwargs):
+        assert kwargs["amount_cents"] == 499
+        assert kwargs["metadata"]["source"] == "community_publish_fee"
+        return StripePaymentIntentResult(
+            id=payment_intent_id,
+            client_secret=f"{payment_intent_id}_secret",
+            status="requires_payment_method",
+        )
+
+    def fake_confirm_payment_intent(provider_payment_intent_id, **kwargs):
+        assert provider_payment_intent_id == payment_intent_id
+        assert kwargs["payment_method_id"] == payment_method["stripe_payment_method_id"]
+        return StripePaymentIntentResult(
+            id=provider_payment_intent_id,
+            client_secret=f"{payment_intent_id}_secret_confirmed",
+            status=confirm_status,
+        )
+
+    monkeypatch.setattr(
+        "backend.services.community_game_publish_service.create_payment_intent",
+        fake_create_payment_intent,
+    )
+    monkeypatch.setattr(
+        "backend.services.community_game_publish_service.confirm_payment_intent",
+        fake_confirm_payment_intent,
+    )
+
+    paid_starts_at = starts_at + timedelta(days=1)
+    paid_response = client.post(
+        "/community-games/publish",
+        json={
+            **first_payload,
+            "starts_at": paid_starts_at.isoformat(),
+            "ends_at": (paid_starts_at + timedelta(hours=2)).isoformat(),
+            "venue": {
+                **first_payload["venue"],
+                "address_line_1": "456 Webhook Paid Ave",
+                "postal_code": "60602",
+            },
+            "payment_method_id": payment_method["id"],
+        },
+    )
+    assert paid_response.status_code == 201, paid_response.text
+    paid_body = paid_response.json()
+    assert paid_body["game"] is None
+    assert paid_body["attempt_id"] is not None
+    assert paid_body["payment_id"] is not None
+
+    return {
+        "host": host,
+        "attempt_id": paid_body["attempt_id"],
+        "payment_id": paid_body["payment_id"],
+        "amount_cents": 499,
+        "currency": "USD",
+        "payment_intent_id": payment_intent_id,
+    }
+
+
+def build_community_publish_payment_intent_event(
+    publish: dict,
+    *,
+    event_type: str,
+    event_id: str | None = None,
+    amount_cents: int | None = None,
+    currency: str = "usd",
+    status: str | None = None,
+    metadata: dict[str, str] | None = None,
+    last_payment_error: dict | None = None,
+) -> dict:
+    event_id = event_id or f"evt_publish_{unique_suffix()}"
+    status = status or event_type.rsplit(".", maxsplit=1)[-1]
+    intent_metadata = (
+        metadata
+        if metadata is not None
+        else {
+            "source": "community_publish_fee",
+            "host_user_id": publish["host"]["id"],
+            "community_publish_attempt_id": publish["attempt_id"],
+            "payment_id": publish["payment_id"],
+            "amount_cents": str(publish["amount_cents"]),
+        }
+    )
+    resolved_amount_cents = (
+        amount_cents if amount_cents is not None else publish["amount_cents"]
+    )
+    intent = {
+        "id": publish["payment_intent_id"],
+        "object": "payment_intent",
+        "amount": resolved_amount_cents,
+        "amount_received": (
+            resolved_amount_cents if event_type == "payment_intent.succeeded" else 0
+        ),
+        "currency": currency,
+        "status": status,
+        "metadata": intent_metadata,
+        "latest_charge": "ch_test_publish_webhook",
     }
     if last_payment_error is not None:
         intent["last_payment_error"] = last_payment_error
@@ -391,6 +535,106 @@ def test_stripe_webhook_rejects_invalid_signature(
 
     assert response.status_code == 400, response.text
     assert "Invalid Stripe webhook signature" in response.text
+
+
+def test_stripe_webhook_finalizes_community_publish_fee_success_once(
+    client: TestClient,
+    monkeypatch,
+):
+    publish = create_pending_community_publish(client, monkeypatch)
+    event_payload = build_community_publish_payment_intent_event(
+        publish,
+        event_type="payment_intent.succeeded",
+    )
+
+    response = post_stripe_event(client, monkeypatch, event_payload)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["processing_status"] == "processed"
+
+    authenticate_as(publish["host"]["id"])
+    attempt_response = client.get(
+        f"/community-games/publish-attempts/{publish['attempt_id']}"
+    )
+    assert attempt_response.status_code == 200, attempt_response.text
+    attempt_status = attempt_response.json()
+    assert attempt_status["status"] == "published"
+    assert attempt_status["attempt_status"] == "succeeded"
+    assert attempt_status["created_game_id"] is not None
+    assert attempt_status["game"]["id"] == attempt_status["created_game_id"]
+
+    payment_response = client.get(f"/payments/{publish['payment_id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    payment = payment_response.json()
+    assert payment["payment_status"] == "succeeded"
+    assert payment["game_id"] == attempt_status["created_game_id"]
+    assert payment["paid_at"] is not None
+
+    fees_response = get_money_as_admin(
+        client,
+        f"/host-publish-fees?game_id={attempt_status['created_game_id']}",
+    )
+    assert fees_response.status_code == 200, fees_response.text
+    fees = fees_response.json()
+    assert len(fees) == 1
+    assert fees[0]["fee_status"] == "paid"
+    assert fees[0]["payment_id"] == publish["payment_id"]
+
+    duplicate_response = post_stripe_event(client, monkeypatch, event_payload)
+    assert duplicate_response.status_code == 200, duplicate_response.text
+    assert duplicate_response.json()["duplicate"] is True
+
+    second_event_payload = build_community_publish_payment_intent_event(
+        publish,
+        event_type="payment_intent.succeeded",
+    )
+    second_response = post_stripe_event(client, monkeypatch, second_event_payload)
+    assert second_response.status_code == 200, second_response.text
+    assert second_response.json()["processing_status"] == "processed"
+
+    second_fees_response = get_money_as_admin(
+        client,
+        f"/host-publish-fees?game_id={attempt_status['created_game_id']}",
+    )
+    assert second_fees_response.status_code == 200, second_fees_response.text
+    assert len(second_fees_response.json()) == 1
+
+
+def test_stripe_webhook_marks_community_publish_fee_failed_without_game(
+    client: TestClient,
+    monkeypatch,
+):
+    publish = create_pending_community_publish(client, monkeypatch)
+    event_payload = build_community_publish_payment_intent_event(
+        publish,
+        event_type="payment_intent.payment_failed",
+        last_payment_error={
+            "code": "card_declined",
+            "message": "Your card was declined.",
+        },
+    )
+
+    response = post_stripe_event(client, monkeypatch, event_payload)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["processing_status"] == "processed"
+
+    authenticate_as(publish["host"]["id"])
+    attempt_response = client.get(
+        f"/community-games/publish-attempts/{publish['attempt_id']}"
+    )
+    assert attempt_response.status_code == 200, attempt_response.text
+    attempt_status = attempt_response.json()
+    assert attempt_status["status"] == "failed"
+    assert attempt_status["attempt_status"] == "failed"
+    assert attempt_status["created_game_id"] is None
+    assert "declined" in attempt_status["error_message"]
+
+    payment_response = client.get(f"/payments/{publish['payment_id']}")
+    assert payment_response.status_code == 200, payment_response.text
+    payment = payment_response.json()
+    assert payment["payment_status"] == "failed"
+    assert payment["game_id"] is None
 
 
 def test_stripe_webhook_succeeded_confirms_booking_and_participants(

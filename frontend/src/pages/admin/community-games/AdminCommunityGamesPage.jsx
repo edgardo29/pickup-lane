@@ -153,6 +153,14 @@ function groupGamesByDate(games) {
 function getCommunityGameIssues(game) {
   const issues = []
 
+  if (game.enforcement_state?.public_visibility_status === 'hidden') {
+    issues.push('Hidden')
+  }
+
+  if (game.enforcement_state?.join_enforcement_status === 'paused') {
+    issues.push('Joining paused')
+  }
+
   if (game.moderation_state?.review_flag_status === 'open') {
     issues.push('Review required')
   }

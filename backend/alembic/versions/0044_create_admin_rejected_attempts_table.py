@@ -22,7 +22,7 @@ ADMIN_REJECTED_ATTEMPT_TYPE_CHECK = (
 
 
 ADMIN_REJECTED_ATTEMPT_REJECTION_MODE_CHECK = (
-    "rejection_mode IN ('permission_denied_preload', 'domain_rejected_postload')"
+    "rejection_mode IN ('domain_rejected_postload')"
 )
 
 

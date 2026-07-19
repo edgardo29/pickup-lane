@@ -7,10 +7,6 @@ from backend.database import get_db
 from backend.models import User
 from backend.schemas import AdminActionCreate, AdminActionNoteCreate, AdminActionRead
 from backend.services.admin_action_policy import ADMIN_ACTION_TARGET_FIELDS
-from backend.services.admin_permission_service import (
-    PERMISSION_AUDIT_READ,
-    PERMISSION_AUDIT_SUPPORT_READ,
-)
 from backend.services.admin_action_service import (
     append_admin_action_note,
     create_admin_action,
@@ -18,10 +14,7 @@ from backend.services.admin_action_service import (
     list_admin_actions,
     serialize_admin_action_reads,
 )
-from backend.services.auth_service import (
-    require_admin_permission,
-    require_any_admin_permission,
-)
+from backend.services.auth_service import require_active_admin
 
 router = APIRouter(prefix="/admin/actions", tags=["admin_actions"])
 
@@ -29,7 +22,7 @@ router = APIRouter(prefix="/admin/actions", tags=["admin_actions"])
 @router.post("", response_model=AdminActionRead, status_code=status.HTTP_201_CREATED)
 def create_admin_action_route(
     admin_action: AdminActionCreate,
-    current_user: User = Depends(require_admin_permission(PERMISSION_AUDIT_READ)),
+    current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminActionRead:
     created_action = create_admin_action(
@@ -47,12 +40,7 @@ def create_admin_action_route(
 )
 def get_admin_action_route(
     admin_action_id: uuid.UUID,
-    current_user: User = Depends(
-        require_any_admin_permission(
-            PERMISSION_AUDIT_READ,
-            PERMISSION_AUDIT_SUPPORT_READ,
-        )
-    ),
+    current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminActionRead:
     admin_action = get_admin_action_for_viewer_or_404(
@@ -71,7 +59,7 @@ def get_admin_action_route(
 def append_admin_action_note_route(
     admin_action_id: uuid.UUID,
     note: AdminActionNoteCreate,
-    current_user: User = Depends(require_admin_permission(PERMISSION_AUDIT_READ)),
+    current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminActionRead:
     admin_action = append_admin_action_note(
@@ -105,13 +93,12 @@ def list_admin_actions_route(
     target_platform_notice_campaign_id: uuid.UUID | None = None,
     target_admin_action_id: uuid.UUID | None = None,
     target_support_flag_id: uuid.UUID | None = None,
+    target_review_case_id: uuid.UUID | None = None,
+    target_financial_outcome_id: uuid.UUID | None = None,
+    target_host_publish_fee_id: uuid.UUID | None = None,
+    target_host_publish_entitlement_id: uuid.UUID | None = None,
     limit: int = Query(default=100, ge=1, le=200),
-    current_user: User = Depends(
-        require_any_admin_permission(
-            PERMISSION_AUDIT_READ,
-            PERMISSION_AUDIT_SUPPORT_READ,
-        )
-    ),
+    current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[AdminActionRead]:
     target_filter_values = {
@@ -133,6 +120,10 @@ def list_admin_actions_route(
         "target_platform_notice_campaign_id": target_platform_notice_campaign_id,
         "target_admin_action_id": target_admin_action_id,
         "target_support_flag_id": target_support_flag_id,
+        "target_review_case_id": target_review_case_id,
+        "target_financial_outcome_id": target_financial_outcome_id,
+        "target_host_publish_fee_id": target_host_publish_fee_id,
+        "target_host_publish_entitlement_id": target_host_publish_entitlement_id,
     }
     target_filters = {
         field_name: target_filter_values[field_name]

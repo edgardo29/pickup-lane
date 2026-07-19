@@ -29,7 +29,7 @@ from backend.schemas.participant_status_history_schema import (
     ParticipantStatusHistoryCreate,
     ParticipantStatusHistoryUpdate,
 )
-from backend.services.admin_permission_service import ADMIN_ROLE
+from backend.services.auth_service import ADMIN_ROLE
 from backend.services.booking_rules import VALID_BOOKING_STATUSES, VALID_PAYMENT_STATUSES
 from backend.services.game_participant_rules import (
     VALID_ATTENDANCE_STATUSES,

@@ -35,6 +35,7 @@ from backend.services.need_a_sub_rules import (
     now_utc,
     require_before_post_start,
     require_live_sub_post,
+    require_publicly_visible_sub_post,
 )
 from backend.services.sub_post_chat_service import (
     resolve_sub_chat_notifications_for_user as resolve_sub_chat_notification_for_user,
@@ -211,6 +212,10 @@ def create_request(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Requests can only be created for open posts.",
         )
+    require_publicly_visible_sub_post(
+        sub_post,
+        "Requests can only be created for open posts.",
+    )
 
     if current_time >= ensure_aware(sub_post.expires_at):
         raise HTTPException(
@@ -352,6 +357,10 @@ def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> Sub
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This post is not accepting requests.",
         )
+    require_publicly_visible_sub_post(
+        sub_post,
+        "This post is not accepting requests.",
+    )
 
     if count_queued_slots(db, position.id) > position.spots_needed:
         raise HTTPException(
@@ -359,7 +368,14 @@ def owner_accept_request(db: Session, owner: User, request_id: uuid.UUID) -> Sub
             detail="This position is already full.",
         )
 
-    change_request_status(db, sub_request, "confirmed", owner.id, "owner", current_time=current_time)
+    change_request_status(
+        db,
+        sub_request,
+        "confirmed",
+        owner.id,
+        "owner",
+        current_time=current_time,
+    )
     resolve_owner_request_activity_notification(
         db,
         sub_post=sub_post,
@@ -531,7 +547,10 @@ def owner_cancel_request(
     expire_due_posts_and_requests(db)
     sub_request, sub_post = get_sub_post_request_and_post_for_update(db, request_id)
     require_owner(sub_post, owner)
-    require_before_post_start(sub_post, "Confirmed players cannot be removed after the game starts.")
+    require_before_post_start(
+        sub_post,
+        "Confirmed players cannot be removed after the game starts.",
+    )
     require_live_sub_post(sub_post, "Only active posts can be reviewed.")
 
     if sub_request.request_status != "confirmed":

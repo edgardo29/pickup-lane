@@ -58,15 +58,6 @@ def test_platform_notice_campaign_routes_require_manage_permission(
     )
     assert player_send_response.status_code == 403, player_send_response.text
 
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
-    moderator_response = client.post(
-        "/admin/platform-notice-campaigns",
-        json=campaign_payload(),
-    )
-    assert moderator_response.status_code == 403, moderator_response.text
-
     suspended_admin = create_user(client)
     set_user_role(suspended_admin["id"], "admin")
     set_user_account_status(suspended_admin["id"], "suspended")

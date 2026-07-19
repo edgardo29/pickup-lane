@@ -6,11 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User, UserStats
 from backend.schemas import UserStatsCreate, UserStatsRead, UserStatsUpdate
-from backend.services.admin_permission_service import (
-    PERMISSION_USERS_MANAGE,
-    PERMISSION_USERS_READ,
-)
-from backend.services.auth_service import get_current_app_user, require_admin_permission
+from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.user_stats_service import (
     create_user_stats_workflow,
     get_current_user_stats,
@@ -27,7 +23,7 @@ router = APIRouter(prefix="/user-stats", tags=["user_stats"])
 def create_user_stats(
     user_stats: UserStatsCreate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
+    _current_admin: User = Depends(require_active_admin),
 ) -> UserStats:
     return create_user_stats_workflow(db, user_stats)
 
@@ -45,7 +41,7 @@ def get_my_user_stats(
 def get_user_stats(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+    _current_admin: User = Depends(require_active_admin),
 ) -> UserStats:
     return get_user_stats_record(db, user_id)
 
@@ -55,7 +51,7 @@ def get_user_stats(
 def list_user_stats(
     user_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_READ)),
+    _current_admin: User = Depends(require_active_admin),
 ) -> list[UserStats]:
     return list_user_stats_workflow(db, user_id=user_id)
 
@@ -66,6 +62,6 @@ def update_user_stats(
     user_id: uuid.UUID,
     user_stats_update: UserStatsUpdate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(require_admin_permission(PERMISSION_USERS_MANAGE)),
+    _current_admin: User = Depends(require_active_admin),
 ) -> UserStats:
     return update_user_stats_workflow(db, user_id, user_stats_update)

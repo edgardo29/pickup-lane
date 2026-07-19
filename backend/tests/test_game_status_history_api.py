@@ -177,16 +177,15 @@ def test_game_status_history_requires_admin_permission(client: TestClient):
     assert patch_response.status_code == 403, patch_response.text
 
 
-def test_game_status_history_rejects_moderator(client: TestClient):
+def test_game_status_history_rejects_player(client: TestClient):
     user, _venue, game = create_game_status_history_setup(client)
     history = create_game_status_history(
         client,
         game["id"],
         changed_by_user_id=user["id"],
     )
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
 
     get_response = client.get(f"/game-status-history/{history['id']}")
     post_response = client.post(

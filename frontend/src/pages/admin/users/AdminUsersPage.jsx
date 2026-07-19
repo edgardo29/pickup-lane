@@ -34,7 +34,6 @@ const ROLE_OPTIONS = [
   { label: 'All roles', value: '' },
   { label: 'Player', value: 'player' },
   { label: 'Admin', value: 'admin' },
-  { label: 'Moderator', value: 'moderator' },
 ]
 
 const EMPTY_FILTERS = {

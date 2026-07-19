@@ -10,10 +10,7 @@ from backend.schemas import (
     ParticipantStatusHistoryRead,
     ParticipantStatusHistoryUpdate,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-)
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.status_history_service import (
     create_participant_status_history_record,
     get_participant_status_history_record,
@@ -35,9 +32,7 @@ router = APIRouter(
 def create_participant_status_history(
     participant_status_history: ParticipantStatusHistoryCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> ParticipantStatusHistory:
     del current_admin
     return create_participant_status_history_record(db, participant_status_history)
@@ -51,9 +46,7 @@ def create_participant_status_history(
 def get_participant_status_history(
     history_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> ParticipantStatusHistory:
     del current_admin
     return get_participant_status_history_record(db, history_id)
@@ -69,9 +62,7 @@ def list_participant_status_history(
     changed_by_user_id: uuid.UUID | None = None,
     change_source: str | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[ParticipantStatusHistory]:
     del current_admin
     return list_participant_status_history_records(
@@ -91,9 +82,7 @@ def update_participant_status_history(
     history_id: uuid.UUID,
     history_update: ParticipantStatusHistoryUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> ParticipantStatusHistory:
     del current_admin
     return update_participant_status_history_record(

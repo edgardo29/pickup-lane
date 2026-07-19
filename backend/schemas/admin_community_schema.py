@@ -22,6 +22,8 @@ class AdminCommunityGameSupportSafeRead(BaseModel):
     payment_collection_type: str
     publish_status: str
     game_status: str
+    public_visibility_status: str
+    join_enforcement_status: str
     title: str
     description: str | None
     venue_id: UUID
@@ -56,6 +58,7 @@ class AdminCommunityGameSupportSafeRead(BaseModel):
     published_at: datetime | None
     cancelled_at: datetime | None
     cancel_reason: str | None
+    cancellation_source: str | None = None
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -127,13 +130,11 @@ class AdminCommunityGameModerationStateRead(BaseModel):
     review_flag_status: str = "not_flagged"
 
 
-class AdminCommunityGameCapabilitiesRead(BaseModel):
-    can_read_audit: bool = False
-    can_read_publish_fee: bool = False
-    can_flag_game: bool = False
-    can_resolve_review_flags: bool = False
-    can_hide_unsafe_payment_text: bool = False
-    can_cancel_game: bool = False
+class AdminCommunityGameEnforcementStateRead(BaseModel):
+    public_visibility_status: str = "visible"
+    join_enforcement_status: str = "open"
+    game_status: str = "active"
+    cancellation_source: str | None = None
 
 
 class AdminCommunityGameListItemRead(BaseModel):
@@ -154,6 +155,7 @@ class AdminCommunityGameListItemRead(BaseModel):
     host: AdminCommunityGameHostRead | None = None
     participant_summary: AdminCommunityGameParticipantSummaryRead
     moderation_state: AdminCommunityGameModerationStateRead
+    enforcement_state: AdminCommunityGameEnforcementStateRead
     created_at: datetime
     updated_at: datetime
 
@@ -186,7 +188,22 @@ class AdminCommunityGameDetailRead(BaseModel):
     audit_offset: int = 0
     audit_limit: int = 50
     moderation_state: AdminCommunityGameModerationStateRead
-    capabilities: AdminCommunityGameCapabilitiesRead
+    enforcement_state: AdminCommunityGameEnforcementStateRead
+
+
+class AdminCommunityGameEnforcementActionCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    reason: str = Field(min_length=1, max_length=100)
+    idempotency_key: str = Field(min_length=8, max_length=160)
+
+
+class AdminCommunityGameEnforcementActionResultRead(BaseModel):
+    game_id: UUID
+    enforcement_state: AdminCommunityGameEnforcementStateRead
+    audit_action_id: UUID
+    notice_ids: list[UUID] = Field(default_factory=list)
+    idempotent_replay: bool = False
 
 
 class AdminCommunityGameHidePaymentTextCreate(BaseModel):
@@ -201,6 +218,7 @@ class AdminCommunityGameHidePaymentTextResultRead(BaseModel):
     payment_snapshot: AdminCommunityGamePaymentSnapshotRead
     moderation_state: AdminCommunityGameModerationStateRead
     audit_action_id: UUID
+    notice_ids: list[UUID] = Field(default_factory=list)
     idempotent_replay: bool = False
 
 

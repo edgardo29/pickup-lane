@@ -9,7 +9,6 @@ import {
 
 const STAFF_ROLE_OPTIONS = [
   { label: 'Player', value: 'player' },
-  { label: 'Moderator', value: 'moderator' },
   { label: 'Admin', value: 'admin' },
 ]
 
@@ -20,12 +19,9 @@ function createIdempotencyKey(userId) {
 
 function getDefaultNextRole(currentRole) {
   if (currentRole === 'player') {
-    return 'moderator'
+    return 'admin'
   }
-  if (currentRole === 'moderator') {
-    return 'player'
-  }
-  return 'moderator'
+  return 'player'
 }
 
 function AdminUserStaffRoleModal({

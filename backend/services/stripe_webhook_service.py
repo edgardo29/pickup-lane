@@ -10,16 +10,27 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
+    AdminFinancialOutcome,
     Booking,
+    CommunityPublishAttempt,
     Game,
     GameCreditUsage,
     GameParticipant,
+    HostPublishFee,
     Notification,
     Payment,
     PaymentEvent,
     Refund,
     User,
     WaitlistEntry,
+)
+from backend.services.community_game_publish_service import (
+    finalize_community_publish_attempt_success,
+    mark_community_publish_attempt_failed_or_canceled,
+    mark_community_publish_attempt_processing,
+)
+from backend.services.admin_financial_outcome_service import (
+    create_financial_outcome_notice_if_needed,
 )
 from backend.services.payment_event_service import build_payment_event_conflict_detail
 from backend.services.game_credit_service import (
@@ -32,12 +43,16 @@ from backend.services.game_service import (
     get_next_roster_order,
     sync_game_capacity_status,
 )
-from backend.services.game_rules import game_requires_app_player_payment
+from backend.services.game_rules import (
+    build_game_conflict_detail,
+    game_requires_app_player_payment,
+)
 from backend.services.game_notification_service import (
     create_or_reopen_booking_refunded_notification,
     create_waitlist_payment_failed_notification,
     create_waitlist_promotion_notification,
 )
+from backend.services.moderation_surfacing_service import surface_community_game_text
 from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
@@ -133,6 +148,7 @@ def record_and_process_stripe_webhook_event(
         db.add(payment_event)
         db.commit()
         db.refresh(payment_event)
+        surface_community_publish_fee_game_if_needed(db, payment_event)
     except IntegrityError as exc:
         db.rollback()
         if "uq_payment_events_provider_event_id" in str(exc.orig):
@@ -152,6 +168,28 @@ def record_and_process_stripe_webhook_event(
         "duplicate": False,
         "processing_status": payment_event.processing_status,
     }
+
+
+def surface_community_publish_fee_game_if_needed(
+    db: Session,
+    payment_event: PaymentEvent,
+) -> None:
+    if (
+        payment_event.processing_status != "processed"
+        or payment_event.event_type != "payment_intent.succeeded"
+        or payment_event.payment_id is None
+    ):
+        return
+
+    payment = db.get(Payment, payment_event.payment_id)
+    if (
+        payment is None
+        or payment.payment_type != "community_publish_fee"
+        or payment.game_id is None
+    ):
+        return
+
+    surface_community_game_text(db, game_id=payment.game_id)
 
 
 def get_payment_intent_payload(event_payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -287,6 +325,18 @@ def get_locked_payment(db: Session, payment_id: uuid.UUID | None) -> Payment | N
     ).first()
 
 
+def get_locked_community_publish_attempt_by_payment(
+    db: Session,
+    payment_id: uuid.UUID,
+) -> CommunityPublishAttempt | None:
+    return db.scalars(
+        select(CommunityPublishAttempt)
+        .where(CommunityPublishAttempt.payment_id == payment_id)
+        .with_for_update()
+        .limit(1)
+    ).first()
+
+
 def get_locked_booking(db: Session, booking_id: uuid.UUID | None) -> Booking | None:
     if booking_id is None:
         return None
@@ -313,6 +363,20 @@ def get_locked_refund_by_provider_id(
         .where(Refund.provider_refund_id == provider_refund_id)
         .with_for_update()
         .limit(1)
+    ).first()
+
+
+def get_locked_host_publish_fee(
+    db: Session,
+    host_publish_fee_id: uuid.UUID | None,
+) -> HostPublishFee | None:
+    if host_publish_fee_id is None:
+        return None
+
+    return db.scalars(
+        select(HostPublishFee)
+        .where(HostPublishFee.id == host_publish_fee_id)
+        .with_for_update()
     ).first()
 
 
@@ -424,6 +488,204 @@ def validate_payment_intent_references(
             return f"Stripe metadata {key} does not match internal records."
 
     return None
+
+
+def validate_community_publish_fee_intent_references(
+    payment: Payment,
+    attempt: CommunityPublishAttempt | None,
+    payment_intent: dict[str, Any],
+    *,
+    require_metadata: bool,
+) -> str | None:
+    amount_cents = get_payment_intent_amount_cents(payment_intent)
+    if amount_cents != payment.amount_cents:
+        return "Stripe amount does not match internal publish fee amount."
+
+    currency = get_payment_intent_currency(payment_intent)
+    if currency != payment.currency:
+        return "Stripe currency does not match internal publish fee currency."
+
+    if payment.payment_type != "community_publish_fee":
+        return "Internal payment is not a community publish fee."
+
+    if payment.booking_id is not None:
+        return "Community publish fee payment cannot reference a booking."
+
+    if attempt is None:
+        return "Internal community publish attempt for this payment was not found."
+
+    if attempt.payment_id != payment.id:
+        return "Publish attempt payment_id does not match internal payment."
+
+    if attempt.host_user_id != payment.payer_user_id:
+        return "Publish attempt host does not match payment payer."
+
+    if attempt.amount_cents != payment.amount_cents:
+        return "Publish attempt amount does not match internal payment amount."
+
+    if attempt.currency != payment.currency:
+        return "Publish attempt currency does not match internal payment currency."
+
+    metadata = get_payment_intent_metadata(payment_intent)
+    expected_metadata = {
+        "source": "community_publish_fee",
+        "host_user_id": str(payment.payer_user_id),
+        "community_publish_attempt_id": str(attempt.id),
+        "payment_id": str(payment.id),
+        "amount_cents": str(payment.amount_cents),
+    }
+
+    for key, expected_value in expected_metadata.items():
+        actual_value = metadata.get(key)
+        if actual_value is None and not require_metadata:
+            continue
+
+        if actual_value != expected_value:
+            return f"Stripe metadata {key} does not match internal publish records."
+
+    return None
+
+
+def apply_community_publish_fee_succeeded(
+    db: Session,
+    event: PaymentEvent,
+    payment: Payment,
+    payment_intent: dict[str, Any],
+    now: datetime,
+) -> None:
+    attempt = get_locked_community_publish_attempt_by_payment(db, payment.id)
+    validation_error = validate_community_publish_fee_intent_references(
+        payment,
+        attempt,
+        payment_intent,
+        require_metadata=True,
+    )
+    if validation_error is not None:
+        mark_event_failed(event, validation_error)
+        return
+
+    if (
+        payment.payment_status in COLLECTED_PAYMENT_STATUSES
+        and attempt is not None
+        and attempt.attempt_status == "succeeded"
+    ):
+        mark_event_processed(event, now)
+        return
+
+    try:
+        with db.begin_nested():
+            finalize_community_publish_attempt_success(
+                db,
+                payment=payment,
+                provider_charge_id=get_latest_charge_id(payment_intent),
+                now=now,
+            )
+    except ValueError as exc:
+        mark_event_failed(event, str(exc))
+        return
+    except IntegrityError as exc:
+        mark_event_failed(event, build_game_conflict_detail(exc))
+        return
+
+    mark_event_processed(event, now)
+
+
+def apply_community_publish_fee_processing(
+    db: Session,
+    event: PaymentEvent,
+    payment: Payment,
+    payment_intent: dict[str, Any],
+    now: datetime,
+) -> None:
+    attempt = get_locked_community_publish_attempt_by_payment(db, payment.id)
+    validation_error = validate_community_publish_fee_intent_references(
+        payment,
+        attempt,
+        payment_intent,
+        require_metadata=False,
+    )
+    if validation_error is not None:
+        mark_event_failed(event, validation_error)
+        return
+
+    if payment.payment_status in COLLECTED_PAYMENT_STATUSES:
+        mark_event_ignored(event, "Processing event arrived after payment success.")
+        return
+
+    try:
+        mark_community_publish_attempt_processing(
+            db,
+            payment=payment,
+            provider_charge_id=get_latest_charge_id(payment_intent),
+            now=now,
+        )
+    except ValueError as exc:
+        mark_event_failed(event, str(exc))
+        return
+
+    mark_event_processed(event, now)
+
+
+def apply_community_publish_fee_failed_or_canceled(
+    db: Session,
+    event: PaymentEvent,
+    payment: Payment,
+    payment_intent: dict[str, Any],
+    now: datetime,
+    *,
+    is_canceled: bool,
+) -> None:
+    attempt = get_locked_community_publish_attempt_by_payment(db, payment.id)
+    validation_error = validate_community_publish_fee_intent_references(
+        payment,
+        attempt,
+        payment_intent,
+        require_metadata=False,
+    )
+    if validation_error is not None:
+        mark_event_failed(event, validation_error)
+        return
+
+    if payment.payment_status in COLLECTED_PAYMENT_STATUSES:
+        mark_event_ignored(
+            event,
+            "Failure or cancel event arrived after payment success.",
+        )
+        return
+
+    if is_canceled:
+        payment_status = "canceled"
+        attempt_status = "cancelled"
+        fallback_code = "payment_intent_canceled"
+        fallback_message = "Stripe payment intent was canceled."
+    else:
+        payment_status = "failed"
+        attempt_status = "failed"
+        fallback_code = "payment_intent_payment_failed"
+        fallback_message = "Stripe payment intent failed."
+
+    failure_code, failure_message, _failure_reason = get_payment_failure_fields(
+        payment_intent,
+        fallback_code=fallback_code,
+        fallback_message=fallback_message,
+    )
+
+    try:
+        mark_community_publish_attempt_failed_or_canceled(
+            db,
+            payment=payment,
+            provider_charge_id=get_latest_charge_id(payment_intent),
+            now=now,
+            payment_status=payment_status,
+            attempt_status=attempt_status,
+            failure_code=failure_code,
+            failure_message=failure_message,
+        )
+    except ValueError as exc:
+        mark_event_failed(event, str(exc))
+        return
+
+    mark_event_processed(event, now)
 
 
 def get_waitlist_auto_promote_entry(
@@ -1031,6 +1293,7 @@ def sync_refunded_payment_and_booking(
     db: Session,
     payment: Payment,
     booking: Booking | None,
+    host_publish_fee: HostPublishFee | None,
     now: datetime,
 ) -> None:
     refunded_cents = (
@@ -1052,10 +1315,52 @@ def sync_refunded_payment_and_booking(
     payment.updated_at = now
     db.add(payment)
 
+    if host_publish_fee is not None and next_payment_status == "refunded":
+        host_publish_fee.fee_status = "refunded"
+        host_publish_fee.updated_at = now
+        db.add(host_publish_fee)
+
     if booking is not None:
         booking.payment_status = next_payment_status
         booking.updated_at = now
         db.add(booking)
+
+
+def sync_financial_outcome_for_refund(
+    db: Session,
+    refund: Refund,
+    refund_status: str,
+    now: datetime,
+) -> None:
+    financial_outcome = db.scalar(
+        select(AdminFinancialOutcome)
+        .where(AdminFinancialOutcome.refund_id == refund.id)
+        .with_for_update()
+        .limit(1)
+    )
+    if financial_outcome is None:
+        return
+
+    if refund_status == "succeeded":
+        financial_outcome.applied_status = "applied"
+        financial_outcome.failure_reason = None
+        financial_outcome.applied_at = financial_outcome.applied_at or now
+    elif refund_status in {"failed", "cancelled"}:
+        financial_outcome.applied_status = "failed"
+        financial_outcome.failure_reason = (
+            financial_outcome.failure_reason or f"Stripe refund {refund_status}."
+        )
+        financial_outcome.applied_at = financial_outcome.applied_at or now
+    else:
+        financial_outcome.applied_status = "pending"
+
+    financial_outcome.updated_at = now
+    db.add(financial_outcome)
+    create_financial_outcome_notice_if_needed(
+        db,
+        financial_outcome=financial_outcome,
+        created_by_user_id=financial_outcome.created_by_user_id,
+    )
 
 
 def booking_has_restored_game_credit(db: Session, booking_id: uuid.UUID) -> bool:
@@ -1120,8 +1425,26 @@ def process_refund_event(
 
     payment = get_locked_payment(db, refund.payment_id)
     booking = get_locked_booking(db, refund.booking_id)
+    host_publish_fee = get_locked_host_publish_fee(db, refund.host_publish_fee_id)
     if payment is None:
         mark_event_failed(event, "Internal payment for this refund was not found.")
+        return
+
+    if refund.host_publish_fee_id is not None and host_publish_fee is None:
+        mark_event_failed(
+            event,
+            "Internal host publish fee for this refund was not found.",
+        )
+        return
+
+    if host_publish_fee is not None and (
+        payment.payment_type != "community_publish_fee"
+        or host_publish_fee.payment_id != payment.id
+    ):
+        mark_event_failed(
+            event,
+            "Host publish fee refund does not match the internal payment.",
+        )
         return
 
     refund_status = map_stripe_refund_event_status(
@@ -1136,10 +1459,17 @@ def process_refund_event(
     elif refund_status in {"failed", "cancelled"}:
         refund.refunded_at = None
     db.add(refund)
+    sync_financial_outcome_for_refund(db, refund, refund_status, now)
 
     if refund_status == "succeeded":
         db.flush()
-        sync_refunded_payment_and_booking(db, payment, booking, now)
+        sync_refunded_payment_and_booking(
+            db,
+            payment,
+            booking,
+            host_publish_fee,
+            now,
+        )
         if booking is not None:
             game = get_locked_game(db, booking.game_id)
             if game is not None:
@@ -1180,6 +1510,35 @@ def process_payment_intent_event(
         return
 
     event.payment_id = payment.id
+
+    if payment.payment_type == "community_publish_fee":
+        if event_type == "payment_intent.succeeded":
+            apply_community_publish_fee_succeeded(
+                db, event, payment, payment_intent, now
+            )
+            return
+
+        if event_type == "payment_intent.processing":
+            apply_community_publish_fee_processing(
+                db, event, payment, payment_intent, now
+            )
+            return
+
+        if event_type == "payment_intent.payment_failed":
+            apply_community_publish_fee_failed_or_canceled(
+                db, event, payment, payment_intent, now, is_canceled=False
+            )
+            return
+
+        if event_type == "payment_intent.canceled":
+            apply_community_publish_fee_failed_or_canceled(
+                db, event, payment, payment_intent, now, is_canceled=True
+            )
+            return
+
+    if payment.payment_type != "booking":
+        mark_event_ignored(event, "PaymentIntent event matched unsupported payment type.")
+        return
 
     if event_type == "payment_intent.succeeded":
         apply_payment_intent_succeeded(db, event, payment, payment_intent, now)

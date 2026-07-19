@@ -253,7 +253,6 @@ def seed_notification_scenario() -> dict[str, UUID]:
                 "pinned_by_user_id": admin.id,
                 "visibility_status": "visible",
                 "review_status": "clear",
-                "edited_at": None,
                 "reviewed_at": None,
                 "reviewed_by_user_id": None,
                 "removed_at": None,

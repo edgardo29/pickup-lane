@@ -169,12 +169,18 @@ def test_sub_posts_create_get_list_cancel_and_remove(client: TestClient):
     assert audit_action["target_user_id"] == owner["id"]
     assert audit_action["target_sub_post_id"] == post["id"]
     assert audit_action["reason"] == "Moderation cleanup."
-    assert audit_action["metadata"] == {
+    audit_metadata = audit_action["metadata"]
+    assert {
+        key: audit_metadata[key]
+        for key in ("source", "old_status", "new_status", "removed_by")
+    } == {
         "source": "need_a_sub",
         "old_status": "cancelled",
         "new_status": "removed",
         "removed_by": "admin",
     }
+    assert audit_metadata["closed_request_ids"] == []
+    assert len(audit_metadata["notice_ids"]) == 1
 
 
 def test_sub_post_cards_cursor_paginates_and_returns_counts(client: TestClient):
@@ -1306,13 +1312,13 @@ def test_sub_posts_edit_cancel_and_remove_expire_due_post_before_action(client: 
     assert remove_response.json()["post_status"] == "removed"
 
 
-def test_sub_posts_moderator_can_remove_post(client: TestClient):
+def test_sub_posts_admin_can_remove_post(client: TestClient):
     owner = create_user(client)
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
     post = create_sub_post(client, owner["id"])
 
-    authenticate_as(moderator["id"])
+    authenticate_as(admin["id"])
     response = client.patch(
         f"/need-a-sub/posts/{post['id']}/remove",
         json={
@@ -1323,7 +1329,7 @@ def test_sub_posts_moderator_can_remove_post(client: TestClient):
 
     assert response.status_code == 200, response.text
     assert response.json()["post_status"] == "removed"
-    assert response.json()["removed_by_user_id"] == moderator["id"]
+    assert response.json()["removed_by_user_id"] == admin["id"]
 
 
 def test_sub_posts_remove_requires_reason_for_audit(client: TestClient):
@@ -1406,7 +1412,7 @@ def test_sub_posts_remove_replays_matching_idempotency_key(client: TestClient):
 
 
 def test_sub_posts_suspended_staff_cannot_remove_post(client: TestClient):
-    for role in ("admin", "moderator"):
+    for role in ("admin",):
         owner = create_user(client)
         staff = create_user(client)
         set_user_role(staff["id"], role)
@@ -1423,7 +1429,7 @@ def test_sub_posts_suspended_staff_cannot_remove_post(client: TestClient):
         )
 
         assert response.status_code == 403, response.text
-        assert response.json()["detail"] == "Active account required."
+        assert response.json()["detail"] == "Admin access required."
 
 
 def test_sub_posts_admin_remove_cancels_active_requests(client: TestClient):
@@ -1472,7 +1478,7 @@ def test_sub_posts_admin_remove_cancels_active_requests(client: TestClient):
         request_response = client.get("/need-a-sub/my-requests")
         assert request_response.status_code == 200, request_response.text
         requests_by_id = {request["id"]: request for request in request_response.json()}
-        assert requests_by_id[sub_request["id"]]["request_status"] == "canceled_by_owner"
+        assert requests_by_id[sub_request["id"]]["request_status"] == "closed_by_admin"
         player_notifications = list_need_a_sub_notifications(client, player["id"])
         assert "sub_post_removed" in notification_types(player_notifications)
         remove_notification = next(

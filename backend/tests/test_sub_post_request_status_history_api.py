@@ -74,11 +74,11 @@ def test_sub_post_request_status_history_blocks_unrelated_user(client: TestClien
     assert response.status_code == 403, response.text
 
 
-def test_sub_post_request_status_history_allows_moderator(client: TestClient):
+def test_sub_post_request_status_history_allows_admin(client: TestClient):
     owner = create_user(client)
     requester = create_user(client)
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
     post = create_sub_post(client, owner["id"])
 
     authenticate_as(requester["id"])
@@ -87,7 +87,7 @@ def test_sub_post_request_status_history_allows_moderator(client: TestClient):
         json={"sub_post_position_id": post["positions"][0]["id"]},
     ).json()
 
-    authenticate_as(moderator["id"])
+    authenticate_as(admin["id"])
     response = client.get(f"/need-a-sub/requests/{request['id']}/status-history")
 
     assert response.status_code == 200, response.text

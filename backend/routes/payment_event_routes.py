@@ -6,11 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import PaymentEvent, User
 from backend.schemas import PaymentEventCreate, PaymentEventRead, PaymentEventUpdate
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_PAYMENT_MANAGE,
-    PERMISSION_MONEY_READ,
-)
-from backend.services.auth_service import require_admin_permission
+from backend.services.auth_service import require_active_admin
 from backend.services.payment_event_service import (
     create_payment_event_record,
     get_payment_event_record,
@@ -27,9 +23,7 @@ router = APIRouter(prefix="/payment-events", tags=["payment_events"])
 def create_payment_event(
     payment_event: PaymentEventCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> PaymentEvent:
     del current_admin
     return create_payment_event_record(db, payment_event)
@@ -44,7 +38,7 @@ def create_payment_event(
 def get_payment_event(
     payment_event_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
 ) -> PaymentEvent:
     del current_admin
     return get_payment_event_record(db, payment_event_id)
@@ -59,7 +53,7 @@ def list_payment_events(
     event_type: str | None = None,
     processing_status: str | None = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin_permission(PERMISSION_MONEY_READ)),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[PaymentEvent]:
     del current_admin
     return list_payment_event_records(
@@ -82,9 +76,7 @@ def update_payment_event(
     payment_event_id: uuid.UUID,
     payment_event_update: PaymentEventUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(
-        require_admin_permission(PERMISSION_MONEY_PAYMENT_MANAGE)
-    ),
+    current_admin: User = Depends(require_active_admin),
 ) -> PaymentEvent:
     del current_admin
     return update_payment_event_record(db, payment_event_id, payment_event_update)

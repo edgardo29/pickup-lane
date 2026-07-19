@@ -9,14 +9,17 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import Booking, GameParticipant, Payment, Refund, User
+from backend.models import (
+    Booking,
+    GameParticipant,
+    HostPublishFee,
+    Payment,
+    Refund,
+    User,
+)
 from backend.schemas.refund_schema import RefundCreate, RefundUpdate
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_READ,
-    require_user_admin_permission,
-    user_has_admin_permission,
-)
+from backend.services.auth_service import require_active_admin_user, user_is_active_admin
 from backend.services.payment_rules import COLLECTED_PAYMENT_STATUSES
 
 VALID_REFUND_REASONS = {
@@ -28,6 +31,7 @@ VALID_REFUND_REASONS = {
     "admin_refund",
     "duplicate_payment",
     "dispute_resolution",
+    "publish_fee_refund",
 }
 VALID_REFUND_STATUSES = {
     "pending",
@@ -99,6 +103,21 @@ def get_participant_or_404(
     return db_participant
 
 
+def get_host_publish_fee_or_404(
+    db: Session,
+    host_publish_fee_id: uuid.UUID,
+) -> HostPublishFee:
+    db_host_publish_fee = db.get(HostPublishFee, host_publish_fee_id)
+
+    if db_host_publish_fee is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Host publish fee not found.",
+        )
+
+    return db_host_publish_fee
+
+
 def get_active_user_or_404(
     db: Session, user_id: uuid.UUID, detail: str
 ) -> User:
@@ -133,7 +152,8 @@ def validate_refund_business_rules(refund_data: dict[str, object]) -> None:
             detail=(
                 "refund_reason must be 'player_cancelled', 'late_cancel', "
                 "'host_cancelled', 'game_cancelled', 'weather', 'admin_refund', "
-                "'duplicate_payment', or 'dispute_resolution'."
+                "'duplicate_payment', 'dispute_resolution', or "
+                "'publish_fee_refund'."
             ),
         )
 
@@ -158,11 +178,52 @@ def validate_refund_business_rules(refund_data: dict[str, object]) -> None:
             detail="amount_cents must be greater than 0.",
         )
 
-    if refund_data["booking_id"] is None and refund_data["participant_id"] is None:
+    has_booking_target = (
+        refund_data["booking_id"] is not None
+        or refund_data["participant_id"] is not None
+    )
+    has_host_publish_fee_target = refund_data["host_publish_fee_id"] is not None
+    if not has_booking_target and not has_host_publish_fee_target:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refunds require booking_id or participant_id.",
+            detail="Refunds require booking_id, participant_id, or host_publish_fee_id.",
         )
+
+    if has_booking_target and has_host_publish_fee_target:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Host publish fee refunds cannot include booking or participant targets.",
+        )
+
+    if (
+        has_host_publish_fee_target
+        and refund_data["refund_reason"] != "publish_fee_refund"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Host publish fee refunds require refund_reason 'publish_fee_refund'.",
+        )
+
+    if has_booking_target and refund_data["refund_reason"] == "publish_fee_refund":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="publish_fee_refund requires host_publish_fee_id.",
+        )
+
+
+def reject_generic_host_publish_fee_refund_mutation(
+    refund_data: dict[str, object],
+) -> None:
+    if refund_data["host_publish_fee_id"] is None:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=(
+            "Host publish fee refunds must be recorded through "
+            "admin financial outcomes."
+        ),
+    )
 
 
 def validate_refund_status(value: str) -> None:
@@ -183,7 +244,8 @@ def validate_refund_reason(value: str) -> None:
             detail=(
                 "refund_reason must be 'player_cancelled', 'late_cancel', "
                 "'host_cancelled', 'game_cancelled', 'weather', 'admin_refund', "
-                "'duplicate_payment', or 'dispute_resolution'."
+                "'duplicate_payment', 'dispute_resolution', or "
+                "'publish_fee_refund'."
             ),
         )
 
@@ -243,10 +305,50 @@ def validate_refund_references(
             detail="Refunds require a payment that has succeeded.",
         )
 
+    if refund_data["requested_by_user_id"] is not None:
+        get_active_user_or_404(
+            db,
+            refund_data["requested_by_user_id"],
+            "Requested by user not found.",
+        )
+
+    if refund_data["approved_by_user_id"] is not None:
+        get_active_user_or_404(
+            db,
+            refund_data["approved_by_user_id"],
+            "Approved by user not found.",
+        )
+
+    if refund_data["host_publish_fee_id"] is not None:
+        db_host_publish_fee = get_host_publish_fee_or_404(
+            db,
+            refund_data["host_publish_fee_id"],
+        )
+
+        if db_payment.payment_type != "community_publish_fee":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Host publish fee refunds require a community publish fee payment.",
+            )
+
+        if db_host_publish_fee.payment_id != db_payment.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="host_publish_fee_id must match the payment.",
+            )
+
+        if db_host_publish_fee.host_user_id != db_payment.payer_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Host publish fee payment must use the host as payer.",
+            )
+
+        return db_payment
+
     if db_payment.booking_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refunds currently require a booking payment.",
+            detail="Booking or participant refunds require a booking payment.",
         )
 
     if refund_data["booking_id"] is not None:
@@ -275,20 +377,6 @@ def validate_refund_references(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="participant_id must belong to booking_id.",
             )
-
-    if refund_data["requested_by_user_id"] is not None:
-        get_active_user_or_404(
-            db,
-            refund_data["requested_by_user_id"],
-            "Requested by user not found.",
-        )
-
-    if refund_data["approved_by_user_id"] is not None:
-        get_active_user_or_404(
-            db,
-            refund_data["approved_by_user_id"],
-            "Approved by user not found.",
-        )
 
     return db_payment
 
@@ -346,6 +434,9 @@ def refund_audit_metadata(
         "refund_reason": refund.refund_reason,
         "amount_cents": refund.amount_cents,
         "currency": refund.currency,
+        "host_publish_fee_id": str(refund.host_publish_fee_id)
+        if refund.host_publish_fee_id is not None
+        else None,
     }
 
     if before is not None:
@@ -365,6 +456,7 @@ def create_refund_record(
 ) -> Refund:
     refund_data = normalize_refund_lifecycle_fields(payload.model_dump())
     validate_refund_business_rules(refund_data)
+    reject_generic_host_publish_fee_refund_mutation(refund_data)
     db_payment = validate_refund_references(db, refund_data)
     if refund_data["refund_status"] in REFUND_AMOUNT_HOLD_STATUSES:
         validate_refund_amount_available(
@@ -391,6 +483,7 @@ def create_refund_record(
             target_participant_id=new_refund.participant_id,
             target_payment_id=new_refund.payment_id,
             target_refund_id=new_refund.id,
+            target_host_publish_fee_id=new_refund.host_publish_fee_id,
             metadata=refund_audit_metadata(
                 new_refund,
                 source="refund_route_create",
@@ -426,7 +519,7 @@ def get_refund_for_user_or_404(
 
     db_payment = get_payment_or_404(db, db_refund.payment_id)
     if db_payment.payer_user_id != current_user.id:
-        require_user_admin_permission(current_user, PERMISSION_MONEY_READ)
+        require_active_admin_user(current_user)
 
     return db_refund
 
@@ -438,12 +531,13 @@ def list_refunds(
     payment_id: uuid.UUID | None = None,
     booking_id: uuid.UUID | None = None,
     participant_id: uuid.UUID | None = None,
+    host_publish_fee_id: uuid.UUID | None = None,
     refund_status: str | None = None,
     refund_reason: str | None = None,
     requested_by_user_id: uuid.UUID | None = None,
     approved_by_user_id: uuid.UUID | None = None,
 ) -> list[Refund]:
-    can_read_all_money = user_has_admin_permission(current_user, PERMISSION_MONEY_READ)
+    can_read_all_money = user_is_active_admin(current_user)
     statement = select(Refund).join(Payment, Refund.payment_id == Payment.id)
 
     if not can_read_all_money:
@@ -457,6 +551,9 @@ def list_refunds(
 
     if participant_id is not None:
         statement = statement.where(Refund.participant_id == participant_id)
+
+    if host_publish_fee_id is not None:
+        statement = statement.where(Refund.host_publish_fee_id == host_publish_fee_id)
 
     if refund_status is not None:
         validate_refund_status(refund_status)
@@ -499,6 +596,10 @@ def update_refund_record(
         "payment_id": update_data.get("payment_id", db_refund.payment_id),
         "booking_id": update_data.get("booking_id", db_refund.booking_id),
         "participant_id": update_data.get("participant_id", db_refund.participant_id),
+        "host_publish_fee_id": update_data.get(
+            "host_publish_fee_id",
+            db_refund.host_publish_fee_id,
+        ),
         "provider_refund_id": update_data.get(
             "provider_refund_id",
             db_refund.provider_refund_id,
@@ -523,6 +624,7 @@ def update_refund_record(
         effective_refund_data, db_refund
     )
     validate_refund_business_rules(effective_refund_data)
+    reject_generic_host_publish_fee_refund_mutation(effective_refund_data)
     db_payment = validate_refund_references(db, effective_refund_data)
     if effective_refund_data["refund_status"] in REFUND_AMOUNT_HOLD_STATUSES:
         validate_refund_amount_available(
@@ -556,6 +658,7 @@ def update_refund_record(
             target_participant_id=db_refund.participant_id,
             target_payment_id=db_refund.payment_id,
             target_refund_id=db_refund.id,
+            target_host_publish_fee_id=db_refund.host_publish_fee_id,
             metadata=refund_audit_metadata(
                 db_refund,
                 source="refund_route_update",

@@ -25,8 +25,7 @@ class AdminUserListRead(BaseModel):
 
 
 class AdminUserStaffRead(AdminUserListRead):
-    permissions: list[str] = Field(default_factory=list)
-    data_scopes: list[str] = Field(default_factory=list)
+    pass
 
 
 class AdminUserStaffRoleChangeCreate(BaseModel):
@@ -138,11 +137,6 @@ class AdminUserSupportFlagSummaryRead(BaseModel):
     resolved_at: datetime | None
     created_at: datetime
     updated_at: datetime
-
-
-class AdminUserCapabilitiesRead(BaseModel):
-    can_view_audit: bool
-    can_view_money: bool
 
 
 class AdminUserSuspensionOfficialHostImpactRead(BaseModel):
@@ -330,4 +324,3 @@ class AdminUserDetailRead(BaseModel):
     support_flags: list[AdminUserSupportFlagSummaryRead] = Field(
         default_factory=list
     )
-    capabilities: AdminUserCapabilitiesRead

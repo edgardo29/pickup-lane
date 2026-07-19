@@ -14,14 +14,11 @@ from backend.schemas.admin_user_schema import (
     AdminUserStaffRoleChangeResultRead,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    ADMIN_ROLE,
-    MODERATOR_ROLE,
-)
+from backend.services.auth_service import ADMIN_ROLE
 from backend.services.user_service import build_user_conflict_detail
 
 PLAYER_ROLE = "player"
-STAFF_ROLE_CHANGE_ROLES = (ADMIN_ROLE, MODERATOR_ROLE, PLAYER_ROLE)
+STAFF_ROLE_CHANGE_ROLES = (ADMIN_ROLE, PLAYER_ROLE)
 
 
 def normalize_staff_role_change_request(

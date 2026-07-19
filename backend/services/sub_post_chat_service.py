@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -18,7 +19,6 @@ from backend.models import (
 )
 from backend.schemas.sub_post_chat_message_schema import (
     SubPostChatMessageCreate,
-    SubPostChatMessageUpdate,
 )
 from backend.schemas.sub_post_chat_read_schema import (
     SubPostChatReadStateRead as SubPostChatReadStateReadSchema,
@@ -36,7 +36,12 @@ from backend.services.chat_moderation_service import (
     build_safe_message_preview,
     detect_chat_message,
 )
+from backend.services.moderation_surfacing_service import (
+    surface_need_a_sub_chat_message_text,
+)
 from backend.services.need_a_sub_rules import CHAT_ALLOWED_POST_STATUSES
+
+logger = logging.getLogger(__name__)
 
 MAX_SUB_CHAT_MESSAGE_LENGTH = 300
 MAX_SUB_CHAT_MESSAGES_PER_PAGE = 50
@@ -358,10 +363,17 @@ def replace_sub_chat_message_detections(
             SubPostChatMessageDetection.message_id == message.id
         )
     )
-    detections = detect_chat_message(
-        message.message_body,
-        is_repeated_message=is_repeated_message,
-    )
+    try:
+        detections = detect_chat_message(
+            message.message_body,
+            is_repeated_message=is_repeated_message,
+        )
+    except Exception:
+        logger.exception(
+            "Need a Sub chat moderation detector failed for message %s.",
+            message.id,
+        )
+        detections = []
     message.review_status = "needs_review" if detections else "clear"
     message.reviewed_at = None
     message.reviewed_by_user_id = None
@@ -829,7 +841,6 @@ def serialize_sub_chat_message(
         "review_status": message.review_status,
         "created_at": message.created_at,
         "updated_at": message.updated_at,
-        "edited_at": message.edited_at,
         "reviewed_at": message.reviewed_at,
         "reviewed_by_user_id": message.reviewed_by_user_id,
         "removed_at": message.removed_at,
@@ -1076,96 +1087,5 @@ def create_sub_post_chat_message_workflow(
             detail=str(exc.orig),
         ) from exc
 
+    surface_need_a_sub_chat_message_text(db, message_id=new_message.id)
     return serialize_sub_chat_message(db, new_message, sub_post)
-
-
-def update_sub_post_chat_message_workflow(
-    db: Session,
-    sub_post_id: uuid.UUID,
-    message_id: uuid.UUID,
-    payload: SubPostChatMessageUpdate,
-    current_user: User,
-) -> dict:
-    sub_post = get_sub_post_or_404(db, sub_post_id, lock_for_update=True)
-    db_chat = get_sub_post_chat_for_post(db, sub_post.id)
-    if db_chat is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Need a Sub chat not found.",
-        )
-
-    require_sub_post_chat_can_write(db, db_chat, current_user)
-    db_message = db.get(SubPostChatMessage, message_id)
-    if db_message is None or db_message.chat_id != db_chat.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Need a Sub chat message not found.",
-        )
-
-    if db_message.sender_user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the sender can update this Need a Sub chat message.",
-        )
-
-    if db_message.visibility_status == "removed":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Removed Need a Sub chat messages cannot be updated.",
-        )
-
-    update_data = payload.model_dump(exclude_unset=True)
-    did_remove_message = False
-    if "message_body" in update_data:
-        db_message.message_body = normalize_message_body(update_data["message_body"])
-        db_message.edited_at = now_utc()
-        is_repeated_message = sender_repeated_sub_chat_message(
-            db,
-            db_chat.id,
-            current_user.id,
-            db_message.message_body,
-            exclude_message_id=db_message.id,
-        )
-        replace_sub_chat_message_detections(
-            db,
-            db_message,
-            is_repeated_message=is_repeated_message,
-        )
-
-    if "visibility_status" in update_data:
-        if update_data["visibility_status"] != "removed":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only sender removal is supported for this message.",
-            )
-        current_time = now_utc()
-        db_message.visibility_status = "removed"
-        db_message.removed_source = "sender"
-        db_message.removed_at = current_time
-        db_message.removed_by_user_id = current_user.id
-        db_message.removed_reason = "Sender removed message."
-        did_remove_message = True
-
-    db_message.updated_at = now_utc()
-
-    try:
-        db.add(db_message)
-        db.flush()
-        refresh_sub_post_chat_summary(db, db_chat)
-        if did_remove_message:
-            reconcile_sub_chat_notifications_after_moderation(
-                db,
-                db_chat=db_chat,
-                moderated_at=db_message.updated_at,
-            )
-        db.flush()
-        db.commit()
-        db.refresh(db_message)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc.orig),
-        ) from exc
-
-    return serialize_sub_chat_message(db, db_message, sub_post)

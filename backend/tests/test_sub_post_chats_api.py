@@ -137,7 +137,6 @@ def test_need_a_sub_chat_routes_reject_suspended_user(client: TestClient):
     authenticate_as(user["id"])
     post_id = "00000000-0000-4000-8000-000000000001"
     chat_id = "00000000-0000-4000-8000-000000000002"
-    message_id = "00000000-0000-4000-8000-000000000003"
 
     responses = [
         client.post(f"/need-a-sub/posts/{post_id}/chat", json={}),
@@ -151,10 +150,6 @@ def test_need_a_sub_chat_routes_reject_suspended_user(client: TestClient):
                 "chat_id": chat_id,
                 "message_body": "Can still make this?",
             },
-        ),
-        client.patch(
-            f"/need-a-sub/posts/{post_id}/chat/messages/{message_id}",
-            json={"message_body": "Updated message."},
         ),
     ]
 
@@ -172,30 +167,6 @@ def test_need_a_sub_chat_owner_can_open_before_confirmed_players(client: TestCli
     assert chat["sub_post_id"] == post["id"]
     assert chat["chat_status"] == "active"
     assert chat["unread_count"] == 0
-
-
-def test_need_a_sub_chat_noop_edit_does_not_flag_repeated_message(
-    client: TestClient,
-):
-    owner, _confirmed_player, post, _sub_request, chat = create_confirmed_sub_chat_setup(
-        client
-    )
-    message = send_sub_chat_message(
-        client,
-        owner["id"],
-        post["id"],
-        chat["id"],
-        "Normal sub logistics update",
-    )
-    authenticate_as(owner["id"])
-
-    response = client.patch(
-        f"/need-a-sub/posts/{post['id']}/chat/messages/{message['id']}",
-        json={"message_body": "Normal sub logistics update"},
-    )
-
-    assert response.status_code == 200, response.text
-    assert response.json()["review_status"] == "clear"
 
 
 def test_need_a_sub_chat_rejects_request_supplied_actor_fields(client: TestClient):
@@ -225,16 +196,6 @@ def test_need_a_sub_chat_rejects_request_supplied_actor_fields(client: TestClien
         },
     )
     assert message_response.status_code == 422, message_response.text
-
-    message = send_sub_chat_message(client, owner["id"], post["id"], chat["id"])
-    update_response = client.patch(
-        f"/need-a-sub/posts/{post['id']}/chat/messages/{message['id']}",
-        json={
-            "sender_user_id": owner["id"],
-            "message_body": "This should also derive sender from auth.",
-        },
-    )
-    assert update_response.status_code == 422, update_response.text
 
 
 def test_need_a_sub_private_detail_stays_available_for_chat_window(
@@ -302,7 +263,7 @@ def test_need_a_sub_closed_chat_rejects_message_changes(client: TestClient):
     owner, confirmed_player, post, _sub_request, chat = create_confirmed_sub_chat_setup(
         client
     )
-    message = send_sub_chat_message(
+    send_sub_chat_message(
         client,
         owner["id"],
         post["id"],
@@ -324,18 +285,9 @@ def test_need_a_sub_closed_chat_rejects_message_changes(client: TestClient):
             "message_body": "This should not send.",
         },
     )
-    edit_response = client.patch(
-        f"/need-a-sub/posts/{post['id']}/chat/messages/{message['id']}",
-        json={"message_body": "This should not edit."},
-    )
-    remove_response = client.patch(
-        f"/need-a-sub/posts/{post['id']}/chat/messages/{message['id']}",
-        json={"visibility_status": "removed"},
-    )
 
-    for response in (create_response, edit_response, remove_response):
-        assert response.status_code == 400, response.text
-        assert "cannot receive messages" in response.text
+    assert create_response.status_code == 400, create_response.text
+    assert "cannot receive messages" in create_response.text
 
 
 def test_need_a_sub_closed_chat_still_hides_write_access_from_non_members(

@@ -1,15 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameCredit, User
-from backend.services.admin_rejected_attempt_policy import (
-    ATTEMPT_TYPE_ISSUE_CREDIT_REJECTED,
-    ATTEMPT_TYPE_REVERSE_CREDIT_REJECTED,
-)
-from backend.services.auth_service import get_current_app_user
+from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.schemas import (
     GameCreditBalanceRead,
     GameCreditIssueCreate,
@@ -18,7 +14,6 @@ from backend.schemas import (
 )
 from backend.services.game_credit_admin_service import (
     issue_admin_game_credit,
-    require_credit_admin_or_log_rejection,
     reverse_admin_game_credit,
 )
 from backend.services.game_credit_service import (
@@ -29,11 +24,6 @@ from backend.services.game_credit_service import (
 router = APIRouter(prefix="/game-credits", tags=["game_credits"])
 admin_router = APIRouter(prefix="/admin/game-credits", tags=["admin_game_credits"])
 
-
-def get_route_path_template(request: Request) -> str:
-    route = request.scope.get("route")
-    route_path = getattr(route, "path", None)
-    return route_path or request.url.path
 
 @router.get(
     "/balance",
@@ -64,23 +54,9 @@ def list_game_credits(
 )
 def issue_game_credit(
     payload: GameCreditIssueCreate,
-    request: Request,
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> GameCredit:
-    require_credit_admin_or_log_rejection(
-        db,
-        current_user=current_user,
-        route_method=request.method,
-        route_path=get_route_path_template(request),
-        attempt_type=ATTEMPT_TYPE_ISSUE_CREDIT_REJECTED,
-        attempted_refs={
-            "user_id": payload.user_id,
-            "source_game_id": payload.source_game_id,
-            "source_booking_id": payload.source_booking_id,
-            "source_payment_id": payload.source_payment_id,
-        },
-    )
     return issue_admin_game_credit(db, admin_user=current_user, payload=payload)
 
 
@@ -92,18 +68,9 @@ def issue_game_credit(
 def reverse_game_credit(
     game_credit_id: uuid.UUID,
     payload: GameCreditReverseCreate,
-    request: Request,
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> GameCredit:
-    require_credit_admin_or_log_rejection(
-        db,
-        current_user=current_user,
-        route_method=request.method,
-        route_path=get_route_path_template(request),
-        attempt_type=ATTEMPT_TYPE_REVERSE_CREDIT_REJECTED,
-        attempted_refs={"game_credit_id": game_credit_id},
-    )
     return reverse_admin_game_credit(
         db,
         admin_user=current_user,

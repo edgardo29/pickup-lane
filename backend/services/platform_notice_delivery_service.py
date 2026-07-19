@@ -23,10 +23,6 @@ from backend.schemas.platform_notice_campaign_schema import (
     PlatformNoticeCampaignDeliveryResult,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_NOTIFICATIONS_MANAGE,
-    require_user_admin_permission,
-)
 from backend.services.notification_event_service import build_app_notification_fields
 from backend.services.platform_notice_campaign_read_service import (
     campaign_delivery_summary,
@@ -366,7 +362,6 @@ def run_delivery_attempt(
     idempotency_key: str,
     attempt_type: str,
 ) -> PlatformNoticeCampaignDeliveryResult:
-    require_user_admin_permission(admin_user, PERMISSION_NOTIFICATIONS_MANAGE)
     normalized_key = normalize_idempotency_key(idempotency_key)
     campaign = get_campaign_for_update_or_404(db, campaign_id)
 
@@ -558,7 +553,6 @@ def list_platform_notice_campaign_deliveries(
     offset: int = 0,
     limit: int = 50,
 ) -> PlatformNoticeCampaignDeliveryListRead:
-    require_user_admin_permission(viewer_user, PERMISSION_NOTIFICATIONS_MANAGE)
     if db.get(PlatformNoticeCampaign, campaign_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -610,7 +604,6 @@ def list_platform_notice_campaign_attempts(
     offset: int = 0,
     limit: int = 50,
 ) -> PlatformNoticeCampaignAttemptListRead:
-    require_user_admin_permission(viewer_user, PERMISSION_NOTIFICATIONS_MANAGE)
     if db.get(PlatformNoticeCampaign, campaign_id) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

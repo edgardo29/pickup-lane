@@ -6,6 +6,9 @@
   --pl-button-green: linear-gradient(180deg, #d7ff35, #98ef0e);
   --pl-button-red: linear-gradient(180deg, #7a2024, #4a1114);
   --pl-button-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --pl-scrollbar-thumb: rgba(248, 250, 252, 0.22);
+  --pl-scrollbar-thumb-hover: rgba(248, 250, 252, 0.32);
+  --pl-scrollbar-track: transparent;
 
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -64,4 +67,38 @@ img {
   min-height: 100svh;
   min-height: 100vh;
   background: var(--app-bg);
+}
+
+.pl-scrollbar {
+  scrollbar-color: var(--pl-scrollbar-thumb) var(--pl-scrollbar-track);
+  scrollbar-width: thin;
+}
+
+.pl-scrollbar--stable {
+  scrollbar-gutter: stable;
+}
+
+.pl-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.pl-scrollbar::-webkit-scrollbar-track {
+  background: var(--pl-scrollbar-track);
+}
+
+.pl-scrollbar::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--pl-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.pl-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--pl-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.pl-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
 }

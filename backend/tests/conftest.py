@@ -11,6 +11,11 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 # Keep this list in dependency order for cleanup: child tables first, then the
 # parent tables they reference.
 TEST_TABLES = (
+    "admin_review_case_events",
+    "admin_review_case_notes",
+    "admin_content_moderation_findings",
+    "admin_review_signals",
+    "admin_target_notices",
     "sub_post_chat_reads",
     "sub_post_chat_messages",
     "sub_post_chats",
@@ -24,7 +29,9 @@ TEST_TABLES = (
     "platform_notice_campaign_target_users",
     "admin_rejected_attempts",
     "support_flags",
+    "admin_financial_outcomes",
     "admin_actions",
+    "admin_review_cases",
     "platform_notice_campaigns",
     "game_credit_usage",
     "game_credits",
@@ -37,7 +44,9 @@ TEST_TABLES = (
     "booking_status_history",
     "participant_status_history",
     "refunds",
+    "host_publish_entitlements",
     "host_publish_fees",
+    "community_publish_attempts",
     "payment_events",
     "payments",
     "waitlist_entries",

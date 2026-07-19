@@ -435,7 +435,7 @@ def test_admin_game_image_reads_can_inspect_hidden_images(client: TestClient):
     assert any(item["id"] == hidden_image["id"] for item in list_response.json())
 
 
-def test_game_image_mutations_require_admin_permission(client: TestClient):
+def test_game_image_mutations_require_admin_access(client: TestClient):
     user, _venue, game = create_game_image_setup(client)
     game_image = create_game_image(client, game["id"], uploaded_by_user_id=user["id"])
     authenticate_as(user["id"])
@@ -463,19 +463,18 @@ def test_game_image_mutations_require_admin_permission(client: TestClient):
     assert admin_list_response.status_code == 403, admin_list_response.text
 
 
-def test_game_image_admin_routes_reject_moderator(client: TestClient):
+def test_game_image_admin_routes_reject_player(client: TestClient):
     user, _venue, game = create_game_image_setup(client)
     game_image = create_game_image(client, game["id"], uploaded_by_user_id=user["id"])
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    player = create_user(client)
+    authenticate_as(player["id"])
 
     create_response = client.post(
         "/game-images",
         json={
             "game_id": game["id"],
             "uploaded_by_user_id": user["id"],
-            "image_url": "https://example.com/images/moderator-denied.jpg",
+            "image_url": "https://example.com/images/player-denied.jpg",
             "image_role": "gallery",
             "image_status": "active",
             "is_primary": False,

@@ -31,14 +31,11 @@ from backend.schemas.admin_chat_moderation_schema import (
     AdminChatSummaryRead,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_permission_service import (
-    PERMISSION_CONTENT_MODERATE,
-    require_user_admin_permission,
-)
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
 )
+from backend.services.auth_service import require_active_admin_user
 from backend.services.game_chat_service import (
     reconcile_game_chat_notifications_after_moderation,
     refresh_game_chat_summary,
@@ -174,7 +171,6 @@ def serialize_game_chat_message(
         review_status=message.review_status,
         created_at=message.created_at,
         updated_at=message.updated_at,
-        edited_at=message.edited_at,
         reviewed_at=message.reviewed_at,
         reviewed_by_user_id=message.reviewed_by_user_id,
         removed_at=message.removed_at,
@@ -206,7 +202,6 @@ def serialize_need_a_sub_chat_message(
         review_status=message.review_status,
         created_at=message.created_at,
         updated_at=message.updated_at,
-        edited_at=message.edited_at,
         reviewed_at=message.reviewed_at,
         reviewed_by_user_id=message.reviewed_by_user_id,
         removed_at=message.removed_at,
@@ -348,7 +343,7 @@ def list_admin_game_chat_messages(
     offset: int = 0,
     limit: int = DEFAULT_REVIEW_PAGE_SIZE,
 ) -> AdminChatMessageListRead:
-    require_user_admin_permission(viewer_user, PERMISSION_CONTENT_MODERATE)
+    require_active_admin_user(viewer_user)
     normalized_view = normalize_review_view(view)
     page_offset = max(0, offset)
     page_limit = max(1, min(limit, MAX_REVIEW_PAGE_SIZE))
@@ -381,7 +376,7 @@ def list_admin_need_a_sub_chat_messages(
     offset: int = 0,
     limit: int = DEFAULT_REVIEW_PAGE_SIZE,
 ) -> AdminChatMessageListRead:
-    require_user_admin_permission(viewer_user, PERMISSION_CONTENT_MODERATE)
+    require_active_admin_user(viewer_user)
     normalized_view = normalize_review_view(view)
     page_offset = max(0, offset)
     page_limit = max(1, min(limit, MAX_REVIEW_PAGE_SIZE))
@@ -412,7 +407,7 @@ def get_admin_game_chat_summary(
     game_id: uuid.UUID,
     viewer_user: User,
 ) -> AdminChatSummaryRead:
-    require_user_admin_permission(viewer_user, PERMISSION_CONTENT_MODERATE)
+    require_active_admin_user(viewer_user)
     game = db.get(Game, game_id)
     if game is None or game.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found.")
@@ -442,7 +437,7 @@ def get_admin_need_a_sub_chat_summary(
     post_id: uuid.UUID,
     viewer_user: User,
 ) -> AdminChatSummaryRead:
-    require_user_admin_permission(viewer_user, PERMISSION_CONTENT_MODERATE)
+    require_active_admin_user(viewer_user)
     post = db.get(SubPost, post_id)
     if post is None:
         raise HTTPException(
@@ -705,7 +700,7 @@ def run_chat_moderation_action(
     action_type: str,
     require_reason: bool,
 ) -> AdminChatModerationActionResultRead:
-    require_user_admin_permission(admin_user, PERMISSION_CONTENT_MODERATE)
+    require_active_admin_user(admin_user)
     normalized_scope = normalize_chat_scope(chat_scope)
     reason, idempotency_key = normalize_action_payload(
         payload,

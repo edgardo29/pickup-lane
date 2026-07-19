@@ -192,22 +192,23 @@ def test_generic_game_chat_routes_require_staff_permission(client: TestClient):
     assert patch_response.status_code == 403, patch_response.text
 
 
-def test_moderator_can_read_but_cannot_manage_generic_game_chats(
+def test_admin_can_read_and_manage_generic_game_chats(
     client: TestClient,
 ):
     host = create_user(client)
     venue = create_venue(client, host["id"])
     game = create_game(client, host["id"], venue)
+    game_without_chat = create_game(client, host["id"], venue)
     game_chat = create_game_chat(client, game["id"])
-    moderator = create_user(client)
-    set_user_role(moderator["id"], "moderator")
-    authenticate_as(moderator["id"])
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
 
     get_response = client.get(f"/game-chats/{game_chat['id']}")
     list_response = client.get(f"/game-chats?game_id={game['id']}")
     create_response = client.post(
         "/game-chats",
-        json={"game_id": game["id"], "chat_status": "active"},
+        json={"game_id": game_without_chat["id"], "chat_status": "active"},
     )
     patch_response = client.patch(
         f"/game-chats/{game_chat['id']}",
@@ -216,5 +217,5 @@ def test_moderator_can_read_but_cannot_manage_generic_game_chats(
 
     assert get_response.status_code == 200, get_response.text
     assert list_response.status_code == 200, list_response.text
-    assert create_response.status_code == 403, create_response.text
-    assert patch_response.status_code == 403, patch_response.text
+    assert create_response.status_code == 201, create_response.text
+    assert patch_response.status_code == 200, patch_response.text

@@ -15,12 +15,6 @@ from backend.models import (
     SupportFlag,
     VenueImage,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_MONEY_READ,
-    PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-    PERMISSION_OFFICIAL_GAMES_READ,
-    ROLE_PERMISSIONS,
-)
 from backend.services.game_credit_service import (
     GameCreditLedgerError,
     RELEASED_USAGE_STATUS,
@@ -933,51 +927,6 @@ def test_admin_can_list_official_game_money_from_admin_route(
     )
 
 
-def test_official_game_money_reads_require_money_permission(
-    client: TestClient,
-    monkeypatch,
-):
-    admin = create_user(client)
-    set_user_role(admin["id"], "admin")
-    monkeypatch.setitem(
-        ROLE_PERMISSIONS,
-        "admin",
-        frozenset(
-            {
-                PERMISSION_OFFICIAL_GAMES_READ,
-                PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-            }
-        ),
-    )
-    missing_game_id = "00000000-0000-0000-0000-000000000000"
-
-    authenticate_as(admin["id"])
-    game_response = client.get(f"/admin/official-games/{missing_game_id}")
-    participant_response = client.get(
-        f"/admin/official-games/{missing_game_id}/participants"
-    )
-    booking_response = client.get(
-        f"/admin/official-games/{missing_game_id}/bookings"
-    )
-    waitlist_response = client.get(
-        f"/admin/official-games/{missing_game_id}/waitlist"
-    )
-    money_response = client.get(f"/admin/official-games/{missing_game_id}/money")
-    removal_preview_response = client.post(
-        (
-            f"/admin/official-games/{missing_game_id}/participants/"
-            f"{missing_game_id}/remove-preview"
-        )
-    )
-
-    assert game_response.status_code == 404, game_response.text
-    assert participant_response.status_code == 404, participant_response.text
-    assert booking_response.status_code == 403, booking_response.text
-    assert waitlist_response.status_code == 403, waitlist_response.text
-    assert money_response.status_code == 403, money_response.text
-    assert removal_preview_response.status_code == 403, removal_preview_response.text
-
-
 def test_admin_official_game_cancel_preview_reports_money_without_mutation(
     client: TestClient,
 ):
@@ -1017,7 +966,6 @@ def test_admin_official_game_cancel_preview_reports_money_without_mutation(
     assert response.status_code == 200, response.text
     preview = response.json()
     assert len(preview["preview_token"]) == 64
-    assert preview["required_permissions"] == ["admin.official_games.cancel"]
     assert preview["booking_count"] == 1
     assert preview["participant_count"] == 1
     assert preview["waitlist_entry_count"] == 1
@@ -2229,7 +2177,6 @@ def test_admin_paid_player_removal_preview_reports_impact_without_mutation(
     assert len(preview["preview_token"]) == 64
     assert preview["blocking_reasons"] == []
     assert preview["allowed_outcomes"] == ["refund_cash_and_remove_party"]
-    assert preview["required_permissions"] == ["admin.money.refund"]
     assert preview["payment_statuses"] == ["succeeded"]
     assert preview["cash_collected_cents"] == 1300
     assert preview["cash_refundable_cents"] == 1300
@@ -2349,10 +2296,6 @@ def test_admin_player_removal_preview_reports_combined_cash_and_credit(
     assert preview["allowed_outcomes"] == [
         "refund_cash_restore_credit_and_remove_party"
     ]
-    assert set(preview["required_permissions"]) == {
-        "admin.money.credit_manage",
-        "admin.money.refund",
-    }
     assert preview["cash_collected_cents"] == 800
     assert preview["cash_refundable_cents"] == 800
     assert preview["credit_redeemed_cents"] == 500
@@ -2702,7 +2645,6 @@ def test_admin_executes_pending_hold_removal_and_releases_reserved_credit(
     assert preview["allowed_outcomes"] == [
         "release_pending_hold_and_remove_party"
     ]
-    assert preview["required_permissions"] == []
 
     execute_response = client.post(
         (
@@ -3018,7 +2960,6 @@ def test_admin_executes_credit_only_player_removal(
     assert preview_response.status_code == 200, preview_response.text
     preview = preview_response.json()
     assert preview["classification"] == "restore_credit"
-    assert preview["required_permissions"] == ["admin.money.credit_manage"]
 
     execute_response = client.post(
         (
@@ -3142,151 +3083,6 @@ def test_admin_paid_player_removal_refund_failure_creates_follow_up(
         list_user_notifications(client, player["id"], "booking_refunded")
         == []
     )
-
-
-def test_admin_paid_player_removal_execution_requires_refund_permission(
-    client: TestClient,
-    monkeypatch,
-):
-    admin = create_user(client)
-    player = create_user(client)
-    set_user_role(admin["id"], "admin")
-
-    authenticate_as(admin["id"])
-    create_response = client.post(
-        "/admin/official-games",
-        json=build_official_game_payload(),
-    )
-    assert create_response.status_code == 201, create_response.text
-    game = create_response.json()["game"]
-    booking = create_booking(client, player["id"], game["id"])
-    participant = create_game_participant(
-        client,
-        player["id"],
-        game["id"],
-        booking_id=booking["id"],
-        price_cents=1500,
-    )
-    create_payment(
-        client,
-        player["id"],
-        booking_id=booking["id"],
-        amount_cents=1300,
-        payment_status="succeeded",
-        provider_charge_id="ch_missing_refund_permission",
-    )
-    monkeypatch.setitem(
-        ROLE_PERMISSIONS,
-        "admin",
-        frozenset(
-            {
-                PERMISSION_OFFICIAL_GAMES_READ,
-                PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-                PERMISSION_MONEY_READ,
-            }
-        ),
-    )
-    authenticate_as(admin["id"])
-    preview_response = client.post(
-        (
-            f"/admin/official-games/{game['id']}/participants/"
-            f"{participant['id']}/remove-preview"
-        )
-    )
-    assert preview_response.status_code == 200, preview_response.text
-    preview = preview_response.json()
-
-    execute_response = client.post(
-        (
-            f"/admin/official-games/{game['id']}/participants/"
-            f"{participant['id']}/remove"
-        ),
-        json={
-            "preview_token": preview["preview_token"],
-            "outcome": preview["allowed_outcomes"][0],
-            "reason": "Permission boundary test.",
-        },
-    )
-
-    assert execute_response.status_code == 403, execute_response.text
-
-
-def test_admin_paid_player_removal_execution_requires_money_read(
-    client: TestClient,
-    monkeypatch,
-):
-    admin = create_user(client)
-    player = create_user(client)
-    set_user_role(admin["id"], "admin")
-
-    authenticate_as(admin["id"])
-    create_response = client.post(
-        "/admin/official-games",
-        json=build_official_game_payload(),
-    )
-    assert create_response.status_code == 201, create_response.text
-    game = create_response.json()["game"]
-    booking = create_booking(
-        client,
-        player["id"],
-        game["id"],
-        booking_status="pending_payment",
-        payment_status="requires_action",
-        booked_at=None,
-    )
-    participant = create_game_participant(
-        client,
-        player["id"],
-        game["id"],
-        booking_id=booking["id"],
-        participant_status="pending_payment",
-        confirmed_at=None,
-        price_cents=1500,
-    )
-    create_payment(
-        client,
-        player["id"],
-        booking_id=booking["id"],
-        amount_cents=1300,
-        payment_status="requires_action",
-    )
-
-    preview_response = client.post(
-        (
-            f"/admin/official-games/{game['id']}/participants/"
-            f"{participant['id']}/remove-preview"
-        )
-    )
-    assert preview_response.status_code == 200, preview_response.text
-    preview = preview_response.json()
-    assert preview["allowed_outcomes"] == [
-        "release_pending_hold_and_remove_party"
-    ]
-
-    monkeypatch.setitem(
-        ROLE_PERMISSIONS,
-        "admin",
-        frozenset(
-            {
-                PERMISSION_OFFICIAL_GAMES_READ,
-                PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-            }
-        ),
-    )
-    authenticate_as(admin["id"])
-    execute_response = client.post(
-        (
-            f"/admin/official-games/{game['id']}/participants/"
-            f"{participant['id']}/remove"
-        ),
-        json={
-            "preview_token": preview["preview_token"],
-            "outcome": preview["allowed_outcomes"][0],
-            "reason": "Permission boundary test.",
-        },
-    )
-
-    assert execute_response.status_code == 403, execute_response.text
 
 
 def test_admin_remove_guest_notifies_booking_owner_with_guest_copy(

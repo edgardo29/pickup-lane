@@ -13,10 +13,7 @@ from backend.schemas.game_participant_schema import (
     GameParticipantCreate,
     GameParticipantUpdate,
 )
-from backend.services.admin_permission_service import (
-    PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-    require_user_admin_permission,
-)
+from backend.services.auth_service import require_active_admin_user
 from backend.services.game_participant_rules import (
     build_game_participant_conflict_detail,
     normalize_game_participant_lifecycle_fields,
@@ -176,10 +173,7 @@ def get_game_participant_for_user_or_404(
         )
 
     if not can_read_participant:
-        require_user_admin_permission(
-            current_user,
-            PERMISSION_OFFICIAL_GAMES_ROSTER_MANAGE,
-        )
+        require_active_admin_user(current_user)
 
     return db_participant
 

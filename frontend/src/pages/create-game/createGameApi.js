@@ -36,7 +36,7 @@ export async function publishCommunityGame(firebaseUser, payload) {
     throw new Error('Sign in to publish a game.')
   }
 
-  const response = await apiRequest('/community-games/publish', {
+  return apiRequest('/community-games/publish', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
@@ -44,7 +44,18 @@ export async function publishCommunityGame(firebaseUser, payload) {
     },
     body: JSON.stringify(payload),
   })
-  return response.game
+}
+
+export async function getCommunityPublishAttempt(firebaseUser, attemptId) {
+  if (!firebaseUser) {
+    throw new Error('Sign in to view this publish attempt.')
+  }
+
+  return apiRequest(`/community-games/publish-attempts/${attemptId}`, {
+    headers: {
+      Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+    },
+  })
 }
 
 export async function loadEditableGame(firebaseUser, gameId) {

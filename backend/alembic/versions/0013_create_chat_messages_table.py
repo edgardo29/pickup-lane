@@ -65,7 +65,6 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.Column("edited_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("reviewed_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("removed_at", sa.DateTime(timezone=True), nullable=True),

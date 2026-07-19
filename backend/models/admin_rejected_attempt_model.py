@@ -23,7 +23,7 @@ class AdminRejectedAttempt(Base):
             name="ck_admin_rejected_attempts_attempt_type",
         ),
         CheckConstraint(
-            "rejection_mode IN ('permission_denied_preload', 'domain_rejected_postload')",
+            "rejection_mode IN ('domain_rejected_postload')",
             name="ck_admin_rejected_attempts_rejection_mode",
         ),
         CheckConstraint(

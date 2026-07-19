@@ -21,7 +21,9 @@ REQUEST_STATUSES = {
     "canceled_by_owner",
     "no_show_reported",
     "expired",
+    "closed_by_admin",
 }
+PUBLIC_VISIBILITY_STATUSES = {"visible", "hidden"}
 ACTIVE_VISIBLE_POST_STATUSES = {"active"}
 CHAT_ALLOWED_POST_STATUSES = {"active", "completed", "expired"}
 ACTIVE_REQUEST_STATUSES = {"pending", "confirmed", "sub_waitlist"}
@@ -49,6 +51,7 @@ TERMINAL_REQUEST_STATUSES = {
     "canceled_by_owner",
     "no_show_reported",
     "expired",
+    "closed_by_admin",
 }
 SUB_POST_UPDATED_RECIPIENT_STATUSES = ACTIVE_REQUEST_STATUSES
 SUB_POST_UPDATED_STRUCTURAL_FIELDS = (
@@ -119,6 +122,22 @@ def require_before_post_start(sub_post: SubPost, detail: str) -> None:
 
 def require_live_sub_post(sub_post: SubPost, detail: str) -> None:
     if sub_post.post_status not in ACTIVE_VISIBLE_POST_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
+def sub_post_is_publicly_visible(sub_post: SubPost) -> bool:
+    return (
+        sub_post.post_status in ACTIVE_VISIBLE_POST_STATUSES
+        and sub_post.public_visibility_status == "visible"
+        and ensure_aware(sub_post.starts_at) >= now_utc()
+    )
+
+
+def require_publicly_visible_sub_post(sub_post: SubPost, detail: str) -> None:
+    if not sub_post_is_publicly_visible(sub_post):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,

@@ -96,6 +96,12 @@ def upgrade() -> None:
         sa.Column("owner_user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("post_status", sa.String(length=30), nullable=False),
         sa.Column(
+            "public_visibility_status",
+            sa.String(length=20),
+            nullable=False,
+            server_default=sa.text("'visible'"),
+        ),
+        sa.Column(
             "sport_type",
             sa.String(length=50),
             nullable=False,
@@ -165,6 +171,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "post_status IN ('active', 'completed', 'cancelled', 'expired', 'removed')",
             name="ck_sub_posts_post_status",
+        ),
+        sa.CheckConstraint(
+            "public_visibility_status IN ('visible', 'hidden')",
+            name="ck_sub_posts_public_visibility_status",
         ),
         sa.CheckConstraint(
             "sport_type IN ('soccer')",
@@ -248,19 +258,25 @@ def upgrade() -> None:
         "ix_sub_posts_browse_active_starts_at",
         "sub_posts",
         ["starts_at"],
-        postgresql_where=sa.text("post_status = 'active'"),
+        postgresql_where=sa.text(
+            "post_status = 'active' AND public_visibility_status = 'visible'"
+        ),
     )
     op.create_index(
         "ix_sub_posts_cards_active_local_starts_created_id",
         "sub_posts",
         ["starts_on_local", "starts_at", "created_at", "id"],
-        postgresql_where=sa.text("post_status = 'active'"),
+        postgresql_where=sa.text(
+            "post_status = 'active' AND public_visibility_status = 'visible'"
+        ),
     )
     op.create_index(
         "ix_sub_posts_owner_cards_active_local_starts_created_id",
         "sub_posts",
         ["owner_user_id", "starts_on_local", "starts_at", "created_at", "id"],
-        postgresql_where=sa.text("post_status = 'active'"),
+        postgresql_where=sa.text(
+            "post_status = 'active' AND public_visibility_status = 'visible'"
+        ),
     )
     op.create_index(
         "ux_sub_posts_owner_active_starts_on_local",

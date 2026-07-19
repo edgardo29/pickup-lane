@@ -5,6 +5,7 @@ from backend.tests.helpers import (
     create_booking,
     create_game,
     create_game_participant,
+    create_host_publish_fee,
     create_payment,
     create_refund,
     create_user,
@@ -77,6 +78,7 @@ def test_refunds_create_get_list_and_update(client: TestClient):
         "refund_reason": "player_cancelled",
         "amount_cents": 500,
         "currency": "USD",
+        "host_publish_fee_id": None,
     }
     assert actions_by_type["update_refund"]["target_user_id"] == user["id"]
     assert actions_by_type["update_refund"]["target_booking_id"] == booking["id"]
@@ -88,6 +90,7 @@ def test_refunds_create_get_list_and_update(client: TestClient):
         "refund_reason": "player_cancelled",
         "amount_cents": 500,
         "currency": "USD",
+        "host_publish_fee_id": None,
         "old_refund_status": "pending",
         "new_refund_status": "approved",
         "before": {
@@ -123,6 +126,113 @@ def test_refunds_can_scope_to_participant(client: TestClient):
 
     assert refund["participant_id"] == participant["id"]
     assert refund["booking_id"] is None
+
+
+def test_refunds_reject_host_publish_fee_creation_without_financial_outcome(
+    client: TestClient,
+):
+    host = create_user(client)
+    admin = create_money_admin(client)
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    payment = create_payment(
+        client,
+        host["id"],
+        game_id=game["id"],
+        payment_type="community_publish_fee",
+        amount_cents=499,
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+        idempotency_key=f"publish-fee-payment-{unique_suffix()}",
+    )
+    host_publish_fee = create_host_publish_fee(
+        client,
+        game["id"],
+        host["id"],
+        payment_id=payment["id"],
+        amount_cents=499,
+        fee_status="paid",
+        waiver_reason="none",
+    )
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        "/refunds",
+        json={
+            "payment_id": payment["id"],
+            "host_publish_fee_id": host_publish_fee["id"],
+            "provider_refund_id": f"re_{unique_suffix()}",
+            "amount_cents": 499,
+            "currency": "USD",
+            "refund_reason": "publish_fee_refund",
+            "refund_status": "processing",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "admin financial outcomes" in response.text
+
+
+def test_refunds_reject_host_publish_fee_update_without_financial_outcome(
+    client: TestClient,
+):
+    user, _venue, _game, booking, booking_payment = create_paid_booking_setup(client)
+    refund = create_refund(
+        client,
+        booking_payment["id"],
+        booking_id=booking["id"],
+        amount_cents=booking_payment["amount_cents"],
+    )
+    admin = create_money_admin(client)
+    venue = create_venue(client, user["id"])
+    community_game = create_game(
+        client,
+        user["id"],
+        venue,
+        game_type="community",
+        host_user_id=user["id"],
+        policy_mode="custom_hosted",
+    )
+    publish_payment = create_payment(
+        client,
+        user["id"],
+        game_id=community_game["id"],
+        payment_type="community_publish_fee",
+        amount_cents=499,
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+        idempotency_key=f"publish-fee-payment-{unique_suffix()}",
+    )
+    host_publish_fee = create_host_publish_fee(
+        client,
+        community_game["id"],
+        user["id"],
+        payment_id=publish_payment["id"],
+        amount_cents=499,
+        fee_status="paid",
+        waiver_reason="none",
+    )
+
+    authenticate_as(admin["id"])
+    response = client.patch(
+        f"/refunds/{refund['id']}",
+        json={
+            "payment_id": publish_payment["id"],
+            "booking_id": None,
+            "host_publish_fee_id": host_publish_fee["id"],
+            "refund_reason": "publish_fee_refund",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert "admin financial outcomes" in response.text
 
 
 def test_refunds_reject_unsucceeded_payment(client: TestClient):

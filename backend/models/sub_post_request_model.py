@@ -1,7 +1,15 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Index, String, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    String,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,7 +23,7 @@ class SubPostRequest(Base):
             (
                 "request_status IN ('pending', 'confirmed', 'declined', "
                 "'sub_waitlist', 'canceled_by_player', 'canceled_by_owner', "
-                "'no_show_reported', 'expired')"
+                "'no_show_reported', 'expired', 'closed_by_admin')"
             ),
             name="ck_sub_post_requests_request_status",
         ),

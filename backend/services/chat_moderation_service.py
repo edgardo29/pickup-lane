@@ -39,7 +39,7 @@ LINK_PATTERN = re.compile(
     re.IGNORECASE,
 )
 OFF_PLATFORM_PATTERN = re.compile(
-    r"\b(?:text me|txt me|call me|dm me|message me|whatsapp|telegram|signal|"
+    r"\b(?:text me|txt me|call me|dm me|whatsapp|telegram|signal|"
     r"instagram|snapchat|phone number|my number)\b",
     re.IGNORECASE,
 )

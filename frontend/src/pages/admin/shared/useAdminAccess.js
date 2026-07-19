@@ -6,7 +6,7 @@ import {
 } from 'react'
 import { useAuth } from '../../../hooks/useAuth.js'
 import { fetchAdminMe } from './adminApi.js'
-import { hasAdminPermission } from './adminWorkspaceData.js'
+import { hasAdminWorkspaceAccess } from './adminWorkspaceData.js'
 
 export const AdminAccessContext = createContext(null)
 
@@ -78,7 +78,7 @@ export function useAdminAccessState({ enabled = true, reloadKey = 0 } = {}) {
   return {
     adminAccess,
     error,
-    hasPermission: (permission) => hasAdminPermission(adminAccess, permission),
+    hasAdminAccess: hasAdminWorkspaceAccess(adminAccess),
     isLoading: isAuthLoading || isWaitingToLoad,
     isRefreshing: loadState === 'loading' && Boolean(adminAccess),
     loadState,

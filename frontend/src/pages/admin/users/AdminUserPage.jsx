@@ -20,10 +20,6 @@ import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminUsers.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
 import { getAdminUser } from '../shared/adminApi.js'
-import {
-  ADMIN_PERMISSIONS,
-  hasAdminPermission,
-} from '../shared/adminWorkspaceData.js'
 import { useAdminAccess } from '../shared/useAdminAccess.js'
 import {
   formatAdminUserDate,
@@ -379,12 +375,10 @@ function SupportFlagsSection({ flags }) {
   )
 }
 
-function AuditSection({ actions, canViewAudit }) {
+function AuditSection({ actions }) {
   return (
     <AdminUserSection count={actions.length} icon={FileClock} title="Audit History">
-      {!canViewAudit ? (
-        <AdminUserEmpty>Audit history is not available for this staff account.</AdminUserEmpty>
-      ) : actions.length === 0 ? (
+      {actions.length === 0 ? (
         <AdminUserEmpty>No directly user-targeted audit actions found.</AdminUserEmpty>
       ) : (
         <div className="admin-user-detail-list">
@@ -419,7 +413,7 @@ function AdminUserPage() {
     syncCurrentFirebaseUser,
   } = useAuth()
   const {
-    adminAccess,
+    hasAdminAccess,
     reload: reloadAdminAccess,
   } = useAdminAccess()
   const [detail, setDetail] = useState(null)
@@ -478,30 +472,12 @@ function AdminUserPage() {
     () => detail?.user?.display_name || 'User Support',
     [detail],
   )
-  const canOpenOfficialGames = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.OFFICIAL_GAMES_READ,
-  )
-  const canOpenCommunityGames = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.COMMUNITY_GAMES_READ,
-  )
-  const canSuspendUsers = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.USERS_SUSPEND,
-  )
-  const canManageHosting = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.USERS_HOSTING_MANAGE,
-  )
-  const canManageStaff = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.STAFF_MANAGE,
-  )
-  const canDeleteUsers = hasAdminPermission(
-    adminAccess,
-    ADMIN_PERMISSIONS.USERS_DELETE,
-  )
+  const canOpenOfficialGames = hasAdminAccess
+  const canOpenCommunityGames = hasAdminAccess
+  const canSuspendUsers = hasAdminAccess
+  const canManageHosting = hasAdminAccess
+  const canManageStaff = hasAdminAccess
+  const canDeleteUsers = hasAdminAccess
   const canMutateCurrentAccount = (
     Boolean(detail?.user)
     && detail?.user?.account_status !== 'deleted'
@@ -522,7 +498,7 @@ function AdminUserPage() {
       const nextAppUser = await syncCurrentFirebaseUser()
       if (
         nextAppUser?.account_status !== 'active'
-        || !['admin', 'moderator'].includes(nextAppUser?.role)
+        || nextAppUser?.role !== 'admin'
       ) {
         navigate('/admin/sign-in', { replace: true })
         return
@@ -620,12 +596,10 @@ function AdminUserPage() {
                 Delete account
               </button>
             )}
-            {detail?.capabilities?.can_view_money && (
-              <Link className="admin-users-button" to={`/admin/money/users/${userId}`}>
-                <WalletCards />
-                Money Support
-              </Link>
-            )}
+            <Link className="admin-users-button" to={`/admin/money/users/${userId}`}>
+              <WalletCards />
+              Money Support
+            </Link>
             <button
               className="admin-users-button admin-users-button--icon"
               aria-label="Refresh user"
@@ -669,7 +643,6 @@ function AdminUserPage() {
             <SupportFlagsSection flags={detail.support_flags ?? []} />
             <AuditSection
               actions={detail.audit_actions ?? []}
-              canViewAudit={detail.capabilities?.can_view_audit}
             />
           </div>
         )}

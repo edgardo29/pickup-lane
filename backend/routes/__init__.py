@@ -10,6 +10,7 @@ from backend.routes.admin_community_routes import (
 from backend.routes.admin_rejected_attempt_routes import (
     router as admin_rejected_attempts_router,
 )
+from backend.routes.admin_review_routes import router as admin_review_cases_router
 from backend.routes.admin_lookup_routes import router as admin_lookups_router
 from backend.routes.admin_money_routes import router as admin_money_router
 from backend.routes.admin_need_a_sub_routes import router as admin_need_a_sub_router
@@ -89,6 +90,7 @@ __all__ = [
     "admin_action_center_router",
     "admin_community_games_router",
     "admin_rejected_attempts_router",
+    "admin_review_cases_router",
     "admin_game_credits_router",
     "admin_game_images_router",
     "admin_lookups_router",

@@ -32,6 +32,18 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("'active'"),
         ),
+        sa.Column(
+            "public_visibility_status",
+            sa.String(length=20),
+            nullable=False,
+            server_default=sa.text("'visible'"),
+        ),
+        sa.Column(
+            "join_enforcement_status",
+            sa.String(length=20),
+            nullable=False,
+            server_default=sa.text("'open'"),
+        ),
         sa.Column("title", sa.String(length=150), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("venue_id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -118,6 +130,7 @@ def upgrade() -> None:
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancelled_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("cancellation_source", sa.String(length=20), nullable=True),
         sa.Column("cancel_reason", sa.Text(), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
@@ -149,6 +162,21 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "game_status IN ('active', 'completed', 'cancelled', 'expired', 'removed')",
             name="ck_games_game_status",
+        ),
+        sa.CheckConstraint(
+            "public_visibility_status IN ('visible', 'hidden')",
+            name="ck_games_public_visibility_status",
+        ),
+        sa.CheckConstraint(
+            "join_enforcement_status IN ('open', 'paused')",
+            name="ck_games_join_enforcement_status",
+        ),
+        sa.CheckConstraint(
+            (
+                "cancellation_source IS NULL "
+                "OR cancellation_source IN ('host', 'admin', 'system')"
+            ),
+            name="ck_games_cancellation_source",
         ),
         sa.CheckConstraint(
             "environment_type IN ('indoor', 'outdoor')",
@@ -249,6 +277,10 @@ def upgrade() -> None:
             name="ck_games_cancelled_requires_cancelled_at",
         ),
         sa.CheckConstraint(
+            "(cancellation_source IS NULL OR game_status = 'cancelled')",
+            name="ck_games_cancellation_source_requires_cancelled",
+        ),
+        sa.CheckConstraint(
             "(game_status <> 'completed' OR completed_at IS NOT NULL)",
             name="ck_games_completed_requires_completed_at",
         ),
@@ -306,6 +338,7 @@ def upgrade() -> None:
         postgresql_where=sa.text(
             "publish_status = 'published' "
             "AND game_status = 'active' "
+            "AND public_visibility_status = 'visible' "
             "AND deleted_at IS NULL"
         ),
     )
@@ -383,6 +416,8 @@ def upgrade() -> None:
         "games",
         [
             "game_status",
+            "public_visibility_status",
+            "join_enforcement_status",
             "publish_status",
             "starts_on_local",
             "starts_at",
