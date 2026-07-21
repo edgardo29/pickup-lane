@@ -41,7 +41,7 @@ ADMIN_ACTION_TYPE_CHECK = (
     "'update_platform_notice_campaign', "
     "'send_platform_notice_campaign', "
     "'retry_platform_notice_campaign', "
-    "'change_staff_role', 'append_audit_note', "
+    "'user_role_changed', 'append_audit_note', "
     "'resolve_support_flag'"
     ")"
 )
@@ -72,7 +72,7 @@ PREVIOUS_ADMIN_ACTION_TYPE_CHECK = (
     "'admin_cancel_community_game', "
     "'restore_community_payment_text', "
     "'create_notification', 'update_notification', "
-    "'change_staff_role', 'append_audit_note', "
+    "'user_role_changed', 'append_audit_note', "
     "'resolve_support_flag'"
     ")"
 )

@@ -43,7 +43,6 @@ class UserRead(BaseModel):
     home_state: str | None
     account_status: str
     hosting_status: str
-    hosting_suspended_until: datetime | None
     member_since: datetime
     created_at: datetime
     updated_at: datetime

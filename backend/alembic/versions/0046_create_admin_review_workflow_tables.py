@@ -41,7 +41,7 @@ PREVIOUS_ADMIN_ACTION_TYPE_CHECK = (
     "'update_platform_notice_campaign', "
     "'send_platform_notice_campaign', "
     "'retry_platform_notice_campaign', "
-    "'change_staff_role', 'append_audit_note', "
+    "'user_role_changed', 'append_audit_note', "
     "'resolve_support_flag'"
     ")"
 )
@@ -76,7 +76,7 @@ ADMIN_ACTION_TYPE_CHECK = (
     "'update_platform_notice_campaign', "
     "'send_platform_notice_campaign', "
     "'retry_platform_notice_campaign', "
-    "'change_staff_role', 'append_audit_note', "
+    "'user_role_changed', 'append_audit_note', "
     "'resolve_support_flag', "
     "'create_review_case', 'close_review_case', "
     "'add_review_case_note'"

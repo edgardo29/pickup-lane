@@ -91,7 +91,6 @@ def seed_users(db: Session) -> dict[str, User]:
                 "home_state": "IL",
                 "account_status": "active",
                 "hosting_status": user_data["hosting_status"],
-                "hosting_suspended_until": None,
                 "stripe_customer_id": None,
                 "deleted_at": None,
                 "updated_at": timestamp,

@@ -15,10 +15,6 @@ export function formatAdminUserDateTime(value) {
   return value ? dateTimeFormatter.format(new Date(value)) : 'No date'
 }
 
-export function formatAdminUserLocation(value) {
-  return [value?.home_city, value?.home_state].filter(Boolean).join(', ') || 'No location'
-}
-
 export function formatAdminUserStatus(value) {
   return String(value || '')
     .split('_')

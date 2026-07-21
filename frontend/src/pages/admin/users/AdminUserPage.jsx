@@ -4,16 +4,12 @@ import {
   CalendarDays,
   ClipboardList,
   FileClock,
-  Flag,
-  RefreshCw,
   ShieldBan,
   ShieldCheck,
   ShieldOff,
   Trash2,
   Trophy,
-  UserCog,
   UserRound,
-  WalletCards,
 } from 'lucide-react'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
@@ -24,18 +20,16 @@ import { useAdminAccess } from '../shared/useAdminAccess.js'
 import {
   formatAdminUserDate,
   formatAdminUserDateTime,
-  formatAdminUserLocation,
   formatAdminUserStatus,
   shortAdminUserId,
 } from './adminUserFormatters.js'
 import AdminUserDeletePreviewModal from './AdminUserDeletePreviewModal.jsx'
 import AdminUserHostingRestorationModal from './AdminUserHostingRestorationModal.jsx'
 import AdminUserHostingRestrictionModal from './AdminUserHostingRestrictionModal.jsx'
-import AdminUserStaffRoleModal from './AdminUserStaffRoleModal.jsx'
 import AdminUserSuspensionModal from './AdminUserSuspensionModal.jsx'
 import AdminUserUnsuspensionModal from './AdminUserUnsuspensionModal.jsx'
 
-function AdminUserSection({ children, count, icon: Icon, title }) {
+function AdminUserSection({ actions = null, children, icon: Icon, title }) {
   return (
     <section className="admin-user-detail-panel">
       <div className="admin-user-detail-panel__heading">
@@ -43,15 +37,36 @@ function AdminUserSection({ children, count, icon: Icon, title }) {
           <Icon />
           <h2>{title}</h2>
         </div>
-        {count !== undefined && <span>{count}</span>}
+        {actions}
       </div>
       {children}
     </section>
   )
 }
 
+function AdminUserFact({ className = '', label, value }) {
+  return (
+    <div className={`admin-user-fact ${className}`.trim()}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
 function AdminUserEmpty({ children }) {
   return <p className="admin-user-detail-empty">{children}</p>
+}
+
+function formatDeletionState(user) {
+  if (user.deleted_at || user.account_status === 'deleted') {
+    return user.deleted_at
+      ? `Deleted ${formatAdminUserDate(user.deleted_at)}`
+      : 'Deleted'
+  }
+  if (user.account_status === 'pending_deletion') {
+    return 'Pending deletion'
+  }
+  return 'Not deleted'
 }
 
 function AdminUserLoading() {
@@ -74,300 +89,320 @@ function AdminUserLoading() {
 function UserSummary({ user }) {
   return (
     <AdminUserSection icon={UserRound} title="User Summary">
-      <div className="admin-user-summary-kpis">
-        <div>
-          <span>Account</span>
-          <strong>{formatAdminUserStatus(user.account_status)}</strong>
-        </div>
-        <div>
-          <span>Role</span>
-          <strong>{formatAdminUserStatus(user.role)}</strong>
-        </div>
-        <div>
-          <span>Hosting</span>
-          <strong>{formatAdminUserStatus(user.hosting_status)}</strong>
-        </div>
-        <div>
-          <span>Email</span>
-          <strong>{user.email_verified ? 'Verified' : 'Unverified'}</strong>
-        </div>
-      </div>
-      <div className="admin-user-detail-fields">
-        <div>
-          <span>User ID</span>
-          <code>{user.id}</code>
-        </div>
-        <div>
-          <span>Email</span>
-          <strong>{user.email || 'No email'}</strong>
-        </div>
-        <div>
-          <span>Phone</span>
-          <strong>{user.phone || 'No phone'}</strong>
-        </div>
-        <div>
-          <span>Location</span>
-          <strong>{formatAdminUserLocation(user)}</strong>
-        </div>
-        <div>
-          <span>Member since</span>
-          <strong>{formatAdminUserDate(user.member_since)}</strong>
-        </div>
-        <div>
-          <span>Hosting suspended until</span>
-          <strong>{formatAdminUserDateTime(user.hosting_suspended_until)}</strong>
-        </div>
-        <div>
-          <span>Updated</span>
-          <strong>{formatAdminUserDateTime(user.updated_at)}</strong>
-        </div>
-        <div>
-          <span>Deleted</span>
-          <strong>{formatAdminUserDateTime(user.deleted_at)}</strong>
-        </div>
+      <div className="admin-user-fact-grid">
+        <AdminUserFact
+          className="admin-user-fact--identity"
+          label="Full name"
+          value={user.display_name || 'No name'}
+        />
+        <AdminUserFact
+          className="admin-user-fact--identity"
+          label="Email"
+          value={user.email || 'No email'}
+        />
+        <AdminUserFact
+          label="Email status"
+          value={user.email_verified ? 'Verified' : 'Unverified'}
+        />
+        <AdminUserFact label="Role" value={formatAdminUserStatus(user.role)} />
+        <AdminUserFact
+          label="Member since"
+          value={formatAdminUserDate(user.member_since)}
+        />
+        <AdminUserFact label="User ID" value={shortAdminUserId(user.id)} />
       </div>
     </AdminUserSection>
   )
 }
 
-function UserStats({ stats }) {
+function UserAccountState({ user }) {
   return (
-    <AdminUserSection icon={Trophy} title="Accountability Summary">
-      {!stats ? (
-        <AdminUserEmpty>No cached accountability summary found.</AdminUserEmpty>
-      ) : (
-        <>
-          <div className="admin-user-summary-kpis admin-user-summary-kpis--five">
-            <div>
-              <span>Played</span>
-              <strong>{stats.games_played_count}</strong>
-            </div>
-            <div>
-              <span>Hosted</span>
-              <strong>{stats.games_hosted_completed_count}</strong>
-            </div>
-            <div>
-              <span>No shows</span>
-              <strong>{stats.no_show_count}</strong>
-            </div>
-            <div>
-              <span>Late cancels</span>
-              <strong>{stats.late_cancel_count}</strong>
-            </div>
-            <div>
-              <span>Host cancels</span>
-              <strong>{stats.host_cancel_count}</strong>
-            </div>
-          </div>
-          <p className="admin-user-detail-note">
-            Cached summary, calculated {formatAdminUserDateTime(stats.last_calculated_at)}.
-          </p>
-        </>
-      )}
+    <AdminUserSection icon={ShieldOff} title="Account State">
+      <div className="admin-user-fact-grid admin-user-fact-grid--account-state">
+        <AdminUserFact
+          label="Account status"
+          value={formatAdminUserStatus(user.account_status)}
+        />
+        <AdminUserFact
+          label="Hosting status"
+          value={formatAdminUserStatus(user.hosting_status)}
+        />
+        <AdminUserFact
+          label="Deletion status"
+          value={formatDeletionState(user)}
+        />
+      </div>
     </AdminUserSection>
   )
 }
 
-function GameRelationshipRow({
-  canOpenCommunityGames,
-  canOpenOfficialGames,
-  item,
-  relationship,
+function getAccountAction({ canMutateCurrentAccount, canSuspendUsers, user }) {
+  if (!canSuspendUsers || !canMutateCurrentAccount) {
+    return null
+  }
+
+  if (user.account_status === 'suspended') {
+    return {
+      disabled: false,
+      Icon: ShieldCheck,
+      label: 'Unsuspend account',
+      modal: 'unsuspend',
+      variant: 'admin-users-button--success',
+    }
+  }
+
+  if (user.account_status === 'active') {
+    return {
+      disabled: false,
+      Icon: ShieldBan,
+      label: 'Suspend account',
+      modal: 'suspend',
+      variant: 'admin-users-button--danger',
+    }
+  }
+
+  return null
+}
+
+function getHostingAction({ canManageHosting, canMutateCurrentAccount, user }) {
+  if (!canManageHosting || !canMutateCurrentAccount) {
+    return null
+  }
+
+  if (user.hosting_status === 'restricted') {
+    return {
+      disabled: false,
+      Icon: ShieldCheck,
+      label: 'Restore hosting',
+      modal: 'restoreHosting',
+      variant: 'admin-users-button--success',
+    }
+  }
+
+  if (user.hosting_status === 'eligible') {
+    return {
+      disabled: false,
+      Icon: ShieldOff,
+      label: 'Restrict hosting',
+      modal: 'restrictHosting',
+      variant: 'admin-users-button--danger',
+    }
+  }
+
+  return null
+}
+
+function AdminUserActionButton({
+  action,
+  className = '',
+  onOpenModal,
 }) {
-  const title = item.game_title || item.title
-  const gameId = item.game_id || item.id
-  let targetPath = ''
-  if (canOpenOfficialGames && item.game_type === 'official') {
-    targetPath = `/admin/official-games/${gameId}`
-  }
-  if (canOpenCommunityGames && item.game_type === 'community') {
-    targetPath = `/admin/community-games/${gameId}`
+  const Icon = action.Icon
+  return (
+    <button
+      className={[
+        'admin-users-button',
+        action.variant,
+        className,
+      ].filter(Boolean).join(' ')}
+      type="button"
+      onClick={() => {
+        if (action.modal) {
+          onOpenModal(action.modal)
+        }
+      }}
+    >
+      <Icon />
+      {action.label}
+    </button>
+  )
+}
+
+function UserActions({
+  canDeleteUsers,
+  canManageHosting,
+  canMutateCurrentAccount,
+  canSuspendUsers,
+  onOpenModal,
+  user,
+}) {
+  const accountAction = getAccountAction({
+    canMutateCurrentAccount,
+    canSuspendUsers,
+    user,
+  })
+  const hostingAction = getHostingAction({
+    canManageHosting,
+    canMutateCurrentAccount,
+    user,
+  })
+  const canDeleteAccount = canDeleteUsers && canMutateCurrentAccount
+
+  if (!accountAction && !hostingAction && !canDeleteAccount) {
+    return null
   }
 
   return (
-    <div className="admin-user-activity-row">
-      <div>
-        {targetPath ? (
-          <Link to={targetPath}>{title}</Link>
-        ) : (
-          <strong>{title}</strong>
-        )}
-        <span>{relationship}</span>
-      </div>
-      <div>
-        <span>{formatAdminUserStatus(item.game_status)}</span>
-        <span>{formatAdminUserStatus(item.game_type)}</span>
-      </div>
-      <div>
-        <span>{formatAdminUserDateTime(item.starts_at)}</span>
-        <code>{shortAdminUserId(gameId)}</code>
-      </div>
+    <div className="admin-user-action-grid">
+      {accountAction && (
+        <AdminUserActionButton
+          action={accountAction}
+          onOpenModal={onOpenModal}
+        />
+      )}
+      {hostingAction && (
+        <AdminUserActionButton
+          action={hostingAction}
+          onOpenModal={onOpenModal}
+        />
+      )}
+      {canDeleteAccount && (
+        <button
+          className="admin-users-button admin-users-button--danger admin-user-action-button--delete"
+          type="button"
+          onClick={() => onOpenModal('delete')}
+        >
+          <Trash2 />
+          Delete account
+        </button>
+      )}
     </div>
   )
 }
 
-function GameActivitySection({
-  bookings,
+function UserStats({ stats }) {
+  const value = (fieldName) => (
+    stats ? String(stats[fieldName]) : 'Unknown'
+  )
+
+  return (
+    <AdminUserSection icon={Trophy} title="Accountability Summary">
+      <div className="admin-user-fact-grid admin-user-fact-grid--accountability">
+        <AdminUserFact label="Played" value={value('games_played_count')} />
+        <AdminUserFact
+          label="Hosted"
+          value={value('games_hosted_completed_count')}
+        />
+        <AdminUserFact label="No shows" value={value('no_show_count')} />
+        <AdminUserFact label="Late cancels" value={value('late_cancel_count')} />
+        <AdminUserFact label="Host cancels" value={value('host_cancel_count')} />
+      </div>
+    </AdminUserSection>
+  )
+}
+
+function formatAdminUserLocation({
+  city,
+  city_snapshot: citySnapshot,
+  location_name: locationName,
+  state,
+  state_snapshot: stateSnapshot,
+  venue_name_snapshot: venueName,
+}) {
+  const name = venueName || locationName || ''
+  const location = [
+    citySnapshot || city,
+    stateSnapshot || state,
+  ].filter(Boolean).join(', ')
+
+  return [name, location].filter(Boolean).join(' · ') || 'Location unavailable'
+}
+
+function getGameActivityTargetPath({
   canOpenCommunityGames,
   canOpenOfficialGames,
-  communityGames,
-  officialHosts,
-  participations,
+  item,
 }) {
-  const count = (
-    bookings.length
-    + participations.length
-    + communityGames.length
-    + officialHosts.length
+  if (canOpenOfficialGames && item.game_type === 'official') {
+    return `/admin/official-games/${item.game_id}`
+  }
+  if (canOpenCommunityGames && item.game_type === 'community') {
+    return `/admin/community-games/${item.game_id}`
+  }
+  return ''
+}
+
+function getNeedASubActivityTargetPath(item) {
+  if (item.activity_type === 'requested' && item.request_id) {
+    return `/admin/need-a-sub/requests/${item.request_id}`
+  }
+  return `/admin/need-a-sub/${item.post_id}`
+}
+
+function ActivityRow({ facts, targetPath }) {
+  const content = (
+    <div className={`admin-user-activity-list-row__facts admin-user-activity-list-row__facts--${facts.length}`}>
+      {facts.map((fact) => (
+        <div className="admin-user-activity-fact" key={fact.label}>
+          <span>{fact.label}</span>
+          <strong>{fact.value}</strong>
+        </div>
+      ))}
+    </div>
   )
 
+  if (!targetPath) {
+    return <div className="admin-user-activity-list-row">{content}</div>
+  }
+
   return (
-    <AdminUserSection count={count} icon={CalendarDays} title="Game Activity">
-      {count === 0 ? (
+    <Link className="admin-user-activity-list-row" to={targetPath}>
+      {content}
+    </Link>
+  )
+}
+
+function ActivityViewAllLink({ targetPath }) {
+  return <Link className="admin-users-button" to={targetPath}>View all</Link>
+}
+
+function GameActivitySection({
+  activity,
+  canOpenCommunityGames,
+  canOpenOfficialGames,
+  userId,
+}) {
+  const items = activity?.items ?? []
+
+  return (
+    <AdminUserSection
+      actions={(
+        <ActivityViewAllLink targetPath={`/admin/users/${userId}/game-activity`} />
+      )}
+      icon={CalendarDays}
+      title="Game Activity"
+    >
+      {items.length === 0 ? (
         <AdminUserEmpty>No game activity found.</AdminUserEmpty>
       ) : (
-        <div className="admin-user-activity-groups">
-          {bookings.length > 0 && (
-            <div>
-              <h3>Bookings</h3>
-              {bookings.map((booking) => (
-                <GameRelationshipRow
-                  canOpenCommunityGames={canOpenCommunityGames}
-                  canOpenOfficialGames={canOpenOfficialGames}
-                  item={booking}
-                  key={booking.id}
-                  relationship={`${formatAdminUserStatus(booking.booking_status)} · ${booking.participant_count} players`}
-                />
-              ))}
-            </div>
-          )}
-          {participations.length > 0 && (
-            <div>
-              <h3>Participation</h3>
-              {participations.map((participation) => (
-                <GameRelationshipRow
-                  canOpenCommunityGames={canOpenCommunityGames}
-                  canOpenOfficialGames={canOpenOfficialGames}
-                  item={participation}
-                  key={participation.id}
-                  relationship={`${formatAdminUserStatus(participation.participant_status)} · ${formatAdminUserStatus(participation.attendance_status)}`}
-                />
-              ))}
-            </div>
-          )}
-          {communityGames.length > 0 && (
-            <div>
-              <h3>Community Hosting</h3>
-              {communityGames.map((game) => (
-                <GameRelationshipRow
-                  canOpenCommunityGames={canOpenCommunityGames}
-                  canOpenOfficialGames={canOpenOfficialGames}
-                  item={game}
-                  key={game.id}
-                  relationship={`${game.city}, ${game.state}`}
-                />
-              ))}
-            </div>
-          )}
-          {officialHosts.length > 0 && (
-            <div>
-              <h3>Official Host Assignments</h3>
-              {officialHosts.map((game) => (
-                <GameRelationshipRow
-                  canOpenCommunityGames={canOpenCommunityGames}
-                  canOpenOfficialGames={canOpenOfficialGames}
-                  item={game}
-                  key={game.id}
-                  relationship={`${game.city}, ${game.state}`}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </AdminUserSection>
-  )
-}
-
-function NeedASubSection({ posts, requests }) {
-  const count = posts.length + requests.length
-
-  return (
-    <AdminUserSection count={count} icon={ClipboardList} title="Need a Sub Activity">
-      {count === 0 ? (
-        <AdminUserEmpty>No Need a Sub activity found.</AdminUserEmpty>
-      ) : (
-        <div className="admin-user-activity-groups">
-          {posts.length > 0 && (
-            <div>
-              <h3>Posts Owned</h3>
-              {posts.map((post) => (
-                <div className="admin-user-activity-row" key={post.id}>
-                  <div>
-                    <strong>{post.team_name || 'Need a Sub post'}</strong>
-                    <span>{post.city}, {post.state}</span>
-                  </div>
-                  <div>
-                    <span>{formatAdminUserStatus(post.post_status)}</span>
-                    <span>{post.subs_needed} subs needed</span>
-                  </div>
-                  <div>
-                    <span>{formatAdminUserDateTime(post.starts_at)}</span>
-                    <code>{shortAdminUserId(post.id)}</code>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {requests.length > 0 && (
-            <div>
-              <h3>Requests Made</h3>
-              {requests.map((request) => (
-                <div className="admin-user-activity-row" key={request.id}>
-                  <div>
-                    <strong>{request.team_name || 'Need a Sub request'}</strong>
-                    <span>{request.city}, {request.state}</span>
-                  </div>
-                  <div>
-                    <span>{formatAdminUserStatus(request.request_status)}</span>
-                    <span>Post {formatAdminUserStatus(request.post_status)}</span>
-                  </div>
-                  <div>
-                    <span>{formatAdminUserDateTime(request.starts_at)}</span>
-                    <code>{shortAdminUserId(request.id)}</code>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </AdminUserSection>
-  )
-}
-
-function SupportFlagsSection({ flags }) {
-  return (
-    <AdminUserSection count={flags.length} icon={Flag} title="Support Flags">
-      {flags.length === 0 ? (
-        <AdminUserEmpty>No user-anchored support flags found.</AdminUserEmpty>
-      ) : (
-        <div className="admin-user-detail-list">
-          {flags.map((flag) => (
-            <div className="admin-user-detail-list__row" key={flag.id}>
-              <div>
-                <strong>{flag.title}</strong>
-                <span>{flag.summary}</span>
-              </div>
-              <div>
-                <span>{formatAdminUserStatus(flag.flag_status)}</span>
-                <span>{formatAdminUserStatus(flag.severity)}</span>
-              </div>
-              <div>
-                <span>{formatAdminUserDateTime(flag.updated_at)}</span>
-                <code>{shortAdminUserId(flag.id)}</code>
-              </div>
-            </div>
+        <div className="admin-user-activity-list">
+          {items.map((item) => (
+            <ActivityRow
+              facts={[
+                {
+                  label: 'Location',
+                  value: formatAdminUserLocation(item),
+                },
+                {
+                  label: 'Date',
+                  value: `${formatAdminUserDateTime(item.scheduled_at)} · ${formatAdminUserStatus(item.game_type)}`,
+                },
+                {
+                  label: 'Role',
+                  value: formatAdminUserStatus(item.role),
+                },
+                {
+                  label: 'Outcome',
+                  value: formatAdminUserStatus(item.outcome),
+                },
+              ]}
+              key={item.game_id}
+              targetPath={getGameActivityTargetPath({
+                canOpenCommunityGames,
+                canOpenOfficialGames,
+                item,
+              })}
+            />
           ))}
         </div>
       )}
@@ -375,11 +410,73 @@ function SupportFlagsSection({ flags }) {
   )
 }
 
-function AuditSection({ actions }) {
+function NeedASubSection({ activity, userId }) {
+  const items = activity?.items ?? []
+
   return (
-    <AdminUserSection count={actions.length} icon={FileClock} title="Audit History">
+    <AdminUserSection
+      actions={(
+        <ActivityViewAllLink targetPath={`/admin/users/${userId}/need-a-sub-activity`} />
+      )}
+      icon={ClipboardList}
+      title="Need a Sub Activity"
+    >
+      {items.length === 0 ? (
+        <AdminUserEmpty>This user has not created a Need a Sub record or submitted a request.</AdminUserEmpty>
+      ) : (
+        <div className="admin-user-activity-list">
+          {items.map((item) => {
+            const facts = [
+              {
+                label: 'Location',
+                value: formatAdminUserLocation(item),
+              },
+              {
+                label: 'Date',
+                value: formatAdminUserDateTime(item.scheduled_at),
+              },
+              {
+                label: 'Type',
+                value: formatAdminUserStatus(item.activity_type),
+              },
+              {
+                label: 'Status',
+                value: formatAdminUserStatus(item.status),
+              },
+            ]
+            if (item.activity_type === 'created' && item.subs_needed) {
+              facts.push({
+                label: 'Subs needed',
+                value: String(item.subs_needed),
+              })
+            }
+            if (item.activity_type === 'requested' && item.post_status) {
+              facts.push({
+                label: 'Post status',
+                value: formatAdminUserStatus(item.post_status),
+              })
+            }
+
+            return (
+              <ActivityRow
+                facts={facts}
+                key={`${item.activity_type}-${item.request_id || item.post_id}`}
+                targetPath={getNeedASubActivityTargetPath(item)}
+              />
+            )
+          })}
+        </div>
+      )}
+    </AdminUserSection>
+  )
+}
+
+function AuditSection({ actionControls = null, actions }) {
+  return (
+    <AdminUserSection icon={FileClock} title="Admin Actions">
+      {actionControls}
       {actions.length === 0 ? (
-        <AdminUserEmpty>No directly user-targeted audit actions found.</AdminUserEmpty>
+        <AdminUserEmpty>No admin actions found for this user.</AdminUserEmpty>
       ) : (
         <div className="admin-user-detail-list">
           {actions.map((action) => (
@@ -389,11 +486,10 @@ function AuditSection({ actions }) {
                 <span>{action.reason || 'No reason recorded.'}</span>
               </div>
               <div>
-                <span>Staff {shortAdminUserId(action.admin_user_id)}</span>
+                <span>Admin {shortAdminUserId(action.admin_user_id)}</span>
               </div>
               <div>
                 <span>{formatAdminUserDateTime(action.created_at)}</span>
-                <code>{shortAdminUserId(action.id)}</code>
               </div>
             </div>
           ))}
@@ -421,7 +517,6 @@ function AdminUserPage() {
   const [pageError, setPageError] = useState('')
   const [refreshCount, setRefreshCount] = useState(0)
   const [isDeletePreviewModalOpen, setIsDeletePreviewModalOpen] = useState(false)
-  const [isStaffRoleModalOpen, setIsStaffRoleModalOpen] = useState(false)
   const [isHostingRestorationModalOpen, setIsHostingRestorationModalOpen] = useState(false)
   const [isHostingRestrictionModalOpen, setIsHostingRestrictionModalOpen] = useState(false)
   const [isSuspensionModalOpen, setIsSuspensionModalOpen] = useState(false)
@@ -476,7 +571,6 @@ function AdminUserPage() {
   const canOpenCommunityGames = hasAdminAccess
   const canSuspendUsers = hasAdminAccess
   const canManageHosting = hasAdminAccess
-  const canManageStaff = hasAdminAccess
   const canDeleteUsers = hasAdminAccess
   const canMutateCurrentAccount = (
     Boolean(detail?.user)
@@ -526,93 +620,39 @@ function AdminUserPage() {
     setRefreshCount((count) => count + 1)
   }
 
+  function handleOpenActionModal(modalName) {
+    if (modalName === 'delete') {
+      setIsDeletePreviewModalOpen(true)
+      return
+    }
+    if (modalName === 'restrictHosting') {
+      setIsHostingRestrictionModalOpen(true)
+      return
+    }
+    if (modalName === 'restoreHosting') {
+      setIsHostingRestorationModalOpen(true)
+      return
+    }
+    if (modalName === 'suspend') {
+      setIsSuspensionModalOpen(true)
+      return
+    }
+    if (modalName === 'unsuspend') {
+      setIsUnsuspensionModalOpen(true)
+    }
+  }
+
   return (
     <>
       <AdminWorkspaceLayout
         actions={(
           <div className="admin-user-header-actions">
             <Link className="admin-users-button" to="/admin/users">Back</Link>
-            {canSuspendUsers && detail?.user?.account_status === 'active' && (
-              <button
-                className="admin-users-button admin-users-button--danger"
-                type="button"
-                onClick={() => setIsSuspensionModalOpen(true)}
-              >
-                <ShieldBan />
-                Suspend
-              </button>
-            )}
-            {canSuspendUsers && detail?.user?.account_status === 'suspended' && (
-              <button
-                className="admin-users-button admin-users-button--success"
-                type="button"
-                onClick={() => setIsUnsuspensionModalOpen(true)}
-              >
-                <ShieldCheck />
-                Unsuspend
-              </button>
-            )}
-            {canManageHosting
-              && canMutateCurrentAccount
-              && detail?.user?.hosting_status === 'eligible' && (
-              <button
-                className="admin-users-button admin-users-button--danger"
-                type="button"
-                onClick={() => setIsHostingRestrictionModalOpen(true)}
-              >
-                <ShieldOff />
-                Restrict hosting
-              </button>
-            )}
-            {canManageHosting
-              && canMutateCurrentAccount
-              && detail?.user?.hosting_status === 'restricted' && (
-              <button
-                className="admin-users-button admin-users-button--success"
-                type="button"
-                onClick={() => setIsHostingRestorationModalOpen(true)}
-              >
-                <ShieldCheck />
-                Restore hosting
-              </button>
-            )}
-            {canManageStaff && canMutateCurrentAccount && (
-              <button
-                className="admin-users-button"
-                type="button"
-                onClick={() => setIsStaffRoleModalOpen(true)}
-              >
-                <UserCog />
-                Change role
-              </button>
-            )}
-            {canDeleteUsers && canMutateCurrentAccount && (
-              <button
-                className="admin-users-button admin-users-button--danger"
-                type="button"
-                onClick={() => setIsDeletePreviewModalOpen(true)}
-              >
-                <Trash2 />
-                Delete account
-              </button>
-            )}
-            <Link className="admin-users-button" to={`/admin/money/users/${userId}`}>
-              <WalletCards />
-              Money Support
-            </Link>
-            <button
-              className="admin-users-button admin-users-button--icon"
-              aria-label="Refresh user"
-              title="Refresh user"
-              type="button"
-              onClick={() => setRefreshCount((count) => count + 1)}
-            >
-              <RefreshCw />
-            </button>
           </div>
         )}
-        breadcrumbs={['Admin', 'People', 'Users']}
-        description="Review account state, activity, hosting, staff, and support context."
+        breadcrumbs={['Admin', 'People', 'User Directory']}
+        description="Review account state, activity, hosting, and support context."
+        headerClassName="admin-user-page-header"
         icon={UserRound}
         title={pageTitle}
       >
@@ -627,21 +667,29 @@ function AdminUserPage() {
         {loadState === 'ready' && detail && (
           <div className="admin-user-detail-layout">
             <UserSummary user={detail.user} />
+            <UserAccountState user={detail.user} />
             <UserStats stats={detail.stats} />
             <GameActivitySection
-              bookings={detail.bookings ?? []}
+              activity={detail.game_activity}
               canOpenCommunityGames={canOpenCommunityGames}
               canOpenOfficialGames={canOpenOfficialGames}
-              communityGames={detail.community_games_hosted ?? []}
-              officialHosts={detail.official_host_assignments ?? []}
-              participations={detail.participations ?? []}
+              userId={detail.user.id}
             />
             <NeedASubSection
-              posts={detail.sub_posts_owned ?? []}
-              requests={detail.sub_requests_made ?? []}
+              activity={detail.need_a_sub_activity}
+              userId={detail.user.id}
             />
-            <SupportFlagsSection flags={detail.support_flags ?? []} />
             <AuditSection
+              actionControls={(
+                <UserActions
+                  canDeleteUsers={canDeleteUsers}
+                  canManageHosting={canManageHosting}
+                  canMutateCurrentAccount={canMutateCurrentAccount}
+                  canSuspendUsers={canSuspendUsers}
+                  user={detail.user}
+                  onOpenModal={handleOpenActionModal}
+                />
+              )}
               actions={detail.audit_actions ?? []}
             />
           </div>
@@ -664,14 +712,6 @@ function AdminUserPage() {
           user={detail.user}
           onClose={() => setIsDeletePreviewModalOpen(false)}
           onDeleted={handleUserDeleted}
-        />
-      )}
-      {isStaffRoleModalOpen && detail?.user && (
-        <AdminUserStaffRoleModal
-          firebaseUser={currentUser}
-          user={detail.user}
-          onChanged={refreshSelfAdminAccess}
-          onClose={() => setIsStaffRoleModalOpen(false)}
         />
       )}
       {isHostingRestrictionModalOpen && detail?.user && (

@@ -61,7 +61,7 @@ def upgrade() -> None:
                 "'assign_official_host', 'remove_official_host', "
                 "'admin_add_player', 'admin_remove_player', 'waive_payment', "
                 "'create_notification', 'update_notification', "
-                "'change_staff_role', 'append_audit_note'"
+                "'user_role_changed', 'append_audit_note'"
                 ")"
             ),
             name="ck_admin_actions_action_type",
@@ -268,12 +268,12 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "uq_admin_actions_change_staff_role_idempotency",
+        "uq_admin_actions_user_role_changed_idempotency",
         "admin_actions",
         ["admin_user_id", "target_user_id", "idempotency_key"],
         unique=True,
         postgresql_where=sa.text(
-            "action_type = 'change_staff_role' AND idempotency_key IS NOT NULL"
+            "action_type = 'user_role_changed' AND idempotency_key IS NOT NULL"
         ),
     )
     op.create_index(
@@ -360,7 +360,7 @@ def downgrade() -> None:
         table_name="admin_actions",
     )
     op.drop_index(
-        "uq_admin_actions_change_staff_role_idempotency",
+        "uq_admin_actions_user_role_changed_idempotency",
         table_name="admin_actions",
     )
     op.drop_index(

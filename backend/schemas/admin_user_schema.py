@@ -11,7 +11,6 @@ class AdminUserListRead(BaseModel):
     id: UUID
     display_name: str
     email: str | None
-    phone: str | None
     role: str
     account_status: str
     hosting_status: str
@@ -24,11 +23,14 @@ class AdminUserListRead(BaseModel):
     deleted_at: datetime | None
 
 
-class AdminUserStaffRead(AdminUserListRead):
-    pass
+class AdminUserListPageRead(BaseModel):
+    users: list[AdminUserListRead] = Field(default_factory=list)
+    limit: int = 50
+    next_cursor: str | None = None
+    has_more: bool = False
 
 
-class AdminUserStaffRoleChangeCreate(BaseModel):
+class AdminUserRoleChangeCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     role: str = Field(min_length=1, max_length=40)
@@ -36,7 +38,7 @@ class AdminUserStaffRoleChangeCreate(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=160)
 
 
-class AdminUserStaffRoleChangeResultRead(BaseModel):
+class AdminUserRoleChangeResultRead(BaseModel):
     user_id: UUID
     previous_role: str
     role: str
@@ -45,7 +47,7 @@ class AdminUserStaffRoleChangeResultRead(BaseModel):
 
 
 class AdminUserProfileRead(AdminUserListRead):
-    hosting_suspended_until: datetime | None
+    pass
 
 
 class AdminUserStatsSummaryRead(BaseModel):
@@ -57,64 +59,48 @@ class AdminUserStatsSummaryRead(BaseModel):
     last_calculated_at: datetime
 
 
-class AdminUserBookingSummaryRead(BaseModel):
-    id: UUID
+class AdminUserGameActivityItemRead(BaseModel):
     game_id: UUID
     game_type: str
     game_title: str
     game_status: str
-    starts_at: datetime
-    booking_status: str
-    participant_count: int
-    created_at: datetime
+    venue_name_snapshot: str
+    city_snapshot: str
+    state_snapshot: str
+    scheduled_at: datetime
+    role: str
+    outcome: str
 
 
-class AdminUserParticipationSummaryRead(BaseModel):
-    id: UUID
-    game_id: UUID
-    booking_id: UUID | None
-    game_type: str
-    game_title: str
-    game_status: str
-    starts_at: datetime
-    participant_type: str
-    participant_status: str
-    attendance_status: str
-    joined_at: datetime
+class AdminUserGameActivityRead(BaseModel):
+    items: list[AdminUserGameActivityItemRead] = Field(default_factory=list)
+    total_items: int = 0
+    offset: int = 0
+    limit: int = 5
+    has_more: bool = False
 
 
-class AdminUserHostedGameSummaryRead(BaseModel):
-    id: UUID
-    game_type: str
-    title: str
-    game_status: str
-    starts_at: datetime
+class AdminUserNeedASubActivityItemRead(BaseModel):
+    activity_type: str
+    post_id: UUID
+    request_id: UUID | None = None
+    location_name: str
     city: str
     state: str
-
-
-class AdminUserSubPostSummaryRead(BaseModel):
-    id: UUID
+    scheduled_at: datetime
+    status: str
     post_status: str
-    team_name: str | None
-    starts_at: datetime
-    city: str
-    state: str
-    subs_needed: int
-    created_at: datetime
+    request_status: str | None = None
+    subs_needed: int | None = None
+    activity_created_at: datetime
 
 
-class AdminUserSubRequestSummaryRead(BaseModel):
-    id: UUID
-    sub_post_id: UUID
-    sub_post_position_id: UUID
-    request_status: str
-    post_status: str
-    team_name: str | None
-    starts_at: datetime
-    city: str
-    state: str
-    created_at: datetime
+class AdminUserNeedASubActivityRead(BaseModel):
+    items: list[AdminUserNeedASubActivityItemRead] = Field(default_factory=list)
+    total_items: int = 0
+    offset: int = 0
+    limit: int = 5
+    has_more: bool = False
 
 
 class AdminUserAuditActionSummaryRead(BaseModel):
@@ -123,20 +109,6 @@ class AdminUserAuditActionSummaryRead(BaseModel):
     action_type: str
     reason: str | None
     created_at: datetime
-
-
-class AdminUserSupportFlagSummaryRead(BaseModel):
-    id: UUID
-    flag_type: str
-    flag_status: str
-    severity: str
-    source: str
-    title: str
-    summary: str
-    resolution_outcome: str | None
-    resolved_at: datetime | None
-    created_at: datetime
-    updated_at: datetime
 
 
 class AdminUserSuspensionOfficialHostImpactRead(BaseModel):
@@ -304,23 +276,12 @@ class AdminUserUnsuspendResultRead(BaseModel):
 class AdminUserDetailRead(BaseModel):
     user: AdminUserProfileRead
     stats: AdminUserStatsSummaryRead | None = None
-    bookings: list[AdminUserBookingSummaryRead] = Field(default_factory=list)
-    participations: list[AdminUserParticipationSummaryRead] = Field(
-        default_factory=list
+    game_activity: AdminUserGameActivityRead = Field(
+        default_factory=AdminUserGameActivityRead
     )
-    community_games_hosted: list[AdminUserHostedGameSummaryRead] = Field(
-        default_factory=list
-    )
-    official_host_assignments: list[AdminUserHostedGameSummaryRead] = Field(
-        default_factory=list
-    )
-    sub_posts_owned: list[AdminUserSubPostSummaryRead] = Field(default_factory=list)
-    sub_requests_made: list[AdminUserSubRequestSummaryRead] = Field(
-        default_factory=list
+    need_a_sub_activity: AdminUserNeedASubActivityRead = Field(
+        default_factory=AdminUserNeedASubActivityRead
     )
     audit_actions: list[AdminUserAuditActionSummaryRead] = Field(
-        default_factory=list
-    )
-    support_flags: list[AdminUserSupportFlagSummaryRead] = Field(
         default_factory=list
     )

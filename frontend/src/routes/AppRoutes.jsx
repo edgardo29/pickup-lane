@@ -35,7 +35,8 @@ import {
   AdminReviewCasePage,
   AdminReviewCasesPage,
   AdminSignInPage,
-  AdminStaffPage,
+  AdminUserGameActivityPage,
+  AdminUserNeedASubActivityPage,
   AdminUserPage,
   AdminUsersPage,
 } from '../pages/admin/index.js'
@@ -184,18 +185,30 @@ export function AppRoutes() {
           }
         />
         <Route
-          path="users/staff"
-          element={
-            <RequireAdmin>
-              <AdminStaffPage />
-            </RequireAdmin>
-          }
+          path="staff"
+          element={<Navigate replace to="/admin/users?role=admin" />}
         />
         <Route
           path="users/:userId"
           element={
             <RequireAdmin>
               <AdminUserPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="users/:userId/game-activity"
+          element={
+            <RequireAdmin>
+              <AdminUserGameActivityPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="users/:userId/need-a-sub-activity"
+          element={
+            <RequireAdmin>
+              <AdminUserNeedASubActivityPage />
             </RequireAdmin>
           }
         />

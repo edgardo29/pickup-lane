@@ -25,6 +25,9 @@ export { default as AdminEditOfficialGamePage } from './official-games/edit/Admi
 export { default as AdminOfficialGamePage } from './official-games/manage/AdminOfficialGamePage.jsx'
 export { default as AdminOfficialGamesPage } from './official-games/list/AdminOfficialGamesPage.jsx'
 export { default as AdminSignInPage } from './sign-in/AdminSignInPage.jsx'
-export { default as AdminStaffPage } from './users/AdminStaffPage.jsx'
+export {
+  AdminUserGameActivityPage,
+  AdminUserNeedASubActivityPage,
+} from './users/AdminUserActivityHistoryPages.jsx'
 export { default as AdminUserPage } from './users/AdminUserPage.jsx'
 export { default as AdminUsersPage } from './users/AdminUsersPage.jsx'

@@ -92,7 +92,7 @@ PREVIOUS_ADMIN_ACTION_TYPES = (
     "waive_payment",
     "create_notification",
     "update_notification",
-    "change_staff_role",
+    "user_role_changed",
     "append_audit_note",
     "remove_sub_post",
     "hide_unsafe_community_payment_text",
