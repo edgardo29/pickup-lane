@@ -10,15 +10,16 @@ from backend.schemas import (
     AdminUserDeleteImpactPreviewRead,
     AdminUserDeleteResultRead,
     AdminUserDetailRead,
+    AdminUserGameActivityRead,
     AdminUserHostingRestrictionPreviewRead,
-    AdminUserListRead,
+    AdminUserListPageRead,
+    AdminUserNeedASubActivityRead,
     AdminUserRestrictHostingCreate,
     AdminUserRestrictHostingResultRead,
     AdminUserRestoreHostingCreate,
     AdminUserRestoreHostingResultRead,
-    AdminUserStaffRead,
-    AdminUserStaffRoleChangeCreate,
-    AdminUserStaffRoleChangeResultRead,
+    AdminUserRoleChangeCreate,
+    AdminUserRoleChangeResultRead,
     AdminUserSuspendCreate,
     AdminUserSuspendResultRead,
     AdminUserSuspensionPreviewRead,
@@ -35,8 +36,10 @@ from backend.services.admin_user_delete_service import (
     preview_admin_user_delete_impact,
 )
 from backend.services.admin_user_service import (
+    get_admin_user_game_activity,
     get_admin_user_detail,
-    list_admin_staff_users,
+    get_admin_user_need_a_sub_activity,
+    get_admin_user_or_404,
     list_admin_users,
 )
 from backend.services.admin_user_hosting_service import (
@@ -44,23 +47,24 @@ from backend.services.admin_user_hosting_service import (
     restrict_admin_user_hosting,
     restore_admin_user_hosting,
 )
-from backend.services.admin_user_staff_service import change_admin_user_staff_role
+from backend.services.admin_user_role_service import change_user_role
 from backend.services.auth_service import require_active_admin
 
 router = APIRouter(prefix="/admin/users", tags=["admin_users"])
 
 
-@router.get("", response_model=list[AdminUserListRead], status_code=status.HTTP_200_OK)
+@router.get("", response_model=AdminUserListPageRead, status_code=status.HTTP_200_OK)
 def list_admin_users_route(
     query: str | None = Query(default=None, max_length=120),
     account_status: str | None = None,
     hosting_status: str | None = None,
     role: str | None = None,
     include_deleted: bool = False,
-    limit: int = Query(default=100, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, max_length=2000),
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
-) -> list[AdminUserListRead]:
+) -> AdminUserListPageRead:
     del current_admin
     return list_admin_users(
         db,
@@ -70,24 +74,50 @@ def list_admin_users_route(
         role=role,
         include_deleted=include_deleted,
         limit=limit,
+        cursor=cursor,
     )
 
 
 @router.get(
-    "/staff",
-    response_model=list[AdminUserStaffRead],
+    "/{user_id}/game-activity",
+    response_model=AdminUserGameActivityRead,
     status_code=status.HTTP_200_OK,
 )
-def list_admin_staff_route(
-    include_deleted: bool = False,
-    limit: int = Query(default=100, ge=1, le=200),
+def get_admin_user_game_activity_route(
+    user_id: uuid.UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
-) -> list[AdminUserStaffRead]:
+) -> AdminUserGameActivityRead:
     del current_admin
-    return list_admin_staff_users(
+    get_admin_user_or_404(db, user_id)
+    return get_admin_user_game_activity(
         db,
-        include_deleted=include_deleted,
+        user_id=user_id,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/{user_id}/need-a-sub-activity",
+    response_model=AdminUserNeedASubActivityRead,
+    status_code=status.HTTP_200_OK,
+)
+def get_admin_user_need_a_sub_activity_route(
+    user_id: uuid.UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
+    current_admin: User = Depends(require_active_admin),
+    db: Session = Depends(get_db),
+) -> AdminUserNeedASubActivityRead:
+    del current_admin
+    get_admin_user_or_404(db, user_id)
+    return get_admin_user_need_a_sub_activity(
+        db,
+        user_id=user_id,
+        offset=offset,
         limit=limit,
     )
 
@@ -149,18 +179,18 @@ def delete_admin_user_route(
     )
 
 
-@router.post(
-    "/{user_id}/staff-role",
-    response_model=AdminUserStaffRoleChangeResultRead,
+@router.patch(
+    "/{user_id}/role",
+    response_model=AdminUserRoleChangeResultRead,
     status_code=status.HTTP_200_OK,
 )
-def change_admin_user_staff_role_route(
+def change_admin_user_role_route(
     user_id: uuid.UUID,
-    payload: AdminUserStaffRoleChangeCreate,
+    payload: AdminUserRoleChangeCreate,
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
-) -> AdminUserStaffRoleChangeResultRead:
-    return change_admin_user_staff_role(
+) -> AdminUserRoleChangeResultRead:
+    return change_user_role(
         db,
         admin_user=current_admin,
         user_id=user_id,

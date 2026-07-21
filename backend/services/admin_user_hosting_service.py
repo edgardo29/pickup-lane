@@ -23,12 +23,9 @@ from backend.schemas.admin_user_schema import (
 from backend.services.admin_action_service import record_admin_action
 from backend.services.admin_user_service import get_admin_user_or_404
 from backend.services.hosting_access_service import (
-    HOSTING_STATUS_BANNED,
     HOSTING_STATUS_ELIGIBLE,
     HOSTING_STATUS_NOT_ELIGIBLE,
-    HOSTING_STATUS_PENDING_REVIEW,
     HOSTING_STATUS_RESTRICTED,
-    HOSTING_STATUS_SUSPENDED,
 )
 from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.notification_event_service import build_app_notification_fields
@@ -40,18 +37,12 @@ HOSTING_RESTRICTION_BLOCKING_MESSAGES = {
     "pending_deletion": "Accounts pending deletion cannot have hosting restricted.",
     "already_restricted": "This user's hosting access is already restricted.",
     "not_eligible": "This user is not currently eligible to host.",
-    "pending_review": "Hosting access pending review cannot be restricted.",
-    "hosting_suspended": "Suspended hosting access cannot be restricted.",
-    "banned_from_hosting": "Banned hosting access cannot be restricted.",
 }
 HOSTING_RESTORATION_BLOCKING_MESSAGES = {
     "deleted": "Deleted accounts cannot have hosting restored.",
     "pending_deletion": "Accounts pending deletion cannot have hosting restored.",
     "already_eligible": "This user's hosting access is already eligible.",
     "not_eligible": "Only restricted hosting access can be restored.",
-    "pending_review": "Hosting access pending review cannot be restored by this workflow.",
-    "hosting_suspended": "Suspended hosting access cannot be restored by this workflow.",
-    "banned_from_hosting": "Banned hosting access cannot be restored by this workflow.",
 }
 
 
@@ -127,9 +118,6 @@ def hosting_restriction_blocking_reason_codes(user: User) -> list[str]:
         {
             HOSTING_STATUS_RESTRICTED: "already_restricted",
             HOSTING_STATUS_NOT_ELIGIBLE: "not_eligible",
-            HOSTING_STATUS_PENDING_REVIEW: "pending_review",
-            HOSTING_STATUS_SUSPENDED: "hosting_suspended",
-            HOSTING_STATUS_BANNED: "banned_from_hosting",
         }.get(user.hosting_status, "not_eligible")
     ]
 
@@ -144,11 +132,6 @@ def hosting_restriction_preview_snapshot_token(
             "id": str(user.id),
             "account_status": user.account_status,
             "hosting_status": user.hosting_status,
-            "hosting_suspended_until": (
-                user.hosting_suspended_until.isoformat()
-                if user.hosting_suspended_until
-                else None
-            ),
             "deleted_at": user.deleted_at.isoformat() if user.deleted_at else None,
             "updated_at": user.updated_at.isoformat(),
         },
@@ -402,9 +385,6 @@ def hosting_restoration_blocking_reason_codes(user: User) -> list[str]:
         {
             HOSTING_STATUS_ELIGIBLE: "already_eligible",
             HOSTING_STATUS_NOT_ELIGIBLE: "not_eligible",
-            HOSTING_STATUS_PENDING_REVIEW: "pending_review",
-            HOSTING_STATUS_SUSPENDED: "hosting_suspended",
-            HOSTING_STATUS_BANNED: "banned_from_hosting",
         }.get(user.hosting_status, "not_eligible")
     ]
 
@@ -508,15 +488,9 @@ def restrict_admin_user_hosting(
         metadata={
             "before": {
                 "hosting_status": target_user.hosting_status,
-                "hosting_suspended_until": (
-                    target_user.hosting_suspended_until.isoformat()
-                    if target_user.hosting_suspended_until
-                    else None
-                ),
             },
             "after": {
                 "hosting_status": HOSTING_STATUS_RESTRICTED,
-                "hosting_suspended_until": None,
             },
             "reviewed": {
                 "future_community_game_count": len(future_games),
@@ -527,7 +501,6 @@ def restrict_admin_user_hosting(
         created_at=now,
     )
     target_user.hosting_status = HOSTING_STATUS_RESTRICTED
-    target_user.hosting_suspended_until = None
     target_user.updated_at = now
     db.add(target_user)
 
@@ -645,22 +618,15 @@ def restore_admin_user_hosting(
         metadata={
             "before": {
                 "hosting_status": target_user.hosting_status,
-                "hosting_suspended_until": (
-                    target_user.hosting_suspended_until.isoformat()
-                    if target_user.hosting_suspended_until
-                    else None
-                ),
             },
             "after": {
                 "hosting_status": HOSTING_STATUS_ELIGIBLE,
-                "hosting_suspended_until": None,
             },
         },
         idempotency_key=idempotency_key,
         created_at=now,
     )
     target_user.hosting_status = HOSTING_STATUS_ELIGIBLE
-    target_user.hosting_suspended_until = None
     target_user.updated_at = now
     db.add(target_user)
 

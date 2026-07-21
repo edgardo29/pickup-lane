@@ -2,6 +2,14 @@
   --app-bg: #010409;
   --pl-lime: #b8ff24;
   --pl-lime-bright: #d7ff35;
+  --pl-text-strong: #ffffff;
+  --pl-text-primary: rgba(248, 250, 252, 0.92);
+  --pl-text-body: rgba(248, 250, 252, 0.88);
+  --pl-text-secondary: rgba(248, 250, 252, 0.64);
+  --pl-text-muted: rgba(248, 250, 252, 0.5);
+  --pl-text-label: rgba(248, 250, 252, 0.38);
+  --pl-text-disabled: rgba(248, 250, 252, 0.28);
+  --pl-text-accent: var(--pl-lime);
   --pl-button-dark: linear-gradient(180deg, #172331, #0a121b);
   --pl-button-green: linear-gradient(180deg, #d7ff35, #98ef0e);
   --pl-button-red: linear-gradient(180deg, #7a2024, #4a1114);

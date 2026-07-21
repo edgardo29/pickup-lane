@@ -939,7 +939,6 @@ def anonymize_user(user: User, now: datetime) -> None:
     user.home_state = None
     user.account_status = "deleted"
     user.hosting_status = "not_eligible"
-    user.hosting_suspended_until = None
     user.stripe_customer_id = None
     user.deleted_at = now
     user.updated_at = now

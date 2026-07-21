@@ -53,7 +53,7 @@ PREVIOUS_ADMIN_ACTION_TYPES = (
     "waive_payment",
     "create_notification",
     "update_notification",
-    "change_staff_role",
+    "user_role_changed",
     "append_audit_note",
 )
 ADMIN_ACTION_TYPES = (*PREVIOUS_ADMIN_ACTION_TYPES, "remove_sub_post")

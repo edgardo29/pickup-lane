@@ -1,4 +1,4 @@
-"""Admin staff role mutation workflows."""
+"""Admin user role mutation workflows."""
 
 import uuid
 from datetime import datetime, timezone
@@ -10,22 +10,23 @@ from sqlalchemy.orm import Session
 
 from backend.models import AdminAction, User
 from backend.schemas.admin_user_schema import (
-    AdminUserStaffRoleChangeCreate,
-    AdminUserStaffRoleChangeResultRead,
+    AdminUserRoleChangeCreate,
+    AdminUserRoleChangeResultRead,
 )
 from backend.services.admin_action_service import record_admin_action
 from backend.services.auth_service import ADMIN_ROLE
 from backend.services.user_service import build_user_conflict_detail
 
 PLAYER_ROLE = "player"
-STAFF_ROLE_CHANGE_ROLES = (ADMIN_ROLE, PLAYER_ROLE)
+USER_ROLE_CHANGE_ROLES = (ADMIN_ROLE, PLAYER_ROLE)
+USER_ROLE_CHANGED_ACTION = "user_role_changed"
 
 
-def normalize_staff_role_change_request(
-    payload: AdminUserStaffRoleChangeCreate,
+def normalize_user_role_change_request(
+    payload: AdminUserRoleChangeCreate,
 ) -> tuple[str, str, str]:
     role = payload.role.strip().lower()
-    if role not in STAFF_ROLE_CHANGE_ROLES:
+    if role not in USER_ROLE_CHANGE_ROLES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="role is not supported.",
@@ -48,7 +49,7 @@ def normalize_staff_role_change_request(
     return role, reason, idempotency_key
 
 
-def get_existing_staff_role_change_action(
+def get_existing_user_role_change_action(
     db: Session,
     *,
     admin_user_id: uuid.UUID,
@@ -58,19 +59,19 @@ def get_existing_staff_role_change_action(
     return db.scalar(
         select(AdminAction).where(
             AdminAction.admin_user_id == admin_user_id,
-            AdminAction.action_type == "change_staff_role",
+            AdminAction.action_type == USER_ROLE_CHANGED_ACTION,
             AdminAction.target_user_id == user_id,
             AdminAction.idempotency_key == idempotency_key,
         )
     )
 
 
-def build_staff_role_change_result(
+def build_user_role_change_result(
     *,
     action: AdminAction,
     expected_reason: str,
     expected_role: str,
-) -> AdminUserStaffRoleChangeResultRead:
+) -> AdminUserRoleChangeResultRead:
     metadata = action.metadata_ or {}
     before = metadata.get("before") or {}
     after = metadata.get("after") or {}
@@ -79,18 +80,18 @@ def build_staff_role_change_result(
     if action.target_user_id is None or not previous_role or not role:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="The prior staff role change result is incomplete.",
+            detail="The prior user role change result is incomplete.",
         )
     if role != expected_role or action.reason != expected_reason:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 "idempotency_key was already used for a different "
-                "staff role change request."
+                "user role change request."
             ),
         )
 
-    return AdminUserStaffRoleChangeResultRead(
+    return AdminUserRoleChangeResultRead(
         user_id=action.target_user_id,
         previous_role=previous_role,
         role=role,
@@ -99,7 +100,7 @@ def build_staff_role_change_result(
     )
 
 
-def lock_staff_role_change_users(
+def lock_user_role_change_users(
     db: Session,
     *,
     user_id: uuid.UUID,
@@ -140,16 +141,16 @@ def lock_staff_role_change_users(
     return target_user, active_admin_users
 
 
-def validate_staff_role_change_target(user: User, *, next_role: str) -> None:
+def validate_user_role_change_target(user: User, *, next_role: str) -> None:
     if user.deleted_at is not None or user.account_status == "deleted":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Deleted accounts cannot have staff roles changed.",
+            detail="Deleted accounts cannot have roles changed.",
         )
     if user.account_status == "pending_deletion":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Accounts pending deletion cannot have staff roles changed.",
+            detail="Accounts pending deletion cannot have roles changed.",
         )
     if user.role == next_role:
         raise HTTPException(
@@ -178,45 +179,45 @@ def validate_last_active_admin_protection(
         )
 
 
-def change_admin_user_staff_role(
+def change_user_role(
     db: Session,
     *,
     admin_user: User,
     user_id: uuid.UUID,
-    payload: AdminUserStaffRoleChangeCreate,
-) -> AdminUserStaffRoleChangeResultRead:
-    next_role, reason, idempotency_key = normalize_staff_role_change_request(payload)
-    existing_action = get_existing_staff_role_change_action(
+    payload: AdminUserRoleChangeCreate,
+) -> AdminUserRoleChangeResultRead:
+    next_role, reason, idempotency_key = normalize_user_role_change_request(payload)
+    existing_action = get_existing_user_role_change_action(
         db,
         admin_user_id=admin_user.id,
         user_id=user_id,
         idempotency_key=idempotency_key,
     )
     if existing_action is not None:
-        return build_staff_role_change_result(
+        return build_user_role_change_result(
             action=existing_action,
             expected_reason=reason,
             expected_role=next_role,
         )
 
-    target_user, active_admin_users = lock_staff_role_change_users(
+    target_user, active_admin_users = lock_user_role_change_users(
         db,
         user_id=user_id,
     )
-    existing_action = get_existing_staff_role_change_action(
+    existing_action = get_existing_user_role_change_action(
         db,
         admin_user_id=admin_user.id,
         user_id=user_id,
         idempotency_key=idempotency_key,
     )
     if existing_action is not None:
-        return build_staff_role_change_result(
+        return build_user_role_change_result(
             action=existing_action,
             expected_reason=reason,
             expected_role=next_role,
         )
 
-    validate_staff_role_change_target(target_user, next_role=next_role)
+    validate_user_role_change_target(target_user, next_role=next_role)
     validate_last_active_admin_protection(
         active_admin_users=active_admin_users,
         target_user=target_user,
@@ -228,7 +229,7 @@ def change_admin_user_staff_role(
     audit_action = record_admin_action(
         db,
         admin_user_id=admin_user.id,
-        action_type="change_staff_role",
+        action_type=USER_ROLE_CHANGED_ACTION,
         target_user_id=target_user.id,
         reason=reason,
         metadata={
@@ -245,7 +246,7 @@ def change_admin_user_staff_role(
     try:
         db.commit()
         db.refresh(target_user)
-        return AdminUserStaffRoleChangeResultRead(
+        return AdminUserRoleChangeResultRead(
             user_id=target_user.id,
             previous_role=previous_role,
             role=target_user.role,
@@ -254,14 +255,14 @@ def change_admin_user_staff_role(
         )
     except IntegrityError as exc:
         db.rollback()
-        existing_action = get_existing_staff_role_change_action(
+        existing_action = get_existing_user_role_change_action(
             db,
             admin_user_id=admin_user.id,
             user_id=user_id,
             idempotency_key=idempotency_key,
         )
         if existing_action is not None:
-            return build_staff_role_change_result(
+            return build_user_role_change_result(
                 action=existing_action,
                 expected_reason=reason,
                 expected_role=next_role,

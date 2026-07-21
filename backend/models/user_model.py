@@ -37,11 +37,8 @@ class User(Base):
             (
                 "hosting_status IN ("
                 "'not_eligible', "
-                "'pending_review', "
                 "'eligible', "
-                "'restricted', "
-                "'suspended', "
-                "'banned_from_hosting'"
+                "'restricted'"
                 ")"
             ),
             name="ck_users_hosting_status",
@@ -76,6 +73,37 @@ class User(Base):
             postgresql_ops={"last_name": "gin_trgm_ops"},
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "ix_users_admin_list_created_id",
+            text("created_at DESC"),
+            text("id DESC"),
+        ),
+        Index(
+            "ix_users_admin_account_status_created_id",
+            "account_status",
+            text("created_at DESC"),
+            text("id DESC"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_users_admin_hosting_status_created_id",
+            "hosting_status",
+            text("created_at DESC"),
+            text("id DESC"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_users_admin_role_created_id",
+            "role",
+            text("created_at DESC"),
+            text("id DESC"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+        Index(
+            "ix_users_admin_email_lower",
+            text("lower(email)"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -99,9 +127,6 @@ class User(Base):
     )
     hosting_status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'not_eligible'")
-    )
-    hosting_suspended_until: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
     )
     stripe_customer_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True

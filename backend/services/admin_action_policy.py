@@ -609,8 +609,8 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID),
         metadata_builder_key="platform_notice",
     ),
-    "change_staff_role": AdminActionPolicy(
-        action_type="change_staff_role",
+    "user_role_changed": AdminActionPolicy(
+        action_type="user_role_changed",
         required_target_rules=(TargetRule(all_of=(TARGET_USER_ID,)),),
         allowed_target_fields=target_set(TARGET_USER_ID),
         metadata_builder_key="support",

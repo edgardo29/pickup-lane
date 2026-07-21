@@ -234,7 +234,7 @@ function AdminUserSuspensionModal({
             {preview.can_suspend && (
               <form className="admin-user-suspension-modal__form" onSubmit={handleSubmit}>
                 <p>
-                  The user will lose access to product and staff actions. Their
+                  The user will lose access to product and admin actions. Their
                   historical records will remain available.
                 </p>
                 <label>

@@ -2557,10 +2557,7 @@ def test_publish_community_game_rejects_request_host_user_id(client: TestClient)
             "not_eligible",
             "Your account is not eligible to host community games.",
         ),
-        ("pending_review", "Your hosting access is pending review."),
         ("restricted", "Your hosting access is restricted."),
-        ("suspended", "Your hosting access is suspended."),
-        ("banned_from_hosting", "Your account is banned from hosting."),
     ],
 )
 def test_publish_community_game_requires_eligible_hosting_status(

@@ -9,9 +9,9 @@ export function getInitials(user) {
 }
 
 export function formatLocation(user, settings) {
-  const city = settings.selected_city || user.home_city || 'Chicago'
-  const state = settings.selected_state || user.home_state || 'IL'
-  return [city, state].filter(Boolean).join(', ')
+  const city = settings.selected_city || user.home_city
+  const state = settings.selected_state || user.home_state
+  return [city, state].filter(Boolean).join(', ') || 'Not set'
 }
 
 export function formatMemberSince(value) {

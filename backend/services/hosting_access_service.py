@@ -7,20 +7,14 @@ from fastapi import HTTPException, status
 from backend.models import User
 
 HOSTING_STATUS_NOT_ELIGIBLE = "not_eligible"
-HOSTING_STATUS_PENDING_REVIEW = "pending_review"
 HOSTING_STATUS_ELIGIBLE = "eligible"
 HOSTING_STATUS_RESTRICTED = "restricted"
-HOSTING_STATUS_SUSPENDED = "suspended"
-HOSTING_STATUS_BANNED = "banned_from_hosting"
 
 COMMUNITY_PUBLISH_BLOCKING_DETAILS = {
     HOSTING_STATUS_NOT_ELIGIBLE: (
         "Your account is not eligible to host community games."
     ),
-    HOSTING_STATUS_PENDING_REVIEW: "Your hosting access is pending review.",
     HOSTING_STATUS_RESTRICTED: "Your hosting access is restricted.",
-    HOSTING_STATUS_SUSPENDED: "Your hosting access is suspended.",
-    HOSTING_STATUS_BANNED: "Your account is banned from hosting.",
 }
 
 
@@ -33,7 +27,6 @@ def apply_verified_hosting_eligibility(
         return False
 
     user.hosting_status = HOSTING_STATUS_ELIGIBLE
-    user.hosting_suspended_until = None
     user.updated_at = verified_at
     return True
 

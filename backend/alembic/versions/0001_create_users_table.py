@@ -46,7 +46,6 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("'not_eligible'"),
         ),
-        sa.Column("hosting_suspended_until", sa.DateTime(timezone=True), nullable=True),
         sa.Column("stripe_customer_id", sa.String(length=255), nullable=True),
         sa.Column(
             "member_since",
@@ -79,11 +78,8 @@ def upgrade() -> None:
             (
                 "hosting_status IN ("
                 "'not_eligible', "
-                "'pending_review', "
                 "'eligible', "
-                "'restricted', "
-                "'suspended', "
-                "'banned_from_hosting'"
+                "'restricted'"
                 ")"
             ),
             name="ck_users_hosting_status",
@@ -122,6 +118,40 @@ def upgrade() -> None:
         unique=False,
         postgresql_using="gin",
         postgresql_ops={"last_name": "gin_trgm_ops"},
+        postgresql_where=active_user_where,
+    )
+    op.create_index(
+        "ix_users_admin_list_created_id",
+        "users",
+        [sa.text("created_at DESC"), sa.text("id DESC")],
+        unique=False,
+    )
+    op.create_index(
+        "ix_users_admin_account_status_created_id",
+        "users",
+        ["account_status", sa.text("created_at DESC"), sa.text("id DESC")],
+        unique=False,
+        postgresql_where=active_user_where,
+    )
+    op.create_index(
+        "ix_users_admin_hosting_status_created_id",
+        "users",
+        ["hosting_status", sa.text("created_at DESC"), sa.text("id DESC")],
+        unique=False,
+        postgresql_where=active_user_where,
+    )
+    op.create_index(
+        "ix_users_admin_role_created_id",
+        "users",
+        ["role", sa.text("created_at DESC"), sa.text("id DESC")],
+        unique=False,
+        postgresql_where=active_user_where,
+    )
+    op.create_index(
+        "ix_users_admin_email_lower",
+        "users",
+        [sa.text("lower(email)")],
+        unique=False,
         postgresql_where=active_user_where,
     )
 

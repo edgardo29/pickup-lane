@@ -44,7 +44,7 @@ class AdminAction(Base):
                 "'update_platform_notice_campaign', "
                 "'send_platform_notice_campaign', "
                 "'retry_platform_notice_campaign', "
-                "'change_staff_role', 'append_audit_note', "
+                "'user_role_changed', 'append_audit_note', "
                 "'resolve_support_flag', "
                 "'create_review_case', 'close_review_case', "
                 "'add_review_case_note'"
@@ -177,13 +177,13 @@ class AdminAction(Base):
             ),
         ),
         Index(
-            "uq_admin_actions_change_staff_role_idempotency",
+            "uq_admin_actions_user_role_changed_idempotency",
             "admin_user_id",
             "target_user_id",
             "idempotency_key",
             unique=True,
             postgresql_where=text(
-                "action_type = 'change_staff_role' AND idempotency_key IS NOT NULL"
+                "action_type = 'user_role_changed' AND idempotency_key IS NOT NULL"
             ),
         ),
         Index(

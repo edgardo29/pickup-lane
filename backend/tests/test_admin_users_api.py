@@ -57,6 +57,13 @@ def authenticate_admin(client: TestClient) -> dict:
     return admin
 
 
+def admin_user_list_items(response) -> list[dict]:
+    body = response.json()
+    assert set(body) == {"users", "limit", "next_cursor", "has_more"}
+    assert body["limit"] <= 100
+    return body["users"]
+
+
 def test_admin_users_list_returns_explicit_safe_shape(client: TestClient):
     authenticate_admin(client)
     user = create_user(
@@ -64,7 +71,6 @@ def test_admin_users_list_returns_explicit_safe_shape(client: TestClient):
         first_name="Avery",
         last_name="Support",
         email="avery.support@example.com",
-        phone="+1 (312) 555-0142",
         home_city="Chicago",
         home_state="IL",
     )
@@ -72,13 +78,13 @@ def test_admin_users_list_returns_explicit_safe_shape(client: TestClient):
     response = client.get(f"/admin/users?query={user['id']}")
 
     assert response.status_code == 200, response.text
-    assert len(response.json()) == 1
-    body = response.json()[0]
+    items = admin_user_list_items(response)
+    assert len(items) == 1
+    body = items[0]
     assert body == {
         "id": user["id"],
         "display_name": "Avery Support",
         "email": "avery.support@example.com",
-        "phone": "+1 (312) 555-0142",
         "role": "player",
         "account_status": "active",
         "hosting_status": "not_eligible",
@@ -92,11 +98,12 @@ def test_admin_users_list_returns_explicit_safe_shape(client: TestClient):
     }
     assert "auth_user_id" not in body
     assert "date_of_birth" not in body
+    assert "phone" not in body
     assert "profile_photo_url" not in body
     assert "stripe_customer_id" not in body
 
 
-def test_admin_users_list_searches_name_email_and_normalized_phone(
+def test_admin_users_list_searches_name_email_and_id(
     client: TestClient,
 ):
     authenticate_admin(client)
@@ -105,14 +112,30 @@ def test_admin_users_list_searches_name_email_and_normalized_phone(
         first_name="Jordan",
         last_name="Keeper",
         email="jordan.keeper@example.com",
-        phone="+1 (773) 555-0199",
     )
     create_user(client, first_name="Someone", last_name="Else")
 
-    for query in ("jordan keeper", "KEEPER@EXAMPLE.COM", "7735550199"):
+    for query in ("jordan keeper", "KEEPER@EXAMPLE.COM", target["id"]):
         response = client.get("/admin/users", params={"query": query})
         assert response.status_code == 200, response.text
-        assert [item["id"] for item in response.json()] == [target["id"]]
+        assert [item["id"] for item in admin_user_list_items(response)] == [
+            target["id"]
+        ]
+
+
+def test_admin_users_list_does_not_search_phone(client: TestClient):
+    authenticate_admin(client)
+    create_user(
+        client,
+        first_name="Phone",
+        last_name="Hidden",
+        phone="+1 (773) 555-0199",
+    )
+
+    response = client.get("/admin/users", params={"query": "7735550199"})
+
+    assert response.status_code == 200, response.text
+    assert admin_user_list_items(response) == []
 
 
 def test_admin_users_list_filters_role_account_and_hosting_status(
@@ -135,7 +158,7 @@ def test_admin_users_list_filters_role_account_and_hosting_status(
     )
 
     assert response.status_code == 200, response.text
-    assert [item["id"] for item in response.json()] == [target["id"]]
+    assert [item["id"] for item in admin_user_list_items(response)] == [target["id"]]
 
 
 def test_admin_users_list_hides_deleted_users_unless_requested(client: TestClient):
@@ -148,7 +171,7 @@ def test_admin_users_list_hides_deleted_users_unless_requested(client: TestClien
         params={"query": deleted_user["id"]},
     )
     assert default_response.status_code == 200, default_response.text
-    assert default_response.json() == []
+    assert admin_user_list_items(default_response) == []
 
     included_response = client.get(
         "/admin/users",
@@ -158,9 +181,10 @@ def test_admin_users_list_hides_deleted_users_unless_requested(client: TestClien
         },
     )
     assert included_response.status_code == 200, included_response.text
-    assert [item["id"] for item in included_response.json()] == [deleted_user["id"]]
-    assert included_response.json()[0]["account_status"] == "deleted"
-    assert included_response.json()[0]["deleted_at"] is not None
+    included_items = admin_user_list_items(included_response)
+    assert [item["id"] for item in included_items] == [deleted_user["id"]]
+    assert included_items[0]["account_status"] == "deleted"
+    assert included_items[0]["deleted_at"] is not None
 
 
 def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient):
@@ -170,7 +194,6 @@ def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient
         first_name="Status",
         last_name="Deleted",
         email="status.deleted@example.com",
-        phone="+13125550101",
         home_city="Chicago",
         home_state="IL",
     )
@@ -179,7 +202,6 @@ def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient
         first_name="Timestamp",
         last_name="Deleted",
         email="timestamp.deleted@example.com",
-        phone="+13125550102",
         home_city="Evanston",
         home_state="IL",
     )
@@ -193,7 +215,7 @@ def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient
     for user in (status_deleted_user, timestamp_deleted_user):
         default_response = client.get("/admin/users", params={"query": user["id"]})
         assert default_response.status_code == 200, default_response.text
-        assert default_response.json() == []
+        assert admin_user_list_items(default_response) == []
 
         included_response = client.get(
             "/admin/users",
@@ -203,11 +225,11 @@ def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient
             },
         )
         assert included_response.status_code == 200, included_response.text
-        body = included_response.json()[0]
+        body = admin_user_list_items(included_response)[0]
         assert body["id"] == user["id"]
         assert body["display_name"] == "Deleted User"
         assert body["email"] is None
-        assert body["phone"] is None
+        assert "phone" not in body
         assert body["home_city"] is None
         assert body["home_state"] is None
         assert body["email_verified"] is False
@@ -215,7 +237,6 @@ def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient
 
         for stale_pii_query in (
             user["email"],
-            user["phone"],
             f"{user['first_name']} {user['last_name']}",
         ):
             stale_pii_response = client.get(
@@ -226,7 +247,7 @@ def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient
                 },
             )
             assert stale_pii_response.status_code == 200, stale_pii_response.text
-            assert stale_pii_response.json() == []
+            assert admin_user_list_items(stale_pii_response) == []
 
         active_filter_response = client.get(
             "/admin/users",
@@ -237,7 +258,7 @@ def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient
             },
         )
         assert active_filter_response.status_code == 200, active_filter_response.text
-        assert active_filter_response.json() == []
+        assert admin_user_list_items(active_filter_response) == []
 
         deleted_filter_response = client.get(
             "/admin/users",
@@ -248,7 +269,9 @@ def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient
             },
         )
         assert deleted_filter_response.status_code == 200, deleted_filter_response.text
-        assert [item["id"] for item in deleted_filter_response.json()] == [user["id"]]
+        assert [
+            item["id"] for item in admin_user_list_items(deleted_filter_response)
+        ] == [user["id"]]
 
         deleted_status_response = client.get(
             "/admin/users",
@@ -260,7 +283,70 @@ def test_admin_users_list_redacts_inconsistent_deleted_states(client: TestClient
         assert deleted_status_response.status_code == 200, (
             deleted_status_response.text
         )
-        assert [item["id"] for item in deleted_status_response.json()] == [user["id"]]
+        assert [
+            item["id"] for item in admin_user_list_items(deleted_status_response)
+        ] == [user["id"]]
+
+
+def test_admin_users_list_uses_cursor_pagination(client: TestClient):
+    authenticate_admin(client)
+    oldest_user = create_user(client, first_name="Cursor", last_name="Oldest")
+    middle_user = create_user(client, first_name="Cursor", last_name="Middle")
+    newest_user = create_user(client, first_name="Cursor", last_name="Newest")
+
+    with SessionLocal() as db:
+        for user_id, created_at in (
+            (oldest_user["id"], datetime(2026, 1, 1, tzinfo=UTC)),
+            (middle_user["id"], datetime(2026, 1, 2, tzinfo=UTC)),
+            (newest_user["id"], datetime(2026, 1, 3, tzinfo=UTC)),
+        ):
+            db_user = db.get(User, UUID(user_id))
+            assert db_user is not None
+            db_user.created_at = created_at
+            db_user.updated_at = created_at
+        db.commit()
+
+    first_response = client.get(
+        "/admin/users",
+        params={"role": "player", "limit": 2},
+    )
+
+    assert first_response.status_code == 200, first_response.text
+    first_page = first_response.json()
+    assert [item["id"] for item in first_page["users"]] == [
+        newest_user["id"],
+        middle_user["id"],
+    ]
+    assert first_page["has_more"] is True
+    assert first_page["next_cursor"]
+
+    second_response = client.get(
+        "/admin/users",
+        params={
+            "role": "player",
+            "limit": 2,
+            "cursor": first_page["next_cursor"],
+        },
+    )
+
+    assert second_response.status_code == 200, second_response.text
+    second_page = second_response.json()
+    assert [item["id"] for item in second_page["users"]] == [oldest_user["id"]]
+    assert second_page["has_more"] is False
+    assert second_page["next_cursor"] is None
+
+    mismatched_cursor_response = client.get(
+        "/admin/users",
+        params={
+            "role": "admin",
+            "limit": 2,
+            "cursor": first_page["next_cursor"],
+        },
+    )
+    assert mismatched_cursor_response.status_code == 400
+    assert mismatched_cursor_response.json()["detail"] == (
+        "cursor does not match the current query."
+    )
 
 
 def test_admin_users_list_rejects_unsupported_filters(client: TestClient):
@@ -292,7 +378,7 @@ def test_admin_users_list_rejects_suspended_admin(client: TestClient):
     assert "Admin access required" in response.text
 
 
-def test_admin_staff_list_returns_staff_only_safe_shape(client: TestClient):
+def test_admin_users_admins_view_returns_admins_only_safe_shape(client: TestClient):
     admin = authenticate_admin(client)
     second_admin = create_user(
         client,
@@ -314,11 +400,10 @@ def test_admin_staff_list_returns_staff_only_safe_shape(client: TestClient):
     set_user_role(deleted_admin["id"], "admin")
     soft_delete_user(deleted_admin["id"])
 
-    response = client.get("/admin/users/staff")
+    response = client.get("/admin/users", params={"role": "admin"})
 
     assert response.status_code == 200, response.text
-    body = response.json()
-    body_by_id = {item["id"]: item for item in body}
+    body_by_id = {item["id"]: item for item in admin_user_list_items(response)}
     assert set(body_by_id) == {
         admin["id"],
         second_admin["id"],
@@ -333,30 +418,34 @@ def test_admin_staff_list_returns_staff_only_safe_shape(client: TestClient):
     assert "permissions" not in body_by_id[second_admin["id"]]
     assert "data_scopes" not in body_by_id[second_admin["id"]]
     assert "auth_user_id" not in body_by_id[second_admin["id"]]
+    assert "phone" not in body_by_id[second_admin["id"]]
     assert "stripe_customer_id" not in body_by_id[second_admin["id"]]
     assert "date_of_birth" not in body_by_id[second_admin["id"]]
 
     included_response = client.get(
-        "/admin/users/staff",
-        params={"include_deleted": True},
+        "/admin/users",
+        params={"role": "admin", "include_deleted": True},
     )
     assert included_response.status_code == 200, included_response.text
-    included_by_id = {item["id"]: item for item in included_response.json()}
+    included_by_id = {
+        item["id"]: item for item in admin_user_list_items(included_response)
+    }
     assert deleted_admin["id"] in included_by_id
     assert included_by_id[deleted_admin["id"]]["display_name"] == "Deleted User"
     assert included_by_id[deleted_admin["id"]]["email"] is None
-    assert included_by_id[deleted_admin["id"]]["phone"] is None
+    assert "phone" not in included_by_id[deleted_admin["id"]]
     assert included_by_id[deleted_admin["id"]]["deleted_at"] is not None
 
 
-def test_admin_staff_list_redacts_inconsistent_deleted_states(client: TestClient):
+def test_admin_users_admins_view_redacts_inconsistent_deleted_states(
+    client: TestClient,
+):
     authenticate_admin(client)
     status_deleted_admin = create_user(
         client,
         first_name="Status",
         last_name="Deleted",
-        email="staff.status.deleted@example.com",
-        phone="+13125550201",
+        email="admin.status.deleted@example.com",
         home_city="Chicago",
         home_state="IL",
     )
@@ -364,13 +453,12 @@ def test_admin_staff_list_redacts_inconsistent_deleted_states(client: TestClient
         client,
         first_name="Timestamp",
         last_name="Deleted",
-        email="staff.timestamp.deleted@example.com",
-        phone="+13125550202",
+        email="admin.timestamp.deleted@example.com",
         home_city="Evanston",
         home_state="IL",
     )
-    for staff_user in (status_deleted_admin, timestamp_deleted_admin):
-        set_user_role(staff_user["id"], "admin")
+    for admin_user in (status_deleted_admin, timestamp_deleted_admin):
+        set_user_role(admin_user["id"], "admin")
 
     set_user_account_status(status_deleted_admin["id"], "deleted")
     with SessionLocal() as db:
@@ -382,37 +470,39 @@ def test_admin_staff_list_redacts_inconsistent_deleted_states(client: TestClient
         db_timestamp_deleted_admin.deleted_at = datetime.now(UTC)
         db.commit()
 
-    default_response = client.get("/admin/users/staff")
+    default_response = client.get("/admin/users", params={"role": "admin"})
     assert default_response.status_code == 200, default_response.text
-    default_ids = {item["id"] for item in default_response.json()}
+    default_ids = {item["id"] for item in admin_user_list_items(default_response)}
     assert status_deleted_admin["id"] not in default_ids
     assert timestamp_deleted_admin["id"] not in default_ids
 
     included_response = client.get(
-        "/admin/users/staff",
-        params={"include_deleted": True},
+        "/admin/users",
+        params={"role": "admin", "include_deleted": True},
     )
     assert included_response.status_code == 200, included_response.text
-    included_by_id = {item["id"]: item for item in included_response.json()}
+    included_by_id = {
+        item["id"]: item for item in admin_user_list_items(included_response)
+    }
 
-    for staff_user in (status_deleted_admin, timestamp_deleted_admin):
-        body = included_by_id[staff_user["id"]]
+    for admin_user in (status_deleted_admin, timestamp_deleted_admin):
+        body = included_by_id[admin_user["id"]]
         assert body["display_name"] == "Deleted User"
         assert body["email"] is None
-        assert body["phone"] is None
+        assert "phone" not in body
         assert body["home_city"] is None
         assert body["home_state"] is None
         assert body["email_verified"] is False
         assert body["account_status"] == "deleted"
 
 
-def test_admin_staff_list_rejects_player_and_suspended_admin(
+def test_admin_users_admins_view_rejects_player_and_suspended_admin(
     client: TestClient,
 ):
     user = create_user(client)
     authenticate_as(user["id"])
 
-    response = client.get("/admin/users/staff")
+    response = client.get("/admin/users", params={"role": "admin"})
 
     assert response.status_code == 403, response.text
     assert "Admin access required" in response.text
@@ -422,7 +512,7 @@ def test_admin_staff_list_rejects_player_and_suspended_admin(
     set_user_account_status(suspended_admin["id"], "suspended")
     authenticate_as(suspended_admin["id"])
 
-    response = client.get("/admin/users/staff")
+    response = client.get("/admin/users", params={"role": "admin"})
 
     assert response.status_code == 403, response.text
     assert "Admin access required" in response.text
@@ -435,7 +525,7 @@ def test_admin_staff_list_rejects_player_and_suspended_admin(
         ("admin", "player"),
     ],
 )
-def test_admin_user_staff_role_change_updates_role_and_audit_once(
+def test_admin_user_role_change_updates_role_and_audit_once(
     client: TestClient,
     initial_role: str,
     next_role: str,
@@ -447,23 +537,23 @@ def test_admin_user_staff_role_change_updates_role_and_audit_once(
 
     payload = {
         "role": next_role,
-        "reason": f"Change staff role from {initial_role} to {next_role}.",
-        "idempotency_key": f"change-staff-role-{initial_role}-{next_role}",
+        "reason": f"Change user role from {initial_role} to {next_role}.",
+        "idempotency_key": f"user-role-changed-{initial_role}-{next_role}",
     }
-    response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json=payload,
     )
-    repeat_response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    repeat_response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json=payload,
     )
-    different_request_response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    different_request_response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json={
             **payload,
             "idempotency_key": (
-                f"change-staff-role-{initial_role}-{next_role}-different"
+                f"user-role-changed-{initial_role}-{next_role}-different"
             ),
         },
     )
@@ -482,7 +572,7 @@ def test_admin_user_staff_role_change_updates_role_and_audit_once(
         db_target = db.get(User, UUID(target["id"]))
         audit_actions = db.scalars(
             select(AdminAction).where(
-                AdminAction.action_type == "change_staff_role",
+                AdminAction.action_type == "user_role_changed",
                 AdminAction.target_user_id == UUID(target["id"]),
             )
         ).all()
@@ -493,7 +583,7 @@ def test_admin_user_staff_role_change_updates_role_and_audit_once(
         assert audit_actions[0].id == UUID(body["admin_action_id"])
         assert audit_actions[0].admin_user_id == UUID(admin["id"])
         assert audit_actions[0].reason == (
-            f"Change staff role from {initial_role} to {next_role}."
+            f"Change user role from {initial_role} to {next_role}."
         )
         assert audit_actions[0].metadata_ == {
             "before": {"role": initial_role},
@@ -501,7 +591,7 @@ def test_admin_user_staff_role_change_updates_role_and_audit_once(
         }
 
 
-def test_admin_user_staff_role_change_rejects_idempotency_request_mismatch(
+def test_admin_user_role_change_rejects_idempotency_request_mismatch(
     client: TestClient,
 ):
     authenticate_admin(client)
@@ -509,19 +599,19 @@ def test_admin_user_staff_role_change_rejects_idempotency_request_mismatch(
     payload = {
         "role": "admin",
         "reason": "Promote this player to admin.",
-        "idempotency_key": "change-staff-role-request-mismatch",
+        "idempotency_key": "user-role-changed-request-mismatch",
     }
 
-    response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json=payload,
     )
-    role_mismatch_response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    role_mismatch_response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json={**payload, "role": "player"},
     )
-    reason_mismatch_response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    reason_mismatch_response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json={**payload, "reason": "Use the same key for another reason."},
     )
 
@@ -530,7 +620,7 @@ def test_admin_user_staff_role_change_rejects_idempotency_request_mismatch(
         assert mismatch_response.status_code == 409, mismatch_response.text
         assert mismatch_response.json()["detail"] == (
             "idempotency_key was already used for a different "
-            "staff role change request."
+            "user role change request."
         )
 
     with SessionLocal() as db:
@@ -539,7 +629,7 @@ def test_admin_user_staff_role_change_rejects_idempotency_request_mismatch(
             select(func.count())
             .select_from(AdminAction)
             .where(
-                AdminAction.action_type == "change_staff_role",
+                AdminAction.action_type == "user_role_changed",
                 AdminAction.target_user_id == UUID(target["id"]),
             )
         )
@@ -548,17 +638,17 @@ def test_admin_user_staff_role_change_rejects_idempotency_request_mismatch(
         assert audit_count == 1
 
 
-def test_admin_user_staff_role_change_rejects_last_active_admin_demotion(
+def test_admin_user_role_change_rejects_last_active_admin_demotion(
     client: TestClient,
 ):
     admin = authenticate_admin(client)
 
-    response = client.post(
-        f"/admin/users/{admin['id']}/staff-role",
+    response = client.patch(
+        f"/admin/users/{admin['id']}/role",
         json={
             "role": "player",
             "reason": "This would remove the last active admin.",
-            "idempotency_key": "change-staff-role-last-active-admin",
+            "idempotency_key": "user-role-changed-last-active-admin",
         },
     )
 
@@ -571,7 +661,7 @@ def test_admin_user_staff_role_change_rejects_last_active_admin_demotion(
             select(func.count())
             .select_from(AdminAction)
             .where(
-                AdminAction.action_type == "change_staff_role",
+                AdminAction.action_type == "user_role_changed",
                 AdminAction.target_user_id == UUID(admin["id"]),
             )
         )
@@ -588,7 +678,7 @@ def test_admin_user_staff_role_change_rejects_last_active_admin_demotion(
         ("active", True, "Deleted accounts"),
     ],
 )
-def test_admin_user_staff_role_change_rejects_ineligible_target_without_mutation(
+def test_admin_user_role_change_rejects_ineligible_target_without_mutation(
     client: TestClient,
     account_status: str,
     has_deleted_at: bool,
@@ -604,13 +694,13 @@ def test_admin_user_staff_role_change_rejects_ineligible_target_without_mutation
             db_target.deleted_at = datetime.now(UTC)
             db.commit()
 
-    response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json={
             "role": "admin",
-            "reason": "This target cannot have staff changed.",
+            "reason": "This target cannot have user role changed.",
             "idempotency_key": (
-                f"change-staff-role-invalid-{account_status}-{has_deleted_at}"
+                f"user-role-changed-invalid-{account_status}-{has_deleted_at}"
             ),
         },
     )
@@ -624,7 +714,7 @@ def test_admin_user_staff_role_change_rejects_ineligible_target_without_mutation
             select(func.count())
             .select_from(AdminAction)
             .where(
-                AdminAction.action_type == "change_staff_role",
+                AdminAction.action_type == "user_role_changed",
                 AdminAction.target_user_id == UUID(target["id"]),
             )
         )
@@ -633,41 +723,43 @@ def test_admin_user_staff_role_change_rejects_ineligible_target_without_mutation
         assert audit_count == 0
 
 
-def test_admin_user_staff_role_change_validates_target_reason_and_authorization(
+def test_admin_user_role_change_validates_target_reason_and_authorization(
     client: TestClient,
 ):
     admin = authenticate_admin(client)
     target = create_user(client)
     authenticate_as(admin["id"])
 
-    missing_response = client.post(
-        "/admin/users/00000000-0000-4000-8000-000000000000/staff-role",
+    missing_response = client.patch(
+        "/admin/users/00000000-0000-4000-8000-000000000000/role",
         json={
             "role": "admin",
-            "reason": "Change missing user staff role.",
-            "idempotency_key": "change-staff-role-missing-user",
+            "reason": "Change missing user user role.",
+            "idempotency_key": "user-role-changed-missing-user",
         },
     )
     assert missing_response.status_code == 404, missing_response.text
     assert missing_response.json()["detail"] == "User not found."
 
-    unsupported_role_response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    unsupported_role_response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json={
             "role": "owner",
-            "reason": "Unsupported staff role.",
-            "idempotency_key": "change-staff-role-unsupported-role",
+            "reason": "Unsupported user role.",
+            "idempotency_key": "user-role-changed-unsupported-role",
         },
     )
-    assert unsupported_role_response.status_code == 400, unsupported_role_response.text
+    assert unsupported_role_response.status_code == 400, (
+        unsupported_role_response.text
+    )
     assert unsupported_role_response.json()["detail"] == "role is not supported."
 
-    blank_reason_response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    blank_reason_response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json={
             "role": "admin",
             "reason": "   ",
-            "idempotency_key": "change-staff-role-blank-reason",
+            "idempotency_key": "user-role-changed-blank-reason",
         },
     )
     assert blank_reason_response.status_code == 400, blank_reason_response.text
@@ -675,12 +767,12 @@ def test_admin_user_staff_role_change_validates_target_reason_and_authorization(
 
     player = create_user(client)
     authenticate_as(player["id"])
-    denied_response = client.post(
-        f"/admin/users/{target['id']}/staff-role",
+    denied_response = client.patch(
+        f"/admin/users/{target['id']}/role",
         json={
             "role": "admin",
-            "reason": "Player must not change staff roles.",
-            "idempotency_key": "change-staff-role-denied",
+            "reason": "Player must not change user roles.",
+            "idempotency_key": "user-role-changed-denied",
         },
     )
     assert denied_response.status_code == 403, denied_response.text
@@ -754,29 +846,6 @@ def test_admin_user_detail_returns_scoped_support_context(client: TestClient):
         reason="Unrelated user support action.",
     )
 
-    with SessionLocal() as db:
-        direct_flag = create_support_flag(
-            db,
-            flag_type="account_delete_partial_failure",
-            source="account",
-            title="Direct user flag",
-            summary="Direct support follow-up.",
-            target_user_id=UUID(target["id"]),
-            idempotency_key=f"admin-user-detail-direct-{target['id']}",
-        )
-        direct_flag_id = direct_flag.id
-        unrelated_flag = create_support_flag(
-            db,
-            flag_type="official_cancel_partial_failure",
-            source="official_game",
-            title="Unrelated shared game flag",
-            summary="This flag belongs to a different user.",
-            target_user_id=UUID(other_user["id"]),
-            target_game_id=UUID(official_game["id"]),
-            idempotency_key=f"admin-user-detail-unrelated-{other_user['id']}",
-        )
-        unrelated_flag_id = unrelated_flag.id
-
     authenticate_as(admin["id"])
     response = client.get(f"/admin/users/{target['id']}")
 
@@ -786,31 +855,46 @@ def test_admin_user_detail_returns_scoped_support_context(client: TestClient):
     assert body["user"]["display_name"] == "Detail Player"
     assert body["stats"]["games_played_count"] == 8
     assert body["stats"]["last_calculated_at"] == stats["last_calculated_at"]
-    assert [item["id"] for item in body["bookings"]] == [booking["id"]]
-    assert [item["id"] for item in body["participations"]] == [participant["id"]]
-    assert [item["id"] for item in body["community_games_hosted"]] == [
-        community_game["id"]
-    ]
-    assert [item["id"] for item in body["official_host_assignments"]] == [
-        official_game["id"]
-    ]
-    assert [item["id"] for item in body["sub_posts_owned"]] == [owned_post["id"]]
-    assert [item["id"] for item in body["sub_requests_made"]] == [
-        sub_request["id"]
-    ]
+    assert body["game_activity"]["total_items"] == 2
+    game_activity_by_id = {
+        item["game_id"]: item for item in body["game_activity"]["items"]
+    }
+    assert set(game_activity_by_id) == {
+        official_game["id"],
+        community_game["id"],
+    }
+    assert game_activity_by_id[official_game["id"]]["role"] == "host"
+    assert game_activity_by_id[official_game["id"]]["outcome"] == "upcoming"
+    assert game_activity_by_id[community_game["id"]]["role"] == "host"
+    assert body["need_a_sub_activity"]["total_items"] == 2
+    need_a_sub_activity = body["need_a_sub_activity"]["items"]
+    assert {
+        (item["activity_type"], item["post_id"], item["request_id"])
+        for item in need_a_sub_activity
+    } == {
+        ("created", owned_post["id"], None),
+        ("requested", other_post["id"], sub_request["id"]),
+    }
+    created_activity = next(
+        item for item in need_a_sub_activity if item["activity_type"] == "created"
+    )
+    assert created_activity["location_name"] == "CI Test Field"
+    assert created_activity["subs_needed"] == 2
     assert [item["id"] for item in body["audit_actions"]] == [direct_action["id"]]
     assert unrelated_action["id"] not in {
         item["id"] for item in body["audit_actions"]
     }
-    assert [item["id"] for item in body["support_flags"]] == [str(direct_flag_id)]
-    assert str(unrelated_flag_id) not in {
-        item["id"] for item in body["support_flags"]
-    }
+    assert "bookings" not in body
+    assert "participations" not in body
+    assert "community_games_hosted" not in body
+    assert "official_host_assignments" not in body
+    assert "sub_posts_owned" not in body
+    assert "sub_requests_made" not in body
+    assert "support_flags" not in body
     assert "capabilities" not in body
     assert "auth_user_id" not in body["user"]
     assert "date_of_birth" not in body["user"]
     assert "stripe_customer_id" not in body["user"]
-    assert "payment_status" not in body["bookings"][0]
 
 
 def test_admin_user_detail_excludes_soft_deleted_game_activity(client: TestClient):
@@ -892,26 +976,93 @@ def test_admin_user_detail_excludes_soft_deleted_game_activity(client: TestClien
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert [item["id"] for item in body["bookings"]] == [active_booking["id"]]
-    assert deleted_booking["id"] not in {item["id"] for item in body["bookings"]}
-    assert [item["id"] for item in body["participations"]] == [
-        active_participant["id"]
-    ]
-    assert deleted_participant["id"] not in {
-        item["id"] for item in body["participations"]
+    activity_game_ids = {
+        item["game_id"] for item in body["game_activity"]["items"]
     }
-    assert [item["id"] for item in body["official_host_assignments"]] == [
-        active_official_game["id"]
-    ]
-    assert deleted_official_game["id"] not in {
-        item["id"] for item in body["official_host_assignments"]
+    assert activity_game_ids == {
+        active_official_game["id"],
+        active_community_game["id"],
     }
-    assert [item["id"] for item in body["community_games_hosted"]] == [
-        active_community_game["id"]
-    ]
-    assert deleted_community_game["id"] not in {
-        item["id"] for item in body["community_games_hosted"]
+    assert deleted_official_game["id"] not in activity_game_ids
+    assert deleted_community_game["id"] not in activity_game_ids
+    assert body["game_activity"]["total_items"] == 2
+    assert {
+        item["game_id"]: item["role"] for item in body["game_activity"]["items"]
+    } == {
+        active_official_game["id"]: "host",
+        active_community_game["id"]: "host",
     }
+
+
+def test_admin_user_activity_history_routes_page_derived_activity(
+    client: TestClient,
+):
+    admin = authenticate_admin(client)
+    target = create_user(client)
+    requester = create_user(client)
+    venue = create_venue(client, admin["id"])
+
+    for index in range(6):
+        starts_at = (
+            datetime.now(UTC).replace(microsecond=0)
+            + timedelta(days=index + 1)
+        )
+        game = create_game(
+            client,
+            admin["id"],
+            venue,
+            starts_at=starts_at.isoformat(),
+            ends_at=(starts_at + timedelta(hours=1)).isoformat(),
+            title=f"Activity Game {index}",
+        )
+        booking = create_booking(client, target["id"], game["id"])
+        create_game_participant(client, target["id"], game["id"], booking["id"])
+
+        create_sub_post(
+            client,
+            target["id"],
+            starts_at=starts_at.isoformat(),
+            ends_at=(starts_at + timedelta(hours=2)).isoformat(),
+            location_name=f"Activity Field {index}",
+            team_name="Should not surface",
+        )
+
+    requester_post = create_sub_post(client, requester["id"])
+    authenticate_as(target["id"])
+    request_response = client.post(
+        f"/need-a-sub/posts/{requester_post['id']}/requests",
+        json={"sub_post_position_id": requester_post["positions"][0]["id"]},
+    )
+    assert request_response.status_code == 201, request_response.text
+
+    authenticate_as(admin["id"])
+    game_response = client.get(
+        f"/admin/users/{target['id']}/game-activity",
+        params={"limit": 5},
+    )
+    need_a_sub_response = client.get(
+        f"/admin/users/{target['id']}/need-a-sub-activity",
+        params={"limit": 5},
+    )
+
+    assert game_response.status_code == 200, game_response.text
+    game_body = game_response.json()
+    assert game_body["total_items"] == 6
+    assert game_body["has_more"] is True
+    assert len(game_body["items"]) == 5
+    assert {item["role"] for item in game_body["items"]} == {"player"}
+    assert {item["outcome"] for item in game_body["items"]} == {"upcoming"}
+
+    assert need_a_sub_response.status_code == 200, need_a_sub_response.text
+    need_a_sub_body = need_a_sub_response.json()
+    assert need_a_sub_body["total_items"] == 7
+    assert need_a_sub_body["has_more"] is True
+    assert len(need_a_sub_body["items"]) == 5
+    assert {item["activity_type"] for item in need_a_sub_body["items"]} <= {
+        "created",
+        "requested",
+    }
+    assert all("team_name" not in item for item in need_a_sub_body["items"])
 
 
 def test_admin_user_detail_preserves_deleted_user_redaction(client: TestClient):
@@ -933,7 +1084,7 @@ def test_admin_user_detail_preserves_deleted_user_redaction(client: TestClient):
     user = response.json()["user"]
     assert user["display_name"] == "Deleted User"
     assert user["email"] is None
-    assert user["phone"] is None
+    assert "phone" not in user
     assert user["home_city"] is None
     assert user["home_state"] is None
     assert user["email_verified"] is False
@@ -2719,7 +2870,7 @@ def test_admin_user_suspension_preview_returns_404_for_missing_user(
     assert response.json()["detail"] == "User not found."
 
 
-def test_admin_user_suspension_preview_rejects_unauthorized_staff(
+def test_admin_user_suspension_preview_rejects_unauthorized_admin(
     client: TestClient,
 ):
     target = create_user(client)
@@ -2970,7 +3121,7 @@ def test_admin_user_suspend_rejects_last_active_admin_and_logs_attempt(
         ]
 
 
-def test_admin_user_suspend_validates_reason_and_rejects_unauthorized_staff(
+def test_admin_user_suspend_validates_reason_and_rejects_unauthorized_admin(
     client: TestClient,
 ):
     admin = authenticate_admin(client)
@@ -3299,9 +3450,6 @@ def test_admin_user_hosting_restriction_preview_reports_future_games_without_mut
     [
         ("active", "restricted", "already restricted"),
         ("active", "not_eligible", "not currently eligible"),
-        ("active", "pending_review", "pending review"),
-        ("active", "suspended", "Suspended hosting access"),
-        ("active", "banned_from_hosting", "Banned hosting access"),
         ("pending_deletion", "eligible", "pending deletion"),
         ("deleted", "eligible", "Deleted accounts"),
     ],
@@ -3406,12 +3554,6 @@ def test_admin_user_restrict_hosting_updates_status_audit_and_notification_once(
     )
     set_user_account_status(target["id"], "suspended")
 
-    with SessionLocal() as db:
-        db_target = db.get(User, UUID(target["id"]))
-        assert db_target is not None
-        db_target.hosting_suspended_until = datetime.now(UTC) + timedelta(days=14)
-        db.commit()
-
     authenticate_as(admin["id"])
     preview_response = client.post(
         f"/admin/users/{target['id']}/hosting-restriction-preview"
@@ -3486,7 +3628,6 @@ def test_admin_user_restrict_hosting_updates_status_audit_and_notification_once(
         assert db_target is not None
         assert db_target.account_status == "suspended"
         assert db_target.hosting_status == "restricted"
-        assert db_target.hosting_suspended_until is None
         assert db_future_game is not None
         assert db_future_game.game_status == "active"
         assert db_future_game.publish_status == "published"
@@ -3500,7 +3641,6 @@ def test_admin_user_restrict_hosting_updates_status_audit_and_notification_once(
         assert audit_actions[0].metadata_["before"]["hosting_status"] == "eligible"
         assert audit_actions[0].metadata_["after"] == {
             "hosting_status": "restricted",
-            "hosting_suspended_until": None,
         }
         assert audit_actions[0].metadata_["reviewed"] == {
             "future_community_game_count": 1,
@@ -3575,9 +3715,6 @@ def test_admin_user_restrict_hosting_rejects_stale_preview_without_mutation(
     [
         ("active", "restricted", "already restricted"),
         ("active", "not_eligible", "not currently eligible"),
-        ("active", "pending_review", "pending review"),
-        ("active", "suspended", "Suspended hosting access"),
-        ("active", "banned_from_hosting", "Banned hosting access"),
         ("pending_deletion", "eligible", "pending deletion"),
         ("deleted", "eligible", "Deleted accounts"),
     ],
@@ -3736,12 +3873,6 @@ def test_admin_user_restore_hosting_updates_status_audit_and_notification_once(
     set_user_account_status(target["id"], "suspended")
     set_user_hosting_status(target["id"], "restricted")
 
-    with SessionLocal() as db:
-        db_target = db.get(User, UUID(target["id"]))
-        assert db_target is not None
-        db_target.hosting_suspended_until = datetime.now(UTC) + timedelta(days=7)
-        db.commit()
-
     authenticate_as(admin["id"])
     payload = {
         "reason": "Support review confirmed hosting can be restored.",
@@ -3803,7 +3934,6 @@ def test_admin_user_restore_hosting_updates_status_audit_and_notification_once(
         assert db_target is not None
         assert db_target.account_status == "suspended"
         assert db_target.hosting_status == "eligible"
-        assert db_target.hosting_suspended_until is None
         assert len(audit_actions) == 1
         assert audit_actions[0].id == UUID(body["admin_action_id"])
         assert audit_actions[0].admin_user_id == UUID(admin["id"])
@@ -3813,7 +3943,6 @@ def test_admin_user_restore_hosting_updates_status_audit_and_notification_once(
         assert audit_actions[0].metadata_["before"]["hosting_status"] == "restricted"
         assert audit_actions[0].metadata_["after"] == {
             "hosting_status": "eligible",
-            "hosting_suspended_until": None,
         }
         assert len(notifications) == 1
         assert notifications[0].id == UUID(body["notification_id"])
@@ -3826,9 +3955,6 @@ def test_admin_user_restore_hosting_updates_status_audit_and_notification_once(
     [
         ("active", "eligible", "already eligible"),
         ("active", "not_eligible", "Only restricted hosting access"),
-        ("active", "pending_review", "pending review"),
-        ("active", "suspended", "Suspended hosting access"),
-        ("active", "banned_from_hosting", "Banned hosting access"),
         ("pending_deletion", "restricted", "pending deletion"),
         ("deleted", "restricted", "Deleted accounts"),
     ],

@@ -2,7 +2,7 @@ import { apiRequest } from '../../../lib/apiClient.js'
 
 export async function getAdminHeaders(firebaseUser, includeJson = false) {
   if (!firebaseUser) {
-    throw new Error('Sign in with an authorized staff account.')
+    throw new Error('Sign in with an authorized admin account.')
   }
 
   const token = await firebaseUser.getIdToken()
@@ -786,10 +786,11 @@ export async function listPlatformNoticeCampaignAttempts({
 
 export async function listAdminUsers({
   accountStatus = '',
+  cursor = '',
   firebaseUser,
   hostingStatus = '',
   includeDeleted = false,
-  limit = 100,
+  limit = 50,
   query = '',
   role = '',
 } = {}) {
@@ -807,6 +808,9 @@ export async function listAdminUsers({
   if (role) {
     searchParams.set('role', role)
   }
+  if (cursor) {
+    searchParams.set('cursor', cursor)
+  }
 
   searchParams.set('include_deleted', includeDeleted ? 'true' : 'false')
   searchParams.set('limit', String(limit))
@@ -816,29 +820,15 @@ export async function listAdminUsers({
   })
 }
 
-export async function listAdminStaff({
-  firebaseUser,
-  includeDeleted = false,
-  limit = 100,
-} = {}) {
-  const searchParams = new URLSearchParams()
-  searchParams.set('include_deleted', includeDeleted ? 'true' : 'false')
-  searchParams.set('limit', String(limit))
-
-  return apiRequest(`/admin/users/staff?${searchParams.toString()}`, {
-    headers: await getAdminHeaders(firebaseUser),
-  })
-}
-
-export async function changeAdminUserStaffRole({
+export async function changeAdminUserRole({
   firebaseUser,
   idempotencyKey,
   reason,
   role,
   userId,
 } = {}) {
-  return apiRequest(`/admin/users/${userId}/staff-role`, {
-    method: 'POST',
+  return apiRequest(`/admin/users/${userId}/role`, {
+    method: 'PATCH',
     headers: await getAdminHeaders(firebaseUser, true),
     body: JSON.stringify({
       role,
@@ -857,6 +847,36 @@ export async function getAdminUser({
   searchParams.set('limit', String(limit))
 
   return apiRequest(`/admin/users/${userId}?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getAdminUserGameActivity({
+  firebaseUser,
+  limit = 25,
+  offset = 0,
+  userId,
+} = {}) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('offset', String(offset))
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/users/${userId}/game-activity?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
+export async function getAdminUserNeedASubActivity({
+  firebaseUser,
+  limit = 25,
+  offset = 0,
+  userId,
+} = {}) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('offset', String(offset))
+  searchParams.set('limit', String(limit))
+
+  return apiRequest(`/admin/users/${userId}/need-a-sub-activity?${searchParams.toString()}`, {
     headers: await getAdminHeaders(firebaseUser),
   })
 }

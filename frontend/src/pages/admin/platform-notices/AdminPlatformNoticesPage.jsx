@@ -151,13 +151,13 @@ function SelectedAudienceEditor({
     setSearchState('loading')
     setSearchError('')
     try {
-      const users = await listAdminUsers({
+      const userResponse = await listAdminUsers({
         accountStatus: 'active',
         firebaseUser: currentUser,
         limit: 20,
         query: normalizedQuery,
       })
-      setResults(users.filter((user) => !selectedIds.has(user.id)))
+      setResults((userResponse.users ?? []).filter((user) => !selectedIds.has(user.id)))
       setSearchState('ready')
     } catch (error) {
       setResults([])

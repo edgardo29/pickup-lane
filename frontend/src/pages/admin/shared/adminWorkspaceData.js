@@ -35,13 +35,8 @@ export const adminWorkspaceNavGroups = [
     label: 'People',
     items: [
       {
-        label: 'Users',
+        label: 'User Directory',
         to: '/admin/users',
-        end: true,
-      },
-      {
-        label: 'Staff',
-        to: '/admin/users/staff',
         end: true,
       },
     ],
@@ -162,17 +157,7 @@ export function getDefaultAdminPath(adminAccess) {
 
 export function isAdminWorkspaceItemActive(item, pathname) {
   if (item.to === '/admin/users') {
-    return (
-      pathname === item.to
-      || (
-        pathname.startsWith('/admin/users/')
-        && !pathname.startsWith('/admin/users/staff')
-      )
-    )
-  }
-
-  if (item.to === '/admin/users/staff') {
-    return pathname === item.to
+    return pathname === item.to || pathname.startsWith('/admin/users/')
   }
 
   if (item.to === '/admin/review-cases') {
