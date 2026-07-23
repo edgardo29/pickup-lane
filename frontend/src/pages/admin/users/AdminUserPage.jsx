@@ -648,6 +648,7 @@ function AdminUserPage() {
         actions={(
           <div className="admin-user-header-actions">
             <Link className="admin-users-button" to="/admin/users">Back</Link>
+            <Link className="admin-users-button" to={`/admin/money/users/${userId}`}>User Money</Link>
           </div>
         )}
         breadcrumbs={['Admin', 'People', 'User Directory']}

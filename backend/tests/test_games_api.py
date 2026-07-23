@@ -1164,7 +1164,7 @@ def test_cancel_official_game_refunds_paid_payment_and_writes_audit_rows(
     payments_response = get_money_as_admin(client, f"/payments?booking_id={booking_id}")
     assert payments_response.status_code == 200, payments_response.text
     payment = payments_response.json()[0]
-    assert payment["payment_status"] == "refunded"
+    assert payment["payment_status"] == "succeeded"
     assert refund_calls == [
         {
             "charge_id": payment["provider_charge_id"],
@@ -1287,7 +1287,7 @@ def test_cancel_official_game_restores_full_credit_booking_without_stripe_refund
         ).all()
 
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 1500
+    assert refreshed_credit.available_cents == 1500
     assert refreshed_credit.credit_status == "active"
     assert {usage.usage_status for usage in usages} == {
         REDEEMED_USAGE_STATUS,
@@ -1448,7 +1448,7 @@ def test_cancel_official_game_restores_credit_and_refunds_stripe_remainder(
 
     payment_response = get_money_as_admin(client, f"/payments/{checkout['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
-    assert payment_response.json()["payment_status"] == "refunded"
+    assert payment_response.json()["payment_status"] == "succeeded"
     assert refund_calls[0]["amount_cents"] == 1000
 
     with SessionLocal() as db:
@@ -1460,7 +1460,7 @@ def test_cancel_official_game_restores_credit_and_refunds_stripe_remainder(
         ).all()
 
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.available_cents == 500
     assert refreshed_credit.credit_status == "active"
     assert {usage.usage_status for usage in usages} == {
         REDEEMED_USAGE_STATUS,
@@ -1794,10 +1794,10 @@ def test_cancel_official_game_releases_uncharged_pending_checkout_hold(
         ).one()
 
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.available_cents == 500
     assert refreshed_credit.credit_status == "active"
     assert usage.usage_status == RELEASED_USAGE_STATUS
-    assert usage.release_reason == "game_cancelled"
+    assert usage.reason_code == "game_cancelled"
 
     admin_actions_response = client.get(
         f"/admin/actions?target_game_id={game['id']}&action_type=cancel_game"
@@ -3927,7 +3927,7 @@ def test_remove_guest_keeps_player_joined_and_marks_payment_partially_refunded(
 
     payments_response = get_money_as_admin(client, f"/payments?booking_id={booking_id}")
     assert payments_response.status_code == 200, payments_response.text
-    assert payments_response.json()[0]["payment_status"] == "partially_refunded"
+    assert payments_response.json()[0]["payment_status"] == "succeeded"
 
 
 def test_remove_game_guests_requires_authentication(client: TestClient):

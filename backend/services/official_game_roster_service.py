@@ -686,6 +686,11 @@ def remove_official_game_player(
             )
         else:
             booking.booking_status = "cancelled"
+            booking.cancelled_at = booking.cancelled_at or now
+            booking.cancelled_by_user_id = admin_user.id
+            booking.cancel_reason = (
+                remove_request.reason or "Admin removed player from official game."
+            )
             if old_booking_status == "pending_payment":
                 booking.payment_status = "failed"
                 cancel_pending_booking_payments_for_admin_removal(
@@ -694,11 +699,6 @@ def remove_official_game_player(
                     reason=remove_request.reason,
                     now=now,
                 )
-            booking.cancelled_at = booking.cancelled_at or now
-            booking.cancelled_by_user_id = admin_user.id
-            booking.cancel_reason = (
-                remove_request.reason or "Admin removed player from official game."
-            )
 
         booking.updated_at = now
         db.add(booking)
@@ -966,7 +966,7 @@ def cancel_pending_booking_payments_for_admin_removal(
         db,
         booking.id,
         now=now,
-        release_reason="admin_player_removed",
+        reason_code="admin_player_removed",
         user_id=booking.buyer_user_id,
     )
 
@@ -983,6 +983,5 @@ def cancel_pending_booking_payments_for_admin_removal(
         payment.failure_message = (
             "Checkout invalidated after an admin removed the pending player."
         )
-        payment.failure_reason = reason or "Admin removed player from official game."
         payment.updated_at = now
         db.add(payment)

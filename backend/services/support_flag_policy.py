@@ -53,69 +53,6 @@ def target_set(*fields: str) -> frozenset[str]:
 
 
 SUPPORT_FLAG_POLICIES: dict[str, SupportFlagPolicy] = {
-    "refund_follow_up_required": SupportFlagPolicy(
-        flag_type="refund_follow_up_required",
-        required_target_rules=(
-            SupportFlagTargetRule(one_of=(TARGET_BOOKING_ID, TARGET_PAYMENT_ID, TARGET_REFUND_ID)),
-        ),
-        allowed_target_fields=target_set(
-            TARGET_USER_ID,
-            TARGET_GAME_ID,
-            TARGET_BOOKING_ID,
-            TARGET_PAYMENT_ID,
-            TARGET_REFUND_ID,
-        ),
-    ),
-    "stripe_refund_failed": SupportFlagPolicy(
-        flag_type="stripe_refund_failed",
-        required_target_rules=(SupportFlagTargetRule(all_of=(TARGET_REFUND_ID,)),),
-        allowed_target_fields=target_set(
-            TARGET_USER_ID,
-            TARGET_GAME_ID,
-            TARGET_BOOKING_ID,
-            TARGET_PAYMENT_ID,
-            TARGET_REFUND_ID,
-        ),
-    ),
-    "missing_stripe_charge_id": SupportFlagPolicy(
-        flag_type="missing_stripe_charge_id",
-        required_target_rules=(
-            SupportFlagTargetRule(one_of=(TARGET_BOOKING_ID, TARGET_PAYMENT_ID)),
-        ),
-        allowed_target_fields=target_set(
-            TARGET_USER_ID,
-            TARGET_GAME_ID,
-            TARGET_BOOKING_ID,
-            TARGET_PAYMENT_ID,
-            TARGET_REFUND_ID,
-        ),
-    ),
-    "credit_restore_failed": SupportFlagPolicy(
-        flag_type="credit_restore_failed",
-        required_target_rules=(
-            SupportFlagTargetRule(one_of=(TARGET_BOOKING_ID, TARGET_GAME_CREDIT_ID)),
-        ),
-        allowed_target_fields=target_set(
-            TARGET_USER_ID,
-            TARGET_GAME_ID,
-            TARGET_BOOKING_ID,
-            TARGET_PAYMENT_ID,
-            TARGET_GAME_CREDIT_ID,
-        ),
-    ),
-    "credit_release_failed": SupportFlagPolicy(
-        flag_type="credit_release_failed",
-        required_target_rules=(
-            SupportFlagTargetRule(one_of=(TARGET_BOOKING_ID, TARGET_GAME_CREDIT_ID)),
-        ),
-        allowed_target_fields=target_set(
-            TARGET_USER_ID,
-            TARGET_GAME_ID,
-            TARGET_BOOKING_ID,
-            TARGET_PAYMENT_ID,
-            TARGET_GAME_CREDIT_ID,
-        ),
-    ),
     "venue_image_upload_failed": SupportFlagPolicy(
         flag_type="venue_image_upload_failed",
         required_target_rules=(
@@ -134,18 +71,6 @@ SUPPORT_FLAG_POLICIES: dict[str, SupportFlagPolicy] = {
         flag_type="account_delete_partial_failure",
         required_target_rules=(SupportFlagTargetRule(all_of=(TARGET_USER_ID,)),),
         allowed_target_fields=target_set(TARGET_USER_ID),
-    ),
-    "official_cancel_partial_failure": SupportFlagPolicy(
-        flag_type="official_cancel_partial_failure",
-        required_target_rules=(SupportFlagTargetRule(all_of=(TARGET_GAME_ID,)),),
-        allowed_target_fields=target_set(
-            TARGET_USER_ID,
-            TARGET_GAME_ID,
-            TARGET_BOOKING_ID,
-            TARGET_PAYMENT_ID,
-            TARGET_REFUND_ID,
-            TARGET_GAME_CREDIT_ID,
-        ),
     ),
     "community_game_review_required": SupportFlagPolicy(
         flag_type="community_game_review_required",

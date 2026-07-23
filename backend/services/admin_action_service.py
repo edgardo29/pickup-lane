@@ -17,9 +17,11 @@ from backend.models import (
     ChatMessage,
     Game,
     GameCredit,
+    GameCreditUsage,
     GameParticipant,
     HostPublishEntitlement,
     HostPublishFee,
+    MoneyIssue,
     Notification,
     Payment,
     PlatformNoticeCampaign,
@@ -42,11 +44,13 @@ from backend.services.admin_action_policy import (
     ADMIN_ACTION_TARGET_FIELDS,
     TARGET_ADMIN_ACTION_ID,
     TARGET_BOOKING_ID,
+    TARGET_CREDIT_USAGE_ID,
     TARGET_FINANCIAL_OUTCOME_ID,
     TARGET_GAME_CREDIT_ID,
     TARGET_GAME_ID,
     TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
     TARGET_HOST_PUBLISH_FEE_ID,
+    TARGET_MONEY_ISSUE_ID,
     TARGET_MESSAGE_ID,
     TARGET_NOTIFICATION_ID,
     TARGET_PARTICIPANT_ID,
@@ -137,12 +141,36 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
             "refund_status",
             "old_refund_status",
             "new_refund_status",
+            "origin_workflow",
             "payment_type",
             "payment_status",
             "old_payment_status",
             "new_payment_status",
             "source",
             "reviewed",
+        }
+    ),
+    "money_issue": frozenset(
+        {
+            "amount_cents",
+            "currency",
+            "issue_type",
+            "old_issue_type",
+            "new_issue_type",
+            "old_status",
+            "new_status",
+            "old_recommended_action_code",
+            "new_recommended_action_code",
+            "operation_key",
+            "origin_workflow",
+            "reason_code",
+            "retry_kind",
+            "failure",
+            "refund_status",
+            "resolution_reason_code",
+            "resolution_external_reference",
+            "source",
+            "value_kind",
         }
     ),
     "official_game": frozenset(
@@ -224,6 +252,7 @@ TARGET_MODEL_BY_FIELD = {
     TARGET_PAYMENT_ID: Payment,
     TARGET_REFUND_ID: Refund,
     TARGET_GAME_CREDIT_ID: GameCredit,
+    TARGET_CREDIT_USAGE_ID: GameCreditUsage,
     TARGET_VENUE_ID: Venue,
     TARGET_VENUE_IMAGE_ID: VenueImage,
     TARGET_MESSAGE_ID: ChatMessage,
@@ -235,6 +264,7 @@ TARGET_MODEL_BY_FIELD = {
     TARGET_PLATFORM_NOTICE_CAMPAIGN_ID: PlatformNoticeCampaign,
     TARGET_ADMIN_ACTION_ID: AdminAction,
     TARGET_SUPPORT_FLAG_ID: SupportFlag,
+    TARGET_MONEY_ISSUE_ID: MoneyIssue,
     TARGET_REVIEW_CASE_ID: AdminReviewCase,
     TARGET_FINANCIAL_OUTCOME_ID: AdminFinancialOutcome,
     TARGET_HOST_PUBLISH_FEE_ID: HostPublishFee,
@@ -249,6 +279,7 @@ TARGET_NOT_FOUND_DETAIL = {
     TARGET_PAYMENT_ID: "Target payment not found.",
     TARGET_REFUND_ID: "Target refund not found.",
     TARGET_GAME_CREDIT_ID: "Target game credit not found.",
+    TARGET_CREDIT_USAGE_ID: "Target credit usage not found.",
     TARGET_VENUE_ID: "Target venue not found.",
     TARGET_VENUE_IMAGE_ID: "Target venue image not found.",
     TARGET_MESSAGE_ID: "Target message not found.",
@@ -262,6 +293,7 @@ TARGET_NOT_FOUND_DETAIL = {
     ),
     TARGET_ADMIN_ACTION_ID: "Target admin action not found.",
     TARGET_SUPPORT_FLAG_ID: "Target support flag not found.",
+    TARGET_MONEY_ISSUE_ID: "Target money issue not found.",
     TARGET_REVIEW_CASE_ID: "Target review case not found.",
     TARGET_FINANCIAL_OUTCOME_ID: "Target financial outcome not found.",
     TARGET_HOST_PUBLISH_FEE_ID: "Target host publish fee not found.",
@@ -292,6 +324,15 @@ def build_admin_action_conflict_detail(exc: IntegrityError) -> str:
 
     if "uq_admin_actions_need_sub_enforcement_idempotency" in error_text:
         return "Need a Sub action with this idempotency key already exists."
+
+    if "uq_admin_actions_money_issue_idempotency" in error_text:
+        return "Money issue action with this idempotency key already exists."
+
+    if "uq_admin_actions_reconcile_refund_idempotency" in error_text:
+        return "Refund reconciliation with this idempotency key already exists."
+
+    if "uq_admin_actions_update_refund_idempotency" in error_text:
+        return "Refund update with this idempotency key already exists."
 
     return build_user_conflict_detail(exc)
 

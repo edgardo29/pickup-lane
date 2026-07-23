@@ -15,7 +15,12 @@ class RefundCreate(BaseModel):
     booking_id: UUID | None = None
     participant_id: UUID | None = None
     host_publish_fee_id: UUID | None = None
+    origin_workflow: str = "direct_admin_refund"
+    provider: str = "stripe"
     provider_refund_id: str | None = None
+    provider_charge_id: str | None = None
+    provider_status: str | None = None
+    provider_status_observed_at: datetime | None = None
     amount_cents: int
     currency: str = "USD"
     refund_reason: str
@@ -36,7 +41,13 @@ class RefundRead(BaseModel):
     booking_id: UUID | None
     participant_id: UUID | None
     host_publish_fee_id: UUID | None
+    origin_workflow: str
+    provider: str
     provider_refund_id: str | None
+    provider_charge_id: str | None
+    provider_status: str | None
+    provider_status_observed_at: datetime | None
+    last_refund_event_at: datetime | None
     amount_cents: int
     currency: str
     refund_reason: str
@@ -59,7 +70,13 @@ class RefundUpdate(BaseModel):
     booking_id: UUID | None = None
     participant_id: UUID | None = None
     host_publish_fee_id: UUID | None = None
+    origin_workflow: str | None = None
+    provider: str | None = None
     provider_refund_id: str | None = None
+    provider_charge_id: str | None = None
+    provider_status: str | None = None
+    provider_status_observed_at: datetime | None = None
+    last_refund_event_at: datetime | None = None
     amount_cents: int | None = None
     currency: str | None = None
     refund_reason: str | None = None

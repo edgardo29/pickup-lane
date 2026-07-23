@@ -16,13 +16,12 @@ import {
   AdminMoneyCreditPage,
   AdminMoneyCreditsPage,
   AdminMoneyFinancialOutcomePage,
+  AdminMoneyIssuePage,
+  AdminMoneyIssuesPage,
   AdminMoneyPaymentPage,
-  AdminMoneyPaymentMethodsPage,
   AdminMoneyPaymentsPage,
   AdminMoneyRefundPage,
   AdminMoneyRefundsPage,
-  AdminMoneySupportFlagPage,
-  AdminMoneySupportFlagsPage,
   AdminMoneyUserPage,
   AdminNeedASubPage,
   AdminNeedASubPostPage,
@@ -293,14 +292,6 @@ export function AppRoutes() {
           }
         />
         <Route
-          path="money/payment-methods"
-          element={
-            <RequireAdmin>
-              <AdminMoneyPaymentMethodsPage />
-            </RequireAdmin>
-          }
-        />
-        <Route
           path="money/credits"
           element={
             <RequireAdmin>
@@ -317,18 +308,18 @@ export function AppRoutes() {
           }
         />
         <Route
-          path="money/support-flags"
+          path="money/issues"
           element={
             <RequireAdmin>
-              <AdminMoneySupportFlagsPage />
+              <AdminMoneyIssuesPage />
             </RequireAdmin>
           }
         />
         <Route
-          path="money/support-flags/:supportFlagId"
+          path="money/issues/:moneyIssueId"
           element={
             <RequireAdmin>
-              <AdminMoneySupportFlagPage />
+              <AdminMoneyIssuePage />
             </RequireAdmin>
           }
         />

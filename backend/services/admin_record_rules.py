@@ -56,7 +56,12 @@ SENSITIVE_METADATA_VALUE_REGEXES = (
 )
 
 
-def normalize_optional_text(value: str | None, field_name: str) -> str | None:
+def normalize_optional_text(
+    value: str | None,
+    field_name: str,
+    *,
+    max_length: int = MAX_REASON_LENGTH,
+) -> str | None:
     if value is None:
         return None
 
@@ -64,10 +69,10 @@ def normalize_optional_text(value: str | None, field_name: str) -> str | None:
     if not normalized:
         return None
 
-    if len(normalized) > MAX_REASON_LENGTH:
+    if len(normalized) > max_length:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} must be {MAX_REASON_LENGTH} characters or fewer.",
+            detail=f"{field_name} must be {max_length} characters or fewer.",
         )
 
     return normalized

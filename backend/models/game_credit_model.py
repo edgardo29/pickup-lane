@@ -25,7 +25,7 @@ class GameCredit(Base):
     __tablename__ = "game_credits"
     __table_args__ = (
         CheckConstraint(
-            "credit_status IN ('active', 'used', 'expired', 'reversed')",
+            "credit_status IN ('active', 'used', 'reversed')",
             name="ck_game_credits_credit_status",
         ),
         CheckConstraint(
@@ -40,21 +40,32 @@ class GameCredit(Base):
         CheckConstraint("currency = 'USD'", name="ck_game_credits_currency"),
         CheckConstraint("amount_cents > 0", name="ck_game_credits_amount_cents"),
         CheckConstraint(
-            "remaining_cents >= 0",
-            name="ck_game_credits_remaining_cents_non_negative",
+            "available_cents >= 0",
+            name="ck_game_credits_available_cents_non_negative",
         ),
         CheckConstraint(
-            "remaining_cents <= amount_cents",
-            name="ck_game_credits_remaining_not_above_amount",
+            "available_cents <= amount_cents",
+            name="ck_game_credits_available_not_above_amount",
         ),
         CheckConstraint(
-            "(credit_status = 'active' OR remaining_cents = 0)",
-            name="ck_game_credits_inactive_has_no_remaining",
+            "(credit_status <> 'reversed' OR available_cents = 0)",
+            name="ck_game_credits_reversed_has_no_available",
+        ),
+        CheckConstraint(
+            (
+                "((credit_status = 'reversed') "
+                "AND reversed_by_user_id IS NOT NULL "
+                "AND reversed_at IS NOT NULL) "
+                "OR ((credit_status <> 'reversed') "
+                "AND reversed_by_user_id IS NULL "
+                "AND reversed_at IS NULL)"
+            ),
+            name="ck_game_credits_reversal_fields_match_status",
         ),
         UniqueConstraint("idempotency_key", name="uq_game_credits_idempotency_key"),
-        Index("ix_game_credits_user_id", "user_id"),
-        Index("ix_game_credits_credit_status", "credit_status"),
-        Index("ix_game_credits_credit_reason", "credit_reason"),
+        Index("ix_game_credits_user_created", "user_id", "created_at", "id"),
+        Index("ix_game_credits_credit_status_created", "credit_status", "created_at", "id"),
+        Index("ix_game_credits_credit_reason_created", "credit_reason", "created_at", "id"),
         Index("ix_game_credits_source_game_id", "source_game_id"),
         Index("ix_game_credits_source_booking_id", "source_booking_id"),
         Index("ix_game_credits_source_payment_id", "source_payment_id"),
@@ -73,7 +84,7 @@ class GameCredit(Base):
         nullable=False,
     )
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
-    remaining_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    available_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(
         CHAR(3), nullable=False, server_default=text("'USD'")
     )
@@ -108,9 +119,6 @@ class GameCredit(Base):
     )
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
     reversed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

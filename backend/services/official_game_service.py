@@ -540,7 +540,7 @@ def expire_pending_checkouts_for_admin_edit(
             db,
             booking.id,
             now=now,
-            release_reason="admin_game_updated",
+            reason_code="admin_game_updated",
             user_id=booking.buyer_user_id,
         )
         booking.booking_status = "expired"
@@ -571,7 +571,6 @@ def expire_pending_checkouts_for_admin_edit(
         payment.payment_status = "canceled"
         payment.failure_code = "admin_game_updated"
         payment.failure_message = "Checkout invalidated after official game details changed."
-        payment.failure_reason = reason or "Official game details changed by admin."
         payment.updated_at = now
         db.add(payment)
 

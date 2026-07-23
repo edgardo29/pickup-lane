@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   CircleDollarSign,
-  Hash,
   RefreshCw,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
@@ -14,10 +13,9 @@ import {
   CreditSummary,
   CreditUsagesSection,
   EmptyState,
+  MoneyIssuesSection,
   PaymentsSection,
   RefundsSection,
-  SectionHeader,
-  SupportFlagsSection,
 } from './AdminMoneyDetailSections.jsx'
 import {
   formatMoney,
@@ -77,7 +75,7 @@ function AdminMoneyCreditPage() {
 
   const pageTitle = useMemo(() => (
     detail?.credit
-      ? `${formatMoney(detail.credit.remaining_cents, detail.credit.currency)} ${formatStatus(detail.credit.credit_status)}`
+      ? `${formatMoney(detail.credit.available_cents, detail.credit.currency)} ${formatStatus(detail.credit.credit_status)}`
       : 'Credit Detail'
   ), [detail])
 
@@ -85,7 +83,7 @@ function AdminMoneyCreditPage() {
     <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Money', 'Credits']}
-        description="Inspect this credit, its usage, and related money support context."
+        description="Inspect this credit, its usage, and related money issue context."
         icon={CircleDollarSign}
         title={pageTitle}
       >
@@ -120,19 +118,18 @@ function AdminMoneyCreditPage() {
           {loadState === 'ready' && detail && (
             <>
               <CreditSummary credit={detail.credit} />
-              <CreditUsagesSection creditUsages={detail.credit_usages ?? []} />
+              <CreditUsagesSection
+                creditUsageCount={detail.credit_usage_count ?? 0}
+                creditUsages={detail.credit_usages ?? []}
+                isTruncated={Boolean(detail.credit_usages_truncated)}
+              />
               <PaymentsSection payments={detail.payments ?? []} />
               <RefundsSection refunds={detail.refunds ?? []} />
               <ContextSection booking={detail.booking} game={detail.game} />
-              <SupportFlagsSection supportFlags={detail.support_flags ?? []} />
-              <AuditSection auditActions={detail.audit_actions ?? []} />
-              <section className="admin-money-panel" aria-label="Read-only status">
-                <SectionHeader icon={Hash} title="Read Only" />
-                <p className="admin-money-note">
-                  This page shows backend credit truth only. It does not issue,
-                  reverse, restore, release, or resolve support flags.
-                </p>
-              </section>
+              <MoneyIssuesSection moneyIssues={detail.linked_money_issues ?? []} />
+              {Boolean(detail.admin_actions?.length) && (
+                <AuditSection auditActions={detail.admin_actions} />
+              )}
             </>
           )}
         </div>

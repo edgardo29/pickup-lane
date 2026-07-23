@@ -9,7 +9,6 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -44,6 +43,29 @@ class Refund(Base):
             name="ck_refunds_refund_status",
         ),
         CheckConstraint(
+            (
+                "origin_workflow IN ("
+                "'player_removal', 'official_game_cancellation', "
+                "'community_publish_fee_refund', 'direct_admin_refund', "
+                "'official_game_checkout', 'pending_checkout_expiration', "
+                "'pending_checkout_cancellation', 'admin_game_update'"
+                ")"
+            ),
+            name="ck_refunds_origin_workflow",
+        ),
+        CheckConstraint(
+            "provider IN ('stripe')",
+            name="ck_refunds_provider",
+        ),
+        CheckConstraint(
+            (
+                "provider_status IS NULL OR provider_status IN ("
+                "'processing', 'succeeded', 'failed', 'cancelled', 'unknown'"
+                ")"
+            ),
+            name="ck_refunds_provider_status",
+        ),
+        CheckConstraint(
             "currency = 'USD'",
             name="ck_refunds_currency",
         ),
@@ -67,18 +89,31 @@ class Refund(Base):
             ),
             name="ck_refunds_target_required",
         ),
-        UniqueConstraint(
-            "provider_refund_id",
-            name="uq_refunds_provider_refund_id",
-        ),
         Index("ix_refunds_payment_id", "payment_id"),
         Index("ix_refunds_booking_id", "booking_id"),
         Index("ix_refunds_participant_id", "participant_id"),
         Index("ix_refunds_host_publish_fee_id", "host_publish_fee_id"),
-        Index("ix_refunds_refund_status", "refund_status"),
+        Index("ix_refunds_refund_status_created", "refund_status", "created_at", "id"),
+        Index("ix_refunds_origin_workflow_created", "origin_workflow", "created_at", "id"),
+        Index("ix_refunds_provider_status_created", "provider_status", "created_at", "id"),
+        Index("ix_refunds_amount_cents_id", "amount_cents", "id"),
+        Index(
+            "ix_refunds_last_refund_event_at",
+            "last_refund_event_at",
+            "id",
+        ),
         Index("ix_refunds_refund_reason", "refund_reason"),
         Index("ix_refunds_requested_by_user_id", "requested_by_user_id"),
         Index("ix_refunds_approved_by_user_id", "approved_by_user_id"),
+        Index("ix_refunds_provider_refund_id", "provider_refund_id"),
+        Index("ix_refunds_provider_charge_id", "provider_charge_id"),
+        Index(
+            "uq_refunds_provider_refund_id",
+            "provider",
+            "provider_refund_id",
+            unique=True,
+            postgresql_where=text("provider_refund_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -104,6 +139,20 @@ class Refund(Base):
     )
     provider_refund_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True
+    )
+    origin_workflow: Mapped[str] = mapped_column(
+        String(80), nullable=False, server_default=text("'direct_admin_refund'")
+    )
+    provider: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'stripe'")
+    )
+    provider_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    provider_status_observed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    provider_charge_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_refund_event_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(

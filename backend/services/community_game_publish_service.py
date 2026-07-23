@@ -532,7 +532,6 @@ def expire_abandoned_community_publish_attempts(
                 payment.failure_message
                 or "Community publish attempt expired before payment confirmation."
             )
-            payment.failure_reason = payment.failure_reason or "publish_attempt_expired"
             payment.updated_at = now
             db.add(payment)
 
@@ -696,7 +695,6 @@ def create_paid_publish_attempt(
         paid_at=None,
         failure_code=None,
         failure_message=None,
-        failure_reason=None,
         payment_metadata={
             "source": "community_publish_fee",
             "host_user_id": str(host.id),
@@ -794,7 +792,6 @@ def create_paid_publish_attempt(
             locked_payment.failure_message = (
                 "Stripe could not confirm this saved payment method."
             )
-            locked_payment.failure_reason = "publish_fee_confirm_failed"
             locked_payment.updated_at = locked_attempt.updated_at
             db.add(locked_attempt)
             db.add(locked_payment)
@@ -836,7 +833,6 @@ def create_paid_publish_attempt(
         locked_payment.provider_charge_id = confirmed_intent.latest_charge_id
         locked_payment.failure_code = failure_code
         locked_payment.failure_message = failure_message
-        locked_payment.failure_reason = failure_code
         locked_payment.updated_at = locked_attempt.updated_at
         db.add(locked_attempt)
         db.add(locked_payment)
@@ -883,7 +879,6 @@ def finalize_community_publish_attempt_success(
             payment.paid_at = payment.paid_at or now
             payment.failure_code = None
             payment.failure_message = None
-            payment.failure_reason = None
             payment_changed = True
         if provider_charge_id is not None and payment.provider_charge_id is None:
             payment.provider_charge_id = provider_charge_id
@@ -916,7 +911,6 @@ def finalize_community_publish_attempt_success(
     payment.paid_at = payment.paid_at or now
     payment.failure_code = None
     payment.failure_message = None
-    payment.failure_reason = None
     payment.updated_at = now
     db.add(payment)
 
@@ -1005,7 +999,6 @@ def mark_community_publish_attempt_failed_or_canceled(
         payment.provider_charge_id = provider_charge_id
         payment.failure_code = failure_code
         payment.failure_message = failure_message
-        payment.failure_reason = failure_code
         payment.updated_at = now
         db.add(payment)
 

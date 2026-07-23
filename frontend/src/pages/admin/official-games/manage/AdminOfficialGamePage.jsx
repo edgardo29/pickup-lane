@@ -97,7 +97,7 @@ const cancellationCategoryLabels = {
 
 const cancellationFollowUpLabels = {
   active_refund: 'Active refund',
-  existing_or_disputed_refund_state: 'Existing refund or dispute state',
+  existing_or_disputed_refund_state: 'Existing refund state',
   missing_stripe_charge_id: 'Missing Stripe charge',
   payment_state_follow_up: 'Payment state follow-up',
   processing_payment: 'Processing payment',
@@ -256,9 +256,9 @@ function AdminOfficialGameCancelModal({
           </label>
         )}
 
-        {result?.support_flag_ids?.length > 0 && (
+        {result?.money_issue_ids?.length > 0 && (
           <p className="admin-official-warning">
-            Support follow-up was created for unresolved money state.
+            Money Issues were created for unresolved money state.
           </p>
         )}
 
@@ -915,7 +915,7 @@ function AdminOfficialGamePageContent({ gameId }) {
       await refreshWorkspace()
       setPageNotice(
         result.refund_follow_up_required
-          ? 'Player removed. Refund follow-up is required.'
+          ? 'Player removed. Money Issue review is required.'
           : 'Player removal completed.',
       )
     } catch (error) {
@@ -1010,7 +1010,7 @@ function AdminOfficialGamePageContent({ gameId }) {
       await refreshWorkspace()
       setPageNotice(
         result.refund_follow_up_required || result.payment_follow_up_required
-          ? 'Official game cancelled. Money follow-up is required.'
+          ? 'Official game cancelled. Money Issue review is required.'
           : 'Official game cancelled.',
       )
     } catch (error) {

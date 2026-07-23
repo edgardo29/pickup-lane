@@ -1,5 +1,5 @@
-from datetime import UTC, datetime
-from uuid import UUID
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -9,16 +9,28 @@ from backend.models import (
     AdminAction,
     AdminFinancialOutcome,
     AdminTargetNotice,
+    GameCredit,
+    GameCreditUsage,
     HostPublishEntitlement,
     HostPublishFee,
+    CommunityPublishAttempt,
+    MoneyIssue,
+    MoneyIssueEvent,
     Notification,
     Payment,
     Refund,
-    SupportFlag,
+    RefundEvent,
 )
-from backend.services.game_credit_service import reserve_game_credits
+from backend.services.admin_money_issue_service import (
+    stage_credit_money_issue,
+    stage_refund_money_issue,
+)
+from backend.services.game_credit_service import (
+    GameCreditLedgerError,
+    redeem_reserved_game_credits,
+    reserve_game_credits,
+)
 from backend.services.stripe_service import StripeRefundResult
-from backend.services.support_flag_service import create_support_flag
 from backend.tests.helpers import (
     authenticate_as,
     create_booking,
@@ -98,6 +110,49 @@ def issue_admin_money_detail_credit(
     return response.json()
 
 
+def create_refund_money_issue_for_test(
+    db,
+    *,
+    refund_id: str,
+    issue_type: str = "refund_failed",
+    reason_code: str = "test_refund_issue",
+):
+    refund = db.get(Refund, UUID(refund_id))
+    assert refund is not None
+    payment = db.get(Payment, refund.payment_id)
+    issue = stage_refund_money_issue(
+        db,
+        refund=refund,
+        payment=payment,
+        issue_type=issue_type,
+        reason_code=reason_code,
+        summary="Test money issue.",
+    )
+    return issue
+
+
+def create_credit_money_issue_for_test(
+    db,
+    *,
+    credit_usage_id: str,
+    issue_type: str = "credit_release_failed",
+    reason_code: str = "test_credit_issue",
+):
+    usage = db.get(GameCreditUsage, UUID(credit_usage_id))
+    assert usage is not None
+    credit = db.get(GameCredit, usage.game_credit_id)
+    issue = stage_credit_money_issue(
+        db,
+        credit_usage=usage,
+        game_credit=credit,
+        issue_type=issue_type,
+        origin_workflow="official_game_cancellation",
+        reason_code=reason_code,
+        summary="Test credit money issue.",
+    )
+    return issue
+
+
 def test_admin_can_list_money_payments_by_user_and_status(client: TestClient):
     admin = create_user(client)
     player = create_user(client)
@@ -138,18 +193,19 @@ def test_admin_can_list_money_payments_by_user_and_status(client: TestClient):
         f"/admin/money/payments?user_id={player['id']}&payment_status=succeeded"
     )
     booking_response = client.get(
-        f"/admin/money/payments?booking_id={booking['id']}&payment_status=all"
+        f"/admin/money/payments?q={booking['id']}&payment_status=all"
     )
     game_response = client.get(
-        f"/admin/money/payments?game_id={game['id']}&payment_status=succeeded"
+        f"/admin/money/payments?q={game['id']}&payment_status=succeeded"
     )
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert {item["id"] for item in body} == {succeeded_payment["id"]}
-    row = body[0]
+    assert {item["id"] for item in body["items"]} == {succeeded_payment["id"]}
+    row = body["items"][0]
     assert row["payer_user_id"] == player["id"]
     assert row["payment_status"] == "succeeded"
+    assert row["is_fully_refunded"] is False
     assert set(row) == {
         "id",
         "payer_user_id",
@@ -157,23 +213,29 @@ def test_admin_can_list_money_payments_by_user_and_status(client: TestClient):
         "game_id",
         "payment_type",
         "provider",
+        "provider_payment_intent_id",
+        "provider_charge_id",
         "amount_cents",
         "currency",
         "payment_status",
         "paid_at",
         "failure_code",
+        "is_fully_refunded",
+        "reserved_credit_cents",
+        "redeemed_credit_cents",
+        "open_money_issue_count",
+        "display",
         "created_at",
-        "updated_at",
     }
 
     assert booking_response.status_code == 200, booking_response.text
-    booking_ids = {item["id"] for item in booking_response.json()}
+    booking_ids = {item["id"] for item in booking_response.json()["items"]}
     assert succeeded_payment["id"] in booking_ids
     assert failed_payment["id"] in booking_ids
     assert other_payment["id"] not in booking_ids
 
     assert game_response.status_code == 200, game_response.text
-    game_payment_ids = {item["id"] for item in game_response.json()}
+    game_payment_ids = {item["id"] for item in game_response.json()["items"]}
     assert game_payment_ids == {succeeded_payment["id"], other_payment["id"]}
 
 
@@ -185,6 +247,28 @@ def test_admin_money_payment_list_rejects_bad_status(client: TestClient):
     response = client.get("/admin/money/payments?payment_status=settled")
 
     assert response.status_code == 400, response.text
+
+
+def test_admin_money_payment_list_rejects_removed_raw_filters(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/money/payments?booking_id={uuid4()}")
+
+    assert response.status_code == 400, response.text
+
+
+def test_admin_money_payment_search_finds_publish_fee_id(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    _host, _game, payment, host_publish_fee = create_paid_publish_fee_setup(client)
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/money/payments?q={host_publish_fee['id']}")
+
+    assert response.status_code == 200, response.text
+    assert {item["id"] for item in response.json()["items"]} == {payment["id"]}
 
 
 def test_player_cannot_list_admin_money_payments(client: TestClient):
@@ -247,10 +331,7 @@ def test_admin_can_list_money_refunds_by_user_status_and_context(client: TestCli
         f"/admin/money/refunds?user_id={player['id']}&refund_status=failed"
     )
     booking_response = client.get(
-        f"/admin/money/refunds?booking_id={booking['id']}&refund_status=all"
-    )
-    game_response = client.get(
-        f"/admin/money/refunds?game_id={game['id']}&refund_status=failed"
+        f"/admin/money/refunds?q={booking['id']}&refund_status=all"
     )
     payment_response = client.get(
         f"/admin/money/refunds?payment_id={payment['id']}&refund_status=all"
@@ -258,8 +339,8 @@ def test_admin_can_list_money_refunds_by_user_status_and_context(client: TestCli
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert {item["id"] for item in body} == {failed_refund["id"]}
-    row = body[0]
+    assert {item["id"] for item in body["items"]} == {failed_refund["id"]}
+    row = body["items"][0]
     assert row["payment_id"] == payment["id"]
     assert row["booking_id"] == booking["id"]
     assert row["refund_status"] == "failed"
@@ -269,6 +350,14 @@ def test_admin_can_list_money_refunds_by_user_status_and_context(client: TestCli
         "booking_id",
         "participant_id",
         "host_publish_fee_id",
+        "game_id",
+        "target_user_id",
+        "origin_workflow",
+        "provider",
+        "provider_refund_id",
+        "provider_charge_id",
+        "provider_status",
+        "provider_status_observed_at",
         "amount_cents",
         "currency",
         "refund_reason",
@@ -278,23 +367,106 @@ def test_admin_can_list_money_refunds_by_user_status_and_context(client: TestCli
         "requested_at",
         "approved_at",
         "refunded_at",
+        "last_refund_event_at",
+        "linked_issue",
+        "display",
         "created_at",
         "updated_at",
     }
+    assert row["game_id"] == game["id"]
+    assert row["target_user_id"] == player["id"]
 
     assert booking_response.status_code == 200, booking_response.text
-    booking_refund_ids = {item["id"] for item in booking_response.json()}
+    booking_refund_ids = {item["id"] for item in booking_response.json()["items"]}
     assert failed_refund["id"] in booking_refund_ids
     assert processing_refund["id"] in booking_refund_ids
     assert other_refund["id"] not in booking_refund_ids
 
-    assert game_response.status_code == 200, game_response.text
-    game_refund_ids = {item["id"] for item in game_response.json()}
-    assert game_refund_ids == {failed_refund["id"], other_refund["id"]}
-
     assert payment_response.status_code == 200, payment_response.text
-    payment_refund_ids = {item["id"] for item in payment_response.json()}
+    payment_refund_ids = {item["id"] for item in payment_response.json()["items"]}
     assert payment_refund_ids == {failed_refund["id"], processing_refund["id"]}
+
+
+def test_admin_money_refund_list_rejects_removed_created_window_filter(
+    client: TestClient,
+):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    created_from = (
+        datetime(2026, 1, 4, tzinfo=UTC).isoformat().replace("+00:00", "Z")
+    )
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/money/refunds?created_from={created_from}")
+
+    assert response.status_code == 400, response.text
+
+
+def test_admin_money_refund_list_omits_resolved_issue_and_rejects_issue_filter(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        amount_cents=500,
+        refund_status="failed",
+    )
+
+    with SessionLocal() as db:
+        db_payment = db.get(Payment, UUID(payment["id"]))
+        db_refund = db.get(Refund, UUID(refund["id"]))
+        assert db_payment is not None
+        assert db_refund is not None
+        money_issue = stage_refund_money_issue(
+            db,
+            refund=db_refund,
+            payment=db_payment,
+            issue_type="refund_failed",
+            reason_code="stripe_refund_failed",
+            summary="Stripe reported the refund failed.",
+            now=datetime.now(UTC),
+        )
+        money_issue_id = str(money_issue.id)
+        db.commit()
+
+    authenticate_as(admin["id"])
+    resolve_response = client.post(
+        f"/admin/money/issues/{money_issue_id}/resolve",
+        json={
+            "resolution_reason_code": "invalid_issue",
+            "resolution_note": "Duplicate issue created during setup.",
+            "idempotency_key": f"resolve-refund-list-issue-{unique_suffix()}",
+        },
+    )
+    response = client.get(
+        f"/admin/money/refunds?payment_id={payment['id']}"
+    )
+    rejected_filter_response = client.get(
+        f"/admin/money/refunds?payment_id={payment['id']}&issue_status=resolved"
+    )
+
+    assert resolve_response.status_code == 200, resolve_response.text
+    assert response.status_code == 200, response.text
+    rows = response.json()["items"]
+    assert {item["id"] for item in rows} == {refund["id"]}
+    assert rows[0]["linked_issue"] is None
+    assert rejected_filter_response.status_code == 400, rejected_filter_response.text
 
 
 def test_admin_money_refund_list_rejects_bad_status(client: TestClient):
@@ -305,6 +477,48 @@ def test_admin_money_refund_list_rejects_bad_status(client: TestClient):
     response = client.get("/admin/money/refunds?refund_status=settled")
 
     assert response.status_code == 400, response.text
+
+
+def test_admin_money_refund_detail_returns_structured_actions(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        refund_status="failed",
+        provider_refund_id=f"re_{unique_suffix()}",
+        provider_charge_id=payment["provider_charge_id"],
+    )
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/money/refunds/{refund['id']}")
+
+    assert response.status_code == 200, response.text
+    actions = {
+        action["action_code"]: action
+        for action in response.json()["available_actions"]
+    }
+    assert actions["retry_refund"]["enabled"] is True
+    assert actions["retry_refund"]["blockers"] == []
+    assert actions["check_provider_status"]["enabled"] is True
+    assert set(actions) == {
+        "retry_refund",
+        "check_provider_status",
+        "open_provider_reference",
+        "open_money_issue",
+    }
 
 
 def test_player_cannot_list_admin_money_refunds(client: TestClient):
@@ -388,33 +602,13 @@ def test_admin_can_get_payment_detail_support_context(client: TestClient):
         db.commit()
 
     with SessionLocal() as db:
-        support_flag = create_support_flag(
+        money_issue = create_refund_money_issue_for_test(
             db,
-            flag_type="refund_follow_up_required",
-            source="stripe",
-            title="Refund still processing",
-            summary="Payment refund needs staff follow-up before support can close it.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-detail-flag-{payment['id']}",
+            refund_id=refund["id"],
+            issue_type="refund_processing_overdue",
         )
-        support_flag_id = str(support_flag.id)
-        official_cancel_flag = create_support_flag(
-            db,
-            flag_type="official_cancel_partial_failure",
-            source="official_game",
-            title="Official cancellation follow-up",
-            summary="This flag stays in the official cancellation workflow.",
-            severity="urgent",
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            idempotency_key=f"admin-money-detail-official-cancel-{booking['id']}",
-        )
-        official_cancel_flag_id = str(official_cancel_flag.id)
+        money_issue_id = str(money_issue.id)
+        db.commit()
 
     authenticate_as(admin["id"])
     response = client.get(f"/admin/money/payments/{payment['id']}")
@@ -425,7 +619,7 @@ def test_admin_can_get_payment_detail_support_context(client: TestClient):
     assert body["payment"]["booking_id"] == booking["id"]
     assert body["payment"]["payment_status"] == "succeeded"
     assert body["payment"]["provider_charge_id"] == payment["provider_charge_id"]
-    assert "idempotency_key" not in body["payment"]
+    assert body["payment"]["idempotency_key"] == payment["idempotency_key"]
     assert "metadata" not in body["payment"]
     assert body["booking"]["id"] == booking["id"]
     assert body["booking"]["payment_status"] == "paid"
@@ -438,21 +632,160 @@ def test_admin_can_get_payment_detail_support_context(client: TestClient):
         item["id"] for item in body["credit_grants"]
     }
     assert usage_id in {item["id"] for item in body["credit_usages"]}
-    assert support_flag_id in {item["id"] for item in body["support_flags"]}
-    assert official_cancel_flag_id not in {
-        item["id"] for item in body["support_flags"]
-    }
+    assert money_issue_id in {item["id"] for item in body["linked_money_issues"]}
     assert any(
         action["action_type"] == "create_payment"
         and action["target_payment_id"] == payment["id"]
-        for action in body["audit_actions"]
+        for action in body["admin_actions"]
     )
     assert any(
         action["action_type"] == "issue_credit"
         and action["target_game_credit_id"] == credit["id"]
-        for action in body["audit_actions"]
+        for action in body["admin_actions"]
     )
-    assert all("idempotency_key" not in action for action in body["audit_actions"])
+    assert all("idempotency_key" not in action for action in body["admin_actions"])
+
+
+def test_admin_payment_detail_orders_open_linked_issues_first(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    open_refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        amount_cents=300,
+        refund_status="failed",
+    )
+    resolved_refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        amount_cents=200,
+        refund_status="failed",
+    )
+
+    with SessionLocal() as db:
+        open_issue = create_refund_money_issue_for_test(
+            db,
+            refund_id=open_refund["id"],
+            issue_type="refund_failed",
+            reason_code="open_refund_issue",
+        )
+        resolved_issue = create_refund_money_issue_for_test(
+            db,
+            refund_id=resolved_refund["id"],
+            issue_type="refund_failed",
+            reason_code="resolved_refund_issue",
+        )
+        later = datetime.now(UTC) + timedelta(minutes=5)
+        resolved_issue.status = "resolved"
+        resolved_issue.resolved_at = later
+        resolved_issue.resolved_by_user_id = UUID(admin["id"])
+        resolved_issue.resolution_reason_code = "invalid_issue"
+        resolved_issue.resolution_note = "Resolved test issue."
+        resolved_issue.last_activity_at = later
+        resolved_issue.updated_at = later
+        open_issue_id = str(open_issue.id)
+        resolved_issue_id = str(resolved_issue.id)
+        db.commit()
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/money/payments/{payment['id']}")
+
+    assert response.status_code == 200, response.text
+    issue_ids = [item["id"] for item in response.json()["linked_money_issues"]]
+    assert open_issue_id in issue_ids
+    assert resolved_issue_id in issue_ids
+    assert issue_ids.index(open_issue_id) < issue_ids.index(resolved_issue_id)
+
+
+def test_admin_payment_detail_includes_publish_fee_context(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    host, game, payment, host_publish_fee = create_paid_publish_fee_setup(client)
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/money/payments/{payment['id']}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["booking"] is None
+    assert body["game"]["id"] == game["id"]
+    assert body["payer"]["id"] == host["id"]
+    assert body["payer"]["email"] == host["email"]
+    assert body["host_publish_fee"]["id"] == host_publish_fee["id"]
+    assert body["host_publish_fee"]["payment_id"] == payment["id"]
+    assert body["publish_host"]["id"] == host["id"]
+    assert body["publish_host"]["email"] == host["email"]
+    assert body["community_publish_attempt"] is None
+
+
+def test_admin_payment_detail_includes_publish_attempt_context(client: TestClient):
+    admin = create_user(client)
+    host = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, host["id"])
+    game = create_game(
+        client,
+        host["id"],
+        venue,
+        game_type="community",
+        host_user_id=host["id"],
+        policy_mode="custom_hosted",
+    )
+    payment = create_payment(
+        client,
+        host["id"],
+        game_id=game["id"],
+        payment_type="community_publish_fee",
+        amount_cents=499,
+        payment_status="processing",
+        provider_charge_id=f"ch_{unique_suffix()}",
+        idempotency_key=f"publish-attempt-payment-{unique_suffix()}",
+    )
+    with SessionLocal() as db:
+        publish_attempt = CommunityPublishAttempt(
+            id=uuid4(),
+            host_user_id=UUID(host["id"]),
+            payment_id=UUID(payment["id"]),
+            created_game_id=None,
+            attempt_status="processing",
+            publish_payload={},
+            starts_on_local=datetime.now(UTC).date(),
+            amount_cents=499,
+            currency="USD",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        db.add(publish_attempt)
+        db.commit()
+        publish_attempt_id = str(publish_attempt.id)
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/money/payments/{payment['id']}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["host_publish_fee"] is None
+    assert body["payer"]["id"] == host["id"]
+    assert body["payer"]["email"] == host["email"]
+    assert body["community_publish_attempt"]["id"] == publish_attempt_id
+    assert body["community_publish_attempt"]["payment_id"] == payment["id"]
+    assert body["publish_host"]["id"] == host["id"]
 
 
 def test_player_cannot_get_payment_detail(client: TestClient):
@@ -564,34 +897,13 @@ def test_admin_can_get_refund_detail_support_context(client: TestClient):
         db.commit()
 
     with SessionLocal() as db:
-        support_flag = create_support_flag(
+        money_issue = create_refund_money_issue_for_test(
             db,
-            flag_type="refund_follow_up_required",
-            source="stripe",
-            title="Refund still processing",
-            summary="Refund needs staff follow-up before support can close it.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-refund-detail-flag-{refund['id']}",
+            refund_id=refund["id"],
+            issue_type="refund_processing_overdue",
         )
-        support_flag_id = str(support_flag.id)
-        official_cancel_flag = create_support_flag(
-            db,
-            flag_type="official_cancel_partial_failure",
-            source="official_game",
-            title="Official cancellation follow-up",
-            summary="This flag stays in the official cancellation workflow.",
-            severity="urgent",
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-refund-official-cancel-{refund['id']}",
-        )
-        official_cancel_flag_id = str(official_cancel_flag.id)
+        money_issue_id = str(money_issue.id)
+        db.commit()
 
     authenticate_as(admin["id"])
     response = client.get(f"/admin/money/refunds/{refund['id']}")
@@ -602,38 +914,32 @@ def test_admin_can_get_refund_detail_support_context(client: TestClient):
     assert body["refund"]["payment_id"] == payment["id"]
     assert body["refund"]["refund_status"] == "processing"
     assert body["refund"]["provider_refund_id"] == refund["provider_refund_id"]
-    assert body["payment"]["id"] == payment["id"]
-    assert body["payment"]["provider_charge_id"] == payment["provider_charge_id"]
-    assert body["booking"]["id"] == booking["id"]
-    assert body["game"]["id"] == game["id"]
-    assert credit["id"] in {item["id"] for item in body["credit_grants"]}
+    assert body["current_provider_snapshot"]["provider_refund_id"] == (
+        refund["provider_refund_id"]
+    )
+    assert body["payment_summary"]["id"] == payment["id"]
+    assert body["payment_summary"]["provider_charge_id"] == payment["provider_charge_id"]
+    assert body["user_summary"]["id"] == player["id"]
+    assert body["booking_summary"]["id"] == booking["id"]
+    assert body["game_summary"]["id"] == game["id"]
+    assert credit["id"] in {
+        item["id"] for item in body["credit_context"]["credit_grants"]
+    }
     assert other_credit["id"] not in {
-        item["id"] for item in body["credit_grants"]
+        item["id"] for item in body["credit_context"]["credit_grants"]
     }
     assert other_refund["id"] != body["refund"]["id"]
-    assert usage_id in {item["id"] for item in body["credit_usages"]}
-    assert other_usage_id not in {item["id"] for item in body["credit_usages"]}
-    assert support_flag_id in {item["id"] for item in body["support_flags"]}
-    assert official_cancel_flag_id not in {
-        item["id"] for item in body["support_flags"]
+    assert usage_id in {
+        item["id"] for item in body["credit_context"]["credit_usages"]
     }
+    assert other_usage_id not in {
+        item["id"] for item in body["credit_context"]["credit_usages"]
+    }
+    assert body["linked_money_issue"]["id"] == money_issue_id
     assert any(
-        action["action_type"] == "create_refund"
-        and action["target_refund_id"] == refund["id"]
-        for action in body["audit_actions"]
+        event["reason_code"] == "refund_route_create"
+        for event in body["recent_refund_events"]
     )
-    assert any(
-        action["action_type"] == "create_payment"
-        and action["target_payment_id"] == payment["id"]
-        for action in body["audit_actions"]
-    )
-    assert all(
-        action["target_payment_id"] != other_payment["id"]
-        and action["target_refund_id"] != other_refund["id"]
-        and action["target_game_credit_id"] != other_credit["id"]
-        for action in body["audit_actions"]
-    )
-    assert all("idempotency_key" not in action for action in body["audit_actions"])
 
 
 def test_player_cannot_get_refund_detail(client: TestClient):
@@ -736,21 +1042,17 @@ def test_admin_can_retry_failed_refund_from_money_detail(
     assert body["refund"]["provider_refund_id"] == provider_refund_id
     assert body["refund"]["refund_status"] == "succeeded"
     assert body["refund"]["approved_by_user_id"] == admin["id"]
-    assert body["payment"]["payment_status"] == "refunded"
-    assert body["booking"]["payment_status"] == "refunded"
-    assert any(
-        action["action_type"] == "update_refund"
-        and action["target_refund_id"] == refund["id"]
-        and action["reason"] == payload["reason"]
-        and action["metadata"]["source"] == "admin_money_refund_retry"
-        and action["metadata"]["old_refund_status"] == "failed"
-        and action["metadata"]["new_refund_status"] == "succeeded"
-        for action in body["audit_actions"]
+    assert body["payment_summary"]["payment_status"] == "succeeded"
+    assert body["booking_summary"]["payment_status"] == "refunded"
+    assert body["linked_money_issue"] is None
+    provider_event = next(
+        event
+        for event in body["recent_refund_events"]
+        if event["event_type"] == "provider_result_recorded"
+        and event["new_refund_status"] == "succeeded"
     )
-    assert all(
-        flag["flag_type"] != "stripe_refund_failed"
-        for flag in body["support_flags"]
-    )
+    assert provider_event["idempotency_key"] is None
+    assert (provider_event["metadata"] or {}).get("admin_reason") is None
     with SessionLocal() as db:
         notification = db.scalar(
             select(Notification).where(
@@ -764,7 +1066,7 @@ def test_admin_can_retry_failed_refund_from_money_detail(
         assert notification.related_game_id == UUID(game["id"])
 
 
-def test_admin_refund_retry_failure_creates_money_follow_up(
+def test_admin_refund_retry_failure_creates_money_issue(
     client: TestClient,
     monkeypatch,
 ):
@@ -789,6 +1091,13 @@ def test_admin_refund_retry_failure_creates_money_follow_up(
         amount_cents=500,
         refund_status="failed",
     )
+    with SessionLocal() as db:
+        money_issue = create_refund_money_issue_for_test(
+            db,
+            refund_id=refund["id"],
+        )
+        money_issue_id = str(money_issue.id)
+        db.commit()
     provider_refund_id = f"re_{unique_suffix()}"
 
     def fake_create_refund(**kwargs):
@@ -819,22 +1128,20 @@ def test_admin_refund_retry_failure_creates_money_follow_up(
     body = response.json()
     assert body["refund"]["provider_refund_id"] == provider_refund_id
     assert body["refund"]["refund_status"] == "failed"
-    assert body["payment"]["payment_status"] == "succeeded"
-    assert body["booking"]["payment_status"] == "paid"
+    assert body["payment_summary"]["payment_status"] == "succeeded"
+    assert body["booking_summary"]["payment_status"] == "paid"
+    assert body["linked_money_issue"]["issue_type"] == "refund_failed"
+    assert body["linked_money_issue"]["status"] == "open"
     assert any(
-        flag["flag_type"] == "stripe_refund_failed"
-        and flag["flag_status"] == "open"
-        and flag["target_refund_id"] == refund["id"]
-        for flag in body["support_flags"]
-    )
-    assert any(
-        action["action_type"] == "update_refund"
-        and action["metadata"]["source"] == "admin_money_refund_retry"
-        for action in body["audit_actions"]
+        event["event_type"] == "provider_result_recorded"
+        and event["new_refund_status"] == "failed"
+        for event in body["recent_refund_events"]
     )
 
 
-def test_admin_refund_retry_processing_creates_follow_up(client: TestClient, monkeypatch):
+def test_admin_refund_retry_processing_records_refund_event(
+    client: TestClient, monkeypatch
+):
     admin = create_user(client)
     player = create_user(client)
     set_user_role(admin["id"], "admin")
@@ -856,6 +1163,13 @@ def test_admin_refund_retry_processing_creates_follow_up(client: TestClient, mon
         amount_cents=500,
         refund_status="failed",
     )
+    with SessionLocal() as db:
+        money_issue = create_refund_money_issue_for_test(
+            db,
+            refund_id=refund["id"],
+        )
+        money_issue_id = str(money_issue.id)
+        db.commit()
     provider_refund_id = f"re_{unique_suffix()}"
 
     def fake_create_refund(**kwargs):
@@ -886,13 +1200,279 @@ def test_admin_refund_retry_processing_creates_follow_up(client: TestClient, mon
     body = response.json()
     assert body["refund"]["provider_refund_id"] == provider_refund_id
     assert body["refund"]["refund_status"] == "processing"
-    assert body["payment"]["payment_status"] == "succeeded"
-    assert body["booking"]["payment_status"] == "paid"
+    assert body["payment_summary"]["payment_status"] == "succeeded"
+    assert body["booking_summary"]["payment_status"] == "paid"
+    assert body["linked_money_issue"]["id"] == money_issue_id
+    assert body["linked_money_issue"]["recommended_action_code"] == (
+        "verify_provider_refund"
+    )
     assert any(
-        flag["flag_type"] == "refund_follow_up_required"
-        and flag["flag_status"] == "open"
-        and flag["target_refund_id"] == refund["id"]
-        for flag in body["support_flags"]
+        event["event_type"] == "provider_result_recorded"
+        and event["new_refund_status"] == "processing"
+        for event in body["recent_refund_events"]
+    )
+    with SessionLocal() as db:
+        linked_event = db.scalars(
+            select(MoneyIssueEvent).where(
+                MoneyIssueEvent.money_issue_id == UUID(money_issue_id),
+                MoneyIssueEvent.event_type == "refund_outcome_linked",
+                MoneyIssueEvent.reason_code == "admin_retry_processing",
+            )
+        ).first()
+        assert linked_event is not None
+        assert linked_event.event_source == "admin"
+
+
+def test_admin_refund_reconcile_records_terminal_provider_result(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        amount_cents=500,
+        refund_status="processing",
+    )
+
+    def fake_retrieve_refund(provider_refund_id):
+        return StripeRefundResult(
+            id=provider_refund_id,
+            status="succeeded",
+            amount_cents=500,
+            currency="USD",
+            charge_id=payment["provider_charge_id"],
+            payment_intent_id=payment["provider_payment_intent_id"],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.admin_money_refund_service.retrieve_stripe_refund",
+        fake_retrieve_refund,
+    )
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        f"/admin/money/refunds/{refund['id']}/reconcile",
+        json={
+            "reason": "Check provider status.",
+            "idempotency_key": f"admin-money-reconcile-succeeded-{unique_suffix()}",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["refund"]["refund_status"] == "succeeded"
+    assert any(
+        event["event_type"] == "provider_result_recorded"
+        and event["event_source"] == "reconciliation"
+        and event["new_refund_status"] == "succeeded"
+        for event in body["recent_refund_events"]
+    )
+
+
+def test_admin_refund_reconcile_processing_before_threshold_does_not_open_issue(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        amount_cents=500,
+        refund_status="processing",
+    )
+
+    with SessionLocal() as db:
+        db_refund = db.get(Refund, UUID(refund["id"]))
+        assert db_refund is not None
+        recent = datetime.now(UTC) - timedelta(hours=1)
+        db_refund.requested_at = recent
+        db_refund.approved_at = recent
+        db_refund.created_at = recent
+        db_refund.updated_at = recent
+        db.commit()
+
+    def fake_retrieve_refund(provider_refund_id):
+        return StripeRefundResult(
+            id=provider_refund_id,
+            status="processing",
+            amount_cents=500,
+            currency="USD",
+            charge_id=payment["provider_charge_id"],
+            payment_intent_id=payment["provider_payment_intent_id"],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.admin_money_refund_service.retrieve_stripe_refund",
+        fake_retrieve_refund,
+    )
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        f"/admin/money/refunds/{refund['id']}/reconcile",
+        json={
+            "reason": "Check provider status before threshold.",
+            "idempotency_key": f"admin-money-reconcile-fresh-{unique_suffix()}",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["refund"]["refund_status"] == "processing"
+    assert body["linked_money_issue"] is None
+
+
+def test_admin_refund_reconcile_processing_after_threshold_opens_overdue_issue(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        amount_cents=500,
+        refund_status="processing",
+    )
+
+    with SessionLocal() as db:
+        db_refund = db.get(Refund, UUID(refund["id"]))
+        assert db_refund is not None
+        old = datetime.now(UTC) - timedelta(hours=25)
+        db_refund.requested_at = old
+        db_refund.approved_at = old
+        db_refund.created_at = old
+        db_refund.updated_at = old
+        for refund_event in db.scalars(
+            select(RefundEvent).where(RefundEvent.refund_id == db_refund.id)
+        ).all():
+            refund_event.occurred_at = old
+            refund_event.created_at = old
+        db.commit()
+
+    def fake_retrieve_refund(provider_refund_id):
+        return StripeRefundResult(
+            id=provider_refund_id,
+            status="processing",
+            amount_cents=500,
+            currency="USD",
+            charge_id=payment["provider_charge_id"],
+            payment_intent_id=payment["provider_payment_intent_id"],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.admin_money_refund_service.retrieve_stripe_refund",
+        fake_retrieve_refund,
+    )
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        f"/admin/money/refunds/{refund['id']}/reconcile",
+        json={
+            "reason": "Check overdue provider status.",
+            "idempotency_key": f"admin-money-reconcile-overdue-{unique_suffix()}",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["refund"]["refund_status"] == "processing"
+    assert body["linked_money_issue"]["issue_type"] == "refund_processing_overdue"
+    assert body["linked_money_issue"]["latest_reason_code"] == (
+        "processing_threshold_reached"
+    )
+    assert any(
+        event["event_type"] == "reconciliation_checked"
+        and event["reason_code"] == "processing_threshold_reached"
+        for event in body["recent_refund_events"]
+    )
+
+
+def test_admin_refund_reconcile_missing_provider_reference_records_unknown(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        amount_cents=booking["total_cents"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        provider_refund_id=None,
+        amount_cents=500,
+        refund_status="processing",
+    )
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        f"/admin/money/refunds/{refund['id']}/reconcile",
+        json={
+            "reason": "Check provider status without stored provider reference.",
+            "idempotency_key": f"admin-money-reconcile-missing-{unique_suffix()}",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["linked_money_issue"]["issue_type"] == (
+        "refund_missing_provider_reference"
+    )
+    assert any(
+        event["event_type"] == "provider_outcome_unknown"
+        and event["event_source"] == "reconciliation"
+        for event in body["recent_refund_events"]
     )
 
 
@@ -955,8 +1535,8 @@ def test_admin_can_retry_cancelled_refund_from_money_detail(
     body = response.json()
     assert body["refund"]["provider_refund_id"] == provider_refund_id
     assert body["refund"]["refund_status"] == "succeeded"
-    assert body["payment"]["payment_status"] == "partially_refunded"
-    assert body["booking"]["payment_status"] == "partially_refunded"
+    assert body["payment_summary"]["payment_status"] == "succeeded"
+    assert body["booking_summary"]["payment_status"] == "partially_refunded"
     with SessionLocal() as db:
         notification = db.scalar(
             select(Notification).where(
@@ -1024,8 +1604,8 @@ def test_admin_refund_retry_stripe_error_does_not_mutate_money_truth(
         retry_actions = db.scalars(
             select(AdminAction).where(AdminAction.target_refund_id == UUID(refund["id"]))
         ).all()
-        retry_flags = db.scalars(
-            select(SupportFlag).where(SupportFlag.target_refund_id == UUID(refund["id"]))
+        retry_issues = db.scalars(
+            select(MoneyIssue).where(MoneyIssue.target_refund_id == UUID(refund["id"]))
         ).all()
 
     assert db_refund is not None
@@ -1037,10 +1617,7 @@ def test_admin_refund_retry_stripe_error_does_not_mutate_money_truth(
         (action.metadata_ or {}).get("source") != "admin_money_refund_retry"
         for action in retry_actions
     )
-    assert all(
-        (flag.metadata_ or {}).get("operation") != "admin_money_refund_retry"
-        for flag in retry_flags
-    )
+    assert retry_issues == []
 
 
 def test_admin_refund_retry_rejects_invalid_payment_state_before_stripe(
@@ -1104,7 +1681,7 @@ def test_admin_refund_retry_rejects_invalid_payment_state_before_stripe(
     with SessionLocal() as db:
         db_payment = db.get(Payment, UUID(missing_paid_payment["id"]))
         assert db_payment is not None
-        db_payment.payment_status = "partially_refunded"
+        db_payment.payment_status = "processing"
         db_payment.paid_at = None
         db.commit()
 
@@ -1133,6 +1710,79 @@ def test_admin_refund_retry_rejects_invalid_payment_state_before_stripe(
     assert (
         missing_paid_response.json()["detail"]
         == "Refund retry requires a succeeded payment."
+    )
+    assert stripe_calls == []
+
+
+def test_admin_refund_retry_rejects_uncertain_provider_outcome_before_stripe(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        refund_status="failed",
+        provider_refund_id=f"re_{unique_suffix()}",
+        provider_status="processing",
+        provider_status_observed_at=datetime.now(UTC).isoformat(),
+        provider_charge_id=payment["provider_charge_id"],
+    )
+    stripe_calls = []
+
+    def fake_create_refund(**kwargs):
+        stripe_calls.append(kwargs)
+        return StripeRefundResult(
+            id=f"re_{unique_suffix()}",
+            status="succeeded",
+            amount_cents=500,
+            currency="USD",
+            charge_id=kwargs["charge_id"],
+            payment_intent_id=None,
+        )
+
+    monkeypatch.setattr(
+        "backend.services.admin_money_refund_service.create_stripe_refund",
+        fake_create_refund,
+    )
+
+    authenticate_as(admin["id"])
+    detail_response = client.get(f"/admin/money/refunds/{refund['id']}")
+    retry_response = client.post(
+        f"/admin/money/refunds/{refund['id']}/retry",
+        json={
+            "reason": "Provider result is still uncertain.",
+            "idempotency_key": f"admin-money-retry-uncertain-{unique_suffix()}",
+        },
+    )
+
+    assert detail_response.status_code == 200, detail_response.text
+    actions = {
+        action["action_code"]: action
+        for action in detail_response.json()["available_actions"]
+    }
+    assert actions["retry_refund"]["enabled"] is False
+    assert (
+        "Refund provider outcome is still uncertain."
+        in actions["retry_refund"]["blockers"]
+    )
+    assert retry_response.status_code == 400, retry_response.text
+    assert (
+        retry_response.json()["detail"]
+        == "Refund provider outcome is still uncertain. Check provider status before retrying."
     )
     assert stripe_calls == []
 
@@ -1291,7 +1941,7 @@ def test_admin_financial_outcome_refunds_publish_fee(
     assert db_refund.refund_reason == "publish_fee_refund"
     assert db_refund.refund_status == "succeeded"
     assert db_payment is not None
-    assert db_payment.payment_status == "refunded"
+    assert db_payment.payment_status == "succeeded"
     assert db_fee is not None
     assert db_fee.fee_status == "refunded"
     assert notice is not None
@@ -1305,10 +1955,12 @@ def test_admin_financial_outcome_refunds_publish_fee(
     }
 
     list_response = client.get(
-        f"/admin/money/refunds?host_publish_fee_id={host_publish_fee['id']}"
+        f"/admin/money/refunds?q={host_publish_fee['id']}"
     )
     assert list_response.status_code == 200, list_response.text
-    assert {item["id"] for item in list_response.json()} == {body["refund_id"]}
+    assert {item["id"] for item in list_response.json()["items"]} == {
+        body["refund_id"]
+    }
 
 
 def test_admin_financial_outcome_credit_creates_publish_entitlement(
@@ -1385,7 +2037,7 @@ def test_admin_financial_outcome_credit_creates_publish_entitlement(
     assert notification.aggregation_key == f"admin_target_notice:{notice.id}"
 
 
-def test_admin_financial_outcome_processing_refund_creates_follow_up(
+def test_admin_financial_outcome_processing_refund_records_pending_refund(
     client: TestClient,
     monkeypatch,
 ):
@@ -1427,21 +2079,19 @@ def test_admin_financial_outcome_processing_refund_creates_follow_up(
 
     with SessionLocal() as db:
         refund = db.get(Refund, UUID(body["refund_id"]))
-        support_flag = db.scalar(
-            select(SupportFlag).where(
-                SupportFlag.flag_type == "refund_follow_up_required",
-                SupportFlag.target_refund_id == UUID(body["refund_id"]),
+        money_issue = db.scalar(
+            select(MoneyIssue).where(
+                MoneyIssue.target_refund_id == UUID(body["refund_id"]),
             )
         )
 
     assert refund is not None
     assert refund.provider_refund_id == provider_refund_id
     assert refund.refund_status == "processing"
-    assert support_flag is not None
-    assert support_flag.flag_status == "open"
+    assert money_issue is None
 
 
-def test_admin_can_list_money_support_flags_only(client: TestClient):
+def test_admin_can_list_money_issues(client: TestClient):
     admin = create_user(client)
     player = create_user(client)
     set_user_role(admin["id"], "admin")
@@ -1452,7 +2102,6 @@ def test_admin_can_list_money_support_flags_only(client: TestClient):
         client,
         player["id"],
         booking_id=booking["id"],
-        amount_cents=booking["total_cents"],
         payment_status="succeeded",
         provider_charge_id=f"ch_{unique_suffix()}",
     )
@@ -1464,78 +2113,134 @@ def test_admin_can_list_money_support_flags_only(client: TestClient):
     )
 
     with SessionLocal() as db:
-        money_flag = create_support_flag(
+        money_issue = create_refund_money_issue_for_test(
             db,
-            flag_type="stripe_refund_failed",
-            source="stripe",
-            title="Stripe refund failed",
-            summary="Stripe reported a failed refund that needs money follow-up.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-list-money-{refund['id']}",
-            metadata={"provider_refund_id": refund["provider_refund_id"]},
+            refund_id=refund["id"],
         )
-        account_flag = create_support_flag(
-            db,
-            flag_type="account_delete_partial_failure",
-            source="account",
-            title="Account cleanup follow-up",
-            summary="Account cleanup is outside the money support queue.",
-            severity="attention",
-            target_user_id=UUID(player["id"]),
-            idempotency_key=f"admin-money-list-account-{player['id']}",
-        )
-        official_cancel_flag = create_support_flag(
-            db,
-            flag_type="official_cancel_partial_failure",
-            source="official_game",
-            title="Official cancellation follow-up",
-            summary="Official cancellation follow-up stays outside this money queue.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-list-official-cancel-{booking['id']}",
-        )
-        money_flag_id = str(money_flag.id)
-        account_flag_id = str(account_flag.id)
-        official_cancel_flag_id = str(official_cancel_flag.id)
+        money_issue_id = str(money_issue.id)
+        db.commit()
 
     authenticate_as(admin["id"])
-    response = client.get("/admin/money/support-flags?flag_status=open")
+    response = client.get("/admin/money/issues?status=open")
 
     assert response.status_code == 200, response.text
     body = response.json()
-    ids = {item["id"] for item in body}
-    assert money_flag_id in ids
-    assert account_flag_id not in ids
-    assert official_cancel_flag_id not in ids
+    assert money_issue_id in {item["id"] for item in body["items"]}
+    row = next(item for item in body["items"] if item["id"] == money_issue_id)
+    assert row["issue_type"] == "refund_failed"
+    assert row["status"] == "open"
+    assert row["target_refund_id"] == refund["id"]
+    assert row["display"]["user_email"] == player["email"]
+    assert row["display"]["game_label"] == game["title"]
+    assert row["display"]["context_label"].startswith("Booking ")
+    assert row["last_activity_at"] is not None
+    assert "metadata" not in row
 
-    money_row = next(item for item in body if item["id"] == money_flag_id)
-    assert money_row["flag_type"] == "stripe_refund_failed"
-    assert money_row["target_refund_id"] == refund["id"]
-    assert "metadata" not in money_row
-    assert "idempotency_key" not in money_row
-    assert "resolution_reason" not in money_row
+
+def test_admin_money_issue_search_uses_controlled_lookup_paths(client: TestClient):
+    admin = create_user(client)
+    player = create_user(
+        client,
+        email=f"money-issue-search-{unique_suffix()}@example.com",
+        first_name="MoneyIssue",
+        last_name="Searchable",
+    )
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(
+        client,
+        admin["id"],
+        venue,
+        title=f"ProviderSearchGame{unique_suffix()}",
+    )
+    booking = create_booking(client, player["id"], game["id"])
+    provider_charge_id = f"ch_issue_search_{unique_suffix()}"
+    provider_refund_id = f"re_issue_search_{unique_suffix()}"
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        payment_status="succeeded",
+        provider_charge_id=provider_charge_id,
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        refund_status="failed",
+        provider_refund_id=provider_refund_id,
+        provider_charge_id=provider_charge_id,
+    )
+
+    with SessionLocal() as db:
+        money_issue = create_refund_money_issue_for_test(
+            db,
+            refund_id=refund["id"],
+        )
+        money_issue_id = str(money_issue.id)
+        operation_key = money_issue.operation_key
+        db.commit()
+
+    authenticate_as(admin["id"])
+    issue_id_response = client.get(f"/admin/money/issues?q={money_issue_id}")
+    operation_key_response = client.get(f"/admin/money/issues?q={operation_key}")
+    user_id_response = client.get(f"/admin/money/issues?q={player['id']}")
+    user_email_response = client.get(f"/admin/money/issues?q={player['email']}")
+    game_response = client.get(f"/admin/money/issues?q={game['title']}")
+    refund_response = client.get(f"/admin/money/issues?q={provider_refund_id}")
+    charge_response = client.get(f"/admin/money/issues?q={provider_charge_id}")
+
+    assert issue_id_response.status_code == 200, issue_id_response.text
+    assert operation_key_response.status_code == 200, operation_key_response.text
+    assert user_id_response.status_code == 200, user_id_response.text
+    assert user_email_response.status_code == 200, user_email_response.text
+    assert game_response.status_code == 200, game_response.text
+    assert refund_response.status_code == 200, refund_response.text
+    assert charge_response.status_code == 200, charge_response.text
+    assert money_issue_id in {item["id"] for item in issue_id_response.json()["items"]}
+    assert money_issue_id in {
+        item["id"] for item in operation_key_response.json()["items"]
+    }
+    assert money_issue_id in {item["id"] for item in user_id_response.json()["items"]}
+    assert money_issue_id in {
+        item["id"] for item in user_email_response.json()["items"]
+    }
+    assert money_issue_id not in {item["id"] for item in game_response.json()["items"]}
+    assert money_issue_id not in {item["id"] for item in refund_response.json()["items"]}
+    assert money_issue_id not in {item["id"] for item in charge_response.json()["items"]}
 
 
-def test_admin_money_support_flag_list_rejects_bad_status(client: TestClient):
+def test_admin_money_issue_list_rejects_bad_status(client: TestClient):
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
 
     authenticate_as(admin["id"])
-    response = client.get("/admin/money/support-flags?flag_status=closed")
+    response = client.get("/admin/money/issues?status=closed")
 
     assert response.status_code == 400, response.text
 
 
-def test_admin_can_get_money_support_flag_detail(client: TestClient):
+def test_admin_money_issue_list_rejects_bad_issue_type(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    response = client.get("/admin/money/issues?issue_type=refund_anything")
+
+    assert response.status_code == 400, response.text
+
+
+def test_admin_money_issue_list_rejects_removed_filters(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/money/issues?game_id={uuid4()}")
+
+    assert response.status_code == 400, response.text
+
+
+def test_admin_can_get_money_issue_detail(client: TestClient):
     admin = create_user(client)
     player = create_user(client)
     set_user_role(admin["id"], "admin")
@@ -1546,7 +2251,6 @@ def test_admin_can_get_money_support_flag_detail(client: TestClient):
         client,
         player["id"],
         booking_id=booking["id"],
-        amount_cents=booking["total_cents"],
         payment_status="succeeded",
         provider_charge_id=f"ch_{unique_suffix()}",
     )
@@ -1556,366 +2260,141 @@ def test_admin_can_get_money_support_flag_detail(client: TestClient):
         booking_id=booking["id"],
         refund_status="failed",
     )
-    credit = issue_admin_money_detail_credit(
-        client,
-        admin_id=admin["id"],
-        user_id=player["id"],
-        game_id=game["id"],
-        booking_id=booking["id"],
-        payment_id=payment["id"],
-        amount_cents=700,
-    )
 
     with SessionLocal() as db:
-        usages = reserve_game_credits(
+        money_issue = create_refund_money_issue_for_test(
             db,
-            UUID(player["id"]),
-            amount_cents=300,
-            booking_id=UUID(booking["id"]),
-            game_id=UUID(game["id"]),
-            payment_id=UUID(payment["id"]),
-            now=datetime.now(UTC),
-            idempotency_scope=f"admin-money-flag-detail:{booking['id']}",
+            refund_id=refund["id"],
         )
-        usage_id = str(usages[0].id)
+        refund_event = db.scalars(
+            select(RefundEvent)
+            .where(RefundEvent.refund_id == UUID(refund["id"]))
+            .order_by(RefundEvent.occurred_at.desc(), RefundEvent.id.desc())
+        ).first()
+        assert refund_event is not None
+        refund_event_id = str(refund_event.id)
+        money_issue_id = str(money_issue.id)
         db.commit()
 
-    with SessionLocal() as db:
-        support_flag = create_support_flag(
-            db,
-            flag_type="stripe_refund_failed",
-            source="stripe",
-            title="Stripe refund failed",
-            summary="Stripe reported a failed refund that needs money follow-up.",
-            severity="critical",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-flag-detail-{refund['id']}",
-            metadata={"provider_refund_id": refund["provider_refund_id"]},
-        )
-        support_flag_id = str(support_flag.id)
-
     authenticate_as(admin["id"])
-    response = client.get(f"/admin/money/support-flags/{support_flag_id}")
+    response = client.get(f"/admin/money/issues/{money_issue_id}")
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["support_flag"]["id"] == support_flag_id
-    assert body["support_flag"]["flag_type"] == "stripe_refund_failed"
-    assert body["support_flag"]["severity"] == "critical"
-    assert "metadata" not in body["support_flag"]
-    assert "idempotency_key" not in body["support_flag"]
-    assert {item["id"] for item in body["payments"]} == {payment["id"]}
-    assert {item["id"] for item in body["refunds"]} == {refund["id"]}
+    assert body["money_issue"]["id"] == money_issue_id
+    assert body["money_issue"]["issue_type"] == "refund_failed"
+    assert body["refund"]["id"] == refund["id"]
+    assert body["payment"]["id"] == payment["id"]
     assert body["booking"]["id"] == booking["id"]
     assert body["game"]["id"] == game["id"]
-    assert credit["id"] in {item["id"] for item in body["credit_grants"]}
-    assert usage_id in {item["id"] for item in body["credit_usages"]}
-    assert any(
-        action["action_type"] == "create_refund"
-        and action["target_refund_id"] == refund["id"]
-        for action in body["audit_actions"]
-    )
-    assert any(
-        action["action_type"] == "issue_credit"
-        and action["target_game_credit_id"] == credit["id"]
-        for action in body["audit_actions"]
-    )
-
-
-def test_admin_can_resolve_money_support_flag_without_mutating_refund_truth(
-    client: TestClient,
-):
-    admin = create_user(client)
-    player = create_user(client)
-    set_user_role(admin["id"], "admin")
-    venue = create_venue(client, admin["id"])
-    game = create_game(client, admin["id"], venue)
-    booking = create_booking(client, player["id"], game["id"])
-    payment = create_payment(
-        client,
-        player["id"],
-        booking_id=booking["id"],
-        amount_cents=booking["total_cents"],
-        payment_status="succeeded",
-        provider_charge_id=f"ch_{unique_suffix()}",
-    )
-    refund = create_refund(
-        client,
-        payment["id"],
-        booking_id=booking["id"],
-        refund_status="failed",
-    )
-
-    with SessionLocal() as db:
-        support_flag = create_support_flag(
-            db,
-            flag_type="stripe_refund_failed",
-            source="stripe",
-            title="Stripe refund failed",
-            summary="Staff handled this failed refund externally.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-resolve-flag-{refund['id']}",
-        )
-        support_flag_id = str(support_flag.id)
-
-    authenticate_as(admin["id"])
-    response = client.post(
-        f"/admin/money/support-flags/{support_flag_id}/resolve",
-        json={
-            "outcome": "handled_externally",
-            "reason": "Stripe refund was handled outside Pickup Lane.",
-        },
-    )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["support_flag"]["id"] == support_flag_id
-    assert body["support_flag"]["flag_status"] == "resolved"
-    assert body["support_flag"]["resolution_outcome"] == "handled_externally"
-    assert body["support_flag"]["resolved_at"] is not None
-    assert "metadata" not in body["support_flag"]
-    assert "idempotency_key" not in body["support_flag"]
-    assert "resolution_reason" not in body["support_flag"]
-    assert {item["id"] for item in body["refunds"]} == {refund["id"]}
-    assert body["refunds"][0]["refund_status"] == "failed"
-    assert body["payments"][0]["payment_status"] == "succeeded"
-    assert body["booking"]["payment_status"] == "paid"
-    assert any(
-        action["action_type"] == "resolve_support_flag"
-        and action["target_support_flag_id"] == support_flag_id
-        and action["reason"] == "Stripe refund was handled outside Pickup Lane."
-        for action in body["audit_actions"]
-    )
-
-
-def test_player_cannot_resolve_money_support_flag(client: TestClient):
-    player = create_user(client)
-    venue = create_venue(client, player["id"])
-    game = create_game(client, player["id"], venue)
-    booking = create_booking(client, player["id"], game["id"])
-    payment = create_payment(
-        client,
-        player["id"],
-        booking_id=booking["id"],
-        payment_status="succeeded",
-        provider_charge_id=f"ch_{unique_suffix()}",
-    )
-    refund = create_refund(
-        client,
-        payment["id"],
-        booking_id=booking["id"],
-        refund_status="failed",
-    )
-
-    with SessionLocal() as db:
-        support_flag = create_support_flag(
-            db,
-            flag_type="stripe_refund_failed",
-            source="stripe",
-            title="Stripe refund failed",
-            summary="Money follow-up requires admin money access.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-player-resolve-{refund['id']}",
-        )
-        support_flag_id = str(support_flag.id)
-
-    authenticate_as(player["id"])
-    response = client.post(
-        f"/admin/money/support-flags/{support_flag_id}/resolve",
-        json={
-            "outcome": "handled_externally",
-            "reason": "Player cannot resolve money support flags.",
-        },
-    )
-
-    assert response.status_code == 403, response.text
-
-
-def test_admin_money_support_flag_resolve_hides_non_money_flags(client: TestClient):
-    admin = create_user(client)
-    player = create_user(client)
-    set_user_role(admin["id"], "admin")
-
-    with SessionLocal() as db:
-        support_flag = create_support_flag(
-            db,
-            flag_type="account_delete_partial_failure",
-            source="account",
-            title="Account cleanup follow-up",
-            summary="Account cleanup is outside the money support queue.",
-            severity="attention",
-            target_user_id=UUID(player["id"]),
-            idempotency_key=f"admin-money-resolve-non-money-{player['id']}",
-        )
-        support_flag_id = str(support_flag.id)
-
-    authenticate_as(admin["id"])
-    response = client.post(
-        f"/admin/money/support-flags/{support_flag_id}/resolve",
-        json={
-            "outcome": "handled_externally",
-            "reason": "This is not a direct money support flag.",
-        },
-    )
-
-    assert response.status_code == 404, response.text
-
-
-def test_admin_money_support_flag_detail_derives_credit_context(
-    client: TestClient,
-):
-    admin = create_user(client)
-    player = create_user(client)
-    other_player = create_user(client)
-    set_user_role(admin["id"], "admin")
-    venue = create_venue(client, admin["id"])
-    game = create_game(client, admin["id"], venue)
-    booking = create_booking(client, player["id"], game["id"])
-    other_booking = create_booking(client, other_player["id"], game["id"])
-    payment = create_payment(
-        client,
-        player["id"],
-        booking_id=booking["id"],
-        amount_cents=booking["total_cents"],
-        payment_status="succeeded",
-        provider_charge_id=f"ch_{unique_suffix()}",
-    )
-    refund = create_refund(
-        client,
-        payment["id"],
-        booking_id=booking["id"],
-        amount_cents=500,
-        refund_status="failed",
-    )
-    other_payment = create_payment(
-        client,
-        other_player["id"],
-        booking_id=other_booking["id"],
-        amount_cents=other_booking["total_cents"],
-        payment_status="succeeded",
-        provider_charge_id=f"ch_{unique_suffix()}",
-    )
-    other_refund = create_refund(
-        client,
-        other_payment["id"],
-        booking_id=other_booking["id"],
-        amount_cents=500,
-        refund_status="failed",
-    )
-    credit = issue_admin_money_detail_credit(
-        client,
-        admin_id=admin["id"],
-        user_id=player["id"],
-        game_id=game["id"],
-        booking_id=booking["id"],
-        payment_id=payment["id"],
-        amount_cents=700,
-    )
-    other_credit = issue_admin_money_detail_credit(
-        client,
-        admin_id=admin["id"],
-        user_id=other_player["id"],
-        game_id=game["id"],
-        booking_id=other_booking["id"],
-        payment_id=other_payment["id"],
-        amount_cents=600,
-    )
-
-    with SessionLocal() as db:
-        usages = reserve_game_credits(
-            db,
-            UUID(player["id"]),
-            amount_cents=300,
-            booking_id=UUID(booking["id"]),
-            game_id=UUID(game["id"]),
-            payment_id=UUID(payment["id"]),
-            now=datetime.now(UTC),
-            idempotency_scope=f"admin-money-credit-flag:{booking['id']}",
-        )
-        other_usages = reserve_game_credits(
-            db,
-            UUID(other_player["id"]),
-            amount_cents=300,
-            booking_id=UUID(other_booking["id"]),
-            game_id=UUID(game["id"]),
-            payment_id=UUID(other_payment["id"]),
-            now=datetime.now(UTC),
-            idempotency_scope=f"admin-money-credit-flag:{other_booking['id']}",
-        )
-        usage_id = str(usages[0].id)
-        other_usage_id = str(other_usages[0].id)
-        db.commit()
-
-    with SessionLocal() as db:
-        support_flag = create_support_flag(
-            db,
-            flag_type="credit_release_failed",
-            source="system",
-            title="Credit release failed",
-            summary="Credit release needs staff follow-up.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_credit_id=UUID(credit["id"]),
-            idempotency_key=f"admin-money-credit-flag-detail-{credit['id']}",
-        )
-        support_flag_id = str(support_flag.id)
-
-    authenticate_as(admin["id"])
-    response = client.get(f"/admin/money/support-flags/{support_flag_id}")
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["support_flag"]["target_game_credit_id"] == credit["id"]
-    assert body["booking"]["id"] == booking["id"]
-    assert body["game"]["id"] == game["id"]
-    assert {item["id"] for item in body["payments"]} == {payment["id"]}
-    assert {item["id"] for item in body["refunds"]} == {refund["id"]}
-    assert credit["id"] in {item["id"] for item in body["credit_grants"]}
-    assert other_credit["id"] not in {
-        item["id"] for item in body["credit_grants"]
+    assert refund_event_id in {
+        event["id"] for event in body["recent_refund_events"]
     }
-    assert usage_id in {item["id"] for item in body["credit_usages"]}
-    assert other_usage_id not in {item["id"] for item in body["credit_usages"]}
-    assert other_payment["id"] not in {item["id"] for item in body["payments"]}
-    assert other_refund["id"] not in {item["id"] for item in body["refunds"]}
-    assert any(
-        action["action_type"] == "create_payment"
-        and action["target_payment_id"] == payment["id"]
-        for action in body["audit_actions"]
-    )
-    assert any(
-        action["action_type"] == "create_refund"
-        and action["target_refund_id"] == refund["id"]
-        for action in body["audit_actions"]
-    )
-    assert any(
-        action["action_type"] == "issue_credit"
-        and action["target_game_credit_id"] == credit["id"]
-        for action in body["audit_actions"]
-    )
-    assert all(
-        action["target_payment_id"] != other_payment["id"]
-        and action["target_refund_id"] != other_refund["id"]
-        and action["target_game_credit_id"] != other_credit["id"]
-        for action in body["audit_actions"]
-    )
+    assert any(event["event_type"] == "issue_opened" for event in body["events"])
 
 
-def test_player_cannot_read_money_support_flags(client: TestClient):
+def test_admin_can_resolve_money_issue_without_mutating_refund_truth(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        refund_status="failed",
+    )
+
+    with SessionLocal() as db:
+        money_issue = create_refund_money_issue_for_test(
+            db,
+            refund_id=refund["id"],
+        )
+        money_issue_id = str(money_issue.id)
+        db.commit()
+
+    authenticate_as(admin["id"])
+    payload = {
+        "resolution_reason_code": "handled_externally",
+        "resolution_note": "Stripe refund was handled outside Pickup Lane.",
+        "resolution_external_reference": "stripe-dashboard-case-1",
+        "idempotency_key": f"admin-money-issue-resolve-{unique_suffix()}",
+    }
+    response = client.post(
+        f"/admin/money/issues/{money_issue_id}/resolve",
+        json=payload,
+    )
+    duplicate_response = client.post(
+        f"/admin/money/issues/{money_issue_id}/resolve",
+        json=payload,
+    )
+
+    assert response.status_code == 200, response.text
+    assert duplicate_response.status_code == 200, duplicate_response.text
+    body = duplicate_response.json()
+    assert body["money_issue"]["id"] == money_issue_id
+    assert body["money_issue"]["status"] == "resolved"
+    assert body["money_issue"]["resolution_reason_code"] == "handled_externally"
+    assert body["money_issue"]["resolution_external_reference"] == "stripe-dashboard-case-1"
+    assert body["refund"]["refund_status"] == "failed"
+    assert body["payment"]["payment_status"] == "succeeded"
+    assert body["booking"]["payment_status"] == "paid"
+    assert sum(event["event_type"] == "issue_resolved" for event in body["events"]) == 1
+
+
+def test_admin_money_issue_handled_externally_requires_note(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    refund = create_refund(
+        client,
+        payment["id"],
+        booking_id=booking["id"],
+        refund_status="failed",
+    )
+
+    with SessionLocal() as db:
+        money_issue = create_refund_money_issue_for_test(
+            db,
+            refund_id=refund["id"],
+        )
+        money_issue_id = str(money_issue.id)
+        db.commit()
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        f"/admin/money/issues/{money_issue_id}/resolve",
+        json={
+            "resolution_reason_code": "handled_externally",
+            "resolution_external_reference": "stripe-dashboard-case-2",
+            "idempotency_key": f"admin-money-issue-resolve-{unique_suffix()}",
+        },
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == "handled_externally requires resolution_note."
+
+
+def test_player_cannot_read_or_resolve_money_issues(client: TestClient):
     player = create_user(client)
     venue = create_venue(client, player["id"])
     game = create_game(client, player["id"], venue)
@@ -1930,63 +2409,36 @@ def test_player_cannot_read_money_support_flags(client: TestClient):
     refund = create_refund(client, payment["id"], booking_id=booking["id"])
 
     with SessionLocal() as db:
-        support_flag = create_support_flag(
+        money_issue = create_refund_money_issue_for_test(
             db,
-            flag_type="refund_follow_up_required",
-            source="stripe",
-            title="Refund follow-up",
-            summary="Refund needs staff follow-up.",
-            severity="attention",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-player-flag-{refund['id']}",
+            refund_id=refund["id"],
         )
-        support_flag_id = str(support_flag.id)
+        money_issue_id = str(money_issue.id)
+        db.commit()
 
     authenticate_as(player["id"])
-    list_response = client.get("/admin/money/support-flags")
-    detail_response = client.get(f"/admin/money/support-flags/{support_flag_id}")
+    list_response = client.get("/admin/money/issues")
+    detail_response = client.get(f"/admin/money/issues/{money_issue_id}")
+    resolve_response = client.post(
+        f"/admin/money/issues/{money_issue_id}/resolve",
+        json={
+            "resolution_reason_code": "handled_externally",
+            "idempotency_key": f"admin-money-issue-player-{unique_suffix()}",
+        },
+    )
 
     assert list_response.status_code == 403, list_response.text
     assert detail_response.status_code == 403, detail_response.text
+    assert resolve_response.status_code == 403, resolve_response.text
 
 
-def test_admin_money_support_flag_detail_hides_non_money_flags(client: TestClient):
-    admin = create_user(client)
-    player = create_user(client)
-    set_user_role(admin["id"], "admin")
-
-    with SessionLocal() as db:
-        support_flag = create_support_flag(
-            db,
-            flag_type="account_delete_partial_failure",
-            source="account",
-            title="Account cleanup follow-up",
-            summary="Account cleanup is outside the money support queue.",
-            severity="attention",
-            target_user_id=UUID(player["id"]),
-            idempotency_key=f"admin-money-non-money-{player['id']}",
-        )
-        support_flag_id = str(support_flag.id)
-
-    authenticate_as(admin["id"])
-    response = client.get(f"/admin/money/support-flags/{support_flag_id}")
-
-    assert response.status_code == 404, response.text
-
-
-def test_admin_money_support_flag_detail_missing_flag_returns_404(
-    client: TestClient,
-):
+def test_admin_money_issue_detail_missing_issue_returns_404(client: TestClient):
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
 
     authenticate_as(admin["id"])
     response = client.get(
-        "/admin/money/support-flags/00000000-0000-0000-0000-000000000000"
+        "/admin/money/issues/00000000-0000-0000-0000-000000000000"
     )
 
     assert response.status_code == 404, response.text
@@ -2042,16 +2494,32 @@ def test_admin_can_list_money_credits_by_user(client: TestClient):
     )
 
     assert response.status_code == 200, response.text
-    body = response.json()
+    body = response.json()["items"]
     ids = {item["id"] for item in body}
     assert credit["id"] in ids
     assert other_credit["id"] not in ids
 
     credit_row = next(item for item in body if item["id"] == credit["id"])
     assert credit_row["user_id"] == player["id"]
-    assert credit_row["remaining_cents"] == 700
-    assert "idempotency_key" not in credit_row
-    assert "note" not in credit_row
+    assert credit_row["available_cents"] == 700
+    assert credit_row["open_money_issue_count"] == 0
+    assert set(credit_row) == {
+        "id",
+        "user_id",
+        "amount_cents",
+        "available_cents",
+        "reserved_cents",
+        "currency",
+        "credit_status",
+        "credit_reason",
+        "source_game_id",
+        "source_booking_id",
+        "source_payment_id",
+        "reversed_at",
+        "open_money_issue_count",
+        "display",
+        "created_at",
+    }
 
     game_response = client.get(
         f"/admin/money/credits?source_game_id={game['id']}&credit_status=active"
@@ -2064,14 +2532,63 @@ def test_admin_can_list_money_credits_by_user(client: TestClient):
     )
 
     assert game_response.status_code == 200, game_response.text
-    assert {item["id"] for item in game_response.json()} == {
+    assert {item["id"] for item in game_response.json()["items"]} == {
         credit["id"],
         other_credit["id"],
     }
     assert booking_response.status_code == 200, booking_response.text
-    assert {item["id"] for item in booking_response.json()} == {credit["id"]}
+    assert {item["id"] for item in booking_response.json()["items"]} == {
+        credit["id"]
+    }
     assert payment_response.status_code == 200, payment_response.text
-    assert {item["id"] for item in payment_response.json()} == {credit["id"]}
+    assert {item["id"] for item in payment_response.json()["items"]} == {
+        credit["id"]
+    }
+
+
+def test_admin_money_credit_search_finds_usage_id(client: TestClient):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    credit = issue_admin_money_detail_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        booking_id=booking["id"],
+        payment_id=payment["id"],
+        amount_cents=700,
+    )
+
+    with SessionLocal() as db:
+        usages = reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=300,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            payment_id=UUID(payment["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"admin-money-credit-search:{booking['id']}",
+        )
+        usage_id = str(usages[0].id)
+        db.commit()
+
+    authenticate_as(admin["id"])
+    response = client.get(f"/admin/money/credits?q={usage_id}")
+
+    assert response.status_code == 200, response.text
+    assert {item["id"] for item in response.json()["items"]} == {credit["id"]}
 
 
 def test_admin_can_get_money_credit_detail_support_context(client: TestClient):
@@ -2158,52 +2675,31 @@ def test_admin_can_get_money_credit_detail_support_context(client: TestClient):
         db.commit()
 
     with SessionLocal() as db:
-        support_flag = create_support_flag(
+        money_issue = create_credit_money_issue_for_test(
             db,
-            flag_type="credit_release_failed",
-            source="system",
-            title="Credit release failed",
-            summary="Credit release needs staff follow-up.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_game_credit_id=UUID(credit["id"]),
-            idempotency_key=f"admin-money-credit-detail-flag-{credit['id']}",
+            credit_usage_id=usage_id,
         )
-        support_flag_id = str(support_flag.id)
-        official_cancel_flag = create_support_flag(
+        money_issue_id = str(money_issue.id)
+        restore_money_issue = create_credit_money_issue_for_test(
             db,
-            flag_type="official_cancel_partial_failure",
-            source="official_game",
-            title="Official cancellation follow-up",
-            summary="This flag stays in the official cancellation workflow.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            target_game_credit_id=UUID(credit["id"]),
-            idempotency_key=f"admin-money-credit-official-cancel-{credit['id']}",
+            credit_usage_id=usage_id,
+            issue_type="credit_restore_failed",
+            reason_code="test_credit_restore_issue",
         )
-        official_cancel_flag_id = str(official_cancel_flag.id)
-        other_support_flag = create_support_flag(
+        restore_money_issue_id = str(restore_money_issue.id)
+        refund_money_issue = create_refund_money_issue_for_test(
             db,
-            flag_type="credit_release_failed",
-            source="system",
-            title="Other credit release failed",
-            summary="Another booking needs separate credit follow-up.",
-            severity="urgent",
-            target_user_id=UUID(other_player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(other_booking["id"]),
-            target_payment_id=UUID(other_payment["id"]),
-            target_game_credit_id=UUID(other_credit["id"]),
-            idempotency_key=f"admin-money-other-credit-flag-{other_credit['id']}",
+            refund_id=refund["id"],
+            issue_type="refund_failed",
+            reason_code="same_booking_refund_issue",
         )
-        other_support_flag_id = str(other_support_flag.id)
+        refund_money_issue_id = str(refund_money_issue.id)
+        other_money_issue = create_credit_money_issue_for_test(
+            db,
+            credit_usage_id=other_usage_id,
+        )
+        other_money_issue_id = str(other_money_issue.id)
+        db.commit()
 
     authenticate_as(admin["id"])
     response = client.get(f"/admin/money/credits/{credit['id']}")
@@ -2213,41 +2709,306 @@ def test_admin_can_get_money_credit_detail_support_context(client: TestClient):
     assert body["credit"]["id"] == credit["id"]
     assert body["credit"]["user_id"] == player["id"]
     assert body["credit"]["source_payment_id"] == payment["id"]
-    assert "idempotency_key" not in body["credit"]
-    assert "note" not in body["credit"]
+    assert body["credit"]["open_money_issue_count"] == 2
     assert {item["id"] for item in body["credit_usages"]} == {usage_id}
     assert other_usage_id not in {item["id"] for item in body["credit_usages"]}
-    assert all("idempotency_key" not in item for item in body["credit_usages"])
     assert {item["id"] for item in body["payments"]} == {payment["id"]}
     assert {item["id"] for item in body["refunds"]} == {refund["id"]}
     assert body["booking"]["id"] == booking["id"]
     assert body["game"]["id"] == game["id"]
-    assert {item["id"] for item in body["support_flags"]} == {support_flag_id}
-    assert official_cancel_flag_id not in {
-        item["id"] for item in body["support_flags"]
+    assert {item["id"] for item in body["linked_money_issues"]} == {
+        money_issue_id,
+        restore_money_issue_id,
     }
-    assert other_support_flag_id not in {
-        item["id"] for item in body["support_flags"]
+    assert refund_money_issue_id not in {
+        item["id"] for item in body["linked_money_issues"]
     }
-    assert other_payment["id"] not in {item["id"] for item in body["payments"]}
-    assert other_refund["id"] not in {item["id"] for item in body["refunds"]}
+    assert other_money_issue_id not in {
+        item["id"] for item in body["linked_money_issues"]
+    }
     assert any(
         action["action_type"] == "issue_credit"
         and action["target_game_credit_id"] == credit["id"]
-        for action in body["audit_actions"]
+        for action in body["admin_actions"]
     )
-    assert any(
-        action["action_type"] == "create_refund"
-        and action["target_refund_id"] == refund["id"]
-        for action in body["audit_actions"]
+    assert other_payment["id"] not in {item["id"] for item in body["payments"]}
+    assert other_refund["id"] not in {item["id"] for item in body["refunds"]}
+
+
+def test_admin_money_issue_credit_release_retry_only_releases_target_usage(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
     )
-    assert all(
-        action["target_payment_id"] != other_payment["id"]
-        and action["target_refund_id"] != other_refund["id"]
-        and action["target_game_credit_id"] != other_credit["id"]
-        and action["target_support_flag_id"] != other_support_flag_id
-        for action in body["audit_actions"]
+    issue_admin_money_detail_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        booking_id=booking["id"],
+        payment_id=payment["id"],
+        amount_cents=500,
     )
+    issue_admin_money_detail_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        booking_id=booking["id"],
+        payment_id=payment["id"],
+        amount_cents=500,
+    )
+
+    with SessionLocal() as db:
+        usages = reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=800,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            payment_id=UUID(payment["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"admin-money-credit-release-target:{booking['id']}",
+        )
+        target_usage_id = str(usages[0].id)
+        target_credit_id = str(usages[0].game_credit_id)
+        target_credit_amount = db.get(
+            GameCredit,
+            usages[0].game_credit_id,
+        ).amount_cents
+        untouched_usage_id = str(usages[1].id)
+        untouched_credit_id = str(usages[1].game_credit_id)
+        untouched_available_before = db.get(
+            GameCredit,
+            usages[1].game_credit_id,
+        ).available_cents
+        money_issue = create_credit_money_issue_for_test(
+            db,
+            credit_usage_id=target_usage_id,
+            issue_type="credit_release_failed",
+        )
+        money_issue_id = str(money_issue.id)
+        db.commit()
+
+    authenticate_as(admin["id"])
+    payload = {
+        "reason": "Release only the credit usage tied to this issue.",
+        "idempotency_key": f"admin-money-credit-release-{unique_suffix()}",
+    }
+    response = client.post(
+        f"/admin/money/issues/{money_issue_id}/retry-credit",
+        json=payload,
+    )
+    duplicate_response = client.post(
+        f"/admin/money/issues/{money_issue_id}/retry-credit",
+        json=payload,
+    )
+
+    assert response.status_code == 200, response.text
+    assert duplicate_response.status_code == 200, duplicate_response.text
+    with SessionLocal() as db:
+        target_usage = db.get(GameCreditUsage, UUID(target_usage_id))
+        untouched_usage = db.get(GameCreditUsage, UUID(untouched_usage_id))
+        refreshed_target_credit = db.get(GameCredit, UUID(target_credit_id))
+        refreshed_untouched_credit = db.get(GameCredit, UUID(untouched_credit_id))
+
+    assert target_usage.usage_status == "released"
+    assert untouched_usage.usage_status == "reserved"
+    assert refreshed_target_credit.available_cents == target_credit_amount
+    assert refreshed_untouched_credit.available_cents == untouched_available_before
+
+
+def test_admin_money_issue_credit_retry_failure_records_target_usage(
+    client: TestClient,
+    monkeypatch,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    issue_admin_money_detail_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        booking_id=booking["id"],
+        payment_id=payment["id"],
+        amount_cents=500,
+    )
+
+    with SessionLocal() as db:
+        usages = reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=300,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            payment_id=UUID(payment["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"admin-money-credit-retry-failure:{booking['id']}",
+        )
+        target_usage_id = str(usages[0].id)
+        money_issue = create_credit_money_issue_for_test(
+            db,
+            credit_usage_id=target_usage_id,
+            issue_type="credit_release_failed",
+        )
+        money_issue_id = str(money_issue.id)
+        db.commit()
+
+    def fail_credit_release(*args, **kwargs):
+        del args, kwargs
+        raise GameCreditLedgerError("Credit release failed.")
+
+    monkeypatch.setattr(
+        "backend.services.admin_money_issue_service.release_reserved_game_credit_usage",
+        fail_credit_release,
+    )
+
+    authenticate_as(admin["id"])
+    response = client.post(
+        f"/admin/money/issues/{money_issue_id}/retry-credit",
+        json={
+            "reason": "Retry release and preserve target usage on failure.",
+            "idempotency_key": f"admin-money-credit-release-fail-{unique_suffix()}",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    with SessionLocal() as db:
+        admin_action = db.scalars(
+            select(AdminAction).where(
+                AdminAction.action_type == "retry_money_issue_credit",
+                AdminAction.target_money_issue_id == UUID(money_issue_id),
+                AdminAction.target_credit_usage_id == UUID(target_usage_id),
+            )
+        ).one()
+
+    assert admin_action.target_credit_usage_id == UUID(target_usage_id)
+
+
+def test_admin_money_issue_credit_restore_retry_only_restores_target_usage(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+    payment = create_payment(
+        client,
+        player["id"],
+        booking_id=booking["id"],
+        payment_status="succeeded",
+        provider_charge_id=f"ch_{unique_suffix()}",
+    )
+    issue_admin_money_detail_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        booking_id=booking["id"],
+        payment_id=payment["id"],
+        amount_cents=500,
+    )
+    issue_admin_money_detail_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=player["id"],
+        game_id=game["id"],
+        booking_id=booking["id"],
+        payment_id=payment["id"],
+        amount_cents=500,
+    )
+
+    with SessionLocal() as db:
+        usages = reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=800,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            payment_id=UUID(payment["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"admin-money-credit-restore-target:{booking['id']}",
+        )
+        redeem_reserved_game_credits(
+            db,
+            UUID(booking["id"]),
+            now=datetime.now(UTC),
+            user_id=UUID(player["id"]),
+        )
+        target_usage_id = str(usages[0].id)
+        target_credit_id = str(usages[0].game_credit_id)
+        target_credit_amount = db.get(
+            GameCredit,
+            usages[0].game_credit_id,
+        ).amount_cents
+        untouched_usage_id = str(usages[1].id)
+        untouched_credit_id = str(usages[1].game_credit_id)
+        untouched_available_before = db.get(
+            GameCredit,
+            usages[1].game_credit_id,
+        ).available_cents
+        money_issue = create_credit_money_issue_for_test(
+            db,
+            credit_usage_id=target_usage_id,
+            issue_type="credit_restore_failed",
+        )
+        money_issue_id = str(money_issue.id)
+        db.commit()
+
+    authenticate_as(admin["id"])
+    payload = {
+        "reason": "Restore only the credit usage tied to this issue.",
+        "idempotency_key": f"admin-money-credit-restore-{unique_suffix()}",
+    }
+    response = client.post(
+        f"/admin/money/issues/{money_issue_id}/retry-credit",
+        json=payload,
+    )
+    duplicate_response = client.post(
+        f"/admin/money/issues/{money_issue_id}/retry-credit",
+        json=payload,
+    )
+
+    assert response.status_code == 200, response.text
+    assert duplicate_response.status_code == 200, duplicate_response.text
+    with SessionLocal() as db:
+        restores = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.booking_id == UUID(booking["id"]),
+                GameCreditUsage.usage_type == "restore",
+            )
+        ).all()
+        refreshed_target_credit = db.get(GameCredit, UUID(target_credit_id))
+        refreshed_untouched_credit = db.get(GameCredit, UUID(untouched_credit_id))
+
+    assert {str(usage.original_usage_id) for usage in restores} == {target_usage_id}
+    assert untouched_usage_id not in {str(usage.original_usage_id) for usage in restores}
+    assert refreshed_target_credit.available_cents == target_credit_amount
+    assert refreshed_untouched_credit.available_cents == untouched_available_before
 
 
 def test_player_cannot_read_money_credits(client: TestClient):
@@ -2290,6 +3051,18 @@ def test_admin_money_credit_list_rejects_bad_status(client: TestClient):
     response = client.get("/admin/money/credits?credit_status=settled")
 
     assert response.status_code == 400, response.text
+
+
+def test_admin_money_credit_list_rejects_removed_filters(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    authenticate_as(admin["id"])
+    reason_response = client.get("/admin/money/credits?credit_reason=admin_credit")
+    issue_response = client.get("/admin/money/credits?has_open_issue=true")
+
+    assert reason_response.status_code == 400, reason_response.text
+    assert issue_response.status_code == 400, issue_response.text
 
 
 def test_admin_money_credit_detail_missing_credit_returns_404(client: TestClient):
@@ -2401,37 +3174,18 @@ def test_admin_can_get_user_money_support_summary(client: TestClient):
         db.commit()
 
     with SessionLocal() as db:
-        support_flag = create_support_flag(
+        money_issue = create_refund_money_issue_for_test(
             db,
-            flag_type="stripe_refund_failed",
-            source="stripe",
-            title="Stripe refund failed",
-            summary="Stripe refund needs user money follow-up.",
-            severity="urgent",
-            target_user_id=UUID(player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_booking_id=UUID(booking["id"]),
-            target_payment_id=UUID(payment["id"]),
-            target_refund_id=UUID(refund["id"]),
-            idempotency_key=f"admin-money-user-summary-flag-{refund['id']}",
-            metadata={"provider_refund_id": refund["provider_refund_id"]},
+            refund_id=refund["id"],
         )
-        support_flag_id = str(support_flag.id)
-        wrong_user_credit_flag = create_support_flag(
+        money_issue_id = str(money_issue.id)
+        wrong_user_money_issue = create_credit_money_issue_for_test(
             db,
-            flag_type="credit_restore_failed",
-            source="admin",
-            title="Wrong user credit follow-up",
-            summary="This wrong-user credit must not leak into selected user summary.",
-            severity="attention",
-            target_user_id=UUID(other_player["id"]),
-            target_game_id=UUID(game["id"]),
-            target_game_credit_id=UUID(wrong_user_credit["id"]),
-            idempotency_key=(
-                f"admin-money-user-summary-wrong-credit-{wrong_user_credit['id']}"
-            ),
+            credit_usage_id=wrong_user_usage_id,
+            issue_type="credit_restore_failed",
         )
-        wrong_user_credit_flag_id = str(wrong_user_credit_flag.id)
+        wrong_user_money_issue_id = str(wrong_user_money_issue.id)
+        db.commit()
 
     authenticate_as(admin["id"])
     default_response = client.get(f"/admin/money/users/{player['id']}")
@@ -2442,54 +3196,120 @@ def test_admin_can_get_user_money_support_summary(client: TestClient):
     assert default_response.status_code == 200, default_response.text
     body = default_response.json()
     assert body["user"]["id"] == player["id"]
+    assert body["user"]["name"] == "Test User"
     assert body["user"]["email"] == player["email"]
     assert body["user"]["account_status"] == "active"
+    assert set(body["user"]) == {
+        "id",
+        "name",
+        "email",
+        "account_status",
+        "created_at",
+    }
     assert "auth_user_id" not in body["user"]
     assert "phone" not in body["user"]
     assert "date_of_birth" not in body["user"]
     assert "stripe_customer_id" not in body["user"]
-    assert {item["id"] for item in body["payments"]} == {payment["id"]}
-    assert other_payment["id"] not in {item["id"] for item in body["payments"]}
-    assert {item["id"] for item in body["refunds"]} == {refund["id"]}
-    assert credit["id"] in {item["id"] for item in body["credit_grants"]}
-    assert wrong_user_credit["id"] not in {
-        item["id"] for item in body["credit_grants"]
+    assert body["snapshot"]["available_credit_cents"] == 400
+    assert body["snapshot"]["open_money_issue_count"] == 1
+    assert {item["id"] for item in body["recent_payments"]["items"]} == {
+        payment["id"]
     }
-    assert usage_id in {item["id"] for item in body["credit_usages"]}
-    assert wrong_user_usage_id not in {item["id"] for item in body["credit_usages"]}
-    assert {item["id"] for item in body["payment_methods"]} == {active_method["id"]}
-    method_row = body["payment_methods"][0]
+    assert other_payment["id"] not in {
+        item["id"] for item in body["recent_payments"]["items"]
+    }
+    assert {item["id"] for item in body["recent_refunds"]["items"]} == {
+        refund["id"]
+    }
+    assert credit["id"] in {item["id"] for item in body["recent_credits"]["items"]}
+    assert wrong_user_credit["id"] not in {
+        item["id"] for item in body["recent_credits"]["items"]
+    }
+    payment_preview = body["recent_payments"]["items"][0]
+    assert set(payment_preview) == {
+        "id",
+        "booking_id",
+        "game_id",
+        "payment_type",
+        "amount_cents",
+        "currency",
+        "payment_status",
+        "paid_at",
+        "is_fully_refunded",
+        "context_label",
+        "created_at",
+    }
+    refund_preview = body["recent_refunds"]["items"][0]
+    assert set(refund_preview) == {
+        "id",
+        "payment_id",
+        "booking_id",
+        "participant_id",
+        "host_publish_fee_id",
+        "amount_cents",
+        "currency",
+        "refund_reason",
+        "refund_status",
+        "refunded_at",
+        "context_label",
+        "created_at",
+    }
+    credit_preview = next(
+        item
+        for item in body["recent_credits"]["items"]
+        if item["id"] == credit["id"]
+    )
+    assert set(credit_preview) == {
+        "id",
+        "amount_cents",
+        "available_cents",
+        "currency",
+        "credit_status",
+        "credit_reason",
+        "source_game_id",
+        "source_booking_id",
+        "source_payment_id",
+        "context_label",
+        "created_at",
+    }
+    assert {item["id"] for item in body["saved_cards"]["items"]} == {
+        active_method["id"]
+    }
+    method_row = body["saved_cards"]["items"][0]
     assert method_row["card_last4"] == "4242"
     assert "stripe_customer_id" not in method_row
     assert "stripe_payment_method_id" not in method_row
     assert "card_fingerprint" not in method_row
-    assert support_flag_id in {item["id"] for item in body["support_flags"]}
-    assert wrong_user_credit_flag_id not in {
-        item["id"] for item in body["support_flags"]
+    assert money_issue_id in {
+        item["id"] for item in body["open_money_issues"]["items"]
     }
-    support_flag_row = next(
-        item for item in body["support_flags"] if item["id"] == support_flag_id
-    )
-    assert "metadata" not in support_flag_row
-    assert "idempotency_key" not in support_flag_row
-    assert any(
-        action["action_type"] == "create_payment"
-        and action["target_payment_id"] == payment["id"]
-        for action in body["audit_actions"]
-    )
-    assert wrong_user_credit["id"] not in {
-        action["target_game_credit_id"] for action in body["audit_actions"]
+    assert wrong_user_money_issue_id not in {
+        item["id"] for item in body["open_money_issues"]["items"]
     }
-    assert all("idempotency_key" not in action for action in body["audit_actions"])
+    money_issue_row = next(
+        item
+        for item in body["open_money_issues"]["items"]
+        if item["id"] == money_issue_id
+    )
+    assert "metadata" not in money_issue_row
+    assert "idempotency_key" not in money_issue_row
+    assert money_issue_row["target_payment_id"] == payment["id"]
+    assert money_issue_row["target_refund_id"] == refund["id"]
+    assert money_issue_row["target_game_credit_id"] is None
+    assert money_issue_row["target_credit_usage_id"] is None
+    assert money_issue_row["first_detected_at"]
+    assert money_issue_row["last_detected_at"]
 
     assert all_cards_response.status_code == 200, all_cards_response.text
-    all_card_ids = {item["id"] for item in all_cards_response.json()["payment_methods"]}
+    all_card_ids = {
+        item["id"]
+        for item in all_cards_response.json()["saved_cards"]["items"]
+    }
     assert active_method["id"] in all_card_ids
     assert inactive_method["id"] in all_card_ids
 
 
 def test_player_cannot_read_admin_money_user_summary(client: TestClient):
-    player = create_user(client)
     player = create_user(client)
     authenticate_as(player["id"])
     response = client.get(f"/admin/money/users/{player['id']}")
@@ -2509,10 +3329,9 @@ def test_admin_money_user_summary_missing_user_returns_404(client: TestClient):
     assert response.status_code == 404, response.text
 
 
-def test_admin_can_list_safe_saved_card_metadata(client: TestClient):
+def test_admin_money_user_saved_cards_include_inactive_with_cursor(client: TestClient):
     admin = create_user(client)
     player = create_user(client)
-    other_player = create_user(client)
     set_user_role(admin["id"], "admin")
     active_method = create_user_payment_method(
         client,
@@ -2523,18 +3342,21 @@ def test_admin_can_list_safe_saved_card_metadata(client: TestClient):
         exp_year=2030,
         is_default=True,
     )
-    detached_at = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
-    detached_method = create_user_payment_method(
-        client,
-        player["id"],
-        card_brand="mastercard",
-        card_last4="4444",
-        exp_month=11,
-        exp_year=2031,
-        method_status="detached",
-        is_default=False,
-        detached_at=detached_at,
-    )
+    inactive_methods = [
+        create_user_payment_method(
+            client,
+            player["id"],
+            card_brand="mastercard",
+            card_last4=str(4400 + index),
+            exp_month=11,
+            exp_year=2031,
+            method_status="detached",
+            is_default=False,
+            detached_at=datetime(2026, 1, index + 1, 3, 4, 5, tzinfo=UTC),
+        )
+        for index in range(11)
+    ]
+    other_player = create_user(client)
     other_method = create_user_payment_method(
         client,
         other_player["id"],
@@ -2544,70 +3366,40 @@ def test_admin_can_list_safe_saved_card_metadata(client: TestClient):
     )
 
     authenticate_as(admin["id"])
-    active_response = client.get(
-        f"/admin/money/payment-methods?user_id={player['id']}"
-    )
+    user_money_path = f"/admin/money/users/{player['id']}"
+    active_response = client.get(user_money_path)
     all_response = client.get(
-        f"/admin/money/payment-methods?user_id={player['id']}&include_inactive=true"
+        f"{user_money_path}?include_inactive_payment_methods=true"
     )
 
     assert active_response.status_code == 200, active_response.text
-    active_body = active_response.json()
-    assert {item["id"] for item in active_body} == {active_method["id"]}
-
-    active_row = active_body[0]
-    assert active_row["user_id"] == player["id"]
+    active_cards = active_response.json()["saved_cards"]
+    assert {item["id"] for item in active_cards["items"]} == {active_method["id"]}
+    active_row = active_cards["items"][0]
     assert active_row["card_brand"] == "visa"
     assert active_row["card_last4"] == "4242"
-    assert active_row["exp_month"] == 12
-    assert active_row["exp_year"] == 2030
     assert active_row["method_status"] == "active"
-    assert active_row["is_default"] is True
-    assert active_row["detached_at"] is None
-    assert set(active_row) == {
-        "id",
-        "user_id",
-        "card_brand",
-        "card_last4",
-        "exp_month",
-        "exp_year",
-        "method_status",
-        "is_default",
-        "created_at",
-        "updated_at",
-        "detached_at",
-    }
+    assert "user_id" not in active_row
+    assert "stripe_customer_id" not in active_row
+    assert "stripe_payment_method_id" not in active_row
+    assert "card_fingerprint" not in active_row
 
     assert all_response.status_code == 200, all_response.text
-    all_body = all_response.json()
-    all_ids = {item["id"] for item in all_body}
-    assert active_method["id"] in all_ids
-    assert detached_method["id"] in all_ids
-    assert other_method["id"] not in all_ids
-    detached_row = next(
-        item for item in all_body if item["id"] == detached_method["id"]
+    saved_cards = all_response.json()["saved_cards"]
+    first_page_ids = {item["id"] for item in saved_cards["items"]}
+    assert len(saved_cards["items"]) == 10
+    assert active_method["id"] in first_page_ids
+    assert other_method["id"] not in first_page_ids
+    assert saved_cards["has_more"] is True
+    assert saved_cards["next_cursor"] is not None
+
+    next_cursor = saved_cards["next_cursor"]
+    next_response = client.get(
+        f"{user_money_path}?include_inactive_payment_methods=true"
+        f"&saved_cards_cursor={next_cursor}"
     )
-    assert (
-        datetime.fromisoformat(detached_row["detached_at"].replace("Z", "+00:00"))
-        == detached_at
-    )
-
-
-def test_admin_money_saved_cards_require_user_id(client: TestClient):
-    admin = create_user(client)
-    set_user_role(admin["id"], "admin")
-
-    authenticate_as(admin["id"])
-    response = client.get("/admin/money/payment-methods")
-
-    assert response.status_code == 422, response.text
-
-
-def test_player_cannot_read_admin_money_saved_cards(client: TestClient):
-    player = create_user(client)
-    create_user_payment_method(client, player["id"])
-
-    authenticate_as(player["id"])
-    response = client.get(f"/admin/money/payment-methods?user_id={player['id']}")
-
-    assert response.status_code == 403, response.text
+    assert next_response.status_code == 200, next_response.text
+    next_cards = next_response.json()["saved_cards"]
+    next_ids = {item["id"] for item in next_cards["items"]}
+    assert next_ids
+    assert next_ids <= {item["id"] for item in inactive_methods}

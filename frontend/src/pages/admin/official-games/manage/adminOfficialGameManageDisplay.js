@@ -15,6 +15,7 @@ const auditRelatedTargetFields = [
   ['target_notification_id', 'Notification'],
   ['target_platform_notice_campaign_id', 'Platform notice campaign'],
   ['target_support_flag_id', 'Support flag'],
+  ['target_money_issue_id', 'Money Issue'],
   ['target_admin_action_id', 'Audit action'],
 ]
 
@@ -107,7 +108,7 @@ export function getPaymentTimelineLabel(payment) {
   if (payment.paid_at) {
     return `Paid ${formatAdminDateTime(payment.paid_at)}`
   }
-  if (payment.failure_code || payment.failure_reason || payment.failure_message) {
+  if (payment.failure_code || payment.failure_message) {
     return 'Failure recorded'
   }
   return `Created ${formatAdminDateTime(payment.created_at)}`

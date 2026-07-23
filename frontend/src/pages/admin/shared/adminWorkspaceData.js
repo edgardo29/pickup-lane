@@ -74,8 +74,13 @@ export const adminWorkspaceNavGroups = [
     label: 'Money',
     items: [
       {
-        label: 'Money Follow-Up',
-        to: '/admin/money/support-flags',
+        label: 'Money Issues',
+        to: '/admin/money/issues',
+        end: true,
+      },
+      {
+        label: 'User Money',
+        to: '/admin/money/users',
         end: true,
       },
       {
@@ -89,18 +94,8 @@ export const adminWorkspaceNavGroups = [
         end: true,
       },
       {
-        label: 'User Money',
-        to: '/admin/money/users',
-        end: true,
-      },
-      {
         label: 'Credits',
         to: '/admin/money/credits',
-        end: true,
-      },
-      {
-        label: 'Saved Cards',
-        to: '/admin/money/payment-methods',
         end: true,
       },
     ],
@@ -187,8 +182,8 @@ export function isAdminWorkspaceItemActive(item, pathname) {
     )
   }
 
-  if (item.to === '/admin/money/support-flags') {
-    return pathname === item.to || pathname.startsWith('/admin/money/support-flags/')
+  if (item.to === '/admin/money/issues') {
+    return pathname === item.to || pathname.startsWith('/admin/money/issues/')
   }
 
   if (item.to === '/admin/money/payments') {
@@ -205,10 +200,6 @@ export function isAdminWorkspaceItemActive(item, pathname) {
 
   if (item.to === '/admin/money/users') {
     return pathname === item.to || pathname.startsWith('/admin/money/users/')
-  }
-
-  if (item.to === '/admin/money/payment-methods') {
-    return pathname === item.to
   }
 
   return pathname === item.to

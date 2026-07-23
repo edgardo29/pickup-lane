@@ -32,7 +32,13 @@ from backend.services.community_game_publish_service import (
 from backend.services.admin_financial_outcome_service import (
     create_financial_outcome_notice_if_needed,
 )
+from backend.services.admin_money_issue_service import (
+    append_money_issue_event,
+    list_related_money_issues,
+    stage_refund_money_issue,
+)
 from backend.services.payment_event_service import build_payment_event_conflict_detail
+from backend.services.refund_event_service import record_refund_event
 from backend.services.game_credit_service import (
     RESTORED_USAGE_STATUS,
     redeem_reserved_game_credits,
@@ -286,7 +292,7 @@ def get_payment_failure_fields(
     *,
     fallback_code: str,
     fallback_message: str,
-) -> tuple[str, str, str]:
+) -> tuple[str, str]:
     last_payment_error = payment_intent.get("last_payment_error")
     error_code: str | None = None
     error_message: str | None = None
@@ -301,8 +307,7 @@ def get_payment_failure_fields(
 
     failure_code = error_code or fallback_code
     failure_message = error_message or fallback_message
-    failure_reason = failure_code
-    return failure_code, failure_message, failure_reason
+    return failure_code, failure_message
 
 
 def get_locked_payment_by_intent(
@@ -664,7 +669,7 @@ def apply_community_publish_fee_failed_or_canceled(
         fallback_code = "payment_intent_payment_failed"
         fallback_message = "Stripe payment intent failed."
 
-    failure_code, failure_message, _failure_reason = get_payment_failure_fields(
+    failure_code, failure_message = get_payment_failure_fields(
         payment_intent,
         fallback_code=fallback_code,
         fallback_message=fallback_message,
@@ -902,7 +907,6 @@ def apply_payment_intent_succeeded(
     payment.paid_at = payment.paid_at or now
     payment.failure_code = None
     payment.failure_message = None
-    payment.failure_reason = None
     payment.updated_at = now
     db.add(payment)
 
@@ -1027,7 +1031,7 @@ def fail_pending_booking_hold(
     restored_credit: bool = False,
     emit_checkout_failure_notification: bool = False,
 ) -> None:
-    failure_code, failure_message, failure_reason = get_payment_failure_fields(
+    failure_code, failure_message = get_payment_failure_fields(
         payment_intent,
         fallback_code=fallback_code,
         fallback_message=fallback_message,
@@ -1036,7 +1040,6 @@ def fail_pending_booking_hold(
     payment.provider_charge_id = get_latest_charge_id(payment_intent)
     payment.failure_code = failure_code
     payment.failure_message = failure_message
-    payment.failure_reason = failure_reason
     payment.paid_at = None
     payment.updated_at = now
     db.add(payment)
@@ -1166,7 +1169,7 @@ def apply_payment_intent_failed_or_canceled(
                 db,
                 booking.id,
                 now=now,
-                release_reason=fallback_code,
+                reason_code=fallback_code,
                 user_id=booking.buyer_user_id,
             )
         except ValueError as exc:
@@ -1271,7 +1274,13 @@ def recover_refund_from_metadata(
         payment_id=payment.id,
         booking_id=booking.id,
         participant_id=None,
+        origin_workflow="official_game_cancellation",
+        provider="stripe",
         provider_refund_id=provider_refund_id,
+        provider_charge_id=payment.provider_charge_id,
+        provider_status=None,
+        provider_status_observed_at=None,
+        last_refund_event_at=None,
         amount_cents=amount_cents,
         currency=currency,
         refund_reason="game_cancelled",
@@ -1308,20 +1317,17 @@ def sync_refunded_payment_and_booking(
     if refunded_cents <= 0:
         return
 
-    next_payment_status = (
+    next_booking_payment_status = (
         "refunded" if refunded_cents >= payment.amount_cents else "partially_refunded"
     )
-    payment.payment_status = next_payment_status
-    payment.updated_at = now
-    db.add(payment)
 
-    if host_publish_fee is not None and next_payment_status == "refunded":
+    if host_publish_fee is not None and refunded_cents >= payment.amount_cents:
         host_publish_fee.fee_status = "refunded"
         host_publish_fee.updated_at = now
         db.add(host_publish_fee)
 
     if booking is not None:
-        booking.payment_status = next_payment_status
+        booking.payment_status = next_booking_payment_status
         booking.updated_at = now
         db.add(booking)
 
@@ -1411,7 +1417,11 @@ def process_refund_event(
 
     refund = get_locked_refund_by_provider_id(db, provider_refund_id)
     if refund is None:
-        refund = recover_refund_from_metadata(db, refund_payload, now)
+        refund = recover_refund_from_metadata(
+            db,
+            refund_payload,
+            now,
+        )
 
     if refund is None:
         mark_event_ignored(event, "No internal refund matched this Stripe refund.")
@@ -1450,15 +1460,58 @@ def process_refund_event(
     refund_status = map_stripe_refund_event_status(
         event_payload["type"], refund_payload
     )
-    refund.refund_status = refund_status
-    refund.updated_at = now
-    if refund_status in {"processing", "succeeded"} and refund.approved_at is None:
-        refund.approved_at = now
-    if refund_status == "succeeded":
-        refund.refunded_at = refund.refunded_at or now
-    elif refund_status in {"failed", "cancelled"}:
-        refund.refunded_at = None
-    db.add(refund)
+    refund_event = record_refund_event(
+        db,
+        refund=refund,
+        event_type="provider_result_recorded",
+        event_source="webhook",
+        provider="stripe",
+        provider_event_id=event.provider_event_id,
+        provider_refund_id=provider_refund_id,
+        provider_charge_id=refund_payload.get("charge") or payment.provider_charge_id,
+        provider_status=refund_status,
+        new_refund_status=refund_status,
+        reason_code=f"stripe_webhook_{refund_status}",
+        summary="Stripe refund webhook result recorded.",
+        occurred_at=now,
+    )
+    if refund_status in {"failed", "cancelled"}:
+        stage_refund_money_issue(
+            db,
+            refund=refund,
+            payment=payment,
+            issue_type="refund_failed"
+            if refund_status == "failed"
+            else "refund_cancelled",
+            reason_code=f"stripe_webhook_{refund_status}",
+            summary="Stripe reported that a refund did not complete.",
+            refund_event=refund_event,
+            now=now,
+        )
+    elif refund_status == "succeeded":
+        for money_issue in list_related_money_issues(
+            db,
+            refund_id=refund.id,
+            status_filter="open",
+            limit=10,
+        ):
+            previous_action = money_issue.recommended_action_code
+            money_issue.latest_reason_code = "stripe_webhook_succeeded"
+            money_issue.latest_summary = "Stripe confirmed the refund succeeded."
+            money_issue.recommended_action_code = "review_and_resolve_no_action"
+            money_issue.updated_at = now
+            append_money_issue_event(
+                db,
+                money_issue=money_issue,
+                event_type="refund_outcome_linked",
+                event_source="system",
+                refund_event_id=refund_event.id,
+                reason_code="stripe_webhook_succeeded",
+                summary="Stripe confirmed the refund succeeded.",
+                previous_recommended_action_code=previous_action,
+                new_recommended_action_code=money_issue.recommended_action_code,
+                occurred_at=now,
+            )
     sync_financial_outcome_for_refund(db, refund, refund_status, now)
 
     if refund_status == "succeeded":

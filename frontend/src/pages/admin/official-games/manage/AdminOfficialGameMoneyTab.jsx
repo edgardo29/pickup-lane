@@ -23,6 +23,7 @@ function AdminOfficialGameMoneyTab({
   const refunds = moneyLedger.refunds ?? []
   const credits = moneyLedger.credits ?? []
   const creditUsages = moneyLedger.credit_usages ?? []
+  const creditOwnerById = new Map(credits.map((credit) => [credit.id, credit.user_id]))
   const paymentTotalCents = payments.reduce(
     (total, payment) => total + Number(payment.amount_cents || 0),
     0,
@@ -135,7 +136,6 @@ function AdminOfficialGameMoneyTab({
                       <strong>{getStatusLabel(payment.payment_status)}</strong>
                       <span>
                         {payment.failure_code
-                          || payment.failure_reason
                           || payment.failure_message
                           || 'No failure'}
                       </span>
@@ -226,7 +226,7 @@ function AdminOfficialGameMoneyTab({
                       <div data-label="Amount" role="cell">
                         <strong>{formatAdminGameMoney(credit.amount_cents, credit.currency)}</strong>
                         <span>
-                          {formatAdminGameMoney(credit.remaining_cents, credit.currency)} remaining
+                          {formatAdminGameMoney(credit.available_cents, credit.currency)} available
                         </span>
                       </div>
                       <div data-label="Status" role="cell">
@@ -235,11 +235,7 @@ function AdminOfficialGameMoneyTab({
                       </div>
                       <div data-label="Timeline" role="cell">
                         <strong>{`Created ${formatAdminDateTime(credit.created_at)}`}</strong>
-                        <span>
-                          {credit.expires_at
-                            ? `Expires ${formatAdminDateTime(credit.expires_at)}`
-                            : 'No expiry'}
-                        </span>
+                        <span>{`Updated ${formatAdminDateTime(credit.updated_at)}`}</span>
                       </div>
                     </div>
                   ))}
@@ -255,36 +251,40 @@ function AdminOfficialGameMoneyTab({
                     <span role="columnheader">Status</span>
                     <span role="columnheader">Timeline</span>
                   </div>
-                  {creditUsages.map((usage) => (
-                    <div key={usage.id} className="admin-bookings-table__row" role="row">
-                      <div data-label="User" role="cell">
-                        <strong>{getParticipantUserLabel(usage.user_id, participants)}</strong>
-                        <span>{String(usage.user_id).slice(0, 8)}</span>
+                  {creditUsages.map((usage) => {
+                    const ownerUserId = creditOwnerById.get(usage.game_credit_id)
+
+                    return (
+                      <div key={usage.id} className="admin-bookings-table__row" role="row">
+                        <div data-label="User" role="cell">
+                          <strong>{ownerUserId ? getParticipantUserLabel(ownerUserId, participants) : 'Unknown user'}</strong>
+                          <span>{ownerUserId ? String(ownerUserId).slice(0, 8) : 'No user'}</span>
+                        </div>
+                        <div data-label="Usage" role="cell">
+                          <Link className="admin-money-link" to={`/admin/money/credits/${usage.game_credit_id}`}>
+                            {getStatusLabel(usage.usage_type)}
+                          </Link>
+                          <span>{String(usage.id).slice(0, 8)}</span>
+                        </div>
+                        <div data-label="Amount" role="cell">
+                          <strong>{formatAdminGameMoney(usage.amount_cents, usage.currency)}</strong>
+                          <span>{usage.reason_code || 'No reason code'}</span>
+                        </div>
+                        <div data-label="Status" role="cell">
+                          <strong>{getStatusLabel(usage.usage_status)}</strong>
+                          <span>
+                            {usage.booking_id
+                              ? `Booking ${String(usage.booking_id).slice(0, 8)}`
+                              : 'No booking'}
+                          </span>
+                        </div>
+                        <div data-label="Timeline" role="cell">
+                          <strong>{getCreditUsageTimelineLabel(usage)}</strong>
+                          <span>{`Updated ${formatAdminDateTime(usage.updated_at)}`}</span>
+                        </div>
                       </div>
-                      <div data-label="Usage" role="cell">
-                        <Link className="admin-money-link" to={`/admin/money/credits/${usage.game_credit_id}`}>
-                          {getStatusLabel(usage.usage_type)}
-                        </Link>
-                        <span>{String(usage.id).slice(0, 8)}</span>
-                      </div>
-                      <div data-label="Amount" role="cell">
-                        <strong>{formatAdminGameMoney(usage.amount_cents, usage.currency)}</strong>
-                        <span>{usage.release_reason || 'No release reason'}</span>
-                      </div>
-                      <div data-label="Status" role="cell">
-                        <strong>{getStatusLabel(usage.usage_status)}</strong>
-                        <span>
-                          {usage.booking_id
-                            ? `Booking ${String(usage.booking_id).slice(0, 8)}`
-                            : 'No booking'}
-                        </span>
-                      </div>
-                      <div data-label="Timeline" role="cell">
-                        <strong>{getCreditUsageTimelineLabel(usage)}</strong>
-                        <span>{`Updated ${formatAdminDateTime(usage.updated_at)}`}</span>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

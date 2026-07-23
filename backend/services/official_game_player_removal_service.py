@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from backend.models import (
     Booking,
     Game,
+    GameCredit,
     GameCreditUsage,
     GameParticipant,
     Payment,
@@ -27,6 +28,10 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameRemovalRefundRead,
 )
 from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_money_issue_service import (
+    stage_credit_money_issue,
+    stage_refund_money_issue,
+)
 from backend.services.auth_service import require_active_admin_user
 from backend.services.game_credit_service import (
     GameCreditLedgerError,
@@ -61,13 +66,10 @@ from backend.services.payment_rules import (
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
 )
+from backend.services.refund_event_service import record_refund_event
 from backend.services.stripe_service import (
     StripeConfigError,
     create_refund as create_stripe_refund,
-)
-from backend.services.support_flag_service import (
-    create_support_flag,
-    stage_support_flag,
 )
 
 REMOVAL_PREVIEW_ACTIVE_REFUND_STATUSES = {
@@ -477,19 +479,6 @@ def preview_official_game_player_removal(
         blocking_reasons.append(
             "A refund is already pending or processing for this booking."
         )
-    elif any(payment.payment_status == "disputed" for payment in payments):
-        classification = "manual_review_required"
-        blocking_reasons.append(
-            "This booking has a disputed payment and requires money support review."
-        )
-    elif any(
-        payment.payment_status in {"partially_refunded", "refunded"}
-        for payment in payments
-    ):
-        classification = "manual_review_required"
-        blocking_reasons.append(
-            "This booking already has a refunded payment state and requires money support review."
-        )
     elif (
         removal_scope == "single_participant"
         and (
@@ -643,13 +632,20 @@ def create_admin_removal_refund_record(
     now: datetime,
     provider_refund_id: str | None,
     refund_status: str,
-) -> Refund:
+    reason_code: str,
+) -> tuple[Refund, uuid.UUID | None]:
     refund = Refund(
         id=uuid.uuid4(),
         payment_id=payment.id,
         booking_id=booking.id,
         participant_id=None,
+        origin_workflow="player_removal",
+        provider="stripe",
         provider_refund_id=provider_refund_id,
+        provider_charge_id=payment.provider_charge_id,
+        provider_status=refund_status if provider_refund_id is not None else None,
+        provider_status_observed_at=now if provider_refund_id is not None else None,
+        last_refund_event_at=now,
         amount_cents=payment.amount_cents,
         currency=payment.currency,
         refund_reason="admin_refund",
@@ -667,7 +663,44 @@ def create_admin_removal_refund_record(
         updated_at=now,
     )
     db.add(refund)
-    return refund
+    db.flush()
+    refund_event = record_refund_event(
+        db,
+        refund=refund,
+        event_type="provider_result_recorded",
+        event_source="system",
+        actor_user_id=admin_user.id,
+        provider="stripe",
+        provider_refund_id=provider_refund_id,
+        provider_charge_id=payment.provider_charge_id,
+        provider_status=refund_status if provider_refund_id is not None else None,
+        new_refund_status=refund_status,
+        reason_code=reason_code,
+        summary="Player-removal refund result recorded.",
+        occurred_at=now,
+    )
+    money_issue_id = None
+    if refund_status in {"failed", "cancelled"}:
+        money_issue = stage_refund_money_issue(
+            db,
+            refund=refund,
+            payment=payment,
+            issue_type=(
+                "refund_missing_provider_reference"
+                if reason_code == "provider_charge_id_missing"
+                else (
+                    "refund_cancelled"
+                    if refund_status == "cancelled"
+                    else "refund_failed"
+                )
+            ),
+            reason_code=reason_code,
+            summary="Player-removal refund could not complete.",
+            refund_event=refund_event,
+            now=now,
+        )
+        money_issue_id = money_issue.id
+    return refund, money_issue_id
 
 
 def execute_admin_removal_refunds(
@@ -678,16 +711,16 @@ def execute_admin_removal_refunds(
     booking: Booking,
     payments: list[Payment],
     now: datetime,
-) -> tuple[list[Refund], list[dict[str, Any]]]:
+) -> tuple[list[Refund], list[uuid.UUID]]:
     refunds: list[Refund] = []
-    support_flags: list[dict[str, Any]] = []
+    money_issue_ids: list[uuid.UUID] = []
 
     for payment in payments:
         if payment.payment_status != "succeeded":
             continue
 
         if not payment.provider_charge_id:
-            refund = create_admin_removal_refund_record(
+            refund, money_issue_id = create_admin_removal_refund_record(
                 db,
                 admin_user=admin_user,
                 booking=booking,
@@ -695,20 +728,11 @@ def execute_admin_removal_refunds(
                 now=now,
                 provider_refund_id=None,
                 refund_status="failed",
+                reason_code="provider_charge_id_missing",
             )
             refunds.append(refund)
-            support_flags.append(
-                {
-                    "flag_type": "missing_stripe_charge_id",
-                    "title": "Removal refund is missing a Stripe charge",
-                    "summary": (
-                        "A paid official-game booking was removed, but its "
-                        "payment has no Stripe charge id for refund."
-                    ),
-                    "target_payment_id": payment.id,
-                    "target_refund_id": refund.id,
-                }
-            )
+            if money_issue_id is not None:
+                money_issue_ids.append(money_issue_id)
             continue
 
         try:
@@ -731,7 +755,7 @@ def execute_admin_removal_refunds(
             refund_status = map_admin_removal_refund_status(
                 provider_refund.status
             )
-            refund = create_admin_removal_refund_record(
+            refund, money_issue_id = create_admin_removal_refund_record(
                 db,
                 admin_user=admin_user,
                 booking=booking,
@@ -739,9 +763,10 @@ def execute_admin_removal_refunds(
                 now=now,
                 provider_refund_id=provider_refund.id,
                 refund_status=refund_status,
+                reason_code=f"stripe_refund_{refund_status}",
             )
         except StripeConfigError:
-            refund = create_admin_removal_refund_record(
+            refund, money_issue_id = create_admin_removal_refund_record(
                 db,
                 admin_user=admin_user,
                 booking=booking,
@@ -749,10 +774,11 @@ def execute_admin_removal_refunds(
                 now=now,
                 provider_refund_id=None,
                 refund_status="failed",
+                reason_code="stripe_refunds_not_configured",
             )
             refund_status = "failed"
         except Exception:
-            refund = create_admin_removal_refund_record(
+            refund, money_issue_id = create_admin_removal_refund_record(
                 db,
                 admin_user=admin_user,
                 booking=booking,
@@ -760,42 +786,15 @@ def execute_admin_removal_refunds(
                 now=now,
                 provider_refund_id=None,
                 refund_status="failed",
+                reason_code="stripe_refund_request_failed",
             )
             refund_status = "failed"
 
         refunds.append(refund)
-        if refund_status == "succeeded":
-            payment.payment_status = "refunded"
-            payment.updated_at = now
-            db.add(payment)
-        elif refund_status == "processing":
-            support_flags.append(
-                {
-                    "flag_type": "refund_follow_up_required",
-                    "title": "Removal refund needs follow-up",
-                    "summary": (
-                        "A paid official-game player was removed while the "
-                        "Stripe refund remained processing."
-                    ),
-                    "target_payment_id": payment.id,
-                    "target_refund_id": refund.id,
-                }
-            )
-        else:
-            support_flags.append(
-                {
-                    "flag_type": "stripe_refund_failed",
-                    "title": "Removal refund failed",
-                    "summary": (
-                        "A paid official-game player was removed, but the "
-                        "Stripe refund did not complete."
-                    ),
-                    "target_payment_id": payment.id,
-                    "target_refund_id": refund.id,
-                }
-            )
+        if money_issue_id is not None:
+            money_issue_ids.append(money_issue_id)
 
-    return refunds, support_flags
+    return refunds, money_issue_ids
 
 
 def record_credit_return_failure(
@@ -808,44 +807,44 @@ def record_credit_return_failure(
     operation: str = "restore",
 ) -> None:
     is_release = operation == "release"
-    create_support_flag(
-        db,
-        flag_type="credit_release_failed" if is_release else "credit_restore_failed",
-        source="official_game",
-        title=(
-            "Player-removal credit release failed"
-            if is_release
-            else "Player-removal credit restore failed"
-        ),
-        summary=(
-            "Pickup Lane could not release reserved credit before removing an "
-            "official-game booking."
-            if is_release
-            else (
-                "Pickup Lane could not restore redeemed credit before removing "
-                "an official-game booking."
+    usage_status = "reserved" if is_release else "redeemed"
+    credit_usages = list(
+        db.scalars(
+            select(GameCreditUsage)
+            .join(GameCredit, GameCreditUsage.game_credit_id == GameCredit.id)
+            .where(
+                GameCreditUsage.booking_id == booking_id,
+                GameCreditUsage.usage_type == "redeem",
+                GameCreditUsage.usage_status == usage_status,
             )
-        ),
-        metadata={
-            "operation": "admin_official_player_removal",
-            "credit_operation": operation,
-            "detail": detail,
-        },
-        idempotency_key=(
-            f"admin_remove:{booking_id}:credit_{operation}_failed"
-        ),
-        created_by_user_id=admin_user.id,
-        reopen_resolved=True,
-        target_user_id=None,
-        target_game_id=game_id,
-        target_booking_id=booking_id,
-        target_payment_id=None,
-        target_refund_id=None,
-        target_game_credit_id=None,
-        target_venue_id=None,
-        target_venue_image_id=None,
-        target_notification_id=None,
+            .order_by(GameCreditUsage.created_at.asc(), GameCreditUsage.id.asc())
+            .with_for_update()
+        ).all()
     )
+    if not credit_usages:
+        return
+
+    now = datetime.now(timezone.utc)
+    for credit_usage in credit_usages:
+        game_credit = db.get(GameCredit, credit_usage.game_credit_id)
+        stage_credit_money_issue(
+            db,
+            credit_usage=credit_usage,
+            game_credit=game_credit,
+            issue_type="credit_release_failed" if is_release else "credit_restore_failed",
+            origin_workflow="player_removal",
+            reason_code=f"credit_{operation}_failed",
+            summary=(
+                "Pickup Lane could not release reserved credit before removing an "
+                "official-game booking."
+                if is_release
+                else (
+                    "Pickup Lane could not restore redeemed credit before removing "
+                    "an official-game booking."
+                )
+            ),
+            now=now,
+        )
 
 
 def execute_official_game_player_removal(
@@ -951,17 +950,17 @@ def execute_official_game_player_removal(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
                     "Game credit could not be restored. No player was removed; "
-                    "support follow-up was created."
+                    "a Money Issue was created."
                 ),
             ) from exc
 
     refunds: list[Refund] = []
-    support_flag_specs: list[dict[str, Any]] = []
+    money_issue_ids: list[uuid.UUID] = []
     if execute_request.outcome in {
         "refund_cash_and_remove_party",
         "refund_cash_restore_credit_and_remove_party",
     }:
-        refunds, support_flag_specs = execute_admin_removal_refunds(
+        refunds, money_issue_ids = execute_admin_removal_refunds(
             db,
             admin_user=admin_user,
             game=game,
@@ -992,7 +991,7 @@ def execute_official_game_player_removal(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
                     "Reserved game credit could not be released. No player was "
-                    "removed; support follow-up was created."
+                    "removed; a Money Issue was created."
                 ),
             ) from exc
 
@@ -1095,38 +1094,6 @@ def execute_official_game_player_removal(
         },
     )
 
-    support_flags = []
-    for flag_spec in support_flag_specs:
-        support_flags.append(
-            stage_support_flag(
-                db,
-                flag_type=flag_spec["flag_type"],
-                source="official_game",
-                title=flag_spec["title"],
-                summary=flag_spec["summary"],
-                metadata={
-                    "operation": "admin_official_player_removal",
-                    "outcome": execute_request.outcome,
-                },
-                idempotency_key=(
-                    f"admin_remove:{booking.id}:{flag_spec['target_payment_id']}:"
-                    f"{flag_spec['flag_type']}"
-                ),
-                source_admin_action_id=audit_action.id,
-                created_by_user_id=admin_user.id,
-                reopen_resolved=True,
-                target_user_id=booking.buyer_user_id,
-                target_game_id=game.id,
-                target_booking_id=booking.id,
-                target_payment_id=flag_spec["target_payment_id"],
-                target_refund_id=flag_spec["target_refund_id"],
-                target_game_credit_id=None,
-                target_venue_id=None,
-                target_venue_image_id=None,
-                target_notification_id=None,
-            )
-        )
-
     create_official_game_player_removed_notification(
         db,
         game=game,
@@ -1195,6 +1162,6 @@ def execute_official_game_player_removal(
         credit_restored_count=len(restored_credit_usages),
         credit_restored_cents=credit_restored_cents,
         refund_follow_up_required=refund_follow_up_required,
-        support_flag_ids=[flag.id for flag in support_flags],
+        money_issue_ids=money_issue_ids,
         waitlist_advanced_entry_ids=waitlist_advanced_entry_ids,
     )

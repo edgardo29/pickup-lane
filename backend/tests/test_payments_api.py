@@ -148,7 +148,7 @@ def test_payments_reject_duplicate_idempotency_key(client: TestClient):
     assert "idempotency_key already exists" in response.text
 
 
-def test_payments_reject_failed_without_failure_reason(client: TestClient):
+def test_payments_reject_failed_without_failure_detail(client: TestClient):
     user = create_user(client)
     admin = create_money_admin(client)
     venue = create_venue(client, user["id"])
@@ -172,7 +172,7 @@ def test_payments_reject_failed_without_failure_reason(client: TestClient):
     )
 
     assert response.status_code == 400, response.text
-    assert "failure_reason" in response.text
+    assert "failure_code or failure_message" in response.text
 
 
 def test_payments_reject_regular_user_mutation(client: TestClient):

@@ -45,7 +45,6 @@ def upgrade() -> None:
         sa.Column("paid_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("failure_code", sa.String(length=100), nullable=True),
         sa.Column("failure_message", sa.Text(), nullable=True),
-        sa.Column("failure_reason", sa.Text(), nullable=True),
         sa.Column("metadata", postgresql.JSONB(), nullable=True),
         sa.Column(
             "created_at",
@@ -62,8 +61,7 @@ def upgrade() -> None:
         sa.CheckConstraint(
             (
                 "payment_type IN ("
-                "'booking', 'community_publish_fee', 'refund_adjustment', "
-                "'admin_charge'"
+                "'booking', 'community_publish_fee', 'admin_charge'"
                 ")"
             ),
             name="ck_payments_payment_type",
@@ -76,8 +74,7 @@ def upgrade() -> None:
             (
                 "payment_status IN ("
                 "'requires_payment_method', 'processing', 'requires_action', "
-                "'succeeded', 'failed', 'canceled', 'refunded', "
-                "'partially_refunded', 'disputed'"
+                "'succeeded', 'failed', 'canceled'"
                 ")"
             ),
             name="ck_payments_payment_status",
@@ -87,7 +84,7 @@ def upgrade() -> None:
             name="ck_payments_currency",
         ),
         sa.CheckConstraint(
-            "amount_cents >= 0",
+            "amount_cents > 0",
             name="ck_payments_amount_cents",
         ),
         sa.CheckConstraint(
@@ -122,18 +119,40 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "provider_payment_intent_id",
-            name="uq_payments_provider_payment_intent_id",
-        ),
-        sa.UniqueConstraint(
             "idempotency_key",
             name="uq_payments_idempotency_key",
         ),
     )
     op.create_index(
-        "ix_payments_payer_user_id",
+        "uq_payments_provider_payment_intent_id",
         "payments",
-        ["payer_user_id"],
+        ["provider", "provider_payment_intent_id"],
+        unique=True,
+        postgresql_where=sa.text("provider_payment_intent_id IS NOT NULL"),
+    )
+    op.create_index(
+        "uq_payments_provider_charge_id",
+        "payments",
+        ["provider", "provider_charge_id"],
+        unique=True,
+        postgresql_where=sa.text("provider_charge_id IS NOT NULL"),
+    )
+    op.create_index(
+        "ix_payments_provider_payment_intent_id",
+        "payments",
+        ["provider_payment_intent_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_payments_provider_charge_id",
+        "payments",
+        ["provider_charge_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_payments_payer_created",
+        "payments",
+        ["payer_user_id", "created_at", "id"],
         unique=False,
     )
     op.create_index(
@@ -149,15 +168,15 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
-        "ix_payments_payment_type",
+        "ix_payments_payment_type_created",
         "payments",
-        ["payment_type"],
+        ["payment_type", "created_at", "id"],
         unique=False,
     )
     op.create_index(
-        "ix_payments_payment_status",
+        "ix_payments_payment_status_created",
         "payments",
-        ["payment_status"],
+        ["payment_status", "created_at", "id"],
         unique=False,
     )
 
@@ -165,9 +184,13 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Downgrade removes the payments table and its indexes because this
     # migration only introduces that single table.
-    op.drop_index("ix_payments_payment_status", table_name="payments")
-    op.drop_index("ix_payments_payment_type", table_name="payments")
+    op.drop_index("ix_payments_payment_status_created", table_name="payments")
+    op.drop_index("ix_payments_payment_type_created", table_name="payments")
+    op.drop_index("ix_payments_provider_charge_id", table_name="payments")
+    op.drop_index("ix_payments_provider_payment_intent_id", table_name="payments")
+    op.drop_index("uq_payments_provider_charge_id", table_name="payments")
+    op.drop_index("uq_payments_provider_payment_intent_id", table_name="payments")
     op.drop_index("ix_payments_game_id", table_name="payments")
     op.drop_index("ix_payments_booking_id", table_name="payments")
-    op.drop_index("ix_payments_payer_user_id", table_name="payments")
+    op.drop_index("ix_payments_payer_created", table_name="payments")
     op.drop_table("payments")

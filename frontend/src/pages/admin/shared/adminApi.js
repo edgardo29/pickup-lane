@@ -1042,27 +1042,31 @@ export async function getAdminMoneyFinancialOutcome({
 }
 
 export async function listAdminMoneyPayments({
-  bookingId = '',
+  cursor = '',
   firebaseUser,
-  gameId = '',
-  limit = 100,
+  limit = 50,
+  paymentType = '',
   paymentStatus = 'all',
+  query = '',
   userId = '',
 } = {}) {
   const searchParams = new URLSearchParams()
 
+  if (String(query).trim()) {
+    searchParams.set('q', String(query).trim())
+  }
   if (String(userId).trim()) {
     searchParams.set('user_id', String(userId).trim())
   }
-  if (String(bookingId).trim()) {
-    searchParams.set('booking_id', String(bookingId).trim())
-  }
-  if (String(gameId).trim()) {
-    searchParams.set('game_id', String(gameId).trim())
+  if (String(paymentType).trim()) {
+    searchParams.set('payment_type', String(paymentType).trim())
   }
 
   searchParams.set('payment_status', paymentStatus)
   searchParams.set('limit', String(limit))
+  if (String(cursor).trim()) {
+    searchParams.set('cursor', String(cursor).trim())
+  }
 
   return apiRequest(`/admin/money/payments?${searchParams.toString()}`, {
     headers: await getAdminHeaders(firebaseUser),
@@ -1076,24 +1080,21 @@ export async function getAdminMoneyRefund({ firebaseUser, refundId }) {
 }
 
 export async function listAdminMoneyRefunds({
-  bookingId = '',
+  cursor = '',
   firebaseUser,
-  gameId = '',
-  limit = 100,
+  limit = 50,
   paymentId = '',
+  query = '',
   refundStatus = 'all',
   userId = '',
 } = {}) {
   const searchParams = new URLSearchParams()
 
+  if (String(query).trim()) {
+    searchParams.set('q', String(query).trim())
+  }
   if (String(userId).trim()) {
     searchParams.set('user_id', String(userId).trim())
-  }
-  if (String(bookingId).trim()) {
-    searchParams.set('booking_id', String(bookingId).trim())
-  }
-  if (String(gameId).trim()) {
-    searchParams.set('game_id', String(gameId).trim())
   }
   if (String(paymentId).trim()) {
     searchParams.set('payment_id', String(paymentId).trim())
@@ -1101,6 +1102,9 @@ export async function listAdminMoneyRefunds({
 
   searchParams.set('refund_status', refundStatus)
   searchParams.set('limit', String(limit))
+  if (String(cursor).trim()) {
+    searchParams.set('cursor', String(cursor).trim())
+  }
 
   return apiRequest(`/admin/money/refunds?${searchParams.toString()}`, {
     headers: await getAdminHeaders(firebaseUser),
@@ -1123,6 +1127,47 @@ export async function retryAdminMoneyRefund({
   })
 }
 
+export async function reconcileAdminMoneyRefund({
+  firebaseUser,
+  idempotencyKey,
+  reason,
+  refundId,
+}) {
+  return apiRequest(`/admin/money/refunds/${refundId}/reconcile`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      reason,
+      idempotency_key: idempotencyKey,
+    }),
+  })
+}
+
+export async function listAdminMoneyRefundEvents({
+  cursor = '',
+  eventSource = '',
+  eventType = '',
+  firebaseUser,
+  limit = 50,
+  refundId,
+}) {
+  const searchParams = new URLSearchParams()
+  if (String(eventType).trim()) {
+    searchParams.set('event_type', String(eventType).trim())
+  }
+  if (String(eventSource).trim()) {
+    searchParams.set('event_source', String(eventSource).trim())
+  }
+  searchParams.set('limit', String(limit))
+  if (String(cursor).trim()) {
+    searchParams.set('cursor', String(cursor).trim())
+  }
+
+  return apiRequest(`/admin/money/refunds/${refundId}/events?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
 export async function createAdminMoneyFinancialOutcome({
   firebaseUser,
   payload,
@@ -1136,8 +1181,10 @@ export async function createAdminMoneyFinancialOutcome({
 
 export async function listAdminMoneyCredits({
   creditStatus = 'all',
+  cursor = '',
   firebaseUser,
-  limit = 100,
+  limit = 50,
+  query = '',
   sourceBookingId = '',
   sourceGameId = '',
   sourcePaymentId = '',
@@ -1145,6 +1192,9 @@ export async function listAdminMoneyCredits({
 } = {}) {
   const searchParams = new URLSearchParams()
 
+  if (String(query).trim()) {
+    searchParams.set('q', String(query).trim())
+  }
   if (String(userId).trim()) {
     searchParams.set('user_id', String(userId).trim())
   }
@@ -1160,6 +1210,9 @@ export async function listAdminMoneyCredits({
 
   searchParams.set('credit_status', creditStatus)
   searchParams.set('limit', String(limit))
+  if (String(cursor).trim()) {
+    searchParams.set('cursor', String(cursor).trim())
+  }
 
   return apiRequest(`/admin/money/credits?${searchParams.toString()}`, {
     headers: await getAdminHeaders(firebaseUser),
@@ -1172,24 +1225,10 @@ export async function getAdminMoneyCredit({ creditId, firebaseUser }) {
   })
 }
 
-export async function listAdminMoneyPaymentMethods({
-  firebaseUser,
-  includeInactive = false,
-  userId,
-} = {}) {
-  const searchParams = new URLSearchParams()
-  searchParams.set('user_id', String(userId || '').trim())
-  searchParams.set('include_inactive', includeInactive ? 'true' : 'false')
-
-  return apiRequest(`/admin/money/payment-methods?${searchParams.toString()}`, {
-    headers: await getAdminHeaders(firebaseUser),
-  })
-}
-
 export async function getAdminMoneyUser({
   firebaseUser,
   includeInactivePaymentMethods = false,
-  limit = 100,
+  savedCardsCursor = '',
   userId,
 } = {}) {
   const searchParams = new URLSearchParams()
@@ -1197,44 +1236,82 @@ export async function getAdminMoneyUser({
     'include_inactive_payment_methods',
     includeInactivePaymentMethods ? 'true' : 'false',
   )
-  searchParams.set('limit', String(limit))
+  if (String(savedCardsCursor).trim()) {
+    searchParams.set('saved_cards_cursor', String(savedCardsCursor).trim())
+  }
 
   return apiRequest(`/admin/money/users/${userId}?${searchParams.toString()}`, {
     headers: await getAdminHeaders(firebaseUser),
   })
 }
 
-export async function listAdminMoneySupportFlags({
+export async function listAdminMoneyIssues({
+  cursor = '',
   firebaseUser,
-  flagStatus = 'open',
-  limit = 100,
+  issueStatus = 'open',
+  issueType = '',
+  limit = 50,
+  query = '',
+  userId = '',
 } = {}) {
   const searchParams = new URLSearchParams()
-  searchParams.set('flag_status', flagStatus)
+  searchParams.set('status', issueStatus)
+  if (String(query).trim()) {
+    searchParams.set('q', String(query).trim())
+  }
+  if (String(issueType).trim()) {
+    searchParams.set('issue_type', String(issueType).trim())
+  }
+  if (String(userId).trim()) {
+    searchParams.set('user_id', String(userId).trim())
+  }
   searchParams.set('limit', String(limit))
+  if (String(cursor).trim()) {
+    searchParams.set('cursor', String(cursor).trim())
+  }
 
-  return apiRequest(`/admin/money/support-flags?${searchParams.toString()}`, {
+  return apiRequest(`/admin/money/issues?${searchParams.toString()}`, {
     headers: await getAdminHeaders(firebaseUser),
   })
 }
 
-export async function getAdminMoneySupportFlag({ firebaseUser, supportFlagId }) {
-  return apiRequest(`/admin/money/support-flags/${supportFlagId}`, {
+export async function getAdminMoneyIssue({ firebaseUser, moneyIssueId }) {
+  return apiRequest(`/admin/money/issues/${moneyIssueId}`, {
     headers: await getAdminHeaders(firebaseUser),
   })
 }
 
-export async function resolveAdminMoneySupportFlag({
+export async function resolveAdminMoneyIssue({
   firebaseUser,
-  outcome,
+  idempotencyKey,
   reason,
-  supportFlagId,
+  resolutionExternalReference = '',
+  resolutionReasonCode,
+  moneyIssueId,
 }) {
-  return apiRequest(`/admin/money/support-flags/${supportFlagId}/resolve`, {
+  return apiRequest(`/admin/money/issues/${moneyIssueId}/resolve`, {
     method: 'POST',
     headers: await getAdminHeaders(firebaseUser, true),
     body: JSON.stringify({
-      outcome,
+      idempotency_key: idempotencyKey,
+      resolution_reason_code: resolutionReasonCode,
+      resolution_note: reason,
+      resolution_external_reference: resolutionExternalReference || null,
+    }),
+  })
+}
+
+export async function retryAdminMoneyIssueCredit({
+  firebaseUser,
+  idempotencyKey,
+  moneyIssueId,
+  reason,
+}) {
+  return apiRequest(`/admin/money/issues/${moneyIssueId}/retry-credit`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify({
+      idempotency_key: idempotencyKey,
       reason,
     }),
   })

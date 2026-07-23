@@ -9,10 +9,10 @@ from backend.models import (
     Game,
     GameCredit,
     GameCreditUsage,
+    MoneyIssue,
     Notification,
     Payment,
     Refund,
-    SupportFlag,
     VenueImage,
 )
 from backend.services.game_credit_service import (
@@ -1056,7 +1056,7 @@ def test_admin_official_game_cancel_execution_returns_booking_results(
     assert result["cancelled_booking_count"] == 1
     assert result["refund_created_count"] == 1
     assert result["refund_follow_up_required"] is False
-    assert result["support_flag_ids"] == []
+    assert result["money_issue_ids"] == []
     booking_result = result["booking_results"][0]
     assert booking_result["booking_id"] == booking["id"]
     assert booking_result["result_category"] == "stripe_refunded"
@@ -1180,7 +1180,7 @@ def test_admin_official_game_cancel_releases_pending_credit_hold(
         ).one()
 
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.available_cents == 500
     assert usage.usage_status == RELEASED_USAGE_STATUS
 
 
@@ -1270,7 +1270,7 @@ def test_admin_official_game_cancel_partial_failure_returns_support_follow_up(
     assert result["refund_follow_up_required"] is True
     assert result["refund_failed_count"] == 1
     assert result["refund_missing_charge_count"] == 1
-    assert len(result["support_flag_ids"]) == 1
+    assert len(result["money_issue_ids"]) == 1
     booking_result = result["booking_results"][0]
     assert booking_result["result_category"] == "follow_up_required"
     assert booking_result["follow_up_required"] is True
@@ -1278,12 +1278,13 @@ def test_admin_official_game_cancel_partial_failure_returns_support_follow_up(
     assert booking_result["refunds"][0]["refund_status"] == "failed"
 
     with SessionLocal() as db:
-        support_flag = db.get(SupportFlag, UUID(result["support_flag_ids"][0]))
+        money_issue = db.get(MoneyIssue, UUID(result["money_issue_ids"][0]))
 
-    assert support_flag is not None
-    assert support_flag.flag_type == "official_cancel_partial_failure"
-    assert support_flag.target_game_id == UUID(game["id"])
-    assert support_flag.source_admin_action_id is not None
+    assert money_issue is not None
+    assert money_issue.issue_type == "refund_missing_provider_reference"
+    assert money_issue.origin_workflow == "official_game_cancellation"
+    assert money_issue.target_game_id == UUID(game["id"])
+    assert money_issue.target_refund_id is not None
 
 
 def test_admin_official_game_cancel_credit_failure_happens_before_stripe(
@@ -1331,6 +1332,35 @@ def test_admin_official_game_cancel_credit_failure_happens_before_stripe(
         booking_id=credit_booking["id"],
         price_cents=credit_booking["total_cents"],
     )
+    issue_game_credit(
+        client,
+        admin_id=admin["id"],
+        user_id=credit_player["id"],
+        game_id=game["id"],
+        booking_id=credit_booking["id"],
+        amount_cents=credit_booking["total_cents"],
+    )
+    with SessionLocal() as db:
+        now = datetime.now(UTC)
+        credit_usages = reserve_game_credits(
+            db,
+            UUID(credit_player["id"]),
+            amount_cents=credit_booking["total_cents"],
+            booking_id=UUID(credit_booking["id"]),
+            game_id=UUID(game["id"]),
+            now=now,
+            idempotency_scope=(
+                f"official-cancel-credit-failure-{credit_booking['id']}"
+            ),
+        )
+        redeem_reserved_game_credits(
+            db,
+            UUID(credit_booking["id"]),
+            now=now,
+            user_id=UUID(credit_player["id"]),
+        )
+        failed_usage_id = credit_usages[0].id
+        db.commit()
 
     def fail_second_credit_restore(db, booking_id, **kwargs):
         del db, kwargs
@@ -1369,26 +1399,29 @@ def test_admin_official_game_cancel_credit_failure_happens_before_stripe(
     assert game_response.json()["game"]["game_status"] == "active"
 
     with SessionLocal() as db:
-        support_flag = db.scalars(
-            select(SupportFlag).where(
-                SupportFlag.flag_type == "official_cancel_partial_failure",
-                SupportFlag.target_game_id == UUID(game["id"]),
-                SupportFlag.target_booking_id == UUID(credit_booking["id"]),
+        money_issue = db.scalars(
+            select(MoneyIssue).where(
+                MoneyIssue.issue_type == "credit_restore_failed",
+                MoneyIssue.target_game_id == UUID(game["id"]),
+                MoneyIssue.target_booking_id == UUID(credit_booking["id"]),
             )
         ).one()
 
-    assert support_flag.metadata_["credit_operation"] == "restore"
-    assert support_flag.source_admin_action_id is None
+    assert money_issue.value_kind == "game_credit_restore"
+    assert money_issue.recommended_action_code == "retry_credit_restore"
+    assert money_issue.target_credit_usage_id == failed_usage_id
 
     resolve_response = client.post(
-        f"/admin/support-flags/{support_flag.id}/resolve",
+        f"/admin/money/issues/{money_issue.id}/resolve",
         json={
-            "outcome": "handled_externally",
-            "reason": "Verified the first credit follow-up externally.",
+            "resolution_reason_code": "handled_externally",
+            "resolution_note": "Verified the first credit follow-up externally.",
+            "resolution_external_reference": "manual-credit-review-1",
+            "idempotency_key": f"resolve-credit-issue-{unique_suffix()}",
         },
     )
     assert resolve_response.status_code == 200, resolve_response.text
-    assert resolve_response.json()["flag_status"] == "resolved"
+    assert resolve_response.json()["money_issue"]["status"] == "resolved"
 
     repeat_preview_response = client.post(
         f"/admin/official-games/{game['id']}/cancel-preview"
@@ -1406,23 +1439,23 @@ def test_admin_official_game_cancel_credit_failure_happens_before_stripe(
     assert refund_calls == []
 
     with SessionLocal() as db:
-        reopened_flags = db.scalars(
-            select(SupportFlag).where(
-                SupportFlag.flag_type == "official_cancel_partial_failure",
-                SupportFlag.target_game_id == UUID(game["id"]),
-                SupportFlag.target_booking_id == UUID(credit_booking["id"]),
+        reopened_issues = db.scalars(
+            select(MoneyIssue).where(
+                MoneyIssue.issue_type == "credit_restore_failed",
+                MoneyIssue.target_game_id == UUID(game["id"]),
+                MoneyIssue.target_booking_id == UUID(credit_booking["id"]),
             )
         ).all()
 
-    assert len(reopened_flags) == 1
-    reopened_flag = reopened_flags[0]
-    assert reopened_flag.id == support_flag.id
-    assert reopened_flag.flag_status == "open"
-    assert reopened_flag.resolved_at is None
-    assert reopened_flag.resolved_by_user_id is None
-    assert reopened_flag.resolution_outcome is None
-    assert reopened_flag.resolution_reason is None
-    assert reopened_flag.resolution_admin_action_id is None
+    assert len(reopened_issues) == 1
+    reopened_issue = reopened_issues[0]
+    assert reopened_issue.id == money_issue.id
+    assert reopened_issue.status == "open"
+    assert reopened_issue.resolved_at is None
+    assert reopened_issue.resolved_by_user_id is None
+    assert reopened_issue.resolution_reason_code is None
+    assert reopened_issue.resolution_note is None
+    assert reopened_issue.resolution_external_reference is None
 
 
 def test_admin_official_game_cancel_execution_rejects_stale_preview(
@@ -1703,10 +1736,10 @@ def test_admin_official_game_update_invalidates_pending_checkout(
         ).one()
 
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.available_cents == 500
     assert refreshed_credit.credit_status == "active"
     assert usage.usage_status == RELEASED_USAGE_STATUS
-    assert usage.release_reason == "admin_game_updated"
+    assert usage.reason_code == "admin_game_updated"
 
     audit_response = client.get(
         f"/admin/actions?action_type=update_official_game&target_game_id={game['id']}"
@@ -2519,7 +2552,7 @@ def test_admin_executes_paid_player_removal_with_successful_refund(
     assert result["booking_status"] == "cancelled"
     assert result["booking_payment_status"] == "refunded"
     assert result["refund_follow_up_required"] is False
-    assert result["support_flag_ids"] == []
+    assert result["money_issue_ids"] == []
     assert result["waitlist_advanced_entry_ids"] == []
     assert len(result["refunds"]) == 1
     assert result["refunds"][0]["payment_id"] == payment["id"]
@@ -2542,7 +2575,7 @@ def test_admin_executes_paid_player_removal_with_successful_refund(
     assert booking_response.json()["payment_status"] == "refunded"
     payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
     assert payment_response.status_code == 200, payment_response.text
-    assert payment_response.json()["payment_status"] == "refunded"
+    assert payment_response.json()["payment_status"] == "succeeded"
 
     removed_notifications = list_user_notifications(
         client,
@@ -2685,10 +2718,10 @@ def test_admin_executes_pending_hold_removal_and_releases_reserved_credit(
         ).one()
 
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.available_cents == 500
     assert refreshed_credit.credit_status == "active"
     assert usage.usage_status == RELEASED_USAGE_STATUS
-    assert usage.release_reason == "admin_player_removed"
+    assert usage.reason_code == "admin_player_removed"
 
 
 def test_admin_paid_player_removal_rejects_stale_preview_before_stripe(
@@ -2891,7 +2924,7 @@ def test_admin_executes_combined_refund_and_credit_restore(
         )
 
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.available_cents == 500
     assert {usage.usage_status for usage in usages} == {"redeemed", "restored"}
     refunded_notifications = list_user_notifications(
         client,
@@ -2984,7 +3017,7 @@ def test_admin_executes_credit_only_player_removal(
         refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
 
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 1300
+    assert refreshed_credit.available_cents == 1300
     restored_notifications = list_user_notifications(
         client,
         player["id"],
@@ -3065,20 +3098,20 @@ def test_admin_paid_player_removal_refund_failure_creates_follow_up(
     assert result["booking_payment_status"] == "paid"
     assert result["refund_follow_up_required"] is True
     assert result["refunds"][0]["refund_status"] == "failed"
-    assert len(result["support_flag_ids"]) == 1
+    assert len(result["money_issue_ids"]) == 1
 
     with SessionLocal() as db:
         db_payment = db.get(Payment, UUID(payment["id"]))
         db_refund = db.get(Refund, UUID(result["refunds"][0]["id"]))
-        support_flag = db.get(SupportFlag, UUID(result["support_flag_ids"][0]))
+        money_issue = db.get(MoneyIssue, UUID(result["money_issue_ids"][0]))
 
     assert db_payment is not None
     assert db_payment.payment_status == "succeeded"
     assert db_refund is not None
     assert db_refund.refund_status == "failed"
-    assert support_flag is not None
-    assert support_flag.flag_type == "stripe_refund_failed"
-    assert support_flag.target_refund_id == db_refund.id
+    assert money_issue is not None
+    assert money_issue.issue_type == "refund_failed"
+    assert money_issue.target_refund_id == db_refund.id
     assert (
         list_user_notifications(client, player["id"], "booking_refunded")
         == []
@@ -3279,10 +3312,10 @@ def test_admin_remove_requires_action_checkout_party_invalidates_payment(
         ).one()
 
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 500
+    assert refreshed_credit.available_cents == 500
     assert refreshed_credit.credit_status == "active"
     assert usage.usage_status == RELEASED_USAGE_STATUS
-    assert usage.release_reason == "admin_player_removed"
+    assert usage.reason_code == "admin_player_removed"
 
 
 def test_admin_remove_processing_checkout_requires_preview_without_mutation(

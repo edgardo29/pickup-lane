@@ -319,6 +319,13 @@ def create_refund(
     return extract_refund_result(refund)
 
 
+def retrieve_refund(refund_id: str) -> StripeRefundResult:
+    stripe = get_stripe_module()
+    refund = stripe.Refund.retrieve(refund_id)
+
+    return extract_refund_result(refund)
+
+
 def construct_webhook_event(payload: bytes, signature: str) -> Any:
     stripe = get_stripe_module()
     webhook_secret = get_stripe_webhook_secret()

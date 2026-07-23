@@ -9,6 +9,7 @@ TARGET_PARTICIPANT_ID = "target_participant_id"
 TARGET_PAYMENT_ID = "target_payment_id"
 TARGET_REFUND_ID = "target_refund_id"
 TARGET_GAME_CREDIT_ID = "target_game_credit_id"
+TARGET_CREDIT_USAGE_ID = "target_credit_usage_id"
 TARGET_VENUE_ID = "target_venue_id"
 TARGET_VENUE_IMAGE_ID = "target_venue_image_id"
 TARGET_MESSAGE_ID = "target_message_id"
@@ -20,6 +21,7 @@ TARGET_NOTIFICATION_ID = "target_notification_id"
 TARGET_PLATFORM_NOTICE_CAMPAIGN_ID = "target_platform_notice_campaign_id"
 TARGET_ADMIN_ACTION_ID = "target_admin_action_id"
 TARGET_SUPPORT_FLAG_ID = "target_support_flag_id"
+TARGET_MONEY_ISSUE_ID = "target_money_issue_id"
 TARGET_REVIEW_CASE_ID = "target_review_case_id"
 TARGET_FINANCIAL_OUTCOME_ID = "target_financial_outcome_id"
 TARGET_HOST_PUBLISH_FEE_ID = "target_host_publish_fee_id"
@@ -33,6 +35,7 @@ ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_PAYMENT_ID,
     TARGET_REFUND_ID,
     TARGET_GAME_CREDIT_ID,
+    TARGET_CREDIT_USAGE_ID,
     TARGET_VENUE_ID,
     TARGET_VENUE_IMAGE_ID,
     TARGET_MESSAGE_ID,
@@ -44,6 +47,7 @@ ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,
     TARGET_ADMIN_ACTION_ID,
     TARGET_SUPPORT_FLAG_ID,
+    TARGET_MONEY_ISSUE_ID,
     TARGET_REVIEW_CASE_ID,
     TARGET_FINANCIAL_OUTCOME_ID,
     TARGET_HOST_PUBLISH_FEE_ID,
@@ -643,6 +647,55 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         ),
         client_allowed_target_fields=target_set(),
         metadata_builder_key="support",
+        requires_reason=True,
+    ),
+    "resolve_money_issue": AdminActionPolicy(
+        action_type="resolve_money_issue",
+        required_target_rules=(TargetRule(all_of=(TARGET_MONEY_ISSUE_ID,)),),
+        allowed_target_fields=target_set(
+            TARGET_MONEY_ISSUE_ID,
+            TARGET_USER_ID,
+            TARGET_GAME_ID,
+            TARGET_BOOKING_ID,
+            TARGET_PAYMENT_ID,
+            TARGET_REFUND_ID,
+            TARGET_GAME_CREDIT_ID,
+            TARGET_CREDIT_USAGE_ID,
+        ),
+        client_allowed_target_fields=target_set(),
+        metadata_builder_key="money_issue",
+        requires_reason=True,
+    ),
+    "retry_money_issue_credit": AdminActionPolicy(
+        action_type="retry_money_issue_credit",
+        required_target_rules=(TargetRule(all_of=(TARGET_MONEY_ISSUE_ID,)),),
+        allowed_target_fields=target_set(
+            TARGET_MONEY_ISSUE_ID,
+            TARGET_USER_ID,
+            TARGET_GAME_ID,
+            TARGET_BOOKING_ID,
+            TARGET_PAYMENT_ID,
+            TARGET_GAME_CREDIT_ID,
+            TARGET_CREDIT_USAGE_ID,
+        ),
+        client_allowed_target_fields=target_set(),
+        metadata_builder_key="money_issue",
+        requires_reason=True,
+    ),
+    "reconcile_refund": AdminActionPolicy(
+        action_type="reconcile_refund",
+        required_target_rules=(TargetRule(all_of=(TARGET_REFUND_ID,)),),
+        allowed_target_fields=target_set(
+            TARGET_MONEY_ISSUE_ID,
+            TARGET_USER_ID,
+            TARGET_GAME_ID,
+            TARGET_BOOKING_ID,
+            TARGET_PAYMENT_ID,
+            TARGET_REFUND_ID,
+            TARGET_HOST_PUBLISH_FEE_ID,
+        ),
+        client_allowed_target_fields=target_set(),
+        metadata_builder_key="money_issue",
         requires_reason=True,
     ),
 }

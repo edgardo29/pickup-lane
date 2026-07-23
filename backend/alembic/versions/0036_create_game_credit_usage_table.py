@@ -16,10 +16,10 @@ def upgrade() -> None:
         "game_credit_usage",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("game_credit_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("booking_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("game_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("payment_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column("original_usage_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("amount_cents", sa.Integer(), nullable=False),
         sa.Column(
             "currency",
@@ -30,7 +30,7 @@ def upgrade() -> None:
         sa.Column("usage_type", sa.String(length=30), nullable=False),
         sa.Column("usage_status", sa.String(length=30), nullable=False),
         sa.Column("idempotency_key", sa.String(length=255), nullable=False),
-        sa.Column("release_reason", sa.Text(), nullable=True),
+        sa.Column("reason_code", sa.String(length=80), nullable=True),
         sa.Column("reserved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("redeemed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("released_at", sa.DateTime(timezone=True), nullable=True),
@@ -87,6 +87,10 @@ def upgrade() -> None:
             "(usage_status <> 'released' OR released_at IS NOT NULL)",
             name="ck_game_credit_usage_released_requires_released_at",
         ),
+        sa.CheckConstraint(
+            "(usage_type <> 'restore' OR original_usage_id IS NOT NULL)",
+            name="ck_game_credit_usage_restore_requires_original_usage",
+        ),
         sa.ForeignKeyConstraint(
             ["booking_id"],
             ["bookings.id"],
@@ -99,7 +103,11 @@ def upgrade() -> None:
             ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(["payment_id"], ["payments.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["original_usage_id"],
+            ["game_credit_usage.id"],
+            ondelete="RESTRICT",
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "idempotency_key",
@@ -123,9 +131,35 @@ def upgrade() -> None:
         ["game_credit_id"],
     )
     op.create_index(
+        "ix_game_credit_usage_credit_created",
+        "game_credit_usage",
+        ["game_credit_id", "created_at", "id"],
+    )
+    op.create_index(
+        "ix_game_credit_usage_credit_status",
+        "game_credit_usage",
+        ["game_credit_id", "usage_status"],
+    )
+    op.create_index(
         "ix_game_credit_usage_payment_id",
         "game_credit_usage",
         ["payment_id"],
+    )
+    op.create_index(
+        "ix_game_credit_usage_original_usage_id",
+        "game_credit_usage",
+        ["original_usage_id"],
+    )
+    op.create_index(
+        "uq_game_credit_usage_one_restore_per_original",
+        "game_credit_usage",
+        ["original_usage_id"],
+        unique=True,
+        postgresql_where=sa.text(
+            "usage_type = 'restore' "
+            "AND usage_status = 'restored' "
+            "AND original_usage_id IS NOT NULL"
+        ),
     )
     op.create_index(
         "ix_game_credit_usage_usage_status",
@@ -137,11 +171,9 @@ def upgrade() -> None:
         "game_credit_usage",
         ["usage_type"],
     )
-    op.create_index("ix_game_credit_usage_user_id", "game_credit_usage", ["user_id"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_game_credit_usage_user_id", table_name="game_credit_usage")
     op.drop_index("ix_game_credit_usage_usage_type", table_name="game_credit_usage")
     op.drop_index(
         "ix_game_credit_usage_usage_status",
@@ -149,7 +181,20 @@ def downgrade() -> None:
     )
     op.drop_index("ix_game_credit_usage_payment_id", table_name="game_credit_usage")
     op.drop_index(
+        "uq_game_credit_usage_one_restore_per_original",
+        table_name="game_credit_usage",
+    )
+    op.drop_index("ix_game_credit_usage_original_usage_id", table_name="game_credit_usage")
+    op.drop_index(
         "ix_game_credit_usage_game_credit_id",
+        table_name="game_credit_usage",
+    )
+    op.drop_index(
+        "ix_game_credit_usage_credit_status",
+        table_name="game_credit_usage",
+    )
+    op.drop_index(
+        "ix_game_credit_usage_credit_created",
         table_name="game_credit_usage",
     )
     op.drop_index("ix_game_credit_usage_game_id", table_name="game_credit_usage")
