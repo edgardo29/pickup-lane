@@ -201,7 +201,7 @@ class AdminOfficialGamePlayerRemovalResultRead(BaseModel):
     credit_restored_count: int = 0
     credit_restored_cents: int = 0
     refund_follow_up_required: bool = False
-    support_flag_ids: list[UUID] = Field(default_factory=list)
+    money_issue_ids: list[UUID] = Field(default_factory=list)
     waitlist_advanced_entry_ids: list[UUID] = Field(default_factory=list)
 
 
@@ -279,7 +279,7 @@ class AdminOfficialGameCancellationResultRead(BaseModel):
     credit_released_cents: int = 0
     refund_follow_up_required: bool = False
     payment_follow_up_required: bool = False
-    support_flag_ids: list[UUID] = Field(default_factory=list)
+    money_issue_ids: list[UUID] = Field(default_factory=list)
     booking_results: list[AdminOfficialGameCancellationBookingResultRead] = Field(
         default_factory=list
     )

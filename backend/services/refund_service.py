@@ -21,6 +21,7 @@ from backend.schemas.refund_schema import RefundCreate, RefundUpdate
 from backend.services.admin_action_service import record_admin_action
 from backend.services.auth_service import require_active_admin_user, user_is_active_admin
 from backend.services.payment_rules import COLLECTED_PAYMENT_STATUSES
+from backend.services.refund_event_service import record_refund_event
 
 VALID_REFUND_REASONS = {
     "player_cancelled",
@@ -40,6 +41,24 @@ VALID_REFUND_STATUSES = {
     "succeeded",
     "failed",
     "cancelled",
+}
+VALID_REFUND_ORIGIN_WORKFLOWS = {
+    "player_removal",
+    "official_game_cancellation",
+    "community_publish_fee_refund",
+    "direct_admin_refund",
+    "official_game_checkout",
+    "pending_checkout_expiration",
+    "pending_checkout_cancellation",
+    "admin_game_update",
+}
+VALID_PROVIDERS = {"stripe"}
+VALID_PROVIDER_REFUND_STATUSES = {
+    "processing",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "unknown",
 }
 VALID_CURRENCY = "USD"
 REFUNDABLE_PAYMENT_STATUSES = COLLECTED_PAYMENT_STATUSES
@@ -164,6 +183,27 @@ def validate_refund_business_rules(refund_data: dict[str, object]) -> None:
                 "refund_status must be 'pending', 'approved', 'processing', "
                 "'succeeded', 'failed', or 'cancelled'."
             ),
+        )
+
+    if refund_data["origin_workflow"] not in VALID_REFUND_ORIGIN_WORKFLOWS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="origin_workflow is not supported.",
+        )
+
+    if refund_data["provider"] not in VALID_PROVIDERS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="provider must be 'stripe'.",
+        )
+
+    if (
+        refund_data["provider_status"] is not None
+        and refund_data["provider_status"] not in VALID_PROVIDER_REFUND_STATUSES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="provider_status is not supported.",
         )
 
     if refund_data["currency"] != VALID_CURRENCY:
@@ -434,6 +474,7 @@ def refund_audit_metadata(
         "refund_reason": refund.refund_reason,
         "amount_cents": refund.amount_cents,
         "currency": refund.currency,
+        "origin_workflow": refund.origin_workflow,
         "host_publish_fee_id": str(refund.host_publish_fee_id)
         if refund.host_publish_fee_id is not None
         else None,
@@ -474,7 +515,7 @@ def create_refund_record(
     try:
         db.add(new_refund)
         db.flush()
-        record_admin_action(
+        admin_action = record_admin_action(
             db,
             admin_user_id=admin_user.id,
             action_type="create_refund",
@@ -488,6 +529,25 @@ def create_refund_record(
                 new_refund,
                 source="refund_route_create",
             ),
+        )
+        record_refund_event(
+            db,
+            refund=new_refund,
+            event_type=(
+                "provider_result_recorded"
+                if new_refund.provider_status is not None
+                else "local_status_changed"
+            ),
+            event_source="admin",
+            actor_user_id=admin_user.id,
+            admin_action_id=admin_action.id,
+            provider=new_refund.provider,
+            provider_refund_id=new_refund.provider_refund_id,
+            provider_charge_id=new_refund.provider_charge_id,
+            provider_status=new_refund.provider_status,
+            new_refund_status=new_refund.refund_status,
+            reason_code="refund_route_create",
+            summary="Admin refund record created.",
         )
         db.commit()
         db.refresh(new_refund)
@@ -592,6 +652,24 @@ def update_refund_record(
 
     before_snapshot = refund_audit_snapshot(db_refund)
     update_data = payload.model_dump(exclude_unset=True)
+    provider_owned_fields = {
+        "origin_workflow",
+        "provider",
+        "provider_refund_id",
+        "provider_charge_id",
+        "provider_status",
+        "provider_status_observed_at",
+        "last_refund_event_at",
+    }
+    protected_fields = sorted(provider_owned_fields.intersection(update_data))
+    if protected_fields:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Refund provider snapshot fields and origin_workflow are managed "
+                "by refund workflow services."
+            ),
+        )
     effective_refund_data = {
         "payment_id": update_data.get("payment_id", db_refund.payment_id),
         "booking_id": update_data.get("booking_id", db_refund.booking_id),
@@ -600,9 +678,30 @@ def update_refund_record(
             "host_publish_fee_id",
             db_refund.host_publish_fee_id,
         ),
+        "origin_workflow": update_data.get(
+            "origin_workflow",
+            db_refund.origin_workflow,
+        ),
+        "provider": update_data.get("provider", db_refund.provider),
         "provider_refund_id": update_data.get(
             "provider_refund_id",
             db_refund.provider_refund_id,
+        ),
+        "provider_charge_id": update_data.get(
+            "provider_charge_id",
+            db_refund.provider_charge_id,
+        ),
+        "provider_status": update_data.get(
+            "provider_status",
+            db_refund.provider_status,
+        ),
+        "provider_status_observed_at": update_data.get(
+            "provider_status_observed_at",
+            db_refund.provider_status_observed_at,
+        ),
+        "last_refund_event_at": update_data.get(
+            "last_refund_event_at",
+            db_refund.last_refund_event_at,
         ),
         "amount_cents": update_data.get("amount_cents", db_refund.amount_cents),
         "currency": update_data.get("currency", db_refund.currency),
@@ -649,7 +748,7 @@ def update_refund_record(
     try:
         db.add(db_refund)
         db.flush()
-        record_admin_action(
+        admin_action = record_admin_action(
             db,
             admin_user_id=admin_user.id,
             action_type="update_refund",
@@ -664,6 +763,26 @@ def update_refund_record(
                 source="refund_route_update",
                 before=before_snapshot,
             ),
+        )
+        record_refund_event(
+            db,
+            refund=db_refund,
+            event_type=(
+                "provider_result_recorded"
+                if db_refund.provider_status is not None
+                else "local_status_changed"
+            ),
+            event_source="admin",
+            actor_user_id=admin_user.id,
+            admin_action_id=admin_action.id,
+            provider=db_refund.provider,
+            provider_refund_id=db_refund.provider_refund_id,
+            provider_charge_id=db_refund.provider_charge_id,
+            provider_status=db_refund.provider_status,
+            previous_refund_status=before_snapshot["refund_status"],
+            new_refund_status=db_refund.refund_status,
+            reason_code="refund_route_update",
+            summary="Admin refund record updated.",
         )
         db.commit()
         db.refresh(db_refund)

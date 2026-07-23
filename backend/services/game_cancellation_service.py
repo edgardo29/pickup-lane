@@ -15,9 +15,11 @@ from backend.models import (
     AdminAction,
     Booking,
     Game,
+    GameCredit,
     GameChat,
     GameCreditUsage,
     GameParticipant,
+    MoneyIssue,
     Notification,
     Payment,
     Refund,
@@ -36,6 +38,10 @@ from backend.schemas.game_schema import (
     GameCancelCreate,
 )
 from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_money_issue_service import (
+    stage_credit_money_issue,
+    stage_refund_money_issue,
+)
 from backend.services.admin_review_service import (
     close_open_content_moderation_case_for_game_lifecycle,
 )
@@ -70,7 +76,7 @@ from backend.services.notification_event_service import (
 from backend.services.status_history_service import (
     add_game_status_history_if_changed,
 )
-from backend.services.support_flag_service import stage_support_flag
+from backend.services.refund_event_service import record_refund_event
 from backend.services.stripe_service import (
     StripeConfigError,
     create_refund as create_stripe_refund,
@@ -307,15 +313,19 @@ def map_stripe_refund_status(stripe_status: str) -> str:
     return "processing"
 
 
-def all_booking_refundable_payments_refunded(payments: list[Payment]) -> bool:
+def all_booking_refundable_payments_refunded(
+    payments: list[Payment],
+    successful_refunds: list[tuple[Payment, Refund]],
+) -> bool:
     refundable_payments = [
         payment
         for payment in payments
         if payment.payment_status
         in CANCELLATION_REFUND_FOLLOWUP_PAYMENT_STATUSES
     ]
+    successful_payment_ids = {payment.id for payment, _refund in successful_refunds}
     return bool(refundable_payments) and all(
-        payment.payment_status == "refunded" for payment in refundable_payments
+        payment.id in successful_payment_ids for payment in refundable_payments
     )
 
 
@@ -391,7 +401,7 @@ def prepare_official_cancellation_credit_outcomes(
                     db,
                     booking.id,
                     now=now,
-                    release_reason="game_cancelled",
+                    reason_code="game_cancelled",
                     user_id=booking.buyer_user_id,
                 )
         except GameCreditLedgerError as exc:
@@ -491,8 +501,6 @@ def build_official_cancellation_booking_impact(
         follow_up_reason = "processing_payment"
     elif missing_charge_payments:
         follow_up_reason = "missing_stripe_charge_id"
-    elif set(payment_statuses) & {"partially_refunded", "refunded", "disputed"}:
-        follow_up_reason = "existing_or_disputed_refund_state"
     elif set(refund_statuses) & {"pending", "approved", "processing"}:
         follow_up_reason = "active_refund"
 
@@ -751,7 +759,10 @@ def cancel_game_bookings(
                     refund_summary["refund_failed_count"] == 0
                     and refund_summary["refund_processing_count"] == 0
                     and refund_summary["refund_missing_charge_count"] == 0
-                    and all_booking_refundable_payments_refunded(payments)
+                    and all_booking_refundable_payments_refunded(
+                        payments,
+                        successful_refunds,
+                    )
                 ):
                     booking.payment_status = "refunded"
                     booking_refund_followup_required = False
@@ -808,7 +819,6 @@ def cancel_game_bookings(
                         payment.failure_message = (
                             "Game was cancelled before payment completed."
                         )
-                        payment.failure_reason = "game_cancelled"
                         payment.updated_at = now
                         db.add(payment)
 
@@ -879,6 +889,7 @@ def create_official_cancellation_refunds(
                 now,
                 provider_refund_id=None,
                 refund_status="failed",
+                reason_code="provider_charge_id_missing",
             )
             summary["refund_failed_count"] += 1
             summary["refund_missing_charge_count"] += 1
@@ -910,6 +921,7 @@ def create_official_cancellation_refunds(
                 now,
                 provider_refund_id=None,
                 refund_status="failed",
+                reason_code="stripe_refunds_not_configured",
             )
             summary["refund_failed_count"] += 1
             continue
@@ -922,6 +934,7 @@ def create_official_cancellation_refunds(
                 now,
                 provider_refund_id=None,
                 refund_status="failed",
+                reason_code="stripe_refund_request_failed",
             )
             summary["refund_failed_count"] += 1
             continue
@@ -935,15 +948,13 @@ def create_official_cancellation_refunds(
             now,
             provider_refund_id=stripe_refund.id,
             refund_status=refund_status,
+            reason_code=f"stripe_refund_{refund_status}",
         )
         summary["refund_created_count"] += 1
 
         if refund_status == "succeeded":
-            payment.payment_status = "refunded"
-            payment.updated_at = now
-            db.add(payment)
             summary["successful_refunds"].append((payment, refund))
-        elif refund_status == "failed":
+        elif refund_status in {"failed", "cancelled"}:
             summary["refund_failed_count"] += 1
         else:
             summary["refund_processing_count"] += 1
@@ -960,13 +971,20 @@ def create_cancellation_refund_record(
     *,
     provider_refund_id: str | None,
     refund_status: str,
+    reason_code: str,
 ) -> Refund:
     refund = Refund(
         id=uuid.uuid4(),
         payment_id=payment.id,
         booking_id=booking.id,
         participant_id=None,
+        origin_workflow="official_game_cancellation",
+        provider="stripe",
         provider_refund_id=provider_refund_id,
+        provider_charge_id=payment.provider_charge_id,
+        provider_status=refund_status if provider_refund_id is not None else None,
+        provider_status_observed_at=now if provider_refund_id is not None else None,
+        last_refund_event_at=now,
         amount_cents=payment.amount_cents,
         currency=payment.currency,
         refund_reason="game_cancelled",
@@ -984,6 +1002,41 @@ def create_cancellation_refund_record(
         updated_at=now,
     )
     db.add(refund)
+    db.flush()
+    refund_event = record_refund_event(
+        db,
+        refund=refund,
+        event_type="provider_result_recorded",
+        event_source="system",
+        actor_user_id=current_user.id,
+        provider="stripe",
+        provider_refund_id=provider_refund_id,
+        provider_charge_id=payment.provider_charge_id,
+        provider_status=refund_status if provider_refund_id is not None else None,
+        new_refund_status=refund_status,
+        reason_code=reason_code,
+        summary="Official-game cancellation refund result recorded.",
+        occurred_at=now,
+    )
+    if refund_status in {"failed", "cancelled"}:
+        stage_refund_money_issue(
+            db,
+            refund=refund,
+            payment=payment,
+            issue_type=(
+                "refund_missing_provider_reference"
+                if reason_code == "provider_charge_id_missing"
+                else (
+                    "refund_cancelled"
+                    if refund_status == "cancelled"
+                    else "refund_failed"
+                )
+            ),
+            reason_code=reason_code,
+            summary="Official-game cancellation refund could not complete.",
+            refund_event=refund_event,
+            now=now,
+        )
     return refund
 
 
@@ -1235,67 +1288,28 @@ def build_community_game_review_case_closure(
     )
 
 
-def stage_official_cancellation_followup_flag(
+def list_official_cancellation_money_issue_ids(
     db: Session,
     *,
     db_game: Game,
-    admin_user: User,
-    admin_action: AdminAction | None,
     payment_summary: dict[str, object],
 ) -> list[uuid.UUID]:
-    if db_game.game_type != "official":
-        return []
-
     if not (
-        bool(payment_summary.get("refund_followup_required"))
-        or bool(payment_summary.get("payment_followup_required"))
+        payment_summary.get("refund_followup_required")
+        or payment_summary.get("payment_followup_required")
     ):
         return []
 
-    support_flag = stage_support_flag(
-        db,
-        flag_type="official_cancel_partial_failure",
-        source="official_game",
-        title="Official cancellation needs money follow-up",
-        summary=(
-            "An official game was cancelled, but one or more booking payment "
-            "or refund outcomes need staff follow-up."
-        ),
-        severity="urgent",
-        metadata={
-            "operation": "official_game_cancellation",
-            "refund_followup_required": bool(
-                payment_summary.get("refund_followup_required")
-            ),
-            "payment_followup_required": bool(
-                payment_summary.get("payment_followup_required")
-            ),
-            "refund_failed_count": int(payment_summary.get("refund_failed_count", 0)),
-            "refund_processing_count": int(
-                payment_summary.get("refund_processing_count", 0)
-            ),
-            "refund_missing_charge_count": int(
-                payment_summary.get("refund_missing_charge_count", 0)
-            ),
-            "processing_payment_booking_count": int(
-                payment_summary.get("processing_payment_booking_count", 0)
-            ),
-        },
-        idempotency_key=f"official_cancel:{db_game.id}:partial_failure",
-        source_admin_action_id=admin_action.id if admin_action is not None else None,
-        created_by_user_id=admin_user.id,
-        reopen_resolved=True,
-        target_user_id=None,
-        target_game_id=db_game.id,
-        target_booking_id=None,
-        target_payment_id=None,
-        target_refund_id=None,
-        target_game_credit_id=None,
-        target_venue_id=None,
-        target_venue_image_id=None,
-        target_notification_id=None,
+    return list(
+        db.scalars(
+            select(MoneyIssue.id)
+            .where(
+                MoneyIssue.target_game_id == db_game.id,
+                MoneyIssue.status == "open",
+            )
+            .order_by(MoneyIssue.first_detected_at.asc(), MoneyIssue.id.asc())
+        ).all()
     )
-    return [support_flag.id]
 
 
 def record_official_cancellation_credit_failure(
@@ -1304,41 +1318,45 @@ def record_official_cancellation_credit_failure(
     admin_user: User,
     failure: OfficialCancellationCreditFailure,
     game_id: uuid.UUID,
-) -> uuid.UUID:
-    support_flag = stage_support_flag(
-        db,
-        flag_type="official_cancel_partial_failure",
-        source="official_game",
-        title="Official cancellation credit return failed",
-        summary=(
-            "An official game was not cancelled because Pickup Lane could not "
-            "complete an internal game-credit return."
-        ),
-        severity="urgent",
-        metadata={
-            "operation": "official_game_cancellation",
-            "credit_operation": failure.operation,
-            "detail": failure.detail,
-        },
-        idempotency_key=(
-            f"official_cancel:{game_id}:booking:{failure.booking_id}:"
-            f"credit_{failure.operation}_failed"
-        ),
-        created_by_user_id=admin_user.id,
-        reopen_resolved=True,
-        target_user_id=None,
-        target_game_id=game_id,
-        target_booking_id=failure.booking_id,
-        target_payment_id=None,
-        target_refund_id=None,
-        target_game_credit_id=None,
-        target_venue_id=None,
-        target_venue_image_id=None,
-        target_notification_id=None,
+) -> uuid.UUID | None:
+    usage_status = "reserved" if failure.operation == "release" else "redeemed"
+    credit_usages = list(
+        db.scalars(
+            select(GameCreditUsage)
+            .join(GameCredit, GameCreditUsage.game_credit_id == GameCredit.id)
+            .where(
+                GameCreditUsage.booking_id == failure.booking_id,
+                GameCreditUsage.usage_type == "redeem",
+                GameCreditUsage.usage_status == usage_status,
+            )
+            .order_by(GameCreditUsage.created_at.asc(), GameCreditUsage.id.asc())
+            .with_for_update()
+        ).all()
     )
+    if not credit_usages:
+        return None
+
+    first_issue_id = None
+    for credit_usage in credit_usages:
+        money_issue = stage_credit_money_issue(
+            db,
+            credit_usage=credit_usage,
+            game_credit=db.get(GameCredit, credit_usage.game_credit_id),
+            issue_type=(
+                "credit_release_failed"
+                if failure.operation == "release"
+                else "credit_restore_failed"
+            ),
+            origin_workflow="official_game_cancellation",
+            reason_code=f"credit_{failure.operation}_failed",
+            summary=(
+                "Official-game cancellation could not complete an internal "
+                "game-credit return."
+            ),
+        )
+        first_issue_id = first_issue_id or money_issue.id
     try:
         db.commit()
-        db.refresh(support_flag)
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
@@ -1346,7 +1364,7 @@ def record_official_cancellation_credit_failure(
             detail=build_game_conflict_detail(exc),
         ) from exc
 
-    return support_flag.id
+    return first_issue_id
 
 
 def abort_official_cancellation_for_credit_failure(
@@ -1368,7 +1386,7 @@ def abort_official_cancellation_for_credit_failure(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             f"Game credit could not be {operation_label}. The game was not "
-            "cancelled and support follow-up was created."
+            "cancelled and a Money Issue was created."
         ),
     )
 
@@ -1436,11 +1454,9 @@ def apply_game_cancellation_state(
         admin_action_idempotency_key,
         admin_action_type,
     )
-    support_flag_ids = stage_official_cancellation_followup_flag(
+    money_issue_ids = list_official_cancellation_money_issue_ids(
         db,
         db_game=db_game,
-        admin_user=current_user,
-        admin_action=admin_action,
         payment_summary=payment_summary,
     )
 
@@ -1482,7 +1498,7 @@ def apply_game_cancellation_state(
             new_game_status="cancelled",
             closed_at=now,
         )
-    return db_game, payment_summary, notified_user_ids, admin_action, support_flag_ids
+    return db_game, payment_summary, notified_user_ids, admin_action, money_issue_ids
 
 
 def lock_official_cancellation_state(db: Session, game_id: uuid.UUID) -> Game:
@@ -1664,7 +1680,7 @@ def execute_official_game_cancellation(
             payment_summary,
             notified_user_ids,
             _admin_action,
-            support_flag_ids,
+            money_issue_ids,
         ) = apply_game_cancellation_state(
             db,
             db_game,
@@ -1707,7 +1723,7 @@ def execute_official_game_cancellation(
         payment_follow_up_required=bool(
             payment_summary["payment_followup_required"]
         ),
-        support_flag_ids=support_flag_ids,
+        money_issue_ids=money_issue_ids,
         booking_results=booking_results,
     )
 

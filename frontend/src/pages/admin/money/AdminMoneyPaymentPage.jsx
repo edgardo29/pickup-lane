@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
-  Hash,
   RefreshCw,
   WalletCards,
 } from 'lucide-react'
@@ -13,10 +12,9 @@ import {
   ContextSection,
   CreditsSection,
   EmptyState,
+  MoneyIssuesSection,
   PaymentSummary,
   RefundsSection,
-  SectionHeader,
-  SupportFlagsSection,
 } from './AdminMoneyDetailSections.jsx'
 import {
   formatMoney,
@@ -89,7 +87,7 @@ function AdminMoneyPaymentPage() {
     <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Money', 'Payments']}
-        description="Inspect this payment and its related booking, refund, credit, and audit context."
+        description="Inspect this payment and its related booking, refund, credit, and issue context."
         icon={WalletCards}
         title={pageTitle}
       >
@@ -123,22 +121,23 @@ function AdminMoneyPaymentPage() {
 
           {loadState === 'ready' && detail && (
             <>
-              <PaymentSummary payment={detail.payment} />
-              <ContextSection booking={detail.booking} game={detail.game} />
+              <PaymentSummary payer={detail.payer} payment={detail.payment} />
+              <ContextSection
+                booking={detail.booking}
+                communityPublishAttempt={detail.community_publish_attempt}
+                game={detail.game}
+                hostPublishFee={detail.host_publish_fee}
+                publishHost={detail.publish_host}
+              />
               <RefundsSection refunds={detail.refunds ?? []} />
               <CreditsSection
                 creditGrants={detail.credit_grants ?? []}
                 creditUsages={detail.credit_usages ?? []}
               />
-              <SupportFlagsSection supportFlags={detail.support_flags ?? []} />
-              <AuditSection auditActions={detail.audit_actions ?? []} />
-              <section className="admin-money-panel" aria-label="Read-only status">
-                <SectionHeader icon={Hash} title="Read Only" />
-                <p className="admin-money-note">
-                  This page shows backend money truth only. It does not retry refunds,
-                  change payment state, restore credit, or resolve support flags.
-                </p>
-              </section>
+              <MoneyIssuesSection moneyIssues={detail.linked_money_issues ?? []} />
+              {Boolean(detail.admin_actions?.length) && (
+                <AuditSection auditActions={detail.admin_actions} />
+              )}
             </>
           )}
         </div>

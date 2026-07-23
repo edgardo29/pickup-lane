@@ -45,7 +45,9 @@ class AdminAction(Base):
                 "'send_platform_notice_campaign', "
                 "'retry_platform_notice_campaign', "
                 "'user_role_changed', 'append_audit_note', "
-                "'resolve_support_flag', "
+                "'resolve_support_flag', 'resolve_money_issue', "
+                "'retry_money_issue_credit', "
+                "'reconcile_refund', "
                 "'create_review_case', 'close_review_case', "
                 "'add_review_case_note'"
                 ")"
@@ -61,6 +63,7 @@ class AdminAction(Base):
                 "OR target_payment_id IS NOT NULL "
                 "OR target_refund_id IS NOT NULL "
                 "OR target_game_credit_id IS NOT NULL "
+                "OR target_credit_usage_id IS NOT NULL "
                 "OR target_venue_id IS NOT NULL "
                 "OR target_venue_image_id IS NOT NULL "
                 "OR target_message_id IS NOT NULL "
@@ -72,6 +75,7 @@ class AdminAction(Base):
                 "OR target_platform_notice_campaign_id IS NOT NULL "
                 "OR target_admin_action_id IS NOT NULL "
                 "OR target_support_flag_id IS NOT NULL "
+                "OR target_money_issue_id IS NOT NULL "
                 "OR target_review_case_id IS NOT NULL "
                 "OR target_financial_outcome_id IS NOT NULL "
                 "OR target_host_publish_fee_id IS NOT NULL "
@@ -89,6 +93,7 @@ class AdminAction(Base):
         Index("ix_admin_actions_target_payment_id", "target_payment_id"),
         Index("ix_admin_actions_target_refund_id", "target_refund_id"),
         Index("ix_admin_actions_target_game_credit_id", "target_game_credit_id"),
+        Index("ix_admin_actions_target_credit_usage_id", "target_credit_usage_id"),
         Index("ix_admin_actions_target_venue_id", "target_venue_id"),
         Index("ix_admin_actions_target_venue_image_id", "target_venue_image_id"),
         Index("ix_admin_actions_target_message_id", "target_message_id"),
@@ -112,6 +117,7 @@ class AdminAction(Base):
         ),
         Index("ix_admin_actions_target_admin_action_id", "target_admin_action_id"),
         Index("ix_admin_actions_target_support_flag_id", "target_support_flag_id"),
+        Index("ix_admin_actions_target_money_issue_id", "target_money_issue_id"),
         Index("ix_admin_actions_target_review_case_id", "target_review_case_id"),
         Index(
             "ix_admin_actions_target_financial_outcome_id",
@@ -218,6 +224,39 @@ class AdminAction(Base):
                 "'create_review_case', 'close_review_case', "
                 "'add_review_case_note'"
                 ") AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_money_issue_idempotency",
+            "admin_user_id",
+            "target_money_issue_id",
+            "action_type",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type IN ("
+                "'resolve_money_issue', 'retry_money_issue_credit'"
+                ") AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_reconcile_refund_idempotency",
+            "admin_user_id",
+            "target_refund_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'reconcile_refund' AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_update_refund_idempotency",
+            "admin_user_id",
+            "target_refund_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'update_refund' AND idempotency_key IS NOT NULL"
             ),
         ),
         Index(
@@ -406,6 +445,12 @@ class AdminAction(Base):
         nullable=True,
     )
 
+    target_credit_usage_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("game_credit_usage.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     target_venue_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("venues.id", ondelete="SET NULL"),
@@ -469,6 +514,12 @@ class AdminAction(Base):
     target_support_flag_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support_flags.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    target_money_issue_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("money_issues.id", ondelete="SET NULL"),
         nullable=True,
     )
 

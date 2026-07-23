@@ -405,7 +405,7 @@ def test_checkout_payment_intent_with_partial_credit_charges_stripe_remainder(
     assert usage.amount_cents == 500
     assert usage.usage_status == RESERVED_USAGE_STATUS
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 0
+    assert refreshed_credit.available_cents == 0
     assert refreshed_credit.credit_status == "active"
 
 
@@ -559,7 +559,7 @@ def test_checkout_full_credit_confirms_without_stripe_or_saved_card(
     assert usage.amount_cents == 1500
     assert usage.usage_status == REDEEMED_USAGE_STATUS
     assert refreshed_credit is not None
-    assert refreshed_credit.remaining_cents == 0
+    assert refreshed_credit.available_cents == 0
     assert refreshed_credit.credit_status == "used"
 
 

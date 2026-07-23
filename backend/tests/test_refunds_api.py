@@ -79,6 +79,7 @@ def test_refunds_create_get_list_and_update(client: TestClient):
         "amount_cents": 500,
         "currency": "USD",
         "host_publish_fee_id": None,
+        "origin_workflow": "direct_admin_refund",
     }
     assert actions_by_type["update_refund"]["target_user_id"] == user["id"]
     assert actions_by_type["update_refund"]["target_booking_id"] == booking["id"]
@@ -91,6 +92,7 @@ def test_refunds_create_get_list_and_update(client: TestClient):
         "amount_cents": 500,
         "currency": "USD",
         "host_publish_fee_id": None,
+        "origin_workflow": "direct_admin_refund",
         "old_refund_status": "pending",
         "new_refund_status": "approved",
         "before": {

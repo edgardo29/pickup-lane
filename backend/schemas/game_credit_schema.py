@@ -17,7 +17,6 @@ class GameCreditIssueCreate(BaseModel):
     source_payment_id: UUID | None = None
     idempotency_key: str | None = None
     note: str | None = None
-    expires_at: datetime | None = None
 
 
 class GameCreditReverseCreate(BaseModel):
@@ -33,7 +32,7 @@ class GameCreditRead(BaseModel):
     id: UUID
     user_id: UUID
     amount_cents: int
-    remaining_cents: int
+    available_cents: int
     currency: str
     credit_status: str
     credit_reason: str
@@ -44,7 +43,6 @@ class GameCreditRead(BaseModel):
     reversed_by_user_id: UUID | None
     idempotency_key: str
     note: str | None
-    expires_at: datetime | None
     reversed_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -55,16 +53,16 @@ class GameCreditUsageRead(BaseModel):
 
     id: UUID
     game_credit_id: UUID
-    user_id: UUID
     booking_id: UUID | None
     game_id: UUID | None
     payment_id: UUID | None
+    original_usage_id: UUID | None
     amount_cents: int
     currency: str
     usage_type: str
     usage_status: str
     idempotency_key: str
-    release_reason: str | None
+    reason_code: str | None
     reserved_at: datetime | None
     redeemed_at: datetime | None
     released_at: datetime | None

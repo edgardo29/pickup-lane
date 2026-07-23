@@ -142,7 +142,7 @@ def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) ->
             db,
             booking.id,
             now=now,
-            release_reason="checkout_hold_expired",
+            reason_code="checkout_hold_expired",
             user_id=booking.buyer_user_id,
         )
         booking.booking_status = "expired"
@@ -161,7 +161,6 @@ def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) ->
         payment.payment_status = "canceled"
         payment.failure_code = "checkout_hold_expired"
         payment.failure_message = "Checkout hold expired before payment confirmation."
-        payment.failure_reason = "checkout_hold_expired"
         payment.updated_at = now
         db.add(payment)
 
@@ -273,7 +272,6 @@ def build_pending_checkout_rows(
             paid_at=None,
             failure_code=None,
             failure_message=None,
-            failure_reason=None,
             payment_metadata={
                 "source": "game_checkout",
                 "game_id": str(db_game.id),

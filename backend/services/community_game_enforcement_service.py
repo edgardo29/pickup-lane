@@ -487,7 +487,7 @@ def admin_cancel_community_game(
         )
 
     try:
-        game, _payment_summary, _notified_user_ids, audit_action, _support_flags = (
+        game, _payment_summary, _notified_user_ids, audit_action, _money_issue_ids = (
             apply_game_cancellation_state(
                 db,
                 game,

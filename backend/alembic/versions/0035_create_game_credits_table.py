@@ -115,7 +115,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("amount_cents", sa.Integer(), nullable=False),
-        sa.Column("remaining_cents", sa.Integer(), nullable=False),
+        sa.Column("available_cents", sa.Integer(), nullable=False),
         sa.Column(
             "currency",
             sa.CHAR(length=3),
@@ -136,7 +136,6 @@ def upgrade() -> None:
         sa.Column("reversed_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("idempotency_key", sa.String(length=255), nullable=False),
         sa.Column("note", sa.Text(), nullable=True),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("reversed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
@@ -151,7 +150,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.CheckConstraint(
-            "credit_status IN ('active', 'used', 'expired', 'reversed')",
+            "credit_status IN ('active', 'used', 'reversed')",
             name="ck_game_credits_credit_status",
         ),
         sa.CheckConstraint(
@@ -165,16 +164,27 @@ def upgrade() -> None:
         sa.CheckConstraint("currency = 'USD'", name="ck_game_credits_currency"),
         sa.CheckConstraint("amount_cents > 0", name="ck_game_credits_amount_cents"),
         sa.CheckConstraint(
-            "remaining_cents >= 0",
-            name="ck_game_credits_remaining_cents_non_negative",
+            "available_cents >= 0",
+            name="ck_game_credits_available_cents_non_negative",
         ),
         sa.CheckConstraint(
-            "remaining_cents <= amount_cents",
-            name="ck_game_credits_remaining_not_above_amount",
+            "available_cents <= amount_cents",
+            name="ck_game_credits_available_not_above_amount",
         ),
         sa.CheckConstraint(
-            "(credit_status = 'active' OR remaining_cents = 0)",
-            name="ck_game_credits_inactive_has_no_remaining",
+            "(credit_status <> 'reversed' OR available_cents = 0)",
+            name="ck_game_credits_reversed_has_no_available",
+        ),
+        sa.CheckConstraint(
+            (
+                "((credit_status = 'reversed') "
+                "AND reversed_by_user_id IS NOT NULL "
+                "AND reversed_at IS NOT NULL) "
+                "OR ((credit_status <> 'reversed') "
+                "AND reversed_by_user_id IS NULL "
+                "AND reversed_at IS NULL)"
+            ),
+            name="ck_game_credits_reversal_fields_match_status",
         ),
         sa.ForeignKeyConstraint(
             ["issued_by_user_id"],
@@ -209,8 +219,16 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_game_credits_created_at", "game_credits", ["created_at"])
-    op.create_index("ix_game_credits_credit_reason", "game_credits", ["credit_reason"])
-    op.create_index("ix_game_credits_credit_status", "game_credits", ["credit_status"])
+    op.create_index(
+        "ix_game_credits_credit_reason_created",
+        "game_credits",
+        ["credit_reason", "created_at", "id"],
+    )
+    op.create_index(
+        "ix_game_credits_credit_status_created",
+        "game_credits",
+        ["credit_status", "created_at", "id"],
+    )
     op.create_index(
         "ix_game_credits_source_booking_id",
         "game_credits",
@@ -226,7 +244,11 @@ def upgrade() -> None:
         "game_credits",
         ["source_payment_id"],
     )
-    op.create_index("ix_game_credits_user_id", "game_credits", ["user_id"])
+    op.create_index(
+        "ix_game_credits_user_created",
+        "game_credits",
+        ["user_id", "created_at", "id"],
+    )
     op.create_index(
         "ix_game_credits_user_id_credit_status",
         "game_credits",
@@ -305,11 +327,11 @@ def downgrade() -> None:
     op.drop_index("ix_admin_actions_target_game_credit_id", table_name="admin_actions")
     op.drop_column("admin_actions", "target_game_credit_id")
     op.drop_index("ix_game_credits_user_id_credit_status", table_name="game_credits")
-    op.drop_index("ix_game_credits_user_id", table_name="game_credits")
+    op.drop_index("ix_game_credits_user_created", table_name="game_credits")
     op.drop_index("ix_game_credits_source_payment_id", table_name="game_credits")
     op.drop_index("ix_game_credits_source_game_id", table_name="game_credits")
     op.drop_index("ix_game_credits_source_booking_id", table_name="game_credits")
-    op.drop_index("ix_game_credits_credit_status", table_name="game_credits")
-    op.drop_index("ix_game_credits_credit_reason", table_name="game_credits")
+    op.drop_index("ix_game_credits_credit_status_created", table_name="game_credits")
+    op.drop_index("ix_game_credits_credit_reason_created", table_name="game_credits")
     op.drop_index("ix_game_credits_created_at", table_name="game_credits")
     op.drop_table("game_credits")

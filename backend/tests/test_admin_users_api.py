@@ -1427,7 +1427,7 @@ def test_admin_user_delete_preview_reports_required_impact_counts(
                 id=uuid4(),
                 user_id=UUID(target["id"]),
                 amount_cents=1200,
-                remaining_cents=1200,
+                available_cents=1200,
                 currency="USD",
                 credit_status="active",
                 credit_reason="admin_credit",

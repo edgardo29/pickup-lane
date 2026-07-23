@@ -27,8 +27,7 @@ class Payment(Base):
         CheckConstraint(
             (
                 "payment_type IN ("
-                "'booking', 'community_publish_fee', 'refund_adjustment', "
-                "'admin_charge'"
+                "'booking', 'community_publish_fee', 'admin_charge'"
                 ")"
             ),
             name="ck_payments_payment_type",
@@ -41,8 +40,7 @@ class Payment(Base):
             (
                 "payment_status IN ("
                 "'requires_payment_method', 'processing', 'requires_action', "
-                "'succeeded', 'failed', 'canceled', 'refunded', "
-                "'partially_refunded', 'disputed'"
+                "'succeeded', 'failed', 'canceled'"
                 ")"
             ),
             name="ck_payments_payment_status",
@@ -52,7 +50,7 @@ class Payment(Base):
             name="ck_payments_currency",
         ),
         CheckConstraint(
-            "amount_cents >= 0",
+            "amount_cents > 0",
             name="ck_payments_amount_cents",
         ),
         CheckConstraint(
@@ -70,19 +68,33 @@ class Payment(Base):
             "(payment_status <> 'succeeded' OR paid_at IS NOT NULL)",
             name="ck_payments_succeeded_requires_paid_at",
         ),
-        UniqueConstraint(
-            "provider_payment_intent_id",
-            name="uq_payments_provider_payment_intent_id",
-        ),
-        UniqueConstraint(
-            "idempotency_key",
-            name="uq_payments_idempotency_key",
-        ),
-        Index("ix_payments_payer_user_id", "payer_user_id"),
+        UniqueConstraint("idempotency_key", name="uq_payments_idempotency_key"),
+        Index("ix_payments_payer_created", "payer_user_id", "created_at", "id"),
         Index("ix_payments_booking_id", "booking_id"),
         Index("ix_payments_game_id", "game_id"),
-        Index("ix_payments_payment_type", "payment_type"),
-        Index("ix_payments_payment_status", "payment_status"),
+        Index("ix_payments_payment_type_created", "payment_type", "created_at", "id"),
+        Index(
+            "ix_payments_payment_status_created",
+            "payment_status",
+            "created_at",
+            "id",
+        ),
+        Index("ix_payments_provider_payment_intent_id", "provider_payment_intent_id"),
+        Index("ix_payments_provider_charge_id", "provider_charge_id"),
+        Index(
+            "uq_payments_provider_payment_intent_id",
+            "provider",
+            "provider_payment_intent_id",
+            unique=True,
+            postgresql_where=text("provider_payment_intent_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_payments_provider_charge_id",
+            "provider",
+            "provider_charge_id",
+            unique=True,
+            postgresql_where=text("provider_charge_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -122,7 +134,6 @@ class Payment(Base):
     )
     failure_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     failure_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     payment_metadata: Mapped[dict | None] = mapped_column(
         "metadata", JSONB, nullable=True
     )

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
-  RefreshCw,
   RotateCcw,
   Search,
+  X,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
@@ -31,21 +31,46 @@ const REFUND_STATUS_OPTIONS = [
 ]
 
 const EMPTY_FILTERS = {
-  bookingId: '',
-  gameId: '',
-  paymentId: '',
-  userId: '',
+  query: '',
+  refundStatus: 'all',
+}
+
+function getRefundScopeLabel(refund) {
+  if (refund.host_publish_fee_id) {
+    return 'Publish fee refund'
+  }
+  if (refund.participant_id) {
+    return 'Participant refund'
+  }
+  return 'Booking refund'
+}
+
+function RefundsEmptyState() {
+  return (
+    <div className="admin-money-empty-state">
+      <span className="admin-money-empty-state__icon">
+        <RotateCcw />
+      </span>
+      <div>
+        <strong>No money refunds found</strong>
+        <p>Refund records matching this search will appear here.</p>
+      </div>
+    </div>
+  )
 }
 
 function AdminMoneyRefundsPage() {
   const { currentUser } = useAuth()
-  const [refundStatus, setRefundStatus] = useState('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const queryUserId = searchParams.get('user_id') || ''
+  const queryPaymentId = searchParams.get('payment_id') || ''
   const [draftFilters, setDraftFilters] = useState(EMPTY_FILTERS)
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS)
   const [refunds, setRefunds] = useState([])
+  const [pageInfo, setPageInfo] = useState({ hasMore: false, nextCursor: '' })
   const [loadState, setLoadState] = useState('loading')
+  const [loadMoreState, setLoadMoreState] = useState('idle')
   const [pageError, setPageError] = useState('')
-  const [refreshCount, setRefreshCount] = useState(0)
 
   useEffect(() => {
     let isMounted = true
@@ -59,9 +84,10 @@ function AdminMoneyRefundsPage() {
       setPageError('')
 
       try {
-        const nextRefunds = await listAdminMoneyRefunds({
+        const refundPage = await listAdminMoneyRefunds({
           firebaseUser: currentUser,
-          refundStatus,
+          paymentId: queryPaymentId,
+          userId: queryUserId,
           ...appliedFilters,
         })
 
@@ -69,7 +95,11 @@ function AdminMoneyRefundsPage() {
           return
         }
 
-        setRefunds(nextRefunds)
+        setRefunds(refundPage.items ?? refundPage)
+        setPageInfo({
+          hasMore: Boolean(refundPage.has_more),
+          nextCursor: refundPage.next_cursor || '',
+        })
         setLoadState('ready')
       } catch (error) {
         if (!isMounted) {
@@ -77,6 +107,7 @@ function AdminMoneyRefundsPage() {
         }
 
         setRefunds([])
+        setPageInfo({ hasMore: false, nextCursor: '' })
         setPageError(error.message || 'Money refunds could not be loaded.')
         setLoadState('error')
       }
@@ -87,13 +118,7 @@ function AdminMoneyRefundsPage() {
     return () => {
       isMounted = false
     }
-  }, [appliedFilters, currentUser, refreshCount, refundStatus])
-
-  const pageTitle = useMemo(() => (
-    refundStatus === 'all'
-      ? 'Refunds'
-      : `${formatStatus(refundStatus)} Refunds`
-  ), [refundStatus])
+  }, [appliedFilters, currentUser, queryPaymentId, queryUserId])
 
   function updateDraftFilter(key, value) {
     setDraftFilters((current) => ({
@@ -105,11 +130,47 @@ function AdminMoneyRefundsPage() {
   function handleSearch(event) {
     event.preventDefault()
     setAppliedFilters({
-      bookingId: draftFilters.bookingId.trim(),
-      gameId: draftFilters.gameId.trim(),
-      paymentId: draftFilters.paymentId.trim(),
-      userId: draftFilters.userId.trim(),
+      query: draftFilters.query.trim(),
+      refundStatus: draftFilters.refundStatus,
     })
+  }
+
+  function clearDeepLinkFilter(key) {
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete(key === 'paymentId' ? 'payment_id' : 'user_id')
+    setSearchParams(nextParams)
+  }
+
+  async function handleLoadMore() {
+    if (!currentUser || !pageInfo.nextCursor) {
+      return
+    }
+
+    setLoadMoreState('loading')
+    setPageError('')
+
+    try {
+      const refundPage = await listAdminMoneyRefunds({
+        firebaseUser: currentUser,
+        cursor: pageInfo.nextCursor,
+        paymentId: queryPaymentId,
+        userId: queryUserId,
+        ...appliedFilters,
+      })
+
+      setRefunds((current) => [
+        ...current,
+        ...(refundPage.items ?? refundPage),
+      ])
+      setPageInfo({
+        hasMore: Boolean(refundPage.has_more),
+        nextCursor: refundPage.next_cursor || '',
+      })
+      setLoadMoreState('idle')
+    } catch (error) {
+      setPageError(error.message || 'More money refunds could not be loaded.')
+      setLoadMoreState('idle')
+    }
   }
 
   return (
@@ -118,67 +179,60 @@ function AdminMoneyRefundsPage() {
         breadcrumbs={['Admin', 'Money', 'Refunds']}
         description="Search refund records and inspect processing outcomes."
         icon={RotateCcw}
-        title={pageTitle}
+        title="Refunds"
       >
-        <div className="admin-money-layout">
-          <div className="admin-money-toolbar">
-            <div className="admin-money-segment" role="group" aria-label="Refund status">
-              {REFUND_STATUS_OPTIONS.map((option) => (
-                <button
-                  aria-pressed={refundStatus === option.value}
-                  className={refundStatus === option.value ? 'is-active' : ''}
-                  key={option.value}
-                  type="button"
-                  onClick={() => setRefundStatus(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <button
-              className="admin-money-button"
-              type="button"
-              onClick={() => setRefreshCount((count) => count + 1)}
-            >
-              <RefreshCw />
-              Refresh
-            </button>
-          </div>
-
-          <form className="admin-money-filters" onSubmit={handleSearch}>
+        <div className="admin-money-layout admin-money-layout--refunds">
+          <form className="admin-money-filters admin-money-filters--refunds-ledger" onSubmit={handleSearch}>
             <label>
-              <span>User ID</span>
+              <span>Search</span>
               <input
-                value={draftFilters.userId}
-                onChange={(event) => updateDraftFilter('userId', event.target.value)}
+                placeholder="Refund ID, provider ID, user, payment, or booking"
+                value={draftFilters.query}
+                onChange={(event) => updateDraftFilter('query', event.target.value)}
               />
             </label>
             <label>
-              <span>Game ID</span>
-              <input
-                value={draftFilters.gameId}
-                onChange={(event) => updateDraftFilter('gameId', event.target.value)}
-              />
-            </label>
-            <label>
-              <span>Booking ID</span>
-              <input
-                value={draftFilters.bookingId}
-                onChange={(event) => updateDraftFilter('bookingId', event.target.value)}
-              />
-            </label>
-            <label>
-              <span>Payment ID</span>
-              <input
-                value={draftFilters.paymentId}
-                onChange={(event) => updateDraftFilter('paymentId', event.target.value)}
-              />
+              <span>Refund Status</span>
+              <select
+                value={draftFilters.refundStatus}
+                onChange={(event) => updateDraftFilter('refundStatus', event.target.value)}
+              >
+                {REFUND_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <button className="admin-money-button" type="submit">
               <Search />
               Search
             </button>
           </form>
+          {(queryUserId || queryPaymentId) && (
+            <div className="admin-money-filter-chips" aria-label="Active refund filters">
+              {queryUserId && (
+                <button
+                  className="admin-money-filter-chip"
+                  type="button"
+                  onClick={() => clearDeepLinkFilter('userId')}
+                >
+                  <span>User: {shortId(queryUserId)}</span>
+                  <X />
+                </button>
+              )}
+              {queryPaymentId && (
+                <button
+                  className="admin-money-filter-chip"
+                  type="button"
+                  onClick={() => clearDeepLinkFilter('paymentId')}
+                >
+                  <span>Payment: {shortId(queryPaymentId)}</span>
+                  <X />
+                </button>
+              )}
+            </div>
+          )}
 
           {pageError && (
             <div className="admin-money-alert" role="alert">
@@ -195,36 +249,48 @@ function AdminMoneyRefundsPage() {
           {loadState === 'ready' && (
             <section className="admin-money-panel" aria-label="Money refunds">
               <SectionHeader
-                count={refunds.length}
                 icon={RotateCcw}
+                meta={`${refunds.length} ${refunds.length === 1 ? 'refund' : 'refunds'}`}
                 title="Refunds"
               />
               {refunds.length === 0 ? (
-                <EmptyState>No money refunds found.</EmptyState>
+                <RefundsEmptyState />
               ) : (
                 <div className="admin-money-row-list">
                   {refunds.map((refund) => (
                     <div className="admin-money-row admin-money-row--four" key={refund.id}>
                       <div>
                         <Link className="admin-money-row-link" to={`/admin/money/refunds/${refund.id}`}>
-                          {formatStatus(refund.refund_status)}
+                          Refund {shortId(refund.id)}
                         </Link>
-                        <span>{formatStatus(refund.refund_reason)}</span>
+                        <span>{formatStatus(refund.refund_status)}</span>
                       </div>
                       <div>
                         <span>{formatMoney(refund.amount_cents, refund.currency)}</span>
-                        <span>{refund.booking_id ? 'Booking refund' : 'Participant refund'}</span>
+                        <span>{formatStatus(refund.refund_reason)}</span>
                       </div>
                       <div>
-                        <span>Payment</span>
-                        <code>{shortId(refund.payment_id)}</code>
+                        <span>{refund.display?.user_name || refund.display?.user_email || 'No user label'}</span>
+                        <span>{refund.display?.context_label || getRefundScopeLabel(refund)}</span>
                       </div>
                       <div>
-                        <span>{formatDateTime(refund.updated_at)}</span>
-                        <code>{shortId(refund.id)}</code>
+                        <span>{formatDateTime(refund.created_at)}</span>
+                        {refund.linked_issue && <span>Open money issue</span>}
                       </div>
                     </div>
                   ))}
+                  {pageInfo.hasMore && (
+                    <div className="admin-money-row">
+                      <button
+                        className="admin-money-button"
+                        disabled={loadMoreState === 'loading'}
+                        type="button"
+                        onClick={handleLoadMore}
+                      >
+                        {loadMoreState === 'loading' ? 'Loading' : 'Load More Refunds'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </section>

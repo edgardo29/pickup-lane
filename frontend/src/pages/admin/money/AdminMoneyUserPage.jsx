@@ -1,34 +1,35 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import {
+  CircleDollarSign,
   CreditCard,
-  RefreshCw,
   Search,
   UserRound,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
 import {
-  AuditSection,
-  CreditsSection,
   DetailCodeField,
   DetailField,
   EmptyState,
+  MoneyIssuesSection,
   PaymentsSection,
   RefundsSection,
   SectionHeader,
-  SupportFlagsSection,
 } from './AdminMoneyDetailSections.jsx'
 import {
   formatDateTime,
+  formatMoney,
   formatStatus,
   shortId,
 } from './adminMoneyFormatters.js'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
-import { getAdminMoneyUser } from '../shared/adminApi.js'
+import { getAdminMoneyUser, listAdminUsers } from '../shared/adminApi.js'
+
+const USER_SEARCH_LIMIT = 5
 
 function formatUserName(user) {
-  return [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || 'User'
+  return user?.name || user?.email || 'User'
 }
 
 function formatExpiry(method) {
@@ -49,34 +50,58 @@ function UserSummary({ user }) {
           <strong>{formatUserName(user)}</strong>
         </div>
         <div>
+          <span>Email</span>
+          <strong>{user.email || 'No email'}</strong>
+        </div>
+        <div>
           <span>Account</span>
           <strong>{formatStatus(user.account_status)}</strong>
         </div>
         <div>
-          <span>Role</span>
-          <strong>{formatStatus(user.role)}</strong>
-        </div>
-        <div>
-          <span>Hosting</span>
-          <strong>{formatStatus(user.hosting_status)}</strong>
+          <span>User Detail</span>
+          <strong>
+            <Link className="admin-money-link" to={`/admin/users/${user.id}`}>
+              Open
+            </Link>
+          </strong>
         </div>
       </div>
       <div className="admin-money-field-grid">
         <DetailCodeField label="User ID" value={user.id} />
-        <DetailField label="Email" value={user.email || 'No email'} />
-        <DetailField label="Member since" value={formatDateTime(user.member_since)} />
         <DetailField label="Created" value={formatDateTime(user.created_at)} />
-        <DetailField label="Updated" value={formatDateTime(user.updated_at)} />
-        <DetailField label="Deleted" value={formatDateTime(user.deleted_at)} />
       </div>
     </section>
   )
 }
 
-function PaymentMethodsSection({ paymentMethods }) {
+function SnapshotSection({ snapshot }) {
+  return (
+    <section className="admin-money-panel" aria-label="User money snapshot">
+      <SectionHeader icon={CircleDollarSign} title="Snapshot" />
+      <div className="admin-money-kpis">
+        <div>
+          <span>Available Credit</span>
+          <strong>{formatMoney(snapshot.available_credit_cents, snapshot.currency)}</strong>
+        </div>
+        <div>
+          <span>Open Money Issues</span>
+          <strong>{snapshot.open_money_issue_count}</strong>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SavedCardsSection({
+  activeCount,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  paymentMethods,
+}) {
   return (
     <section className="admin-money-panel" aria-label="Saved cards">
-      <SectionHeader count={paymentMethods.length} icon={CreditCard} title="Saved Cards" />
+      <SectionHeader count={activeCount} icon={CreditCard} title="Saved Cards" />
       {paymentMethods.length === 0 ? (
         <EmptyState>No saved cards found.</EmptyState>
       ) : (
@@ -93,34 +118,119 @@ function PaymentMethodsSection({ paymentMethods }) {
               </div>
               <div>
                 <span>Created {formatDateTime(method.created_at)}</span>
-                <span>Updated {formatDateTime(method.updated_at)}</span>
+                <span>Detached {formatDateTime(method.detached_at)}</span>
               </div>
               <div>
-                <span>Detached {formatDateTime(method.detached_at)}</span>
-                <span>User {shortId(method.user_id)}</span>
+                <span>Updated {formatDateTime(method.updated_at)}</span>
                 <code>{shortId(method.id)}</code>
               </div>
             </div>
           ))}
+          {hasMore && (
+            <div className="admin-money-row">
+              <button
+                className="admin-money-button"
+                disabled={isLoadingMore}
+                type="button"
+                onClick={onLoadMore}
+              >
+                {isLoadingMore ? 'Loading' : 'Load More Saved Cards'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>
   )
 }
 
+function UserSearchResultsSection({
+  error,
+  hasMore,
+  searchState,
+  users,
+}) {
+  return (
+    <section className="admin-money-panel" aria-label="User search results">
+      <SectionHeader count={users.length} icon={Search} title="User Search" />
+      {searchState === 'loading' && (
+        <EmptyState>Loading users.</EmptyState>
+      )}
+      {error && (
+        <div className="admin-money-alert" role="alert">
+          {error}
+        </div>
+      )}
+      {searchState === 'ready' && users.length === 0 && (
+        <EmptyState>No users found.</EmptyState>
+      )}
+      {users.length > 0 && (
+        <div className="admin-money-row-list">
+          {users.map((user) => (
+            <div className="admin-money-row admin-money-row--four" key={user.id}>
+              <div>
+                <Link className="admin-money-row-link" to={`/admin/money/users/${user.id}`}>
+                  {user.display_name || user.email || 'User'}
+                </Link>
+                <span>{user.email || 'No email'}</span>
+              </div>
+              <div>
+                <span>{formatStatus(user.account_status)}</span>
+                <span>{formatStatus(user.role)}</span>
+              </div>
+              <div>
+                <span>{formatStatus(user.hosting_status || 'not_eligible')}</span>
+                <span>{formatDateTime(user.member_since)}</span>
+              </div>
+              <div>
+                <code>{shortId(user.id)}</code>
+              </div>
+            </div>
+          ))}
+          {hasMore && (
+            <div className="admin-money-row">
+              <Link className="admin-money-row-link" to="/admin/users">More in User Directory</Link>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function UserMoneyLandingState() {
+  return (
+    <section className="admin-money-panel">
+      <div className="admin-money-empty-state">
+        <span className="admin-money-empty-state__icon">
+          <UserRound />
+        </span>
+        <div>
+          <strong>Select a user</strong>
+          <p>Search by name, email, or user ID to open a money snapshot.</p>
+          <Link className="admin-money-button" to="/admin/users">
+            <Search />
+            User Directory
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function AdminMoneyUserPage() {
   const { userId } = useParams()
-  const navigate = useNavigate()
   const { currentUser } = useAuth()
-  const [draftUserSearch, setDraftUserSearch] = useState({
-    userId: userId || '',
-    value: userId || '',
-  })
+  const [userSearchQuery, setUserSearchQuery] = useState(userId || '')
+  const [userSearchResults, setUserSearchResults] = useState([])
+  const [userSearchState, setUserSearchState] = useState('idle')
+  const [userSearchError, setUserSearchError] = useState('')
+  const [userSearchHasMore, setUserSearchHasMore] = useState(false)
   const [includeInactivePaymentMethods, setIncludeInactivePaymentMethods] = useState(false)
   const [detail, setDetail] = useState(null)
   const [loadState, setLoadState] = useState(userId ? 'loading' : 'idle')
   const [pageError, setPageError] = useState('')
-  const [refreshCount, setRefreshCount] = useState(0)
+  const [savedCardsLoadState, setSavedCardsLoadState] = useState('idle')
 
   useEffect(() => {
     let isMounted = true
@@ -139,6 +249,7 @@ function AdminMoneyUserPage() {
         const nextDetail = await getAdminMoneyUser({
           firebaseUser: currentUser,
           includeInactivePaymentMethods,
+          savedCardsCursor: '',
           userId,
         })
 
@@ -164,67 +275,97 @@ function AdminMoneyUserPage() {
     return () => {
       isMounted = false
     }
-  }, [currentUser, includeInactivePaymentMethods, refreshCount, userId])
+  }, [currentUser, includeInactivePaymentMethods, userId])
 
-  const pageTitle = useMemo(() => (
-    detail?.user
-      ? `${formatUserName(detail.user)} Money`
-      : 'User Money'
-  ), [detail])
-  const draftUserId = draftUserSearch.userId === (userId || '')
-    ? draftUserSearch.value
-    : userId || ''
+  const userFilterQuery = userId ? `?user_id=${encodeURIComponent(userId)}` : ''
 
-  function handleSearch(event) {
+  async function handleSearch(event) {
     event.preventDefault()
 
-    const nextUserId = draftUserId.trim()
-    if (!nextUserId) {
+    const query = userSearchQuery.trim()
+    if (!query || !currentUser) {
       return
     }
 
-    navigate(`/admin/money/users/${nextUserId}`)
+    setUserSearchState('loading')
+    setUserSearchError('')
+    setUserSearchResults([])
+    setUserSearchHasMore(false)
+
+    try {
+      const response = await listAdminUsers({
+        firebaseUser: currentUser,
+        limit: USER_SEARCH_LIMIT,
+        query,
+      })
+      setUserSearchResults(response.users ?? [])
+      setUserSearchHasMore(Boolean(response.has_more))
+      setUserSearchState('ready')
+    } catch (error) {
+      setUserSearchError(error.message || 'Users could not be searched.')
+      setUserSearchState('error')
+    }
+  }
+
+  async function handleLoadMoreSavedCards() {
+    const nextCursor = detail?.saved_cards?.next_cursor
+    if (!currentUser || !userId || !nextCursor) {
+      return
+    }
+
+    setSavedCardsLoadState('loading')
+    setPageError('')
+
+    try {
+      const nextDetail = await getAdminMoneyUser({
+        firebaseUser: currentUser,
+        includeInactivePaymentMethods,
+        savedCardsCursor: nextCursor,
+        userId,
+      })
+
+      setDetail((current) => ({
+        ...nextDetail,
+        saved_cards: {
+          ...nextDetail.saved_cards,
+          items: [
+            ...(current?.saved_cards?.items ?? []),
+            ...(nextDetail.saved_cards?.items ?? []),
+          ],
+        },
+      }))
+      setSavedCardsLoadState('idle')
+    } catch (error) {
+      setPageError(error.message || 'More saved cards could not be loaded.')
+      setSavedCardsLoadState('idle')
+    }
   }
 
   return (
-    <>
-      <AdminWorkspaceLayout
-        breadcrumbs={['Admin', 'Money', 'User Money']}
-        description="Open a user-centered payment, refund, credit, and support summary."
-        icon={UserRound}
-        title={pageTitle}
-      >
-        <div className="admin-money-layout">
-          <div className="admin-money-toolbar">
-            <form className="admin-money-inline-search" onSubmit={handleSearch}>
-              <label>
-                <span>User ID</span>
-                <input
-                  value={draftUserId}
-                  onChange={(event) => {
-                    setDraftUserSearch({
-                      userId: userId || '',
-                      value: event.target.value,
-                    })
-                  }}
-                />
-              </label>
-              <button className="admin-money-button" type="submit">
-                <Search />
-                Open
-              </button>
-            </form>
-            <button
-              className="admin-money-button"
-              disabled={!userId}
-              type="button"
-              onClick={() => setRefreshCount((count) => count + 1)}
-            >
-              <RefreshCw />
-              Refresh
+    <AdminWorkspaceLayout
+      breadcrumbs={['Admin', 'Money', 'User Money']}
+      description="Open a user-centered money snapshot and links to detailed ledgers."
+      icon={UserRound}
+      title="User Money"
+    >
+      <div className="admin-money-layout admin-money-layout--user">
+        <div className="admin-money-toolbar">
+          <form className="admin-money-inline-search" onSubmit={handleSearch}>
+            <label>
+              <span>User</span>
+              <input
+                value={userSearchQuery}
+                onChange={(event) => setUserSearchQuery(event.target.value)}
+              />
+            </label>
+            <button className="admin-money-button" type="submit">
+              <Search />
+              Search
             </button>
-          </div>
+          </form>
+        </div>
 
+        {loadState === 'ready' && detail && (
           <label className="admin-money-checkbox admin-money-checkbox--standalone">
             <input
               checked={includeInactivePaymentMethods}
@@ -233,42 +374,117 @@ function AdminMoneyUserPage() {
             />
             <span>Include inactive saved cards</span>
           </label>
+        )}
 
-          {pageError && (
-            <div className="admin-money-alert" role="alert">
-              {pageError}
+        {pageError && (
+          <div className="admin-money-alert" role="alert">
+            {pageError}
+          </div>
+        )}
+
+        {userSearchState !== 'idle' && (
+          <UserSearchResultsSection
+            error={userSearchError}
+            hasMore={userSearchHasMore}
+            searchState={userSearchState}
+            users={userSearchResults}
+          />
+        )}
+
+        {loadState === 'idle' && userSearchState === 'idle' && (
+          <UserMoneyLandingState />
+        )}
+
+        {loadState === 'loading' && (
+          <section className="admin-money-panel">
+            <EmptyState>Loading user money summary.</EmptyState>
+          </section>
+        )}
+
+        {loadState === 'ready' && detail && (
+          <>
+            <UserSummary user={detail.user} />
+            <SnapshotSection snapshot={detail.snapshot} />
+            <MoneyIssuesSection
+              hasMore={detail.open_money_issues?.has_more}
+              moneyIssues={detail.open_money_issues?.items ?? []}
+              viewAllTo={`/admin/money/issues?status=open&user_id=${encodeURIComponent(userId)}`}
+            />
+            <SavedCardsSection
+              activeCount={detail.saved_cards?.active_count ?? 0}
+              hasMore={detail.saved_cards?.has_more}
+              isLoadingMore={savedCardsLoadState === 'loading'}
+              paymentMethods={detail.saved_cards?.items ?? []}
+              onLoadMore={handleLoadMoreSavedCards}
+            />
+            <PaymentsSection
+              hasMore={detail.recent_payments?.has_more}
+              payments={detail.recent_payments?.items ?? []}
+              showIssueContext={false}
+              viewAllTo={`/admin/money/payments${userFilterQuery}`}
+            />
+            <RefundsSection
+              hasMore={detail.recent_refunds?.has_more}
+              refunds={detail.recent_refunds?.items ?? []}
+              showIssueContext={false}
+              viewAllTo={`/admin/money/refunds${userFilterQuery}`}
+            />
+            <CreditPreviewSection
+              hasMore={detail.recent_credits?.has_more}
+              credits={detail.recent_credits?.items ?? []}
+              viewAllTo={`/admin/money/credits${userFilterQuery}`}
+            />
+          </>
+        )}
+      </div>
+    </AdminWorkspaceLayout>
+  )
+}
+
+function CreditPreviewSection({ credits, hasMore, viewAllTo }) {
+  return (
+    <section className="admin-money-panel" aria-label="Recent credits">
+      <SectionHeader count={credits.length} icon={CircleDollarSign} title="Credits" />
+      {credits.length === 0 ? (
+        <EmptyState>No credits linked here.</EmptyState>
+      ) : (
+        <div className="admin-money-row-list">
+          {credits.map((credit) => (
+            <div className="admin-money-row admin-money-row--four" key={credit.id}>
+              <div>
+                <Link className="admin-money-row-link" to={`/admin/money/credits/${credit.id}`}>
+                  {formatStatus(credit.credit_status)}
+                </Link>
+                <span>{formatStatus(credit.credit_reason)}</span>
+              </div>
+              <div>
+                <span>{formatMoney(credit.amount_cents, credit.currency)}</span>
+                <span>{formatMoney(credit.available_cents, credit.currency)} available</span>
+              </div>
+              <div>
+                <span>{credit.context_label || 'No source context'}</span>
+                <code>
+                  {shortId(
+                    credit.source_booking_id
+                      || credit.source_game_id
+                      || credit.source_payment_id,
+                  )}
+                </code>
+              </div>
+              <div>
+                <span>{formatDateTime(credit.created_at)}</span>
+                <code>{shortId(credit.id)}</code>
+              </div>
+            </div>
+          ))}
+          {hasMore && viewAllTo && (
+            <div className="admin-money-row">
+              <Link className="admin-money-row-link" to={viewAllTo}>View all credits</Link>
             </div>
           )}
-
-          {loadState === 'idle' && (
-            <section className="admin-money-panel">
-              <EmptyState>No user selected.</EmptyState>
-            </section>
-          )}
-
-          {loadState === 'loading' && (
-            <section className="admin-money-panel">
-              <EmptyState>Loading user money summary.</EmptyState>
-            </section>
-          )}
-
-          {loadState === 'ready' && detail && (
-            <>
-              <UserSummary user={detail.user} />
-              <PaymentsSection payments={detail.payments ?? []} />
-              <RefundsSection refunds={detail.refunds ?? []} />
-              <CreditsSection
-                creditGrants={detail.credit_grants ?? []}
-                creditUsages={detail.credit_usages ?? []}
-              />
-              <PaymentMethodsSection paymentMethods={detail.payment_methods ?? []} />
-              <SupportFlagsSection supportFlags={detail.support_flags ?? []} />
-              <AuditSection auditActions={detail.audit_actions ?? []} />
-            </>
-          )}
         </div>
-      </AdminWorkspaceLayout>
-    </>
+      )}
+    </section>
   )
 }
 

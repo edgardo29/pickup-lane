@@ -15,6 +15,7 @@ from backend.services.admin_action_service import record_admin_action
 from backend.services.game_credit_service import (
     REVERSED_USAGE_STATUS,
     REVERSE_USAGE_TYPE,
+    has_reserved_usage_for_credit,
 )
 from backend.services.user_service import build_user_conflict_detail
 
@@ -282,7 +283,7 @@ def issue_admin_game_credit(
         id=uuid.uuid4(),
         user_id=payload.user_id,
         amount_cents=payload.amount_cents,
-        remaining_cents=payload.amount_cents,
+        available_cents=payload.amount_cents,
         currency="USD",
         credit_status="active",
         credit_reason=payload.credit_reason,
@@ -292,7 +293,6 @@ def issue_admin_game_credit(
         issued_by_user_id=admin_user.id,
         idempotency_key=idempotency_key,
         note=payload.note,
-        expires_at=payload.expires_at,
         created_at=now,
         updated_at=now,
     )
@@ -350,16 +350,22 @@ def reverse_admin_game_credit(
         )
 
     now = datetime.now(timezone.utc)
-    is_expired = game_credit.expires_at is not None and game_credit.expires_at <= now
-    if (
-        game_credit.credit_status != "active"
-        or game_credit.remaining_cents <= 0
-        or game_credit.remaining_cents != game_credit.amount_cents
-        or is_expired
-    ):
+    if game_credit.credit_status != "active":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only active unused credit can be reversed.",
+            detail="Only active credit with available value can be reversed.",
+        )
+
+    if has_reserved_usage_for_credit(db, game_credit.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credit with reserved usage cannot be reversed.",
+        )
+
+    if game_credit.available_cents <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only active credit with available value can be reversed.",
         )
 
     idempotency_key = payload.idempotency_key or (
@@ -368,19 +374,19 @@ def reverse_admin_game_credit(
     usage = GameCreditUsage(
         id=uuid.uuid4(),
         game_credit_id=game_credit.id,
-        user_id=game_credit.user_id,
         booking_id=game_credit.source_booking_id,
         game_id=game_credit.source_game_id,
         payment_id=game_credit.source_payment_id,
-        amount_cents=game_credit.remaining_cents,
+        amount_cents=game_credit.available_cents,
         currency="USD",
         usage_type=REVERSE_USAGE_TYPE,
         usage_status=REVERSED_USAGE_STATUS,
         idempotency_key=idempotency_key,
+        reason_code="admin_credit_reversal",
         created_at=now,
         updated_at=now,
     )
-    game_credit.remaining_cents = 0
+    game_credit.available_cents = 0
     game_credit.credit_status = "reversed"
     game_credit.reversed_by_user_id = admin_user.id
     game_credit.reversed_at = now

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
-  RefreshCw,
   Search,
   WalletCards,
+  X,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminMoneySupport.css'
@@ -27,27 +27,40 @@ const PAYMENT_STATUS_OPTIONS = [
   { label: 'Processing', value: 'processing' },
   { label: 'Requires Action', value: 'requires_action' },
   { label: 'Failed', value: 'failed' },
-  { label: 'Refunded', value: 'refunded' },
-  { label: 'Partial Refund', value: 'partially_refunded' },
-  { label: 'Disputed', value: 'disputed' },
   { label: 'Canceled', value: 'canceled' },
 ]
 
 const EMPTY_FILTERS = {
-  bookingId: '',
-  gameId: '',
-  userId: '',
+  paymentStatus: 'all',
+  paymentType: '',
+  query: '',
+}
+
+function PaymentsEmptyState() {
+  return (
+    <div className="admin-money-empty-state">
+      <span className="admin-money-empty-state__icon">
+        <WalletCards />
+      </span>
+      <div>
+        <strong>No money payments found</strong>
+        <p>Payment records matching this search will appear here.</p>
+      </div>
+    </div>
+  )
 }
 
 function AdminMoneyPaymentsPage() {
   const { currentUser } = useAuth()
-  const [paymentStatus, setPaymentStatus] = useState('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const queryUserId = searchParams.get('user_id') || ''
   const [draftFilters, setDraftFilters] = useState(EMPTY_FILTERS)
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS)
   const [payments, setPayments] = useState([])
+  const [pageInfo, setPageInfo] = useState({ hasMore: false, nextCursor: '' })
   const [loadState, setLoadState] = useState('loading')
+  const [loadMoreState, setLoadMoreState] = useState('idle')
   const [pageError, setPageError] = useState('')
-  const [refreshCount, setRefreshCount] = useState(0)
 
   useEffect(() => {
     let isMounted = true
@@ -61,9 +74,9 @@ function AdminMoneyPaymentsPage() {
       setPageError('')
 
       try {
-        const nextPayments = await listAdminMoneyPayments({
+        const paymentPage = await listAdminMoneyPayments({
           firebaseUser: currentUser,
-          paymentStatus,
+          userId: queryUserId,
           ...appliedFilters,
         })
 
@@ -71,7 +84,11 @@ function AdminMoneyPaymentsPage() {
           return
         }
 
-        setPayments(nextPayments)
+        setPayments(paymentPage.items ?? paymentPage)
+        setPageInfo({
+          hasMore: Boolean(paymentPage.has_more),
+          nextCursor: paymentPage.next_cursor || '',
+        })
         setLoadState('ready')
       } catch (error) {
         if (!isMounted) {
@@ -79,6 +96,7 @@ function AdminMoneyPaymentsPage() {
         }
 
         setPayments([])
+        setPageInfo({ hasMore: false, nextCursor: '' })
         setPageError(error.message || 'Money payments could not be loaded.')
         setLoadState('error')
       }
@@ -89,13 +107,7 @@ function AdminMoneyPaymentsPage() {
     return () => {
       isMounted = false
     }
-  }, [appliedFilters, currentUser, paymentStatus, refreshCount])
-
-  const pageTitle = useMemo(() => (
-    paymentStatus === 'all'
-      ? 'Payments'
-      : `${formatStatus(paymentStatus)} Payments`
-  ), [paymentStatus])
+  }, [appliedFilters, currentUser, queryUserId])
 
   function updateDraftFilter(key, value) {
     setDraftFilters((current) => ({
@@ -107,10 +119,47 @@ function AdminMoneyPaymentsPage() {
   function handleSearch(event) {
     event.preventDefault()
     setAppliedFilters({
-      bookingId: draftFilters.bookingId.trim(),
-      gameId: draftFilters.gameId.trim(),
-      userId: draftFilters.userId.trim(),
+      paymentStatus: draftFilters.paymentStatus,
+      paymentType: draftFilters.paymentType,
+      query: draftFilters.query.trim(),
     })
+  }
+
+  function clearUserFilter() {
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('user_id')
+    setSearchParams(nextParams)
+  }
+
+  async function handleLoadMore() {
+    if (!currentUser || !pageInfo.nextCursor) {
+      return
+    }
+
+    setLoadMoreState('loading')
+    setPageError('')
+
+    try {
+      const paymentPage = await listAdminMoneyPayments({
+        firebaseUser: currentUser,
+        cursor: pageInfo.nextCursor,
+        userId: queryUserId,
+        ...appliedFilters,
+      })
+
+      setPayments((current) => [
+        ...current,
+        ...(paymentPage.items ?? paymentPage),
+      ])
+      setPageInfo({
+        hasMore: Boolean(paymentPage.has_more),
+        nextCursor: paymentPage.next_cursor || '',
+      })
+      setLoadMoreState('idle')
+    } catch (error) {
+      setPageError(error.message || 'More money payments could not be loaded.')
+      setLoadMoreState('idle')
+    }
   }
 
   return (
@@ -119,60 +168,61 @@ function AdminMoneyPaymentsPage() {
         breadcrumbs={['Admin', 'Money', 'Payments']}
         description="Search payment records and inspect their current state."
         icon={WalletCards}
-        title={pageTitle}
+        title="Payments"
       >
-        <div className="admin-money-layout">
-          <div className="admin-money-toolbar">
-            <div className="admin-money-segment" role="group" aria-label="Payment status">
-              {PAYMENT_STATUS_OPTIONS.map((option) => (
-                <button
-                  aria-pressed={paymentStatus === option.value}
-                  className={paymentStatus === option.value ? 'is-active' : ''}
-                  key={option.value}
-                  type="button"
-                  onClick={() => setPaymentStatus(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <button
-              className="admin-money-button"
-              type="button"
-              onClick={() => setRefreshCount((count) => count + 1)}
-            >
-              <RefreshCw />
-              Refresh
-            </button>
-          </div>
-
-          <form className="admin-money-filters admin-money-filters--payments" onSubmit={handleSearch}>
+        <div className="admin-money-layout admin-money-layout--payments">
+          <form className="admin-money-filters admin-money-filters--payments-ledger" onSubmit={handleSearch}>
             <label>
-              <span>User ID</span>
+              <span>Search</span>
               <input
-                value={draftFilters.userId}
-                onChange={(event) => updateDraftFilter('userId', event.target.value)}
+                placeholder="Payment ID, provider ID, user, booking, or publish fee"
+                value={draftFilters.query}
+                onChange={(event) => updateDraftFilter('query', event.target.value)}
               />
             </label>
             <label>
-              <span>Game ID</span>
-              <input
-                value={draftFilters.gameId}
-                onChange={(event) => updateDraftFilter('gameId', event.target.value)}
-              />
+              <span>Status</span>
+              <select
+                value={draftFilters.paymentStatus}
+                onChange={(event) => updateDraftFilter('paymentStatus', event.target.value)}
+              >
+                {PAYMENT_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
-              <span>Booking ID</span>
-              <input
-                value={draftFilters.bookingId}
-                onChange={(event) => updateDraftFilter('bookingId', event.target.value)}
-              />
+              <span>Payment Type</span>
+              <select
+                value={draftFilters.paymentType}
+                onChange={(event) => updateDraftFilter('paymentType', event.target.value)}
+              >
+                <option value="">Any type</option>
+                <option value="booking">Booking</option>
+                <option value="community_publish_fee">Community publish fee</option>
+                <option value="admin_charge">Admin charge</option>
+              </select>
             </label>
             <button className="admin-money-button" type="submit">
               <Search />
               Search
             </button>
           </form>
+
+          {queryUserId && (
+            <div className="admin-money-filter-chips" aria-label="Active payment filters">
+              <button
+                className="admin-money-filter-chip"
+                type="button"
+                onClick={clearUserFilter}
+              >
+                <span>User: {shortId(queryUserId)}</span>
+                <X />
+              </button>
+            </div>
+          )}
 
           {pageError && (
             <div className="admin-money-alert" role="alert">
@@ -189,40 +239,48 @@ function AdminMoneyPaymentsPage() {
           {loadState === 'ready' && (
             <section className="admin-money-panel" aria-label="Money payments">
               <SectionHeader
-                count={payments.length}
                 icon={WalletCards}
+                meta={`${payments.length} ${payments.length === 1 ? 'payment' : 'payments'}`}
                 title="Payments"
               />
               {payments.length === 0 ? (
-                <EmptyState>No money payments found.</EmptyState>
+                <PaymentsEmptyState />
               ) : (
                 <div className="admin-money-row-list">
                   {payments.map((payment) => (
                     <div className="admin-money-row admin-money-row--four" key={payment.id}>
                       <div>
                         <Link className="admin-money-row-link" to={`/admin/money/payments/${payment.id}`}>
-                          {formatStatus(payment.payment_status)}
+                          Payment {shortId(payment.id)}
                         </Link>
-                        <span>{formatStatus(payment.payment_type)}</span>
+                        <span>{formatStatus(payment.payment_status)}</span>
                       </div>
                       <div>
                         <span>{formatMoney(payment.amount_cents, payment.currency)}</span>
-                        <span>
-                          {payment.failure_code
-                            ? formatStatus(payment.failure_code)
-                            : formatStatus(payment.provider)}
-                        </span>
+                        {payment.is_fully_refunded && <span>Fully refunded</span>}
                       </div>
                       <div>
-                        <span>User</span>
-                        <code>{shortId(payment.payer_user_id)}</code>
+                        <span>{payment.display?.user_name || payment.display?.user_email || 'No user label'}</span>
+                        <span>{payment.display?.context_label || payment.display?.game_label || 'No context'}</span>
                       </div>
                       <div>
-                        <span>{formatDateTime(payment.updated_at)}</span>
-                        <code>{shortId(payment.id)}</code>
+                        <span>{formatStatus(payment.payment_type)}</span>
+                        <span>{payment.paid_at ? `Paid ${formatDateTime(payment.paid_at)}` : formatDateTime(payment.created_at)}</span>
                       </div>
                     </div>
                   ))}
+                  {pageInfo.hasMore && (
+                    <div className="admin-money-row">
+                      <button
+                        className="admin-money-button"
+                        disabled={loadMoreState === 'loading'}
+                        type="button"
+                        onClick={handleLoadMore}
+                      >
+                        {loadMoreState === 'loading' ? 'Loading' : 'Load More Payments'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </section>

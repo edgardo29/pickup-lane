@@ -20,6 +20,7 @@ class AdminActionCreate(BaseModel):
     target_payment_id: UUID | None = None
     target_refund_id: UUID | None = None
     target_game_credit_id: UUID | None = None
+    target_credit_usage_id: UUID | None = None
     target_venue_id: UUID | None = None
     target_venue_image_id: UUID | None = None
     target_message_id: UUID | None = None
@@ -31,6 +32,7 @@ class AdminActionCreate(BaseModel):
     target_platform_notice_campaign_id: UUID | None = None
     target_admin_action_id: UUID | None = None
     target_support_flag_id: UUID | None = None
+    target_money_issue_id: UUID | None = None
     target_review_case_id: UUID | None = None
     target_financial_outcome_id: UUID | None = None
     target_host_publish_fee_id: UUID | None = None
@@ -58,6 +60,7 @@ class AdminActionRead(BaseModel):
     target_payment_id: UUID | None
     target_refund_id: UUID | None
     target_game_credit_id: UUID | None
+    target_credit_usage_id: UUID | None
     target_venue_id: UUID | None
     target_venue_image_id: UUID | None
     target_message_id: UUID | None
@@ -69,6 +72,7 @@ class AdminActionRead(BaseModel):
     target_platform_notice_campaign_id: UUID | None
     target_admin_action_id: UUID | None
     target_support_flag_id: UUID | None
+    target_money_issue_id: UUID | None
     target_review_case_id: UUID | None
     target_financial_outcome_id: UUID | None
     target_host_publish_fee_id: UUID | None

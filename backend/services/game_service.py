@@ -1026,9 +1026,7 @@ def game_has_paid_booking_payment(db: Session, game_id: uuid.UUID) -> bool:
             .where(
                 Booking.game_id == game_id,
                 Payment.payment_type == "booking",
-                Payment.payment_status.in_(
-                    {"succeeded", "partially_refunded", "disputed"}
-                ),
+                Payment.payment_status == "succeeded",
             )
             .limit(1)
         )

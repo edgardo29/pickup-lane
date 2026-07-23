@@ -25,6 +25,7 @@ from backend.schemas.admin_money_schema import (
     AdminMoneyFinancialOutcomeRead,
 )
 from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_money_issue_service import stage_refund_money_issue
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
@@ -35,11 +36,11 @@ from backend.services.refund_service import (
     build_refund_conflict_detail,
     validate_refund_amount_available,
 )
+from backend.services.refund_event_service import record_refund_event
 from backend.services.stripe_service import (
     StripeConfigError,
     create_refund as create_stripe_refund,
 )
-from backend.services.support_flag_service import stage_support_flag
 
 VALID_FINANCIAL_OUTCOMES = {
     "no_fee_charged",
@@ -50,7 +51,7 @@ VALID_FINANCIAL_OUTCOMES = {
 }
 APPLIED_OUTCOME_STATUSES = {"applied", "failed"}
 ACTIVE_FINANCIAL_DECISION_STATUSES = {"pending", "applied", "not_applicable"}
-REFUNDABLE_PAYMENT_STATUSES = {"succeeded", "partially_refunded"}
+REFUNDABLE_PAYMENT_STATUSES = {"succeeded"}
 PUBLISH_FEE_REFUND_REASON = "publish_fee_refund"
 FINANCIAL_OUTCOME_NOTICE_COPY = {
     "publish_fee_refunded": (
@@ -258,13 +259,7 @@ def sync_publish_fee_refunded_state(
     now: datetime,
 ) -> None:
     refunded_cents = sum_succeeded_refunds_for_payment(db, payment.id)
-    payment.payment_status = (
-        "refunded" if refunded_cents >= payment.amount_cents else "partially_refunded"
-    )
-    payment.updated_at = now
-    db.add(payment)
-
-    if payment.payment_status == "refunded":
+    if refunded_cents >= payment.amount_cents:
         host_publish_fee.fee_status = "refunded"
         host_publish_fee.updated_at = now
         db.add(host_publish_fee)
@@ -570,7 +565,13 @@ def create_publish_fee_refund_record(
         booking_id=None,
         participant_id=None,
         host_publish_fee_id=host_publish_fee.id,
+        origin_workflow="community_publish_fee_refund",
+        provider="stripe",
         provider_refund_id=None,
+        provider_charge_id=payment.provider_charge_id,
+        provider_status=None,
+        provider_status_observed_at=None,
+        last_refund_event_at=None,
         amount_cents=amount_cents,
         currency=payment.currency,
         refund_reason=PUBLISH_FEE_REFUND_REASON,
@@ -619,6 +620,30 @@ def apply_refund_outcome(
         financial_outcome.updated_at = now
         db.add(refund)
         db.add(financial_outcome)
+        refund_event = record_refund_event(
+            db,
+            refund=refund,
+            event_type="provider_outcome_unknown",
+            event_source="system",
+            actor_user_id=admin_user.id,
+            provider="stripe",
+            provider_charge_id=None,
+            provider_status=None,
+            new_refund_status="failed",
+            reason_code="provider_charge_id_missing",
+            summary="Publish-fee refund could not start because the payment has no provider charge id.",
+            occurred_at=now,
+        )
+        stage_refund_money_issue(
+            db,
+            refund=refund,
+            payment=payment,
+            issue_type="refund_missing_provider_reference",
+            reason_code="provider_charge_id_missing",
+            summary="Publish-fee refund could not start because the payment has no provider charge id.",
+            refund_event=refund_event,
+            now=now,
+        )
         return refund
 
     try:
@@ -637,6 +662,9 @@ def apply_refund_outcome(
             },
         )
         refund.provider_refund_id = provider_refund.id
+        refund.provider_charge_id = payment.provider_charge_id
+        refund.provider_status = map_stripe_refund_status(provider_refund.status)
+        refund.provider_status_observed_at = now
         refund.refund_status = map_stripe_refund_status(provider_refund.status)
     except StripeConfigError:
         refund.refund_status = "failed"
@@ -649,6 +677,7 @@ def apply_refund_outcome(
 
     refund.refunded_at = now if refund.refund_status == "succeeded" else None
     refund.updated_at = now
+    refund.last_refund_event_at = now
     financial_outcome.applied_status = map_refund_status_to_outcome_status(
         refund.refund_status
     )
@@ -666,6 +695,36 @@ def apply_refund_outcome(
         )
     db.add(refund)
     db.add(financial_outcome)
+    refund_event = record_refund_event(
+        db,
+        refund=refund,
+        event_type="provider_result_recorded",
+        event_source="system",
+        actor_user_id=admin_user.id,
+        provider="stripe",
+        provider_refund_id=refund.provider_refund_id,
+        provider_charge_id=payment.provider_charge_id,
+        provider_status=refund.provider_status,
+        new_refund_status=refund.refund_status,
+        reason_code=f"publish_fee_refund_{refund.refund_status}",
+        summary="Publish-fee refund result recorded.",
+        occurred_at=now,
+    )
+    if refund.refund_status in {"failed", "cancelled"}:
+        stage_refund_money_issue(
+            db,
+            refund=refund,
+            payment=payment,
+            issue_type=(
+                "refund_failed"
+                if refund.refund_status == "failed"
+                else "refund_cancelled"
+            ),
+            reason_code=f"publish_fee_refund_{refund.refund_status}",
+            summary="Publish-fee refund did not complete with the provider.",
+            refund_event=refund_event,
+            now=now,
+        )
     return refund
 
 
@@ -960,7 +1019,7 @@ def record_financial_outcome_actions(
     return create_action
 
 
-def stage_financial_outcome_support_flag(
+def stage_financial_outcome_money_issue(
     db: Session,
     *,
     financial_outcome: AdminFinancialOutcome,
@@ -972,89 +1031,34 @@ def stage_financial_outcome_support_flag(
     if financial_outcome.outcome != "refund":
         return
 
-    target_game_id = financial_outcome.target_game_id
     if refund is None:
-        if financial_outcome.failure_reason and payment is not None:
-            stage_support_flag(
-                db,
-                flag_type="missing_stripe_charge_id",
-                source="stripe",
-                title="Publish fee refund could not start",
-                summary="A publish-fee refund needs money support follow-up.",
-                severity="urgent",
-                metadata={
-                    "operation": "admin_publish_fee_refund",
-                    "financial_outcome_id": str(financial_outcome.id),
-                    "applied_status": financial_outcome.applied_status,
-                },
-                idempotency_key=f"publish-fee-refund-missing-charge:{payment.id}",
-                source_admin_action_id=admin_action.id,
-                created_by_user_id=admin_user.id,
-                reopen_resolved=True,
-                target_user_id=financial_outcome.host_user_id,
-                target_game_id=target_game_id,
-                target_booking_id=None,
-                target_payment_id=payment.id,
-                target_refund_id=None,
-                target_game_credit_id=None,
-                target_venue_id=None,
-                target_venue_image_id=None,
-                target_notification_id=None,
-            )
         return
 
     if financial_outcome.failure_reason == (
         "Publish fee payment is missing Stripe charge id."
     ):
-        flag_type = "missing_stripe_charge_id"
-        title = "Publish fee refund is missing a Stripe charge"
-        summary = "A publish-fee refund needs money support follow-up."
-        severity = "urgent"
-        idempotency_status = "missing-charge"
+        issue_type = "refund_missing_provider_reference"
+        summary = "A publish-fee refund needs Money Issue review."
+        reason_code = "provider_charge_id_missing"
     elif refund.refund_status == "processing":
-        flag_type = "refund_follow_up_required"
-        title = "Publish fee refund still processing"
-        summary = (
-            "A publish-fee refund was sent to Stripe but has not finalized yet."
-        )
-        severity = "attention"
-        idempotency_status = "processing"
+        return
     elif refund.refund_status in {"failed", "cancelled"}:
-        flag_type = "stripe_refund_failed"
-        title = "Publish fee refund failed"
+        issue_type = (
+            "refund_failed" if refund.refund_status == "failed" else "refund_cancelled"
+        )
         summary = "A publish-fee refund did not complete in Stripe."
-        severity = "urgent"
-        idempotency_status = "failed"
+        reason_code = f"publish_fee_refund_{refund.refund_status}"
     else:
         return
 
-    stage_support_flag(
+    stage_refund_money_issue(
         db,
-        flag_type=flag_type,
-        source="stripe",
-        title=title,
+        refund=refund,
+        payment=payment,
+        issue_type=issue_type,
+        reason_code=reason_code,
         summary=summary,
-        severity=severity,
-        metadata={
-            "operation": "admin_publish_fee_refund",
-            "financial_outcome_id": str(financial_outcome.id),
-            "refund_status": refund.refund_status,
-        },
-        idempotency_key=(
-            f"admin-publish-fee-refund:{refund.id}:{idempotency_status}"
-        ),
-        source_admin_action_id=admin_action.id,
-        created_by_user_id=admin_user.id,
-        reopen_resolved=True,
-        target_user_id=financial_outcome.host_user_id,
-        target_game_id=target_game_id,
-        target_booking_id=None,
-        target_payment_id=payment.id if payment is not None else None,
-        target_refund_id=refund.id,
-        target_game_credit_id=None,
-        target_venue_id=None,
-        target_venue_image_id=None,
-        target_notification_id=None,
+        admin_action=admin_action,
     )
 
 
@@ -1159,7 +1163,7 @@ def create_admin_financial_outcome(
             refund=refund,
             payment=payment,
         )
-        stage_financial_outcome_support_flag(
+        stage_financial_outcome_money_issue(
             db,
             financial_outcome=financial_outcome,
             refund=refund,

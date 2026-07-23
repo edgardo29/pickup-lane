@@ -25,7 +25,6 @@ class PaymentCreate(BaseModel):
     paid_at: datetime | None = None
     failure_code: str | None = None
     failure_message: str | None = None
-    failure_reason: str | None = None
     metadata: dict | None = None
 
 
@@ -49,7 +48,6 @@ class PaymentRead(BaseModel):
     paid_at: datetime | None
     failure_code: str | None
     failure_message: str | None
-    failure_reason: str | None
     metadata: dict | None = Field(
         validation_alias="payment_metadata",
         serialization_alias="metadata",
@@ -77,5 +75,4 @@ class PaymentUpdate(BaseModel):
     paid_at: datetime | None = None
     failure_code: str | None = None
     failure_message: str | None = None
-    failure_reason: str | None = None
     metadata: dict | None = None

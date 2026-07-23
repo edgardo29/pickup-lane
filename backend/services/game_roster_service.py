@@ -145,27 +145,6 @@ def create_booking_guest_add_payment(
     )
 
 
-def update_booking_payment_status(
-    db: Session, booking_id: uuid.UUID, payment_status: str, now: datetime
-) -> None:
-    payment = db.scalars(
-        select(Payment)
-        .where(
-            Payment.booking_id == booking_id,
-            Payment.payment_type == "booking",
-            Payment.payment_status.in_({"succeeded", "partially_refunded"}),
-        )
-        .limit(1)
-    ).first()
-
-    if payment is None:
-        return
-
-    payment.payment_status = payment_status
-    payment.updated_at = now
-    db.add(payment)
-
-
 def build_added_booking_guest_participants(
     db_game: Game,
     booking: Booking,
@@ -478,8 +457,6 @@ def leave_game_roster_workflow(
             )
         booking.updated_at = now
         db.add(booking)
-        if app_refund_eligible and not was_waitlisted:
-            update_booking_payment_status(db, booking.id, "refunded", now)
 
     db_game.updated_at = now
     if not was_waitlisted:
@@ -850,7 +827,6 @@ def remove_game_guests_workflow(
             booking.booking_status = "partially_cancelled"
             if refundable and app_payment_required:
                 booking.payment_status = "partially_refunded"
-                update_booking_payment_status(db, booking.id, "partially_refunded", now)
         booking.updated_at = now
         db.add(booking)
 

@@ -490,7 +490,6 @@ def create_payment(
         "amount_cents": 1300,
         "currency": "USD",
         "payment_status": "processing",
-        "failure_reason": None,
         "metadata": {"source": "ci"},
     }
     payload.update(overrides)

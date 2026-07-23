@@ -366,20 +366,20 @@ def test_admin_support_flag_limit_counts_all_flags(
             target_game_id=UUID(game["id"]),
             idempotency_key=f"visible-community-flag-{unique_suffix()}",
         )
-        sensitive_flag = create_support_flag(
+        newer_flag = create_support_flag(
             db,
-            flag_type="official_cancel_partial_failure",
-            source="official_game",
-            title="Sensitive cancellation follow-up",
-            summary="This money-sensitive flag must not consume the visible limit.",
+            flag_type="community_game_review_required",
+            source="admin",
+            title="Newer community game review required",
+            summary="The newest supported community flag should appear first.",
             target_game_id=UUID(game["id"]),
-            idempotency_key=f"sensitive-community-flag-{unique_suffix()}",
+            idempotency_key=f"newer-community-flag-{unique_suffix()}",
         )
         visible_flag.created_at = datetime.now(UTC) - timedelta(minutes=1)
-        sensitive_flag.created_at = datetime.now(UTC)
+        newer_flag.created_at = datetime.now(UTC)
         db.commit()
         visible_flag_id = str(visible_flag.id)
-        sensitive_flag_id = str(sensitive_flag.id)
+        newer_flag_id = str(newer_flag.id)
 
     authenticate_as(admin_actor["id"])
     response = client.get(
@@ -393,11 +393,11 @@ def test_admin_support_flag_limit_counts_all_flags(
 
     assert response.status_code == 200, response.text
     assert [flag["id"] for flag in response.json()["support_flags"]] == [
-        sensitive_flag_id
+        newer_flag_id
     ]
     assert response.json()["support_flag_total_count"] == 2
     assert generic_response.status_code == 200, generic_response.text
-    assert [flag["id"] for flag in generic_response.json()] == [sensitive_flag_id]
+    assert [flag["id"] for flag in generic_response.json()] == [newer_flag_id]
 
 
 def test_admin_community_game_detail_paginates_flags_and_audit_independently(

@@ -199,7 +199,6 @@ def create_waitlist_auto_charge_payment(
         paid_at=None,
         failure_code=None,
         failure_message=None,
-        failure_reason=None,
         payment_metadata={
             "source": "waitlist_auto_promote",
             "game_id": str(db_game.id),
@@ -265,7 +264,6 @@ def mark_paid_waitlist_auto_promotion_failed(
         payment.payment_status = payment_status or "failed"
         payment.failure_code = failure_code
         payment.failure_message = failure_message
-        payment.failure_reason = failure_code
         payment.updated_at = now
         db.add(payment)
 
@@ -331,7 +329,6 @@ def confirm_paid_waitlist_auto_promotion(
     payment.paid_at = now
     payment.failure_code = None
     payment.failure_message = None
-    payment.failure_reason = None
     payment.updated_at = now
     db.add(payment)
 

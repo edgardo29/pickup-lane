@@ -9,7 +9,6 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     UniqueConstraint,
     text,
 )
@@ -63,12 +62,37 @@ class GameCreditUsage(Base):
             "(usage_status <> 'released' OR released_at IS NOT NULL)",
             name="ck_game_credit_usage_released_requires_released_at",
         ),
+        CheckConstraint(
+            "(usage_type <> 'restore' OR original_usage_id IS NOT NULL)",
+            name="ck_game_credit_usage_restore_requires_original_usage",
+        ),
         UniqueConstraint("idempotency_key", name="uq_game_credit_usage_idempotency_key"),
         Index("ix_game_credit_usage_game_credit_id", "game_credit_id"),
-        Index("ix_game_credit_usage_user_id", "user_id"),
+        Index(
+            "ix_game_credit_usage_credit_created",
+            "game_credit_id",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_game_credit_usage_credit_status",
+            "game_credit_id",
+            "usage_status",
+        ),
         Index("ix_game_credit_usage_game_id", "game_id"),
         Index("ix_game_credit_usage_booking_id", "booking_id"),
         Index("ix_game_credit_usage_payment_id", "payment_id"),
+        Index("ix_game_credit_usage_original_usage_id", "original_usage_id"),
+        Index(
+            "uq_game_credit_usage_one_restore_per_original",
+            "original_usage_id",
+            unique=True,
+            postgresql_where=text(
+                "usage_type = 'restore' "
+                "AND usage_status = 'restored' "
+                "AND original_usage_id IS NOT NULL"
+            ),
+        ),
         Index("ix_game_credit_usage_usage_type", "usage_type"),
         Index("ix_game_credit_usage_usage_status", "usage_status"),
         Index("ix_game_credit_usage_created_at", "created_at"),
@@ -78,11 +102,6 @@ class GameCreditUsage(Base):
     game_credit_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("game_credits.id", ondelete="RESTRICT"),
-        nullable=False,
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
     booking_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -100,6 +119,11 @@ class GameCreditUsage(Base):
         ForeignKey("payments.id", ondelete="SET NULL"),
         nullable=True,
     )
+    original_usage_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("game_credit_usage.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(
         CHAR(3), nullable=False, server_default=text("'USD'")
@@ -107,7 +131,7 @@ class GameCreditUsage(Base):
     usage_type: Mapped[str] = mapped_column(String(30), nullable=False)
     usage_status: Mapped[str] = mapped_column(String(30), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False)
-    release_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     reserved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

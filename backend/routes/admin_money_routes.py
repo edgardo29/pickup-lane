@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -9,17 +9,19 @@ from backend.schemas import (
     AdminMoneyFinancialOutcomeCreate,
     AdminMoneyFinancialOutcomeRead,
     AdminMoneyCreditDetailRead,
-    AdminMoneyCreditGrantSummaryRead,
+    AdminMoneyCreditListResponseRead,
+    AdminMoneyIssueCreditRetryCreate,
+    AdminMoneyIssueDetailRead,
+    AdminMoneyIssueListResponseRead,
+    AdminMoneyIssueResolveCreate,
     AdminMoneyPaymentDetailRead,
-    AdminMoneyPaymentListRead,
-    AdminMoneyPaymentMethodRead,
+    AdminMoneyPaymentListResponseRead,
     AdminMoneyRefundDetailRead,
-    AdminMoneyRefundListRead,
+    AdminMoneyRefundEventListResponseRead,
+    AdminMoneyRefundListResponseRead,
+    AdminMoneyRefundReconcileCreate,
     AdminMoneyRefundRetryCreate,
-    AdminMoneySupportFlagDetailRead,
-    AdminMoneySupportFlagSummaryRead,
     AdminMoneyUserDetailRead,
-    SupportFlagResolve,
 )
 from backend.services.admin_money_credit_service import (
     get_admin_money_credit_detail,
@@ -34,24 +36,66 @@ from backend.services.admin_money_payment_service import (
     list_admin_money_payments,
 )
 from backend.services.admin_money_refund_service import (
+    list_refund_events,
     get_admin_money_refund_detail,
     list_admin_money_refunds,
+    reconcile_admin_money_refund,
     retry_admin_money_refund,
 )
-from backend.services.admin_money_support_flag_read_service import (
-    get_admin_money_support_flag_detail,
-    list_admin_money_support_flags,
-)
-from backend.services.admin_money_support_flag_service import (
-    resolve_admin_money_support_flag,
+from backend.services.admin_money_issue_service import (
+    get_admin_money_issue_detail,
+    list_admin_money_issues_page,
+    resolve_admin_money_issue,
+    retry_admin_money_issue_credit,
 )
 from backend.services.admin_money_user_service import (
     get_admin_money_user_detail,
-    list_admin_money_payment_methods,
 )
 from backend.services.auth_service import require_active_admin
 
 router = APIRouter(prefix="/admin/money", tags=["admin_money"])
+MONEY_ISSUE_LIST_QUERY_PARAMS = frozenset(
+    {
+        "status",
+        "issue_type",
+        "user_id",
+        "q",
+        "limit",
+        "cursor",
+    }
+)
+MONEY_PAYMENT_LIST_QUERY_PARAMS = frozenset(
+    {
+        "q",
+        "payment_status",
+        "payment_type",
+        "user_id",
+        "limit",
+        "cursor",
+    }
+)
+MONEY_REFUND_LIST_QUERY_PARAMS = frozenset(
+    {
+        "q",
+        "refund_status",
+        "user_id",
+        "payment_id",
+        "limit",
+        "cursor",
+    }
+)
+MONEY_CREDIT_LIST_QUERY_PARAMS = frozenset(
+    {
+        "q",
+        "credit_status",
+        "user_id",
+        "source_game_id",
+        "source_booking_id",
+        "source_payment_id",
+        "limit",
+        "cursor",
+    }
+)
 
 
 @router.post(
@@ -88,24 +132,6 @@ def get_admin_money_financial_outcome_route(
 
 
 @router.get(
-    "/payment-methods",
-    response_model=list[AdminMoneyPaymentMethodRead],
-    status_code=status.HTTP_200_OK,
-)
-def list_admin_money_payment_methods_route(
-    user_id: uuid.UUID = Query(...),
-    include_inactive: bool = Query(default=False),
-    current_admin: User = Depends(require_active_admin),
-    db: Session = Depends(get_db),
-) -> list[AdminMoneyPaymentMethodRead]:
-    return list_admin_money_payment_methods(
-        db,
-        user_id=user_id,
-        include_inactive=include_inactive,
-    )
-
-
-@router.get(
     "/users/{user_id}",
     response_model=AdminMoneyUserDetailRead,
     status_code=status.HTTP_200_OK,
@@ -113,7 +139,7 @@ def list_admin_money_payment_methods_route(
 def get_admin_money_user(
     user_id: uuid.UUID,
     include_inactive_payment_methods: bool = Query(default=False),
-    limit: int = Query(default=100, ge=1, le=250),
+    saved_cards_cursor: str | None = None,
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyUserDetailRead:
@@ -122,25 +148,128 @@ def get_admin_money_user(
         user_id=user_id,
         viewer_user=current_admin,
         include_inactive_payment_methods=include_inactive_payment_methods,
+        saved_cards_cursor=saved_cards_cursor,
+    )
+
+
+@router.get(
+    "/issues",
+    response_model=AdminMoneyIssueListResponseRead,
+    status_code=status.HTTP_200_OK,
+)
+def list_admin_money_issues_route(
+    request: Request,
+    status_filter: str | None = Query(default=None, alias="status"),
+    issue_type: str | None = None,
+    user_id: uuid.UUID | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
+    current_admin: User = Depends(require_active_admin),
+    db: Session = Depends(get_db),
+) -> AdminMoneyIssueListResponseRead:
+    unsupported_params = sorted(
+        set(request.query_params.keys()) - MONEY_ISSUE_LIST_QUERY_PARAMS
+    )
+    if unsupported_params:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Unsupported money issue list filter: "
+                f"{', '.join(unsupported_params)}."
+            ),
+        )
+    return list_admin_money_issues_page(
+        db,
+        issue_status=status_filter or "open",
+        issue_type=issue_type,
+        user_id=user_id,
+        query_text=q,
         limit=limit,
+        cursor=cursor,
+    )
+
+
+@router.get(
+    "/issues/{money_issue_id}",
+    response_model=AdminMoneyIssueDetailRead,
+    status_code=status.HTTP_200_OK,
+)
+def get_admin_money_issue_route(
+    money_issue_id: uuid.UUID,
+    current_admin: User = Depends(require_active_admin),
+    db: Session = Depends(get_db),
+) -> AdminMoneyIssueDetailRead:
+    return get_admin_money_issue_detail(db, money_issue_id=money_issue_id)
+
+
+@router.post(
+    "/issues/{money_issue_id}/resolve",
+    response_model=AdminMoneyIssueDetailRead,
+    status_code=status.HTTP_200_OK,
+)
+def resolve_admin_money_issue_route(
+    money_issue_id: uuid.UUID,
+    payload: AdminMoneyIssueResolveCreate,
+    current_admin: User = Depends(require_active_admin),
+    db: Session = Depends(get_db),
+) -> AdminMoneyIssueDetailRead:
+    return resolve_admin_money_issue(
+        db,
+        admin_user=current_admin,
+        money_issue_id=money_issue_id,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/issues/{money_issue_id}/retry-credit",
+    response_model=AdminMoneyIssueDetailRead,
+    status_code=status.HTTP_200_OK,
+)
+def retry_admin_money_issue_credit_route(
+    money_issue_id: uuid.UUID,
+    payload: AdminMoneyIssueCreditRetryCreate,
+    current_admin: User = Depends(require_active_admin),
+    db: Session = Depends(get_db),
+) -> AdminMoneyIssueDetailRead:
+    return retry_admin_money_issue_credit(
+        db,
+        admin_user=current_admin,
+        money_issue_id=money_issue_id,
+        payload=payload,
     )
 
 
 @router.get(
     "/credits",
-    response_model=list[AdminMoneyCreditGrantSummaryRead],
+    response_model=AdminMoneyCreditListResponseRead,
     status_code=status.HTTP_200_OK,
 )
 def list_admin_money_credits_route(
+    request: Request,
     user_id: uuid.UUID | None = None,
     credit_status: str = Query(default="all"),
     source_game_id: uuid.UUID | None = None,
     source_booking_id: uuid.UUID | None = None,
     source_payment_id: uuid.UUID | None = None,
-    limit: int = Query(default=100, ge=1, le=250),
+    q: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
-) -> list[AdminMoneyCreditGrantSummaryRead]:
+) -> AdminMoneyCreditListResponseRead:
+    unsupported_params = sorted(
+        set(request.query_params.keys()) - MONEY_CREDIT_LIST_QUERY_PARAMS
+    )
+    if unsupported_params:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Unsupported money credit list filter: "
+                f"{', '.join(unsupported_params)}."
+            ),
+        )
     return list_admin_money_credits(
         db,
         user_id=user_id,
@@ -148,7 +277,9 @@ def list_admin_money_credits_route(
         source_game_id=source_game_id,
         source_booking_id=source_booking_id,
         source_payment_id=source_payment_id,
+        query_text=q,
         limit=limit,
+        cursor=cursor,
     )
 
 
@@ -171,25 +302,39 @@ def get_admin_money_credit(
 
 @router.get(
     "/payments",
-    response_model=list[AdminMoneyPaymentListRead],
+    response_model=AdminMoneyPaymentListResponseRead,
     status_code=status.HTTP_200_OK,
 )
 def list_admin_money_payments_route(
+    request: Request,
     user_id: uuid.UUID | None = None,
     payment_status: str = Query(default="all"),
-    booking_id: uuid.UUID | None = None,
-    game_id: uuid.UUID | None = None,
-    limit: int = Query(default=100, ge=1, le=250),
+    payment_type: str | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
-) -> list[AdminMoneyPaymentListRead]:
+) -> AdminMoneyPaymentListResponseRead:
+    unsupported_params = sorted(
+        set(request.query_params.keys()) - MONEY_PAYMENT_LIST_QUERY_PARAMS
+    )
+    if unsupported_params:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Unsupported money payment list filter: "
+                f"{', '.join(unsupported_params)}."
+            ),
+        )
     return list_admin_money_payments(
         db,
         user_id=user_id,
         payment_status=payment_status,
-        booking_id=booking_id,
-        game_id=game_id,
+        payment_type=payment_type,
+        query_text=q,
         limit=limit,
+        cursor=cursor,
     )
 
 
@@ -212,29 +357,39 @@ def get_admin_money_payment(
 
 @router.get(
     "/refunds",
-    response_model=list[AdminMoneyRefundListRead],
+    response_model=AdminMoneyRefundListResponseRead,
     status_code=status.HTTP_200_OK,
 )
 def list_admin_money_refunds_route(
+    request: Request,
     user_id: uuid.UUID | None = None,
     refund_status: str = Query(default="all"),
     payment_id: uuid.UUID | None = None,
-    booking_id: uuid.UUID | None = None,
-    host_publish_fee_id: uuid.UUID | None = None,
-    game_id: uuid.UUID | None = None,
-    limit: int = Query(default=100, ge=1, le=250),
+    q: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
-) -> list[AdminMoneyRefundListRead]:
+) -> AdminMoneyRefundListResponseRead:
+    unsupported_params = sorted(
+        set(request.query_params.keys()) - MONEY_REFUND_LIST_QUERY_PARAMS
+    )
+    if unsupported_params:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Unsupported money refund list filter: "
+                f"{', '.join(unsupported_params)}."
+            ),
+        )
     return list_admin_money_refunds(
         db,
         user_id=user_id,
         refund_status=refund_status,
         payment_id=payment_id,
-        booking_id=booking_id,
-        host_publish_fee_id=host_publish_fee_id,
-        game_id=game_id,
+        query_text=q,
         limit=limit,
+        cursor=cursor,
     )
 
 
@@ -275,55 +430,43 @@ def retry_admin_money_refund_route(
 
 
 @router.get(
-    "/support-flags",
-    response_model=list[AdminMoneySupportFlagSummaryRead],
+    "/refunds/{refund_id}/events",
+    response_model=AdminMoneyRefundEventListResponseRead,
     status_code=status.HTTP_200_OK,
 )
-def list_admin_money_support_flags_route(
-    flag_status: str = Query(default="open"),
-    limit: int = Query(default=100, ge=1, le=250),
+def list_admin_money_refund_events_route(
+    refund_id: uuid.UUID,
+    event_type: str | None = None,
+    event_source: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
-) -> list[AdminMoneySupportFlagSummaryRead]:
-    return list_admin_money_support_flags(
+) -> AdminMoneyRefundEventListResponseRead:
+    return list_refund_events(
         db,
-        viewer_user=current_admin,
-        flag_status=flag_status,
+        refund_id,
+        event_type=event_type,
+        event_source=event_source,
         limit=limit,
-    )
-
-
-@router.get(
-    "/support-flags/{support_flag_id}",
-    response_model=AdminMoneySupportFlagDetailRead,
-    status_code=status.HTTP_200_OK,
-)
-def get_admin_money_support_flag(
-    support_flag_id: uuid.UUID,
-    current_admin: User = Depends(require_active_admin),
-    db: Session = Depends(get_db),
-) -> AdminMoneySupportFlagDetailRead:
-    return get_admin_money_support_flag_detail(
-        db,
-        support_flag_id=support_flag_id,
-        viewer_user=current_admin,
+        cursor=cursor,
     )
 
 
 @router.post(
-    "/support-flags/{support_flag_id}/resolve",
-    response_model=AdminMoneySupportFlagDetailRead,
+    "/refunds/{refund_id}/reconcile",
+    response_model=AdminMoneyRefundDetailRead,
     status_code=status.HTTP_200_OK,
 )
-def resolve_admin_money_support_flag_route(
-    support_flag_id: uuid.UUID,
-    payload: SupportFlagResolve,
+def reconcile_admin_money_refund_route(
+    refund_id: uuid.UUID,
+    payload: AdminMoneyRefundReconcileCreate,
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
-) -> AdminMoneySupportFlagDetailRead:
-    return resolve_admin_money_support_flag(
+) -> AdminMoneyRefundDetailRead:
+    return reconcile_admin_money_refund(
         db,
-        support_flag_id=support_flag_id,
         admin_user=current_admin,
+        refund_id=refund_id,
         payload=payload,
     )

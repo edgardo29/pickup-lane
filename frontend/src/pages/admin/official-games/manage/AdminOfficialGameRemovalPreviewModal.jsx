@@ -372,7 +372,7 @@ function AdminOfficialGameRemovalPreviewModal({
 
             {executionResult.refund_follow_up_required && (
               <FormErrorMessage className="admin-removal-preview__warning">
-                Money support follow-up created. The booking was removed, but at
+                Money Issue review is required. The booking was removed, but at
                 least one refund did not finish. The payment remains in its
                 truthful state.
               </FormErrorMessage>

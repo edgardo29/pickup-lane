@@ -1,5 +1,5 @@
-from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,6 +8,7 @@ from sqlalchemy import select
 from backend.database import SessionLocal
 from backend.models import GameCredit, GameCreditUsage
 from backend.services.game_credit_service import (
+    GameCreditLedgerError,
     GameCreditCalculationError,
     REDEEMED_USAGE_STATUS,
     RELEASED_USAGE_STATUS,
@@ -17,7 +18,9 @@ from backend.services.game_credit_service import (
     get_available_game_credit_balance,
     redeem_reserved_game_credits,
     release_reserved_game_credits,
+    release_reserved_game_credit_usage,
     reserve_game_credits,
+    restore_redeemed_game_credit_usage,
 )
 from backend.tests.helpers import (
     authenticate_as,
@@ -55,7 +58,7 @@ def test_admin_can_issue_list_balance_and_reverse_game_credit(client: TestClient
     credit = issue_response.json()
     assert credit["user_id"] == player["id"]
     assert credit["amount_cents"] == 2500
-    assert credit["remaining_cents"] == 2500
+    assert credit["available_cents"] == 2500
     assert credit["credit_status"] == "active"
 
     balance_response = client.get(f"/game-credits/balance?user_id={player['id']}")
@@ -72,7 +75,7 @@ def test_admin_can_issue_list_balance_and_reverse_game_credit(client: TestClient
     )
     assert reverse_response.status_code == 200, reverse_response.text
     assert reverse_response.json()["credit_status"] == "reversed"
-    assert reverse_response.json()["remaining_cents"] == 0
+    assert reverse_response.json()["available_cents"] == 0
     with SessionLocal() as db:
         usage = db.scalars(
             select(GameCreditUsage).where(
@@ -88,6 +91,173 @@ def test_admin_can_issue_list_balance_and_reverse_game_credit(client: TestClient
     )
     assert balance_after_reverse_response.status_code == 200
     assert balance_after_reverse_response.json()["available_credit_cents"] == 0
+
+
+def test_admin_can_reverse_partially_used_credit_without_reserved_usage(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+
+    authenticate_as(admin["id"])
+    issue_response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": player["id"],
+            "amount_cents": 2500,
+            "credit_reason": "official_game_cancelled",
+            "source_game_id": game["id"],
+            "idempotency_key": "test-partial-credit-issue",
+            "note": "Official game cancelled.",
+        },
+    )
+    assert issue_response.status_code == 201, issue_response.text
+    credit = issue_response.json()
+
+    with SessionLocal() as db:
+        reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=1000,
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"partial-reverse:{booking['id']}",
+        )
+        redeem_reserved_game_credits(
+            db,
+            UUID(booking["id"]),
+            now=datetime.now(UTC),
+            user_id=UUID(player["id"]),
+        )
+        db.commit()
+
+    reverse_response = client.post(
+        f"/admin/game-credits/{credit['id']}/reverse",
+        json={
+            "idempotency_key": "test-partial-credit-reverse",
+            "note": "Void remaining value.",
+        },
+    )
+    assert reverse_response.status_code == 200, reverse_response.text
+    assert reverse_response.json()["credit_status"] == "reversed"
+    assert reverse_response.json()["available_cents"] == 0
+
+    with SessionLocal() as db:
+        reverse_usage = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.game_credit_id == UUID(credit["id"]),
+                GameCreditUsage.usage_type == "reverse",
+            )
+        ).one()
+
+    assert reverse_usage.amount_cents == 1500
+    assert reverse_usage.usage_status == "reversed"
+
+
+def test_reversed_credit_cannot_be_redeemed_released_or_restored(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+    booking = create_booking(client, player["id"], game["id"])
+
+    authenticate_as(admin["id"])
+    issue_response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": player["id"],
+            "amount_cents": 1000,
+            "credit_reason": "official_game_cancelled",
+            "source_game_id": game["id"],
+            "idempotency_key": "test-terminal-credit-issue",
+            "note": "Official game cancelled.",
+        },
+    )
+    assert issue_response.status_code == 201, issue_response.text
+    credit = issue_response.json()
+
+    reverse_response = client.post(
+        f"/admin/game-credits/{credit['id']}/reverse",
+        json={
+            "idempotency_key": "test-terminal-credit-reverse",
+            "note": "Void grant.",
+        },
+    )
+    assert reverse_response.status_code == 200, reverse_response.text
+
+    with SessionLocal() as db:
+        now = datetime.now(UTC)
+        reserved_usage = GameCreditUsage(
+            id=uuid4(),
+            game_credit_id=UUID(credit["id"]),
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            amount_cents=100,
+            currency="USD",
+            usage_type="redeem",
+            usage_status=RESERVED_USAGE_STATUS,
+            idempotency_key=f"stale-reserved:{uuid4()}",
+            reserved_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        redeemed_usage = GameCreditUsage(
+            id=uuid4(),
+            game_credit_id=UUID(credit["id"]),
+            booking_id=UUID(booking["id"]),
+            game_id=UUID(game["id"]),
+            amount_cents=100,
+            currency="USD",
+            usage_type="redeem",
+            usage_status=REDEEMED_USAGE_STATUS,
+            idempotency_key=f"stale-redeemed:{uuid4()}",
+            redeemed_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add_all([reserved_usage, redeemed_usage])
+        db.commit()
+
+        with pytest.raises(GameCreditLedgerError, match="Reversed game credit"):
+            release_reserved_game_credit_usage(
+                db,
+                reserved_usage.id,
+                now=datetime.now(UTC),
+                reason_code="test_release",
+            )
+        db.rollback()
+
+        with pytest.raises(GameCreditLedgerError, match="Reversed game credit"):
+            restore_redeemed_game_credit_usage(
+                db,
+                redeemed_usage.id,
+                now=datetime.now(UTC),
+                restore_reason="test_restore",
+            )
+        db.rollback()
+
+        with pytest.raises(GameCreditLedgerError, match="Reversed game credit"):
+            redeem_reserved_game_credits(
+                db,
+                UUID(booking["id"]),
+                now=datetime.now(UTC),
+                user_id=UUID(player["id"]),
+            )
+        db.rollback()
+
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+
+    assert refreshed_credit is not None
+    assert refreshed_credit.credit_status == "reversed"
+    assert refreshed_credit.available_cents == 0
 
 
 def test_regular_user_cannot_issue_game_credit(client: TestClient):
@@ -315,32 +485,6 @@ def test_admin_credit_rejects_source_payment_for_different_source_game(
     assert "Source payment must belong to the source game" in response.text
 
 
-def test_expired_credit_is_ignored_in_available_balance(client: TestClient):
-    admin = create_user(client)
-    player = create_user(client)
-    set_user_role(admin["id"], "admin")
-    venue = create_venue(client, admin["id"])
-    game = create_game(client, admin["id"], venue)
-    authenticate_as(admin["id"])
-
-    response = client.post(
-        "/admin/game-credits/issue",
-        json={
-            "user_id": player["id"],
-            "amount_cents": 2500,
-            "credit_reason": "admin_credit",
-            "source_game_id": game["id"],
-            "note": "Expired credit test.",
-            "expires_at": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
-        },
-    )
-
-    assert response.status_code == 201, response.text
-    balance_response = client.get(f"/game-credits/balance?user_id={player['id']}")
-    assert balance_response.status_code == 200, balance_response.text
-    assert balance_response.json()["available_credit_cents"] == 0
-
-
 def test_game_credit_application_calculates_checkout_amounts_in_cents():
     no_credit = calculate_game_credit_application(
         1500,
@@ -433,7 +577,7 @@ def test_game_credit_application_rejects_negative_money_values():
         )
 
 
-def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
+def test_game_credit_ledger_reserves_releases_and_redeems_oldest_grant_first(
     client: TestClient,
 ):
     admin = create_user(client)
@@ -451,7 +595,6 @@ def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
             "source_game_id": game["id"],
             "idempotency_key": "soon-expiring-credit",
             "note": "Soon expiring credit.",
-            "expires_at": (datetime.now(UTC) + timedelta(days=2)).isoformat(),
         },
     )
     later_credit_response = client.post(
@@ -463,7 +606,6 @@ def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
             "source_game_id": game["id"],
             "idempotency_key": "later-expiring-credit",
             "note": "Later expiring credit.",
-            "expires_at": (datetime.now(UTC) + timedelta(days=10)).isoformat(),
         },
     )
     assert soon_credit_response.status_code == 201, soon_credit_response.text
@@ -514,9 +656,9 @@ def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
         refreshed_later_credit = db.get(GameCredit, UUID(later_credit["id"]))
         assert refreshed_soon_credit is not None
         assert refreshed_later_credit is not None
-        assert refreshed_soon_credit.remaining_cents == 0
+        assert refreshed_soon_credit.available_cents == 0
         assert refreshed_soon_credit.credit_status == "active"
-        assert refreshed_later_credit.remaining_cents == 700
+        assert refreshed_later_credit.available_cents == 700
         assert (
             get_available_game_credit_balance(db, UUID(player["id"]), now=now)
             == 700
@@ -531,7 +673,7 @@ def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
         reverse_reserved_response.text
     )
     assert reverse_reserved_response.json()["detail"] == (
-        "Only active unused credit can be reversed."
+        "Credit with reserved usage cannot be reversed."
     )
 
     with SessionLocal() as db:
@@ -539,7 +681,7 @@ def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
             db,
             UUID(booking["id"]),
             now=datetime.now(UTC),
-            release_reason="test_release",
+            reason_code="test_release",
             user_id=UUID(player["id"]),
         )
         db.commit()
@@ -552,8 +694,8 @@ def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
         restored_later_credit = db.get(GameCredit, UUID(later_credit["id"]))
         assert restored_soon_credit is not None
         assert restored_later_credit is not None
-        assert restored_soon_credit.remaining_cents == 500
-        assert restored_later_credit.remaining_cents == 1000
+        assert restored_soon_credit.available_cents == 500
+        assert restored_later_credit.available_cents == 1000
 
     second_booking = create_booking(
         client,
@@ -593,10 +735,101 @@ def test_game_credit_ledger_reserves_releases_and_redeems_oldest_expiring_first(
         redeemed_later_credit = db.get(GameCredit, UUID(later_credit["id"]))
         assert redeemed_soon_credit is not None
         assert redeemed_later_credit is not None
-        assert redeemed_soon_credit.remaining_cents == 0
+        assert redeemed_soon_credit.available_cents == 0
         assert redeemed_soon_credit.credit_status == "used"
-        assert redeemed_later_credit.remaining_cents == 700
+        assert redeemed_later_credit.available_cents == 700
         assert redeemed_later_credit.credit_status == "active"
+
+
+def test_restoring_redeemed_usage_twice_does_not_create_second_movement(
+    client: TestClient,
+):
+    admin = create_user(client)
+    player = create_user(client)
+    set_user_role(admin["id"], "admin")
+    venue = create_venue(client, admin["id"])
+    game = create_game(client, admin["id"], venue)
+
+    authenticate_as(admin["id"])
+    credit_response = client.post(
+        "/admin/game-credits/issue",
+        json={
+            "user_id": player["id"],
+            "amount_cents": 1000,
+            "credit_reason": "admin_credit",
+            "source_game_id": game["id"],
+            "idempotency_key": f"restore-duplicate-credit-{uuid4()}",
+            "note": "Regression coverage for duplicate restores.",
+        },
+    )
+    assert credit_response.status_code == 201, credit_response.text
+    credit = credit_response.json()
+
+    first_booking = create_booking(client, player["id"], game["id"])
+    second_booking = create_booking(client, player["id"], game["id"])
+
+    with SessionLocal() as db:
+        first_usage = reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=400,
+            booking_id=UUID(first_booking["id"]),
+            game_id=UUID(game["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"first-restore-duplicate:{first_booking['id']}",
+        )[0]
+        redeem_reserved_game_credits(
+            db,
+            UUID(first_booking["id"]),
+            now=datetime.now(UTC),
+            user_id=UUID(player["id"]),
+        )
+        reserve_game_credits(
+            db,
+            UUID(player["id"]),
+            amount_cents=500,
+            booking_id=UUID(second_booking["id"]),
+            game_id=UUID(game["id"]),
+            now=datetime.now(UTC),
+            idempotency_scope=f"second-restore-duplicate:{second_booking['id']}",
+        )
+        redeem_reserved_game_credits(
+            db,
+            UUID(second_booking["id"]),
+            now=datetime.now(UTC),
+            user_id=UUID(player["id"]),
+        )
+        db.commit()
+
+        first_usage = db.get(GameCreditUsage, first_usage.id)
+        assert first_usage is not None
+        restored_once = restore_redeemed_game_credit_usage(
+            db,
+            first_usage.id,
+            now=datetime.now(UTC),
+            restore_reason="first_restore_reason",
+        )
+        restored_twice = restore_redeemed_game_credit_usage(
+            db,
+            first_usage.id,
+            now=datetime.now(UTC),
+            restore_reason="different_restore_reason",
+        )
+        db.commit()
+
+        restores = db.scalars(
+            select(GameCreditUsage).where(
+                GameCreditUsage.original_usage_id == first_usage.id,
+                GameCreditUsage.usage_type == "restore",
+                GameCreditUsage.usage_status == "restored",
+            )
+        ).all()
+        refreshed_credit = db.get(GameCredit, UUID(credit["id"]))
+
+    assert restored_twice.id == restored_once.id
+    assert len(restores) == 1
+    assert refreshed_credit is not None
+    assert refreshed_credit.available_cents == 500
 
 
 def test_user_game_credit_application_uses_available_balance(client: TestClient):

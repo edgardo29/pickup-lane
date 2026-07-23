@@ -900,7 +900,7 @@ def test_stripe_webhook_succeeded_redeems_reserved_game_credit(
         credit = db.get(GameCredit, UUID(checkout["credit"]["id"]))
         assert usage.usage_status == RESERVED_USAGE_STATUS
         assert credit is not None
-        assert credit.remaining_cents == 0
+        assert credit.available_cents == 0
         assert credit.credit_status == "active"
 
     event = build_payment_intent_event(
@@ -925,7 +925,7 @@ def test_stripe_webhook_succeeded_redeems_reserved_game_credit(
     assert redeemed_usage.usage_status == REDEEMED_USAGE_STATUS
     assert redeemed_usage.redeemed_at is not None
     assert redeemed_credit is not None
-    assert redeemed_credit.remaining_cents == 0
+    assert redeemed_credit.available_cents == 0
     assert redeemed_credit.credit_status == "used"
 
 
@@ -1153,9 +1153,9 @@ def test_stripe_webhook_failed_payment_releases_reserved_game_credit(
 
     assert usage.usage_status == RELEASED_USAGE_STATUS
     assert usage.released_at is not None
-    assert usage.release_reason == "payment_intent_payment_failed"
+    assert usage.reason_code == "payment_intent_payment_failed"
     assert credit is not None
-    assert credit.remaining_cents == 500
+    assert credit.available_cents == 500
     assert credit.credit_status == "active"
     failed_notifications = list_user_notifications(
         client,
@@ -1228,9 +1228,9 @@ def test_stripe_webhook_canceled_payment_releases_reserved_game_credit(
 
     assert usage.usage_status == RELEASED_USAGE_STATUS
     assert usage.released_at is not None
-    assert usage.release_reason == "payment_intent_canceled"
+    assert usage.reason_code == "payment_intent_canceled"
     assert credit is not None
-    assert credit.remaining_cents == 500
+    assert credit.available_cents == 500
     assert credit.credit_status == "active"
 
 
@@ -1270,7 +1270,7 @@ def test_stripe_webhook_refund_updated_succeeded_marks_payment_refunded(
 
     payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
     assert payment_response.status_code == 200, payment_response.text
-    assert payment_response.json()["payment_status"] == "refunded"
+    assert payment_response.json()["payment_status"] == "succeeded"
 
     authenticate_as(user["id"])
     booking_response = client.get(f"/bookings/{booking['id']}")
@@ -1383,9 +1383,24 @@ def test_stripe_webhook_refund_updated_recovers_missing_internal_refund(
     assert refunds[0]["refund_status"] == "succeeded"
     assert refunds[0]["booking_id"] == booking["id"]
 
+    refund_events_response = get_money_as_admin(
+        client,
+        f"/admin/money/refunds/{refunds[0]['id']}/events",
+    )
+    assert refund_events_response.status_code == 200, refund_events_response.text
+    refund_events = refund_events_response.json()["items"]
+    provider_events = [
+        item
+        for item in refund_events
+        if item["provider_event_id"] == event["id"]
+    ]
+    assert len(provider_events) == 1
+    assert provider_events[0]["provider_status"] == "succeeded"
+    assert provider_events[0]["new_refund_status"] == "succeeded"
+
     payment_response = get_money_as_admin(client, f"/payments/{payment['id']}")
     assert payment_response.status_code == 200, payment_response.text
-    assert payment_response.json()["payment_status"] == "refunded"
+    assert payment_response.json()["payment_status"] == "succeeded"
 
 
 def test_stripe_webhook_unmatched_refund_is_saved_and_ignored(

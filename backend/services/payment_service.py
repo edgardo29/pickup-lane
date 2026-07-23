@@ -16,7 +16,6 @@ from backend.services.auth_service import require_active_admin_user, user_is_act
 from backend.services.payment_rules import (
     COLLECTED_PAYMENT_STATUSES,
     FAILED_PAYMENT_STATUSES,
-    POST_SUCCESS_PAYMENT_STATUSES,
     VALID_CURRENCY,
     VALID_PAYMENT_STATUSES,
     VALID_PAYMENT_TYPES,
@@ -29,6 +28,9 @@ def build_payment_conflict_detail(exc: IntegrityError) -> str:
 
     if "uq_payments_provider_payment_intent_id" in error_text:
         return "A payment with this provider_payment_intent_id already exists."
+
+    if "uq_payments_provider_charge_id" in error_text:
+        return "A payment with this provider_charge_id already exists."
 
     if "uq_payments_idempotency_key" in error_text:
         return "A payment with this idempotency_key already exists."
@@ -93,7 +95,7 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "payment_type must be 'booking', 'community_publish_fee', "
-                "'refund_adjustment', or 'admin_charge'."
+                "or 'admin_charge'."
             ),
         )
 
@@ -109,7 +111,7 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
             detail=(
                 "payment_status must be 'requires_payment_method', "
                 "'processing', 'requires_action', 'succeeded', 'failed', "
-                "'canceled', 'refunded', 'partially_refunded', or 'disputed'."
+                "or 'canceled'."
             ),
         )
 
@@ -119,10 +121,10 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
             detail="currency must be 'USD'.",
         )
 
-    if payment_data["amount_cents"] < 0:
+    if payment_data["amount_cents"] <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="amount_cents must be greater than or equal to 0.",
+            detail="amount_cents must be greater than 0.",
         )
 
     if payment_data["payment_type"] == "booking" and payment_data["booking_id"] is None:
@@ -146,45 +148,24 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
             detail="Community publish fee payments cannot include booking_id.",
         )
 
-    if (
-        payment_data["payment_type"] in {"refund_adjustment", "admin_charge"}
-        and (
-            payment_data["booking_id"] is not None
-            or payment_data["game_id"] is not None
-        )
+    if payment_data["payment_type"] == "admin_charge" and (
+        payment_data["booking_id"] is not None or payment_data["game_id"] is not None
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "Refund adjustment and admin charge payments cannot include "
-                "booking_id or game_id."
-            ),
-        )
-
-    if (
-        payment_data["payment_status"] in POST_SUCCESS_PAYMENT_STATUSES
-        and payment_data["paid_at"] is None
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Refunded, partially_refunded, and disputed payments require "
-                "paid_at from an earlier successful payment."
+                "Admin charge payments cannot include booking_id or game_id."
             ),
         )
 
     if (
         payment_data["payment_status"] in FAILED_PAYMENT_STATUSES
-        and payment_data["failure_reason"] is None
         and payment_data["failure_code"] is None
         and payment_data["failure_message"] is None
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Failed and canceled payments require failure_reason, "
-                "failure_code, or failure_message."
-            ),
+            detail="Failed and canceled payments require failure_code or failure_message.",
         )
 
 
@@ -194,7 +175,7 @@ def validate_payment_type(value: str) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "payment_type must be 'booking', 'community_publish_fee', "
-                "'refund_adjustment', or 'admin_charge'."
+                "or 'admin_charge'."
             ),
         )
 
@@ -206,7 +187,7 @@ def validate_payment_status(value: str) -> None:
             detail=(
                 "payment_status must be 'requires_payment_method', "
                 "'processing', 'requires_action', 'succeeded', 'failed', "
-                "'canceled', 'refunded', 'partially_refunded', or 'disputed'."
+                "or 'canceled'."
             ),
         )
 
@@ -217,20 +198,14 @@ def normalize_payment_lifecycle_fields(
 ) -> dict[str, object]:
     normalized_data = dict(payment_data)
 
-    # Preserve paid_at for payment states that can only happen after a
-    # successful payment, including later refund or dispute history.
+    # Collection success is the only state that owns paid_at. Refund state is
+    # derived from refunds, not stored back onto payments.
     if normalized_data["payment_status"] in COLLECTED_PAYMENT_STATUSES:
-        if normalized_data["payment_status"] == "succeeded":
-            normalized_data["paid_at"] = (
-                normalized_data.get("paid_at")
-                or (existing_payment.paid_at if existing_payment is not None else None)
-                or datetime.now(timezone.utc)
-            )
-        else:
-            normalized_data["paid_at"] = (
-                normalized_data.get("paid_at")
-                or (existing_payment.paid_at if existing_payment is not None else None)
-            )
+        normalized_data["paid_at"] = (
+            normalized_data.get("paid_at")
+            or (existing_payment.paid_at if existing_payment is not None else None)
+            or datetime.now(timezone.utc)
+        )
     else:
         normalized_data["paid_at"] = None
 
@@ -441,7 +416,6 @@ def update_payment_record(
         "failure_message": update_data.get(
             "failure_message", db_payment.failure_message
         ),
-        "failure_reason": update_data.get("failure_reason", db_payment.failure_reason),
         "payment_metadata": update_data.get(
             "payment_metadata", db_payment.payment_metadata
         ),
