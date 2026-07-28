@@ -82,7 +82,11 @@ class AdminAction(Base):
         ),
         Index("ix_admin_actions_admin_user_id", "admin_user_id"),
         Index("ix_admin_actions_action_type", "action_type"),
-        Index("ix_admin_actions_created_at", "created_at"),
+        Index(
+            "ix_admin_actions_log_created_id",
+            text("created_at DESC"),
+            text("id DESC"),
+        ),
         Index("ix_admin_actions_target_user_id", "target_user_id"),
         Index("ix_admin_actions_target_game_id", "target_game_id"),
         Index("ix_admin_actions_target_booking_id", "target_booking_id"),
@@ -379,14 +383,23 @@ class AdminAction(Base):
             ),
         ),
         Index(
-            "ix_admin_actions_admin_user_id_created_at",
+            "ix_admin_actions_log_admin_created_id",
             "admin_user_id",
-            "created_at",
+            text("created_at DESC"),
+            text("id DESC"),
         ),
         Index(
-            "ix_admin_actions_action_type_created_at",
+            "ix_admin_actions_log_action_created_id",
             "action_type",
-            "created_at",
+            text("created_at DESC"),
+            text("id DESC"),
+        ),
+        Index(
+            "ix_admin_actions_log_admin_action_created_id",
+            "admin_user_id",
+            "action_type",
+            text("created_at DESC"),
+            text("id DESC"),
         ),
     )
 

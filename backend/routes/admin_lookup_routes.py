@@ -21,6 +21,7 @@ router = APIRouter(prefix="/admin/lookups", tags=["admin_lookups"])
 def list_admin_lookup_users(
     account_status: str | None = Query(default=None, max_length=40),
     query: str | None = Query(default=None, max_length=120),
+    role: str | None = Query(default=None, max_length=20),
     limit: int = Query(default=10, ge=1, le=10),
     db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
@@ -30,6 +31,7 @@ def list_admin_lookup_users(
             db,
             account_status=account_status,
             query=query,
+            role=role,
             limit=limit,
         )
     }

@@ -2,13 +2,14 @@
 # surface grows.
 from backend.schemas.admin_action_schema import (
     AdminActionCreate,
+    AdminActionDetailRead,
+    AdminActionLogActionTypeOptionRead,
+    AdminActionLogItemRead,
+    AdminActionLogListRead,
+    AdminActionLogTargetSummaryRead,
     AdminActionNoteCreate,
     AdminActionRead,
-)
-from backend.schemas.admin_action_center_schema import (
-    AdminActionCenterItemRead,
-    AdminActionCenterRead,
-    AdminActionCenterSectionRead,
+    AdminActionTargetDetailRead,
 )
 from backend.schemas.admin_lookup_schema import (
     AdminLookupUserListRead,
@@ -401,9 +402,12 @@ from backend.schemas.waitlist_entry_schema import (
 
 __all__ = [
     "AdminActionCreate",
-    "AdminActionCenterItemRead",
-    "AdminActionCenterRead",
-    "AdminActionCenterSectionRead",
+    "AdminActionDetailRead",
+    "AdminActionLogActionTypeOptionRead",
+    "AdminActionLogItemRead",
+    "AdminActionLogListRead",
+    "AdminActionLogTargetSummaryRead",
+    "AdminActionTargetDetailRead",
     "AdminLookupUserListRead",
     "AdminLookupUserRead",
     "AdminChatDetectionRead",

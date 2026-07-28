@@ -86,8 +86,59 @@ class AdminActionRead(BaseModel):
     created_at: datetime
 
 
+class AdminActionTargetDetailRead(BaseModel):
+    target_field: str
+    target_type: str
+    target_type_label: str
+    target_id: UUID
+    label: str
+    destination_path: str | None = None
+    is_primary: bool = False
+
+
+class AdminActionDetailRead(AdminActionRead):
+    target_details: list[AdminActionTargetDetailRead] = Field(default_factory=list)
+
+
 class AdminActionNoteCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     note: str
     idempotency_key: str | None = None
+
+
+class AdminActionLogActionTypeOptionRead(BaseModel):
+    action_type: str
+    label: str
+
+
+class AdminActionLogTargetSummaryRead(BaseModel):
+    target_field: str
+    target_type: str
+    target_type_label: str
+    target_id: UUID
+    label: str
+    destination_path: str | None = None
+
+
+class AdminActionLogItemRead(BaseModel):
+    id: UUID
+    action_type: str
+    action_label: str
+    admin_user_id: UUID
+    admin_label: str
+    admin_email: str | None = None
+    primary_target: AdminActionLogTargetSummaryRead | None = None
+    target_label: str
+    target_type_label: str
+    destination_path: str | None = None
+    reason_preview: str | None = None
+    created_at: datetime
+
+
+class AdminActionLogListRead(BaseModel):
+    actions: list[AdminActionLogItemRead]
+    action_type_options: list[AdminActionLogActionTypeOptionRead]
+    limit: int = 50
+    next_cursor: str | None = None
+    has_more: bool = False

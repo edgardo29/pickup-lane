@@ -1,12 +1,22 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User
-from backend.schemas import AdminActionCreate, AdminActionNoteCreate, AdminActionRead
+from backend.schemas import (
+    AdminActionCreate,
+    AdminActionDetailRead,
+    AdminActionLogListRead,
+    AdminActionNoteCreate,
+    AdminActionRead,
+)
 from backend.services.admin_action_policy import ADMIN_ACTION_TARGET_FIELDS
+from backend.services.admin_action_display_service import (
+    list_admin_action_log,
+    serialize_admin_action_detail_read,
+)
 from backend.services.admin_action_service import (
     append_admin_action_note,
     create_admin_action,
@@ -17,6 +27,22 @@ from backend.services.admin_action_service import (
 from backend.services.auth_service import require_active_admin
 
 router = APIRouter(prefix="/admin/actions", tags=["admin_actions"])
+ADMIN_ACTION_LOG_QUERY_PARAMS = {"admin_user_id", "action_type", "cursor"}
+
+
+def reject_unsupported_log_params(request: Request) -> None:
+    unsupported_params = sorted(
+        set(request.query_params.keys()) - ADMIN_ACTION_LOG_QUERY_PARAMS
+    )
+    if unsupported_params:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "admin_action_log_unsupported_query_param",
+                "message": "Admin Action Log only supports admin and action filters.",
+                "params": unsupported_params,
+            },
+        )
 
 
 @router.post("", response_model=AdminActionRead, status_code=status.HTTP_201_CREATED)
@@ -34,21 +60,44 @@ def create_admin_action_route(
 
 
 @router.get(
+    "/log",
+    response_model=AdminActionLogListRead,
+    status_code=status.HTTP_200_OK,
+)
+def list_admin_action_log_route(
+    request: Request,
+    admin_user_id: uuid.UUID | None = None,
+    action_type: str | None = Query(default=None, max_length=60),
+    cursor: str | None = None,
+    current_user: User = Depends(require_active_admin),
+    db: Session = Depends(get_db),
+) -> AdminActionLogListRead:
+    reject_unsupported_log_params(request)
+    return list_admin_action_log(
+        db,
+        viewer_user=current_user,
+        admin_user_id=admin_user_id,
+        action_type=action_type,
+        cursor=cursor,
+    )
+
+
+@router.get(
     "/{admin_action_id}",
-    response_model=AdminActionRead,
+    response_model=AdminActionDetailRead,
     status_code=status.HTTP_200_OK,
 )
 def get_admin_action_route(
     admin_action_id: uuid.UUID,
     current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
-) -> AdminActionRead:
+) -> AdminActionDetailRead:
     admin_action = get_admin_action_for_viewer_or_404(
         db,
         admin_action_id,
         current_user,
     )
-    return serialize_admin_action_reads(db, [admin_action])[0]
+    return serialize_admin_action_detail_read(db, admin_action)
 
 
 @router.post(
