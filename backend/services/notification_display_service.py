@@ -27,6 +27,9 @@ def ensure_aware_utc(value: datetime) -> datetime:
 
 
 def format_row_subject(notification: Notification) -> str:
+    if notification.notification_type == "admin_enforcement_notice":
+        return notification.summary
+
     if notification.subject_starts_at is None:
         return notification.subject_label
 

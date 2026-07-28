@@ -40,10 +40,7 @@ class AdminAction(Base):
                 "'admin_cancel_community_game', "
                 "'restore_community_payment_text', "
                 "'create_notification', 'update_notification', "
-                "'create_platform_notice_campaign', "
-                "'update_platform_notice_campaign', "
-                "'send_platform_notice_campaign', "
-                "'retry_platform_notice_campaign', "
+                "'publish_platform_notice', 'cancel_platform_notice', "
                 "'user_role_changed', 'append_audit_note', "
                 "'resolve_support_flag', 'resolve_money_issue', "
                 "'retry_money_issue_credit', "
@@ -72,7 +69,7 @@ class AdminAction(Base):
                 "OR target_sub_post_position_id IS NOT NULL "
                 "OR target_sub_chat_message_id IS NOT NULL "
                 "OR target_notification_id IS NOT NULL "
-                "OR target_platform_notice_campaign_id IS NOT NULL "
+                "OR target_platform_notice_id IS NOT NULL "
                 "OR target_admin_action_id IS NOT NULL "
                 "OR target_support_flag_id IS NOT NULL "
                 "OR target_money_issue_id IS NOT NULL "
@@ -112,8 +109,8 @@ class AdminAction(Base):
         ),
         Index("ix_admin_actions_target_notification_id", "target_notification_id"),
         Index(
-            "ix_admin_actions_target_platform_notice_campaign_id",
-            "target_platform_notice_campaign_id",
+            "ix_admin_actions_target_platform_notice_id",
+            "target_platform_notice_id",
         ),
         Index("ix_admin_actions_target_admin_action_id", "target_admin_action_id"),
         Index("ix_admin_actions_target_support_flag_id", "target_support_flag_id"),
@@ -499,9 +496,9 @@ class AdminAction(Base):
         nullable=True,
     )
 
-    target_platform_notice_campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+    target_platform_notice_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("platform_notice_campaigns.id", ondelete="SET NULL"),
+        ForeignKey("platform_notices.id", ondelete="SET NULL"),
         nullable=True,
     )
 

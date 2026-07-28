@@ -1,16 +1,32 @@
 import { formatNotificationDate, formatRelativeTime } from './inboxFormatters.js'
 import InboxNotificationIcon from './InboxNotificationIcon.jsx'
+import { isInboxItemNew } from './inboxData.js'
 
-function InboxRow({ notification, onOpenNotification }) {
-  const eventAt = notification.event_at || notification.created_at
-  const relativeTime = formatRelativeTime(eventAt)
+function InboxRow({
+  notification,
+  onOpenNotification,
+  showMeta = true,
+  showNewBadge = true,
+  showReadIndicator = true,
+  showRelativeTime = true,
+  showUnreadState = true,
+}) {
+  const eventAt = notification.occurred_at || notification.event_at || notification.created_at
+  const relativeTime = showRelativeTime ? formatRelativeTime(eventAt) : ''
   const sourceLabel = notification.source_label || 'Pickup Lane'
   const title = notification.title || 'Inbox update'
-  const rowSubject = notification.row_subject || notification.subject_label || 'Pickup Lane'
+  const rowSubject = notification.row_subject || notification.subject_label || ''
+  const isNew = showUnreadState && isInboxItemNew(notification)
+  const isDateOnlyMeta = showMeta && !showRelativeTime && !showReadIndicator
+  const rowClassName = [
+    'inbox-row',
+    isNew ? 'inbox-row--unread' : '',
+    showMeta ? '' : 'inbox-row--without-meta',
+  ].filter(Boolean).join(' ')
 
   return (
     <button
-      className={`inbox-row ${notification.is_read ? '' : 'inbox-row--unread'}`}
+      className={rowClassName}
       type="button"
       onClick={() => onOpenNotification(notification)}
     >
@@ -23,16 +39,20 @@ function InboxRow({ notification, onOpenNotification }) {
         <span className="inbox-row__titleline">
           <span className="inbox-row__source">[{sourceLabel}]</span>
           <strong>{title}</strong>
-          {!notification.is_read && <em>New</em>}
+          {showNewBadge && isNew && <em>New</em>}
         </span>
-        <span className="inbox-row__subject">{rowSubject}</span>
+        {rowSubject && <span className="inbox-row__subject">{rowSubject}</span>}
       </span>
 
-      <span className="inbox-row__meta">
-        <span className="inbox-row__time">{relativeTime}</span>
-        <span className="inbox-row__date">{formatNotificationDate(eventAt)}</span>
-        <span className="inbox-row__read-indicator" aria-hidden="true" />
-      </span>
+      {showMeta && (
+        <span className={`inbox-row__meta ${isDateOnlyMeta ? 'inbox-row__meta--date-only' : ''}`}>
+          {showRelativeTime && <span className="inbox-row__time">{relativeTime}</span>}
+          <span className="inbox-row__date">{formatNotificationDate(eventAt)}</span>
+          {showReadIndicator && (
+            <span className="inbox-row__read-indicator" aria-hidden="true" />
+          )}
+        </span>
+      )}
     </button>
   )
 }

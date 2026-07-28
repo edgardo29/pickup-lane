@@ -31,7 +31,7 @@ const targetFields = [
   ['target_sub_post_position_id', 'Need a Sub position'],
   ['target_sub_chat_message_id', 'Need a Sub chat message'],
   ['target_notification_id', 'Notification'],
-  ['target_platform_notice_campaign_id', 'Platform notice campaign'],
+  ['target_platform_notice_id', 'Platform notice'],
   ['target_admin_action_id', 'Audit action'],
   ['target_support_flag_id', 'Support flag'],
 ]

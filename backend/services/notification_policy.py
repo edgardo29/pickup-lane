@@ -23,16 +23,16 @@ class NotificationTypeConfig:
 
 
 NOTIFICATION_TYPE_CONFIG = {
-    "admin_notice": NotificationTypeConfig(
+    "admin_enforcement_notice": NotificationTypeConfig(
         notification_category="app",
-        notification_domains=frozenset({"app", "admin"}),
-        title="Pickup Lane update",
-        summary="Pickup Lane posted an update.",
-        body="Pickup Lane posted an update.",
+        notification_domains=frozenset({"admin"}),
+        title="Account notice",
+        summary="Pickup Lane sent you an account notice.",
+        body="Pickup Lane sent you an account notice.",
         action_key=None,
         icon="Megaphone",
-        preference_class="conditional",
-        implementation_status="planned_if_tooling",
+        preference_class="mandatory",
+        implementation_status="active",
     ),
     "policy_update": NotificationTypeConfig(
         notification_category="app",
@@ -491,6 +491,8 @@ def subject_label_for_app_notification(
     if notification_type == "support_reply":
         return "Support"
     if notification_type == "policy_update":
+        return "Pickup Lane"
+    if notification_type == "admin_enforcement_notice":
         return "Pickup Lane"
     if source_type == "payment":
         return "Payment methods"

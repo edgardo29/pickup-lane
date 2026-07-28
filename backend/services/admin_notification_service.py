@@ -1,47 +1,98 @@
+import base64
+import binascii
+import hashlib
+import json
 import uuid
-from collections import defaultdict
+from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from backend.models import AdminAction, Notification, User
+from backend.models import (
+    AdminAction,
+    Booking,
+    ChatMessage,
+    Game,
+    GameChat,
+    GameParticipant,
+    Notification,
+    Payment,
+    Refund,
+    SubPost,
+    SubPostChat,
+    SubPostChatMessage,
+    SubPostPosition,
+    SubPostRequest,
+    User,
+)
 from backend.schemas.admin_notification_schema import (
     AdminNotificationActionStateRead,
     AdminNotificationAuditActionRead,
-    AdminNotificationDebugListRead,
-    AdminNotificationDebugRead,
+    AdminNotificationCompactRelatedRecordRead,
+    AdminNotificationLookupDetailRead,
+    AdminNotificationLookupItemRead,
+    AdminNotificationLookupListRead,
+    AdminNotificationRecipientRead,
+    AdminNotificationRelatedRecordRead,
 )
-from backend.services.notification_display_service import serialize_notification
+from backend.services.notification_display_service import (
+    format_row_subject,
+    serialize_notification,
+)
 from backend.services.notification_policy import (
-    VALID_ACTION_KEYS,
-    VALID_NOTIFICATION_CATEGORIES,
-    VALID_NOTIFICATION_DOMAINS,
-    VALID_NOTIFICATION_TYPES,
-    VALID_SOURCE_TYPES,
+    ICON_BY_NOTIFICATION_TYPE,
+    SEVERITY_BY_NOTIFICATION_TYPE,
+    SOURCE_LABEL_BY_TYPE,
 )
 
+NOTIFICATION_LOOKUP_RELATED_FIELDS: dict[str, tuple[str, str]] = {
+    "game": ("related_game_id", "Game"),
+    "game_chat": ("related_chat_id", "Game chat"),
+    "booking": ("related_booking_id", "Booking"),
+    "payment": ("related_payment_id", "Payment"),
+    "refund": ("related_refund_id", "Refund"),
+    "participant": ("related_participant_id", "Participant"),
+    "game_message": ("related_message_id", "Game message"),
+    "need_a_sub_post": ("related_sub_post_id", "Need a Sub post"),
+    "need_a_sub_chat": ("related_sub_post_chat_id", "Need a Sub chat"),
+    "need_a_sub_chat_message": (
+        "related_sub_post_chat_message_id",
+        "Need a Sub chat message",
+    ),
+    "need_a_sub_request": ("related_sub_post_request_id", "Need a Sub request"),
+    "need_a_sub_position": ("related_sub_post_position_id", "Need a Sub position"),
+}
 
-def normalize_optional_filter(
-    value: str | None,
-    *,
-    allowed_values: set[str],
-    field_name: str,
-) -> str | None:
-    if value is None:
-        return None
+NOTIFICATION_LOOKUP_RELATED_MODELS = {
+    "game": Game,
+    "game_chat": GameChat,
+    "booking": Booking,
+    "payment": Payment,
+    "refund": Refund,
+    "participant": GameParticipant,
+    "game_message": ChatMessage,
+    "need_a_sub_post": SubPost,
+    "need_a_sub_chat": SubPostChat,
+    "need_a_sub_chat_message": SubPostChatMessage,
+    "need_a_sub_request": SubPostRequest,
+    "need_a_sub_position": SubPostPosition,
+}
 
-    normalized_value = value.strip()
-    if not normalized_value:
-        return None
+MEANINGFUL_AGGREGATE_COUNT_NOTIFICATION_TYPES = {
+    "chat_message",
+    "sub_chat_message",
+}
 
-    if normalized_value not in allowed_values:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{field_name} is not supported.",
-        )
+ACTION_TARGET_RELATED_TYPE_BY_KEY = {
+    "view_game": "game",
+    "view_sub_post": "need_a_sub_post",
+}
 
-    return normalized_value
+NOTIFICATION_LOOKUP_CURSOR_VERSION = 1
+NOTIFICATION_LOOKUP_SORT_VERSION = "created_at_desc_id_desc"
+ADMIN_NOTIFICATION_LOOKUP_PAGE_LIMIT = 50
 
 
 def normalize_optional_exact_filter(value: str | None) -> str | None:
@@ -52,109 +103,110 @@ def normalize_optional_exact_filter(value: str | None) -> str | None:
     return normalized_value or None
 
 
+def lookup_validation_error(*, code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "code": code,
+            "message": message,
+        },
+    )
+
+
+def invalid_notification_cursor_error() -> HTTPException:
+    return lookup_validation_error(
+        code="invalid_notification_lookup_cursor",
+        message="cursor is invalid.",
+    )
+
+
+def query_context_hash(context: dict[str, object]) -> str:
+    raw_context = json.dumps(
+        context,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(raw_context).hexdigest()
+
+
+def encode_notification_cursor(
+    notification: Notification,
+    *,
+    context_hash: str,
+) -> str:
+    payload = {
+        "cursor_version": NOTIFICATION_LOOKUP_CURSOR_VERSION,
+        "sort_version": NOTIFICATION_LOOKUP_SORT_VERSION,
+        "created_at": notification.created_at.isoformat(),
+        "id": str(notification.id),
+        "query_context_hash": context_hash,
+    }
+    raw_payload = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw_payload).decode("ascii")
+
+
+def decode_notification_cursor(
+    cursor: str | None,
+    *,
+    expected_context_hash: str,
+) -> dict[str, Any] | None:
+    normalized_cursor = normalize_optional_exact_filter(cursor)
+    if normalized_cursor is None:
+        return None
+
+    try:
+        raw_payload = base64.urlsafe_b64decode(normalized_cursor.encode("ascii"))
+        payload = json.loads(raw_payload.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("cursor payload must be an object")
+        if payload.get("cursor_version") != NOTIFICATION_LOOKUP_CURSOR_VERSION:
+            raise ValueError("unsupported cursor version")
+        if payload.get("sort_version") != NOTIFICATION_LOOKUP_SORT_VERSION:
+            raise ValueError("unsupported sort version")
+        if payload.get("query_context_hash") != expected_context_hash:
+            raise ValueError("cursor context mismatch")
+        return {
+            "created_at": datetime.fromisoformat(payload["created_at"]),
+            "id": uuid.UUID(payload["id"]),
+        }
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+        binascii.Error,
+    ) as exc:
+        raise invalid_notification_cursor_error() from exc
+
+
+def build_cursor_filter(cursor_data: dict[str, Any] | None):
+    if cursor_data is None:
+        return None
+
+    return or_(
+        Notification.created_at < cursor_data["created_at"],
+        and_(
+            Notification.created_at == cursor_data["created_at"],
+            Notification.id < cursor_data["id"],
+        ),
+    )
+
+
 def build_admin_notification_filters(
     *,
     user_id: uuid.UUID | None = None,
-    notification_type: str | None = None,
-    notification_category: str | None = None,
-    notification_domain: str | None = None,
-    source_type: str | None = None,
-    is_read: bool | None = None,
-    action_key: str | None = None,
-    aggregation_key: str | None = None,
-    related_game_id: uuid.UUID | None = None,
-    related_chat_id: uuid.UUID | None = None,
-    related_booking_id: uuid.UUID | None = None,
-    related_payment_id: uuid.UUID | None = None,
-    related_refund_id: uuid.UUID | None = None,
-    related_participant_id: uuid.UUID | None = None,
-    related_message_id: uuid.UUID | None = None,
-    related_sub_post_id: uuid.UUID | None = None,
-    related_sub_post_chat_id: uuid.UUID | None = None,
-    related_sub_post_chat_message_id: uuid.UUID | None = None,
-    related_sub_post_request_id: uuid.UUID | None = None,
-    related_sub_post_position_id: uuid.UUID | None = None,
-) -> list[object]:
-    filters: list[object] = []
-
-    normalized_notification_type = normalize_optional_filter(
-        notification_type,
-        allowed_values=VALID_NOTIFICATION_TYPES,
-        field_name="notification_type",
-    )
-    normalized_notification_category = normalize_optional_filter(
-        notification_category,
-        allowed_values=VALID_NOTIFICATION_CATEGORIES,
-        field_name="notification_category",
-    )
-    normalized_notification_domain = normalize_optional_filter(
-        notification_domain,
-        allowed_values=VALID_NOTIFICATION_DOMAINS,
-        field_name="notification_domain",
-    )
-    normalized_source_type = normalize_optional_filter(
-        source_type,
-        allowed_values=VALID_SOURCE_TYPES,
-        field_name="source_type",
-    )
-    normalized_action_key = normalize_optional_filter(
-        action_key,
-        allowed_values=VALID_ACTION_KEYS,
-        field_name="action_key",
-    )
-    normalized_aggregation_key = normalize_optional_exact_filter(aggregation_key)
-
-    if user_id is not None:
-        filters.append(Notification.user_id == user_id)
-    if normalized_notification_type is not None:
-        filters.append(Notification.notification_type == normalized_notification_type)
-    if normalized_notification_category is not None:
-        filters.append(
-            Notification.notification_category == normalized_notification_category
-        )
-    if normalized_notification_domain is not None:
-        filters.append(Notification.notification_domain == normalized_notification_domain)
-    if normalized_source_type is not None:
-        filters.append(Notification.source_type == normalized_source_type)
-    if is_read is not None:
-        filters.append(Notification.is_read == is_read)
-    if normalized_action_key is not None:
-        filters.append(Notification.action_key == normalized_action_key)
-    if normalized_aggregation_key is not None:
-        filters.append(Notification.aggregation_key == normalized_aggregation_key)
-    if related_game_id is not None:
-        filters.append(Notification.related_game_id == related_game_id)
-    if related_chat_id is not None:
-        filters.append(Notification.related_chat_id == related_chat_id)
-    if related_booking_id is not None:
-        filters.append(Notification.related_booking_id == related_booking_id)
-    if related_payment_id is not None:
-        filters.append(Notification.related_payment_id == related_payment_id)
-    if related_refund_id is not None:
-        filters.append(Notification.related_refund_id == related_refund_id)
-    if related_participant_id is not None:
-        filters.append(Notification.related_participant_id == related_participant_id)
-    if related_message_id is not None:
-        filters.append(Notification.related_message_id == related_message_id)
-    if related_sub_post_id is not None:
-        filters.append(Notification.related_sub_post_id == related_sub_post_id)
-    if related_sub_post_chat_id is not None:
-        filters.append(Notification.related_sub_post_chat_id == related_sub_post_chat_id)
-    if related_sub_post_chat_message_id is not None:
-        filters.append(
-            Notification.related_sub_post_chat_message_id
-            == related_sub_post_chat_message_id
-        )
-    if related_sub_post_request_id is not None:
-        filters.append(
-            Notification.related_sub_post_request_id == related_sub_post_request_id
-        )
-    if related_sub_post_position_id is not None:
-        filters.append(
-            Notification.related_sub_post_position_id == related_sub_post_position_id
+) -> tuple[list[object], str]:
+    if user_id is None:
+        raise lookup_validation_error(
+            code="notification_lookup_user_required",
+            message="Search by recipient.",
         )
 
-    return filters
+    context = {
+        "user_id": str(user_id),
+    }
+
+    return [Notification.user_id == user_id], query_context_hash(context)
 
 
 def list_admin_notification_audit_actions(
@@ -170,41 +222,233 @@ def list_admin_notification_audit_actions(
         .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
     ).all()
 
-    actions_by_notification_id: dict[uuid.UUID, list[AdminAction]] = defaultdict(list)
+    actions_by_notification_id: dict[uuid.UUID, list[AdminAction]] = {}
     for action in audit_actions:
-        if action.target_notification_id is not None:
-            actions_by_notification_id[action.target_notification_id].append(action)
+        if action.target_notification_id is None:
+            continue
+        actions_by_notification_id.setdefault(action.target_notification_id, []).append(
+            action
+        )
 
-    return dict(actions_by_notification_id)
+    return actions_by_notification_id
+
+
+def users_by_id(db: Session, user_ids: list[uuid.UUID]) -> dict[uuid.UUID, User]:
+    if not user_ids:
+        return {}
+
+    return {
+        user.id: user
+        for user in db.scalars(select(User).where(User.id.in_(user_ids))).all()
+    }
+
+
+def user_display_name(user: User | None) -> str:
+    if user is None:
+        return "Unknown user"
+
+    name = " ".join(
+        part for part in (user.first_name, user.last_name) if part
+    ).strip()
+    return name or user.email or str(user.id)
+
+
+def serialize_admin_notification_recipient(
+    user: User | None,
+    *,
+    fallback_user_id: uuid.UUID,
+) -> AdminNotificationRecipientRead:
+    return AdminNotificationRecipientRead(
+        user_id=user.id if user is not None else fallback_user_id,
+        display_name=user_display_name(user),
+        email=user.email if user is not None else None,
+        account_status=user.account_status if user is not None else None,
+    )
+
+
+def related_record_exists(
+    db: Session,
+    *,
+    related_type: str,
+    related_id: uuid.UUID,
+) -> bool | None:
+    model = NOTIFICATION_LOOKUP_RELATED_MODELS.get(related_type)
+    if model is None:
+        return None
+    return db.get(model, related_id) is not None
+
+
+def related_records_for_notification(
+    db: Session | None,
+    notification: Notification,
+    *,
+    include_exists: bool = False,
+) -> list[AdminNotificationRelatedRecordRead]:
+    related_records: list[AdminNotificationRelatedRecordRead] = []
+    for related_type, (field_name, display_label) in (
+        NOTIFICATION_LOOKUP_RELATED_FIELDS.items()
+    ):
+        related_id = getattr(notification, field_name)
+        if related_id is None:
+            continue
+        related_records.append(
+            AdminNotificationRelatedRecordRead(
+                type=related_type,
+                id=related_id,
+                display_label=display_label,
+                exists=related_record_exists(
+                    db,
+                    related_type=related_type,
+                    related_id=related_id,
+                )
+                if include_exists and db is not None
+                else None,
+            )
+        )
+
+    return related_records
+
+
+def compact_related_records_for_notification(
+    notification: Notification,
+) -> list[AdminNotificationCompactRelatedRecordRead]:
+    related_records: list[AdminNotificationCompactRelatedRecordRead] = []
+    for related_type, (field_name, display_label) in (
+        NOTIFICATION_LOOKUP_RELATED_FIELDS.items()
+    ):
+        related_id = getattr(notification, field_name)
+        if related_id is None:
+            continue
+        related_records.append(
+            AdminNotificationCompactRelatedRecordRead(
+                type=related_type,
+                id=related_id,
+                display_label=display_label,
+            )
+        )
+
+    return related_records
+
+
+def action_target_record_for_notification(
+    db: Session,
+    notification: Notification,
+    *,
+    evaluate_exists: bool,
+) -> AdminNotificationRelatedRecordRead | None:
+    if notification.action_key is None:
+        return None
+
+    related_type = ACTION_TARGET_RELATED_TYPE_BY_KEY.get(notification.action_key)
+    if related_type is None:
+        return None
+
+    field_name, display_label = NOTIFICATION_LOOKUP_RELATED_FIELDS[related_type]
+    related_id = getattr(notification, field_name)
+    if related_id is None:
+        return None
+
+    return AdminNotificationRelatedRecordRead(
+        type=related_type,
+        id=related_id,
+        display_label=display_label,
+        exists=(
+            related_record_exists(
+                db,
+                related_type=related_type,
+                related_id=related_id,
+            )
+            if evaluate_exists
+            else None
+        ),
+    )
 
 
 def serialize_admin_notification_action_state(
+    db: Session,
+    notification: Notification,
     notification_data: dict[str, object],
+    *,
+    include_detail: bool,
 ) -> AdminNotificationActionStateRead:
     action_key = notification_data["action_key"]
     action = notification_data["action"]
+    evaluated_at = datetime.now(timezone.utc) if include_detail else None
+    target_record = action_target_record_for_notification(
+        db,
+        notification,
+        evaluate_exists=include_detail or action is None,
+    )
+    detail_target_record = target_record if include_detail else None
 
     if action_key is None:
-        return AdminNotificationActionStateRead(action_key=None, status="no_action")
+        return AdminNotificationActionStateRead(
+            action_key=None,
+            status="not_applicable",
+            reason_code="no_action" if include_detail else None,
+            explanation=(
+                "This notification does not have an Inbox action."
+                if include_detail
+                else None
+            ),
+            evaluated_at=evaluated_at,
+            target_record=detail_target_record,
+        )
+
+    if action is None and target_record is not None and target_record.exists is True:
+        return AdminNotificationActionStateRead(
+            action_key=str(action_key),
+            status="unavailable",
+            reason_code="action_unavailable" if include_detail else None,
+            explanation=(
+                "The stored action target exists but is no longer available "
+                "in the current product state."
+                if include_detail
+                else None
+            ),
+            evaluated_at=evaluated_at,
+            target_record=detail_target_record,
+        )
 
     if action is None:
         return AdminNotificationActionStateRead(
             action_key=str(action_key),
-            status="unavailable",
+            status="broken",
+            reason_code="action_target_broken" if include_detail else None,
+            explanation=(
+                "The stored action no longer resolves to an available target."
+                if include_detail
+                else None
+            ),
+            evaluated_at=evaluated_at,
+            target_record=detail_target_record,
         )
 
     action_payload = dict(action)
     if action_payload.get("disabled"):
+        disabled_reason = action_payload.get("disabled_reason")
         return AdminNotificationActionStateRead(
             action_key=str(action_key),
-            status="disabled",
-            disabled_reason=action_payload.get("disabled_reason"),
+            status="unavailable",
+            disabled_reason=disabled_reason if include_detail else None,
+            reason_code="action_disabled" if include_detail else None,
+            explanation=str(disabled_reason or "The action is currently disabled.")
+            if include_detail
+            else None,
+            evaluated_at=evaluated_at,
+            target_record=detail_target_record,
         )
 
     return AdminNotificationActionStateRead(
         action_key=str(action_key),
         status="available",
-        path=action_payload.get("path"),
+        path=action_payload.get("path") if include_detail else None,
+        reason_code="action_available" if include_detail else None,
+        explanation="The action currently resolves to an available target."
+        if include_detail
+        else None,
+        evaluated_at=evaluated_at,
+        target_record=detail_target_record,
     )
 
 
@@ -219,122 +463,147 @@ def serialize_admin_notification_audit_action(
     )
 
 
-def serialize_admin_notification_debug(
+def serialize_admin_notification_lookup_item(
+    db: Session,
+    notification: Notification,
+    *,
+    recipients: dict[uuid.UUID, User],
+) -> AdminNotificationLookupItemRead:
+    related_records = compact_related_records_for_notification(notification)
+
+    return AdminNotificationLookupItemRead(
+        id=notification.id,
+        user_id=notification.user_id,
+        recipient=serialize_admin_notification_recipient(
+            recipients.get(notification.user_id),
+            fallback_user_id=notification.user_id,
+        ),
+        title=notification.title,
+        subject_label=notification.subject_label,
+        row_subject=format_row_subject(notification),
+        notification_type=notification.notification_type,
+        notification_category=notification.notification_category,
+        notification_domain=notification.notification_domain,
+        source_type=notification.source_type,
+        source_label=SOURCE_LABEL_BY_TYPE.get(notification.source_type, "Pickup Lane"),
+        icon=ICON_BY_NOTIFICATION_TYPE.get(notification.notification_type, "Bell"),
+        severity=SEVERITY_BY_NOTIFICATION_TYPE.get(
+            notification.notification_type,
+            "default",
+        ),
+        event_at=notification.event_at,
+        created_at=notification.created_at,
+        is_read=notification.is_read,
+        read_at=notification.read_at,
+        primary_related_record=related_records[0] if related_records else None,
+    )
+
+
+def serialize_admin_notification_lookup_detail(
     db: Session,
     notification: Notification,
     *,
     audit_actions: list[AdminAction] | None = None,
-) -> AdminNotificationDebugRead:
+) -> AdminNotificationLookupDetailRead:
     notification_data = serialize_notification(db, notification)
+    if (
+        notification.notification_type
+        not in MEANINGFUL_AGGREGATE_COUNT_NOTIFICATION_TYPES
+    ):
+        notification_data["aggregate_count"] = None
     serialized_audit_actions = [
         serialize_admin_notification_audit_action(action)
         for action in (audit_actions or [])
     ]
 
-    return AdminNotificationDebugRead(
+    return AdminNotificationLookupDetailRead(
         **notification_data,
-        action_state=serialize_admin_notification_action_state(notification_data),
+        action_state=serialize_admin_notification_action_state(
+            db,
+            notification,
+            notification_data,
+            include_detail=True,
+        ),
+        related_records=related_records_for_notification(
+            db,
+            notification,
+            include_exists=True,
+        ),
         audit_actions=serialized_audit_actions,
         audit_action_count=len(serialized_audit_actions),
     )
 
 
-def list_admin_notification_debug(
+def list_admin_notification_lookup(
     db: Session,
     *,
     viewer_user: User,
-    offset: int = 0,
-    limit: int = 50,
+    cursor: str | None = None,
     user_id: uuid.UUID | None = None,
-    notification_type: str | None = None,
-    notification_category: str | None = None,
-    notification_domain: str | None = None,
-    source_type: str | None = None,
-    is_read: bool | None = None,
-    action_key: str | None = None,
-    aggregation_key: str | None = None,
-    related_game_id: uuid.UUID | None = None,
-    related_chat_id: uuid.UUID | None = None,
-    related_booking_id: uuid.UUID | None = None,
-    related_payment_id: uuid.UUID | None = None,
-    related_refund_id: uuid.UUID | None = None,
-    related_participant_id: uuid.UUID | None = None,
-    related_message_id: uuid.UUID | None = None,
-    related_sub_post_id: uuid.UUID | None = None,
-    related_sub_post_chat_id: uuid.UUID | None = None,
-    related_sub_post_chat_message_id: uuid.UUID | None = None,
-    related_sub_post_request_id: uuid.UUID | None = None,
-    related_sub_post_position_id: uuid.UUID | None = None,
-) -> AdminNotificationDebugListRead:
-    filters = build_admin_notification_filters(
+) -> AdminNotificationLookupListRead:
+    filters, context_hash = build_admin_notification_filters(
         user_id=user_id,
-        notification_type=notification_type,
-        notification_category=notification_category,
-        notification_domain=notification_domain,
-        source_type=source_type,
-        is_read=is_read,
-        action_key=action_key,
-        aggregation_key=aggregation_key,
-        related_game_id=related_game_id,
-        related_chat_id=related_chat_id,
-        related_booking_id=related_booking_id,
-        related_payment_id=related_payment_id,
-        related_refund_id=related_refund_id,
-        related_participant_id=related_participant_id,
-        related_message_id=related_message_id,
-        related_sub_post_id=related_sub_post_id,
-        related_sub_post_chat_id=related_sub_post_chat_id,
-        related_sub_post_chat_message_id=related_sub_post_chat_message_id,
-        related_sub_post_request_id=related_sub_post_request_id,
-        related_sub_post_position_id=related_sub_post_position_id,
     )
 
-    count_statement = select(func.count()).select_from(Notification)
-    list_statement = select(Notification)
-    if filters:
-        count_statement = count_statement.where(*filters)
-        list_statement = list_statement.where(*filters)
+    cursor_filter = build_cursor_filter(
+        decode_notification_cursor(
+            cursor,
+            expected_context_hash=context_hash,
+        )
+    )
+    if cursor_filter is not None:
+        filters.append(cursor_filter)
 
-    total_count = db.scalar(count_statement) or 0
+    query_limit = ADMIN_NOTIFICATION_LOOKUP_PAGE_LIMIT
     notifications = list(
         db.scalars(
-            list_statement.order_by(
-                Notification.event_at.desc(),
+            select(Notification)
+            .where(*filters)
+            .order_by(
                 Notification.created_at.desc(),
+                Notification.id.desc(),
             )
-            .offset(offset)
-            .limit(limit)
+            .limit(query_limit + 1)
         ).all()
     )
-    audit_actions_by_notification_id = list_admin_notification_audit_actions(
+
+    has_more = len(notifications) > query_limit
+    page_notifications = notifications[:query_limit]
+    recipients = users_by_id(
         db,
-        [notification.id for notification in notifications],
+        sorted({notification.user_id for notification in page_notifications}, key=str),
     )
 
-    return AdminNotificationDebugListRead(
+    next_cursor = (
+        encode_notification_cursor(
+            page_notifications[-1],
+            context_hash=context_hash,
+        )
+        if has_more and page_notifications
+        else None
+    )
+
+    return AdminNotificationLookupListRead(
         notifications=[
-            serialize_admin_notification_debug(
+            serialize_admin_notification_lookup_item(
                 db,
                 notification,
-                audit_actions=audit_actions_by_notification_id.get(
-                    notification.id,
-                    [],
-                ),
+                recipients=recipients,
             )
-            for notification in notifications
+            for notification in page_notifications
         ],
-        total_count=total_count,
-        offset=offset,
-        limit=limit,
+        limit=query_limit,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
 
-def get_admin_notification_debug_detail(
+def get_admin_notification_lookup_detail(
     db: Session,
     *,
     notification_id: uuid.UUID,
     viewer_user: User,
-) -> AdminNotificationDebugRead:
+) -> AdminNotificationLookupDetailRead:
     notification = db.get(Notification, notification_id)
     if notification is None:
         raise HTTPException(
@@ -343,7 +612,7 @@ def get_admin_notification_debug_detail(
         )
 
     audit_actions = list_admin_notification_audit_actions(db, [notification.id])
-    return serialize_admin_notification_debug(
+    return serialize_admin_notification_lookup_detail(
         db,
         notification,
         audit_actions=audit_actions.get(notification.id, []),

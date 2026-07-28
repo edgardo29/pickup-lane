@@ -31,7 +31,7 @@ class Notification(Base):
                 "'game_reminder', 'waitlist_joined', 'waitlist_promoted', "
                 "'waitlist_expired', 'host_update', 'chat_message', "
                 "'deposit_paid', 'deposit_released', 'deposit_forfeited', "
-                "'admin_notice', 'support_reply', 'account_security', "
+                "'admin_enforcement_notice', 'support_reply', 'account_security', "
                 "'policy_update', 'game_player_added_by_admin', "
                 "'game_player_removed_by_admin', 'game_host_assigned', "
                 "'game_host_removed', 'game_roster_update', "
@@ -100,7 +100,7 @@ class Notification(Base):
         ),
         CheckConstraint(
             (
-                "((notification_type IN ('admin_notice', 'policy_update') "
+                "((notification_type IN ('admin_enforcement_notice', 'policy_update') "
                 "AND notification_category = 'app' "
                 "AND notification_domain IN ('app', 'admin')) "
                 "OR (notification_type = 'support_reply' "
@@ -220,6 +220,19 @@ class Notification(Base):
             "user_id",
             "notification_category",
             "event_at",
+        ),
+        Index(
+            "ix_notifications_user_event_created_id",
+            "user_id",
+            "event_at",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_notifications_user_created_id",
+            "user_id",
+            text("created_at DESC"),
+            text("id DESC"),
         ),
         Index("ix_notifications_related_game_id", "related_game_id"),
         Index("ix_notifications_related_chat_id", "related_chat_id"),

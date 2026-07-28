@@ -262,7 +262,7 @@ def move_sub_post_expiration_into_past(post_id: str) -> None:
         db.commit()
 
 
-def count_admin_notice_notifications(user_id: str) -> int:
+def count_admin_enforcement_notice_notifications(user_id: str) -> int:
     with SessionLocal() as db:
         return int(
             db.scalar(
@@ -270,7 +270,7 @@ def count_admin_notice_notifications(user_id: str) -> int:
                 .select_from(Notification)
                 .where(
                     Notification.user_id == UUID(user_id),
-                    Notification.notification_type == "admin_notice",
+                    Notification.notification_type == "admin_enforcement_notice",
                 )
             )
             or 0
@@ -288,7 +288,7 @@ def test_normal_need_a_sub_payment_note_does_not_surface_review_case(
     )
 
     assert get_review_findings_for_sub_post(post["id"]) == []
-    assert count_admin_notice_notifications(owner["id"]) == 0
+    assert count_admin_enforcement_notice_notifications(owner["id"]) == 0
 
 
 def test_need_a_sub_risky_text_surfaces_and_marks_stale_after_clean_edit(
@@ -333,7 +333,7 @@ def test_need_a_sub_risky_text_surfaces_and_marks_stale_after_clean_edit(
     assert any("https://pay.example.com" in excerpt for excerpt in excerpts)
     assert all("***" not in excerpt for excerpt in excerpts)
     assert all("[link]" not in excerpt for excerpt in excerpts)
-    assert count_admin_notice_notifications(owner["id"]) == 0
+    assert count_admin_enforcement_notice_notifications(owner["id"]) == 0
     authenticate_as(admin["id"])
     list_response = client.get("/admin/review-cases?case_status=open")
     assert list_response.status_code == 200, list_response.text
@@ -457,7 +457,7 @@ def test_need_a_sub_admin_remove_closes_case_as_enforcement_and_notices_owner(
         notes="Text me at 312-555-1234 before approval.",
     )
     case = get_review_cases_for_sub_post(post["id"])[0]
-    notice_count_before = count_admin_notice_notifications(owner["id"])
+    notice_count_before = count_admin_enforcement_notice_notifications(owner["id"])
 
     authenticate_as(admin["id"])
     remove_response = client.patch(
@@ -478,7 +478,10 @@ def test_need_a_sub_admin_remove_closes_case_as_enforcement_and_notices_owner(
     assert metadata["lifecycle_action"] == "admin_removed"
     assert metadata["trigger_actor_type"] == "admin"
     assert metadata["linked_admin_action_id"]
-    assert count_admin_notice_notifications(owner["id"]) == notice_count_before + 1
+    assert (
+        count_admin_enforcement_notice_notifications(owner["id"])
+        == notice_count_before + 1
+    )
     assert str(case.id) not in list_review_case_ids(
         client,
         admin["id"],
@@ -805,7 +808,7 @@ def test_need_a_sub_create_still_succeeds_when_scanner_fails(
 
     assert post["id"]
     assert get_review_findings_for_sub_post(post["id"]) == []
-    assert count_admin_notice_notifications(owner["id"]) == 0
+    assert count_admin_enforcement_notice_notifications(owner["id"]) == 0
 
 
 def test_community_game_host_edit_risky_text_surfaces_review_case(
@@ -846,7 +849,7 @@ def test_community_game_host_edit_risky_text_surfaces_review_case(
     )["matched_rule_ids"]
     evidence_text = " ".join(item["display_text"] for item in finding.evidence)
     assert "312-555-1212" in evidence_text
-    assert count_admin_notice_notifications(host["id"]) == 0
+    assert count_admin_enforcement_notice_notifications(host["id"]) == 0
 
 
 def test_community_game_payment_detail_surfaces_payment_review_case(
@@ -885,7 +888,7 @@ def test_community_game_payment_detail_surfaces_payment_review_case(
     assert "payment_pressure.phrase" in (
         finding.metadata_ or {}
     )["matched_rule_ids"]
-    assert count_admin_notice_notifications(host["id"]) == 0
+    assert count_admin_enforcement_notice_notifications(host["id"]) == 0
 
 
 def test_community_game_chat_detection_creates_parent_review_case(

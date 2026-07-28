@@ -6,7 +6,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = "0046_admin_review_workflow"
-down_revision = "0045_platform_notice_campaigns"
+down_revision = "0045_platform_notices"
 branch_labels = None
 depends_on = None
 
@@ -37,10 +37,7 @@ PREVIOUS_ADMIN_ACTION_TYPE_CHECK = (
     "'admin_cancel_community_game', "
     "'restore_community_payment_text', "
     "'create_notification', 'update_notification', "
-    "'create_platform_notice_campaign', "
-    "'update_platform_notice_campaign', "
-    "'send_platform_notice_campaign', "
-    "'retry_platform_notice_campaign', "
+    "'publish_platform_notice', 'cancel_platform_notice', "
     "'user_role_changed', 'append_audit_note', "
     "'resolve_support_flag'"
     ")"
@@ -72,10 +69,7 @@ ADMIN_ACTION_TYPE_CHECK = (
     "'admin_cancel_community_game', "
     "'restore_community_payment_text', "
     "'create_notification', 'update_notification', "
-    "'create_platform_notice_campaign', "
-    "'update_platform_notice_campaign', "
-    "'send_platform_notice_campaign', "
-    "'retry_platform_notice_campaign', "
+    "'publish_platform_notice', 'cancel_platform_notice', "
     "'user_role_changed', 'append_audit_note', "
     "'resolve_support_flag', "
     "'create_review_case', 'close_review_case', "
@@ -102,7 +96,7 @@ PREVIOUS_ADMIN_ACTION_TARGET_REQUIRED_CHECK = (
     "OR target_sub_post_position_id IS NOT NULL "
     "OR target_sub_chat_message_id IS NOT NULL "
     "OR target_notification_id IS NOT NULL "
-    "OR target_platform_notice_campaign_id IS NOT NULL "
+    "OR target_platform_notice_id IS NOT NULL "
     "OR target_admin_action_id IS NOT NULL "
     "OR target_support_flag_id IS NOT NULL"
 )

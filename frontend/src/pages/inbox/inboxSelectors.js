@@ -1,51 +1,73 @@
 import {
-  filterNotificationsBySource,
-  getSourceFilterOptions,
-  INBOX_SOURCE_FILTER_ALL,
+  APP_UPDATES_TAB,
+  GAME_ACTIVITY_TAB,
+  getStatusFilterOptions,
+  INBOX_STATUS_FILTER_ALL,
+  isInboxItemNew,
 } from './inboxData.js'
 
 function createInboxSection({
+  count,
   description,
   emptyMessage,
   emptyTitle,
+  hasMore,
+  isLoadingMore,
   key,
-  notifications,
-  sourceFilters,
+  loadMoreError,
+  items,
+  statusFilters,
   title,
 }) {
-  const sourceFilter = sourceFilters?.[key] || INBOX_SOURCE_FILTER_ALL
+  const statusFilter = statusFilters?.[key] || INBOX_STATUS_FILTER_ALL
+  const fallbackCount = items.filter(isInboxItemNew).length
 
   return {
+    count: typeof count === 'number' ? count : fallbackCount,
     description,
     emptyMessage,
     emptyTitle,
-    items: filterNotificationsBySource(notifications, sourceFilter),
+    hasMore: Boolean(hasMore),
+    isLoadingMore: Boolean(isLoadingMore),
+    items,
     key,
-    sourceFilterOptions: getSourceFilterOptions(key),
-    sourceFilterValue: sourceFilter,
+    loadMoreError: loadMoreError || '',
+    statusFilterOptions: getStatusFilterOptions(key),
+    statusFilterValue: statusFilter,
     title,
-    totalItems: notifications.length,
+    totalItems: items.length,
   }
 }
 
-export function getInboxSections(appNotifications, gameNotifications, sourceFilters = {}) {
+export function getInboxSections(feeds, statusFilters = {}, counts = {}) {
+  const appUpdates = feeds?.[APP_UPDATES_TAB] || {}
+  const gameActivity = feeds?.[GAME_ACTIVITY_TAB] || {}
+
   return [
     createInboxSection({
-      description: 'Important updates and support messages.',
-      emptyMessage: 'App-wide updates and support messages will show up here.',
-      emptyTitle: 'No app notifications',
-      key: 'app',
-      notifications: appNotifications,
-      sourceFilters,
-      title: 'App Notifications',
+      count: counts.app_updates_new_count,
+      description: 'Platform notices, account alerts, and admin updates.',
+      emptyMessage: 'Platform notices and account updates will show up here.',
+      emptyTitle: 'No app updates',
+      hasMore: appUpdates.hasMore,
+      isLoadingMore: appUpdates.isLoadingMore,
+      key: APP_UPDATES_TAB,
+      loadMoreError: appUpdates.loadMoreError,
+      items: appUpdates.items || [],
+      statusFilters,
+      title: 'App Updates',
     }),
     createInboxSection({
+      count: counts.game_activity_unread_count,
       description: 'Game, roster, chat, and Need a Sub updates.',
       emptyMessage: 'Game, chat, roster, and Need a Sub updates will show up here.',
       emptyTitle: 'No game activity',
-      key: 'game',
-      notifications: gameNotifications,
-      sourceFilters,
+      hasMore: gameActivity.hasMore,
+      isLoadingMore: gameActivity.isLoadingMore,
+      key: GAME_ACTIVITY_TAB,
+      loadMoreError: gameActivity.loadMoreError,
+      items: gameActivity.items || [],
+      statusFilters,
       title: 'Game Activity',
     }),
   ]
@@ -53,11 +75,11 @@ export function getInboxSections(appNotifications, gameNotifications, sourceFilt
 
 export function getFilteredSections(
   activeFilter,
-  appNotifications,
-  gameNotifications,
-  sourceFilters = {},
+  feeds,
+  statusFilters = {},
+  counts = {},
 ) {
-  return getInboxSections(appNotifications, gameNotifications, sourceFilters).filter(
+  return getInboxSections(feeds, statusFilters, counts).filter(
     (section) => section.key === activeFilter,
   )
 }

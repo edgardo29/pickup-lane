@@ -98,7 +98,7 @@ def upgrade() -> None:
                 "'game_reminder', 'waitlist_joined', 'waitlist_promoted', "
                 "'waitlist_expired', 'host_update', 'chat_message', "
                 "'deposit_paid', 'deposit_released', 'deposit_forfeited', "
-                "'admin_notice', 'support_reply', 'account_security', "
+                "'admin_enforcement_notice', 'support_reply', 'account_security', "
                 "'policy_update', 'game_player_added_by_admin', "
                 "'game_player_removed_by_admin', 'game_host_assigned', "
                 "'game_host_removed', 'game_roster_update', "
@@ -167,7 +167,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             (
-                "((notification_type IN ('admin_notice', 'policy_update') "
+                "((notification_type IN ('admin_enforcement_notice', 'policy_update') "
                 "AND notification_category = 'app' "
                 "AND notification_domain IN ('app', 'admin')) "
                 "OR (notification_type = 'support_reply' "
@@ -391,6 +391,18 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
+        "ix_notifications_user_event_created_id",
+        "notifications",
+        ["user_id", "event_at", "created_at", "id"],
+        unique=False,
+    )
+    op.execute(
+        """
+        CREATE INDEX ix_notifications_user_created_id
+        ON notifications (user_id, created_at DESC, id DESC)
+        """
+    )
+    op.create_index(
         "ix_notifications_related_game_id",
         "notifications",
         ["related_game_id"],
@@ -469,6 +481,14 @@ def downgrade() -> None:
     # migration only introduces that single table.
     op.drop_index(
         "ix_notifications_user_category_event_at",
+        table_name="notifications",
+    )
+    op.drop_index(
+        "ix_notifications_user_event_created_id",
+        table_name="notifications",
+    )
+    op.drop_index(
+        "ix_notifications_user_created_id",
         table_name="notifications",
     )
     op.drop_index(
