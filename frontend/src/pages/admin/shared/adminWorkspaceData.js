@@ -13,18 +13,8 @@ export const adminWorkspaceNavGroups = [
     label: 'Overview',
     items: [
       {
-        label: 'Action Center',
-        to: '/admin/action-center',
-        end: true,
-      },
-      {
         label: 'Review Cases',
         to: '/admin/review-cases',
-        end: true,
-      },
-      {
-        label: 'Audit Log',
-        to: '/admin/audit',
         end: true,
       },
     ],
@@ -108,6 +98,11 @@ export const adminWorkspaceNavGroups = [
       {
         label: 'Notification Lookup',
         to: '/admin/notifications',
+        end: true,
+      },
+      {
+        label: 'Admin Action Log',
+        to: '/admin/audit',
         end: true,
       },
       {

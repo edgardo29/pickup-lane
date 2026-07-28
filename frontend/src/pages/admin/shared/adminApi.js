@@ -34,12 +34,6 @@ export async function fetchAdminMe({ firebaseUser, forceRefresh = false }) {
   }
 }
 
-export async function fetchAdminActionCenter({ firebaseUser }) {
-  return apiRequest('/admin/action-center', {
-    headers: await getAdminHeaders(firebaseUser),
-  })
-}
-
 export async function listAdminReviewCases({
   caseCategory = '',
   caseStatus = 'open',
@@ -645,11 +639,15 @@ export async function listAdminLookupUsers({
   firebaseUser,
   limit = 10,
   query = '',
+  role = '',
   signal,
 } = {}) {
   const searchParams = new URLSearchParams()
   if (accountStatus) {
     searchParams.set('account_status', accountStatus)
+  }
+  if (role) {
+    searchParams.set('role', role)
   }
   if (query.trim()) {
     searchParams.set('query', query.trim())
@@ -977,9 +975,41 @@ export async function listAdminActions({
   })
 }
 
-export async function getAdminAction({ adminActionId, firebaseUser }) {
+const adminActionLogFilterParams = [
+  'admin_user_id',
+  'action_type',
+]
+
+export async function listAdminActionLog({
+  cursor = '',
+  filters = {},
+  firebaseUser,
+  signal,
+} = {}) {
+  const searchParams = new URLSearchParams()
+
+  adminActionLogFilterParams.forEach((param) => {
+    const value = filters[param]
+    const normalizedValue = String(value ?? '').trim()
+    if (normalizedValue) {
+      searchParams.set(param, normalizedValue)
+    }
+  })
+
+  if (cursor) {
+    searchParams.set('cursor', cursor)
+  }
+
+  return apiRequest(`/admin/actions/log?${searchParams.toString()}`, {
+    headers: await getAdminHeaders(firebaseUser),
+    signal,
+  })
+}
+
+export async function getAdminAction({ adminActionId, firebaseUser, signal }) {
   return apiRequest(`/admin/actions/${adminActionId}`, {
     headers: await getAdminHeaders(firebaseUser),
+    signal,
   })
 }
 

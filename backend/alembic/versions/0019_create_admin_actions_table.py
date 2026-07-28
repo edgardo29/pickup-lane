@@ -150,11 +150,11 @@ def upgrade() -> None:
         ["action_type"],
         unique=False,
     )
-    op.create_index(
-        "ix_admin_actions_created_at",
-        "admin_actions",
-        ["created_at"],
-        unique=False,
+    op.execute(
+        """
+        CREATE INDEX ix_admin_actions_log_created_id
+        ON admin_actions (created_at DESC, id DESC)
+        """
     )
     op.create_index(
         "ix_admin_actions_target_user_id",
@@ -318,17 +318,23 @@ def upgrade() -> None:
             "AND idempotency_key IS NOT NULL"
         ),
     )
-    op.create_index(
-        "ix_admin_actions_admin_user_id_created_at",
-        "admin_actions",
-        ["admin_user_id", "created_at"],
-        unique=False,
+    op.execute(
+        """
+        CREATE INDEX ix_admin_actions_log_admin_created_id
+        ON admin_actions (admin_user_id, created_at DESC, id DESC)
+        """
     )
-    op.create_index(
-        "ix_admin_actions_action_type_created_at",
-        "admin_actions",
-        ["action_type", "created_at"],
-        unique=False,
+    op.execute(
+        """
+        CREATE INDEX ix_admin_actions_log_action_created_id
+        ON admin_actions (action_type, created_at DESC, id DESC)
+        """
+    )
+    op.execute(
+        """
+        CREATE INDEX ix_admin_actions_log_admin_action_created_id
+        ON admin_actions (admin_user_id, action_type, created_at DESC, id DESC)
+        """
     )
 
 
@@ -336,11 +342,15 @@ def downgrade() -> None:
     # Downgrade removes the admin_actions table and indexes because this
     # migration only introduces that single audit table.
     op.drop_index(
-        "ix_admin_actions_action_type_created_at",
+        "ix_admin_actions_log_admin_action_created_id",
         table_name="admin_actions",
     )
     op.drop_index(
-        "ix_admin_actions_admin_user_id_created_at",
+        "ix_admin_actions_log_action_created_id",
+        table_name="admin_actions",
+    )
+    op.drop_index(
+        "ix_admin_actions_log_admin_created_id",
         table_name="admin_actions",
     )
     op.drop_index(
@@ -409,7 +419,7 @@ def downgrade() -> None:
     op.drop_index("ix_admin_actions_target_booking_id", table_name="admin_actions")
     op.drop_index("ix_admin_actions_target_game_id", table_name="admin_actions")
     op.drop_index("ix_admin_actions_target_user_id", table_name="admin_actions")
-    op.drop_index("ix_admin_actions_created_at", table_name="admin_actions")
+    op.drop_index("ix_admin_actions_log_created_id", table_name="admin_actions")
     op.drop_index("ix_admin_actions_action_type", table_name="admin_actions")
     op.drop_index("ix_admin_actions_admin_user_id", table_name="admin_actions")
     op.drop_table("admin_actions")

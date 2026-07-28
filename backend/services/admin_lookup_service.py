@@ -11,6 +11,7 @@ from backend.models import User, Venue
 USER_LOOKUP_MIN_TERM_LENGTH = 3
 USER_LOOKUP_MAX_TERMS = 3
 USER_LOOKUP_MAX_LIMIT = 10
+USER_LOOKUP_ALLOWED_ROLES = {"admin", "player"}
 
 
 def normalized_like_query(query: str | None) -> str | None:
@@ -64,12 +65,18 @@ def list_admin_lookup_users(
     *,
     account_status: str | None = None,
     query: str | None = None,
+    role: str | None = None,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     effective_limit = max(1, min(limit, USER_LOOKUP_MAX_LIMIT))
     statement = select(User).where(User.deleted_at.is_(None))
     if account_status:
         statement = statement.where(User.account_status == account_status)
+    if role:
+        normalized_role = role.strip().lower()
+        if normalized_role not in USER_LOOKUP_ALLOWED_ROLES:
+            return []
+        statement = statement.where(User.role == normalized_role)
 
     normalized_query = " ".join((query or "").strip().lower().split())
     if not normalized_query:

@@ -1,7 +1,14 @@
-from fastapi.testclient import TestClient
+import uuid
+from datetime import datetime, timezone
 
-from backend.models import AdminAction
+from fastapi.testclient import TestClient
+from sqlalchemy import event
+
+from backend.database import SessionLocal
+from backend.models import AdminAction, Game, User
+from backend.services.admin_action_display_service import list_admin_action_log
 from backend.services.admin_action_policy import ADMIN_ACTION_TYPES
+from backend.services.admin_action_service import record_admin_action
 from backend.tests.helpers import (
     authenticate_as,
     create_admin_action,
@@ -42,6 +49,14 @@ def test_admin_action_create_get_list_and_append_note(client: TestClient):
     assert get_response.json()["id"] == admin_action["id"]
     assert get_response.json()["admin_user_email"] == admin_user["email"]
     assert get_response.json()["target_user_email"] == target_user["email"]
+    target_details = get_response.json()["target_details"]
+    assert any(
+        target_detail["target_field"] == "target_user_id"
+        and target_detail["target_type_label"] == "User"
+        and target_detail["label"] == "Test User"
+        and target_detail["is_primary"]
+        for target_detail in target_details
+    )
 
     list_by_admin_response = client.get(
         f"/admin/actions?admin_user_id={admin_user['id']}"
@@ -89,6 +104,254 @@ def test_admin_action_create_get_list_and_append_note(client: TestClient):
     )
     assert duplicate_note_response.status_code == 201, duplicate_note_response.text
     assert duplicate_note_response.json()["id"] == note["id"]
+
+
+def test_admin_actions_list_contract_stays_plain_array(client: TestClient):
+    admin_user, target_user = create_admin_action_setup(client)
+    create_admin_action(
+        client,
+        admin_user["id"],
+        target_user_id=target_user["id"],
+    )
+
+    authenticate_as(admin_user["id"])
+    response = client.get("/admin/actions")
+
+    assert response.status_code == 200, response.text
+    assert isinstance(response.json(), list)
+
+
+def test_admin_action_log_model_indexes_match_cursor_contract():
+    def index_expression_labels(index_name: str) -> list[str]:
+        index = next(
+            index
+            for index in AdminAction.__table__.indexes
+            if index.name == index_name
+        )
+        return [
+            getattr(expression, "name", None) or str(expression)
+            for expression in index.expressions
+        ]
+
+    assert index_expression_labels("ix_admin_actions_log_created_id") == [
+        "created_at DESC",
+        "id DESC",
+    ]
+    assert index_expression_labels("ix_admin_actions_log_admin_created_id") == [
+        "admin_user_id",
+        "created_at DESC",
+        "id DESC",
+    ]
+    assert index_expression_labels("ix_admin_actions_log_action_created_id") == [
+        "action_type",
+        "created_at DESC",
+        "id DESC",
+    ]
+    assert index_expression_labels("ix_admin_actions_log_admin_action_created_id") == [
+        "admin_user_id",
+        "action_type",
+        "created_at DESC",
+        "id DESC",
+    ]
+
+
+def test_admin_action_log_route_returns_paginated_display_rows(client: TestClient):
+    admin_user, target_user = create_admin_action_setup(client)
+    admin_action = create_admin_action(
+        client,
+        admin_user["id"],
+        target_user_id=target_user["id"],
+        reason="Support reviewed the account.",
+    )
+
+    authenticate_as(admin_user["id"])
+    response = client.get("/admin/actions/log")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert set(body) >= {"actions", "action_type_options", "has_more", "next_cursor"}
+    assert body["limit"] == 50
+    option_labels = [option["label"] for option in body["action_type_options"]]
+    assert option_labels == sorted(option_labels, key=str.casefold)
+    assert any(
+        option == {"action_type": "suspend_user", "label": "User suspended"}
+        for option in body["action_type_options"]
+    )
+    row = next(action for action in body["actions"] if action["id"] == admin_action["id"])
+    assert row["action_label"] == "User suspended"
+    assert row["admin_label"] == "Test User"
+    assert row["admin_email"] == admin_user["email"]
+    assert row["target_label"] == "Test User"
+    assert row["target_type_label"] == "User"
+    assert row["reason_preview"] == "Support reviewed the account."
+
+
+def test_admin_action_log_rejects_removed_query_params(client: TestClient):
+    admin_user, _target_user = create_admin_action_setup(client)
+    authenticate_as(admin_user["id"])
+
+    for param_name in ("limit", "date_from", "date_to"):
+        response = client.get(f"/admin/actions/log?{param_name}=2026-01-01")
+
+        assert response.status_code == 400, response.text
+        assert response.json()["detail"]["code"] == (
+            "admin_action_log_unsupported_query_param"
+        )
+        assert response.json()["detail"]["params"] == [param_name]
+
+
+def test_admin_action_log_rejects_cursor_when_filter_changes(client: TestClient):
+    admin_user, target_user = create_admin_action_setup(client)
+    other_admin = create_user(client)
+    set_user_role(other_admin["id"], "admin")
+    with SessionLocal() as db:
+        for index in range(51):
+            record_admin_action(
+                db,
+                admin_user_id=uuid.UUID(admin_user["id"]),
+                action_type="suspend_user",
+                target_user_id=uuid.UUID(target_user["id"]),
+                reason=f"Cursor fixture {index}",
+                metadata={"source": "ci"},
+                created_at=datetime(2026, 1, 1, 12, index, tzinfo=timezone.utc),
+            )
+        db.commit()
+
+    authenticate_as(admin_user["id"])
+    response = client.get("/admin/actions/log")
+    assert response.status_code == 200, response.text
+    cursor = response.json()["next_cursor"]
+    assert cursor
+
+    changed_filter_response = client.get(
+        f"/admin/actions/log?cursor={cursor}&action_type=suspend_user"
+    )
+
+    assert changed_filter_response.status_code == 400, changed_filter_response.text
+    assert changed_filter_response.json()["detail"]["code"] == (
+        "invalid_admin_action_log_cursor"
+    )
+
+    changed_admin_response = client.get(
+        f"/admin/actions/log?cursor={cursor}&admin_user_id={other_admin['id']}"
+    )
+
+    assert changed_admin_response.status_code == 400, changed_admin_response.text
+    assert changed_admin_response.json()["detail"]["code"] == (
+        "invalid_admin_action_log_cursor"
+    )
+
+
+def test_admin_action_log_orders_created_at_ties_by_id_desc(client: TestClient):
+    admin_user, target_user = create_admin_action_setup(client)
+    created_at = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+    lower_id = uuid.UUID(int=1)
+    higher_id = uuid.UUID(int=2)
+
+    with SessionLocal() as db:
+        db.add_all(
+            [
+                AdminAction(
+                    id=lower_id,
+                    admin_user_id=uuid.UUID(admin_user["id"]),
+                    action_type="suspend_user",
+                    target_user_id=uuid.UUID(target_user["id"]),
+                    reason="Lower id",
+                    metadata_={"source": "ci"},
+                    created_at=created_at,
+                ),
+                AdminAction(
+                    id=higher_id,
+                    admin_user_id=uuid.UUID(admin_user["id"]),
+                    action_type="suspend_user",
+                    target_user_id=uuid.UUID(target_user["id"]),
+                    reason="Higher id",
+                    metadata_={"source": "ci"},
+                    created_at=created_at,
+                ),
+            ]
+        )
+        db.commit()
+
+    authenticate_as(admin_user["id"])
+    response = client.get("/admin/actions/log?action_type=suspend_user")
+
+    assert response.status_code == 200, response.text
+    assert [row["id"] for row in response.json()["actions"][:2]] == [
+        str(higher_id),
+        str(lower_id),
+    ]
+
+
+def test_admin_action_log_uses_missing_target_fallback(client: TestClient):
+    admin_user, target_user = create_admin_action_setup(client)
+    venue = create_venue(client, target_user["id"])
+    game = create_game(client, target_user["id"], venue)
+
+    with SessionLocal() as db:
+        record_admin_action(
+            db,
+            admin_user_id=uuid.UUID(admin_user["id"]),
+            action_type="create_official_game",
+            target_game_id=uuid.UUID(game["id"]),
+            reason="Created for fallback check.",
+        )
+        db_game = db.get(Game, uuid.UUID(game["id"]))
+        db_game.deleted_at = datetime.now(timezone.utc)
+        db.commit()
+
+    authenticate_as(admin_user["id"])
+    response = client.get("/admin/actions/log?action_type=create_official_game")
+
+    assert response.status_code == 200, response.text
+    [row] = response.json()["actions"]
+    assert row["target_label"] == f"Official game {game['id']}"
+    assert row["destination_path"] is None
+
+
+def test_admin_action_log_batch_loads_primary_targets(client: TestClient):
+    admin_user, target_user = create_admin_action_setup(client)
+    venue = create_venue(client, target_user["id"])
+    games = [create_game(client, target_user["id"], venue) for _ in range(3)]
+
+    with SessionLocal() as db:
+        for game in games:
+            record_admin_action(
+                db,
+                admin_user_id=uuid.UUID(admin_user["id"]),
+                action_type="create_official_game",
+                target_game_id=uuid.UUID(game["id"]),
+                reason="Batch load check.",
+            )
+        db.commit()
+
+    game_selects: list[str] = []
+    with SessionLocal() as db:
+        engine = db.get_bind()
+
+        def collect_game_selects(conn, cursor, statement, parameters, context, executemany):
+            del conn, cursor, parameters, context, executemany
+            if "FROM games" in statement:
+                game_selects.append(statement)
+
+        event.listen(engine, "before_cursor_execute", collect_game_selects)
+        try:
+            viewer_user = db.get(User, uuid.UUID(admin_user["id"]))
+            list_admin_action_log(
+                db,
+                viewer_user=viewer_user,
+                action_type="create_official_game",
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", collect_game_selects)
+
+    assert len(game_selects) == 1
+
+
+def test_admin_action_log_requires_active_admin(client: TestClient):
+    response = client.get("/admin/actions/log")
+
+    assert response.status_code == 401, response.text
 
 
 def test_admin_action_routes_require_authentication(client: TestClient):

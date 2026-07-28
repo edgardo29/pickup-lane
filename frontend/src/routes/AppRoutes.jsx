@@ -8,7 +8,6 @@ import {
   SignInPage,
 } from '../pages/auth/index.js'
 import {
-  AdminActionCenterPage,
   AdminAuditLogPage,
   AdminCommunityGamePage,
   AdminCommunityGamesPage,
@@ -143,14 +142,6 @@ export function AppRoutes() {
         }
       >
         <Route index element={<AdminIndexRedirect />} />
-        <Route
-          path="action-center"
-          element={
-            <RequireAdmin>
-              <AdminActionCenterPage />
-            </RequireAdmin>
-          }
-        />
         <Route
           path="audit"
           element={

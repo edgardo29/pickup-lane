@@ -1,4 +1,3 @@
-export { default as AdminActionCenterPage } from './action-center/AdminActionCenterPage.jsx'
 export { default as AdminAuditLogPage } from './audit/AdminAuditLogPage.jsx'
 export { default as AdminCommunityGamePage } from './community-games/AdminCommunityGamePage.jsx'
 export { default as AdminCommunityGamesPage } from './community-games/AdminCommunityGamesPage.jsx'
