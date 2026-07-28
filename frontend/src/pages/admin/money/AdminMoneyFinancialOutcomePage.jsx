@@ -8,15 +8,15 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
-import '../../../styles/admin/AdminMoneySupport.css'
+import '../../../styles/admin/AdminMoney.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
-import { getAdminMoneyFinancialOutcome } from '../shared/adminApi.js'
+import { getAdminFinancialOutcome } from '../shared/adminFinancialOutcomeApi.js'
 import {
   DetailCodeField,
   DetailField,
   EmptyState,
   SectionHeader,
-} from './AdminMoneyDetailSections.jsx'
+} from './AdminMoneyDetailShared.jsx'
 import {
   formatDateTime,
   formatMoney,
@@ -88,7 +88,7 @@ function AdminMoneyFinancialOutcomePage() {
       setPageError('')
 
       try {
-        const nextOutcome = await getAdminMoneyFinancialOutcome({
+        const nextOutcome = await getAdminFinancialOutcome({
           financialOutcomeId,
           firebaseUser: currentUser,
         })

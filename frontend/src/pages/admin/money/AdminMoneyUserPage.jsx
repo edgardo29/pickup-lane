@@ -7,16 +7,22 @@ import {
   UserRound,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
-import '../../../styles/admin/AdminMoneySupport.css'
+import '../../../styles/admin/AdminMoney.css'
 import {
   DetailCodeField,
   DetailField,
   EmptyState,
-  MoneyIssuesSection,
-  PaymentsSection,
-  RefundsSection,
   SectionHeader,
-} from './AdminMoneyDetailSections.jsx'
+} from './AdminMoneyDetailShared.jsx'
+import {
+  MoneyIssuesSection,
+} from './AdminMoneyIssueSections.jsx'
+import {
+  PaymentsSection,
+} from './AdminMoneyPaymentSections.jsx'
+import {
+  RefundsSection,
+} from './AdminMoneyRefundSections.jsx'
 import {
   formatDateTime,
   formatMoney,
@@ -24,7 +30,8 @@ import {
   shortId,
 } from './adminMoneyFormatters.js'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
-import { getAdminMoneyUser, listAdminUsers } from '../shared/adminApi.js'
+import { getAdminMoneyUser } from './adminMoneyApi.js'
+import { listAdminUsers } from '../shared/adminApi.js'
 
 const USER_SEARCH_LIMIT = 5
 

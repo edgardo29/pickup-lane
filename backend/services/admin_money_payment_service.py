@@ -19,14 +19,18 @@ from backend.models import (
     Refund,
     User,
 )
-from backend.schemas.admin_money_schema import (
+from backend.schemas.admin_money_context_schema import (
     AdminMoneyCommunityPublishAttemptContextRead,
     AdminMoneyHostPublishFeeContextRead,
+    AdminMoneyPaymentUserContextRead,
+)
+from backend.schemas.admin_money_payment_detail_schema import AdminMoneyPaymentDetailRead
+from backend.schemas.admin_money_payment_schema import (
     AdminMoneyPaymentDetailItemRead,
-    AdminMoneyPaymentDetailRead,
     AdminMoneyPaymentListRead,
     AdminMoneyPaymentListResponseRead,
-    AdminMoneyPaymentUserContextRead,
+)
+from backend.schemas.admin_money_refund_schema import (
     AdminMoneyRefundDetailItemRead,
 )
 from backend.services.admin_action_service import user_can_read_admin_action
@@ -36,7 +40,7 @@ from backend.services.admin_money_cursor import (
     page_has_more,
 )
 from backend.services.admin_money_display import admin_money_display, compact_id
-from backend.services.admin_money_issue_service import (
+from backend.services.admin_money_issue_query_service import (
     list_related_money_issues,
     sort_money_issues_open_first,
 )
@@ -690,7 +694,9 @@ def get_admin_money_payment_detail(
     viewer_user: User,
 ) -> AdminMoneyPaymentDetailRead:
     from backend.services.admin_money_credit_service import build_credit_summaries
-    from backend.services.admin_money_refund_service import build_refund_summaries
+    from backend.services.admin_money_refund_query_service import (
+        build_refund_summaries,
+    )
 
     payment = get_payment_or_404(db, payment_id)
     payer = db.get(User, payment.payer_user_id)

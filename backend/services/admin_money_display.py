@@ -1,7 +1,7 @@
 import uuid
 
 from backend.models import Game, User
-from backend.schemas.admin_money_schema import AdminMoneyDisplayRead
+from backend.schemas.admin_money_context_schema import AdminMoneyDisplayRead
 
 
 def compact_id(value: uuid.UUID | None) -> str | None:

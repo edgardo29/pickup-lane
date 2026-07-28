@@ -36,12 +36,12 @@ from backend.models.payment_event_model import PaymentEvent
 from backend.models.payment_model import Payment
 from backend.models.policy_acceptance_model import PolicyAcceptance
 from backend.models.policy_document_model import PolicyDocument
-from backend.models.platform_notice_model import (
-    PlatformNotice,
+from backend.models.platform_notice_global_seen_state_model import (
     PlatformNoticeGlobalSeenState,
-    PlatformNoticeRecipient,
-    PlatformNoticeSelectedRead,
 )
+from backend.models.platform_notice_model import PlatformNotice
+from backend.models.platform_notice_recipient_model import PlatformNoticeRecipient
+from backend.models.platform_notice_selected_read_model import PlatformNoticeSelectedRead
 from backend.models.refund_model import Refund
 from backend.models.refund_event_model import RefundEvent
 from backend.models.sub_post_model import SubPost

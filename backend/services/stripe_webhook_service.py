@@ -34,9 +34,9 @@ from backend.services.admin_financial_outcome_service import (
 )
 from backend.services.admin_money_issue_service import (
     append_money_issue_event,
-    list_related_money_issues,
     stage_refund_money_issue,
 )
+from backend.services.admin_money_issue_query_service import list_related_money_issues
 from backend.services.payment_event_service import build_payment_event_conflict_detail
 from backend.services.refund_event_service import record_refund_event
 from backend.services.game_credit_service import (

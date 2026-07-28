@@ -6,22 +6,30 @@ import {
   WalletCards,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
-import '../../../styles/admin/AdminMoneySupport.css'
+import '../../../styles/admin/AdminMoney.css'
 import {
   AuditSection,
   ContextSection,
-  CreditsSection,
   EmptyState,
+} from './AdminMoneyDetailShared.jsx'
+import {
+  CreditsSection,
+} from './AdminMoneyCreditSections.jsx'
+import {
   MoneyIssuesSection,
+} from './AdminMoneyIssueSections.jsx'
+import {
   PaymentSummary,
+} from './AdminMoneyPaymentSections.jsx'
+import {
   RefundsSection,
-} from './AdminMoneyDetailSections.jsx'
+} from './AdminMoneyRefundSections.jsx'
 import {
   formatMoney,
   formatStatus,
 } from './adminMoneyFormatters.js'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
-import { getAdminMoneyPayment } from '../shared/adminApi.js'
+import { getAdminMoneyPayment } from './adminMoneyApi.js'
 
 function AdminMoneyPaymentPage() {
   const { paymentId } = useParams()

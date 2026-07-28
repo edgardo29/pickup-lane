@@ -8,19 +8,27 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
-import '../../../styles/admin/AdminMoneySupport.css'
+import '../../../styles/admin/AdminMoney.css'
 import {
   ContextSection,
+  EmptyState,
+  SectionHeader,
+} from './AdminMoneyDetailShared.jsx'
+import {
   CreditSummary,
   CreditUsagesSection,
-  EmptyState,
+} from './AdminMoneyCreditSections.jsx'
+import {
   MoneyIssueEventsSection,
   MoneyIssueSummary,
+} from './AdminMoneyIssueSections.jsx'
+import {
   PaymentSummary,
+} from './AdminMoneyPaymentSections.jsx'
+import {
   RefundEventsSection,
   RefundSummary,
-  SectionHeader,
-} from './AdminMoneyDetailSections.jsx'
+} from './AdminMoneyRefundSections.jsx'
 import {
   formatDateTime,
   formatStatus,
@@ -31,7 +39,7 @@ import {
   resolveAdminMoneyIssue,
   retryAdminMoneyIssueCredit,
   retryAdminMoneyRefund,
-} from '../shared/adminApi.js'
+} from './adminMoneyApi.js'
 
 const RESOLUTION_REASON_OPTIONS = [
   { label: 'Retried Successfully', value: 'retried_successfully' },

@@ -354,15 +354,11 @@ class Notification(Base):
     )
 
     related_sub_post_chat_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("sub_post_chats.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     related_sub_post_chat_message_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("sub_post_chat_messages.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     related_sub_post_request_id: Mapped[uuid.UUID | None] = mapped_column(

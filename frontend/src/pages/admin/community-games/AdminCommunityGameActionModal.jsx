@@ -10,9 +10,9 @@ import {
   X,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
+import { createAdminFinancialOutcome } from '../shared/adminFinancialOutcomeApi.js'
 import {
   cancelAdminCommunityGame,
-  createAdminMoneyFinancialOutcome,
   hideAdminCommunityGame,
   pauseAdminCommunityGameJoining,
   restoreAdminCommunityGame,
@@ -232,7 +232,7 @@ function AdminCommunityGameActionModal({
 
       if (shouldRecordFinancialOutcome) {
         try {
-          await createAdminMoneyFinancialOutcome({
+          await createAdminFinancialOutcome({
             firebaseUser,
             payload: buildFinancialOutcomePayload({
               detail,

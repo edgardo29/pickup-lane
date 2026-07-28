@@ -8,18 +8,26 @@ import {
   Search,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
-import '../../../styles/admin/AdminMoneySupport.css'
+import '../../../styles/admin/AdminMoney.css'
 import {
   AuditSection,
   ContextSection,
-  CreditsSection,
   EmptyState,
+  SectionHeader,
+} from './AdminMoneyDetailShared.jsx'
+import {
+  CreditsSection,
+} from './AdminMoneyCreditSections.jsx'
+import {
   MoneyIssuesSection,
+} from './AdminMoneyIssueSections.jsx'
+import {
   PaymentSummary,
+} from './AdminMoneyPaymentSections.jsx'
+import {
   RefundEventsSection,
   RefundSummary,
-  SectionHeader,
-} from './AdminMoneyDetailSections.jsx'
+} from './AdminMoneyRefundSections.jsx'
 import {
   formatMoney,
   formatStatus,
@@ -29,7 +37,7 @@ import {
   getAdminMoneyRefund,
   reconcileAdminMoneyRefund,
   retryAdminMoneyRefund,
-} from '../shared/adminApi.js'
+} from './adminMoneyApi.js'
 
 function buildRefundRetryIdempotencyKey(refundId) {
   const randomValue = globalThis.crypto?.randomUUID?.()
