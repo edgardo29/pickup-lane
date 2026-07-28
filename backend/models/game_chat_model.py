@@ -68,9 +68,7 @@ class GameChat(Base):
         Integer, nullable=False, server_default=text("0")
     )
     latest_message_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("chat_messages.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
     latest_message_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
     latest_message_at: Mapped[datetime | None] = mapped_column(

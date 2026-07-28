@@ -139,9 +139,7 @@ class AdminFinancialOutcome(Base):
         nullable=True,
     )
     review_case_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("admin_review_cases.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
     outcome: Mapped[str] = mapped_column(String(40), nullable=False)
     applied_status: Mapped[str] = mapped_column(String(30), nullable=False)

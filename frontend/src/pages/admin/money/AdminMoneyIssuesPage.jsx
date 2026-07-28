@@ -5,11 +5,11 @@ import {
   Search,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
-import '../../../styles/admin/AdminMoneySupport.css'
+import '../../../styles/admin/AdminMoney.css'
 import {
   EmptyState,
   SectionHeader,
-} from './AdminMoneyDetailSections.jsx'
+} from './AdminMoneyDetailShared.jsx'
 import {
   formatDateTime,
   formatMoney,
@@ -17,7 +17,7 @@ import {
   shortId,
 } from './adminMoneyFormatters.js'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
-import { listAdminMoneyIssues } from '../shared/adminApi.js'
+import { listAdminMoneyIssues } from './adminMoneyApi.js'
 
 const ISSUE_STATUS_OPTIONS = [
   { label: 'Open', value: 'open' },

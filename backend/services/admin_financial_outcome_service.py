@@ -20,7 +20,7 @@ from backend.models import (
     Refund,
     User,
 )
-from backend.schemas.admin_money_schema import (
+from backend.schemas.admin_money_financial_outcome_schema import (
     AdminMoneyFinancialOutcomeCreate,
     AdminMoneyFinancialOutcomeRead,
 )

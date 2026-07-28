@@ -8,8 +8,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from backend.database import Base
 
 
-# Admin actions store audit rows for important admin/support actions across
-# users, games, payments, venues, and chat messages.
+# Admin actions store audit rows for important admin/support actions across the
+# app. Target columns are typed audit pointers; service policy validates them
+# when actions are recorded.
 class AdminAction(Base):
     __tablename__ = "admin_actions"
     __table_args__ = (
@@ -414,147 +415,99 @@ class AdminAction(Base):
     action_type: Mapped[str] = mapped_column(String(60), nullable=False)
 
     target_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_game_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("games.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_booking_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("bookings.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_participant_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("game_participants.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_payment_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("payments.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_refund_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("refunds.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_game_credit_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("game_credits.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_credit_usage_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("game_credit_usage.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_venue_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("venues.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_venue_image_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("venue_images.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_message_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("chat_messages.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_sub_post_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("sub_posts.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_sub_post_request_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("sub_post_requests.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_sub_post_position_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("sub_post_positions.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_sub_chat_message_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("sub_post_chat_messages.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_notification_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("notifications.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_platform_notice_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("platform_notices.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_admin_action_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("admin_actions.id", ondelete="RESTRICT"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_support_flag_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("support_flags.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_money_issue_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("money_issues.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_review_case_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("admin_review_cases.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_financial_outcome_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("admin_financial_outcomes.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_host_publish_fee_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("host_publish_fees.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     target_host_publish_entitlement_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("host_publish_entitlements.id", ondelete="SET NULL"),
-        nullable=True,
+        UUID(as_uuid=True), nullable=True
     )
 
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -7,7 +7,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from backend.models import GameCredit, MoneyIssue, Payment, Refund, User, UserPaymentMethod
-from backend.schemas.admin_money_schema import (
+from backend.schemas.admin_money_user_schema import (
     AdminMoneyCreditPreviewSectionRead,
     AdminMoneyIssuePreviewSectionRead,
     AdminMoneyPaymentPreviewSectionRead,
@@ -21,7 +21,7 @@ from backend.schemas.admin_money_schema import (
     AdminMoneyUserSummaryRead,
     AdminMoneyUserSnapshotRead,
 )
-from backend.services.admin_money_issue_service import list_admin_money_issues
+from backend.services.admin_money_issue_query_service import list_admin_money_issues
 from backend.services.admin_money_display import compact_id
 from backend.services.admin_money_payment_service import sum_payment_refunded_cents
 

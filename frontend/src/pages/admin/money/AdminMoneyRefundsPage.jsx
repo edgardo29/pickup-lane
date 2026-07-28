@@ -6,11 +6,11 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
-import '../../../styles/admin/AdminMoneySupport.css'
+import '../../../styles/admin/AdminMoney.css'
 import {
   EmptyState,
   SectionHeader,
-} from './AdminMoneyDetailSections.jsx'
+} from './AdminMoneyDetailShared.jsx'
 import {
   formatDateTime,
   formatMoney,
@@ -18,7 +18,7 @@ import {
   shortId,
 } from './adminMoneyFormatters.js'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
-import { listAdminMoneyRefunds } from '../shared/adminApi.js'
+import { listAdminMoneyRefunds } from './adminMoneyApi.js'
 
 const REFUND_STATUS_OPTIONS = [
   { label: 'All', value: 'all' },
