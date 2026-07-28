@@ -1,20 +1,20 @@
 import { ChatIcon } from '../../components/BrowseIcons.jsx'
 import { InboxState } from './InboxState.jsx'
 import InboxRow from './InboxRow.jsx'
+import { getInboxItemKey } from './inboxData.js'
 
 function InboxSection({
   emptyMessage = 'Your updates will show up here.',
   emptyTitle = 'Nothing here yet',
   items,
+  onLoadMore,
   onOpenNotification,
   onSourceFilterChange,
   section,
   showHeader = true,
 }) {
   const isFilteredEmpty = section.totalItems > 0 && items.length === 0
-  const countLabel = items.length === section.totalItems
-    ? String(items.length)
-    : `${items.length}/${section.totalItems}`
+  const countLabel = String(section.count ?? 0)
 
   return (
     <section className="inbox-section">
@@ -28,15 +28,15 @@ function InboxSection({
         </div>
       )}
 
-      {section.sourceFilterOptions?.length > 0 && (
+      {section.statusFilterOptions?.length > 0 && (
         <div className="inbox-section__filter">
           <span className="inbox-section__select-control">
             <select
               aria-label={`Filter ${section.title}`}
-              value={section.sourceFilterValue}
+              value={section.statusFilterValue}
               onChange={(event) => onSourceFilterChange(section.key, event.target.value)}
             >
-              {section.sourceFilterOptions.map((option) => (
+              {section.statusFilterOptions.map((option) => (
                 <option key={option.key} value={option.key}>
                   {option.label}
                 </option>
@@ -54,15 +54,36 @@ function InboxSection({
           message={isFilteredEmpty ? 'Try another source filter.' : emptyMessage}
         />
       ) : (
-        <div className="inbox-list">
-          {items.map((notification) => (
-            <InboxRow
-              key={notification.id}
-              notification={notification}
-              onOpenNotification={onOpenNotification}
-            />
-          ))}
-        </div>
+        <>
+          <div className="inbox-list">
+            {items.map((notification) => (
+              <InboxRow
+                key={getInboxItemKey(notification)}
+                notification={notification}
+                onOpenNotification={onOpenNotification}
+              />
+            ))}
+          </div>
+          {(section.hasMore || section.loadMoreError) && (
+            <div className="inbox-section__pagination">
+              {section.loadMoreError && (
+                <p className="inbox-section__pagination-error">
+                  {section.loadMoreError}
+                </p>
+              )}
+              {section.hasMore && (
+                <button
+                  className="inbox-section__load-more"
+                  type="button"
+                  disabled={section.isLoadingMore}
+                  onClick={() => onLoadMore(section.key)}
+                >
+                  {section.isLoadingMore ? 'Loading...' : 'Load More'}
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
     </section>
   )

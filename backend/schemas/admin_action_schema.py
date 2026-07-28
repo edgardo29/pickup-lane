@@ -29,7 +29,7 @@ class AdminActionCreate(BaseModel):
     target_sub_post_position_id: UUID | None = None
     target_sub_chat_message_id: UUID | None = None
     target_notification_id: UUID | None = None
-    target_platform_notice_campaign_id: UUID | None = None
+    target_platform_notice_id: UUID | None = None
     target_admin_action_id: UUID | None = None
     target_support_flag_id: UUID | None = None
     target_money_issue_id: UUID | None = None
@@ -69,7 +69,7 @@ class AdminActionRead(BaseModel):
     target_sub_post_position_id: UUID | None
     target_sub_chat_message_id: UUID | None
     target_notification_id: UUID | None
-    target_platform_notice_campaign_id: UUID | None
+    target_platform_notice_id: UUID | None
     target_admin_action_id: UUID | None
     target_support_flag_id: UUID | None
     target_money_issue_id: UUID | None

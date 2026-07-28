@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
-  BellRing,
+  Bell,
   ChevronLeft,
   ChevronRight,
-  FilePenLine,
   Megaphone,
-  Plus,
   RefreshCw,
-  Save,
   Search,
+  Send,
   UserPlus,
   X,
 } from 'lucide-react'
@@ -17,107 +16,239 @@ import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
 import '../../../styles/admin/AdminPlatformNotices.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
-import AdminPlatformNoticeDeliveryPanel from './AdminPlatformNoticeDeliveryPanel.jsx'
 import {
-  createPlatformNoticeCampaign,
-  getPlatformNoticeCampaign,
-  listAdminUsers,
-  listPlatformNoticeCampaigns,
-  updatePlatformNoticeCampaign,
+  cancelPlatformNotice,
+  createPlatformNotice,
+  getPlatformNotice,
+  listAdminLookupUsers,
+  listPlatformNoticeRecipients,
+  listPlatformNotices,
 } from '../shared/adminApi.js'
 import {
+  AUDIENCE_TYPE_ALL_ELIGIBLE,
+  AUDIENCE_TYPE_SELECTED,
   EMPTY_PLATFORM_NOTICE_FILTERS,
   EMPTY_PLATFORM_NOTICE_FORM,
+  PLATFORM_NOTICE_HISTORY_SEARCH_MAX_LENGTH,
+  PLATFORM_NOTICE_HISTORY_SEARCH_MIN_MEANINGFUL_CHARS,
+  PLATFORM_NOTICE_SELECTED_USER_LIMIT,
   PLATFORM_NOTICE_STATUS_OPTIONS,
-  buildPlatformNoticePayload,
+  buildPlatformNoticeCancelPayload,
+  buildPlatformNoticeCreatePayload,
+  canAddPlatformNoticeSelectedUser,
   createPlatformNoticeIdempotencyKey,
   formatPlatformNoticeDateTime,
-  formatPlatformNoticeLabel,
-  mapPlatformNoticeCampaignToForm,
-  shortPlatformNoticeId,
-  validatePlatformNoticeForm,
+  getActivePlatformNoticeHistorySearch,
+  platformNoticeAudienceLabel,
+  platformNoticeStatusLabel,
+  userDisplayName,
+  validatePlatformNoticeAudience,
+  validatePlatformNoticeContent,
 } from './adminPlatformNoticeData.js'
 
-const PAGE_LIMIT = 30
+const HISTORY_LIMIT = 30
+const HISTORY_SEARCH_DEBOUNCE_MS = 300
+const RECIPIENT_LIMIT = 50
+const USER_LOOKUP_LIMIT = 10
+const USER_SEARCH_DEBOUNCE_MS = 300
+const USER_SEARCH_MIN_LENGTH = 3
 
-function campaignTargetLabel(campaign) {
-  if (campaign.audience_type === 'all_active_users') {
-    return 'All active users'
-  }
+const NOTICE_STEPS = [
+  { key: 'write', label: 'Write Notice' },
+  { key: 'audience', label: 'Choose Audience' },
+  { key: 'review', label: 'Review & Publish' },
+]
 
-  const count = campaign.target_user_count || 0
-  return `${count} selected ${count === 1 ? 'user' : 'users'}`
+function useDebouncedValue(value, delayMs) {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedValue(value)
+    }, delayMs)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [delayMs, value])
+
+  return debouncedValue
 }
 
-function fallbackSelectedUsers(campaign) {
-  return (campaign?.target_user_ids || []).map((userId) => ({
-    account_status: 'active',
-    display_name: `User ${shortPlatformNoticeId(userId)}`,
-    email: '',
-    id: userId,
-  }))
-}
+function NoticeStepRail({ activeStep }) {
+  const activeIndex = NOTICE_STEPS.findIndex((step) => step.key === activeStep)
 
-function CampaignListLoading() {
   return (
-    <div className="admin-platform-notices-loading" role="status">
-      {Array.from({ length: 5 }).map((_, index) => (
-        <div className="admin-platform-notices-loading__row" key={index}>
-          <SkeletonBlock height="0.86rem" rounded width="58%" />
-          <SkeletonBlock height="0.7rem" rounded width="72%" />
-          <SkeletonBlock height="0.7rem" rounded width="40%" />
+    <ol className="platform-notices-steps" aria-label="Platform notice steps">
+      {NOTICE_STEPS.map((step, index) => {
+        const className = [
+          'platform-notices-step',
+          step.key === activeStep ? 'active' : '',
+          index < activeIndex ? 'complete' : '',
+        ].filter(Boolean).join(' ')
+
+        return (
+          <li className={className} key={step.key}>
+            <span className="platform-notices-step__content">
+              <span className="platform-notices-step__marker">{index + 1}</span>
+              <strong>{step.label}</strong>
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+function NoticePreview({ message, title }) {
+  const previewTitle = title.trim() || 'Notice title'
+  const previewMessage = message.trim() || 'Notice message preview.'
+
+  return (
+    <aside className="platform-notices-preview" aria-label="Notice preview">
+      <div className="platform-notices-preview__heading">
+        <span className="platform-notices-preview__icon" aria-hidden="true">
+          <Bell />
+        </span>
+        <div>
+          <span>[PICKUP LANE]</span>
+          <h3>{previewTitle}</h3>
         </div>
-      ))}
+      </div>
+      <div className="platform-notices-preview__message">
+        <span>Message</span>
+        <p>{previewMessage}</p>
+      </div>
+    </aside>
+  )
+}
+
+function PageTabs({ activeMode, onChange }) {
+  return (
+    <div className="app-tabs platform-notices-tabs" role="tablist">
+      <button
+        className={activeMode === 'create' ? 'active' : ''}
+        type="button"
+        onClick={() => onChange('create')}
+      >
+        Create Notice
+      </button>
+      <button
+        className={activeMode === 'history' ? 'active' : ''}
+        type="button"
+        onClick={() => onChange('history')}
+      >
+        History
+      </button>
     </div>
   )
 }
 
-function CampaignStatus({ status }) {
-  return (
-    <span className={`admin-platform-notices-status admin-platform-notices-status--${status}`}>
-      {formatPlatformNoticeLabel(status)}
-    </span>
-  )
-}
-
-function CampaignRow({ campaign, isSelected, onSelect }) {
+function PrimaryButton({ children, disabled = false, icon: Icon, onClick, type = 'button' }) {
   return (
     <button
-      className={`admin-platform-notices-row ${isSelected ? 'is-active' : ''}`}
-      type="button"
-      onClick={() => onSelect(campaign.id)}
+      className="platform-notices-button platform-notices-button--primary"
+      disabled={disabled}
+      type={type}
+      onClick={onClick}
     >
-      <span className="admin-platform-notices-row__icon" aria-hidden="true">
-        <Megaphone />
-      </span>
-      <span className="admin-platform-notices-row__copy">
-        <strong>{campaign.internal_name}</strong>
-        <span>{campaign.title}</span>
-        <small>{formatPlatformNoticeDateTime(campaign.updated_at)}</small>
-      </span>
-      <span className="admin-platform-notices-row__meta">
-        <CampaignStatus status={campaign.campaign_status} />
-        <span>{campaignTargetLabel(campaign)}</span>
-      </span>
+      {Icon && <Icon aria-hidden="true" />}
+      {children}
     </button>
   )
 }
 
-function SegmentedChoice({ disabled, label, onChange, options, value }) {
+function SecondaryButton({ children, disabled = false, icon: Icon, onClick, type = 'button' }) {
   return (
-    <fieldset className="admin-platform-notices-segmented">
-      <legend>{label}</legend>
-      <div>
+    <button
+      className="platform-notices-button"
+      disabled={disabled}
+      type={type}
+      onClick={onClick}
+    >
+      {Icon && <Icon aria-hidden="true" />}
+      {children}
+    </button>
+  )
+}
+
+function FieldShell({ children, label }) {
+  return (
+    <label className="platform-notices-field">
+      <span>{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function WriteNoticeStep({ error, form, onContinue, onFieldChange }) {
+  return (
+    <>
+      <NoticeStepRail activeStep="write" />
+      <section className="platform-notices-flow-grid">
+        <div className="platform-notices-panel">
+          <header className="platform-notices-panel__heading">
+            <h2>Write Notice</h2>
+          </header>
+          <div className="platform-notices-form">
+            <FieldShell label="Title">
+              <input
+                maxLength={150}
+                value={form.title}
+                onChange={(event) => onFieldChange('title', event.target.value)}
+              />
+            </FieldShell>
+            <FieldShell label="Message">
+              <textarea
+                maxLength={4000}
+                rows={8}
+                value={form.message}
+                onChange={(event) => onFieldChange('message', event.target.value)}
+              />
+              <small>{form.message.length}/4000</small>
+            </FieldShell>
+          </div>
+          <FormErrorMessage className="platform-notices-error">{error}</FormErrorMessage>
+          <div className="platform-notices-actions">
+            <span />
+            <PrimaryButton icon={ChevronRight} onClick={onContinue}>
+              Continue
+            </PrimaryButton>
+          </div>
+        </div>
+        <NoticePreview message={form.message} title={form.title} />
+      </section>
+    </>
+  )
+}
+
+function AudienceChoice({ form, onChange }) {
+  const options = [
+    {
+      description: 'Shown to every currently eligible user.',
+      label: 'All eligible users',
+      value: AUDIENCE_TYPE_ALL_ELIGIBLE,
+    },
+    {
+      description: `Choose up to ${PLATFORM_NOTICE_SELECTED_USER_LIMIT} users.`,
+      label: 'Selected users',
+      value: AUDIENCE_TYPE_SELECTED,
+    },
+  ]
+
+  return (
+    <fieldset className="platform-notices-audience">
+      <legend>Audience</legend>
+      <div className="platform-notices-audience__options">
         {options.map((option) => (
           <button
-            aria-pressed={value === option.value}
-            className={value === option.value ? 'is-active' : ''}
-            disabled={disabled}
+            aria-pressed={form.audienceType === option.value}
+            className={form.audienceType === option.value ? 'is-selected' : ''}
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}
           >
-            {option.label}
+            <span aria-hidden="true" />
+            <strong>{option.label}</strong>
+            <small>{option.description}</small>
           </button>
         ))}
       </div>
@@ -125,646 +256,1196 @@ function SegmentedChoice({ disabled, label, onChange, options, value }) {
   )
 }
 
-function SelectedAudienceEditor({
-  currentUser,
-  disabled,
-  onAddUser,
-  onRemoveUser,
-  selectedUsers,
-}) {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [searchError, setSearchError] = useState('')
-  const [searchState, setSearchState] = useState('idle')
-  const selectedIds = useMemo(
-    () => new Set(selectedUsers.map((user) => user.id)),
-    [selectedUsers],
-  )
-
-  async function handleSearch(event) {
-    event.preventDefault()
-    const normalizedQuery = query.trim()
-    if (!normalizedQuery || disabled || !currentUser) {
-      return
-    }
-
-    setSearchState('loading')
-    setSearchError('')
-    try {
-      const userResponse = await listAdminUsers({
-        accountStatus: 'active',
-        firebaseUser: currentUser,
-        limit: 20,
-        query: normalizedQuery,
-      })
-      setResults((userResponse.users ?? []).filter((user) => !selectedIds.has(user.id)))
-      setSearchState('ready')
-    } catch (error) {
-      setResults([])
-      setSearchError(error.message || 'Users could not be searched.')
-      setSearchState('error')
-    }
-  }
-
-  function addUser(user) {
-    onAddUser(user)
-    setResults((current) => current.filter((item) => item.id !== user.id))
-  }
-
+function SelectedUserToken({ onClear, user }) {
   return (
-    <div className="admin-platform-notices-audience-editor">
-      <form className="admin-platform-notices-user-search" onSubmit={handleSearch}>
-        <label>
-          <span>Find active users</span>
-          <input
-            disabled={disabled}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-        <button
-          aria-label="Search active users"
-          disabled={disabled || !query.trim() || searchState === 'loading'}
-          title="Search users"
-          type="submit"
-        >
-          <Search />
-        </button>
-      </form>
-
-      <FormErrorMessage>{searchError}</FormErrorMessage>
-
-      {searchState === 'ready' && results.length === 0 && (
-        <p className="admin-platform-notices-inline-empty">No active users found.</p>
-      )}
-      {results.length > 0 && (
-        <div className="admin-platform-notices-user-results">
-          {results.map((user) => (
-            <button key={user.id} type="button" onClick={() => addUser(user)}>
-              <span>
-                <strong>{user.display_name}</strong>
-                <small>{user.email || user.id}</small>
-              </span>
-              <UserPlus aria-hidden="true" />
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="admin-platform-notices-selected-users">
-        <div>
-          <span>Selected recipients</span>
-          <strong>{selectedUsers.length}</strong>
-        </div>
-        {selectedUsers.length === 0 ? (
-          <p className="admin-platform-notices-inline-empty">No users selected.</p>
-        ) : (
-          <ul>
-            {selectedUsers.map((user) => (
-              <li key={user.id}>
-                <span>
-                  <strong>{user.display_name}</strong>
-                  <small>{user.email || user.id}</small>
-                </span>
-                <button
-                  aria-label={`Remove ${user.display_name}`}
-                  disabled={disabled}
-                  title="Remove recipient"
-                  type="button"
-                  onClick={() => onRemoveUser(user.id)}
-                >
-                  <X />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+    <div className="platform-notices-user-token">
+      <div>
+        <strong>{userDisplayName(user)}</strong>
+        <span>{user.email || user.id}</span>
       </div>
+      <button aria-label="Clear selected user" type="button" onClick={onClear}>
+        <X aria-hidden="true" />
+      </button>
     </div>
   )
 }
 
-function CampaignPreview({ form, selectedUserCount }) {
-  const targetText = form.audienceType === 'all_active_users'
-    ? 'All active users'
-    : `${selectedUserCount} selected ${selectedUserCount === 1 ? 'user' : 'users'}`
+function UserSearch({
+  error,
+  lookupState,
+  onAdd,
+  onClearCandidate,
+  onQueryChange,
+  onSelectCandidate,
+  query,
+  results,
+  selectedCandidate,
+  selectedUsers,
+}) {
+  const selectedIds = useMemo(
+    () => new Set(selectedUsers.map((user) => user.id)),
+    [selectedUsers],
+  )
+  const isAtSelectedUserLimit = selectedUsers.length >= PLATFORM_NOTICE_SELECTED_USER_LIMIT
+  const canAdd = canAddPlatformNoticeSelectedUser(selectedCandidate, selectedUsers)
 
   return (
-    <section className="admin-platform-notices-preview">
-      <div>
-        <BellRing aria-hidden="true" />
-        <span>Pickup Lane</span>
+    <div className="platform-notices-user-search">
+      <span className="platform-notices-label">Find eligible users</span>
+      <div className="platform-notices-user-search__row">
+        <div className="platform-notices-user-search__field">
+          {selectedCandidate ? (
+            <SelectedUserToken user={selectedCandidate} onClear={onClearCandidate} />
+          ) : (
+            <>
+              <input
+                autoComplete="off"
+                placeholder="Search by name, email, or user ID"
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+              />
+              {query.trim().length >= USER_SEARCH_MIN_LENGTH && (
+                <div className="platform-notices-user-search__menu">
+                  {lookupState === 'loading' && <p>Searching...</p>}
+                  {lookupState === 'ready' && results.length === 0 && (
+                    <p>No eligible users found.</p>
+                  )}
+                  {lookupState === 'ready' && results.map((user) => {
+                    const alreadyAdded = selectedIds.has(user.id)
+                    const isDisabled = alreadyAdded || isAtSelectedUserLimit
+                    return (
+                      <button
+                        className={isDisabled ? 'is-disabled' : ''}
+                        disabled={isDisabled}
+                        key={user.id}
+                        type="button"
+                        onClick={() => onSelectCandidate(user)}
+                      >
+                        <span>
+                          <strong>{userDisplayName(user)}</strong>
+                          <small>{user.email || user.id}</small>
+                        </span>
+                        {alreadyAdded && <em>Added</em>}
+                        {!alreadyAdded && isAtSelectedUserLimit && <em>Max</em>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        <PrimaryButton disabled={!canAdd} icon={UserPlus} onClick={onAdd}>
+          Add
+        </PrimaryButton>
       </div>
-      <h3>{form.title.trim() || 'Notice title'}</h3>
-      <strong>{form.summary.trim() || 'Notice summary'}</strong>
-      <p>{form.body.trim() || 'Notice body preview.'}</p>
-      <footer>
-        <span>{targetText}</span>
-        <span>{formatPlatformNoticeLabel(form.deliveryClass)}</span>
-      </footer>
+      <FormErrorMessage className="platform-notices-error">{error}</FormErrorMessage>
+    </div>
+  )
+}
+
+function AddedRecipients({ onRemove, selectedUsers }) {
+  return (
+    <section className="platform-notices-added">
+      <header>
+        <span>Added recipients</span>
+        <strong>{selectedUsers.length} / {PLATFORM_NOTICE_SELECTED_USER_LIMIT}</strong>
+      </header>
+      <div className="platform-notices-added__list">
+        {selectedUsers.length === 0 ? (
+          <p>No recipients selected.</p>
+        ) : (
+          selectedUsers.map((user) => (
+            <div className="platform-notices-recipient-row" key={user.id}>
+              <span>
+                <strong>{userDisplayName(user)}</strong>
+                <small>{user.email || user.id}</small>
+              </span>
+              <button
+                aria-label={`Remove ${userDisplayName(user)}`}
+                type="button"
+                onClick={() => onRemove(user.id)}
+              >
+                <X aria-hidden="true" />
+                Remove
+              </button>
+            </div>
+          ))
+        )}
+      </div>
     </section>
   )
 }
 
-function CampaignEditor({
-  campaign,
-  currentUser,
-  editorMode,
-  onCampaignSaved,
+function ChooseAudienceStep({
+  error,
+  form,
+  lookupError,
+  lookupState,
+  onAddSelectedUser,
+  onBack,
+  onClearCandidate,
+  onContinue,
+  onFieldChange,
+  onQueryChange,
+  onRemoveSelectedUser,
+  onSelectCandidate,
+  query,
+  results,
+  selectedCandidate,
+  selectedUsers,
 }) {
-  const [form, setForm] = useState(() => (
-    editorMode === 'create'
-      ? EMPTY_PLATFORM_NOTICE_FORM
-      : mapPlatformNoticeCampaignToForm(campaign)
-  ))
-  const [idempotencyKey] = useState(createPlatformNoticeIdempotencyKey)
-  const [saveError, setSaveError] = useState('')
-  const [saveState, setSaveState] = useState('idle')
-  const [selectedUsers, setSelectedUsers] = useState(() => (
-    editorMode === 'create' ? [] : fallbackSelectedUsers(campaign)
-  ))
+  return (
+    <>
+      <NoticeStepRail activeStep="audience" />
+      <section className="platform-notices-panel">
+        <header className="platform-notices-panel__heading">
+          <h2>Choose Audience</h2>
+        </header>
+        <AudienceChoice
+          form={form}
+          onChange={(audienceType) => onFieldChange('audienceType', audienceType)}
+        />
+        {form.audienceType === AUDIENCE_TYPE_ALL_ELIGIBLE ? (
+          <div className="platform-notices-audience-note">
+            This notice will remain visible to current and future eligible users until cancelled.
+          </div>
+        ) : (
+          <>
+            <UserSearch
+              error={lookupError}
+              lookupState={lookupState}
+              query={query}
+              results={results}
+              selectedCandidate={selectedCandidate}
+              selectedUsers={selectedUsers}
+              onAdd={onAddSelectedUser}
+              onClearCandidate={onClearCandidate}
+              onQueryChange={onQueryChange}
+              onSelectCandidate={onSelectCandidate}
+            />
+            <AddedRecipients
+              selectedUsers={selectedUsers}
+              onRemove={onRemoveSelectedUser}
+            />
+          </>
+        )}
+        <FormErrorMessage className="platform-notices-error">{error}</FormErrorMessage>
+        <div className="platform-notices-actions">
+          <SecondaryButton icon={ChevronLeft} onClick={onBack}>
+            Back
+          </SecondaryButton>
+          <PrimaryButton icon={Search} onClick={onContinue}>
+            Review Notice
+          </PrimaryButton>
+        </div>
+      </section>
+    </>
+  )
+}
 
-  const isDraft = editorMode === 'create' || campaign?.campaign_status === 'draft'
-  const isSaving = saveState === 'saving'
+function ReviewNoticeStep({
+  error,
+  form,
+  onBack,
+  onOpenConfirm,
+  selectedUsers,
+  submitState,
+}) {
+  const audienceText = form.audienceType === AUDIENCE_TYPE_ALL_ELIGIBLE
+    ? 'All eligible users'
+    : `${selectedUsers.length} selected ${selectedUsers.length === 1 ? 'user' : 'users'}`
 
-  function updateForm(field, value) {
-    setSaveError('')
-    setSaveState('idle')
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }))
-    if (field === 'audienceType' && value === 'all_active_users') {
-      setSelectedUsers([])
-    }
-  }
+  return (
+    <>
+      <NoticeStepRail activeStep="review" />
+      <section className="platform-notices-panel">
+        <header className="platform-notices-panel__heading">
+          <h2>Review Platform Notice</h2>
+        </header>
+        <div className="platform-notices-review">
+          <div className="platform-notices-review__facts">
+            <span className="platform-notices-label">Audience</span>
+            <strong>{audienceText}</strong>
+          </div>
+          <div className="platform-notices-review__preview">
+            <NoticePreview message={form.message} title={form.title} />
+          </div>
+        </div>
+        <FormErrorMessage className="platform-notices-error">{error}</FormErrorMessage>
+        <div className="platform-notices-actions">
+          <SecondaryButton disabled={submitState === 'saving'} icon={ChevronLeft} onClick={onBack}>
+            Back
+          </SecondaryButton>
+          <PrimaryButton
+            disabled={submitState === 'saving'}
+            icon={Send}
+            onClick={onOpenConfirm}
+          >
+            Send Notice
+          </PrimaryButton>
+        </div>
+      </section>
+    </>
+  )
+}
 
-  function addSelectedUser(user) {
-    setSaveError('')
-    setSelectedUsers((current) => (
-      current.some((item) => item.id === user.id) ? current : [...current, user]
-    ))
-  }
+function ConfirmSendModal({ onClose, onSend, submitState }) {
+  return (
+    <div className="platform-notices-modal-backdrop" role="presentation" onClick={onClose}>
+      <section
+        aria-labelledby="platform-notices-confirm-title"
+        aria-modal="true"
+        className="platform-notices-modal"
+        role="dialog"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header>
+          <h2 id="platform-notices-confirm-title">
+            <span className="platform-notices-modal__icon">
+              <Send aria-hidden="true" />
+            </span>
+            <span>Send platform notice?</span>
+          </h2>
+          <button aria-label="Close" disabled={submitState === 'saving'} type="button" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </header>
+        <p className="platform-notices-modal__copy">
+          This notice cannot be edited after sending. Cancelling later withdraws it from everyone.
+        </p>
+        <div className="platform-notices-modal__actions">
+          <PrimaryButton disabled={submitState === 'saving'} icon={Send} onClick={onSend}>
+            Send Notice
+          </PrimaryButton>
+        </div>
+      </section>
+    </div>
+  )
+}
 
-  function removeSelectedUser(userId) {
-    setSaveError('')
-    setSelectedUsers((current) => current.filter((user) => user.id !== userId))
-  }
+function CancelNoticeModal({ cancelError, cancelReason, cancelState, onClose, onConfirm, onReasonChange }) {
+  return (
+    <div className="platform-notices-modal-backdrop" role="presentation" onClick={onClose}>
+      <section
+        aria-labelledby="platform-notices-cancel-title"
+        aria-modal="true"
+        className="platform-notices-modal"
+        role="dialog"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header>
+          <h2 id="platform-notices-cancel-title">Cancel platform notice?</h2>
+          <button aria-label="Close" disabled={cancelState === 'saving'} type="button" onClick={onClose}>
+            <X aria-hidden="true" />
+          </button>
+        </header>
+        <FieldShell label="Cancellation reason">
+          <textarea
+            maxLength={1000}
+            rows={4}
+            value={cancelReason}
+            onChange={(event) => onReasonChange(event.target.value)}
+          />
+          <small>{cancelReason.length}/1000</small>
+        </FieldShell>
+        <FormErrorMessage className="platform-notices-error">{cancelError}</FormErrorMessage>
+        <div className="platform-notices-modal__actions">
+          <SecondaryButton disabled={cancelState === 'saving'} onClick={onClose}>
+            Back
+          </SecondaryButton>
+          <button
+            className="platform-notices-button platform-notices-button--danger"
+            disabled={cancelState === 'saving'}
+            type="button"
+            onClick={onConfirm}
+          >
+            Cancel Notice
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
 
-  async function handleSave(event) {
-    event.preventDefault()
-    const validationError = validatePlatformNoticeForm(form, selectedUsers)
-    if (validationError) {
-      setSaveError(validationError)
-      return
-    }
+function HistoryLoading() {
+  return (
+    <div className="platform-notices-history-list" role="status">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div className="platform-notices-history-row" key={index}>
+          <SkeletonBlock height="0.92rem" rounded width="48%" />
+          <SkeletonBlock height="0.72rem" rounded width="64%" />
+        </div>
+      ))}
+    </div>
+  )
+}
 
-    setSaveState('saving')
-    setSaveError('')
-    try {
-      const payload = buildPlatformNoticePayload({
-        form,
-        idempotencyKey: editorMode === 'create' ? idempotencyKey : '',
-        selectedUsers,
-      })
-      const savedCampaign = editorMode === 'create'
-        ? await createPlatformNoticeCampaign({ firebaseUser: currentUser, payload })
-        : await updatePlatformNoticeCampaign({
-          campaignId: campaign.id,
-          firebaseUser: currentUser,
-          payload,
-        })
+function NoticeStatus({ notice }) {
+  const status = platformNoticeStatusLabel(notice)
 
-      setSaveState('saved')
-      onCampaignSaved(savedCampaign)
-    } catch (error) {
-      setSaveError(error.message || 'Campaign could not be saved.')
-      setSaveState('error')
-    }
-  }
+  return (
+    <span className={`platform-notices-status platform-notices-status--${status.toLowerCase()}`}>
+      {status}
+    </span>
+  )
+}
 
-  if (editorMode === 'detail' && !campaign) {
-    return (
-      <div className="admin-platform-notices-empty">
+function HistoryRow({ notice, onSelect }) {
+  return (
+    <button
+      className="platform-notices-history-row"
+      type="button"
+      onClick={() => onSelect(notice.id)}
+    >
+      <span className="platform-notices-history-row__icon" aria-hidden="true">
         <Megaphone />
-        <strong>No campaign selected</strong>
-        <span>Select a campaign or create a draft.</span>
+      </span>
+      <span className="platform-notices-history-row__main">
+        <strong>{notice.title}</strong>
+        <span>{platformNoticeAudienceLabel(notice)} - {formatPlatformNoticeDateTime(notice.published_at)}</span>
+      </span>
+      <NoticeStatus notice={notice} />
+    </button>
+  )
+}
+
+function HistoryView({
+  error,
+  filters,
+  hasMore,
+  isLoadingMore,
+  isSearchBelowMinimum,
+  loadState,
+  notices,
+  onFilterChange,
+  onLoadMore,
+  onRefresh,
+  onSelect,
+}) {
+  return (
+    <section className="platform-notices-panel">
+      <header className="platform-notices-panel__heading platform-notices-panel__heading--inline">
+        <div>
+          <h2>History</h2>
+        </div>
+        <button aria-label="Refresh notices" className="platform-notices-icon-button" type="button" onClick={onRefresh}>
+          <RefreshCw aria-hidden="true" />
+        </button>
+      </header>
+      <div className="platform-notices-filters">
+        <input
+          maxLength={PLATFORM_NOTICE_HISTORY_SEARCH_MAX_LENGTH}
+          placeholder="Search title or message"
+          value={filters.search}
+          onChange={(event) => onFilterChange('search', event.target.value)}
+        />
+        <select
+          value={filters.status}
+          onChange={(event) => onFilterChange('status', event.target.value)}
+        >
+          {PLATFORM_NOTICE_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
       </div>
+      {loadState === 'loading' ? (
+        <HistoryLoading />
+      ) : loadState === 'error' ? (
+        <div className="platform-notices-empty platform-notices-empty--error">
+          <Megaphone aria-hidden="true" />
+          <strong>Platform notices could not be loaded</strong>
+          <p>{error || 'Try refreshing the list.'}</p>
+          <SecondaryButton icon={RefreshCw} onClick={onRefresh}>Retry</SecondaryButton>
+        </div>
+      ) : isSearchBelowMinimum ? (
+        <div className="platform-notices-empty">
+          <Search aria-hidden="true" />
+          <strong>Keep typing</strong>
+          <p>Type at least 3 letters or numbers to search history.</p>
+        </div>
+      ) : notices.length === 0 ? (
+        <div className="platform-notices-empty">
+          <Megaphone aria-hidden="true" />
+          <strong>No platform notices yet</strong>
+        </div>
+      ) : (
+        <div className="platform-notices-history-list">
+          {notices.map((notice) => (
+            <HistoryRow key={notice.id} notice={notice} onSelect={onSelect} />
+          ))}
+        </div>
+      )}
+      {loadState === 'ready' && error && (
+        <FormErrorMessage className="platform-notices-error">
+          {error}
+        </FormErrorMessage>
+      )}
+      {hasMore && (
+        <div className="platform-notices-load-more">
+          <SecondaryButton disabled={isLoadingMore} onClick={onLoadMore}>
+            {isLoadingMore ? 'Loading...' : 'Load More'}
+          </SecondaryButton>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function RecipientRows({ hasMore, loadMore, recipients }) {
+  return (
+    <section className="platform-notices-detail-section">
+      <header>
+        <span>Selected recipients</span>
+      </header>
+      <div className="platform-notices-detail-recipients">
+        {recipients.length === 0 ? (
+          <p>No recipients loaded.</p>
+        ) : (
+          recipients.map((recipient) => (
+            <div className="platform-notices-recipient-row" key={recipient.user_id}>
+              <span>
+                <strong>{recipient.display_name}</strong>
+                <small>{recipient.email || recipient.user_id}</small>
+              </span>
+              <em>{recipient.read_at ? 'Read' : 'Unread'}</em>
+            </div>
+          ))
+        )}
+      </div>
+      {hasMore && (
+        <div className="platform-notices-load-more">
+          <SecondaryButton onClick={loadMore}>Load More</SecondaryButton>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function NoticeDetail({
+  cancelError,
+  cancelReason,
+  cancelState,
+  detailError,
+  detailState,
+  hasMoreRecipients,
+  notice,
+  onBack,
+  onCancelNotice,
+  onCloseCancel,
+  onLoadMoreRecipients,
+  onOpenCancel,
+  onReasonChange,
+  onRetry,
+  recipients,
+  showCancelModal,
+}) {
+  if (detailState === 'error') {
+    return (
+      <section className="platform-notices-panel">
+        <button className="platform-notices-button platform-notices-detail-back" type="button" onClick={onBack}>
+          <ChevronLeft aria-hidden="true" />
+          Back
+        </button>
+        <div className="platform-notices-empty platform-notices-empty--error">
+          <Megaphone aria-hidden="true" />
+          <strong>Platform notice could not be loaded</strong>
+          <p>{detailError || 'Try opening the notice again.'}</p>
+          <SecondaryButton icon={RefreshCw} onClick={onRetry}>Retry</SecondaryButton>
+        </div>
+      </section>
+    )
+  }
+
+  if (detailState === 'loading' || !notice) {
+    return (
+      <section className="platform-notices-panel">
+        <SkeletonBlock height="1.4rem" rounded width="40%" />
+        <SkeletonBlock height="10rem" rounded width="100%" />
+      </section>
     )
   }
 
   return (
-    <form className="admin-platform-notices-form" onSubmit={handleSave}>
-      <div className="admin-platform-notices-editor-heading">
-        <div>
-          <FilePenLine />
-          <div>
-            <h2>{editorMode === 'create' ? 'New Campaign Draft' : campaign.internal_name}</h2>
-            <span>
-              {editorMode === 'create'
-                ? 'Unsaved draft'
-                : `Updated ${formatPlatformNoticeDateTime(campaign.updated_at)}`}
-            </span>
-          </div>
-        </div>
-        {campaign && <CampaignStatus status={campaign.campaign_status} />}
-      </div>
-
-      {!isDraft && (
-        <p className="admin-platform-notices-readonly">
-          This campaign is no longer a draft and cannot be edited.
-        </p>
-      )}
-
-      <div className="admin-platform-notices-form-grid">
-        <label className="admin-platform-notices-field admin-platform-notices-field--wide">
-          <span>Internal name</span>
-          <input
-            disabled={!isDraft || isSaving}
-            maxLength={160}
-            value={form.internalName}
-            onChange={(event) => updateForm('internalName', event.target.value)}
-          />
-        </label>
-        <label className="admin-platform-notices-field">
-          <span>Inbox title</span>
-          <input
-            disabled={!isDraft || isSaving}
-            maxLength={150}
-            value={form.title}
-            onChange={(event) => updateForm('title', event.target.value)}
-          />
-        </label>
-        <label className="admin-platform-notices-field">
-          <span>Summary</span>
-          <input
-            disabled={!isDraft || isSaving}
-            maxLength={500}
-            value={form.summary}
-            onChange={(event) => updateForm('summary', event.target.value)}
-          />
-        </label>
-        <label className="admin-platform-notices-field admin-platform-notices-field--wide">
-          <span>Body</span>
-          <textarea
-            disabled={!isDraft || isSaving}
-            maxLength={4000}
-            rows={5}
-            value={form.body}
-            onChange={(event) => updateForm('body', event.target.value)}
-          />
-          <small>{form.body.length}/4000</small>
-        </label>
-      </div>
-
-      <div className="admin-platform-notices-choice-grid">
-        <SegmentedChoice
-          disabled={!isDraft || isSaving}
-          label="Audience"
-          value={form.audienceType}
-          options={[
-            { label: 'All active users', value: 'all_active_users' },
-            { label: 'Selected users', value: 'selected_users' },
-          ]}
-          onChange={(value) => updateForm('audienceType', value)}
-        />
-        <SegmentedChoice
-          disabled={!isDraft || isSaving}
-          label="Delivery class"
-          value={form.deliveryClass}
-          options={[
-            { label: 'Mandatory', value: 'mandatory' },
-            { label: 'Preference controlled', value: 'preference_controlled' },
-          ]}
-          onChange={(value) => updateForm('deliveryClass', value)}
-        />
-      </div>
-
-      {form.audienceType === 'selected_users' && (
-        <SelectedAudienceEditor
-          currentUser={currentUser}
-          disabled={!isDraft || isSaving}
-          onAddUser={addSelectedUser}
-          onRemoveUser={removeSelectedUser}
-          selectedUsers={selectedUsers}
-        />
-      )}
-
-      <CampaignPreview form={form} selectedUserCount={selectedUsers.length} />
-
-      <FormErrorMessage>{saveError}</FormErrorMessage>
-      {saveState === 'saved' && (
-        <p className="admin-platform-notices-success">Draft saved.</p>
-      )}
-
-      <div className="admin-platform-notices-form-actions">
-        <button
-          className="admin-platform-notices-button admin-platform-notices-button--primary"
-          disabled={!isDraft || isSaving}
-          type="submit"
-        >
-          <Save />
-          {isSaving ? 'Saving' : editorMode === 'create' ? 'Create Draft' : 'Save Draft'}
+    <>
+      <section className="platform-notices-panel">
+        <button className="platform-notices-button platform-notices-detail-back" type="button" onClick={onBack}>
+          <ChevronLeft aria-hidden="true" />
+          Back
         </button>
-      </div>
-    </form>
+        <header className="platform-notices-detail-header">
+          <span className="platform-notices-detail-header__icon" aria-hidden="true">
+            <Megaphone />
+          </span>
+          <div>
+            <h2>{notice.title}</h2>
+            <p>Published {formatPlatformNoticeDateTime(notice.published_at)}</p>
+          </div>
+          <NoticeStatus notice={notice} />
+        </header>
+        <div className="platform-notices-detail-grid">
+          <NoticePreview message={notice.message} title={notice.title} />
+          <section className="platform-notices-detail-section">
+            <header>
+              <span>Audience</span>
+            </header>
+            <strong>{platformNoticeAudienceLabel(notice)}</strong>
+            {notice.cancelled_at && (
+              <div className="platform-notices-cancelled-note">
+                <span>Cancelled</span>
+                <p>{formatPlatformNoticeDateTime(notice.cancelled_at)}</p>
+                <p>{notice.cancellation_reason}</p>
+              </div>
+            )}
+            {!notice.cancelled_at && (
+              <button
+                className="platform-notices-button platform-notices-button--danger"
+                type="button"
+                onClick={onOpenCancel}
+              >
+                Cancel Notice
+              </button>
+            )}
+          </section>
+        </div>
+        {notice.audience_type === AUDIENCE_TYPE_SELECTED && (
+          <RecipientRows
+            hasMore={hasMoreRecipients}
+            recipients={recipients}
+            loadMore={onLoadMoreRecipients}
+          />
+        )}
+      </section>
+      {showCancelModal && (
+        <CancelNoticeModal
+          cancelError={cancelError}
+          cancelReason={cancelReason}
+          cancelState={cancelState}
+          onClose={onCloseCancel}
+          onConfirm={onCancelNotice}
+          onReasonChange={onReasonChange}
+        />
+      )}
+    </>
   )
 }
 
 function AdminPlatformNoticesPage() {
   const { currentUser } = useAuth()
-  const [campaigns, setCampaigns] = useState([])
-  const [detailCampaign, setDetailCampaign] = useState(null)
-  const [detailError, setDetailError] = useState('')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { noticeId } = useParams()
+  const isCreateRoute = location.pathname.endsWith('/platform-notices/new')
+  const activeMode = isCreateRoute ? 'create' : 'history'
+  const [filters, setFilters] = useState(EMPTY_PLATFORM_NOTICE_FILTERS)
+  const [form, setForm] = useState(EMPTY_PLATFORM_NOTICE_FORM)
+  const [selectedUsers, setSelectedUsers] = useState([])
+  const [activeStep, setActiveStep] = useState('write')
+  const [stepError, setStepError] = useState('')
+  const [submitState, setSubmitState] = useState('idle')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [notices, setNotices] = useState([])
+  const [historyState, setHistoryState] = useState('idle')
+  const [historyError, setHistoryError] = useState('')
+  const [historyCursor, setHistoryCursor] = useState('')
+  const [historyHasMore, setHistoryHasMore] = useState(false)
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
+  const [historyReloadKey, setHistoryReloadKey] = useState(0)
+  const [notice, setNotice] = useState(null)
   const [detailState, setDetailState] = useState('idle')
-  const [draftFilters, setDraftFilters] = useState(EMPTY_PLATFORM_NOTICE_FILTERS)
-  const [appliedFilters, setAppliedFilters] = useState(EMPTY_PLATFORM_NOTICE_FILTERS)
-  const [editorMode, setEditorMode] = useState('detail')
-  const [listError, setListError] = useState('')
-  const [listState, setListState] = useState('loading')
-  const [offset, setOffset] = useState(0)
-  const [refreshCount, setRefreshCount] = useState(0)
-  const [selectedCampaignId, setSelectedCampaignId] = useState(null)
-  const [totalCount, setTotalCount] = useState(0)
+  const [detailError, setDetailError] = useState('')
+  const [detailReloadKey, setDetailReloadKey] = useState(0)
+  const [recipients, setRecipients] = useState([])
+  const [recipientCursor, setRecipientCursor] = useState('')
+  const [recipientHasMore, setRecipientHasMore] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelError, setCancelError] = useState('')
+  const [cancelState, setCancelState] = useState('idle')
+  const [userQuery, setUserQuery] = useState('')
+  const [userResults, setUserResults] = useState([])
+  const [userLookupState, setUserLookupState] = useState('idle')
+  const [userLookupError, setUserLookupError] = useState('')
+  const [selectedCandidate, setSelectedCandidate] = useState(null)
+  const historyAbortControllerRef = useRef(null)
+  const historyRequestIdRef = useRef(0)
+  const publishKeyRef = useRef(createPlatformNoticeIdempotencyKey())
+  const debouncedHistorySearch = useDebouncedValue(
+    filters.search,
+    HISTORY_SEARCH_DEBOUNCE_MS,
+  )
+  const activeHistorySearch = getActivePlatformNoticeHistorySearch(
+    debouncedHistorySearch,
+    PLATFORM_NOTICE_HISTORY_SEARCH_MIN_MEANINGFUL_CHARS,
+  )
+  const immediateActiveHistorySearch = getActivePlatformNoticeHistorySearch(
+    filters.search,
+    PLATFORM_NOTICE_HISTORY_SEARCH_MIN_MEANINGFUL_CHARS,
+  )
+  const hasHistorySearchInput = Boolean(filters.search.trim())
+  const isHistorySearchBelowMinimum =
+    hasHistorySearchInput && !immediateActiveHistorySearch
+  const isHistorySearchWaitingForDebounce = Boolean(
+    immediateActiveHistorySearch
+    && immediateActiveHistorySearch !== activeHistorySearch,
+  )
 
   useEffect(() => {
+    if (!currentUser || noticeId || isCreateRoute) {
+      return undefined
+    }
+
+    if (isHistorySearchBelowMinimum) {
+      historyRequestIdRef.current += 1
+      historyAbortControllerRef.current?.abort()
+      historyAbortControllerRef.current = null
+      setHistoryState('ready')
+      setHistoryLoadingMore(false)
+      setHistoryError('')
+      setNotices([])
+      setHistoryCursor('')
+      setHistoryHasMore(false)
+      return undefined
+    }
+
+    if (isHistorySearchWaitingForDebounce) {
+      historyRequestIdRef.current += 1
+      historyAbortControllerRef.current?.abort()
+      historyAbortControllerRef.current = null
+      setHistoryState('loading')
+      setHistoryLoadingMore(false)
+      setHistoryError('')
+      setNotices([])
+      setHistoryCursor('')
+      setHistoryHasMore(false)
+      return undefined
+    }
+
     let isMounted = true
+    const requestId = historyRequestIdRef.current + 1
+    const controller = new AbortController()
+    historyRequestIdRef.current = requestId
+    historyAbortControllerRef.current?.abort()
+    historyAbortControllerRef.current = controller
 
-    async function loadCampaigns() {
-      if (!currentUser) {
-        return
-      }
+    setHistoryState('loading')
+    setHistoryLoadingMore(false)
+    setHistoryError('')
+    setNotices([])
+    setHistoryCursor('')
+    setHistoryHasMore(false)
 
-      setListState('loading')
-      setListError('')
-      try {
-        const response = await listPlatformNoticeCampaigns({
-          firebaseUser: currentUser,
-          limit: PAGE_LIMIT,
-          offset,
-          ...appliedFilters,
-        })
-        if (!isMounted) {
-          return
-        }
-
-        const nextCampaigns = response.campaigns || []
-        const nextTotal = response.total_count || 0
-        if (!nextCampaigns.length && offset > 0 && nextTotal > 0) {
-          setOffset(Math.max(0, offset - PAGE_LIMIT))
-          return
-        }
-
-        setCampaigns(nextCampaigns)
-        setTotalCount(nextTotal)
-        setSelectedCampaignId((currentId) => {
-          if (editorMode === 'create') {
-            return currentId
-          }
-          return nextCampaigns.some((campaign) => campaign.id === currentId)
-            ? currentId
-            : nextCampaigns[0]?.id || null
-        })
-        if (!nextCampaigns.length && editorMode !== 'create') {
-          setEditorMode('create')
-        }
-        setListState('ready')
-      } catch (error) {
-        if (!isMounted) {
-          return
-        }
-        setCampaigns([])
-        setTotalCount(0)
-        setListError(error.message || 'Campaigns could not be loaded.')
-        setListState('error')
-      }
-    }
-
-    loadCampaigns()
-    return () => {
-      isMounted = false
-    }
-  }, [appliedFilters, currentUser, editorMode, offset, refreshCount])
-
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadDetail() {
-      if (!currentUser || !selectedCampaignId || editorMode === 'create') {
-        setDetailCampaign(null)
-        setDetailError('')
-        setDetailState('idle')
-        return
-      }
-
-      setDetailState('loading')
-      setDetailError('')
-      try {
-        const campaign = await getPlatformNoticeCampaign({
-          campaignId: selectedCampaignId,
-          firebaseUser: currentUser,
-        })
-        if (isMounted) {
-          setDetailCampaign(campaign)
-          setDetailState('ready')
-        }
-      } catch (error) {
-        if (isMounted) {
-          setDetailCampaign(null)
-          setDetailError(error.message || 'Campaign detail could not be loaded.')
-          setDetailState('error')
-        }
-      }
-    }
-
-    loadDetail()
-    return () => {
-      isMounted = false
-    }
-  }, [currentUser, editorMode, selectedCampaignId])
-
-  function selectCampaign(campaignId) {
-    setEditorMode('detail')
-    setSelectedCampaignId(campaignId)
-  }
-
-  function startNewCampaign() {
-    setEditorMode('create')
-    setSelectedCampaignId(null)
-    setDetailCampaign(null)
-  }
-
-  function applyFilters(event) {
-    event.preventDefault()
-    setOffset(0)
-    setAppliedFilters({
-      campaignStatus: draftFilters.campaignStatus,
-      search: draftFilters.search.trim(),
+    listPlatformNotices({
+      firebaseUser: currentUser,
+      limit: HISTORY_LIMIT,
+      search: activeHistorySearch,
+      signal: controller.signal,
+      status: filters.status,
     })
+      .then((response) => {
+        if (!isMounted || requestId !== historyRequestIdRef.current) {
+          return
+        }
+        setNotices(response.notices || [])
+        setHistoryCursor(response.next_cursor || '')
+        setHistoryHasMore(Boolean(response.has_more))
+        setHistoryState('ready')
+        setHistoryError('')
+      })
+      .catch((error) => {
+        if (
+          !isMounted
+          || requestId !== historyRequestIdRef.current
+          || error.name === 'AbortError'
+        ) {
+          return
+        }
+        setHistoryState('error')
+        setHistoryError(error.message || 'Platform notices could not be loaded.')
+        setNotices([])
+        setHistoryCursor('')
+        setHistoryHasMore(false)
+      })
+
+    return () => {
+      isMounted = false
+      controller.abort()
+      if (historyAbortControllerRef.current === controller) {
+        historyAbortControllerRef.current = null
+      }
+    }
+  }, [
+    activeHistorySearch,
+    currentUser,
+    debouncedHistorySearch,
+    filters.search,
+    filters.status,
+    historyReloadKey,
+    isHistorySearchBelowMinimum,
+    isHistorySearchWaitingForDebounce,
+    isCreateRoute,
+    noticeId,
+  ])
+
+  useEffect(() => {
+    if (!currentUser || !noticeId) {
+      return undefined
+    }
+
+    let isMounted = true
+
+    Promise.resolve()
+      .then(() => {
+        if (!isMounted) {
+          return null
+        }
+        setDetailState('loading')
+        setDetailError('')
+        setNotice(null)
+        setRecipients([])
+        setRecipientCursor('')
+        setRecipientHasMore(false)
+        return getPlatformNotice({ firebaseUser: currentUser, noticeId })
+      })
+      .then((response) => {
+        if (!isMounted || !response) {
+          return null
+        }
+        setNotice(response)
+        setDetailState('ready')
+        setDetailError('')
+        if (response.audience_type === AUDIENCE_TYPE_SELECTED) {
+          return listPlatformNoticeRecipients({
+            firebaseUser: currentUser,
+            limit: RECIPIENT_LIMIT,
+            noticeId,
+          })
+        }
+        return null
+      })
+      .then((response) => {
+        if (!isMounted || !response) {
+          return
+        }
+        setRecipients(response.recipients || [])
+        setRecipientCursor(response.next_cursor || '')
+        setRecipientHasMore(Boolean(response.has_more))
+      })
+      .catch((error) => {
+        if (!isMounted) {
+          return
+        }
+        setNotice(null)
+        setRecipients([])
+        setRecipientCursor('')
+        setRecipientHasMore(false)
+        setDetailState('error')
+        setDetailError(error.message || 'Platform notice could not be loaded.')
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [currentUser, detailReloadKey, noticeId])
+
+  useEffect(() => {
+    if (!currentUser || !isCreateRoute || form.audienceType !== AUDIENCE_TYPE_SELECTED) {
+      return undefined
+    }
+
+    const normalizedQuery = userQuery.trim()
+    if (selectedCandidate || normalizedQuery.length < USER_SEARCH_MIN_LENGTH) {
+      return undefined
+    }
+
+    let isMounted = true
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => {
+      setUserLookupState('loading')
+      setUserLookupError('')
+      listAdminLookupUsers({
+        accountStatus: 'active',
+        firebaseUser: currentUser,
+        limit: USER_LOOKUP_LIMIT,
+        query: normalizedQuery,
+        signal: controller.signal,
+      })
+        .then((results) => {
+          if (!isMounted) {
+            return
+          }
+          setUserResults(results.filter((user) => user.eligible !== false))
+          setUserLookupState('ready')
+        })
+        .catch((error) => {
+          if (!isMounted || error.name === 'AbortError') {
+            return
+          }
+          setUserResults([])
+          setUserLookupState('error')
+          setUserLookupError(error.message || 'User search failed.')
+        })
+    }, USER_SEARCH_DEBOUNCE_MS)
+
+    return () => {
+      isMounted = false
+      controller.abort()
+      window.clearTimeout(timeoutId)
+    }
+  }, [currentUser, form.audienceType, isCreateRoute, selectedCandidate, userQuery])
+
+  function resetCreateFlow() {
+    setForm(EMPTY_PLATFORM_NOTICE_FORM)
+    setSelectedUsers([])
+    setActiveStep('write')
+    setStepError('')
+    setSubmitState('idle')
+    setConfirmOpen(false)
+    setUserQuery('')
+    setUserResults([])
+    setUserLookupState('idle')
+    setUserLookupError('')
+    setSelectedCandidate(null)
+    publishKeyRef.current = createPlatformNoticeIdempotencyKey()
   }
 
-  function handleCampaignSaved(campaign) {
-    setEditorMode('detail')
-    setSelectedCampaignId(campaign.id)
-    setDetailCampaign(campaign)
-    setRefreshCount((count) => count + 1)
+  function prepareHistoryLoad() {
+    historyRequestIdRef.current += 1
+    historyAbortControllerRef.current?.abort()
+    setHistoryState('loading')
+    setHistoryLoadingMore(false)
+    setHistoryError('')
+    setNotices([])
+    setHistoryCursor('')
+    setHistoryHasMore(false)
   }
 
-  function handleCampaignDeliveryUpdated(campaign) {
-    setDetailCampaign(campaign)
-    setRefreshCount((count) => count + 1)
+  function handleTabChange(mode) {
+    setStepError('')
+    if (mode === 'create') {
+      resetCreateFlow()
+      navigate('/admin/platform-notices/new')
+    } else {
+      navigate('/admin/platform-notices')
+    }
   }
 
-  const pageStart = totalCount ? offset + 1 : 0
-  const pageEnd = Math.min(offset + campaigns.length, totalCount)
+  function updateFormField(field, value) {
+    setStepError('')
+    setForm((currentForm) => ({
+      ...currentForm,
+      [field]: value,
+    }))
+    if (field === 'audienceType') {
+      setSelectedCandidate(null)
+      setUserQuery('')
+      setUserResults([])
+      setUserLookupState('idle')
+      setUserLookupError('')
+    }
+  }
+
+  function continueFromWrite() {
+    const error = validatePlatformNoticeContent(form)
+    if (error) {
+      setStepError(error)
+      return
+    }
+    setStepError('')
+    setActiveStep('audience')
+  }
+
+  function continueFromAudience() {
+    const error = validatePlatformNoticeAudience(form, selectedUsers)
+    if (error) {
+      setStepError(error)
+      return
+    }
+    setStepError('')
+    setActiveStep('review')
+  }
+
+  function addSelectedUser() {
+    if (!selectedCandidate) {
+      return
+    }
+    if (selectedUsers.some((user) => user.id === selectedCandidate.id)) {
+      setSelectedCandidate(null)
+      setUserQuery('')
+      return
+    }
+    if (selectedUsers.length >= PLATFORM_NOTICE_SELECTED_USER_LIMIT) {
+      setUserLookupError(`Selected notices cannot include more than ${PLATFORM_NOTICE_SELECTED_USER_LIMIT} users.`)
+      return
+    }
+    setSelectedUsers((currentUsers) => [...currentUsers, selectedCandidate])
+    setSelectedCandidate(null)
+    setUserQuery('')
+    setUserResults([])
+    setUserLookupState('idle')
+    setUserLookupError('')
+  }
+
+  function removeSelectedUser(userId) {
+    setSelectedUsers((currentUsers) => currentUsers.filter((user) => user.id !== userId))
+  }
+
+  async function sendNotice() {
+    const contentError = validatePlatformNoticeContent(form)
+    const audienceError = validatePlatformNoticeAudience(form, selectedUsers)
+    if (contentError || audienceError) {
+      setConfirmOpen(false)
+      setStepError(contentError || audienceError)
+      return
+    }
+
+    setSubmitState('saving')
+    setStepError('')
+    try {
+      const response = await createPlatformNotice({
+        firebaseUser: currentUser,
+        payload: buildPlatformNoticeCreatePayload({
+          form,
+          idempotencyKey: publishKeyRef.current,
+          selectedUsers,
+        }),
+      })
+      resetCreateFlow()
+      navigate(`/admin/platform-notices/${response.notice.id}`)
+    } catch (error) {
+      setConfirmOpen(false)
+      setSubmitState('idle')
+      setStepError(error.message || 'Platform notice could not be sent.')
+    }
+  }
+
+  async function loadMoreHistory() {
+    if (!currentUser || !historyCursor || historyLoadingMore) {
+      return
+    }
+
+    const requestId = historyRequestIdRef.current
+    setHistoryLoadingMore(true)
+    setHistoryError('')
+
+    try {
+      const response = await listPlatformNotices({
+        cursor: historyCursor,
+        firebaseUser: currentUser,
+        limit: HISTORY_LIMIT,
+        search: activeHistorySearch,
+        status: filters.status,
+      })
+      if (requestId !== historyRequestIdRef.current) {
+        return
+      }
+      setNotices((currentNotices) => [
+        ...currentNotices,
+        ...(response.notices || []),
+      ])
+      setHistoryCursor(response.next_cursor || '')
+      setHistoryHasMore(Boolean(response.has_more))
+    } catch (error) {
+      if (requestId !== historyRequestIdRef.current) {
+        return
+      }
+      setHistoryError(error.message || 'More platform notices could not be loaded.')
+    } finally {
+      if (requestId === historyRequestIdRef.current) {
+        setHistoryLoadingMore(false)
+      }
+    }
+  }
+
+  async function loadMoreRecipients() {
+    if (!currentUser || !noticeId || !recipientCursor) {
+      return
+    }
+    const response = await listPlatformNoticeRecipients({
+      cursor: recipientCursor,
+      firebaseUser: currentUser,
+      limit: RECIPIENT_LIMIT,
+      noticeId,
+    })
+    setRecipients((currentRecipients) => [
+      ...currentRecipients,
+      ...(response.recipients || []),
+    ])
+    setRecipientCursor(response.next_cursor || '')
+    setRecipientHasMore(Boolean(response.has_more))
+  }
+
+  async function cancelNotice() {
+    const reason = cancelReason.trim()
+    if (!reason) {
+      setCancelError('Enter cancellation reason.')
+      return
+    }
+
+    setCancelState('saving')
+    setCancelError('')
+    try {
+      const response = await cancelPlatformNotice({
+        firebaseUser: currentUser,
+        noticeId,
+        payload: buildPlatformNoticeCancelPayload(reason),
+      })
+      setNotice(response)
+      setCancelOpen(false)
+      setCancelReason('')
+      setCancelState('idle')
+    } catch (error) {
+      setCancelState('idle')
+      setCancelError(error.message || 'Platform notice could not be cancelled.')
+    }
+  }
+
+  function refreshHistory() {
+    prepareHistoryLoad()
+    setHistoryReloadKey((currentKey) => currentKey + 1)
+  }
+
+  function renderCreateFlow() {
+    if (activeStep === 'write') {
+      return (
+        <WriteNoticeStep
+          error={stepError}
+          form={form}
+          onContinue={continueFromWrite}
+          onFieldChange={updateFormField}
+        />
+      )
+    }
+
+    if (activeStep === 'audience') {
+      return (
+        <ChooseAudienceStep
+          error={stepError}
+          form={form}
+          lookupError={userLookupError}
+          lookupState={userLookupState}
+          query={userQuery}
+          results={userResults}
+          selectedCandidate={selectedCandidate}
+          selectedUsers={selectedUsers}
+          onAddSelectedUser={addSelectedUser}
+          onBack={() => {
+            setStepError('')
+            setActiveStep('write')
+          }}
+          onClearCandidate={() => {
+            setSelectedCandidate(null)
+            setUserQuery('')
+            setUserResults([])
+            setUserLookupError('')
+            setUserLookupState('idle')
+          }}
+          onContinue={continueFromAudience}
+          onFieldChange={updateFormField}
+          onQueryChange={(value) => {
+            setUserQuery(value)
+            setSelectedCandidate(null)
+            setUserLookupError('')
+            if (value.trim().length < USER_SEARCH_MIN_LENGTH) {
+              setUserResults([])
+              setUserLookupState('idle')
+            }
+          }}
+          onRemoveSelectedUser={removeSelectedUser}
+          onSelectCandidate={(user) => {
+            setSelectedCandidate(user)
+            setUserResults([])
+            setUserQuery(userDisplayName(user))
+          }}
+        />
+      )
+    }
+
+    return (
+      <>
+        <ReviewNoticeStep
+          error={stepError}
+          form={form}
+          selectedUsers={selectedUsers}
+          submitState={submitState}
+          onBack={() => {
+            setStepError('')
+            setActiveStep('audience')
+          }}
+          onOpenConfirm={() => setConfirmOpen(true)}
+        />
+        {confirmOpen && (
+          <ConfirmSendModal
+            submitState={submitState}
+            onClose={() => setConfirmOpen(false)}
+            onSend={sendNotice}
+          />
+        )}
+      </>
+    )
+  }
 
   return (
-    <>
-      <AdminWorkspaceLayout
-        breadcrumbs={['Admin', 'System', 'Platform Notices']}
-        description="Create, review, send, and monitor platform notices."
-        icon={Megaphone}
-        title="Platform Notices"
-      >
-        <div className="admin-platform-notices-layout">
-          <section className="admin-platform-notices-panel">
-            <div className="admin-platform-notices-panel__heading">
-              <div>
-                <Megaphone />
-                <h2>Campaigns</h2>
-              </div>
-              <button
-                aria-label="Create campaign draft"
-                title="New draft"
-                type="button"
-                onClick={startNewCampaign}
-              >
-                <Plus />
-              </button>
-            </div>
-
-            <form className="admin-platform-notices-filters" onSubmit={applyFilters}>
-              <label>
-                <span>Search</span>
-                <input
-                  value={draftFilters.search}
-                  onChange={(event) => setDraftFilters((current) => ({
-                    ...current,
-                    search: event.target.value,
-                  }))}
-                />
-              </label>
-              <label>
-                <span>Status</span>
-                <select
-                  value={draftFilters.campaignStatus}
-                  onChange={(event) => setDraftFilters((current) => ({
-                    ...current,
-                    campaignStatus: event.target.value,
-                  }))}
-                >
-                  {PLATFORM_NOTICE_STATUS_OPTIONS.map((option) => (
-                    <option key={option.value || 'all'} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button aria-label="Search campaigns" title="Search campaigns" type="submit">
-                <Search />
-              </button>
-              <button
-                aria-label="Refresh campaigns"
-                title="Refresh campaigns"
-                type="button"
-                onClick={() => setRefreshCount((count) => count + 1)}
-              >
-                <RefreshCw />
-              </button>
-            </form>
-
-            <FormErrorMessage>{listError}</FormErrorMessage>
-            {listState === 'loading' && <CampaignListLoading />}
-            {listState === 'ready' && campaigns.length === 0 && (
-              <div className="admin-platform-notices-empty admin-platform-notices-empty--list">
-                <Megaphone />
-                <strong>No campaigns found</strong>
-                <span>Create a draft or change the filters.</span>
-              </div>
-            )}
-            {campaigns.length > 0 && (
-              <div className="admin-platform-notices-list">
-                {campaigns.map((campaign) => (
-                  <CampaignRow
-                    campaign={campaign}
-                    isSelected={
-                      editorMode === 'detail' && campaign.id === selectedCampaignId
-                    }
-                    key={campaign.id}
-                    onSelect={selectCampaign}
-                  />
-                ))}
-              </div>
-            )}
-
-            {totalCount > 0 && (
-              <nav className="admin-platform-notices-pagination">
-                <span>{pageStart}-{pageEnd} of {totalCount}</span>
-                <div>
-                  <button
-                    aria-label="Previous campaign page"
-                    disabled={offset === 0}
-                    title="Previous page"
-                    type="button"
-                    onClick={() => setOffset(Math.max(0, offset - PAGE_LIMIT))}
-                  >
-                    <ChevronLeft />
-                  </button>
-                  <button
-                    aria-label="Next campaign page"
-                    disabled={offset + campaigns.length >= totalCount}
-                    title="Next page"
-                    type="button"
-                    onClick={() => setOffset(offset + PAGE_LIMIT)}
-                  >
-                    <ChevronRight />
-                  </button>
-                </div>
-              </nav>
-            )}
-          </section>
-
-          <section className="admin-platform-notices-panel admin-platform-notices-panel--editor">
-            {detailState === 'loading' ? (
-              <div className="admin-platform-notices-editor-loading">
-                <SkeletonBlock height="1rem" rounded width="42%" />
-                <SkeletonBlock height="2.5rem" rounded width="100%" />
-                <SkeletonBlock height="8rem" rounded width="100%" />
-              </div>
-            ) : (
-              <>
-                <FormErrorMessage>{detailError}</FormErrorMessage>
-                <CampaignEditor
-                  campaign={detailCampaign}
-                  currentUser={currentUser}
-                  editorMode={editorMode}
-                  key={`${editorMode}-${detailCampaign?.id || 'new'}`}
-                  onCampaignSaved={handleCampaignSaved}
-                />
-                {editorMode === 'detail' && detailCampaign && (
-                  <AdminPlatformNoticeDeliveryPanel
-                    campaign={detailCampaign}
-                    currentUser={currentUser}
-                    key={detailCampaign.id}
-                    onCampaignUpdated={handleCampaignDeliveryUpdated}
-                  />
-                )}
-              </>
-            )}
-          </section>
-        </div>
-      </AdminWorkspaceLayout>
-    </>
+    <AdminWorkspaceLayout
+      description="Create, send, and monitor platform notices."
+      icon={Megaphone}
+      title="Platform Notices"
+    >
+      <div className="platform-notices">
+        <PageTabs activeMode={activeMode} onChange={handleTabChange} />
+        {isCreateRoute && renderCreateFlow()}
+        {!isCreateRoute && !noticeId && (
+          <HistoryView
+            error={historyError}
+            filters={filters}
+            hasMore={historyHasMore}
+            isLoadingMore={historyLoadingMore}
+            isSearchBelowMinimum={isHistorySearchBelowMinimum}
+            loadState={historyState}
+            notices={notices}
+            onFilterChange={(field, value) => {
+              setStepError('')
+              prepareHistoryLoad()
+              setFilters((currentFilters) => ({
+                ...currentFilters,
+                [field]: field === 'search'
+                  ? value.slice(0, PLATFORM_NOTICE_HISTORY_SEARCH_MAX_LENGTH)
+                  : value,
+              }))
+            }}
+            onLoadMore={loadMoreHistory}
+            onRefresh={refreshHistory}
+            onSelect={(id) => navigate(`/admin/platform-notices/${id}`)}
+          />
+        )}
+        {!isCreateRoute && noticeId && (
+          <NoticeDetail
+            cancelError={cancelError}
+            cancelReason={cancelReason}
+            cancelState={cancelState}
+            detailError={detailError}
+            detailState={detailState}
+            hasMoreRecipients={recipientHasMore}
+            notice={notice}
+            recipients={recipients}
+            showCancelModal={cancelOpen}
+            onBack={() => navigate('/admin/platform-notices')}
+            onCancelNotice={cancelNotice}
+            onCloseCancel={() => setCancelOpen(false)}
+            onLoadMoreRecipients={loadMoreRecipients}
+            onOpenCancel={() => {
+              setCancelError('')
+              setCancelOpen(true)
+            }}
+            onReasonChange={(value) => {
+              setCancelReason(value)
+              setCancelError('')
+            }}
+            onRetry={() => setDetailReloadKey((currentKey) => currentKey + 1)}
+          />
+        )}
+      </div>
+    </AdminWorkspaceLayout>
   )
 }
 

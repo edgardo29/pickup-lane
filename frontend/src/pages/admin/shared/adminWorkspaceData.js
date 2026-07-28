@@ -106,7 +106,7 @@ export const adminWorkspaceNavGroups = [
     label: 'System',
     items: [
       {
-        label: 'Notifications',
+        label: 'Notification Lookup',
         to: '/admin/notifications',
         end: true,
       },
@@ -168,11 +168,11 @@ export function isAdminWorkspaceItemActive(item, pathname) {
   }
 
   if (item.to === '/admin/notifications') {
-    return pathname === item.to
+    return pathname === item.to || pathname.startsWith('/admin/notifications/')
   }
 
   if (item.to === '/admin/platform-notices') {
-    return pathname === item.to
+    return pathname === item.to || pathname.startsWith('/admin/platform-notices/')
   }
 
   if (item.to === '/admin/official-games') {

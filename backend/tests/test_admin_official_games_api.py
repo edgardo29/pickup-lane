@@ -1541,7 +1541,7 @@ def test_admin_lookup_routes_return_users_and_venues(client: TestClient):
     venues_response = client.get("/admin/lookups/venues?query=lookup")
 
     assert users_response.status_code == 200, users_response.text
-    assert {user["id"] for user in users_response.json()} >= {
+    assert {user["id"] for user in users_response.json()["results"]} >= {
         admin["id"],
         player["id"],
     }

@@ -430,6 +430,39 @@ def test_admin_action_reject_direct_append_note_create(client: TestClient):
     assert "Use the audit note endpoint" in response.text
 
 
+def test_admin_action_rejects_direct_system_workflow_audit_creates(
+    client: TestClient,
+):
+    admin_user, _ = create_admin_action_setup(client)
+    authenticate_as(admin_user["id"])
+    notification_target = "00000000-0000-0000-0000-000000000001"
+    notice_target = "00000000-0000-0000-0000-000000000002"
+
+    payloads = [
+        {
+            "action_type": "create_notification",
+            "target_notification_id": notification_target,
+        },
+        {
+            "action_type": "update_notification",
+            "target_notification_id": notification_target,
+        },
+        {
+            "action_type": "publish_platform_notice",
+            "target_platform_notice_id": notice_target,
+        },
+        {
+            "action_type": "cancel_platform_notice",
+            "target_platform_notice_id": notice_target,
+        },
+    ]
+
+    for payload in payloads:
+        response = client.post("/admin/actions", json=payload)
+        assert response.status_code == 400, response.text
+        assert "does not allow target field" in response.text
+
+
 def test_admin_action_policy_includes_expected_core_types():
     assert "cancel_game" in ADMIN_ACTION_TYPES
     assert "refund_booking" in ADMIN_ACTION_TYPES
@@ -441,10 +474,8 @@ def test_admin_action_policy_includes_expected_core_types():
     assert "update_game_chat" in ADMIN_ACTION_TYPES
     assert "create_notification" in ADMIN_ACTION_TYPES
     assert "update_notification" in ADMIN_ACTION_TYPES
-    assert "create_platform_notice_campaign" in ADMIN_ACTION_TYPES
-    assert "update_platform_notice_campaign" in ADMIN_ACTION_TYPES
-    assert "send_platform_notice_campaign" in ADMIN_ACTION_TYPES
-    assert "retry_platform_notice_campaign" in ADMIN_ACTION_TYPES
+    assert "publish_platform_notice" in ADMIN_ACTION_TYPES
+    assert "cancel_platform_notice" in ADMIN_ACTION_TYPES
     assert "issue_credit" in ADMIN_ACTION_TYPES
     assert "create_financial_outcome" in ADMIN_ACTION_TYPES
     assert "apply_financial_outcome" in ADMIN_ACTION_TYPES

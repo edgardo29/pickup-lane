@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { getNotificationAction } from './inboxData.js'
+import { getRenderableNotificationAction } from './inboxData.js'
 import {
   formatNotificationDateTime,
   formatSubjectDateTime,
@@ -7,17 +7,23 @@ import {
 import InboxNotificationIcon from './InboxNotificationIcon.jsx'
 
 function NotificationModal({ notification, onClose, onNotificationAction }) {
-  const action = getNotificationAction(notification)
-  const eventAt = notification.event_at || notification.created_at
+  const action = getRenderableNotificationAction(notification)
+  const actionDisabled = Boolean(action?.disabled)
+  const eventAt = notification.occurred_at || notification.event_at || notification.created_at
   const notificationTime = formatNotificationDateTime(eventAt)
   const sourceLabel = notification.source_label || 'Pickup Lane'
   const title = notification.title || 'Inbox update'
   const subjectLabel = notification.subject_label || sourceLabel
+  const showSubject = Boolean(
+    notification.subject_label &&
+      notification.subject_label !== sourceLabel &&
+      notification.item_kind !== 'platform_notice',
+  )
   const subjectTime = formatSubjectDateTime(
     notification.subject_starts_at,
     notification.subject_timezone,
   )
-  const body = notification.body || 'Open this update for more details.'
+  const body = notification.message || notification.body || 'Open this update for more details.'
 
   return (
     <div className="inbox-modal-backdrop" role="presentation" onClick={onClose}>
@@ -43,10 +49,12 @@ function NotificationModal({ notification, onClose, onNotificationAction }) {
           </div>
         </div>
 
-        <p className="inbox-modal__subject">
-          <strong>{subjectLabel}</strong>
-          {subjectTime && <span>{subjectTime}</span>}
-        </p>
+        {showSubject && (
+          <p className="inbox-modal__subject">
+            <strong>{subjectLabel}</strong>
+            {subjectTime && <span>{subjectTime}</span>}
+          </p>
+        )}
 
         <div className="inbox-modal__message">
           <span>Message</span>
@@ -66,13 +74,21 @@ function NotificationModal({ notification, onClose, onNotificationAction }) {
             {action && (
               <button
                 className="inbox-modal__primary"
+                disabled={actionDisabled}
                 type="button"
-                onClick={() => onNotificationAction(action)}
+                onClick={() => {
+                  if (!actionDisabled) {
+                    onNotificationAction(action)
+                  }
+                }}
               >
                 {action.label}
               </button>
             )}
           </div>
+          {actionDisabled && action.disabled_reason && (
+            <p className="inbox-modal__action-note">{action.disabled_reason}</p>
+          )}
         </div>
       </section>
     </div>

@@ -1,99 +1,118 @@
+export const AUDIENCE_TYPE_ALL_ELIGIBLE = 'all_eligible_users'
+export const AUDIENCE_TYPE_SELECTED = 'selected_users'
+
 export const EMPTY_PLATFORM_NOTICE_FILTERS = {
-  campaignStatus: '',
   search: '',
+  status: '',
 }
 
 export const EMPTY_PLATFORM_NOTICE_FORM = {
-  audienceType: 'all_active_users',
-  body: '',
-  deliveryClass: 'mandatory',
-  internalName: '',
-  summary: '',
+  audienceType: AUDIENCE_TYPE_ALL_ELIGIBLE,
+  message: '',
   title: '',
 }
 
+export const PLATFORM_NOTICE_SELECTED_USER_LIMIT = 200
+export const PLATFORM_NOTICE_HISTORY_SEARCH_MAX_LENGTH = 200
+export const PLATFORM_NOTICE_HISTORY_SEARCH_MIN_MEANINGFUL_CHARS = 3
+
 export const PLATFORM_NOTICE_STATUS_OPTIONS = [
   { label: 'All statuses', value: '' },
-  { label: 'Draft', value: 'draft' },
-  { label: 'Sending', value: 'sending' },
-  { label: 'Completed', value: 'completed' },
-  { label: 'Completed with failures', value: 'completed_with_failures' },
-  { label: 'Failed', value: 'failed' },
+  { label: 'Published', value: 'published' },
   { label: 'Cancelled', value: 'cancelled' },
 ]
 
-export const PLATFORM_NOTICE_DELIVERY_STATUS_OPTIONS = [
-  { label: 'All recipients', value: '' },
-  { label: 'Delivered', value: 'delivered' },
-  { label: 'Skipped', value: 'skipped' },
-  { label: 'Failed', value: 'failed' },
-  { label: 'Pending', value: 'pending' },
-]
+export function createPlatformNoticeIdempotencyKey(operation = 'publish') {
+  const suffix = typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`
 
-export function createPlatformNoticeIdempotencyKey() {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return `platform-notice-${globalThis.crypto.randomUUID()}`
+  return `platform-notice-${operation}-${suffix}`
+}
+
+export function userDisplayName(user) {
+  if (user?.display_name) {
+    return user.display_name
   }
 
-  return `platform-notice-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  const name = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim()
+  return name || user?.email || user?.id || 'Unknown user'
 }
 
-export function createPlatformNoticeDeliveryIdempotencyKey(campaignId, operation) {
-  const suffix = globalThis.crypto?.randomUUID?.()
-    || `${Date.now()}-${Math.random().toString(16).slice(2)}`
-  return `platform-notice-${operation}:${campaignId}:${suffix}`
-}
-
-export function mapPlatformNoticeCampaignToForm(campaign) {
-  return {
-    audienceType: campaign?.audience_type || 'all_active_users',
-    body: campaign?.body || '',
-    deliveryClass: campaign?.delivery_class || 'mandatory',
-    internalName: campaign?.internal_name || '',
-    summary: campaign?.summary || '',
-    title: campaign?.title || '',
-  }
-}
-
-export function buildPlatformNoticePayload({
+export function buildPlatformNoticeCreatePayload({
   form,
   idempotencyKey,
   selectedUsers,
 }) {
-  const payload = {
-    internal_name: form.internalName.trim(),
+  return {
+    idempotency_key: idempotencyKey,
     title: form.title.trim(),
-    summary: form.summary.trim(),
-    body: form.body.trim(),
+    message: form.message.trim(),
     audience_type: form.audienceType,
-    delivery_class: form.deliveryClass,
-    target_user_ids: form.audienceType === 'selected_users'
+    selected_user_ids: form.audienceType === AUDIENCE_TYPE_SELECTED
       ? selectedUsers.map((user) => user.id)
       : [],
   }
-
-  return idempotencyKey
-    ? { ...payload, idempotency_key: idempotencyKey }
-    : payload
 }
 
-export function validatePlatformNoticeForm(form, selectedUsers) {
+export function buildPlatformNoticeCancelPayload(reason) {
+  return {
+    cancellation_reason: String(reason || '').trim(),
+  }
+}
+
+export function validatePlatformNoticeContent(form) {
   const missingFields = [
-    !form.internalName.trim() && 'internal name',
     !form.title.trim() && 'title',
-    !form.summary.trim() && 'summary',
-    !form.body.trim() && 'body',
+    !form.message.trim() && 'message',
   ].filter(Boolean)
 
-  if (missingFields.length) {
-    return `Enter ${missingFields.join(', ')}.`
-  }
+  return missingFields.length ? `Enter ${missingFields.join(', ')}.` : ''
+}
 
-  if (form.audienceType === 'selected_users' && selectedUsers.length === 0) {
+export function validatePlatformNoticeAudience(form, selectedUsers) {
+  if (form.audienceType === AUDIENCE_TYPE_SELECTED && selectedUsers.length === 0) {
     return 'Select at least one active user.'
   }
 
+  if (selectedUsers.length > PLATFORM_NOTICE_SELECTED_USER_LIMIT) {
+    return `Selected notices cannot include more than ${PLATFORM_NOTICE_SELECTED_USER_LIMIT} users.`
+  }
+
   return ''
+}
+
+export function canAddPlatformNoticeSelectedUser(selectedCandidate, selectedUsers) {
+  if (!selectedCandidate) {
+    return false
+  }
+
+  if (selectedUsers.length >= PLATFORM_NOTICE_SELECTED_USER_LIMIT) {
+    return false
+  }
+
+  return !selectedUsers.some((user) => user.id === selectedCandidate.id)
+}
+
+export function normalizePlatformNoticeHistorySearch(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+export function countPlatformNoticeHistorySearchMeaningfulCharacters(value) {
+  return Array.from(String(value || '')).filter((character) => (
+    /[\p{L}\p{N}]/u.test(character)
+  )).length
+}
+
+export function getActivePlatformNoticeHistorySearch(
+  value,
+  minMeaningfulCharacters = PLATFORM_NOTICE_HISTORY_SEARCH_MIN_MEANINGFUL_CHARS,
+) {
+  const normalizedSearch = normalizePlatformNoticeHistorySearch(value)
+  const meaningfulCharacters =
+    countPlatformNoticeHistorySearchMeaningfulCharacters(normalizedSearch)
+
+  return meaningfulCharacters >= minMeaningfulCharacters ? normalizedSearch : ''
 }
 
 export function formatPlatformNoticeLabel(value) {
@@ -113,6 +132,23 @@ export function formatPlatformNoticeDateTime(value) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+export function platformNoticeAudienceLabel(notice) {
+  if (!notice) {
+    return 'Unknown audience'
+  }
+
+  if (notice.audience_type === AUDIENCE_TYPE_ALL_ELIGIBLE) {
+    return 'All eligible users'
+  }
+
+  const count = notice.selected_recipient_count ?? 0
+  return `${count} selected ${count === 1 ? 'user' : 'users'}`
+}
+
+export function platformNoticeStatusLabel(notice) {
+  return notice?.cancelled_at ? 'Cancelled' : 'Published'
 }
 
 export function shortPlatformNoticeId(value) {

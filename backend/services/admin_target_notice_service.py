@@ -34,7 +34,7 @@ def create_admin_target_notice_notification(
         return existing_notification
 
     notification_fields = build_app_notification_fields(
-        "admin_notice",
+        "admin_enforcement_notice",
         event_at=notice.created_at,
         source_type="pickup_lane",
         subject_label="Pickup Lane",
@@ -47,7 +47,7 @@ def create_admin_target_notice_notification(
     notification = Notification(
         id=uuid.uuid4(),
         user_id=notice.recipient_user_id,
-        notification_type="admin_notice",
+        notification_type="admin_enforcement_notice",
         notification_category="app",
         notification_domain="admin",
         actor_user_id=None,

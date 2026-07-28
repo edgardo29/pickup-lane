@@ -260,7 +260,31 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="notifications/:notificationId"
+          element={
+            <RequireAdmin>
+              <AdminNotificationsPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
           path="platform-notices"
+          element={
+            <RequireAdmin>
+              <AdminPlatformNoticesPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="platform-notices/new"
+          element={
+            <RequireAdmin>
+              <AdminPlatformNoticesPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="platform-notices/:noticeId"
           element={
             <RequireAdmin>
               <AdminPlatformNoticesPage />

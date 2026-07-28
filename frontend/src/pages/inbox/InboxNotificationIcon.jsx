@@ -17,7 +17,7 @@ import {
 
 const ICON_BY_NOTIFICATION_TYPE = {
   account_security: ShieldCheck,
-  admin_notice: Megaphone,
+  admin_enforcement_notice: Megaphone,
   booking_cancelled: CalendarX,
   booking_confirmed: CalendarDays,
   booking_refunded: CircleDollarSign,

@@ -5,8 +5,8 @@ export async function fetchUnreadNotificationCount(firebaseUser) {
     return 0
   }
 
-  const unreadNotifications = await apiRequest(
-    '/notifications/me?is_read=false',
+  const counts = await apiRequest(
+    '/inbox/counts',
     {
       headers: {
         Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
@@ -14,5 +14,8 @@ export async function fetchUnreadNotificationCount(firebaseUser) {
     },
   )
 
-  return unreadNotifications.length
+  return (
+    Number(counts?.app_updates_new_count || 0) +
+    Number(counts?.game_activity_unread_count || 0)
+  )
 }

@@ -28,36 +28,20 @@ function InboxPage() {
       {page.status === 'error' && <InboxState title="Could not load inbox" message={page.error} />}
 
       {page.status === 'success' && (
-        <>
-          <div className="inbox-desktop-grid">
-            {page.inboxSections.map((section) => (
-              <InboxSection
-                emptyMessage={section.emptyMessage}
-                emptyTitle={section.emptyTitle}
-                items={section.items}
-                key={section.key}
-                onOpenNotification={page.handleOpenNotification}
-                onSourceFilterChange={page.handleSourceFilterChange}
-                section={section}
-              />
-            ))}
-          </div>
-
-          <div className="inbox-mobile-stack">
-            {page.filteredSections.map((section) => (
-              <InboxSection
-                emptyMessage={section.emptyMessage}
-                emptyTitle={section.emptyTitle}
-                items={section.items}
-                key={section.key}
-                onOpenNotification={page.handleOpenNotification}
-                onSourceFilterChange={page.handleSourceFilterChange}
-                section={section}
-                showHeader={false}
-              />
-            ))}
-          </div>
-        </>
+        <div className="inbox-tab-panel">
+          {page.filteredSections.map((section) => (
+            <InboxSection
+              emptyMessage={section.emptyMessage}
+              emptyTitle={section.emptyTitle}
+              items={section.items}
+              key={section.key}
+              onLoadMore={page.handleLoadMore}
+              onOpenNotification={page.handleOpenNotification}
+              onSourceFilterChange={page.handleSourceFilterChange}
+              section={section}
+            />
+          ))}
+        </div>
       )}
 
       {page.activeNotification && (

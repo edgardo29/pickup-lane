@@ -1,8 +1,12 @@
+import base64
+import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from backend.services.notification_policy import (
@@ -27,31 +31,88 @@ from backend.tests.helpers import (
     create_sub_post,
     create_user,
     create_venue,
-    run_as_temporary_admin,
     set_user_account_status,
     set_user_role,
 )
 
 
+class ServiceResponse:
+    def __init__(self, status_code: int, body: object) -> None:
+        self.status_code = status_code
+        self._body = body
+        self.text = str(body)
+
+    def json(self) -> object:
+        return self._body
+
+
+def _notification_service_error_response(error: Exception) -> ServiceResponse:
+    if isinstance(error, HTTPException):
+        return ServiceResponse(error.status_code, {"detail": error.detail})
+    if isinstance(error, ValidationError):
+        return ServiceResponse(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            {"detail": error.errors()},
+        )
+    raise error
+
+
 def post_notification_as_admin(
     client: TestClient,
     payload: dict[str, object],
-):
-    return run_as_temporary_admin(
-        client,
-        lambda: client.post("/notifications", json=payload),
-    )
+) -> ServiceResponse:
+    from backend.database import SessionLocal
+    from backend.models import User
+    from backend.schemas import NotificationCreate, NotificationRead
+    from backend.services.notification_service import create_notification_workflow
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    try:
+        notification = NotificationCreate.model_validate(payload)
+        with SessionLocal() as db:
+            admin_user = db.get(User, UUID(admin["id"]))
+            assert admin_user is not None
+            result = create_notification_workflow(db, notification, admin_user)
+        return ServiceResponse(
+            status.HTTP_201_CREATED,
+            NotificationRead.model_validate(result).model_dump(mode="json"),
+        )
+    except Exception as exc:
+        return _notification_service_error_response(exc)
 
 
 def patch_notification_as_admin(
     client: TestClient,
     notification_id: str,
     payload: dict[str, object],
-):
-    return run_as_temporary_admin(
-        client,
-        lambda: client.patch(f"/notifications/{notification_id}", json=payload),
-    )
+) -> ServiceResponse:
+    from backend.database import SessionLocal
+    from backend.models import User
+    from backend.schemas import NotificationRead, NotificationUpdate
+    from backend.services.notification_service import update_notification_workflow
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+
+    try:
+        notification_update = NotificationUpdate.model_validate(payload)
+        with SessionLocal() as db:
+            admin_user = db.get(User, UUID(admin["id"]))
+            assert admin_user is not None
+            result = update_notification_workflow(
+                db,
+                UUID(notification_id),
+                notification_update,
+                admin_user,
+            )
+        return ServiceResponse(
+            status.HTTP_200_OK,
+            NotificationRead.model_validate(result).model_dump(mode="json"),
+        )
+    except Exception as exc:
+        return _notification_service_error_response(exc)
 
 
 def notification_contract_fields(
@@ -83,10 +144,13 @@ def notification_contract_fields(
     return fields
 
 
-def admin_notice_payload(user_id: str, **overrides: object) -> dict[str, object]:
+def admin_enforcement_notice_payload(
+    user_id: str,
+    **overrides: object,
+) -> dict[str, object]:
     payload: dict[str, object] = {
         "user_id": user_id,
-        "notification_type": "admin_notice",
+        "notification_type": "admin_enforcement_notice",
         "notification_category": "app",
         "notification_domain": "admin",
         "title": "CI notification",
@@ -145,6 +209,33 @@ def create_notification_setup(
     game_chat = create_game_chat(client, game["id"])
     chat_message = create_chat_message(client, game_chat["id"], user["id"])
     return user, game, booking, participant, game_chat, chat_message
+
+
+ADMIN_NOTIFICATION_RELATED_TYPE_LABELS = {
+    "game": "Game",
+    "game_chat": "Game chat",
+    "booking": "Booking",
+    "payment": "Payment",
+    "refund": "Refund",
+    "participant": "Participant",
+    "game_message": "Game message",
+    "need_a_sub_post": "Need a Sub post",
+    "need_a_sub_chat": "Need a Sub chat",
+    "need_a_sub_chat_message": "Need a Sub chat message",
+    "need_a_sub_request": "Need a Sub request",
+    "need_a_sub_position": "Need a Sub position",
+}
+
+
+def set_notification_created_at(notification_id: str, created_at: datetime) -> None:
+    from backend.database import SessionLocal
+    from backend.models import Notification
+
+    with SessionLocal() as db:
+        notification = db.get(Notification, UUID(notification_id))
+        assert notification is not None
+        notification.created_at = created_at
+        db.commit()
 
 
 def create_sub_request(
@@ -630,7 +721,7 @@ def test_notifications_reject_empty_title(client: TestClient):
         client,
         {
             "user_id": user["id"],
-            "notification_type": "admin_notice",
+            "notification_type": "admin_enforcement_notice",
             "notification_category": "app",
             "notification_domain": "admin",
             "title": "   ",
@@ -654,7 +745,7 @@ def test_notifications_reject_missing_event_at(client: TestClient):
         client,
         {
             "user_id": user["id"],
-            "notification_type": "admin_notice",
+            "notification_type": "admin_enforcement_notice",
             "notification_category": "app",
             "notification_domain": "admin",
             "title": "Missing event time",
@@ -676,7 +767,7 @@ def test_notifications_reject_invalid_source_type(client: TestClient):
         client,
         {
             "user_id": user["id"],
-            "notification_type": "admin_notice",
+            "notification_type": "admin_enforcement_notice",
             "notification_category": "app",
             "notification_domain": "admin",
             "title": "Invalid source",
@@ -698,7 +789,7 @@ def test_notifications_reject_subject_start_without_timezone(client: TestClient)
         client,
         {
             "user_id": user["id"],
-            "notification_type": "admin_notice",
+            "notification_type": "admin_enforcement_notice",
             "notification_category": "app",
             "notification_domain": "admin",
             "title": "Missing subject timezone",
@@ -722,7 +813,7 @@ def test_notifications_reject_action_without_target(client: TestClient):
         client,
         {
             "user_id": user["id"],
-            "notification_type": "admin_notice",
+            "notification_type": "admin_enforcement_notice",
             "notification_category": "app",
             "notification_domain": "admin",
             "title": "Broken action",
@@ -826,6 +917,30 @@ def test_notifications_support_payment_and_refund_relations(client: TestClient):
     refund_list_response = client.get(f"/notifications/me?related_refund_id={refund_id}")
     assert refund_list_response.status_code == 200, refund_list_response.text
     assert [item["id"] for item in refund_list_response.json()] == [body["id"]]
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+    admin_payment_lookup_response = client.get(
+        "/admin/notifications",
+        params={"related_type": "payment", "related_id": payment_id},
+    )
+    assert admin_payment_lookup_response.status_code == 400, (
+        admin_payment_lookup_response.text
+    )
+    assert admin_payment_lookup_response.json()["detail"]["code"] == (
+        "notification_lookup_unsupported_query_param"
+    )
+
+    admin_detail_response = client.get(f"/admin/notifications/{body['id']}")
+    assert admin_detail_response.status_code == 200, admin_detail_response.text
+    related_records = {
+        item["type"]: item for item in admin_detail_response.json()["related_records"]
+    }
+    assert related_records["payment"]["id"] == payment_id
+    assert related_records["payment"]["exists"] is True
+    assert related_records["refund"]["id"] == refund_id
+    assert related_records["refund"]["exists"] is True
 
 
 def test_notifications_reject_payment_mismatched_booking(client: TestClient):
@@ -935,7 +1050,7 @@ def test_notifications_reject_category_domain_mismatch(client: TestClient):
         client,
         {
             "user_id": user["id"],
-            "notification_type": "admin_notice",
+            "notification_type": "admin_enforcement_notice",
             "notification_category": "app",
             "notification_domain": "game",
             "title": "Mismatch",
@@ -1001,12 +1116,17 @@ def test_notifications_are_scoped_to_owner_unless_admin(client: TestClient):
     admin_get_response = client.get(f"/notifications/{notification['id']}")
     assert admin_get_response.status_code == 200, admin_get_response.text
 
-    admin_list_response = client.get(f"/notifications?user_id={owner['id']}")
+    admin_list_response = client.get(
+        "/admin/notifications",
+        params={"user_id": owner["id"]},
+    )
     assert admin_list_response.status_code == 200, admin_list_response.text
-    assert [item["id"] for item in admin_list_response.json()] == [notification["id"]]
+    assert [item["id"] for item in admin_list_response.json()["notifications"]] == [
+        notification["id"]
+    ]
 
 
-def test_notification_admin_scaffolds_require_admin_access(
+def test_notification_admin_scaffolds_are_retired(
     client: TestClient,
 ):
     owner = create_user(client)
@@ -1015,7 +1135,7 @@ def test_notification_admin_scaffolds_require_admin_access(
     authenticate_as(owner["id"])
     player_create_response = client.post(
         "/notifications",
-        json=admin_notice_payload(owner["id"]),
+        json=admin_enforcement_notice_payload(owner["id"]),
     )
     assert player_create_response.status_code == 403, player_create_response.text
 
@@ -1028,8 +1148,50 @@ def test_notification_admin_scaffolds_require_admin_access(
     )
     assert player_update_response.status_code == 403, player_update_response.text
 
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
 
-def test_admin_notification_debug_routes_require_admin_access(
+    admin_create_response = client.post(
+        "/notifications",
+        json=admin_enforcement_notice_payload(owner["id"]),
+    )
+    assert admin_create_response.status_code == 410, admin_create_response.text
+    assert admin_create_response.json()["detail"]["code"] == (
+        "notification_admin_scaffold_removed"
+    )
+    admin_create_no_body_response = client.post("/notifications")
+    assert admin_create_no_body_response.status_code == 410, (
+        admin_create_no_body_response.text
+    )
+    assert admin_create_no_body_response.json()["detail"]["code"] == (
+        "notification_admin_scaffold_removed"
+    )
+
+    admin_list_response = client.get(f"/notifications?user_id={owner['id']}")
+    assert admin_list_response.status_code == 410, admin_list_response.text
+    assert admin_list_response.json()["detail"]["code"] == (
+        "notification_admin_scaffold_removed"
+    )
+
+    admin_update_response = client.patch(
+        f"/notifications/{notification['id']}",
+        json={"is_read": True},
+    )
+    assert admin_update_response.status_code == 410, admin_update_response.text
+    assert admin_update_response.json()["detail"]["code"] == (
+        "notification_admin_scaffold_removed"
+    )
+    admin_update_no_body_response = client.patch(f"/notifications/{notification['id']}")
+    assert admin_update_no_body_response.status_code == 410, (
+        admin_update_no_body_response.text
+    )
+    assert admin_update_no_body_response.json()["detail"]["code"] == (
+        "notification_admin_scaffold_removed"
+    )
+
+
+def test_admin_notification_lookup_routes_require_admin_access(
     client: TestClient,
 ):
     owner = create_user(client)
@@ -1046,14 +1208,17 @@ def test_admin_notification_debug_routes_require_admin_access(
     set_user_role(admin["id"], "admin")
     authenticate_as(admin["id"])
 
-    admin_list_response = client.get("/admin/notifications")
+    admin_list_response = client.get(
+        "/admin/notifications",
+        params={"user_id": owner["id"]},
+    )
     assert admin_list_response.status_code == 200, admin_list_response.text
 
     admin_detail_response = client.get(f"/admin/notifications/{notification['id']}")
     assert admin_detail_response.status_code == 200, admin_detail_response.text
 
 
-def test_admin_notification_debug_list_filters_and_paginates(
+def test_admin_notification_lookup_lists_recipient_history(
     client: TestClient,
 ):
     owner, game, booking, participant, game_chat, chat_message = (
@@ -1103,42 +1268,34 @@ def test_admin_notification_debug_list_filters_and_paginates(
         "/admin/notifications",
         params={
             "user_id": owner["id"],
-            "notification_type": "chat_message",
-            "notification_category": "game_activity",
-            "notification_domain": "game",
-            "source_type": "official_game",
-            "is_read": False,
-            "action_key": "view_game",
-            "related_game_id": game["id"],
-            "related_chat_id": game_chat["id"],
-            "related_booking_id": booking["id"],
-            "related_participant_id": participant["id"],
-            "related_message_id": chat_message["id"],
-            "offset": 0,
-            "limit": 1,
         },
     )
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["total_count"] == 1
-    assert body["offset"] == 0
-    assert body["limit"] == 1
+    assert body["limit"] == 50
+    assert body["has_more"] is False
+    assert body["next_cursor"] is None
     assert [item["id"] for item in body["notifications"]] == [
         matching_notification["id"]
     ]
     item = body["notifications"][0]
-    assert item["action_state"] == {
-        "action_key": "view_game",
-        "status": "available",
-        "path": f"/games/{game['id']}",
-        "disabled_reason": None,
+    assert item["subject_label"] == game["title"]
+    assert item["is_read"] is False
+    assert "action_state" not in item
+    assert "action_key" not in item
+    assert "related_records" not in item
+    assert "aggregate_count" not in item
+    assert "body" not in item
+    assert "summary" not in item
+    assert item["primary_related_record"] == {
+        "type": "game",
+        "id": game["id"],
+        "display_label": "Game",
     }
-    assert item["audit_action_count"] == 1
-    assert item["audit_actions"][0]["action_type"] == "create_notification"
 
 
-def test_admin_notification_debug_detail_reports_unavailable_actions(
+def test_admin_notification_lookup_detail_reports_unavailable_actions(
     client: TestClient,
 ):
     owner, game, *_ = create_notification_setup(client)
@@ -1174,58 +1331,323 @@ def test_admin_notification_debug_detail_reports_unavailable_actions(
     set_user_role(admin["id"], "admin")
     authenticate_as(admin["id"])
 
+    list_response = client.get(
+        "/admin/notifications",
+        params={"user_id": owner["id"]},
+    )
+    assert list_response.status_code == 200, list_response.text
+    list_body = list_response.json()
+    assert [item["id"] for item in list_body["notifications"]] == [notification["id"]]
+    assert "action_state" not in list_body["notifications"][0]
+
     response = client.get(f"/admin/notifications/{notification['id']}")
 
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["id"] == notification["id"]
     assert body["action"] is None
-    assert body["action_state"] == {
-        "action_key": "view_game",
-        "status": "unavailable",
-        "path": None,
-        "disabled_reason": None,
+    assert body["action_state"]["action_key"] == "view_game"
+    assert body["action_state"]["status"] == "unavailable"
+    assert body["action_state"]["path"] is None
+    assert body["action_state"]["reason_code"] == "action_unavailable"
+    assert body["action_state"]["explanation"]
+    assert body["action_state"]["target_record"] == {
+        "type": "game",
+        "id": game["id"],
+        "display_label": "Game",
+        "exists": True,
     }
     assert body["audit_action_count"] == 1
     assert body["audit_actions"][0]["action_type"] == "create_notification"
 
 
-def test_admin_notification_debug_rejects_invalid_filters(client: TestClient):
+def test_admin_notification_lookup_detail_hides_non_meaningful_aggregate_count(
+    client: TestClient,
+):
+    owner = create_user(client)
+    notification = create_notification(
+        client,
+        owner["id"],
+        notification_type="admin_enforcement_notice",
+        notification_category="app",
+        notification_domain="admin",
+        source_type="pickup_lane",
+        aggregation_key=f"admin-notice-test:{uuid4()}",
+        aggregate_count=3,
+    )
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+
+    response = client.get(f"/admin/notifications/{notification['id']}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["notification_type"] == "admin_enforcement_notice"
+    assert body["aggregation_key"] == notification["aggregation_key"]
+    assert body["aggregate_count"] is None
+
+
+def test_admin_notification_lookup_requires_recipient_anchor(client: TestClient):
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+
+    no_anchor_response = client.get("/admin/notifications")
+    assert no_anchor_response.status_code == 400, no_anchor_response.text
+    assert no_anchor_response.json()["detail"]["code"] == (
+        "notification_lookup_user_required"
+    )
+
+
+def test_admin_notification_lookup_rejects_unsupported_collection_params(
+    client: TestClient,
+):
+    admin = create_user(client)
+    owner = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+
+    for unsupported_param in ("related_type", "notification_type", "limit"):
+        response = client.get(
+            "/admin/notifications",
+            params={"user_id": owner["id"], unsupported_param: "ignored"},
+        )
+
+        assert response.status_code == 400, response.text
+        assert response.json()["detail"]["code"] == (
+            "notification_lookup_unsupported_query_param"
+        )
+
+
+def test_admin_notification_lookup_created_at_cursor_is_query_bound(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    owner = create_user(client)
+    other_owner = create_user(client)
+    newer = create_notification(client, owner["id"], title="Newest notification")
+    older = create_notification(client, owner["id"], title="Older notification")
+    create_notification(client, other_owner["id"], title="Other user notification")
+    base_created_at = datetime.now(UTC)
+    set_notification_created_at(newer["id"], base_created_at)
+    set_notification_created_at(older["id"], base_created_at - timedelta(minutes=5))
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+    monkeypatch.setattr(
+        "backend.services.admin_notification_service."
+        "ADMIN_NOTIFICATION_LOOKUP_PAGE_LIMIT",
+        1,
+    )
+
+    first_page_response = client.get(
+        "/admin/notifications",
+        params={"user_id": owner["id"]},
+    )
+    assert first_page_response.status_code == 200, first_page_response.text
+    first_page = first_page_response.json()
+    assert [item["id"] for item in first_page["notifications"]] == [newer["id"]]
+    assert first_page["next_cursor"]
+
+    second_page_response = client.get(
+        "/admin/notifications",
+        params={
+            "user_id": owner["id"],
+            "cursor": first_page["next_cursor"],
+        },
+    )
+    assert second_page_response.status_code == 200, second_page_response.text
+    second_page = second_page_response.json()
+    assert [item["id"] for item in second_page["notifications"]] == [older["id"]]
+    assert second_page["next_cursor"] is None
+
+    mismatched_cursor_response = client.get(
+        "/admin/notifications",
+        params={
+            "user_id": other_owner["id"],
+            "cursor": first_page["next_cursor"],
+        },
+    )
+    assert mismatched_cursor_response.status_code == 400, (
+        mismatched_cursor_response.text
+    )
+    assert mismatched_cursor_response.json()["detail"]["code"] == (
+        "invalid_notification_lookup_cursor"
+    )
+
+    malformed_cursor_response = client.get(
+        "/admin/notifications",
+        params={"user_id": owner["id"], "cursor": "not-a-valid-cursor"},
+    )
+    assert malformed_cursor_response.status_code == 400, malformed_cursor_response.text
+    assert malformed_cursor_response.json()["detail"]["code"] == (
+        "invalid_notification_lookup_cursor"
+    )
+
+    unsupported_cursor = base64.urlsafe_b64encode(
+        json.dumps(
+            {
+                "cursor_version": 999,
+                "sort_version": "created_at_desc_id_desc",
+                "created_at": base_created_at.isoformat(),
+                "id": newer["id"],
+                "query_context_hash": "not-used",
+            }
+        ).encode("utf-8")
+    ).decode("ascii")
+    unsupported_cursor_response = client.get(
+        "/admin/notifications",
+        params={"user_id": owner["id"], "cursor": unsupported_cursor},
+    )
+    assert unsupported_cursor_response.status_code == 400, (
+        unsupported_cursor_response.text
+    )
+    assert unsupported_cursor_response.json()["detail"]["code"] == (
+        "invalid_notification_lookup_cursor"
+    )
+
+
+def test_admin_notification_lookup_cursor_uses_id_tie_breaker(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    owner = create_user(client)
+    first = create_notification(client, owner["id"], title="First same timestamp")
+    second = create_notification(client, owner["id"], title="Second same timestamp")
+    shared_created_at = datetime.now(UTC).replace(microsecond=0)
+    set_notification_created_at(first["id"], shared_created_at)
+    set_notification_created_at(second["id"], shared_created_at)
+    expected_order = sorted(
+        [first, second],
+        key=lambda item: UUID(item["id"]),
+        reverse=True,
+    )
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    authenticate_as(admin["id"])
+    monkeypatch.setattr(
+        "backend.services.admin_notification_service."
+        "ADMIN_NOTIFICATION_LOOKUP_PAGE_LIMIT",
+        1,
+    )
+
+    first_page_response = client.get(
+        "/admin/notifications",
+        params={"user_id": owner["id"]},
+    )
+    assert first_page_response.status_code == 200, first_page_response.text
+    first_page = first_page_response.json()
+    assert [item["id"] for item in first_page["notifications"]] == [
+        expected_order[0]["id"]
+    ]
+    assert first_page["next_cursor"]
+
+    second_page_response = client.get(
+        "/admin/notifications",
+        params={
+            "user_id": owner["id"],
+            "cursor": first_page["next_cursor"],
+        },
+    )
+    assert second_page_response.status_code == 200, second_page_response.text
+    second_page = second_page_response.json()
+    assert [item["id"] for item in second_page["notifications"]] == [
+        expected_order[1]["id"]
+    ]
+    assert second_page["next_cursor"] is None
+
+
+def test_admin_notification_lookup_list_does_not_resolve_detail_state(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    owner, game, *_ = create_notification_setup(client)
+    notification = create_notification(
+        client,
+        owner["id"],
+        notification_type="game_updated",
+        notification_category="game_activity",
+        notification_domain="game",
+        title="Compact row update",
+        **game_notification_contract_fields(game),
+        body="Review the latest game details before heading out.",
+        related_game_id=game["id"],
+    )
+
+    def fail_full_serializer(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Collection lookup must not use full Inbox serializer.")
+
+    def fail_related_exists(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Collection lookup must not check related existence.")
+
+    monkeypatch.setattr(
+        "backend.services.admin_notification_service.serialize_notification",
+        fail_full_serializer,
+    )
+    monkeypatch.setattr(
+        "backend.services.admin_notification_service.related_record_exists",
+        fail_related_exists,
+    )
+
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
     authenticate_as(admin["id"])
 
     response = client.get(
         "/admin/notifications",
-        params={"notification_type": "made_up_type"},
+        params={"user_id": owner["id"]},
     )
 
-    assert response.status_code == 400, response.text
-    assert "notification_type is not supported" in response.text
+    assert response.status_code == 200, response.text
+    item = response.json()["notifications"][0]
+    assert item["id"] == notification["id"]
+    assert "action_state" not in item
+    assert "action_key" not in item
+    assert item["primary_related_record"] == {
+        "type": "game",
+        "id": game["id"],
+        "display_label": "Game",
+    }
+    assert "body" not in item
+    assert "summary" not in item
+    assert "related_records" not in item
+    assert "audit_actions" not in item
 
 
-def test_notification_admin_create_and_update_are_audited(client: TestClient):
+def test_notification_internal_create_and_update_are_audited(client: TestClient):
     from backend.database import SessionLocal
-    from backend.models import AdminAction
+    from backend.models import AdminAction, User
+    from backend.schemas import NotificationCreate, NotificationRead, NotificationUpdate
+    from backend.services.notification_service import (
+        create_notification_workflow,
+        update_notification_workflow,
+    )
 
     owner = create_user(client)
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
-    authenticate_as(admin["id"])
 
-    create_response = client.post(
-        "/notifications",
-        json=admin_notice_payload(owner["id"]),
-    )
-    assert create_response.status_code == 201, create_response.text
-    notification = create_response.json()
+    with SessionLocal() as db:
+        admin_user = db.get(User, UUID(admin["id"]))
+        assert admin_user is not None
+        notification_payload = NotificationCreate.model_validate(
+            admin_enforcement_notice_payload(owner["id"])
+        )
+        created = create_notification_workflow(db, notification_payload, admin_user)
+        notification = NotificationRead.model_validate(created).model_dump(mode="json")
+        updated = update_notification_workflow(
+            db,
+            UUID(notification["id"]),
+            NotificationUpdate(is_read=True),
+            admin_user,
+        )
+        update_body = NotificationRead.model_validate(updated).model_dump(mode="json")
 
-    update_response = client.patch(
-        f"/notifications/{notification['id']}",
-        json={"is_read": True},
-    )
-    assert update_response.status_code == 200, update_response.text
-    assert update_response.json()["is_read"] is True
+    assert update_body["is_read"] is True
 
     with SessionLocal() as db:
         actions = (

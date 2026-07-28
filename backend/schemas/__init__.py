@@ -10,6 +10,10 @@ from backend.schemas.admin_action_center_schema import (
     AdminActionCenterRead,
     AdminActionCenterSectionRead,
 )
+from backend.schemas.admin_lookup_schema import (
+    AdminLookupUserListRead,
+    AdminLookupUserRead,
+)
 from backend.schemas.admin_chat_moderation_schema import (
     AdminChatDetectionRead,
     AdminChatMessageListRead,
@@ -146,8 +150,12 @@ from backend.schemas.admin_need_a_sub_schema import (
 from backend.schemas.admin_notification_schema import (
     AdminNotificationActionStateRead,
     AdminNotificationAuditActionRead,
-    AdminNotificationDebugListRead,
-    AdminNotificationDebugRead,
+    AdminNotificationCompactRelatedRecordRead,
+    AdminNotificationLookupDetailRead,
+    AdminNotificationLookupItemRead,
+    AdminNotificationLookupListRead,
+    AdminNotificationRecipientRead,
+    AdminNotificationRelatedRecordRead,
 )
 from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCardRead,
@@ -275,6 +283,12 @@ from backend.schemas.host_publish_fee_schema import (
     HostPublishFeeUpdate,
 )
 from backend.schemas.host_publish_entitlement_schema import HostPublishEntitlementRead
+from backend.schemas.inbox_schema import (
+    InboxCountsRead,
+    InboxGlobalSeenUpdate,
+    InboxItemRead,
+    InboxListRead,
+)
 from backend.schemas.notification_schema import (
     NotificationCreate,
     NotificationRead,
@@ -301,18 +315,15 @@ from backend.schemas.policy_document_schema import (
     PolicyDocumentRead,
     PolicyDocumentUpdate,
 )
-from backend.schemas.platform_notice_campaign_schema import (
-    PlatformNoticeCampaignAttemptListRead,
-    PlatformNoticeCampaignAttemptRead,
-    PlatformNoticeCampaignCreate,
-    PlatformNoticeCampaignDeliveryListRead,
-    PlatformNoticeCampaignDeliveryRead,
-    PlatformNoticeCampaignDeliveryRequest,
-    PlatformNoticeCampaignDeliveryResult,
-    PlatformNoticeCampaignDeliverySummary,
-    PlatformNoticeCampaignListRead,
-    PlatformNoticeCampaignRead,
-    PlatformNoticeCampaignUpdate,
+from backend.schemas.platform_notice_schema import (
+    PlatformNoticeAdminSummaryRead,
+    PlatformNoticeCancel,
+    PlatformNoticeCreate,
+    PlatformNoticeCreateResultRead,
+    PlatformNoticeListRead,
+    PlatformNoticeRead,
+    PlatformNoticeRecipientListRead,
+    PlatformNoticeRecipientRead,
 )
 from backend.schemas.refund_schema import RefundCreate, RefundRead, RefundUpdate
 from backend.schemas.sub_post_chat_message_schema import (
@@ -393,6 +404,8 @@ __all__ = [
     "AdminActionCenterItemRead",
     "AdminActionCenterRead",
     "AdminActionCenterSectionRead",
+    "AdminLookupUserListRead",
+    "AdminLookupUserRead",
     "AdminChatDetectionRead",
     "AdminChatMessageListRead",
     "AdminChatMessageRead",
@@ -473,8 +486,12 @@ __all__ = [
     "AdminNeedASubUserRead",
     "AdminNotificationActionStateRead",
     "AdminNotificationAuditActionRead",
-    "AdminNotificationDebugListRead",
-    "AdminNotificationDebugRead",
+    "AdminNotificationCompactRelatedRecordRead",
+    "AdminNotificationLookupDetailRead",
+    "AdminNotificationLookupItemRead",
+    "AdminNotificationLookupListRead",
+    "AdminNotificationRecipientRead",
+    "AdminNotificationRelatedRecordRead",
     "AdminContentModerationFindingRead",
     "AdminRejectedAttemptRead",
     "AdminReviewEvidenceItemRead",
@@ -601,6 +618,10 @@ __all__ = [
     "HostPublishFeeRead",
     "HostPublishFeeUpdate",
     "HostPublishEntitlementRead",
+    "InboxCountsRead",
+    "InboxGlobalSeenUpdate",
+    "InboxItemRead",
+    "InboxListRead",
     "NotificationCreate",
     "NotificationRead",
     "NotificationUpdate",
@@ -616,17 +637,14 @@ __all__ = [
     "PolicyAcceptanceCreate",
     "PolicyAcceptanceRead",
     "PolicyAcceptanceUpdate",
-    "PlatformNoticeCampaignAttemptListRead",
-    "PlatformNoticeCampaignAttemptRead",
-    "PlatformNoticeCampaignCreate",
-    "PlatformNoticeCampaignDeliveryListRead",
-    "PlatformNoticeCampaignDeliveryRead",
-    "PlatformNoticeCampaignDeliveryRequest",
-    "PlatformNoticeCampaignDeliveryResult",
-    "PlatformNoticeCampaignDeliverySummary",
-    "PlatformNoticeCampaignListRead",
-    "PlatformNoticeCampaignRead",
-    "PlatformNoticeCampaignUpdate",
+    "PlatformNoticeAdminSummaryRead",
+    "PlatformNoticeCancel",
+    "PlatformNoticeCreate",
+    "PlatformNoticeCreateResultRead",
+    "PlatformNoticeListRead",
+    "PlatformNoticeRead",
+    "PlatformNoticeRecipientListRead",
+    "PlatformNoticeRecipientRead",
     "RefundCreate",
     "RefundRead",
     "RefundUpdate",

@@ -1922,7 +1922,7 @@ def test_admin_financial_outcome_refunds_publish_fee(
             db.scalar(
                 select(Notification).where(
                     Notification.user_id == UUID(host["id"]),
-                    Notification.notification_type == "admin_notice",
+                    Notification.notification_type == "admin_enforcement_notice",
                     Notification.title == "Publish fee refunded",
                 )
             )
@@ -2012,7 +2012,7 @@ def test_admin_financial_outcome_credit_creates_publish_entitlement(
             db.scalar(
                 select(Notification).where(
                     Notification.user_id == UUID(host["id"]),
-                    Notification.notification_type == "admin_notice",
+                    Notification.notification_type == "admin_enforcement_notice",
                     Notification.title == "Publish credit added",
                 )
             )

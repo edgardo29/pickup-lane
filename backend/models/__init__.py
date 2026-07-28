@@ -36,11 +36,11 @@ from backend.models.payment_event_model import PaymentEvent
 from backend.models.payment_model import Payment
 from backend.models.policy_acceptance_model import PolicyAcceptance
 from backend.models.policy_document_model import PolicyDocument
-from backend.models.platform_notice_campaign_model import (
-    PlatformNoticeCampaign,
-    PlatformNoticeCampaignAttempt,
-    PlatformNoticeCampaignDelivery,
-    PlatformNoticeCampaignTargetUser,
+from backend.models.platform_notice_model import (
+    PlatformNotice,
+    PlatformNoticeGlobalSeenState,
+    PlatformNoticeRecipient,
+    PlatformNoticeSelectedRead,
 )
 from backend.models.refund_model import Refund
 from backend.models.refund_event_model import RefundEvent
@@ -110,10 +110,10 @@ __all__ = [
     "PaymentEvent",
     "PolicyDocument",
     "PolicyAcceptance",
-    "PlatformNoticeCampaign",
-    "PlatformNoticeCampaignAttempt",
-    "PlatformNoticeCampaignDelivery",
-    "PlatformNoticeCampaignTargetUser",
+    "PlatformNotice",
+    "PlatformNoticeGlobalSeenState",
+    "PlatformNoticeRecipient",
+    "PlatformNoticeSelectedRead",
     "Refund",
     "RefundEvent",
     "SubPost",

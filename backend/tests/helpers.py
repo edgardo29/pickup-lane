@@ -573,10 +573,15 @@ def create_notification(
     user_id: str,
     **overrides: object,
 ) -> dict:
+    from backend.database import SessionLocal
+    from backend.models import User
+    from backend.schemas import NotificationCreate, NotificationRead
+    from backend.services.notification_service import create_notification_workflow
+
     authenticate_as(user_id)
     payload = {
         "user_id": user_id,
-        "notification_type": "admin_notice",
+        "notification_type": "admin_enforcement_notice",
         "notification_category": "app",
         "notification_domain": "admin",
         "source_type": "pickup_lane",
@@ -590,13 +595,16 @@ def create_notification(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/notifications", json=payload),
-    )
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    notification_payload = NotificationCreate.model_validate(payload)
 
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        admin_user = db.get(User, UUID(admin["id"]))
+        assert admin_user is not None
+        result = create_notification_workflow(db, notification_payload, admin_user)
+
+    return NotificationRead.model_validate(result).model_dump(mode="json")
 
 
 def create_game_status_history(

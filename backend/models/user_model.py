@@ -104,6 +104,13 @@ class User(Base):
             text("lower(email)"),
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "ix_users_platform_notice_active_id",
+            "id",
+            postgresql_where=text(
+                "account_status = 'active' AND deleted_at IS NULL"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)

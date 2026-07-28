@@ -18,7 +18,7 @@ TARGET_SUB_POST_REQUEST_ID = "target_sub_post_request_id"
 TARGET_SUB_POST_POSITION_ID = "target_sub_post_position_id"
 TARGET_SUB_CHAT_MESSAGE_ID = "target_sub_chat_message_id"
 TARGET_NOTIFICATION_ID = "target_notification_id"
-TARGET_PLATFORM_NOTICE_CAMPAIGN_ID = "target_platform_notice_campaign_id"
+TARGET_PLATFORM_NOTICE_ID = "target_platform_notice_id"
 TARGET_ADMIN_ACTION_ID = "target_admin_action_id"
 TARGET_SUPPORT_FLAG_ID = "target_support_flag_id"
 TARGET_MONEY_ISSUE_ID = "target_money_issue_id"
@@ -44,7 +44,7 @@ ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_SUB_POST_POSITION_ID,
     TARGET_SUB_CHAT_MESSAGE_ID,
     TARGET_NOTIFICATION_ID,
-    TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,
+    TARGET_PLATFORM_NOTICE_ID,
     TARGET_ADMIN_ACTION_ID,
     TARGET_SUPPORT_FLAG_ID,
     TARGET_MONEY_ISSUE_ID,
@@ -573,45 +573,30 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         action_type="update_notification",
         required_target_rules=(TargetRule(all_of=(TARGET_NOTIFICATION_ID,)),),
         allowed_target_fields=target_set(TARGET_NOTIFICATION_ID, TARGET_USER_ID),
+        client_allowed_target_fields=target_set(),
         metadata_builder_key="support",
     ),
     "create_notification": AdminActionPolicy(
         action_type="create_notification",
         required_target_rules=(TargetRule(all_of=(TARGET_NOTIFICATION_ID,)),),
         allowed_target_fields=target_set(TARGET_NOTIFICATION_ID, TARGET_USER_ID),
+        client_allowed_target_fields=target_set(),
         metadata_builder_key="support",
     ),
-    "create_platform_notice_campaign": AdminActionPolicy(
-        action_type="create_platform_notice_campaign",
-        required_target_rules=(
-            TargetRule(all_of=(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,)),
-        ),
-        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID),
+    "publish_platform_notice": AdminActionPolicy(
+        action_type="publish_platform_notice",
+        required_target_rules=(TargetRule(all_of=(TARGET_PLATFORM_NOTICE_ID,)),),
+        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_ID),
+        client_allowed_target_fields=target_set(),
         metadata_builder_key="platform_notice",
     ),
-    "update_platform_notice_campaign": AdminActionPolicy(
-        action_type="update_platform_notice_campaign",
-        required_target_rules=(
-            TargetRule(all_of=(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,)),
-        ),
-        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID),
+    "cancel_platform_notice": AdminActionPolicy(
+        action_type="cancel_platform_notice",
+        required_target_rules=(TargetRule(all_of=(TARGET_PLATFORM_NOTICE_ID,)),),
+        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_ID),
+        client_allowed_target_fields=target_set(),
         metadata_builder_key="platform_notice",
-    ),
-    "send_platform_notice_campaign": AdminActionPolicy(
-        action_type="send_platform_notice_campaign",
-        required_target_rules=(
-            TargetRule(all_of=(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,)),
-        ),
-        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID),
-        metadata_builder_key="platform_notice",
-    ),
-    "retry_platform_notice_campaign": AdminActionPolicy(
-        action_type="retry_platform_notice_campaign",
-        required_target_rules=(
-            TargetRule(all_of=(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID,)),
-        ),
-        allowed_target_fields=target_set(TARGET_PLATFORM_NOTICE_CAMPAIGN_ID),
-        metadata_builder_key="platform_notice",
+        requires_reason=True,
     ),
     "user_role_changed": AdminActionPolicy(
         action_type="user_role_changed",
