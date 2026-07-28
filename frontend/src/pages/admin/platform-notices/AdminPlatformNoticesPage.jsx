@@ -649,7 +649,13 @@ function HistoryView({
           ))}
         </select>
       </div>
-      {loadState === 'loading' ? (
+      {isSearchBelowMinimum ? (
+        <div className="platform-notices-empty">
+          <Search aria-hidden="true" />
+          <strong>Keep typing</strong>
+          <p>Type at least 3 letters or numbers to search history.</p>
+        </div>
+      ) : loadState === 'loading' ? (
         <HistoryLoading />
       ) : loadState === 'error' ? (
         <div className="platform-notices-empty platform-notices-empty--error">
@@ -657,12 +663,6 @@ function HistoryView({
           <strong>Platform notices could not be loaded</strong>
           <p>{error || 'Try refreshing the list.'}</p>
           <SecondaryButton icon={RefreshCw} onClick={onRefresh}>Retry</SecondaryButton>
-        </div>
-      ) : isSearchBelowMinimum ? (
-        <div className="platform-notices-empty">
-          <Search aria-hidden="true" />
-          <strong>Keep typing</strong>
-          <p>Type at least 3 letters or numbers to search history.</p>
         </div>
       ) : notices.length === 0 ? (
         <div className="platform-notices-empty">
@@ -895,29 +895,7 @@ function AdminPlatformNoticesPage() {
       return undefined
     }
 
-    if (isHistorySearchBelowMinimum) {
-      historyRequestIdRef.current += 1
-      historyAbortControllerRef.current?.abort()
-      historyAbortControllerRef.current = null
-      setHistoryState('ready')
-      setHistoryLoadingMore(false)
-      setHistoryError('')
-      setNotices([])
-      setHistoryCursor('')
-      setHistoryHasMore(false)
-      return undefined
-    }
-
-    if (isHistorySearchWaitingForDebounce) {
-      historyRequestIdRef.current += 1
-      historyAbortControllerRef.current?.abort()
-      historyAbortControllerRef.current = null
-      setHistoryState('loading')
-      setHistoryLoadingMore(false)
-      setHistoryError('')
-      setNotices([])
-      setHistoryCursor('')
-      setHistoryHasMore(false)
+    if (isHistorySearchBelowMinimum || isHistorySearchWaitingForDebounce) {
       return undefined
     }
 
@@ -928,22 +906,27 @@ function AdminPlatformNoticesPage() {
     historyAbortControllerRef.current?.abort()
     historyAbortControllerRef.current = controller
 
-    setHistoryState('loading')
-    setHistoryLoadingMore(false)
-    setHistoryError('')
-    setNotices([])
-    setHistoryCursor('')
-    setHistoryHasMore(false)
-
-    listPlatformNotices({
-      firebaseUser: currentUser,
-      limit: HISTORY_LIMIT,
-      search: activeHistorySearch,
-      signal: controller.signal,
-      status: filters.status,
-    })
+    Promise.resolve()
+      .then(() => {
+        if (!isMounted) {
+          return null
+        }
+        setHistoryState('loading')
+        setHistoryLoadingMore(false)
+        setHistoryError('')
+        setNotices([])
+        setHistoryCursor('')
+        setHistoryHasMore(false)
+        return listPlatformNotices({
+          firebaseUser: currentUser,
+          limit: HISTORY_LIMIT,
+          search: activeHistorySearch,
+          signal: controller.signal,
+          status: filters.status,
+        })
+      })
       .then((response) => {
-        if (!isMounted || requestId !== historyRequestIdRef.current) {
+        if (!response || !isMounted || requestId !== historyRequestIdRef.current) {
           return
         }
         setNotices(response.notices || [])
