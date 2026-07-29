@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 
 from backend.tests.helpers import (
@@ -166,6 +168,7 @@ def test_bookings_reject_bad_total_math(client: TestClient):
             "currency": "USD",
             "price_per_player_snapshot_cents": 1200,
             "platform_fee_snapshot_cents": 100,
+            "expires_at": (datetime.now(UTC) + timedelta(minutes=10)).isoformat(),
         },
     )
 

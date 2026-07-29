@@ -1,11 +1,15 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.services.auth_service import require_active_user, require_active_admin
+from backend.services.auth_service import (
+    get_optional_current_app_user,
+    require_active_user,
+    require_active_admin,
+)
 from backend.models import (
     Game,
     GameParticipant,
@@ -161,7 +165,7 @@ def list_game_participant_counts(
     status_code=status.HTTP_200_OK,
 )
 def list_browse_games(
-    starts_on: date = Query(...),
+    starts_on: date | None = Query(default=None),
     limit: int = Query(default=40, ge=1),
     cursor: str | None = Query(default=None, max_length=2000),
     db: Session = Depends(get_db),
@@ -181,15 +185,29 @@ def list_browse_games(
 )
 def list_game_roster_participants(
     game_id: uuid.UUID,
+    response: Response,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_app_user),
 ) -> list[GameParticipant]:
-    return list_public_game_participants(db, game_id)
+    participants = list_public_game_participants(db, game_id, current_user)
+    game = db.get(Game, game_id)
+    if game is not None and game.public_visibility_status == "hidden":
+        response.headers["Cache-Control"] = "private, no-store"
+    return participants
 
 
 # This route fetches a single game record by its internal UUID.
 @router.get("/{game_id}", response_model=GameRead, status_code=status.HTTP_200_OK)
-def get_game(game_id: uuid.UUID, db: Session = Depends(get_db)) -> Game:
-    return get_public_game_or_404(db, game_id)
+def get_game(
+    game_id: uuid.UUID,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_app_user),
+) -> Game:
+    game = get_public_game_or_404(db, game_id, current_user)
+    if game.public_visibility_status == "hidden":
+        response.headers["Cache-Control"] = "private, no-store"
+    return game
 
 
 # This route returns game records currently stored in the app database.

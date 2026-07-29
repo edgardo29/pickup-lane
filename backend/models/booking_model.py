@@ -88,6 +88,10 @@ class Booking(Base):
             "(booking_status <> 'cancelled' OR cancelled_at IS NOT NULL)",
             name="ck_bookings_cancelled_requires_cancelled_at",
         ),
+        CheckConstraint(
+            "(booking_status <> 'pending_payment' OR expires_at IS NOT NULL)",
+            name="ck_bookings_pending_payment_requires_expires_at",
+        ),
         # These indexes support the buyer, game, and operational views that
         # will be needed before participant and refund tables exist.
         Index("ix_bookings_game_id", "game_id"),
@@ -103,6 +107,13 @@ class Booking(Base):
             "ix_bookings_game_id_booking_status",
             "game_id",
             "booking_status",
+        ),
+        Index(
+            "ix_bookings_game_status_expires_payment",
+            "game_id",
+            "booking_status",
+            "expires_at",
+            "payment_status",
         ),
     )
 

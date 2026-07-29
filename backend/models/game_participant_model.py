@@ -120,6 +120,12 @@ class GameParticipant(Base):
             "participant_status",
         ),
         Index(
+            "ix_game_participants_game_status_booking",
+            "game_id",
+            "participant_status",
+            "booking_id",
+        ),
+        Index(
             "ix_game_participants_booking_id_participant_status",
             "booking_id",
             "participant_status",

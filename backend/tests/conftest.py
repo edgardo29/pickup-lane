@@ -65,12 +65,17 @@ TEST_TABLES = (
     "policy_documents",
     "users",
 )
+TEST_DATABASE_ADVISORY_LOCK_ID = 917_263_514
 
 
 def _is_safe_test_database(database_url: str) -> bool:
     # Local test runs should never truncate a real development database by
     # accident, so require the database name itself to include "test".
     return "test" in database_url.rsplit("/", maxsplit=1)[-1]
+
+
+def _truncate_test_tables(connection, table_names: str) -> None:
+    connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
 
 
 @pytest.fixture(scope="session")
@@ -100,21 +105,39 @@ def clean_database(client: TestClient):
     from backend.main import app
 
     table_names = ", ".join(TEST_TABLES)
-    app.dependency_overrides.clear()
 
-    # Each test gets a clean database so tests can create the same logical
-    # records without leaking state into the next test.
-    with engine.begin() as connection:
+    with engine.connect() as connection:
         connection.execute(
-            text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE")
+            text("SELECT pg_advisory_lock(:lock_id)"),
+            {"lock_id": TEST_DATABASE_ADVISORY_LOCK_ID},
         )
+        connection.commit()
 
-    yield
-    app.dependency_overrides.clear()
+        try:
+            app.dependency_overrides.clear()
 
-    # Clean again after the test so a failed test does not leave rows behind
-    # for the next local run.
-    with engine.begin() as connection:
-        connection.execute(
-            text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE")
-        )
+            # Each test gets a clean database so tests can create the same
+            # logical records without leaking state into the next test. The
+            # advisory lock keeps shared-DB local runs from truncating while
+            # another test request is still reading or writing.
+            with connection.begin():
+                _truncate_test_tables(connection, table_names)
+
+            yield
+
+            app.dependency_overrides.clear()
+
+            # Clean again after the test so a failed test does not leave rows
+            # behind for the next local run.
+            with connection.begin():
+                _truncate_test_tables(connection, table_names)
+        finally:
+            app.dependency_overrides.clear()
+            if connection.in_transaction():
+                connection.rollback()
+
+            connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": TEST_DATABASE_ADVISORY_LOCK_ID},
+            )
+            connection.commit()

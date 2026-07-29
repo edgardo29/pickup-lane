@@ -50,6 +50,7 @@ def upgrade() -> None:
     )
     op.create_index('ix_waitlist_entries_game_id', 'waitlist_entries', ['game_id'], unique=False)
     op.create_index('ix_waitlist_entries_game_id_waitlist_status_position', 'waitlist_entries', ['game_id', 'waitlist_status', 'position'], unique=False)
+    op.create_index('ix_waitlist_entries_game_user_status', 'waitlist_entries', ['game_id', 'user_id', 'waitlist_status'], unique=False)
     op.create_index('ix_waitlist_entries_user_id', 'waitlist_entries', ['user_id'], unique=False)
     op.create_index('ix_waitlist_entries_user_id_waitlist_status', 'waitlist_entries', ['user_id', 'waitlist_status'], unique=False)
     op.create_index('ix_waitlist_entries_waitlist_status', 'waitlist_entries', ['waitlist_status'], unique=False)

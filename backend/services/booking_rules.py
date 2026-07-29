@@ -66,6 +66,15 @@ def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
     validate_booking_status(booking_data["booking_status"])
     validate_booking_payment_status(booking_data["payment_status"])
 
+    if (
+        booking_data["booking_status"] == "pending_payment"
+        and booking_data["expires_at"] is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pending-payment bookings require expires_at.",
+        )
+
     if booking_data["currency"] != VALID_CURRENCY:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

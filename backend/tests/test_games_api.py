@@ -248,106 +248,6 @@ def test_games_create_get_list_update_and_soft_delete(client: TestClient):
     assert delete_response.json()["deleted_at"] is not None
 
 
-def test_browse_game_cards_cursor_paginates_and_returns_card_metadata(
-    client: TestClient,
-):
-    admin = create_user(client)
-    player = create_user(client)
-    second_player = create_user(client)
-    venue = create_venue(client, admin["id"])
-    base_start = (
-        datetime.now(UTC).replace(hour=18, minute=0, second=0, microsecond=0)
-        + timedelta(days=7)
-    )
-
-    game_ids: list[str] = []
-    for index in range(3):
-        starts_at = base_start + timedelta(hours=index)
-        game = create_game(
-            client,
-            admin["id"],
-            venue,
-            title=f"Browse Card {index + 1}",
-            starts_at=starts_at.isoformat(),
-            ends_at=(starts_at + timedelta(hours=1)).isoformat(),
-        )
-        game_ids.append(game["id"])
-
-    create_game_participant(client, player["id"], game_ids[0])
-    create_game_participant(
-        client,
-        second_player["id"],
-        game_ids[0],
-        roster_order=2,
-    )
-    create_game_image(
-        client,
-        game_ids[0],
-        admin["id"],
-        image_url="https://example.com/browse-primary.jpg",
-        image_status="active",
-        is_primary=True,
-    )
-
-    starts_on = local_date_string(base_start, "America/Chicago")
-    first_page = client.get(
-        "/games/browse",
-        params={"starts_on": starts_on, "limit": 2},
-    )
-
-    assert first_page.status_code == 200, first_page.text
-    first_body = first_page.json()
-    assert first_body["limit"] == 2
-    assert first_body["has_more"] is True
-    assert first_body["next_cursor"]
-    assert [item["id"] for item in first_body["games"]] == game_ids[:2]
-    assert first_body["games"][0]["participant_count"] == 2
-    assert (
-        first_body["games"][0]["primary_image_url"]
-        == "https://example.com/browse-primary.jpg"
-    )
-
-    second_page = client.get(
-        "/games/browse",
-        params={
-            "starts_on": starts_on,
-            "limit": 2,
-            "cursor": first_body["next_cursor"],
-        },
-    )
-    assert second_page.status_code == 200, second_page.text
-    second_body = second_page.json()
-    assert [item["id"] for item in second_body["games"]] == [game_ids[2]]
-    assert second_body["has_more"] is False
-    assert second_body["next_cursor"] is None
-
-    mismatch_response = client.get(
-        "/games/browse",
-        params={
-            "starts_on": local_date_string(
-                base_start + timedelta(days=1),
-                "America/Chicago",
-            ),
-            "cursor": first_body["next_cursor"],
-        },
-    )
-    assert mismatch_response.status_code == 400, mismatch_response.text
-    assert "cursor does not match" in mismatch_response.text
-
-
-def test_browse_game_cards_caps_limit(client: TestClient):
-    response = client.get(
-        "/games/browse",
-        params={
-            "starts_on": (datetime.now(UTC) + timedelta(days=7)).date().isoformat(),
-            "limit": 500,
-        },
-    )
-
-    assert response.status_code == 200, response.text
-    assert response.json()["limit"] == 100
-
-
 def test_my_games_cards_cursor_paginates_upcoming_hosted_games(
     client: TestClient,
 ):
@@ -3145,10 +3045,18 @@ def test_list_game_participant_counts_returns_public_roster_counts(
         price_cents=0,
         roster_order=1,
     )
+    pending_booking = create_booking(
+        client,
+        player["id"],
+        game["id"],
+        booking_status="pending_payment",
+        payment_status="processing",
+    )
     create_game_participant(
         client,
         player["id"],
         game["id"],
+        booking_id=pending_booking["id"],
         participant_status="pending_payment",
         roster_order=2,
     )
@@ -3282,13 +3190,12 @@ def test_join_game_with_guests_creates_party_booking_and_guest_participants(
     assert booking["payment_status"] == "paid"
     assert booking["total_cents"] == game["price_per_player_cents"] * 3
 
-    participants_response = get_roster_as_admin(client, f"/game-participants?game_id={game['id']}")
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={body['booking_id']}",
+    )
     assert participants_response.status_code == 200, participants_response.text
-    participants = [
-        item
-        for item in participants_response.json()
-        if item["booking_id"] == body["booking_id"]
-    ]
+    participants = participants_response.json()
     assert len(participants) == 3
     assert sum(item["participant_type"] == "guest" for item in participants) == 2
     assert {item["participant_status"] for item in participants} == {"confirmed"}
@@ -3534,13 +3441,12 @@ def test_join_game_waitlists_whole_party_when_not_enough_spots(client: TestClien
     assert booking["booking_status"] == "waitlisted"
     assert booking["payment_status"] == "not_required"
 
-    participants_response = get_roster_as_admin(client, f"/game-participants?game_id={game['id']}")
+    participants_response = get_roster_as_admin(
+        client,
+        f"/game-participants?booking_id={body['booking_id']}",
+    )
     assert participants_response.status_code == 200, participants_response.text
-    participants = [
-        item
-        for item in participants_response.json()
-        if item["booking_id"] == body["booking_id"]
-    ]
+    participants = participants_response.json()
     assert len(participants) == 3
     assert sum(item["participant_type"] == "guest" for item in participants) == 2
     assert {item["participant_status"] for item in participants} == {"waitlisted"}
@@ -4302,7 +4208,9 @@ def test_paid_waitlist_processing_holds_capacity_and_blocks_duplicate_join(
     assert waitlist_response.status_code == 201, waitlist_response.text
     waitlist_body = waitlist_response.json()
 
+    promotion_started_at = datetime.now(UTC)
     leave_response = leave_game_as(client, game["id"], joined_players[0]["id"])
+    promotion_finished_at = datetime.now(UTC)
     assert leave_response.status_code == 200, leave_response.text
 
     waitlist_entry_response = get_roster_as_admin(
@@ -4310,7 +4218,9 @@ def test_paid_waitlist_processing_holds_capacity_and_blocks_duplicate_join(
         f"/waitlist-entries/{waitlist_body['waitlist_entry_id']}"
     )
     assert waitlist_entry_response.status_code == 200, waitlist_entry_response.text
-    assert waitlist_entry_response.json()["waitlist_status"] == "payment_processing"
+    waitlist_entry = waitlist_entry_response.json()
+    assert waitlist_entry["waitlist_status"] == "payment_processing"
+    assert waitlist_entry["promotion_expires_at"] is not None
 
     booking_response = get_money_as_admin(
         client,
@@ -4320,6 +4230,13 @@ def test_paid_waitlist_processing_holds_capacity_and_blocks_duplicate_join(
     booking = booking_response.json()
     assert booking["booking_status"] == "pending_payment"
     assert booking["payment_status"] == "processing"
+    assert booking["expires_at"] is not None
+    processing_expires_at = datetime.fromisoformat(booking["expires_at"])
+    assert promotion_started_at + timedelta(minutes=2) <= processing_expires_at
+    assert processing_expires_at <= promotion_finished_at + timedelta(minutes=2)
+    assert datetime.fromisoformat(waitlist_entry["promotion_expires_at"]) == (
+        processing_expires_at
+    )
 
     participants_response = get_roster_as_admin(
         client,

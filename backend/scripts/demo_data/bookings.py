@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, User
@@ -56,6 +58,7 @@ def seed_bookings(db: Session, users: dict[str, User], games: dict[str, Game]) -
             buyer = users[CURRENT_USER_KEY]
             booking_key = f"{game_data['key']}:{CURRENT_USER_KEY}"
             subtotal_cents = game.price_per_player_cents
+            is_pending_payment = current_user_status == "pending_payment"
 
             seeded_bookings[booking_key] = upsert_by_id(
                 db,
@@ -64,8 +67,10 @@ def seed_bookings(db: Session, users: dict[str, User], games: dict[str, Game]) -
                 {
                     "game_id": game.id,
                     "buyer_user_id": buyer.id,
-                    "booking_status": "confirmed",
-                    "payment_status": "paid",
+                    "booking_status": (
+                        "pending_payment" if is_pending_payment else "confirmed"
+                    ),
+                    "payment_status": "processing" if is_pending_payment else "paid",
                     "participant_count": 1,
                     "subtotal_cents": subtotal_cents,
                     "platform_fee_cents": 0,
@@ -74,11 +79,15 @@ def seed_bookings(db: Session, users: dict[str, User], games: dict[str, Game]) -
                     "currency": "USD",
                     "price_per_player_snapshot_cents": game.price_per_player_cents,
                     "platform_fee_snapshot_cents": 0,
-                    "booked_at": timestamp,
+                    "booked_at": None if is_pending_payment else timestamp,
                     "cancelled_at": None,
                     "cancelled_by_user_id": None,
                     "cancel_reason": None,
-                    "expires_at": None,
+                    "expires_at": (
+                        timestamp + timedelta(minutes=2)
+                        if is_pending_payment
+                        else None
+                    ),
                     "updated_at": timestamp,
                 },
             )

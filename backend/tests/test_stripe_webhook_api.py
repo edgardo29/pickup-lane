@@ -6,13 +6,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from backend.database import SessionLocal
-from backend.models import Booking, GameCredit, GameCreditUsage, GameParticipant
+from backend.models import Booking, GameCredit, GameCreditUsage, GameParticipant, Refund
 from backend.services.game_credit_service import (
     REDEEMED_USAGE_STATUS,
     RELEASED_USAGE_STATUS,
     RESERVED_USAGE_STATUS,
 )
-from backend.services.stripe_service import StripePaymentIntentResult
+from backend.services.stripe_service import StripePaymentIntentResult, StripeRefundResult
 from backend.tests.helpers import (
     authenticate_as,
     create_booking,
@@ -756,6 +756,93 @@ def test_stripe_webhook_duplicate_event_is_idempotent(
         "booking_confirmed",
     )
     assert len(confirmed_notifications) == 1
+
+
+def test_stripe_webhook_late_success_expires_booking_and_refunds_once(
+    client: TestClient,
+    monkeypatch,
+):
+    checkout = create_pending_checkout(client, monkeypatch)
+    expired_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+    with SessionLocal() as db:
+        booking = db.get(Booking, UUID(checkout["booking_id"]))
+        assert booking is not None
+        booking.expires_at = expired_at
+        db.commit()
+
+    refund_calls: list[dict] = []
+
+    def fake_create_stripe_refund(**kwargs):
+        refund_calls.append(kwargs)
+        return StripeRefundResult(
+            id="re_late_checkout_success",
+            status="succeeded",
+            amount_cents=kwargs["amount_cents"],
+            currency=kwargs["currency"],
+            charge_id=kwargs["charge_id"],
+            payment_intent_id=checkout["payment_intent_id"],
+        )
+
+    monkeypatch.setattr(
+        "backend.services.stripe_webhook_service.create_stripe_refund",
+        fake_create_stripe_refund,
+    )
+    event = build_payment_intent_event(
+        checkout,
+        event_type="payment_intent.succeeded",
+        event_id="evt_late_checkout_success",
+        status="succeeded",
+    )
+
+    response = post_stripe_event(client, monkeypatch, event)
+    duplicate_response = post_stripe_event(client, monkeypatch, event)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["processing_status"] == "processed"
+    assert duplicate_response.status_code == 200, duplicate_response.text
+    assert duplicate_response.json()["duplicate"] is True
+    assert len(refund_calls) == 1
+    assert refund_calls[0]["charge_id"] == "ch_test_webhook"
+    assert refund_calls[0]["amount_cents"] == checkout["amount_cents"]
+    assert refund_calls[0]["idempotency_key"] == (
+        f"late_payment:{checkout['booking_id']}:"
+        f"payment:{checkout['payment_id']}:refund"
+    )
+
+    with SessionLocal() as db:
+        booking = db.get(Booking, UUID(checkout["booking_id"]))
+        assert booking is not None
+        assert booking.booking_status == "expired"
+        assert booking.payment_status == "refunded"
+        assert booking.expires_at is None
+
+        participants = list(
+            db.scalars(
+                select(GameParticipant).where(
+                    GameParticipant.booking_id == UUID(checkout["booking_id"])
+                )
+            ).all()
+        )
+        assert {participant.participant_status for participant in participants} == {
+            "cancelled"
+        }
+        assert {participant.cancellation_type for participant in participants} == {
+            "payment_failed"
+        }
+
+        refunds = list(
+            db.scalars(
+                select(Refund).where(
+                    Refund.payment_id == UUID(checkout["payment_id"]),
+                    Refund.origin_workflow == "pending_checkout_expiration",
+                    Refund.refund_reason == "duplicate_payment",
+                )
+            ).all()
+        )
+        assert len(refunds) == 1
+        assert refunds[0].provider_refund_id == "re_late_checkout_success"
+        assert refunds[0].refund_status == "succeeded"
 
 
 def test_stripe_webhook_waitlist_processing_success_confirms_and_notifies(

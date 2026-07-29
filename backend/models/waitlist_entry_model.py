@@ -73,6 +73,12 @@ class WaitlistEntry(Base):
             "waitlist_status",
         ),
         Index(
+            "ix_waitlist_entries_game_user_status",
+            "game_id",
+            "user_id",
+            "waitlist_status",
+        ),
+        Index(
             "ux_waitlist_entries_active_user_per_game",
             "game_id",
             "user_id",

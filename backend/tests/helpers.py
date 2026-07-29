@@ -315,6 +315,12 @@ def create_game(
         "policy_mode": "official_standard",
     }
     payload.update(overrides)
+    if "total_spots" in overrides and "format_label" not in overrides:
+        total_spots = int(payload["total_spots"])
+        if total_spots < 10:
+            side_size = max(3, total_spots // 2)
+            payload["format_label"] = f"{side_size}v{side_size}"
+
     if (
         payload["game_type"] == "community"
         and "payment_collection_type" not in overrides
@@ -404,6 +410,8 @@ def create_booking(
         "platform_fee_snapshot_cents": 100,
     }
     payload.update(overrides)
+    if payload["booking_status"] == "pending_payment" and payload.get("expires_at") is None:
+        payload["expires_at"] = (datetime.now(UTC) + timedelta(minutes=2)).isoformat()
 
     response = run_as_temporary_admin(
         client,

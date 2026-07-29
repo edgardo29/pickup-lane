@@ -1,7 +1,7 @@
 """Waitlist workflow orchestration for game joins and promotion."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -43,6 +43,8 @@ from backend.services.stripe_service import (
     create_payment_intent,
     map_payment_intent_status,
 )
+
+PAYMENT_PROCESSING_HOLD_MINUTES = 2
 
 
 def get_authorized_waitlist_payment_method(
@@ -227,15 +229,18 @@ def mark_paid_waitlist_auto_promotion_processing(
     booking_participants: list[GameParticipant],
     now: datetime,
 ) -> None:
+    hold_expires_at = now + timedelta(minutes=PAYMENT_PROCESSING_HOLD_MINUTES)
+
     waitlist_entry.waitlist_status = "payment_processing"
     waitlist_entry.promoted_booking_id = booking.id
     waitlist_entry.promoted_at = waitlist_entry.promoted_at or now
+    waitlist_entry.promotion_expires_at = hold_expires_at
     waitlist_entry.updated_at = now
     db.add(waitlist_entry)
 
     booking.booking_status = "pending_payment"
     booking.payment_status = "processing"
-    booking.expires_at = None
+    booking.expires_at = hold_expires_at
     booking.updated_at = now
     db.add(booking)
 
@@ -504,7 +509,10 @@ def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
         sync_game_capacity_status(db, db_game)
         return
 
-    available_spots = max(db_game.total_spots - count_roster_players(db, db_game.id), 0)
+    available_spots = max(
+        db_game.total_spots - count_roster_players(db, db_game.id, now=now),
+        0,
+    )
     if available_spots <= 0:
         sync_game_capacity_status(db, db_game)
         return
