@@ -33,6 +33,10 @@
   --app-page-shell-padding-bottom: 52px;
 }
 
+.browse-content {
+  --pl-motion-distance: 4px;
+}
+
 .browse-panel {
   margin-top: 34px;
 }
@@ -157,6 +161,7 @@
   color: #071007;
   background: linear-gradient(135deg, var(--lime), #94ef00);
   box-shadow: none;
+  animation: browse-date-selected var(--pl-motion-duration-fast) var(--pl-motion-ease);
 }
 
 .browse-date--active:focus-visible {
@@ -175,6 +180,9 @@
 }
 
 .time-section {
+  --pl-motion-duration: 190ms;
+  --pl-motion-distance: 6px;
+
   display: grid;
   gap: 28px;
 }
@@ -320,6 +328,9 @@
 }
 
 .game-card {
+  --pl-motion-duration: 210ms;
+  --pl-motion-distance: 8px;
+
   min-width: 0;
   overflow: hidden;
   border: 1px solid rgba(248, 250, 252, 0.075);
@@ -896,4 +907,14 @@
   transform: translateY(-1px);
   border-color: rgba(248, 250, 252, 0.13);
   box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.045);
+}
+
+@keyframes browse-date-selected {
+  from {
+    transform: scale(0.985);
+  }
+
+  to {
+    transform: scale(1);
+  }
 }

@@ -17,6 +17,10 @@
   --pl-scrollbar-thumb: rgba(248, 250, 252, 0.22);
   --pl-scrollbar-thumb-hover: rgba(248, 250, 252, 0.32);
   --pl-scrollbar-track: transparent;
+  --pl-motion-duration-fast: 140ms;
+  --pl-motion-duration: 180ms;
+  --pl-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --pl-motion-distance: 5px;
 
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -109,4 +113,53 @@ img {
 
 .pl-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+.pl-motion-enter {
+  animation: pl-motion-enter var(--pl-motion-duration) var(--pl-motion-ease) both;
+  animation-delay: var(--pl-motion-delay, 0ms);
+}
+
+.pl-motion-enter--fade {
+  animation-name: pl-motion-fade;
+}
+
+@keyframes pl-motion-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--pl-motion-distance));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pl-motion-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+
+  .pl-motion-enter,
+  .pl-motion-enter--fade {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }

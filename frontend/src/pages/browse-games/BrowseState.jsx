@@ -2,7 +2,7 @@ import { SoccerBallIcon } from '../../components/BrowseIcons.jsx'
 
 export function BrowseState({ action, message, title }) {
   return (
-    <div className="browse-state">
+    <div className="browse-state pl-motion-enter">
       <SoccerBallIcon />
       <h2>{title}</h2>
       {message && <p>{message}</p>}

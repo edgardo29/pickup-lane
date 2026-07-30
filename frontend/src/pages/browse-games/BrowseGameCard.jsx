@@ -12,7 +12,7 @@ import {
 } from './browseGameFormatters.js'
 import { buildMediaUrl } from '../../lib/apiClient.js'
 
-function BrowseGameCard({ browseTimezone, game }) {
+function BrowseGameCard({ animationIndex = 0, browseTimezone, game }) {
   const tone = game.game_type === 'community' ? 'community' : 'official'
   const title = game.display_title || game.venue_name_snapshot || game.title
   const availability = game.availability || {}
@@ -25,7 +25,8 @@ function BrowseGameCard({ browseTimezone, game }) {
   const imageUrl = buildMediaUrl(game.primary_image_url)
   const cardImageUrl = imageUrl || (tone === 'community' ? defaultCommunityVenueImage : '')
   const locationLabel = game.location_label || [game.city_snapshot, game.state_snapshot].filter(Boolean).join(', ')
-  const cardClassName = `game-card game-card--${tone}`
+  const cardClassName = `game-card game-card--${tone} pl-motion-enter`
+  const motionDelay = `${36 + Math.min(animationIndex, 5) * 32}ms`
   const gameSpec = [
     formatGamePlayerGroup(game.game_player_group),
     game.format_label,
@@ -33,7 +34,11 @@ function BrowseGameCard({ browseTimezone, game }) {
   ].filter(Boolean).join(' · ')
 
   return (
-    <Link className={cardClassName} to={`/games/${game.id}`}>
+    <Link
+      className={cardClassName}
+      style={{ '--pl-motion-delay': motionDelay }}
+      to={`/games/${game.id}`}
+    >
       <div className="game-card__media">
         <div className="game-card__fallback">
           <SoccerBallIcon />
