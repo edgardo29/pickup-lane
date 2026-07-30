@@ -28,7 +28,17 @@ function BrowseGamesPage() {
               onSelectDate={page.setSelectedDateKey}
             />
 
-            {page.status === 'error' && <BrowseState title="Could not load games" message={page.error} />}
+            {page.status === 'error' && (
+              <BrowseState
+                title="Could not load games"
+                message={page.error}
+                action={(
+                  <button type="button" onClick={page.retryFirstPage}>
+                    Retry
+                  </button>
+                )}
+              />
+            )}
             {page.status === 'success' && page.timeGroups.length === 0 && (
               <BrowseState title="No games found" message="Try another date or check back soon." />
             )}
@@ -38,20 +48,24 @@ function BrowseGamesPage() {
                 <div className="browse-results">
                   {page.timeGroups.map((group) => (
                     <BrowseTimeSection
+                      browseTimezone={page.browseTimezone}
                       group={group}
-                      key={group.label}
+                      key={group.key}
                     />
                   ))}
                 </div>
 
                 {page.hasMoreGames && (
                   <div className="browse-load-more">
+                    {page.loadMoreError && (
+                      <p className="browse-load-more__error">{page.loadMoreError}</p>
+                    )}
                     <button
                       type="button"
-                      onClick={page.loadMoreGames}
+                      onClick={page.loadMoreError ? page.retryLoadMore : page.loadMoreGames}
                       disabled={page.isLoadingMore}
                     >
-                      {page.isLoadingMore ? 'Loading…' : 'Load More'}
+                      {page.isLoadingMore ? 'Loading...' : page.loadMoreError ? 'Retry' : 'Load More'}
                     </button>
                   </div>
                 )}

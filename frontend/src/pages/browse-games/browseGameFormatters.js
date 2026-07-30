@@ -7,7 +7,7 @@ export function formatDate(value) {
   }).format(new Date(value))
 }
 
-export function formatTime(value) {
+export function formatTime(value, { timeZone } = {}) {
   if (!value) {
     return ''
   }
@@ -15,15 +15,34 @@ export function formatTime(value) {
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    ...(timeZone ? { timeZone } : {}),
   }).format(new Date(value))
 }
 
-export function formatTimeRange(start, end, { separator = '-' } = {}) {
+export function formatTimeRange(start, end, { separator = '-', timeZone } = {}) {
   if (!start || !end) {
     return ''
   }
 
-  return `${formatTime(start)}${separator}${formatTime(end)}`
+  return `${formatTime(start, { timeZone })}${separator}${formatTime(end, { timeZone })}`
+}
+
+export function formatTimeGroupLabel(groupKey) {
+  const match = /^(\d{2}):(\d{2})$/.exec(groupKey || '')
+  if (!match) {
+    return groupKey || ''
+  }
+
+  const hour = Number(match[1])
+  const minute = Number(match[2])
+  const normalizedHour = hour % 12 || 12
+  const suffix = hour < 12 ? 'AM' : 'PM'
+
+  if (minute === 0) {
+    return `${normalizedHour} ${suffix}`
+  }
+
+  return `${normalizedHour}:${String(minute).padStart(2, '0')} ${suffix}`
 }
 
 export function getDurationLabel(start, end) {

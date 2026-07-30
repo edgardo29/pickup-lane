@@ -1,108 +1,163 @@
-import { buildMediaUrl } from '../../lib/apiClient.js'
-import {
-  BROWSE_VISIBLE_AFTER_START_MINUTES,
-  DATE_WINDOW_DAYS,
-} from './browseGamesData.js'
+export function buildDateOptions({
+  maximumDate,
+  minimumDate,
+  timeZone,
+}) {
+  if (!minimumDate || !maximumDate || !timeZone) {
+    return []
+  }
 
-export function buildDateOptions(nowMs) {
-  const startDate = new Date(nowMs)
-  startDate.setHours(12, 0, 0, 0)
+  const dates = []
+  const current = parseDateKeyParts(minimumDate)
 
-  return Array.from({ length: DATE_WINDOW_DAYS }, (_, index) => {
-    const date = new Date(startDate)
-    date.setDate(startDate.getDate() + index)
+  while (current) {
+    const key = getDateKeyFromParts(current)
+    const labelDate = new Date(Date.UTC(current.year, current.month - 1, current.day, 12))
+    dates.push({
+      key,
+      weekday: new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(labelDate).toUpperCase(),
+      month: new Intl.DateTimeFormat('en-US', { timeZone, month: 'short' }).format(labelDate),
+      day: new Intl.DateTimeFormat('en-US', { timeZone, day: 'numeric' }).format(labelDate),
+    })
 
-    return {
-      key: getDateKey(date),
-      weekday: new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date).toUpperCase(),
-      month: new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date),
-      day: new Intl.DateTimeFormat('en-US', { day: 'numeric' }).format(date),
+    if (key >= maximumDate) {
+      break
     }
-  })
+
+    addCalendarDays(current, 1)
+  }
+
+  return dates
 }
 
-export function buildImageUrlsByGameId(games = [], gameImages = [], venueImages = []) {
-  const images = new Map()
-  const venueImagesByVenueId = new Map()
+export function groupLoadedGamesByTimeGroups(games = [], timeGroups = []) {
+  const loadedGamesByGroup = games.reduce((groups, game) => {
+    const key = game.time_group_key || ''
 
-  gameImages.forEach((image) => {
-    if (!images.has(image.game_id)) {
-      images.set(image.game_id, buildMediaUrl(image.image_url))
-    }
-  })
-
-  venueImages.forEach((image) => {
-    if (!venueImagesByVenueId.has(image.venue_id)) {
-      venueImagesByVenueId.set(image.venue_id, buildMediaUrl(image.image_url))
-    }
-  })
-
-  games.forEach((game) => {
-    if (game.game_type !== 'official' || images.has(game.id)) {
-      return
+    if (!groups.has(key)) {
+      groups.set(key, [])
     }
 
-    const venueImageUrl = venueImagesByVenueId.get(game.venue_id)
-    if (venueImageUrl) {
-      images.set(game.id, venueImageUrl)
-    }
-  })
-
-  return images
-}
-
-export function buildParticipantCountsByGameId(participantCounts) {
-  const counts = new Map()
-
-  participantCounts.forEach((item) => {
-    counts.set(item.game_id, item.participant_count)
-  })
-
-  return counts
-}
-
-export function getDateKey(value) {
-  const date = new Date(value)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
-}
-
-export function getVisibleGames(games, nowMs) {
-  return games
-    .filter(
-      (game) => {
-        const browseVisibleUntil =
-          new Date(game.starts_at).getTime() + BROWSE_VISIBLE_AFTER_START_MINUTES * 60 * 1000
-
-        return (
-          !game.deleted_at &&
-          game.publish_status === 'published' &&
-          game.game_status !== 'cancelled' &&
-          browseVisibleUntil > nowMs
-        )
-      },
-    )
-    .sort((first, second) => new Date(first.starts_at) - new Date(second.starts_at))
-}
-
-export function groupGamesByHour(games) {
-  const groupedGames = games.reduce((groups, game) => {
-    const date = new Date(game.starts_at)
-    const label = new Intl.DateTimeFormat('en-US', { hour: 'numeric' }).format(date)
-
-    if (!groups.has(label)) {
-      groups.set(label, [])
-    }
-
-    groups.get(label).push(game)
+    groups.get(key).push(game)
     return groups
   }, new Map())
 
-  return [...groupedGames.entries()].map(([label, groupGames]) => ({
-    label,
-    games: groupGames,
-  }))
+  const knownGroupKeys = new Set(timeGroups.map((group) => group.group_key))
+  const knownGroups = timeGroups
+    .map((group) => ({
+      key: group.group_key,
+      label: group.group_key,
+      totalGames: group.total_games,
+      games: loadedGamesByGroup.get(group.group_key) || [],
+    }))
+    .filter((group) => group.games.length > 0)
+
+  const fallbackGroups = [...loadedGamesByGroup.entries()]
+    .filter(([key]) => !knownGroupKeys.has(key))
+    .map(([key, groupGames]) => ({
+      key,
+      label: key,
+      totalGames: groupGames.length,
+      games: groupGames,
+    }))
+
+  return [...knownGroups, ...fallbackGroups]
+}
+
+export function isDateKey(value) {
+  return Boolean(parseDateKeyParts(value))
+}
+
+export function resolveRequestedDateKey(value) {
+  return isDateKey(value) ? value : ''
+}
+
+export function getDatePageIndexForDate(dateOptions = [], dateKey = '', pageSize = 7) {
+  const activeDateIndex = dateOptions.findIndex((date) => date.key === dateKey)
+  return activeDateIndex >= 0 ? Math.floor(activeDateIndex / pageSize) : null
+}
+
+export function buildBrowseMetaFromPageData(pageData) {
+  return {
+    browse_date: pageData.browse_date,
+    browse_timezone: pageData.browse_timezone,
+    browse_today: pageData.browse_today,
+    maximum_browse_date: pageData.maximum_browse_date,
+    minimum_browse_date: pageData.minimum_browse_date,
+    time_groups: pageData.time_groups || [],
+  }
+}
+
+export function buildSelectedDateResetMeta(currentMeta, nextDateKey) {
+  return currentMeta
+    ? {
+        ...currentMeta,
+        browse_date: nextDateKey,
+        time_groups: [],
+      }
+    : currentMeta
+}
+
+export function getNextBrowseListGeneration(
+  currentGeneration,
+  { append = false } = {},
+) {
+  return append ? currentGeneration : currentGeneration + 1
+}
+
+export function shouldApplyBrowseRequest({
+  currentDateKey,
+  currentGeneration,
+  currentVersion,
+  requestDateKey,
+  requestGeneration,
+  requestVersion,
+}) {
+  const generationMatches = (
+    currentGeneration === undefined
+    || requestGeneration === undefined
+    || requestGeneration === currentGeneration
+  )
+
+  return (
+    requestVersion === currentVersion
+    && requestDateKey === currentDateKey
+    && generationMatches
+  )
+}
+
+function parseDateKeyParts(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '')
+  if (!match) {
+    return null
+  }
+
+  const parts = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  }
+  const normalizedDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12))
+  const isValidDate = (
+    normalizedDate.getUTCFullYear() === parts.year
+    && normalizedDate.getUTCMonth() + 1 === parts.month
+    && normalizedDate.getUTCDate() === parts.day
+  )
+
+  return isValidDate ? parts : null
+}
+
+function getDateKeyFromParts({ year, month, day }) {
+  return [
+    String(year).padStart(4, '0'),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-')
+}
+
+function addCalendarDays(parts, days) {
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days, 12))
+  parts.year = date.getUTCFullYear()
+  parts.month = date.getUTCMonth() + 1
+  parts.day = date.getUTCDate()
 }

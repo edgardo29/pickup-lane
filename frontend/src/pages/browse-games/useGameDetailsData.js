@@ -73,7 +73,7 @@ export function useGameDetailsData({
   }, [appUser, firebaseUser, gameId])
 
   async function refreshParticipants() {
-    const gameDetails = await refreshGameParticipantsData(gameId)
+    const gameDetails = await refreshGameParticipantsData(gameId, firebaseUser)
     setParticipants(gameDetails.participants)
     setGame(gameDetails.game)
   }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from backend.models import Booking, Game, GameParticipant, User
+from backend.models import Booking, Game, GameParticipant, User, WaitlistEntry
 from backend.scripts.demo_data.games import ALL_DEMO_GAMES, get_demo_game_host_key
 from backend.scripts.demo_data.helpers import demo_uuid, now_utc, upsert_by_id
 from backend.scripts.demo_data.users import CURRENT_USER_KEY, PLAYER_KEYS
@@ -111,6 +111,31 @@ def seed_participants(
             player = users[player_key]
             participant_key = f"{game_data['key']}:{player_key}:waitlist"
             participant_id = demo_uuid(f"participant:{participant_key}")
+            waitlist_entry_key = f"{game_data['key']}:{player_key}:waitlist-entry"
+
+            upsert_by_id(
+                db,
+                WaitlistEntry,
+                demo_uuid(f"waitlist-entry:{waitlist_entry_key}"),
+                {
+                    "game_id": game.id,
+                    "user_id": player.id,
+                    "party_size": 1,
+                    "position": waitlist_index + 1,
+                    "waitlist_status": "active",
+                    "promoted_booking_id": None,
+                    "promotion_expires_at": None,
+                    "auto_charge_consent_at": None,
+                    "auto_charge_consent_version": None,
+                    "authorized_payment_method_last4": None,
+                    "authorized_amount_cents": None,
+                    "joined_at": timestamp,
+                    "promoted_at": None,
+                    "cancelled_at": None,
+                    "expired_at": None,
+                    "updated_at": timestamp,
+                },
+            )
 
             seeded_participants[participant_key] = upsert_by_id(
                 db,
@@ -151,6 +176,34 @@ def seed_participants(
             attendance_status = game_data.get("current_user_attendance_status", "unknown")
             checked_in_at = timestamp if attendance_status == "attended" else None
 
+            if current_user_status == "waitlisted":
+                waitlist_entry_key = (
+                    f"{game_data['key']}:{CURRENT_USER_KEY}:waitlist-entry"
+                )
+                upsert_by_id(
+                    db,
+                    WaitlistEntry,
+                    demo_uuid(f"waitlist-entry:{waitlist_entry_key}"),
+                    {
+                        "game_id": game.id,
+                        "user_id": current_user.id,
+                        "party_size": 1,
+                        "position": DEMO_WAITLIST_COUNT + 1,
+                        "waitlist_status": "active",
+                        "promoted_booking_id": None,
+                        "promotion_expires_at": None,
+                        "auto_charge_consent_at": None,
+                        "auto_charge_consent_version": None,
+                        "authorized_payment_method_last4": None,
+                        "authorized_amount_cents": None,
+                        "joined_at": timestamp,
+                        "promoted_at": None,
+                        "cancelled_at": None,
+                        "expired_at": None,
+                        "updated_at": timestamp,
+                    },
+                )
+
             seeded_participants[participant_key] = upsert_by_id(
                 db,
                 GameParticipant,
@@ -180,7 +233,7 @@ def seed_participants(
                     ),
                     "joined_at": timestamp,
                     "confirmed_at": (
-                        timestamp if current_user_status in {"pending_payment", "confirmed"} else None
+                        timestamp if current_user_status == "confirmed" else None
                     ),
                     "cancelled_at": None,
                     "checked_in_at": checked_in_at,

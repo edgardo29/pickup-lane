@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -282,6 +283,7 @@ def test_checkout_payment_intent_can_use_saved_payment_method(
     )
     authenticate_as(user["id"])
 
+    request_started_at = datetime.now(UTC)
     response = client.post(
         f"/checkout/games/{game['id']}/payment-intent",
         json={
@@ -290,6 +292,7 @@ def test_checkout_payment_intent_can_use_saved_payment_method(
             "return_url": f"http://localhost:5173/games/{game['id']}/checkout",
         },
     )
+    request_finished_at = datetime.now(UTC)
 
     assert response.status_code == 201, response.text
     body = response.json()
@@ -309,6 +312,10 @@ def test_checkout_payment_intent_can_use_saved_payment_method(
     assert booking["payment_status"] == "processing"
     assert booking["participant_count"] == 1
     assert booking["total_cents"] == 1800
+    assert booking["expires_at"] is not None
+    checkout_expires_at = datetime.fromisoformat(booking["expires_at"])
+    assert request_started_at + timedelta(minutes=2) <= checkout_expires_at
+    assert checkout_expires_at <= request_finished_at + timedelta(minutes=2)
 
     payment_response = get_money_as_admin(client, f"/payments/{body['payment_id']}")
     assert payment_response.status_code == 200, payment_response.text
@@ -316,6 +323,12 @@ def test_checkout_payment_intent_can_use_saved_payment_method(
     assert payment["booking_id"] == body["booking_id"]
     assert payment["payment_status"] == "processing"
     assert payment["provider_payment_intent_id"] == "pi_checkout_saved_card"
+    assert (
+        datetime.fromisoformat(
+            payment["metadata"]["checkout_hold_expires_at"]
+        )
+        == checkout_expires_at
+    )
 
 
 def test_checkout_payment_intent_with_partial_credit_charges_stripe_remainder(

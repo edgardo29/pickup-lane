@@ -45,6 +45,7 @@ RESERVED_PLAYER_STATUSES = ACTIVE_ROSTER_PARTICIPANT_STATUSES
 ROSTER_PLAYER_STATUSES = ACTIVE_ROSTER_PARTICIPANT_STATUSES
 ACTIVE_WAITLIST_STATUSES = {"active", "promoted", "payment_processing"}
 WAITLIST_PROMOTION_CANDIDATE_STATUSES = {"active"}
+ACTIVE_PAYMENT_HOLD_BOOKING_STATUSES = {"processing", "requires_action"}
 ACTIVE_BOOKING_STATUSES = {
     "pending_payment",
     "confirmed",
@@ -543,12 +544,16 @@ def normalize_game_lifecycle_fields(
     return normalized_data
 
 
+def game_is_publicly_visible(db_game: Game) -> bool:
+    return db_game.public_visibility_status == "visible"
+
+
 def community_game_is_publicly_visible(db_game: Game) -> bool:
-    return db_game.game_type != "community" or db_game.public_visibility_status == "visible"
+    return game_is_publicly_visible(db_game)
 
 
 def require_publicly_visible_game(db_game: Game) -> None:
-    if not community_game_is_publicly_visible(db_game):
+    if not game_is_publicly_visible(db_game):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Game not found.",
@@ -556,13 +561,13 @@ def require_publicly_visible_game(db_game: Game) -> None:
 
 
 def require_community_game_joining_open(db_game: Game) -> None:
-    if (
-        db_game.game_type == "community"
-        and (
-            db_game.public_visibility_status != "visible"
-            or db_game.join_enforcement_status != "open"
+    if db_game.public_visibility_status != "visible":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
         )
-    ):
+
+    if db_game.join_enforcement_status != "open":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This game is not open for joining.",

@@ -190,6 +190,7 @@ class Game(Base):
                 "publish_status = 'published' "
                 "AND game_status = 'active' "
                 "AND public_visibility_status = 'visible' "
+                "AND join_enforcement_status = 'open' "
                 "AND deleted_at IS NULL"
             ),
         ),

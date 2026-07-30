@@ -954,10 +954,8 @@ def test_admin_community_game_enforcement_hides_restores_and_pauses_joining(
     hidden_join_response = client.post(f"/games/{game['id']}/join", json={})
 
     assert public_hidden_response.status_code == 404, public_hidden_response.text
-    assert hidden_join_response.status_code == 400, hidden_join_response.text
-    assert hidden_join_response.json()["detail"] == (
-        "This game is not open for joining."
-    )
+    assert hidden_join_response.status_code == 404, hidden_join_response.text
+    assert hidden_join_response.json()["detail"] == "Game not found."
 
     authenticate_as(admin["id"])
     restore_response = client.post(

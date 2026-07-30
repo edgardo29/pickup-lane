@@ -1,22 +1,23 @@
-import { apiRequest } from '../../lib/apiClient.js'
+import { ApiRequestError, apiRequest } from '../../lib/apiClient.js'
 import { canUseGameChat } from './gameDetailsSelectors.js'
 import { buildChatMessagesPath, getChatAuthHeaders } from './gameDetailsChat.js'
 
 export async function loadGameDetails({ appUser, firebaseUser, gameId }) {
-  const game = await apiRequest(`/games/${gameId}`)
+  const authHeaders = firebaseUser ? await getChatAuthHeaders(firebaseUser) : {}
+  const game = await apiRequest(`/games/${gameId}`, { headers: authHeaders })
 
   const [gameImages, venueImages, participants, venue] = await Promise.all([
     apiRequest(`/game-images?game_id=${gameId}&image_status=active`).catch(() => []),
     game.game_type === 'official'
       ? apiRequest(`/venue-images?venue_id=${game.venue_id}`).catch(() => [])
       : Promise.resolve([]),
-    apiRequest(`/games/${gameId}/participants`),
+    loadParticipantsForDetail(gameId, authHeaders),
     apiRequest(`/venues/${game.venue_id}`).catch(() => null),
   ])
   const displayImages =
     game.game_type === 'official' && gameImages.length === 0 ? venueImages : gameImages
   const communityGameDetails = game.game_type === 'community'
-    ? await apiRequest(`/community-game-details?game_id=${gameId}`)
+    ? await apiRequest(`/community-game-details?game_id=${gameId}`, { headers: authHeaders })
       .then((details) => details[0] || null)
       .catch(() => null)
     : null
@@ -44,10 +45,11 @@ export async function loadGameDetails({ appUser, firebaseUser, gameId }) {
   }
 }
 
-export async function refreshGameParticipants(gameId) {
+export async function refreshGameParticipants(gameId, firebaseUser) {
+  const authHeaders = firebaseUser ? await getChatAuthHeaders(firebaseUser) : {}
   const [participants, game] = await Promise.all([
-    apiRequest(`/games/${gameId}/participants`),
-    apiRequest(`/games/${gameId}`),
+    loadParticipantsForDetail(gameId, authHeaders),
+    apiRequest(`/games/${gameId}`, { headers: authHeaders }),
   ])
 
   return { game, participants }
@@ -155,4 +157,16 @@ async function getOrCreateGameChat(gameId, firebaseUser) {
     },
     body: JSON.stringify({}),
   })
+}
+
+async function loadParticipantsForDetail(gameId, authHeaders) {
+  try {
+    return await apiRequest(`/games/${gameId}/participants`, { headers: authHeaders })
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404) {
+      return []
+    }
+
+    throw error
+  }
 }

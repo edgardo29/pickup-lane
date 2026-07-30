@@ -5,7 +5,10 @@ import {
 } from '../../components/skeleton/index.js'
 
 const skeletonDates = ['fri', 'sat', 'sun', 'mon', 'tue', 'wed', 'thu']
-const skeletonCards = ['one', 'two', 'three', 'four', 'five', 'six']
+const skeletonCards = Array.from(
+  { length: 20 },
+  (_item, index) => `card-${index + 1}`,
+)
 
 export function BrowseGamesSkeleton() {
   return (
@@ -45,6 +48,11 @@ export function BrowseGamesSkeleton() {
                 <SkeletonCircle size="28px" />
                 <SkeletonBlock height="1.5rem" rounded width="5.2rem" />
               </span>
+              <SkeletonBlock
+                className="browse-skeleton-time-rule"
+                height="1px"
+                width="100%"
+              />
               <SkeletonBlock height="34px" rounded width="5.4rem" />
             </SkeletonCard>
 

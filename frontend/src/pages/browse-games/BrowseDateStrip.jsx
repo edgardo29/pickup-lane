@@ -19,12 +19,14 @@ function BrowseDateStrip({
         ←
       </button>
 
-      <div className="browse-date-strip" aria-label="Browse games by date">
+      <div className="browse-date-strip pl-scrollbar" aria-label="Browse games by date">
         {dates.map((date) => (
           <button
             className={`browse-date ${date.key === selectedDateKey ? 'browse-date--active' : ''}`}
             type="button"
             key={date.key}
+            aria-current={date.key === selectedDateKey ? 'date' : undefined}
+            aria-label={`Browse games on ${date.weekday} ${date.month} ${date.day}`}
             onClick={() => onSelectDate(date.key)}
           >
             <span>{date.weekday}</span>

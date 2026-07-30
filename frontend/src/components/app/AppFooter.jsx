@@ -5,7 +5,7 @@ const footerGroups = [
   {
     title: 'Play',
     links: [
-      { label: 'Browse Games', to: '/games' },
+      { label: 'Browse Games', to: '/games/browse' },
       { label: 'Need a Sub', to: '/need-a-sub' },
       { label: 'Create Game', to: '/create-game' },
     ],

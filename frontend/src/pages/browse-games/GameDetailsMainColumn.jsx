@@ -74,7 +74,7 @@ export function GameDetailsMainColumn({
   return (
     <div className="details-main">
       <div className="details-titlebar">
-        <Link className="details-back-to-browse" to="/games">
+        <Link className="details-back-to-browse" to="/games/browse">
           <ArrowLeft aria-hidden="true" />
           <span>Back</span>
         </Link>

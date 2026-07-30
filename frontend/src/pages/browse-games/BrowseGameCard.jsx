@@ -8,19 +8,24 @@ import { AddressIcon, GameSpotsIcon, GameTimeIcon, GameTraitIcon } from '../../c
 import {
   formatEnvironment,
   formatGamePlayerGroup,
-  formatPrice,
   formatTimeRange,
 } from './browseGameFormatters.js'
 import { buildMediaUrl } from '../../lib/apiClient.js'
 
-function BrowseGameCard({ game }) {
+function BrowseGameCard({ browseTimezone, game }) {
   const tone = game.game_type === 'community' ? 'community' : 'official'
-  const title = game.venue_name_snapshot || game.title
-  const signedUpCount = game.participant_count || 0
+  const title = game.display_title || game.venue_name_snapshot || game.title
+  const availability = game.availability || {}
+  const signedUpCount = availability.occupied_spots ?? game.participant_count ?? 0
+  const totalSpots = availability.total_spots ?? game.total_spots
+  const occupiedSpotCount = Number(signedUpCount)
+  const totalSpotCount = Number(totalSpots)
+  const hasSpotCounts = Number.isFinite(occupiedSpotCount) && Number.isFinite(totalSpotCount)
+  const isFull = hasSpotCounts && totalSpotCount > 0 && occupiedSpotCount >= totalSpotCount
   const imageUrl = buildMediaUrl(game.primary_image_url)
   const cardImageUrl = imageUrl || (tone === 'community' ? defaultCommunityVenueImage : '')
-  const isFull = signedUpCount >= game.total_spots
-  const locationLabel = [game.city_snapshot, game.state_snapshot].filter(Boolean).join(', ')
+  const locationLabel = game.location_label || [game.city_snapshot, game.state_snapshot].filter(Boolean).join(', ')
+  const cardClassName = `game-card game-card--${tone}`
   const gameSpec = [
     formatGamePlayerGroup(game.game_player_group),
     game.format_label,
@@ -28,7 +33,7 @@ function BrowseGameCard({ game }) {
   ].filter(Boolean).join(' · ')
 
   return (
-    <Link className={`game-card game-card--${tone} ${isFull ? 'game-card--full' : ''}`} to={`/games/${game.id}`}>
+    <Link className={cardClassName} to={`/games/${game.id}`}>
       <div className="game-card__media">
         <div className="game-card__fallback">
           <SoccerBallIcon />
@@ -53,7 +58,7 @@ function BrowseGameCard({ game }) {
 
         <p className="game-card__meta">
           <GameTimeIcon />
-          {formatTimeRange(game.starts_at, game.ends_at, { separator: ' - ' })}
+          {formatTimeRange(game.starts_at, game.ends_at, { separator: ' - ', timeZone: browseTimezone })}
         </p>
 
         <p className="game-card__meta">
@@ -66,12 +71,12 @@ function BrowseGameCard({ game }) {
         <span>
           <GameSpotsIcon />
           <strong>
-            {signedUpCount}/{game.total_spots}
+            {signedUpCount}/{totalSpots}
           </strong>{' '}
           spots
         </span>
 
-        <span>{formatPrice(game.price_per_player_cents, game.currency)}</span>
+        <span>{game.price_label}</span>
       </div>
     </Link>
   )

@@ -22,7 +22,7 @@ function GameDetailsPage() {
         state={
           <>
             <DetailsState title="Game not found" message="This game may no longer be available." />
-            <Link className="details-back-link" to="/games">
+            <Link className="details-back-link" to="/games/browse">
               Back to games
             </Link>
           </>

@@ -380,6 +380,12 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
                 "payment_collection_type": game_data["payment_collection_type"],
                 "publish_status": "published",
                 "game_status": game_status,
+                "public_visibility_status": game_data.get(
+                    "public_visibility_status", "visible"
+                ),
+                "join_enforcement_status": game_data.get(
+                    "join_enforcement_status", "open"
+                ),
                 "title": game_data["title"],
                 "description": details["description"],
                 "venue_id": venue.id,
@@ -388,7 +394,7 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
                 "city_snapshot": venue.city,
                 "state_snapshot": venue.state,
                 "neighborhood_snapshot": venue.neighborhood,
-                "host_user_id": host.id,
+                "host_user_id": host.id if is_community else None,
                 "created_by_user_id": host.id if is_community else admin.id,
                 "starts_at": game_start,
                 "ends_at": ends_at(game_start),
@@ -396,23 +402,31 @@ def seed_games(db: Session, users: dict[str, User], venues: dict[str, Venue]) ->
                 "timezone": "America/Chicago",
                 "sport_type": "soccer",
                 "format_label": game_data["format_label"],
+                "game_player_group": game_data.get("game_player_group", "coed"),
+                "skill_level": game_data.get("skill_level", "any"),
                 "environment_type": game_data["environment_type"],
                 "total_spots": game_data["total_spots"],
                 "price_per_player_cents": game_data["price_per_player_cents"],
                 "currency": "USD",
-                "minimum_age": details["minimum_age"],
+                "minimum_age": details["minimum_age"] if is_community else None,
                 "allow_guests": True,
                 "max_guests_per_booking": 2,
+                "host_guest_max": 0,
                 "waitlist_enabled": True,
                 "is_chat_enabled": True,
                 "policy_mode": "custom_hosted" if is_community else "official_standard",
-                "custom_rules_text": details["custom_rules_text"],
-                "custom_cancellation_text": details["custom_cancellation_text"],
+                "custom_rules_text": (
+                    details["custom_rules_text"] if is_community else None
+                ),
+                "custom_cancellation_text": (
+                    details["custom_cancellation_text"] if is_community else None
+                ),
                 "game_notes": details["game_notes"],
                 "parking_notes": details["parking_notes"],
                 "published_at": timestamp,
                 "cancelled_at": timestamp if game_status == "cancelled" else None,
                 "cancelled_by_user_id": host.id if game_status == "cancelled" else None,
+                "cancellation_source": "host" if game_status == "cancelled" else None,
                 "cancel_reason": game_data.get("cancel_reason"),
                 "completed_at": timestamp if game_status == "completed" else None,
                 "completed_by_user_id": host.id if game_status == "completed" else None,

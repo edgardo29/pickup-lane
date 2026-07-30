@@ -64,6 +64,7 @@ def upgrade() -> None:
     op.create_index('ix_game_participants_booking_id_participant_status', 'game_participants', ['booking_id', 'participant_status'], unique=False)
     op.create_index('ix_game_participants_game_id', 'game_participants', ['game_id'], unique=False)
     op.create_index('ix_game_participants_game_id_participant_status', 'game_participants', ['game_id', 'participant_status'], unique=False)
+    op.create_index('ix_game_participants_game_status_booking', 'game_participants', ['game_id', 'participant_status', 'booking_id'], unique=False)
     op.create_index('ix_game_participants_guest_of_user_id', 'game_participants', ['guest_of_user_id'], unique=False)
     op.create_index('ix_game_participants_participant_status', 'game_participants', ['participant_status'], unique=False)
     op.create_index('ix_game_participants_user_id', 'game_participants', ['user_id'], unique=False)

@@ -1,10 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import CommunityGameDetail, User
+from backend.models import CommunityGameDetail, Game, User
 from backend.schemas import (
     CommunityGameDetailCreate,
     CommunityGameDetailHostRead,
@@ -13,7 +13,11 @@ from backend.schemas import (
     CommunityGameDetailStaffRead,
     CommunityGameDetailUpdate,
 )
-from backend.services.auth_service import require_active_user, require_active_admin
+from backend.services.auth_service import (
+    get_optional_current_app_user,
+    require_active_user,
+    require_active_admin,
+)
 from backend.services.community_game_detail_service import (
     create_community_game_detail_workflow,
     get_host_community_game_detail_workflow,
@@ -74,9 +78,17 @@ def get_host_community_game_detail(
     status_code=status.HTTP_200_OK,
 )
 def get_community_game_detail(
-    community_game_detail_id: uuid.UUID, db: Session = Depends(get_db)
+    community_game_detail_id: uuid.UUID,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_app_user),
 ) -> CommunityGameDetailPublicRead:
-    return get_public_community_game_detail(db, community_game_detail_id)
+    detail = get_public_community_game_detail(db, community_game_detail_id, current_user)
+    db_detail = db.get(CommunityGameDetail, community_game_detail_id)
+    game = db.get(Game, db_detail.game_id) if db_detail is not None else None
+    if game is not None and game.public_visibility_status == "hidden":
+        response.headers["Cache-Control"] = "private, no-store"
+    return detail
 
 
 @router.get(
@@ -85,9 +97,20 @@ def get_community_game_detail(
     status_code=status.HTTP_200_OK,
 )
 def list_community_game_details(
-    game_id: uuid.UUID | None = None, db: Session = Depends(get_db)
+    response: Response,
+    game_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_app_user),
 ) -> list[CommunityGameDetailPublicRead]:
-    return list_public_community_game_details(db, game_id=game_id)
+    details = list_public_community_game_details(
+        db,
+        game_id=game_id,
+        current_user=current_user,
+    )
+    game = db.get(Game, game_id) if game_id is not None else None
+    if game is not None and game.public_visibility_status == "hidden":
+        response.headers["Cache-Control"] = "private, no-store"
+    return details
 
 
 @router.patch(

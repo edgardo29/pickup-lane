@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import Booking, Game, GameParticipant, Payment, User
+from backend.models import Booking, Game, GameParticipant, Payment, User, WaitlistEntry
 from backend.schemas.checkout_schema import (
     GameCheckoutPaymentIntentCreate,
     GameCheckoutPaymentIntentRead,
@@ -62,7 +62,7 @@ from backend.services.stripe_service import (
 )
 from backend.services.user_service import get_user_display_name
 
-CHECKOUT_HOLD_MINUTES = 15
+CHECKOUT_HOLD_MINUTES = 2
 MINIMUM_USD_PAYMENT_INTENT_AMOUNT_CENTS = 50
 
 
@@ -83,6 +83,12 @@ def get_locked_active_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
 
 
 def require_checkout_game_open(db_game: Game, current_user: User, now: datetime) -> None:
+    if db_game.public_visibility_status != "visible":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
+        )
+
     require_join_ready_user(current_user)
     require_minimum_age(current_user, db_game.minimum_age)
 
@@ -96,6 +102,12 @@ def require_checkout_game_open(db_game: Game, current_user: User, now: datetime)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Stripe checkout is only available for official in-app games.",
+        )
+
+    if db_game.join_enforcement_status != "open":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This game is not open for checkout.",
         )
 
     if (
@@ -117,7 +129,7 @@ def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) ->
             Booking.booking_status == "pending_payment",
             Booking.expires_at.is_not(None),
             Booking.expires_at <= now,
-        )
+        ).with_for_update()
     ).all()
 
     if not stale_bookings:
@@ -128,14 +140,25 @@ def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) ->
         select(GameParticipant).where(
             GameParticipant.booking_id.in_(stale_booking_ids),
             GameParticipant.participant_status == "pending_payment",
-        )
+        ).with_for_update()
     ).all()
     stale_payments = db.scalars(
         select(Payment).where(
             Payment.booking_id.in_(stale_booking_ids),
             Payment.payment_status.in_(PENDING_PAYMENT_STATUSES),
-        )
+        ).with_for_update()
     ).all()
+    stale_waitlist_entries = db.scalars(
+        select(WaitlistEntry).where(
+            WaitlistEntry.promoted_booking_id.in_(stale_booking_ids),
+            WaitlistEntry.waitlist_status == "payment_processing",
+        ).with_for_update()
+    ).all()
+    waitlist_booking_ids = {
+        waitlist_entry.promoted_booking_id
+        for waitlist_entry in stale_waitlist_entries
+        if waitlist_entry.promoted_booking_id is not None
+    }
 
     for booking in stale_bookings:
         release_reserved_game_credits(
@@ -151,11 +174,19 @@ def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) ->
         db.add(booking)
 
     for participant in stale_participants:
-        participant.participant_status = "cancelled"
+        participant.participant_status = (
+            "removed" if participant.booking_id in waitlist_booking_ids else "cancelled"
+        )
         participant.cancellation_type = "payment_failed"
         participant.cancelled_at = now
         participant.updated_at = now
         db.add(participant)
+
+    for waitlist_entry in stale_waitlist_entries:
+        waitlist_entry.waitlist_status = "payment_failed"
+        waitlist_entry.cancelled_at = waitlist_entry.cancelled_at or now
+        waitlist_entry.updated_at = now
+        db.add(waitlist_entry)
 
     for payment in stale_payments:
         payment.payment_status = "canceled"
@@ -568,7 +599,7 @@ def create_game_checkout_payment_intent_workflow(
             detail="You are already on the waitlist for this game.",
         )
 
-    roster_count = count_roster_players(db, db_game.id)
+    roster_count = count_roster_players(db, db_game.id, now=now)
     spots_left = max(db_game.total_spots - roster_count, 0)
     if party_size > spots_left:
         raise HTTPException(

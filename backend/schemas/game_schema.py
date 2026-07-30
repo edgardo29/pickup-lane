@@ -116,6 +116,18 @@ class GameRead(BaseModel):
     deleted_at: datetime | None
 
 
+class GameAvailabilityRead(BaseModel):
+    status: str
+    occupied_spots: int
+    total_spots: int
+    spots_remaining: int
+
+
+class GameTimeGroupRead(BaseModel):
+    group_key: str
+    total_games: int
+
+
 class GameCardRead(BaseModel):
     id: UUID
     game_type: str
@@ -123,12 +135,15 @@ class GameCardRead(BaseModel):
     public_visibility_status: str = "visible"
     join_enforcement_status: str = "open"
     title: str
+    display_title: str
     venue_name_snapshot: str
     city_snapshot: str
     state_snapshot: str
+    location_label: str
     starts_at: datetime
     ends_at: datetime
     starts_on_local: date
+    time_group_key: str
     timezone: str
     format_label: str
     game_player_group: str
@@ -136,11 +151,20 @@ class GameCardRead(BaseModel):
     total_spots: int
     price_per_player_cents: int
     currency: str
+    price_label: str
     participant_count: int
+    availability: GameAvailabilityRead
+    registration_closes_at: datetime
     primary_image_url: str | None = None
 
 
 class GameCardListRead(BaseModel):
+    browse_today: date
+    browse_timezone: str
+    minimum_browse_date: date
+    maximum_browse_date: date
+    browse_date: date
+    time_groups: list[GameTimeGroupRead]
     games: list[GameCardRead]
     next_cursor: str | None = None
     has_more: bool = False

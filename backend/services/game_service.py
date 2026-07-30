@@ -5,9 +5,10 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from binascii import Error as BinasciiError
 from datetime import date, datetime, timedelta, timezone
 from json import JSONDecodeError, dumps, loads
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,13 +24,16 @@ from backend.models import (
     WaitlistEntry,
 )
 from backend.schemas.game_schema import (
+    GameAvailabilityRead,
     GameCardListRead,
     GameCardRead,
     GameCreate,
+    GameTimeGroupRead,
     GameUpdate,
     MyGameCardRead,
     MyGamesListRead,
 )
+from backend.services.auth_service import user_is_active_admin
 from backend.services.admin_review_service import (
     close_open_content_moderation_case_for_game_lifecycle,
 )
@@ -45,25 +49,27 @@ from backend.services.game_notification_service import (
 )
 from backend.services.game_rules import (
     ACTIVE_JOIN_STATUSES,
+    ACTIVE_PAYMENT_HOLD_BOOKING_STATUSES,
     ACTIVE_WAITLIST_STATUSES,
+    JOIN_WINDOW_MINUTES,
     OFFICIAL_FORCED_FIELDS,
     OPEN_GAME_STATUSES,
-    ROSTER_PLAYER_STATUSES,
     build_game_conflict_detail,
-    community_game_is_publicly_visible,
+    game_is_publicly_visible,
+    get_join_window_closes_at,
     get_default_host_guest_max,
     normalize_game_lifecycle_fields,
     normalize_official_game_invariants,
     reject_direct_official_host_change,
     reject_official_location_change,
-    require_publicly_visible_game,
     require_game_not_started,
     validate_game_business_rules,
 )
 
 BROWSE_GAME_CARD_DEFAULT_LIMIT = 40
 BROWSE_GAME_CARD_MAX_LIMIT = 100
-BROWSE_VISIBLE_AFTER_START_MINUTES = 15
+BROWSE_DATE_WINDOW_DAYS = 14
+BROWSE_TIMEZONE = "America/Chicago"
 MY_GAMES_CARD_DEFAULT_LIMIT = 40
 MY_GAMES_CARD_MAX_LIMIT = 100
 MY_GAMES_VALID_VIEWS = {"upcoming", "history"}
@@ -159,10 +165,133 @@ def get_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
     return db_game
 
 
-def get_public_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
+def get_public_game_or_404(
+    db: Session,
+    game_id: uuid.UUID,
+    current_user: User | None = None,
+) -> Game:
     db_game = get_game_or_404(db, game_id)
-    require_publicly_visible_game(db_game)
-    return db_game
+    if game_is_publicly_visible(db_game):
+        return db_game
+
+    if current_user is not None and user_can_view_hidden_game(
+        db,
+        db_game,
+        current_user,
+        now=datetime.now(timezone.utc),
+    ):
+        return db_game
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Game not found.",
+    )
+
+
+def user_can_view_hidden_game(
+    db: Session,
+    db_game: Game,
+    current_user: User,
+    *,
+    now: datetime,
+) -> bool:
+    return (
+        db_game.host_user_id == current_user.id
+        or user_is_active_admin(current_user)
+        or user_is_active_participant(db, db_game.id, current_user.id, now=now)
+        or user_is_active_booking_buyer(db, db_game.id, current_user.id, now=now)
+        or user_is_active_waitlist_member(db, db_game.id, current_user.id)
+    )
+
+
+def user_can_view_hidden_game_roster(
+    db: Session,
+    db_game: Game,
+    current_user: User,
+    *,
+    now: datetime,
+) -> bool:
+    return (
+        db_game.host_user_id == current_user.id
+        or user_is_active_admin(current_user)
+        or user_is_active_participant(db, db_game.id, current_user.id, now=now)
+    )
+
+
+def user_is_active_participant(
+    db: Session,
+    game_id: uuid.UUID,
+    user_id: uuid.UUID,
+    *,
+    now: datetime,
+) -> bool:
+    participant_id = db.scalar(
+        select(GameParticipant.id)
+        .outerjoin(Booking, GameParticipant.booking_id == Booking.id)
+        .where(
+            GameParticipant.game_id == game_id,
+            GameParticipant.user_id == user_id,
+            or_(
+                GameParticipant.participant_status == "confirmed",
+                build_capacity_holding_participant_condition(now),
+            ),
+        )
+        .limit(1)
+    )
+    return participant_id is not None
+
+
+def user_is_active_booking_buyer(
+    db: Session,
+    game_id: uuid.UUID,
+    user_id: uuid.UUID,
+    *,
+    now: datetime,
+) -> bool:
+    pending_booking_id = db.scalar(
+        select(Booking.id)
+        .where(
+            Booking.game_id == game_id,
+            Booking.buyer_user_id == user_id,
+            Booking.booking_status == "pending_payment",
+            Booking.expires_at.is_not(None),
+            Booking.expires_at > now,
+            Booking.payment_status.in_(ACTIVE_PAYMENT_HOLD_BOOKING_STATUSES),
+        )
+        .limit(1)
+    )
+    if pending_booking_id is not None:
+        return True
+
+    confirmed_booking_id = db.scalar(
+        select(Booking.id)
+        .join(GameParticipant, GameParticipant.booking_id == Booking.id)
+        .where(
+            Booking.game_id == game_id,
+            Booking.buyer_user_id == user_id,
+            Booking.booking_status.in_({"confirmed", "partially_cancelled"}),
+            GameParticipant.participant_status == "confirmed",
+        )
+        .limit(1)
+    )
+    return confirmed_booking_id is not None
+
+
+def user_is_active_waitlist_member(
+    db: Session,
+    game_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> bool:
+    waitlist_entry_id = db.scalar(
+        select(WaitlistEntry.id)
+        .where(
+            WaitlistEntry.game_id == game_id,
+            WaitlistEntry.user_id == user_id,
+            WaitlistEntry.waitlist_status.in_(ACTIVE_WAITLIST_STATUSES),
+        )
+        .limit(1)
+    )
+    return waitlist_entry_id is not None
 
 
 def list_games(db: Session) -> list[Game]:
@@ -170,7 +299,7 @@ def list_games(db: Session) -> list[Game]:
         select(Game)
         .where(
             Game.deleted_at.is_(None),
-            or_(Game.game_type != "community", Game.public_visibility_status == "visible"),
+            Game.public_visibility_status == "visible",
         )
         .order_by(Game.starts_at.asc(), Game.created_at.asc())
     ).all()
@@ -180,25 +309,27 @@ def list_games(db: Session) -> list[Game]:
 def list_browse_game_cards(
     db: Session,
     *,
-    starts_on: date,
+    starts_on: date | None = None,
     limit: int = BROWSE_GAME_CARD_DEFAULT_LIMIT,
     cursor: str | None = None,
 ) -> GameCardListRead:
     effective_limit = min(limit, BROWSE_GAME_CARD_MAX_LIMIT)
+    now = datetime.now(timezone.utc)
+    (
+        browse_today,
+        minimum_browse_date,
+        maximum_browse_date,
+        browse_date,
+        browse_timezone,
+    ) = get_browse_date_context(starts_on, now=now)
     cursor_payload = decode_browse_game_card_cursor(cursor) if cursor else None
-    validate_browse_game_card_cursor_context(cursor_payload, starts_on=starts_on)
-    visible_after_start_cutoff = datetime.now(timezone.utc) - timedelta(
-        minutes=BROWSE_VISIBLE_AFTER_START_MINUTES
-    )
+    validate_browse_game_card_cursor_context(cursor_payload, starts_on=browse_date)
 
-    statement = select(Game).where(
-        Game.publish_status == "published",
-        Game.deleted_at.is_(None),
-        or_(Game.game_type != "community", Game.public_visibility_status == "visible"),
-        Game.game_status.in_(OPEN_GAME_STATUSES),
-        Game.starts_on_local == starts_on,
-        Game.starts_at > visible_after_start_cutoff,
+    eligibility_conditions = build_browse_game_eligibility_conditions(
+        browse_date,
+        now=now,
     )
+    statement = select(Game).where(*eligibility_conditions)
 
     if cursor_payload is not None:
         statement = statement.where(build_browse_game_card_cursor_filter(cursor_payload))
@@ -212,11 +343,17 @@ def list_browse_game_cards(
     rows = list(db.scalars(statement.limit(effective_limit + 1)).all())
     page_games = rows[:effective_limit]
     has_more = len(rows) > effective_limit
+    time_groups = list_browse_time_groups(
+        db,
+        browse_date=browse_date,
+        browse_timezone=browse_timezone,
+        now=now,
+    )
     (
         participant_counts_by_game_id,
         primary_game_image_urls_by_game_id,
         primary_venue_image_object_key_by_venue_id,
-    ) = load_game_card_metadata(db, page_games)
+    ) = load_game_card_metadata(db, page_games, now=now)
     games = [
         build_game_card_read(
             game,
@@ -225,6 +362,8 @@ def list_browse_game_cards(
             primary_venue_image_object_key=primary_venue_image_object_key_by_venue_id.get(
                 game.venue_id
             ),
+            browse_timezone=browse_timezone,
+            now=now,
         )
         for game in page_games
     ]
@@ -233,10 +372,16 @@ def list_browse_game_cards(
     if has_more and page_games:
         next_cursor = encode_browse_game_card_cursor(
             game=page_games[-1],
-            starts_on=starts_on,
+            starts_on=browse_date,
         )
 
     return GameCardListRead(
+        browse_today=browse_today,
+        browse_timezone=browse_timezone,
+        minimum_browse_date=minimum_browse_date,
+        maximum_browse_date=maximum_browse_date,
+        browse_date=browse_date,
+        time_groups=time_groups,
         games=games,
         next_cursor=next_cursor,
         has_more=has_more,
@@ -244,13 +389,90 @@ def list_browse_game_cards(
     )
 
 
+def get_browse_date_context(
+    starts_on: date | None,
+    *,
+    now: datetime,
+) -> tuple[date, date, date, date, str]:
+    browse_timezone = BROWSE_TIMEZONE
+    browse_today = now.astimezone(ZoneInfo(browse_timezone)).date()
+    minimum_browse_date = browse_today
+    maximum_browse_date = browse_today + timedelta(days=BROWSE_DATE_WINDOW_DAYS - 1)
+    requested_date = starts_on or browse_today
+    browse_date = min(max(requested_date, minimum_browse_date), maximum_browse_date)
+
+    return (
+        browse_today,
+        minimum_browse_date,
+        maximum_browse_date,
+        browse_date,
+        browse_timezone,
+    )
+
+
+def build_browse_game_eligibility_conditions(
+    browse_date: date,
+    *,
+    now: datetime,
+) -> tuple[object, ...]:
+    registration_cutoff = now - timedelta(minutes=JOIN_WINDOW_MINUTES)
+    return (
+        Game.publish_status == "published",
+        Game.deleted_at.is_(None),
+        Game.public_visibility_status == "visible",
+        Game.join_enforcement_status == "open",
+        Game.game_status.in_(OPEN_GAME_STATUSES),
+        Game.starts_on_local == browse_date,
+        Game.starts_at > registration_cutoff,
+    )
+
+
+def list_browse_time_groups(
+    db: Session,
+    *,
+    browse_date: date,
+    browse_timezone: str,
+    now: datetime,
+) -> list[GameTimeGroupRead]:
+    local_hour_expr = func.date_trunc(
+        literal("hour"),
+        func.timezone(browse_timezone, Game.starts_at),
+    )
+    group_key_expr = func.to_char(
+        local_hour_expr,
+        literal("HH24:MI"),
+    )
+    first_start_expr = func.min(Game.starts_at)
+    rows = db.execute(
+        select(
+            group_key_expr.label("group_key"),
+            func.count(Game.id).label("total_games"),
+            first_start_expr.label("first_starts_at"),
+        )
+        .where(*build_browse_game_eligibility_conditions(browse_date, now=now))
+        .group_by(group_key_expr)
+        .order_by(first_start_expr.asc())
+    ).all()
+
+    return [
+        GameTimeGroupRead(
+            group_key=str(row.group_key),
+            total_games=int(row.total_games or 0),
+        )
+        for row in rows
+    ]
+
+
 def load_game_card_metadata(
     db: Session,
     games: list[Game],
+    *,
+    now: datetime | None = None,
 ) -> tuple[dict[uuid.UUID, int], dict[uuid.UUID, str], dict[uuid.UUID, str]]:
     if not games:
         return {}, {}, {}
 
+    captured_now = now or datetime.now(timezone.utc)
     game_ids = [game.id for game in games]
     venue_ids = {game.venue_id for game in games if game.venue_id is not None}
     participant_counts_by_game_id: dict[uuid.UUID, int] = {}
@@ -259,9 +481,10 @@ def load_game_card_metadata(
 
     for game_id, participant_count in db.execute(
         select(GameParticipant.game_id, func.count(GameParticipant.id))
+        .outerjoin(Booking, GameParticipant.booking_id == Booking.id)
         .where(
             GameParticipant.game_id.in_(game_ids),
-            GameParticipant.participant_status.in_(ROSTER_PLAYER_STATUSES),
+            build_capacity_holding_participant_condition(captured_now),
         )
         .group_by(GameParticipant.game_id)
     ).all():
@@ -308,7 +531,10 @@ def build_game_card_read(
     participant_count: int,
     primary_game_image_url: str | None,
     primary_venue_image_object_key: str | None,
+    browse_timezone: str | None = None,
+    now: datetime | None = None,
 ) -> GameCardRead:
+    captured_now = now or datetime.now(timezone.utc)
     primary_image_url = primary_game_image_url
     if primary_image_url is None and primary_venue_image_object_key is not None:
         try:
@@ -316,6 +542,15 @@ def build_game_card_read(
         except (R2StorageConfigError, R2StorageError):
             primary_image_url = None
 
+    display_title = build_game_card_display_title(game)
+    location_label = build_game_card_location_label(game)
+    spots_remaining = max(game.total_spots - participant_count, 0)
+    availability_status = get_game_availability_status(
+        game,
+        occupied_spots=participant_count,
+        now=captured_now,
+    )
+    timezone_name = browse_timezone or game.timezone
     return GameCardRead(
         id=game.id,
         game_type=game.game_type,
@@ -323,12 +558,15 @@ def build_game_card_read(
         public_visibility_status=game.public_visibility_status,
         join_enforcement_status=game.join_enforcement_status,
         title=game.title,
+        display_title=display_title,
         venue_name_snapshot=game.venue_name_snapshot,
         city_snapshot=game.city_snapshot,
         state_snapshot=game.state_snapshot,
+        location_label=location_label,
         starts_at=game.starts_at,
         ends_at=game.ends_at,
         starts_on_local=game.starts_on_local,
+        time_group_key=get_game_time_group_key(game.starts_at, timezone_name),
         timezone=game.timezone,
         format_label=game.format_label,
         game_player_group=game.game_player_group,
@@ -336,9 +574,96 @@ def build_game_card_read(
         total_spots=game.total_spots,
         price_per_player_cents=game.price_per_player_cents,
         currency=game.currency,
+        price_label=format_game_card_price(game.price_per_player_cents, game.currency),
         participant_count=participant_count,
+        availability=GameAvailabilityRead(
+            status=availability_status,
+            occupied_spots=participant_count,
+            total_spots=game.total_spots,
+            spots_remaining=spots_remaining,
+        ),
+        registration_closes_at=get_join_window_closes_at(game),
         primary_image_url=primary_image_url,
     )
+
+
+def build_capacity_holding_participant_condition(now: datetime):
+    return or_(
+        GameParticipant.participant_status == "confirmed",
+        and_(
+            GameParticipant.participant_status == "pending_payment",
+            GameParticipant.booking_id.is_not(None),
+            Booking.booking_status == "pending_payment",
+            Booking.expires_at.is_not(None),
+            Booking.expires_at > now,
+            Booking.payment_status.in_(ACTIVE_PAYMENT_HOLD_BOOKING_STATUSES),
+        ),
+    )
+
+
+def get_game_availability_status(
+    game: Game,
+    *,
+    occupied_spots: int,
+    now: datetime,
+) -> str:
+    if game.join_enforcement_status == "paused":
+        return "paused"
+
+    spots_remaining = max(game.total_spots - occupied_spots, 0)
+    if spots_remaining > 0:
+        return "open"
+
+    if game_waitlist_is_accepting(game, now=now):
+        return "waitlist_open"
+
+    return "full"
+
+
+def game_waitlist_is_accepting(game: Game, *, now: datetime) -> bool:
+    return (
+        game.waitlist_enabled
+        and game.publish_status == "published"
+        and game.game_status in OPEN_GAME_STATUSES
+        and game.public_visibility_status == "visible"
+        and game.deleted_at is None
+        and game.join_enforcement_status == "open"
+        and get_join_window_closes_at(game) > now
+    )
+
+
+def build_game_card_display_title(game: Game) -> str:
+    if game.game_type == "official":
+        return game.venue_name_snapshot or game.title
+
+    return game.title or game.venue_name_snapshot
+
+
+def build_game_card_location_label(game: Game) -> str:
+    return ", ".join(
+        part
+        for part in (
+            game.city_snapshot,
+            game.state_snapshot,
+        )
+        if part
+    )
+
+
+def get_game_time_group_key(starts_at: datetime, timezone_name: str) -> str:
+    local_starts_at = starts_at.astimezone(ZoneInfo(timezone_name))
+    return local_starts_at.strftime("%H:00")
+
+
+def format_game_card_price(cents: int, currency: str) -> str:
+    if cents <= 0:
+        return "Free"
+
+    dollars = cents / 100
+    if cents % 100 == 0:
+        return f"${int(dollars)}"
+
+    return f"${dollars:.2f}" if currency == "USD" else f"{dollars:.2f} {currency}"
 
 
 def encode_browse_game_card_cursor(*, game: Game, starts_on: date) -> str:
@@ -1048,13 +1373,20 @@ def get_existing_active_participant(
     ).first()
 
 
-def count_roster_players(db: Session, game_id: uuid.UUID) -> int:
+def count_roster_players(
+    db: Session,
+    game_id: uuid.UUID,
+    *,
+    now: datetime | None = None,
+) -> int:
+    captured_now = now or datetime.now(timezone.utc)
     return db.scalar(
         select(func.count())
         .select_from(GameParticipant)
+        .outerjoin(Booking, GameParticipant.booking_id == Booking.id)
         .where(
             GameParticipant.game_id == game_id,
-            GameParticipant.participant_status.in_(ROSTER_PLAYER_STATUSES),
+            build_capacity_holding_participant_condition(captured_now),
         )
     ) or 0
 
@@ -1064,7 +1396,7 @@ def get_next_roster_order(db: Session, game_id: uuid.UUID) -> int:
         db.scalar(
             select(func.max(GameParticipant.roster_order)).where(
                 GameParticipant.game_id == game_id,
-                GameParticipant.participant_status.in_(ROSTER_PLAYER_STATUSES),
+                GameParticipant.participant_status == "confirmed",
             )
         )
         or 0
@@ -1120,7 +1452,11 @@ def get_booking_participants(
     )
 
 
-def list_public_game_participants(db: Session, game_id: uuid.UUID) -> list[GameParticipant]:
+def list_public_game_participants(
+    db: Session,
+    game_id: uuid.UUID,
+    current_user: User | None = None,
+) -> list[GameParticipant]:
     db_game = db.get(Game, game_id)
 
     if db_game is None or db_game.deleted_at is not None:
@@ -1128,7 +1464,18 @@ def list_public_game_participants(db: Session, game_id: uuid.UUID) -> list[GameP
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Game not found.",
         )
-    require_publicly_visible_game(db_game)
+    if game_is_publicly_visible(db_game):
+        pass
+    elif current_user is None or not user_can_view_hidden_game_roster(
+        db,
+        db_game,
+        current_user,
+        now=datetime.now(timezone.utc),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
+        )
 
     return list(
         db.scalars(
@@ -1143,16 +1490,18 @@ def list_public_game_participants(db: Session, game_id: uuid.UUID) -> list[GameP
 
 
 def list_public_game_participant_counts(db: Session) -> list[dict[str, object]]:
+    now = datetime.now(timezone.utc)
     rows = db.execute(
         select(
             GameParticipant.game_id,
             func.count(GameParticipant.id).label("participant_count"),
         )
+        .outerjoin(Booking, GameParticipant.booking_id == Booking.id)
         .join(Game, GameParticipant.game_id == Game.id)
-        .where(GameParticipant.participant_status.in_(ROSTER_PLAYER_STATUSES))
+        .where(build_capacity_holding_participant_condition(now))
         .where(
             Game.deleted_at.is_(None),
-            or_(Game.game_type != "community", Game.public_visibility_status == "visible"),
+            Game.public_visibility_status == "visible",
         )
         .group_by(GameParticipant.game_id)
     ).all()

@@ -93,7 +93,8 @@ export function AppRoutes() {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/policies/cancellation-refunds" element={<CancellationRefundPolicyPage />} />
-      <Route path="/games" element={<BrowseGamesPage />} />
+      <Route path="/games" element={<Navigate to="/games/browse" replace />} />
+      <Route path="/games/browse" element={<BrowseGamesPage />} />
       <Route path="/games/:gameId" element={<GameDetailsPage />} />
       <Route
         path="/games/:gameId/checkout"

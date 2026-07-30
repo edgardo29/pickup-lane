@@ -1,3 +1,1 @@
-export const BROWSE_VISIBLE_AFTER_START_MINUTES = 15
-export const DATE_WINDOW_DAYS = 14
 export const DATE_PAGE_SIZE = 7

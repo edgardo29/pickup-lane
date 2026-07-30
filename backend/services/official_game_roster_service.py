@@ -307,8 +307,8 @@ def search_official_game_add_player_users(
             )
         ).all()
     )
-    roster_count = count_roster_players(db, game.id)
     now = datetime.now(timezone.utc)
+    roster_count = count_roster_players(db, game.id, now=now)
 
     return AdminOfficialGameUserSearchRead(
         results=[
@@ -341,9 +341,10 @@ def add_official_game_player(
             detail="Players can only be added to published active official games.",
         )
 
+    now = datetime.now(timezone.utc)
     require_game_not_started(
         game,
-        datetime.now(timezone.utc),
+        now,
         "Players can only be added before the game starts.",
     )
 
@@ -365,13 +366,12 @@ def add_official_game_player(
             detail="Selected user already has an active roster row for this game.",
         )
 
-    if count_roster_players(db, game.id) >= game.total_spots:
+    if count_roster_players(db, game.id, now=now) >= game.total_spots:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot add player because the game is already full.",
         )
 
-    now = datetime.now(timezone.utc)
     booking = Booking(
         id=uuid.uuid4(),
         game_id=game.id,

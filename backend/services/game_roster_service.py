@@ -232,6 +232,12 @@ def join_game_roster_workflow(
             detail="Game not found.",
         )
 
+    if db_game.public_visibility_status != "visible":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
+        )
+
     require_join_ready_user(joining_user)
     require_minimum_age(joining_user, db_game.minimum_age)
 
@@ -267,7 +273,7 @@ def join_game_roster_workflow(
             detail="You are already on the waitlist for this game.",
         )
 
-    roster_count = count_roster_players(db, db_game.id)
+    roster_count = count_roster_players(db, db_game.id, now=now)
     display_name = get_user_display_name(joining_user)
     guest_count = validate_guest_count(db_game, join_request.guest_count)
     party_size = guest_count + 1
@@ -564,7 +570,7 @@ def add_booking_game_guests_workflow(
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
-    roster_count = count_roster_players(db, db_game.id)
+    roster_count = count_roster_players(db, db_game.id, now=now)
     if guest_request.guest_count > max(db_game.total_spots - roster_count, 0):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -581,6 +587,7 @@ def add_booking_game_guests_workflow(
         now,
         get_next_roster_order(db, db_game.id),
     )
+    booking_id = booking.id
     booking.participant_count += len(added_guests)
     booking.subtotal_cents = db_game.price_per_player_cents * booking.participant_count
     booking.total_cents = booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
@@ -620,7 +627,7 @@ def add_booking_game_guests_workflow(
         status="guests_added",
         message="Guests added to your booking.",
         added_count=len(added_guests),
-        booking_id=booking.id,
+        booking_id=booking_id,
     )
 
 
@@ -687,7 +694,7 @@ def add_host_game_guests_workflow(
             detail=f"This game allows up to {max_guests} host guests.",
         )
 
-    roster_count = count_roster_players(db, db_game.id)
+    roster_count = count_roster_players(db, db_game.id, now=now)
     if guest_count > max(db_game.total_spots - roster_count, 0):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

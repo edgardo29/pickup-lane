@@ -60,7 +60,7 @@ function LandingPage() {
             <p>Book real games, meet real players, and play at approved venues near you.</p>
 
             {showGuestActions && (
-              <Link className="landing-hero__cta" to="/games">
+              <Link className="landing-hero__cta" to="/games/browse">
                 Browse Games
                 <ArrowRightIcon />
               </Link>
@@ -89,7 +89,7 @@ function SignedInHeroPanel() {
       <p>Find an open game near you or create one for other players to join.</p>
 
       <div className="signed-home-panel__actions">
-        <Link className="signed-home-panel__primary" to="/games">
+        <Link className="signed-home-panel__primary" to="/games/browse">
           Browse Games
           <ArrowRightIcon />
         </Link>

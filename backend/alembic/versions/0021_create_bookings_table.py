@@ -36,6 +36,7 @@ def upgrade() -> None:
         sa.CheckConstraint("booking_status IN ('pending_payment', 'confirmed', 'waitlisted', 'partially_cancelled', 'cancelled', 'expired', 'failed')", name='ck_bookings_booking_status'),
         sa.CheckConstraint("(booking_status <> 'cancelled' OR cancelled_at IS NOT NULL)", name='ck_bookings_cancelled_requires_cancelled_at'),
         sa.CheckConstraint("(booking_status <> 'confirmed' OR booked_at IS NOT NULL)", name='ck_bookings_confirmed_requires_booked_at'),
+        sa.CheckConstraint("(booking_status <> 'pending_payment' OR expires_at IS NOT NULL)", name='ck_bookings_pending_payment_requires_expires_at'),
         sa.CheckConstraint("currency = 'USD'", name='ck_bookings_currency'),
         sa.CheckConstraint('discount_cents >= 0', name='ck_bookings_discount_cents'),
         sa.CheckConstraint('participant_count > 0', name='ck_bookings_participant_count'),
@@ -56,6 +57,7 @@ def upgrade() -> None:
     op.create_index('ix_bookings_buyer_user_id_booking_status', 'bookings', ['buyer_user_id', 'booking_status'], unique=False)
     op.create_index('ix_bookings_game_id', 'bookings', ['game_id'], unique=False)
     op.create_index('ix_bookings_game_id_booking_status', 'bookings', ['game_id', 'booking_status'], unique=False)
+    op.create_index('ix_bookings_game_status_expires_payment', 'bookings', ['game_id', 'booking_status', 'expires_at', 'payment_status'], unique=False)
     op.create_index('ix_bookings_payment_status', 'bookings', ['payment_status'], unique=False)
 
 
