@@ -380,6 +380,8 @@ from backend.schemas.sub_post_request_status_history_schema import (
 from backend.schemas.sub_post_schema import (
     MAX_SUB_POST_POSITION_ROWS,
     MAX_SUB_POST_TOTAL_SUBS,
+    MyNeedASubCardRead,
+    MyNeedASubListRead,
     SubPostCancel,
     SubPostCreate,
     SubPostListRead,
@@ -681,6 +683,8 @@ __all__ = [
     "RefundCreate",
     "RefundRead",
     "RefundUpdate",
+    "MyNeedASubCardRead",
+    "MyNeedASubListRead",
     "SubPostCreate",
     "SubPostListRead",
     "SubPostPublicRead",

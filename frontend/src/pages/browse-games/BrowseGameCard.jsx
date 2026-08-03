@@ -25,7 +25,7 @@ function BrowseGameCard({ animationIndex = 0, browseTimezone, game }) {
   const imageUrl = buildMediaUrl(game.primary_image_url)
   const cardImageUrl = imageUrl || (tone === 'community' ? defaultCommunityVenueImage : '')
   const locationLabel = game.location_label || [game.city_snapshot, game.state_snapshot].filter(Boolean).join(', ')
-  const cardClassName = `game-card game-card--${tone} pl-motion-enter`
+  const cardClassName = `game-card game-card--${tone} app-hover-card pl-motion-enter`
   const motionDelay = `${36 + Math.min(animationIndex, 5) * 32}ms`
   const gameSpec = [
     formatGamePlayerGroup(game.game_player_group),

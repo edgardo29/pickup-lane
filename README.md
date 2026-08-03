@@ -65,3 +65,7 @@ VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 
 `frontend/vercel.json` rewrites all routes to `index.html` so React Router
 deep links work on Vercel.
+
+## Production Readiness Governance
+
+WS01 governance artifacts live in `docs/production-readiness/README.md`.

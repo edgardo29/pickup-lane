@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from './context/AuthProvider.jsx'
 import './styles/base.css'
 import './styles/app-shell.css'
+import './styles/game-card.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(

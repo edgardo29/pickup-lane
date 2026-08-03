@@ -35,6 +35,7 @@ function NeedASubDetailPage() {
   const {
     error,
     isLoading,
+    isUnavailable,
     loadDetail,
     myRequests,
     ownerRequests,
@@ -201,6 +202,12 @@ function NeedASubDetailPage() {
 
         {isLoading ? (
           <NeedASubDetailSkeleton />
+        ) : isUnavailable ? (
+          <div className="need-sub-empty">
+            <strong>This post isn't available right now.</strong>
+            <span>Browse other Need a Sub posts.</span>
+            <Link className="need-sub-back-link" to="/need-a-sub">Browse Need a Sub</Link>
+          </div>
         ) : !post ? (
           <div className="need-sub-empty">
             <strong>Post not found.</strong>

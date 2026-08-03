@@ -75,6 +75,7 @@ from backend.services.notification_event_service import (
 )
 from backend.services.status_history_service import (
     add_game_status_history_if_changed,
+    add_participant_status_history_if_changed,
 )
 from backend.services.refund_event_service import record_refund_event
 from backend.services.stripe_service import (
@@ -1045,11 +1046,15 @@ def cancel_game_participants(
     db_game: Game,
     now: datetime,
     cancellation_type: str,
+    changed_by_user_id: uuid.UUID,
+    change_source: str,
 ) -> list[uuid.UUID]:
     notified_user_ids: set[uuid.UUID] = set()
     participants = list_cancellable_game_participants(db, db_game)
 
     for participant in participants:
+        old_participant_status = participant.participant_status
+        old_attendance_status = participant.attendance_status
         notification_user_id = get_game_cancellation_participant_notification_user_id(
             db_game,
             participant,
@@ -1063,6 +1068,16 @@ def cancel_game_participants(
         participant.attendance_status = "not_applicable"
         participant.updated_at = now
         db.add(participant)
+        add_participant_status_history_if_changed(
+            db,
+            participant,
+            old_participant_status=old_participant_status,
+            old_attendance_status=old_attendance_status,
+            changed_by_user_id=changed_by_user_id,
+            change_source=change_source,
+            reason="Game cancelled.",
+            changed_at=now,
+        )
 
     return list(notified_user_ids)
 
@@ -1413,6 +1428,8 @@ def apply_game_cancellation_state(
         db_game,
         now,
         cancellation_type,
+        current_user.id,
+        change_source,
     )
     if cancellation_type == "admin_cancelled":
         notified_user_ids = add_game_cancellation_host_recipient(
