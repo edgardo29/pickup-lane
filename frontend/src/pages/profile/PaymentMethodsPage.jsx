@@ -12,7 +12,11 @@ import {
   getRequestErrorMessage,
   getSetupErrorMessage,
 } from '../../features/payment-methods/paymentMethodSetup.js'
-import { hasStripePublishableKey, stripePromise } from '../../lib/stripe.js'
+import {
+  areStripePaymentsEnabled,
+  hasStripeCheckoutSupport,
+  stripePromise,
+} from '../../lib/stripe.js'
 import {
   createPaymentMethodSetupIntent,
   listUserPaymentMethods,
@@ -55,7 +59,8 @@ export function PaymentMethodsPage() {
   const [activeMenuPaymentMethodId, setActiveMenuPaymentMethodId] = useState('')
   const [removeCandidate, setRemoveCandidate] = useState(null)
   const [removeStatus, setRemoveStatus] = useState('idle')
-  const stripeReady = hasStripePublishableKey()
+  const stripePaymentsEnabled = areStripePaymentsEnabled()
+  const stripeReady = hasStripeCheckoutSupport()
   const hasReachedSavedCardLimit = paymentMethods.length >= MAX_SAVED_PAYMENT_METHODS
 
   const loadPaymentMethods = useCallback(async () => {
@@ -242,7 +247,13 @@ export function PaymentMethodsPage() {
               </button>
             </div>
 
-            {!stripeReady && (
+            {!stripePaymentsEnabled && (
+              <p className="payment-methods-alert payment-methods-alert--error">
+                Card payments are disabled for this demo.
+              </p>
+            )}
+
+            {stripePaymentsEnabled && !stripeReady && (
               <p className="payment-methods-alert payment-methods-alert--error">
                 Stripe publishable key is not configured.
               </p>
@@ -263,7 +274,11 @@ export function PaymentMethodsPage() {
             {status === 'success' && paymentMethods.length === 0 && (
               <PaymentMethodsEmptyState
                 title="No saved cards yet"
-                message="Add a card to speed up official game checkout."
+                message={
+                  stripePaymentsEnabled
+                    ? 'Add a card to speed up official game checkout.'
+                    : 'Card setup is unavailable while demo payments are disabled.'
+                }
               />
             )}
 

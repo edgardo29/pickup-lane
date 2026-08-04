@@ -141,6 +141,20 @@ def test_payment_method_setup_intent_stores_customer_on_user(
         assert db_user.stripe_customer_id == "cus_saved_card_test"
 
 
+def test_payment_method_setup_intent_rejects_when_stripe_payments_disabled(
+    client: TestClient,
+    monkeypatch,
+):
+    user = create_user(client)
+    monkeypatch.setenv("ENABLE_STRIPE_PAYMENTS", "false")
+    authenticate_as(user["id"])
+
+    response = client.post("/user-payment-methods/setup-intent", json={})
+
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"] == "Stripe payments are disabled for this demo."
+
+
 def test_payment_method_setup_intent_reuses_existing_customer(
     client: TestClient,
     monkeypatch,

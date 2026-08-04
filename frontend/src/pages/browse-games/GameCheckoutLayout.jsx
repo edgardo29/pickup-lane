@@ -47,6 +47,7 @@ function GameCheckoutLayout({
   projectedGuestCount,
   setupError,
   submitError,
+  stripePaymentsDisabled,
   stripeStatusMessage,
   stripeUnavailable,
   title,
@@ -55,6 +56,7 @@ function GameCheckoutLayout({
   const needsPaymentMethod = isStripeCheckout && isStripeReady && !paymentMethod
   const confirmDisabled =
     !agreed ||
+    stripePaymentsDisabled ||
     needsPaymentMethod ||
     isSubmitting ||
     isBlockedByCapacity ||
@@ -64,9 +66,11 @@ function GameCheckoutLayout({
 
   const actionMessage = !agreed
     ? 'Accept the terms to continue.'
-    : needsPaymentMethod
-      ? 'Add a payment method to continue.'
-      : checkoutActionMessage
+    : stripePaymentsDisabled
+      ? 'Official game payments are disabled for this demo.'
+      : needsPaymentMethod
+        ? 'Add a payment method to continue.'
+        : checkoutActionMessage
 
   return (
     <div className="checkout-page">
@@ -110,6 +114,7 @@ function GameCheckoutLayout({
               paymentMethod={paymentMethod}
               paymentMethods={paymentMethods}
               setupError={setupError}
+              stripePaymentsDisabled={stripePaymentsDisabled}
               stripeStatusMessage={stripeStatusMessage}
               stripeUnavailable={stripeUnavailable}
             />

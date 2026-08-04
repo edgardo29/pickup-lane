@@ -4,6 +4,7 @@ from typing import Any
 
 
 DEFAULT_STRIPE_CURRENCY = "USD"
+STRIPE_PAYMENTS_ENABLED_VALUES = {"1", "true", "yes", "on"}
 
 
 class StripeConfigError(RuntimeError):
@@ -61,6 +62,13 @@ def get_stripe_currency() -> str:
     return currency
 
 
+def stripe_payments_enabled() -> bool:
+    return (
+        os.getenv("ENABLE_STRIPE_PAYMENTS", "").strip().lower()
+        in STRIPE_PAYMENTS_ENABLED_VALUES
+    )
+
+
 def get_stripe_publishable_key() -> str:
     publishable_key = os.getenv("STRIPE_PUBLISHABLE_KEY", "").strip()
     if not publishable_key:
@@ -86,6 +94,9 @@ def get_stripe_secret_key() -> str:
 
 
 def get_stripe_module() -> Any:
+    if not stripe_payments_enabled():
+        raise StripeConfigError("Stripe payments are disabled for this demo.")
+
     try:
         import stripe
     except ModuleNotFoundError as exc:

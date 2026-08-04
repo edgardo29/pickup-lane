@@ -90,6 +90,25 @@ def test_checkout_payment_intent_requires_saved_payment_method(client: TestClien
     assert response.json()["detail"] == "Choose a saved card before checkout."
 
 
+def test_checkout_payment_intent_rejects_when_stripe_payments_disabled(
+    client: TestClient,
+    monkeypatch,
+):
+    user = create_user(client)
+    venue = create_venue(client, user["id"])
+    game = create_game(client, user["id"], venue, price_per_player_cents=1500)
+    monkeypatch.setenv("ENABLE_STRIPE_PAYMENTS", "false")
+    authenticate_as(user["id"])
+
+    response = client.post(
+        f"/checkout/games/{game['id']}/payment-intent",
+        json={"guest_count": 0},
+    )
+
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"] == "Stripe payments are disabled for this demo."
+
+
 def test_checkout_payment_intent_rejects_non_official_games(client: TestClient):
     host_user = create_user(client)
     buyer_user = create_user(client)
