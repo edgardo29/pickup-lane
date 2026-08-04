@@ -13,10 +13,12 @@ async function getAuthHeaders(firebaseUser) {
 
 export async function loadMyGamesPage(firebaseUser, {
   cursor = '',
+  domain = 'games',
   limit = 40,
   view = 'upcoming',
 } = {}) {
   const authHeaders = await getAuthHeaders(firebaseUser)
+  const endpoint = domain === 'need-a-sub' ? '/my-games/need-a-sub' : '/my-games'
   const params = new URLSearchParams({
     view,
     limit: String(limit),
@@ -26,5 +28,5 @@ export async function loadMyGamesPage(firebaseUser, {
     params.set('cursor', cursor)
   }
 
-  return apiRequest(`/my-games?${params.toString()}`, { headers: authHeaders })
+  return apiRequest(`${endpoint}?${params.toString()}`, { headers: authHeaders })
 }

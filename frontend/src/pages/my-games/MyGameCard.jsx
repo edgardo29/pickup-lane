@@ -17,6 +17,10 @@ function MyGameCard({ item }) {
   const { bucket, game } = item
   const statusLabel = item.statusLabel || item.status_label
   const statusTone = item.statusTone || item.status_tone
+  const shouldShowStatus = ['cancelled', 'hosted', 'hosting'].includes(statusTone)
+  const headingClassName = shouldShowStatus
+    ? 'my-game-card__heading my-game-card__heading--with-status'
+    : 'my-game-card__heading'
   const tone = game.game_type === 'community' ? 'community' : 'official'
   const title = game.venue_name_snapshot || game.title
   const imageUrl = buildMediaUrl(game.primary_image_url)
@@ -33,7 +37,7 @@ function MyGameCard({ item }) {
 
   return (
     <Link
-      className={`game-card game-card--${tone} ${
+      className={`game-card game-card--${tone} app-hover-card ${
         isFull ? 'game-card--full' : ''
       } my-game-card my-game-card--${statusTone}`}
       to={`/games/${game.id}`}
@@ -50,11 +54,13 @@ function MyGameCard({ item }) {
       </div>
 
       <div className="game-card__body">
-        <div className="my-game-card__heading">
+        <div className={headingClassName}>
           <h3>{title}</h3>
-          <span className={`my-game-card__status my-game-card__status--${statusTone}`}>
-            {statusLabel}
-          </span>
+          {shouldShowStatus && (
+            <span className={`my-game-card__status my-game-card__status--${statusTone}`}>
+              {statusLabel}
+            </span>
+          )}
         </div>
 
         <p className="game-card__location">

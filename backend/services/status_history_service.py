@@ -155,6 +155,7 @@ def add_participant_status_history_if_changed(
     reason: str,
     changed_by_user_id: uuid.UUID | None = None,
     change_source: str = "system",
+    changed_at: datetime | None = None,
 ) -> None:
     if (
         old_participant_status == participant.participant_status
@@ -162,19 +163,21 @@ def add_participant_status_history_if_changed(
     ):
         return
 
-    db.add(
-        ParticipantStatusHistory(
-            id=uuid.uuid4(),
-            participant_id=participant.id,
-            old_participant_status=old_participant_status,
-            new_participant_status=participant.participant_status,
-            old_attendance_status=old_attendance_status,
-            new_attendance_status=participant.attendance_status,
-            changed_by_user_id=changed_by_user_id,
-            change_source=change_source,
-            change_reason=reason,
-        )
+    history = ParticipantStatusHistory(
+        id=uuid.uuid4(),
+        participant_id=participant.id,
+        old_participant_status=old_participant_status,
+        new_participant_status=participant.participant_status,
+        old_attendance_status=old_attendance_status,
+        new_attendance_status=participant.attendance_status,
+        changed_by_user_id=changed_by_user_id,
+        change_source=change_source,
+        change_reason=reason,
     )
+    if changed_at is not None:
+        history.created_at = changed_at
+
+    db.add(history)
 
 
 def build_status_history_conflict_detail(exc: IntegrityError) -> str:

@@ -1,20 +1,42 @@
 .my-games-page {
   --red: #ff3b30;
   --orange: #ff9f0a;
-  min-height: 100vh;
-  background: #010409;
 }
 
 .my-games-panel {
-  margin-top: 36px;
+  margin-top: 30px;
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
 }
 
+.my-games-section-header {
+  min-width: 0;
+  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.my-games-section-header h2 {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 1.16rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
 .my-games-timeline {
+  display: grid;
   gap: 28px;
+}
+
+.my-games-timeline--date-dividers {
+  gap: 42px;
 }
 
 .my-games-agenda-day {
@@ -22,25 +44,128 @@
   gap: 14px;
 }
 
+.my-games-timeline--date-dividers .my-games-agenda-day {
+  gap: 28px;
+}
+
 .my-games-agenda-day__header {
   width: 100%;
+  min-height: 0;
+  padding: 0;
+  display: block;
+}
+
+.my-games-timeline--date-dividers .my-games-agenda-day__header {
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: max-content minmax(56px, 1fr) auto;
+  align-items: center;
+  gap: 0;
 }
 
 .my-games-agenda-day__header h2 {
-  font-size: 1.35rem;
+  width: fit-content;
+  min-height: 46px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid rgba(248, 250, 252, 0.14);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel-material);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
+.my-games-timeline--date-dividers .my-games-agenda-day__header h2 {
+  width: auto;
+  min-width: 278px;
+  min-height: 68px;
+  padding: 0 26px;
+  border-color: rgba(248, 250, 252, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(248, 250, 252, 0.045),
+    0 14px 28px rgba(0, 0, 0, 0.28);
+  gap: 18px;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.my-games-agenda-day__label {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.my-games-timeline--date-dividers .my-games-agenda-day__label {
+  color: #ffffff;
+  font-size: 1.7rem;
+  font-weight: 900;
+  line-height: 1;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .my-games-agenda-day__header h2 svg {
+  width: 22px;
+  height: 22px;
   color: rgba(248, 250, 252, 0.72);
+  flex: 0 0 auto;
+}
+
+.my-games-timeline--date-dividers .my-games-agenda-day__header h2 svg {
+  width: 28px;
+  height: 28px;
+  color: #ffffff;
+  stroke-width: 2.2;
+}
+
+.my-games-agenda-day__rule {
+  min-width: 0;
+  height: 6px;
+  background: rgba(248, 250, 252, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 0 rgba(0, 0, 0, 0.38);
+}
+
+.my-games-agenda-day__count {
+  min-height: 0;
+  padding: 0 0 0 28px;
+  border: 0;
+  color: #ffffff;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .my-games-agenda-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
   align-items: start;
+}
+
+.my-games-timeline--date-dividers .my-games-agenda-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.my-games-agenda-grid__item {
+  min-width: 0;
+  display: block;
 }
 
 .my-games-view-more {
@@ -53,7 +178,7 @@
   background: linear-gradient(135deg, var(--lime), var(--lime-bright));
   cursor: pointer;
   font-size: 0.88rem;
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .my-games-view-more:hover {
@@ -62,6 +187,44 @@
 
 .my-games-view-more:focus-visible {
   outline: 2px solid var(--lime);
+  outline-offset: 3px;
+}
+
+.my-games-load-more-error {
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 59, 48, 0.28);
+  border-radius: 8px;
+  color: rgba(248, 250, 252, 0.78);
+  background: rgba(255, 59, 48, 0.08);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.my-games-load-more-error button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 59, 48, 0.38);
+  border-radius: 6px;
+  color: #ffffff;
+  background: rgba(255, 59, 48, 0.16);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.my-games-load-more-error button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.my-games-load-more-error button:focus-visible {
+  outline: 2px solid var(--red);
   outline-offset: 3px;
 }
 
@@ -75,6 +238,10 @@
 
 .my-game-card__heading {
   min-width: 0;
+  display: block;
+}
+
+.my-game-card__heading--with-status {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -102,25 +269,27 @@
   justify-self: end;
   flex: 0 0 auto;
   font-size: 0.62rem;
-  font-weight: 950;
+  font-weight: 800;
   line-height: 1;
   text-transform: uppercase;
+  letter-spacing: 0.08em;
   pointer-events: none;
 }
 
 .my-game-card__status--confirmed,
-.my-game-card__status--played {
+.my-game-card__status--completed {
   border-color: rgba(184, 255, 36, 0.28);
   color: var(--lime);
 }
 
-.my-game-card__status--waitlisted {
+.my-game-card__status--ended {
   border-color: rgba(248, 250, 252, 0.14);
   color: rgba(248, 250, 252, 0.72);
 }
 
 .my-game-card__status--hosting,
-.my-game-card__status--hosted {
+.my-game-card__status--hosted,
+.my-game-card__status--owner {
   border-color: rgba(255, 159, 10, 0.32);
   color: var(--orange);
 }
@@ -130,11 +299,264 @@
   color: var(--red);
 }
 
+.my-need-sub-card {
+  --my-need-sub-card-body-size: 0.78rem;
+  --my-need-sub-card-label-size: 0.62rem;
+  --my-need-sub-card-body-weight: 500;
+
+  min-width: 0;
+  height: 330px;
+  border: 1px solid rgba(248, 250, 252, 0.1);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel-material);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
+  cursor: pointer;
+  display: grid;
+  grid-template-rows: 54px 112px minmax(122px, 1fr) 42px;
+  overflow: hidden;
+  text-decoration: none;
+}
+
+.my-need-sub-card--disabled {
+  cursor: default;
+}
+
+.my-need-sub-card--disabled:hover {
+  border-color: rgba(248, 250, 252, 0.1);
+  box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.035);
+  transform: none;
+}
+
+.my-need-sub-card:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
+}
+
+.my-need-sub-card__top {
+  min-width: 0;
+  padding: 13px 14px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+
+.my-need-sub-card__title-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.my-need-sub-card__title-row strong {
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: #ffffff;
+  font-size: 1.02rem;
+  font-weight: 850;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-need-sub-card__title-row strong span {
+  color: var(--lime);
+}
+
+.my-need-sub-card__facts {
+  min-width: 0;
+  padding: 11px 14px;
+  border-top: 1px solid rgba(248, 250, 252, 0.06);
+  display: grid;
+  grid-template-rows: repeat(4, minmax(0, 20px));
+  gap: 6px;
+  align-content: start;
+}
+
+.my-need-sub-card__facts span {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(248, 250, 252, 0.86);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--my-need-sub-card-body-size);
+  font-weight: var(--my-need-sub-card-body-weight);
+  line-height: 1.1;
+}
+
+.my-need-sub-card__facts > span {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+}
+
+.my-need-sub-card__fact-text {
+  width: calc(100% - 28px);
+  max-width: calc(100% - 28px);
+  min-width: 0;
+  overflow: hidden;
+  display: inline-block;
+  flex: 0 1 calc(100% - 28px);
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.my-need-sub-card__facts svg {
+  width: 18px;
+  height: 18px;
+  color: var(--lime);
+  flex: 0 0 auto;
+}
+
+.my-need-sub-card__needs {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(248, 250, 252, 0.075);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+
+.my-need-sub-card__needs-title {
+  width: fit-content;
+  margin-bottom: 0;
+  color: rgba(184, 255, 36, 0.92);
+  font-size: var(--my-need-sub-card-label-size);
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.my-need-sub-card__needs-group {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.my-need-sub-card__needs-group + .my-need-sub-card__needs-group {
+  padding-top: 12px;
+  border-top: 1px solid rgba(248, 250, 252, 0.04);
+}
+
+.my-need-sub-card__need-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.my-need-sub-card__need-summary svg {
+  width: 16px;
+  height: 16px;
+  color: var(--lime);
+}
+
+.my-need-sub-card__need-summary h4 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: rgba(248, 250, 252, 0.58);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-size: var(--my-need-sub-card-label-size);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  line-height: 1.1;
+}
+
+.my-need-sub-card__need-summary strong {
+  color: var(--lime);
+  font-size: var(--my-need-sub-card-body-size);
+  font-weight: var(--my-need-sub-card-body-weight);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.my-need-sub-card__needs-group p {
+  min-width: 0;
+  margin: 0 0 0 24px;
+  overflow: hidden;
+  color: rgba(248, 250, 252, 0.86);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--my-need-sub-card-body-size);
+  font-weight: var(--my-need-sub-card-body-weight);
+}
+
+.my-need-sub-card__footer {
+  min-height: 42px;
+  margin-top: auto;
+  padding: 0 14px;
+  border-top: 1px solid rgba(248, 250, 252, 0.06);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.my-need-sub-card__footer span {
+  min-width: 0;
+  color: rgba(248, 250, 252, 0.84);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--my-need-sub-card-body-size);
+  font-weight: var(--my-need-sub-card-body-weight);
+}
+
+.my-need-sub-card__footer svg {
+  width: 17px;
+  height: 17px;
+  color: var(--lime);
+}
+
+.my-need-sub-card__arrow {
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  border: 1px solid rgba(248, 250, 252, 0.16);
+  border-radius: 999px;
+  color: rgba(248, 250, 252, 0.92) !important;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.065), rgba(248, 250, 252, 0.018)),
+    rgba(13, 22, 31, 0.99);
+  display: grid !important;
+  flex: 0 0 24px;
+  place-items: center;
+  font-size: 1.12rem !important;
+  line-height: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(248, 250, 252, 0.14),
+    inset 0 -1px 0 rgba(1, 4, 9, 0.62),
+    0 1px 0 rgba(1, 4, 9, 0.48),
+    0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 160ms ease;
+}
+
+.my-need-sub-card:hover .my-need-sub-card__arrow {
+  transform: translateX(1px);
+}
+
 .my-games-state {
   min-height: 300px;
   margin-top: 0;
-  border: 1px dashed rgba(248, 250, 252, 0.18);
-  border-radius: 14px;
+  padding: 30px 22px;
+  border: 1px dashed rgba(248, 250, 252, 0.2);
+  border-radius: 8px;
   display: grid;
   place-items: center;
   align-content: center;
@@ -154,6 +576,41 @@
 .my-games-state h2,
 .my-games-state p {
   margin: 0;
+}
+
+.my-games-state h2 {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.my-games-state p {
+  max-width: 34rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.my-games-state__action {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid rgba(184, 255, 36, 0.42);
+  border-radius: 8px;
+  color: var(--lime);
+  background: rgba(184, 255, 36, 0.12);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.my-games-state__action:hover {
+  filter: brightness(1.05);
+}
+
+.my-games-state__action:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
 }
 
 .my-games-skeleton {
@@ -193,6 +650,7 @@
 }
 
 @media (max-width: 1440px) {
+  .my-games-timeline--date-dividers .my-games-agenda-grid,
   .my-games-agenda-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -203,6 +661,7 @@
 }
 
 @media (max-width: 1180px) {
+  .my-games-timeline--date-dividers .my-games-agenda-grid,
   .my-games-agenda-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -217,6 +676,7 @@
 }
 
 @media (max-width: 900px) {
+  .my-games-timeline--date-dividers .my-games-agenda-grid,
   .my-games-agenda-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -227,16 +687,80 @@
 }
 
 @media (max-width: 760px) {
+  .my-games-section-header {
+    gap: 10px;
+  }
+
   .my-games-agenda-day {
     gap: 14px;
+  }
+
+  .my-games-agenda-day__header h2 {
+    width: 100%;
   }
 
   .my-games-view-more {
     width: 100%;
   }
+
+  .my-games-load-more-error {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .my-games-load-more-error button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .my-games-timeline--date-dividers {
+    gap: 36px;
+  }
+
+  .my-games-timeline--date-dividers .my-games-agenda-day {
+    gap: 24px;
+  }
+
+  .my-games-timeline--date-dividers .my-games-agenda-day__header {
+    min-height: 50px;
+    grid-template-columns: max-content minmax(18px, 1fr) auto;
+  }
+
+  .my-games-timeline--date-dividers .my-games-agenda-day__header h2 {
+    min-width: 188px;
+    min-height: 50px;
+    padding: 0 14px;
+    border-radius: 8px;
+    gap: 10px;
+  }
+
+  .my-games-timeline--date-dividers .my-games-agenda-day__label {
+    font-size: 1rem;
+  }
+
+  .my-games-timeline--date-dividers .my-games-agenda-day__header h2 svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  .my-games-agenda-day__rule {
+    height: 3px;
+  }
+
+  .my-games-agenda-day__count {
+    padding-left: 12px;
+    font-size: 0.76rem;
+  }
+
+  .my-games-timeline--date-dividers .my-games-agenda-grid {
+    gap: 12px;
+  }
 }
 
 @media (max-width: 360px) {
+  .my-games-timeline--date-dividers .my-games-agenda-grid,
   .my-games-agenda-grid {
     grid-template-columns: 1fr;
   }

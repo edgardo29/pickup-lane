@@ -4,8 +4,10 @@
 # Python
 __pycache__/
 *.pyc
+*.bak
 .venv/
 venv/
+backend/.mutmut-cache
 
 # Env files
 .env

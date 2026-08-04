@@ -14,7 +14,7 @@ function BrowseGamesPage() {
       {page.status === 'loading' ? (
         <BrowseGamesSkeleton />
       ) : (
-        <>
+        <div className="browse-content pl-motion-enter pl-motion-enter--fade">
           <AppPageHeader title="Browse Games" subtitle="Find open pickup games near you." />
 
           <section className="browse-panel" aria-label="Available games">
@@ -72,7 +72,7 @@ function BrowseGamesPage() {
               </>
             )}
           </section>
-        </>
+        </div>
       )}
     </AppPageShell>
   )

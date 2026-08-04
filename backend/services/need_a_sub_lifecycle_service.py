@@ -60,18 +60,21 @@ def add_request_status_history(
     changed_by_user_id: uuid.UUID | None,
     change_source: str,
     change_reason: str | None = None,
+    changed_at: datetime | None = None,
 ) -> None:
-    db.add(
-        SubPostRequestStatusHistory(
-            id=uuid.uuid4(),
-            sub_post_request_id=sub_request.id,
-            old_status=old_status,
-            new_status=new_status,
-            changed_by_user_id=changed_by_user_id,
-            change_source=change_source,
-            change_reason=change_reason,
-        )
+    history = SubPostRequestStatusHistory(
+        id=uuid.uuid4(),
+        sub_post_request_id=sub_request.id,
+        old_status=old_status,
+        new_status=new_status,
+        changed_by_user_id=changed_by_user_id,
+        change_source=change_source,
+        change_reason=change_reason,
     )
+    if changed_at is not None:
+        history.created_at = changed_at
+
+    db.add(history)
 
 
 def change_request_status(
@@ -110,6 +113,7 @@ def change_request_status(
         changed_by_user_id=changed_by_user_id,
         change_source=change_source,
         change_reason=change_reason,
+        changed_at=current_time,
     )
 
 

@@ -7,9 +7,9 @@ from datetime import date, datetime, timedelta
 from json import JSONDecodeError, dumps, loads
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from backend.models import (
     AdminAction,
@@ -17,11 +17,14 @@ from backend.models import (
     SubPost,
     SubPostPosition,
     SubPostRequest,
+    SubPostRequestStatusHistory,
     User,
 )
 from backend.schemas.sub_post_schema import (
     MAX_SUB_POST_POSITION_ROWS,
     MAX_SUB_POST_TOTAL_SUBS,
+    MyNeedASubCardRead,
+    MyNeedASubListRead,
     SubPostCreate,
     SubPostListRead,
     SubPostUpdate,
@@ -75,6 +78,12 @@ from backend.services.sub_post_chat_service import (
 SUB_POST_CARD_DEFAULT_LIMIT = 40
 SUB_POST_CARD_MAX_LIMIT = 100
 SUB_POST_CARD_VALID_VIEWS = {"all", "mine"}
+MY_NEED_A_SUB_CARD_DEFAULT_LIMIT = 40
+MY_NEED_A_SUB_CARD_MAX_LIMIT = 100
+MY_NEED_A_SUB_CURSOR_DOMAIN = "need-a-sub"
+MY_NEED_A_SUB_DETAIL_ACCESS_HOURS = 24
+MY_NEED_A_SUB_VALID_VIEWS = {"upcoming", "history"}
+MY_NEED_A_SUB_HISTORY_WINDOW_DAYS = 60
 
 
 def get_sub_post_or_404(db: Session, sub_post_id: uuid.UUID) -> SubPost:
@@ -766,16 +775,26 @@ def user_can_view_private_sub_post(
     if is_publicly_visible_sub_post(sub_post):
         return True
 
-    if sub_post.post_status not in {"active", "completed", "expired"}:
+    if sub_post.post_status in {"cancelled", "removed"}:
         return False
 
-    chat_access_closes_at = ensure_aware(sub_post.ends_at) + timedelta(hours=24)
-    if now_utc() > chat_access_closes_at:
+    detail_access_closes_at = ensure_aware(sub_post.ends_at) + timedelta(
+        hours=MY_NEED_A_SUB_DETAIL_ACCESS_HOURS
+    )
+    if now_utc() > detail_access_closes_at:
         return False
 
     if sub_post.owner_user_id == user.id:
         return True
 
+    return user_has_current_confirmed_sub_post_request(db, sub_post, user)
+
+
+def user_has_current_confirmed_sub_post_request(
+    db: Session,
+    sub_post: SubPost,
+    user: User,
+) -> bool:
     return (
         db.scalar(
             select(SubPostRequest.id).where(
@@ -911,6 +930,342 @@ def list_sub_post_cards(
         next_cursor=next_cursor,
         has_more=has_more,
         limit=effective_limit,
+    )
+
+
+def list_my_need_a_sub_cards(
+    db: Session,
+    current_user: User,
+    *,
+    view: str = "upcoming",
+    limit: int = MY_NEED_A_SUB_CARD_DEFAULT_LIMIT,
+    cursor: str | None = None,
+) -> MyNeedASubListRead:
+    expire_due_posts_and_requests(db)
+
+    normalized_view = view.strip().lower()
+    if normalized_view not in MY_NEED_A_SUB_VALID_VIEWS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="view must be 'upcoming' or 'history'.",
+        )
+
+    sort_direction = "asc" if normalized_view == "upcoming" else "desc"
+    effective_limit = min(limit, MY_NEED_A_SUB_CARD_MAX_LIMIT)
+    cursor_payload = decode_my_need_a_sub_cursor(cursor) if cursor else None
+    validate_my_need_a_sub_cursor_context(
+        cursor_payload,
+        view=normalized_view,
+        sort_direction=sort_direction,
+    )
+
+    current_time = now_utc()
+    history_cutoff = current_time - timedelta(days=MY_NEED_A_SUB_HISTORY_WINDOW_DAYS)
+    is_owner_relationship = SubPost.owner_user_id == current_user.id
+    has_confirmed_request = exists().where(
+        SubPostRequest.sub_post_id == SubPost.id,
+        SubPostRequest.requester_user_id == current_user.id,
+        SubPostRequest.request_status == "confirmed",
+    )
+    latest_request_status_history = aliased(SubPostRequestStatusHistory)
+    latest_request_status_history_id = (
+        select(latest_request_status_history.id)
+        .where(latest_request_status_history.sub_post_request_id == SubPostRequest.id)
+        .order_by(
+            latest_request_status_history.created_at.desc(),
+            latest_request_status_history.id.desc(),
+        )
+        .limit(1)
+        .correlate(SubPostRequest)
+        .scalar_subquery()
+    )
+    has_confirmed_whole_post_cancellation_request = exists().where(
+        SubPostRequest.sub_post_id == SubPost.id,
+        SubPostRequest.requester_user_id == current_user.id,
+        SubPostRequest.request_status == "canceled_by_owner",
+        SubPostRequest.canceled_at == SubPost.canceled_at,
+        exists().where(
+            (
+                SubPostRequestStatusHistory.sub_post_request_id
+                == SubPostRequest.id
+            ),
+            SubPostRequestStatusHistory.old_status == "confirmed",
+            SubPostRequestStatusHistory.new_status == "canceled_by_owner",
+            SubPostRequestStatusHistory.change_source == "owner",
+            SubPostRequestStatusHistory.created_at == SubPost.canceled_at,
+            SubPostRequestStatusHistory.id == latest_request_status_history_id,
+        ),
+    )
+
+    statement = select(SubPost).where(SubPost.post_status != "removed")
+
+    if normalized_view == "upcoming":
+        statement = statement.where(
+            SubPost.ends_at > current_time,
+            SubPost.post_status != "cancelled",
+            or_(is_owner_relationship, has_confirmed_request),
+        )
+    else:
+        ended_history_condition = and_(
+            SubPost.post_status != "cancelled",
+            SubPost.ends_at <= current_time,
+            or_(is_owner_relationship, has_confirmed_request),
+        )
+        cancelled_history_condition = and_(
+            SubPost.post_status == "cancelled",
+            or_(
+                is_owner_relationship,
+                has_confirmed_whole_post_cancellation_request,
+            ),
+        )
+        statement = statement.where(
+            SubPost.ends_at >= history_cutoff,
+            or_(ended_history_condition, cancelled_history_condition),
+        )
+
+    if cursor_payload is not None:
+        statement = statement.where(
+            build_my_need_a_sub_cursor_filter(
+                cursor_payload,
+                sort_direction=sort_direction,
+            )
+        )
+
+    if sort_direction == "asc":
+        statement = statement.order_by(
+            SubPost.starts_at.asc(),
+            SubPost.created_at.asc(),
+            SubPost.id.asc(),
+        )
+    else:
+        statement = statement.order_by(
+            SubPost.starts_at.desc(),
+            SubPost.created_at.desc(),
+            SubPost.id.desc(),
+        )
+
+    posts = list(db.scalars(statement.limit(effective_limit + 1)).all())
+    page_posts = posts[:effective_limit]
+    has_more = len(posts) > effective_limit
+    requests_by_post_id = load_my_need_a_sub_user_requests(
+        db,
+        page_posts,
+        current_user,
+    )
+    serialized_posts = serialize_public_sub_posts_for_list(db, page_posts)
+    serialized_posts_by_id = {post["id"]: post for post in serialized_posts}
+
+    items = [
+        build_my_need_a_sub_card_read(
+            db,
+            post,
+            serialized_posts_by_id[post.id],
+            requests_by_post_id.get(post.id),
+            current_user=current_user,
+            bucket=normalized_view,
+        )
+        for post in page_posts
+    ]
+
+    next_cursor = None
+    if has_more and page_posts:
+        next_cursor = encode_my_need_a_sub_cursor(
+            post=page_posts[-1],
+            view=normalized_view,
+            sort_direction=sort_direction,
+        )
+
+    return MyNeedASubListRead(
+        items=items,
+        next_cursor=next_cursor,
+        has_more=has_more,
+        limit=effective_limit,
+    )
+
+
+def load_my_need_a_sub_user_requests(
+    db: Session,
+    posts: list[SubPost],
+    current_user: User,
+) -> dict[uuid.UUID, SubPostRequest]:
+    if not posts:
+        return {}
+
+    post_ids = [post.id for post in posts]
+    requests = list(
+        db.scalars(
+            select(SubPostRequest)
+            .where(
+                SubPostRequest.sub_post_id.in_(post_ids),
+                SubPostRequest.requester_user_id == current_user.id,
+            )
+            .order_by(SubPostRequest.created_at.desc())
+        ).all()
+    )
+    requests.sort(key=get_my_need_a_sub_request_priority)
+    requests_by_post_id: dict[uuid.UUID, SubPostRequest] = {}
+    for sub_request in requests:
+        requests_by_post_id.setdefault(sub_request.sub_post_id, sub_request)
+
+    return requests_by_post_id
+
+
+def get_my_need_a_sub_request_priority(sub_request: SubPostRequest) -> int:
+    if sub_request.request_status == "confirmed":
+        return 0
+    if sub_request.request_status == "canceled_by_owner":
+        return 1
+    return 2
+
+
+def build_my_need_a_sub_card_read(
+    db: Session,
+    post: SubPost,
+    serialized_post: dict,
+    sub_request: SubPostRequest | None,
+    *,
+    current_user: User,
+    bucket: str,
+) -> MyNeedASubCardRead:
+    is_owner = post.owner_user_id == current_user.id
+    status_label, status_tone = get_my_need_a_sub_status(
+        post,
+        bucket=bucket,
+        is_owner=is_owner,
+    )
+
+    return MyNeedASubCardRead(
+        bucket=bucket,
+        can_view_detail=user_can_view_private_sub_post(db, post, current_user),
+        post=serialized_post,
+        is_owner=is_owner,
+        request_id=sub_request.id if sub_request is not None else None,
+        request_status=sub_request.request_status if sub_request is not None else None,
+        status_label=status_label,
+        status_tone=status_tone,
+    )
+
+
+def get_my_need_a_sub_status(
+    post: SubPost,
+    *,
+    bucket: str,
+    is_owner: bool,
+) -> tuple[str, str]:
+    if post.post_status == "cancelled":
+        return "Cancelled", "cancelled"
+
+    if bucket == "history":
+        return "Ended", "ended"
+
+    if is_owner:
+        return "Your Post", "owner"
+
+    return "Confirmed", "confirmed"
+
+
+def encode_my_need_a_sub_cursor(
+    *,
+    post: SubPost,
+    view: str,
+    sort_direction: str,
+) -> str:
+    payload = {
+        "domain": MY_NEED_A_SUB_CURSOR_DOMAIN,
+        "view": view,
+        "sort_direction": sort_direction,
+        "starts_at": post.starts_at.isoformat(),
+        "created_at": post.created_at.isoformat(),
+        "id": str(post.id),
+    }
+    serialized = dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return urlsafe_b64encode(serialized).decode("ascii")
+
+
+def decode_my_need_a_sub_cursor(cursor: str | None) -> dict[str, object] | None:
+    if cursor is None:
+        return None
+
+    try:
+        decoded = urlsafe_b64decode(cursor.encode("ascii"))
+        payload = loads(decoded.decode("utf-8"))
+    except (BinasciiError, JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    required_keys = {
+        "domain",
+        "view",
+        "sort_direction",
+        "starts_at",
+        "created_at",
+        "id",
+    }
+    if not required_keys.issubset(payload.keys()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor is invalid.",
+        )
+
+    return payload
+
+
+def validate_my_need_a_sub_cursor_context(
+    cursor_payload: dict[str, object] | None,
+    *,
+    view: str,
+    sort_direction: str,
+) -> None:
+    if cursor_payload is None:
+        return
+
+    if (
+        cursor_payload["view"] != view
+        or cursor_payload["domain"] != MY_NEED_A_SUB_CURSOR_DOMAIN
+        or cursor_payload["sort_direction"] != sort_direction
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="cursor does not match the current query.",
+        )
+
+
+def build_my_need_a_sub_cursor_filter(
+    cursor_payload: dict[str, object],
+    *,
+    sort_direction: str,
+):
+    starts_at = parse_sub_post_card_cursor_datetime(cursor_payload, "starts_at")
+    created_at = parse_sub_post_card_cursor_datetime(cursor_payload, "created_at")
+    post_id = parse_sub_post_card_cursor_uuid(cursor_payload)
+
+    if sort_direction == "asc":
+        return or_(
+            SubPost.starts_at > starts_at,
+            and_(SubPost.starts_at == starts_at, SubPost.created_at > created_at),
+            and_(
+                SubPost.starts_at == starts_at,
+                SubPost.created_at == created_at,
+                SubPost.id > post_id,
+            ),
+        )
+
+    return or_(
+        SubPost.starts_at < starts_at,
+        and_(SubPost.starts_at == starts_at, SubPost.created_at < created_at),
+        and_(
+            SubPost.starts_at == starts_at,
+            SubPost.created_at == created_at,
+            SubPost.id < post_id,
+        ),
     )
 
 

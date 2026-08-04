@@ -4,6 +4,7 @@ import {
   listMyNeedASubRequests,
   listNeedASubPostRequests,
 } from './needASubApi.js'
+import { ApiRequestError } from '../../lib/apiClient.js'
 
 export function useNeedASubDetailData({
   appUser,
@@ -14,10 +15,12 @@ export function useNeedASubDetailData({
   const [myRequests, setMyRequests] = useState([])
   const [ownerRequests, setOwnerRequests] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isUnavailable, setIsUnavailable] = useState(false)
   const [error, setError] = useState('')
 
   const loadDetail = useCallback(async () => {
     setIsLoading(true)
+    setIsUnavailable(false)
     setError('')
 
     try {
@@ -35,6 +38,14 @@ export function useNeedASubDetailData({
       setMyRequests(requestResponse)
       setOwnerRequests(ownerRequestResponse)
     } catch (loadError) {
+      if (loadError instanceof ApiRequestError && loadError.status === 404) {
+        setPost(null)
+        setMyRequests([])
+        setOwnerRequests([])
+        setIsUnavailable(true)
+        return
+      }
+
       setError(loadError instanceof Error ? loadError.message : 'Unable to load post.')
     } finally {
       setIsLoading(false)
@@ -52,6 +63,7 @@ export function useNeedASubDetailData({
   return {
     error,
     isLoading,
+    isUnavailable,
     loadDetail,
     myRequests,
     ownerRequests,

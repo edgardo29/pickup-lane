@@ -7,7 +7,7 @@ function BrowseTimeSection({ browseTimezone, group }) {
   const groupLabel = formatTimeGroupLabel(group.label)
 
   return (
-    <section className="time-section">
+    <section className="time-section pl-motion-enter">
       <div className="time-section__header">
         <h2 className="time-section__title">
           <span className="time-section__clock" aria-hidden="true">
@@ -22,8 +22,9 @@ function BrowseTimeSection({ browseTimezone, group }) {
       </div>
 
       <div className="time-section__grid">
-        {group.games.map((game) => (
+        {group.games.map((game, index) => (
           <BrowseGameCard
+            animationIndex={index}
             browseTimezone={browseTimezone}
             game={game}
             key={game.id}

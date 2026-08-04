@@ -14,9 +14,9 @@ export function MyGamesSkeleton() {
         Loading your games
       </p>
 
-      <div className="browse-results my-games-timeline my-games-skeleton" aria-hidden="true">
+      <div className="my-games-timeline my-games-skeleton" aria-hidden="true">
         <section className="my-games-agenda-day">
-          <SkeletonCard className="time-section__header my-games-agenda-day__header my-games-skeleton-day-header">
+          <SkeletonCard className="my-games-agenda-day__header my-games-skeleton-day-header">
             <span className="my-games-skeleton-day-copy">
               <SkeletonCircle size="26px" />
               <SkeletonBlock height="1.25rem" rounded width="8.6rem" />
@@ -25,8 +25,8 @@ export function MyGamesSkeleton() {
 
           <AppCardGrid className="my-games-agenda-grid">
             {skeletonCards.map((card) => (
-              <SkeletonCard className="game-card browse-skeleton-card my-games-skeleton-card" key={card}>
-                <SkeletonBlock className="browse-skeleton-card-media my-games-skeleton-card-media" />
+              <SkeletonCard className="game-card my-games-skeleton-card" key={card}>
+                <SkeletonBlock className="my-games-skeleton-card-media" />
 
                 <div className="game-card__body my-games-skeleton-card-body">
                   <div className="my-games-skeleton-card-heading">
@@ -38,7 +38,7 @@ export function MyGamesSkeleton() {
                   <SkeletonBlock height="0.78rem" rounded width="54%" />
                 </div>
 
-                <div className="game-card__footer browse-skeleton-card-footer">
+                <div className="game-card__footer my-games-skeleton-card-footer">
                   <SkeletonBlock height="0.82rem" rounded width="4.8rem" />
                   <SkeletonBlock height="0.82rem" rounded width="2.2rem" />
                 </div>

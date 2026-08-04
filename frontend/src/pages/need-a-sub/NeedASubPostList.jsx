@@ -108,7 +108,7 @@ function NeedASubPostCard({ onOpenPost, post }) {
 
   return (
     <article
-      className="need-sub-post"
+      className="need-sub-post app-hover-card"
       role="button"
       tabIndex={0}
       onClick={() => onOpenPost(post)}

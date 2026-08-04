@@ -266,3 +266,21 @@ class SubPostListRead(BaseModel):
     next_cursor: str | None = None
     has_more: bool = False
     limit: int = 40
+
+
+class MyNeedASubCardRead(BaseModel):
+    bucket: str
+    can_view_detail: bool = False
+    post: SubPostPublicRead
+    is_owner: bool
+    request_id: UUID | None = None
+    request_status: str | None = None
+    status_label: str
+    status_tone: str
+
+
+class MyNeedASubListRead(BaseModel):
+    items: list[MyNeedASubCardRead]
+    next_cursor: str | None = None
+    has_more: bool = False
+    limit: int = 40
