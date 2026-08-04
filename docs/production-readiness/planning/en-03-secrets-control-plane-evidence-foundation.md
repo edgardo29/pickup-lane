@@ -117,9 +117,9 @@ The EN-03 [provider evidence handling standard](../governance/provider-evidence-
 
 ## INBOX_TOKEN_SECRET Fallback Risk
 
-Repository source references `INBOX_TOKEN_SECRET` for inbox token signing. If that variable is unset, the current implementation falls back to `DATABASE_URL`.
+At EN-03 completion, repository source referenced `INBOX_TOKEN_SECRET` for inbox token signing and fell back to `DATABASE_URL` when that variable was unset.
 
-EN-03 records this as a risk because the inbox token signing secret must be independent from database credentials and any other provider credential. EN-03 does not modify the fallback behavior. Correction belongs to WS02-01 typed settings and environment isolation, followed by WS10 rotation and revocation verification.
+EN-03 recorded this as a risk because the inbox token signing secret must be independent from database credentials and any other provider credential. WS02-01 removes the source fallback and validates independence in typed settings. Deployed secret-store proof, rotation, and revocation evidence still belong to WS10.
 
 ## Control Mapping After EN-03
 
@@ -138,7 +138,7 @@ Later WS10 provider verification and mutation work must collect provider account
 
 Later WS08 work may add secret scanning, CI enforcement, frontend bundle checks, artifact handling enforcement, and checker integration if those controls are approved for that pass.
 
-Later WS02 typed-settings work must correct the `INBOX_TOKEN_SECRET` fallback, enforce environment-specific settings, reject unsafe production defaults, and prove runtime environment separation.
+Later WS02 typed-settings work after WS02-01 must continue environment-specific validation and runtime environment separation proof without reintroducing credential fallbacks.
 
 ## Non-Closure Statement
 

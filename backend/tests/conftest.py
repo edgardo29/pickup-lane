@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
+from backend.settings import reset_settings_cache
 from backend.tests.support.environment_safety import (
     EnvironmentSafetyError,
     assert_cleanup_table_inventory_complete,
@@ -90,6 +91,15 @@ NON_DATABASE_TEST_FILES = {
 _NETWORK_GUARD_RESTORE = None
 
 
+def _install_synthetic_backend_test_settings() -> None:
+    os.environ.setdefault("APP_ENV", "test")
+    os.environ.setdefault("INBOX_TOKEN_SECRET", "synthetic-inbox-test-token")
+    os.environ.setdefault("STRIPE_SECRET_KEY", "synthetic-stripe-secret-key")
+    os.environ.setdefault("STRIPE_PUBLISHABLE_KEY", "synthetic-stripe-publishable-key")
+    os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "synthetic-stripe-webhook-secret")
+    os.environ.setdefault("STRIPE_CURRENCY", "USD")
+
+
 def _is_safe_test_database(database_url: str) -> bool:
     try:
         validate_dedicated_test_database_url(database_url)
@@ -167,6 +177,8 @@ def _restore_backend_network_guard() -> None:
 
 def pytest_sessionstart(session) -> None:
     del session
+    _install_synthetic_backend_test_settings()
+    reset_settings_cache()
     database_url = os.getenv("DATABASE_URL", "")
     try:
         _install_backend_network_guard(database_url)
@@ -178,6 +190,7 @@ def pytest_sessionstart(session) -> None:
 
 def pytest_sessionfinish(session, exitstatus) -> None:
     del session, exitstatus
+    reset_settings_cache()
     _restore_backend_network_guard()
 
 
@@ -213,10 +226,20 @@ def client() -> TestClient:
 @pytest.fixture(autouse=True)
 def enable_stripe_payments_for_existing_tests(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ENABLE_STRIPE_PAYMENTS", "true")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "synthetic-stripe-secret-key")
+    monkeypatch.setenv("STRIPE_PUBLISHABLE_KEY", "synthetic-stripe-publishable-key")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "synthetic-stripe-webhook-secret")
+    monkeypatch.setenv("INBOX_TOKEN_SECRET", "synthetic-inbox-test-token")
+    reset_settings_cache()
+    yield
+    reset_settings_cache()
 
 
 @pytest.fixture(autouse=True)
-def clean_database(request: pytest.FixtureRequest):
+def clean_database(
+    request: pytest.FixtureRequest,
+    enable_stripe_payments_for_existing_tests,
+):
     if not _test_uses_database(request):
         yield
         return

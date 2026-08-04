@@ -1,20 +1,11 @@
-import os
-from pathlib import Path
 from typing import Generator
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-# Load backend-specific environment variables from the backend folder so the
-# database configuration works the same way from the project root or from tools
-# like Alembic.
-load_dotenv(Path(__file__).resolve().parent / ".env")
+from backend.settings import get_database_url
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is not set.")
+DATABASE_URL = get_database_url()
 
 
 # Base is the shared declarative parent for all SQLAlchemy models in the app.

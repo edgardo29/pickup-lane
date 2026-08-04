@@ -144,9 +144,11 @@ Prohibited label names include:
 - free-form text
 - raw route parameters
 
-Label values must be bounded code tokens or approved environment values. Values
-that look like UUIDs, provider IDs, emails, phone numbers, URLs, object keys,
-exception messages, or free text are rejected.
+Label values must be bounded code tokens or approved environment values.
+Approved environment values are `ci`, `development`, `local`, `preview`,
+`production`, `staging`, and `test`. Values that look like UUIDs, provider IDs,
+emails, phone numbers, URLs, object keys, exception messages, or free text are
+rejected.
 
 ## Redaction Rules
 

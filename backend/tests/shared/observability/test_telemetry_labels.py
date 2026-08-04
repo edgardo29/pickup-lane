@@ -82,6 +82,10 @@ def test_unapproved_environment_is_rejected():
         validate_telemetry_label("environment", "qa_personal")
 
 
+def test_preview_environment_is_approved():
+    assert validate_telemetry_label("environment", "preview") == "preview"
+
+
 @pytest.mark.parametrize(
     "route_template",
     [

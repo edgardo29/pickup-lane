@@ -1,10 +1,9 @@
 from dataclasses import dataclass
-import os
 from typing import Any
 
+from backend.settings import SUPPORTED_STRIPE_CURRENCY, SettingsError, get_settings
 
-DEFAULT_STRIPE_CURRENCY = "USD"
-STRIPE_PAYMENTS_ENABLED_VALUES = {"1", "true", "yes", "on"}
+DEFAULT_STRIPE_CURRENCY = SUPPORTED_STRIPE_CURRENCY
 
 
 class StripeConfigError(RuntimeError):
@@ -55,22 +54,15 @@ class StripePaymentMethodCardResult:
 
 
 def get_stripe_currency() -> str:
-    currency = os.getenv("STRIPE_CURRENCY", DEFAULT_STRIPE_CURRENCY).strip().upper()
-    if currency != DEFAULT_STRIPE_CURRENCY:
-        raise StripeConfigError("Pickup Lane Stripe payments currently support USD only.")
-
-    return currency
+    return _stripe_settings().stripe_currency
 
 
 def stripe_payments_enabled() -> bool:
-    return (
-        os.getenv("ENABLE_STRIPE_PAYMENTS", "").strip().lower()
-        in STRIPE_PAYMENTS_ENABLED_VALUES
-    )
+    return _stripe_settings().enable_stripe_payments
 
 
 def get_stripe_publishable_key() -> str:
-    publishable_key = os.getenv("STRIPE_PUBLISHABLE_KEY", "").strip()
+    publishable_key = _stripe_settings().stripe_publishable_key_value
     if not publishable_key:
         raise StripeConfigError("STRIPE_PUBLISHABLE_KEY is not configured.")
 
@@ -78,7 +70,7 @@ def get_stripe_publishable_key() -> str:
 
 
 def get_stripe_webhook_secret() -> str:
-    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+    webhook_secret = _stripe_settings().stripe_webhook_secret_value
     if not webhook_secret:
         raise StripeConfigError("STRIPE_WEBHOOK_SECRET is not configured.")
 
@@ -86,7 +78,7 @@ def get_stripe_webhook_secret() -> str:
 
 
 def get_stripe_secret_key() -> str:
-    secret_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
+    secret_key = _stripe_settings().stripe_secret_key_value
     if not secret_key:
         raise StripeConfigError("STRIPE_SECRET_KEY is not configured.")
 
@@ -106,6 +98,13 @@ def get_stripe_module() -> Any:
 
     stripe.api_key = get_stripe_secret_key()
     return stripe
+
+
+def _stripe_settings():
+    try:
+        return get_settings()
+    except SettingsError as exc:
+        raise StripeConfigError(str(exc)) from exc
 
 
 def normalize_metadata(metadata: dict[str, object]) -> dict[str, str]:

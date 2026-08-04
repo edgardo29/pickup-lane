@@ -1,4 +1,3 @@
-import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
@@ -6,6 +5,12 @@ from urllib.parse import quote
 import boto3
 from botocore.client import Config
 from botocore.exceptions import BotoCoreError, ClientError
+
+from backend.settings import (
+    DEFAULT_R2_ALLOWED_IMAGE_TYPES,
+    SettingsError,
+    get_settings,
+)
 
 
 class R2StorageConfigError(RuntimeError):
@@ -48,44 +53,20 @@ class R2StorageConfig:
     allowed_image_types: frozenset[str]
 
 
-DEFAULT_ALLOWED_IMAGE_TYPES = frozenset(
-    {
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-    }
-)
-
-
-def get_env_int(name: str, default: int) -> int:
-    value = os.getenv(name)
-    if not value:
-        return default
-
-    try:
-        return int(value)
-    except ValueError as exc:
-        raise R2StorageConfigError(f"{name} must be an integer.") from exc
+DEFAULT_ALLOWED_IMAGE_TYPES = DEFAULT_R2_ALLOWED_IMAGE_TYPES
 
 
 def get_allowed_image_types() -> frozenset[str]:
-    configured_types = os.getenv("R2_ALLOWED_IMAGE_TYPES")
-    if not configured_types:
-        return DEFAULT_ALLOWED_IMAGE_TYPES
-
-    return frozenset(
-        content_type.strip().lower()
-        for content_type in configured_types.split(",")
-        if content_type.strip()
-    )
+    return _storage_settings().r2_allowed_image_types
 
 
 def get_r2_storage_config() -> R2StorageConfig:
-    account_id = os.getenv("R2_ACCOUNT_ID", "").strip()
-    access_key_id = os.getenv("R2_ACCESS_KEY_ID", "").strip()
-    secret_access_key = os.getenv("R2_SECRET_ACCESS_KEY", "").strip()
-    endpoint_url = os.getenv("R2_ENDPOINT_URL", "").strip().rstrip("/")
-    bucket_name = os.getenv("R2_BUCKET_NAME", "").strip()
+    settings = _storage_settings()
+    account_id = settings.r2_account_id
+    access_key_id = settings.r2_access_key_id_value
+    secret_access_key = settings.r2_secret_access_key_value
+    endpoint_url = settings.r2_endpoint_url
+    bucket_name = settings.r2_bucket_name
 
     if not account_id:
         raise R2StorageConfigError("R2_ACCOUNT_ID is not set.")
@@ -96,9 +77,6 @@ def get_r2_storage_config() -> R2StorageConfig:
     if not secret_access_key:
         raise R2StorageConfigError("R2_SECRET_ACCESS_KEY is not set.")
 
-    if not endpoint_url:
-        endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
-
     if not bucket_name:
         raise R2StorageConfigError("R2_BUCKET_NAME is not set.")
 
@@ -108,11 +86,18 @@ def get_r2_storage_config() -> R2StorageConfig:
         secret_access_key=secret_access_key,
         endpoint_url=endpoint_url,
         bucket_name=bucket_name,
-        upload_url_minutes=get_env_int("R2_UPLOAD_URL_MINUTES", 15),
-        read_url_minutes=get_env_int("R2_READ_URL_MINUTES", 60),
-        max_image_bytes=get_env_int("R2_MAX_IMAGE_BYTES", 8 * 1024 * 1024),
-        allowed_image_types=get_allowed_image_types(),
+        upload_url_minutes=settings.r2_upload_url_minutes,
+        read_url_minutes=settings.r2_read_url_minutes,
+        max_image_bytes=settings.r2_max_image_bytes,
+        allowed_image_types=settings.r2_allowed_image_types,
     )
+
+
+def _storage_settings():
+    try:
+        return get_settings()
+    except SettingsError as exc:
+        raise R2StorageConfigError(str(exc)) from exc
 
 
 def get_r2_client(config: R2StorageConfig | None = None):

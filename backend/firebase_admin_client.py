@@ -1,12 +1,10 @@
 import json
 import os
-from pathlib import Path
 
 import firebase_admin
-from dotenv import load_dotenv
 from firebase_admin import auth, credentials
 
-load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
+from backend.settings import SettingsError, get_settings
 
 FIREBASE_TOKEN_CLOCK_SKEW_SECONDS = 10
 
@@ -24,18 +22,17 @@ def initialize_firebase_admin() -> None:
 
 
 def _load_firebase_credentials() -> credentials.Certificate:
-    credentials_json = os.getenv("FIREBASE_ADMIN_CREDENTIALS_JSON", "").strip()
-    if credentials_json:
-        try:
-            credentials_info = json.loads(credentials_json)
-        except json.JSONDecodeError as exc:
-            raise FirebaseAdminConfigError(
-                "FIREBASE_ADMIN_CREDENTIALS_JSON must be valid JSON."
-            ) from exc
+    try:
+        settings = get_settings()
+    except SettingsError as exc:
+        raise FirebaseAdminConfigError(str(exc)) from exc
 
+    credentials_json = settings.firebase_admin_credentials_json_value
+    if credentials_json:
+        credentials_info = json.loads(credentials_json)
         return credentials.Certificate(credentials_info)
 
-    credentials_path = os.getenv("FIREBASE_ADMIN_CREDENTIALS", "").strip()
+    credentials_path = settings.firebase_admin_credentials_value
     if not credentials_path:
         raise FirebaseAdminConfigError(
             "FIREBASE_ADMIN_CREDENTIALS_JSON or FIREBASE_ADMIN_CREDENTIALS is required."

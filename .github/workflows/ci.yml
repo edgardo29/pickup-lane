@@ -112,6 +112,7 @@ jobs:
           --health-retries 5
 
     env:
+      APP_ENV: ci
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_test_db
       PYTHONPATH: ${{ github.workspace }}
 
