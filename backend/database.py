@@ -30,6 +30,12 @@ def check_database_connection() -> bool:
     return True
 
 
+def dispose_database_engine() -> None:
+    # Dispose pooled connections during application shutdown without changing
+    # pool sizing or connection behavior.
+    engine.dispose()
+
+
 def get_db() -> Generator[Session, None, None]:
     # Yield one session per request and always close it afterward so
     # connections do not get left open.

@@ -1,10 +1,12 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.database import check_database_connection
+from backend.database import check_database_connection, dispose_database_engine
 from backend.routes import (
     admin_actions_router,
     admin_rejected_attempts_router,
@@ -65,6 +67,17 @@ from backend.settings import BackendSettings, get_settings
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
+NO_STORE_CACHE_CONTROL = "no-store"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.lifecycle_started = True
+    try:
+        yield
+    finally:
+        app.state.lifecycle_started = False
+        dispose_database_engine()
 
 
 def create_app(settings: BackendSettings | None = None) -> FastAPI:
@@ -75,7 +88,10 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
         docs_url="/docs" if api_docs_enabled else None,
         redoc_url="/redoc" if api_docs_enabled else None,
         openapi_url="/openapi.json" if api_docs_enabled else None,
+        lifespan=lifespan,
     )
+    app.state.lifecycle_started = False
+    app.state.release_identity = backend_settings.release_identity
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     app.add_middleware(
@@ -90,15 +106,77 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     def read_root():
         return {"message": "Backend is running"}
 
+    @app.get("/live")
+    def live():
+        if not _lifecycle_started(app):
+            return _health_response(
+                app,
+                "not_live",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return _health_response(app, "live")
+
+    @app.get("/ready")
+    def ready():
+        if not _lifecycle_started(app):
+            return _health_response(
+                app,
+                "not_ready",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if not _database_ready():
+            return _health_response(
+                app,
+                "not_ready",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return _health_response(app, "ready")
+
     if backend_settings.enable_db_health:
 
         @app.get("/db-health")
-        def db_health():
-            check_database_connection()
+        def db_health(response: Response):
+            response.headers["Cache-Control"] = NO_STORE_CACHE_CONTROL
+            if not _database_ready():
+                return JSONResponse(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    headers={"Cache-Control": NO_STORE_CACHE_CONTROL},
+                    content={"message": "Database connection is unavailable"},
+                )
             return {"message": "Database connection is working"}
 
     _include_routers(app)
     return app
+
+
+def _lifecycle_started(app: FastAPI) -> bool:
+    return bool(getattr(app.state, "lifecycle_started", False))
+
+
+def _database_ready() -> bool:
+    try:
+        check_database_connection()
+    except Exception:  # noqa: BLE001 - health probes must not expose diagnostics.
+        return False
+    return True
+
+
+def _health_response(
+    app: FastAPI,
+    health_status: str,
+    *,
+    status_code: int = status.HTTP_200_OK,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        headers={"Cache-Control": NO_STORE_CACHE_CONTROL},
+        content={
+            "status": health_status,
+            "release": getattr(app.state, "release_identity", "source-unavailable"),
+        },
+    )
 
 
 def _include_routers(app: FastAPI) -> None:
