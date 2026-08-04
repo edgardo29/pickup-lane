@@ -68,4 +68,5 @@ deep links work on Vercel.
 
 ## Production Readiness Governance
 
-WS01 governance artifacts live in `docs/production-readiness/README.md`.
+Production-readiness artifacts live in `docs/production-readiness/00-READ-ME-FIRST.md`.
+WS01 governance artifacts live in `docs/production-readiness/governance/README.md`.
