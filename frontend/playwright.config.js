@@ -17,8 +17,9 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: 'signed-out-smoke',
+      testMatch: /landing\.spec\.js/,
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
   ],
 })

@@ -11,6 +11,55 @@ It checks exactly one target at a time:
 
 It does not scan the entire backend test suite.
 
+## Production-Readiness Evidence Rules
+
+The production-readiness taxonomy builds around this checker. It does not
+replace it.
+
+Current backend evidence uses these categories:
+
+- Checker-certified leaf-domain tests: organized page or shared-domain tests
+  with a `_backend_test_contract.py` that pass this checker for the selected
+  target.
+- Organized but not yet checker-certified tests: current page or shared-domain
+  tests that live in the organized tree but do not yet have a contract for their
+  leaf target.
+- Shared backend tests: tests for rules used by more than one page or feature.
+- Checker and compliance self-tests: tests for the backend test harness itself,
+  not application-domain evidence.
+- Legacy historical tests: old valid coverage under `backend/tests/legacy/`.
+
+My Games is currently the contract-certified pilot:
+
+- `backend/tests/pages/my_games/_backend_test_contract.py`
+- `backend/tests/pages/my_games/`
+
+Organized tests without a contract are not yet checker-certified for their
+domain. Empty categories must not be presented as existing coverage.
+
+`backend/tests/legacy/` is historical. It can contain useful scenarios for
+future migration, but it does not count as current production-readiness evidence
+and ordinary current-test discovery excludes it. Do not delete, move, rewrite,
+or count legacy tests as part of EN-01.
+
+Standard backend tests must use synthetic data and must not use development,
+staging, or production resources. Backend test URLs must use a PostgreSQL
+SQLAlchemy driver, such as `postgresql://` or `postgresql+psycopg://`. The
+dedicated PostgreSQL test database name is exactly `pickup_lane_test_db`; a
+database is not accepted merely because its name contains `test`.
+
+Standard backend tests must not make live provider calls. Firebase, Stripe, R2,
+email, and other provider behavior must be mocked at the application-owned
+boundary unless a later provider-integration suite has explicit approved
+sandbox or emulator configuration. Ordinary backend tests may open network
+sockets only to the configured PostgreSQL test host and exact port from the
+approved `DATABASE_URL`; EN-01 does not perform protocol inspection after that
+host-and-port decision. Every other network endpoint is prohibited.
+
+Retries are diagnostic only. A retry success does not erase the original
+failure or become clean evidence by itself. Flaky tests require an owner, a
+reason, and a repair or removal plan.
+
 ## Required Contract
 
 Each checked leaf page/domain directory requires `_backend_test_contract.py`.
@@ -50,7 +99,7 @@ Runtime mode requires:
 Example:
 
 ```bash
-DATABASE_URL='postgresql+psycopg://USER:PASSWORD@localhost:5432/TEST_DATABASE' \
+DATABASE_URL='postgresql+psycopg://USER:PASSWORD@localhost:5432/pickup_lane_test_db' \
 backend/.venv/bin/python \
   backend/tests/check_backend_tests.py \
   pages/my_games \
@@ -68,7 +117,7 @@ Mutation testing is optional targeted hardening. It is not required for normal d
 Example:
 
 ```bash
-DATABASE_URL='postgresql+psycopg://USER:PASSWORD@localhost:5432/TEST_DATABASE' \
+DATABASE_URL='postgresql+psycopg://USER:PASSWORD@localhost:5432/pickup_lane_test_db' \
 backend/.venv/bin/python \
   backend/tests/check_backend_tests.py \
   pages/my_games \
