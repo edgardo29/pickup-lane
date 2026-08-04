@@ -18,12 +18,14 @@ from backend.services.stripe_service import (
     retrieve_payment_method,
     retrieve_setup_intent,
     set_customer_default_payment_method,
+    stripe_payments_enabled,
 )
 from backend.services.user_service import build_user_conflict_detail
 
 ACTIVE_PAYMENT_METHOD_STATUS = "active"
 DETACHED_PAYMENT_METHOD_STATUS = "detached"
 MAX_ACTIVE_PAYMENT_METHODS = 5
+STRIPE_PAYMENTS_DISABLED_DETAIL = "Stripe payments are disabled for this demo."
 
 
 def build_user_payment_method_conflict_detail(exc: IntegrityError) -> str:
@@ -44,6 +46,14 @@ def build_user_payment_method_conflict_detail(exc: IntegrityError) -> str:
 def build_customer_name(user: User) -> str | None:
     name = f"{user.first_name or ''} {user.last_name or ''}".strip()
     return name or user.email
+
+
+def require_stripe_payments_enabled() -> None:
+    if not stripe_payments_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=STRIPE_PAYMENTS_DISABLED_DETAIL,
+        )
 
 
 def ensure_stripe_customer_id(db: Session, current_user: User) -> str:
@@ -91,6 +101,7 @@ def create_saved_payment_method_setup_intent(
     *,
     set_as_default: bool,
 ) -> str:
+    require_stripe_payments_enabled()
     stripe_customer_id = ensure_stripe_customer_id(db, current_user)
 
     try:
@@ -237,6 +248,7 @@ def sync_saved_payment_method(
     setup_intent_id: str,
     set_as_default: bool,
 ) -> UserPaymentMethod:
+    require_stripe_payments_enabled()
     if not current_user.stripe_customer_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -59,11 +59,13 @@ from backend.services.stripe_service import (
     get_stripe_currency,
     map_payment_intent_status,
     retrieve_payment_intent,
+    stripe_payments_enabled,
 )
 from backend.services.user_service import get_user_display_name
 
 CHECKOUT_HOLD_MINUTES = 2
 MINIMUM_USD_PAYMENT_INTENT_AMOUNT_CENTS = 50
+STRIPE_PAYMENTS_DISABLED_DETAIL = "Stripe payments are disabled for this demo."
 
 
 def get_locked_active_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
@@ -120,6 +122,14 @@ def require_checkout_game_open(db_game: Game, current_user: User, now: datetime)
         )
 
     require_roster_window_open(db_game, now, "Checkout is closed for this game.")
+
+
+def require_stripe_payments_enabled() -> None:
+    if not stripe_payments_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=STRIPE_PAYMENTS_DISABLED_DETAIL,
+        )
 
 
 def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) -> None:
@@ -479,6 +489,7 @@ def create_game_checkout_payment_intent_workflow(
     now = datetime.now(timezone.utc)
     db_game = get_locked_active_game_or_404(db, game_id)
     require_checkout_game_open(db_game, current_user, now)
+    require_stripe_payments_enabled()
 
     if db_game.currency != "USD":
         raise HTTPException(

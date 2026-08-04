@@ -100,6 +100,11 @@ def client() -> TestClient:
 
 
 @pytest.fixture(autouse=True)
+def enable_stripe_payments_for_existing_tests(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ENABLE_STRIPE_PAYMENTS", "true")
+
+
+@pytest.fixture(autouse=True)
 def clean_database(client: TestClient):
     from backend.database import engine
     from backend.main import app

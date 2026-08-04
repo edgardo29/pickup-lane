@@ -23,7 +23,11 @@ import {
   getPreferredPaymentMethod,
   getUsablePaymentMethods,
 } from '../../lib/paymentMethodCards.js'
-import { hasStripePublishableKey, stripePromise } from '../../lib/stripe.js'
+import {
+  areStripePaymentsEnabled,
+  hasStripeCheckoutSupport,
+  stripePromise,
+} from '../../lib/stripe.js'
 import '../../styles/browse-games/BrowseGamesPage.css'
 import '../../styles/browse-games/GameCheckoutPage.css'
 
@@ -33,7 +37,11 @@ function GameCheckoutPage() {
   const { gameId } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { appUser, currentUser: firebaseUser, isLoading: isAuthLoading } = useAuth()
+  const {
+    appUser,
+    currentUser: firebaseUser,
+    isLoading: isAuthLoading,
+  } = useAuth()
   const isAddGuestsCheckout = searchParams.get('mode') === 'add-guests'
   const requestedGuestCount = Number.parseInt(searchParams.get('guest_count') || '', 10)
 
@@ -122,7 +130,7 @@ function GameCheckoutPage() {
       return
     }
 
-    if (!firebaseUser || !hasStripePublishableKey()) {
+    if (!firebaseUser || !hasStripeCheckoutSupport()) {
       return
     }
 
@@ -250,13 +258,17 @@ function GameCheckoutPage() {
       !checkout.isWaitlistCheckout &&
       !isAddGuestsCheckout,
   )
-  const isStripeReady = hasStripePublishableKey()
+  const stripePaymentsEnabled = areStripePaymentsEnabled()
+  const isStripeReady = hasStripeCheckoutSupport()
+  const stripePaymentsDisabled = isStripeCheckout && !stripePaymentsEnabled
   const hasReachedSavedCardLimit = checkoutData.paymentMethods.length >= MAX_SAVED_PAYMENT_METHODS
   const canAddPaymentMethod = isStripeReady && !hasReachedSavedCardLimit && setupStatus !== 'loading'
   const selectedUsablePaymentMethod = getUsablePaymentMethods(checkoutData.paymentMethods)
     .find((method) => method.id === effectiveSelectedPaymentMethodId)
-  const usesSavedPaymentMethod = Boolean(isStripeCheckout && selectedUsablePaymentMethod)
-  const stripeUnavailable = isStripeCheckout && !isStripeReady
+  const usesSavedPaymentMethod = Boolean(
+    isStripeCheckout && isStripeReady && selectedUsablePaymentMethod,
+  )
+  const stripeUnavailable = isStripeCheckout && stripePaymentsEnabled && !isStripeReady
   const isExistingParticipantBlocked = Boolean(
     !isAddGuestsCheckout &&
       checkout.existingParticipant &&
@@ -280,13 +292,18 @@ function GameCheckoutPage() {
     }
 
     if (isStripeCheckout) {
-      if (!usesSavedPaymentMethod) {
-        setCheckoutActionError('Add a payment method to continue.')
+      if (stripePaymentsDisabled) {
+        setCheckoutActionError('Official game payments are disabled for this demo.')
         return
       }
 
       if (stripeUnavailable) {
         setCheckoutActionError('Secure payment is not configured.')
+        return
+      }
+
+      if (!usesSavedPaymentMethod) {
+        setCheckoutActionError('Add a payment method to continue.')
         return
       }
 
@@ -338,6 +355,7 @@ function GameCheckoutPage() {
       isSubmitting={isSubmitting}
       isStripeCheckout={isStripeCheckout}
       isStripeReady={isStripeReady}
+      stripePaymentsDisabled={stripePaymentsDisabled}
       isWaitlistCheckout={checkout.isWaitlistCheckout}
       maxGuests={checkout.maxGuests}
       maxSelectableGuests={checkout.maxSelectableGuests}
