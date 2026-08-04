@@ -27,6 +27,11 @@ These WS01 artifacts are governance records. They are not proof that application
 | [Production-readiness audit process](production-readiness-audit-process.md) | Repeatable audit workflow, evidence classes, approval gates, reassessment, result versioning, and unresolved-control handling. | GOV-005, GOV-007 |
 | [Risk and exception register](risk-and-exception-register.md) | Empty governed exception register and required approval process. | GOV-007 |
 | [Reusable templates](templates.md) | Decision, exception, and audit-run templates for future governed changes. | GOV-005, GOV-006, GOV-007 |
+| [Provider control-plane register](provider-control-plane-register.md) | Sanitized register of provider/control-plane ownership, access, MFA, recovery, separation, and evidence gaps. | OPS-005, OPS-025 |
+| [Secret lifecycle register](secret-lifecycle-register.md) | Secret-name and configuration lifecycle register without values. | OPS-006, OPS-007 |
+| [Provider evidence handling standard](provider-evidence-handling-standard.md) | Rules for collecting, sanitizing, reviewing, storing, and replacing provider evidence. | OPS-025 |
+| [Provider evidence checklist](provider-evidence-checklist.md) | Reusable provider evidence checklist with no real account information. | OPS-005, OPS-006, OPS-007, OPS-025 |
+| [EN-03 secrets, control plane, and evidence foundation](../planning/en-03-secrets-control-plane-evidence-foundation.md) | Pass-specific scope, topology, boundaries, control mapping, and deferred evidence. | OPS-005, OPS-006, OPS-007, OPS-025 |
 
 ## Record Types
 
