@@ -15,6 +15,8 @@ from pydantic import BaseModel, ConfigDict, SecretStr
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+from backend.observability.redaction import contains_sensitive_text
+
 
 class SettingsError(RuntimeError):
     """Raised when backend environment configuration is unsafe or invalid."""
@@ -93,6 +95,17 @@ DOCUMENTED_PLACEHOLDER_VALUES = frozenset(
     }
 )
 
+DEFAULT_RELEASE_IDENTITY = "source-unavailable"
+RELEASE_IDENTITY_ENV_NAMES = (
+    "PICKUP_LANE_RELEASE",
+    "RELEASE_IDENTITY",
+    "SOURCE_REVISION",
+    "GITHUB_SHA",
+    "RENDER_GIT_COMMIT",
+    "VERCEL_GIT_COMMIT_SHA",
+)
+_MAX_RELEASE_IDENTITY_LENGTH = 80
+
 _LOCAL_HOSTNAMES = frozenset(
     {
         "localhost",
@@ -110,6 +123,7 @@ class BackendSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     app_env: AppEnvironment
+    release_identity: str = DEFAULT_RELEASE_IDENTITY
     database_url: SecretStr
     inbox_token_secret: SecretStr | None = None
     firebase_admin_credentials_json: SecretStr | None = None
@@ -232,6 +246,7 @@ def build_settings(
         _fail("APP_ENV", "deployed runtimes must set preview, staging, or production explicitly")
 
     database_url = _parse_database_url(env, app_env)
+    release_identity = _parse_release_identity(env)
     cors_origins = _parse_cors_origins(env, app_env) if validate_full else DEFAULT_CORS_ORIGINS
     enable_api_docs = (
         _parse_bool(env, "ENABLE_API_DOCS", default=not app_env.is_production_like)
@@ -260,6 +275,7 @@ def build_settings(
 
     return BackendSettings(
         app_env=app_env,
+        release_identity=release_identity,
         database_url=SecretStr(database_url),
         inbox_token_secret=SecretStr(inbox_token_secret) if inbox_token_secret else None,
         cors_allowed_origins=cors_origins,
@@ -355,6 +371,29 @@ def _parse_database_url(env: Mapping[str, str], app_env: AppEnvironment) -> str:
             _fail("DATABASE_URL", "must not use a staging or preview database name")
 
     return database_url
+
+
+def _parse_release_identity(env: Mapping[str, str]) -> str:
+    for name in RELEASE_IDENTITY_ENV_NAMES:
+        raw_value = env.get(name)
+        if raw_value is None:
+            continue
+        value = raw_value.strip()
+        if not value:
+            continue
+        if len(value) > _MAX_RELEASE_IDENTITY_LENGTH:
+            _fail(name, "must be concise")
+        if any(character.isspace() for character in value):
+            _fail(name, "must not contain whitespace")
+        if any(character in value for character in ("\x00", "/", "\\", "@")):
+            _fail(name, "must not contain sensitive or path-like characters")
+        if contains_sensitive_text(value):
+            _fail(name, "must not contain sensitive data")
+        parsed = urlsplit(value)
+        if parsed.scheme and parsed.netloc:
+            _fail(name, "must not be a URL")
+        return value
+    return DEFAULT_RELEASE_IDENTITY
 
 
 def _parse_cors_origins(
