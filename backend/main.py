@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -62,115 +61,103 @@ from backend.routes import (
     venues_router,
     waitlist_entries_router,
 )
+from backend.settings import BackendSettings, get_settings
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
-FALSE_ENV_VALUES = {"0", "false", "no", "off"}
 
 
-def get_env_flag(name: str, *, default: bool) -> bool:
-    configured_value = os.getenv(name)
-    if configured_value is None:
-        return default
+def create_app(settings: BackendSettings | None = None) -> FastAPI:
+    backend_settings = settings or get_settings()
+    api_docs_enabled = backend_settings.enable_api_docs
 
-    return configured_value.strip().lower() not in FALSE_ENV_VALUES
+    app = FastAPI(
+        docs_url="/docs" if api_docs_enabled else None,
+        redoc_url="/redoc" if api_docs_enabled else None,
+        openapi_url="/openapi.json" if api_docs_enabled else None,
+    )
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(backend_settings.cors_allowed_origins),
+        allow_credentials=backend_settings.cors_allow_credentials,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-def get_cors_origins() -> list[str]:
-    configured_origins = os.getenv("CORS_ALLOWED_ORIGINS")
-    if not configured_origins:
-        return DEFAULT_CORS_ORIGINS
+    @app.get("/")
+    def read_root():
+        return {"message": "Backend is running"}
 
-    return [
-        origin.strip().rstrip("/")
-        for origin in configured_origins.split(",")
-        if origin.strip()
-    ]
+    if backend_settings.enable_db_health:
 
-api_docs_enabled = get_env_flag("ENABLE_API_DOCS", default=True)
+        @app.get("/db-health")
+        def db_health():
+            check_database_connection()
+            return {"message": "Database connection is working"}
 
-app = FastAPI(
-    docs_url="/docs" if api_docs_enabled else None,
-    redoc_url="/redoc" if api_docs_enabled else None,
-    openapi_url="/openapi.json" if api_docs_enabled else None,
-)
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=get_cors_origins(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    _include_routers(app)
+    return app
 
 
-@app.get("/")
-def read_root():
-    return {"message": "Backend is running"}
+def _include_routers(app: FastAPI) -> None:
+    # Include feature-specific routers here so the main app stays small as the API
+    # surface grows.
+    app.include_router(users_router)
+    app.include_router(auth_router)
+    app.include_router(user_settings_router)
+    app.include_router(user_stats_router)
+    app.include_router(user_payment_method_router)
+    app.include_router(venues_router)
+    app.include_router(venue_approval_requests_router)
+    app.include_router(venue_images_router)
+    app.include_router(game_chats_router)
+    app.include_router(game_credits_router)
+    app.include_router(admin_router)
+    app.include_router(admin_users_router)
+    app.include_router(admin_community_games_router)
+    app.include_router(admin_rejected_attempts_router)
+    app.include_router(admin_review_cases_router)
+    app.include_router(admin_game_credits_router)
+    app.include_router(admin_game_images_router)
+    app.include_router(admin_lookups_router)
+    app.include_router(admin_money_router)
+    app.include_router(admin_need_a_sub_router)
+    app.include_router(admin_notifications_router)
+    app.include_router(admin_official_games_router)
+    app.include_router(admin_venue_images_router)
+    app.include_router(game_images_router)
+    app.include_router(chat_messages_router)
+    app.include_router(checkout_router)
+    app.include_router(community_game_details_router)
+    app.include_router(community_games_router)
+    app.include_router(games_router)
+    app.include_router(bookings_router)
+    app.include_router(booking_status_history_router)
+    app.include_router(booking_policy_acceptances_router)
+    app.include_router(game_participants_router)
+    app.include_router(game_status_history_router)
+    app.include_router(participant_status_history_router)
+    app.include_router(host_publish_fees_router)
+    app.include_router(inbox_router)
+    app.include_router(my_games_router)
+    app.include_router(notifications_router)
+    app.include_router(admin_actions_router)
+    app.include_router(waitlist_entries_router)
+    app.include_router(payments_router)
+    app.include_router(payment_events_router)
+    app.include_router(policy_documents_router)
+    app.include_router(policy_acceptances_router)
+    app.include_router(platform_notices_router)
+    app.include_router(refunds_router)
+    app.include_router(stripe_webhook_router)
+    app.include_router(sub_posts_router)
+    app.include_router(sub_post_positions_router)
+    app.include_router(sub_post_requests_router)
+    app.include_router(sub_post_request_status_history_router)
+    app.include_router(sub_post_status_history_router)
+    app.include_router(support_flags_router)
 
 
-if get_env_flag("ENABLE_DB_HEALTH", default=True):
-    @app.get("/db-health")
-    def db_health():
-        check_database_connection()
-        return {"message": "Database connection is working"}
-
-
-# Include feature-specific routers here so the main app stays small as the API
-# surface grows.
-app.include_router(users_router)
-app.include_router(auth_router)
-app.include_router(user_settings_router)
-app.include_router(user_stats_router)
-app.include_router(user_payment_method_router)
-app.include_router(venues_router)
-app.include_router(venue_approval_requests_router)
-app.include_router(venue_images_router)
-app.include_router(game_chats_router)
-app.include_router(game_credits_router)
-app.include_router(admin_router)
-app.include_router(admin_users_router)
-app.include_router(admin_community_games_router)
-app.include_router(admin_rejected_attempts_router)
-app.include_router(admin_review_cases_router)
-app.include_router(admin_game_credits_router)
-app.include_router(admin_game_images_router)
-app.include_router(admin_lookups_router)
-app.include_router(admin_money_router)
-app.include_router(admin_need_a_sub_router)
-app.include_router(admin_notifications_router)
-app.include_router(admin_official_games_router)
-app.include_router(admin_venue_images_router)
-app.include_router(game_images_router)
-app.include_router(chat_messages_router)
-app.include_router(checkout_router)
-app.include_router(community_game_details_router)
-app.include_router(community_games_router)
-app.include_router(games_router)
-app.include_router(bookings_router)
-app.include_router(booking_status_history_router)
-app.include_router(booking_policy_acceptances_router)
-app.include_router(game_participants_router)
-app.include_router(game_status_history_router)
-app.include_router(participant_status_history_router)
-app.include_router(host_publish_fees_router)
-app.include_router(inbox_router)
-app.include_router(my_games_router)
-app.include_router(notifications_router)
-app.include_router(admin_actions_router)
-app.include_router(waitlist_entries_router)
-app.include_router(payments_router)
-app.include_router(payment_events_router)
-app.include_router(policy_documents_router)
-app.include_router(policy_acceptances_router)
-app.include_router(platform_notices_router)
-app.include_router(refunds_router)
-app.include_router(stripe_webhook_router)
-app.include_router(sub_posts_router)
-app.include_router(sub_post_positions_router)
-app.include_router(sub_post_requests_router)
-app.include_router(sub_post_request_status_history_router)
-app.include_router(sub_post_status_history_router)
-app.include_router(support_flags_router)
+app = create_app()

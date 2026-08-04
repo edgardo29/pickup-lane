@@ -4,7 +4,6 @@ import base64
 import hashlib
 import hmac
 import json
-import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
@@ -14,7 +13,6 @@ from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from backend.database import DATABASE_URL
 from backend.models import (
     Notification,
     PlatformNotice,
@@ -23,6 +21,7 @@ from backend.models import (
     PlatformNoticeSelectedRead,
     User,
 )
+from backend.settings import SettingsError, get_inbox_token_secret
 from backend.schemas.inbox_schema import InboxCountsRead, InboxItemRead, InboxListRead
 from backend.services.account_eligibility_service import user_is_account_eligible
 from backend.services.notification_display_service import serialize_notification
@@ -52,8 +51,10 @@ def now_utc() -> datetime:
 
 
 def token_secret() -> bytes:
-    configured_secret = os.getenv("INBOX_TOKEN_SECRET") or DATABASE_URL
-    return configured_secret.encode("utf-8")
+    try:
+        return get_inbox_token_secret().encode("utf-8")
+    except SettingsError as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 def encode_payload(payload: dict[str, Any]) -> str:

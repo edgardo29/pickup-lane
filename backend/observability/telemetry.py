@@ -44,7 +44,7 @@ PROHIBITED_LABEL_NAMES = frozenset(
     }
 )
 ALLOWED_ENVIRONMENTS = frozenset(
-    {"ci", "development", "local", "production", "staging", "test"}
+    {"ci", "development", "local", "preview", "production", "staging", "test"}
 )
 # Existing operational event, reason, and status code columns use bounded
 # string fields. EN-02 keeps shared code-like telemetry tokens in that range.

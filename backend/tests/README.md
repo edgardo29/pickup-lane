@@ -93,13 +93,17 @@ Single-file checks load the containing directory contract and report file-level 
 Runtime mode requires:
 
 - a dedicated test database
+- `APP_ENV=test`
 - `DATABASE_URL` pointing to that test database
+- synthetic local-only backend secrets for settings that tests exercise
 - the required tables/schema already existing
 
 Example:
 
 ```bash
+APP_ENV=test \
 DATABASE_URL='postgresql+psycopg://USER:PASSWORD@localhost:5432/pickup_lane_test_db' \
+INBOX_TOKEN_SECRET='synthetic-inbox-test-token' \
 backend/.venv/bin/python \
   backend/tests/check_backend_tests.py \
   pages/my_games \
@@ -117,7 +121,9 @@ Mutation testing is optional targeted hardening. It is not required for normal d
 Example:
 
 ```bash
+APP_ENV=test \
 DATABASE_URL='postgresql+psycopg://USER:PASSWORD@localhost:5432/pickup_lane_test_db' \
+INBOX_TOKEN_SECRET='synthetic-inbox-test-token' \
 backend/.venv/bin/python \
   backend/tests/check_backend_tests.py \
   pages/my_games \
