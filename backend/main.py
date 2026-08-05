@@ -10,6 +10,10 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.database import check_database_connection, dispose_database_engine
+from backend.observability.http_errors import (
+    CorrelationIdMiddleware,
+    register_exception_handlers,
+)
 from backend.routes import (
     admin_actions_router,
     admin_rejected_attempts_router,
@@ -147,6 +151,8 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
         www_redirect=False,
     )
     app.add_middleware(ResponseSecurityHeadersMiddleware)
+    app.add_middleware(CorrelationIdMiddleware)
+    register_exception_handlers(app)
 
     @app.get("/")
     def read_root():
