@@ -57,6 +57,7 @@ test('validatePlatformNoticeContent requires title and message', () => {
 })
 
 test('validatePlatformNoticeAudience enforces selected recipients and cap', () => {
+  assert.equal(PLATFORM_NOTICE_SELECTED_USER_LIMIT, 500)
   assert.equal(
     validatePlatformNoticeAudience(
       { audienceType: AUDIENCE_TYPE_SELECTED },
@@ -95,7 +96,7 @@ test('canAddPlatformNoticeSelectedUser blocks missing, duplicate, and capped use
   )
   assert.equal(
     canAddPlatformNoticeSelectedUser(
-      { id: 'user-201' },
+      { id: 'user-over-limit' },
       Array.from(
         { length: PLATFORM_NOTICE_SELECTED_USER_LIMIT },
         (_, index) => ({ id: `user-${index}` }),
