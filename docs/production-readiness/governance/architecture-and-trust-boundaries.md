@@ -6,6 +6,18 @@ Owner role: Platform and deployment owner, held by Project owner (interim).
 
 Evidence basis: README deployment notes, `backend/main.py`, `backend/database.py`, `backend/firebase_admin_client.py`, `backend/services/stripe_service.py`, `backend/services/r2_storage_service.py`, `frontend/src/lib/firebase.js`, `frontend/vite.config.js`, `frontend/vercel.json`, `.github/workflows/ci.yml`, environment examples, and the finalized Part 5 and Part 6 audit findings. No providers, deployments, services, tests, databases, backups, restores, or networks were accessed.
 
+## Current Hosting Status
+
+For WS02-04B2A1, Render, Vercel, and Neon are treated as temporary demo
+infrastructure, not permanent production-provider decisions. Permanent hosting
+selection remains a later owner decision and external-evidence trigger.
+
+Source-owned FastAPI request-body enforcement must remain portable across
+hosting providers. After permanent hosts are selected, WS02-04B2B and
+WS02-04B2C must verify ingress, process-server, edge/provider precedence,
+header and URL limits, staging behavior, and deployed response captures against
+the selected topology.
+
 ## Inventory
 
 | Item | Repository-confirmed | Intended or documented | Provider evidence required | Runtime verification required | Absent or not implemented |

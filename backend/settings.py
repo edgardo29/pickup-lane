@@ -16,6 +16,10 @@ from pydantic import BaseModel, ConfigDict, SecretStr
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+from backend.observability.request_body_limits import (
+    DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES,
+    DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES,
+)
 from backend.observability.redaction import contains_sensitive_text
 
 
@@ -47,6 +51,8 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
         "CORS_ALLOWED_ORIGINS",
         "ENABLE_API_DOCS",
         "ENABLE_DB_HEALTH",
+        "PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES",
+        "STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES",
         "ENABLE_STRIPE_PAYMENTS",
         "STRIPE_SECRET_KEY",
         "STRIPE_PUBLISHABLE_KEY",
@@ -149,6 +155,12 @@ class BackendSettings(BaseModel):
     cors_allow_credentials: bool = True
     enable_api_docs: bool
     enable_db_health: bool
+    platform_notice_request_body_limit_bytes: int = (
+        DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES
+    )
+    stripe_webhook_request_body_limit_bytes: int = (
+        DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES
+    )
     enable_stripe_payments: bool
     stripe_secret_key: SecretStr | None = None
     stripe_publishable_key: SecretStr | None = None
@@ -276,6 +288,16 @@ def build_settings(
         if validate_full
         else False
     )
+    platform_notice_request_body_limit_bytes = _parse_positive_int(
+        env,
+        "PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES",
+        default=DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES,
+    )
+    stripe_webhook_request_body_limit_bytes = _parse_positive_int(
+        env,
+        "STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES",
+        default=DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES,
+    )
 
     if app_env is AppEnvironment.PRODUCTION and enable_api_docs:
         _fail("ENABLE_API_DOCS", "must be disabled in production")
@@ -300,6 +322,8 @@ def build_settings(
         cors_allowed_origins=cors_origins,
         enable_api_docs=enable_api_docs,
         enable_db_health=enable_db_health,
+        platform_notice_request_body_limit_bytes=platform_notice_request_body_limit_bytes,
+        stripe_webhook_request_body_limit_bytes=stripe_webhook_request_body_limit_bytes,
         **stripe_values,
         **firebase_values,
         **r2_values,

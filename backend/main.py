@@ -14,6 +14,7 @@ from backend.observability.http_errors import (
     CorrelationIdMiddleware,
     register_exception_handlers,
 )
+from backend.observability.request_body_limits import RequestBodyLimitMiddleware
 from backend.routes import (
     admin_actions_router,
     admin_rejected_attempts_router,
@@ -138,6 +139,15 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     app.state.release_identity = backend_settings.release_identity
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        platform_notice_request_body_limit_bytes=(
+            backend_settings.platform_notice_request_body_limit_bytes
+        ),
+        stripe_webhook_request_body_limit_bytes=(
+            backend_settings.stripe_webhook_request_body_limit_bytes
+        ),
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(backend_settings.cors_allowed_origins),

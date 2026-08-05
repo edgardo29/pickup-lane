@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -22,6 +23,9 @@ from backend.models import (
     User,
     UserPaymentMethod,
     VenueImage,
+)
+from backend.observability.request_body_limits import (
+    DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES,
 )
 from backend.schemas.sub_post_schema import MAX_SUB_POST_POSITION_ROWS, SubPostCreate
 from backend.services.game_chat_service import (
@@ -489,13 +493,19 @@ def test_platform_notice_selected_audience_accepts_500_and_keeps_recipient_pagin
     admin = create_admin_user(client)
     selected_user_ids = bulk_create_active_users(MAX_SELECTED_PLATFORM_NOTICE_USERS)
     authenticate_client_as(client, admin["id"])
+    payload = platform_notice_payload(
+        audience_type="selected_users",
+        selected_user_ids=selected_user_ids,
+    )
+    compact_payload_size = len(
+        json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    )
+
+    assert compact_payload_size < DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES
 
     response = client.post(
         "/admin/platform-notices",
-        json=platform_notice_payload(
-            audience_type="selected_users",
-            selected_user_ids=selected_user_ids,
-        ),
+        json=payload,
     )
 
     assert response.status_code == 201, response.text
