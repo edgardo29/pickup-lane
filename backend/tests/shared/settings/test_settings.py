@@ -7,6 +7,8 @@ from backend.settings import (
     BACKEND_ENVIRONMENT_VARIABLES,
     AppEnvironment,
     DEFAULT_RELEASE_IDENTITY,
+    DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES,
+    DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES,
     SettingsError,
     build_settings,
     get_inbox_token_secret,
@@ -286,6 +288,57 @@ def test_api_docs_and_db_health_are_env_aware():
 def test_production_rejects_public_api_docs():
     with pytest.raises(SettingsError, match="ENABLE_API_DOCS"):
         build_settings(production_like_env("production", ENABLE_API_DOCS="true"))
+
+
+@pytest.mark.parametrize(
+    "app_env",
+    ["local", "test", "ci", "preview", "staging", "production"],
+)
+def test_request_body_limit_defaults_apply_in_every_environment(app_env):
+    env = (
+        production_like_env(app_env)
+        if app_env in {"preview", "staging", "production"}
+        else backend_test_env(APP_ENV=app_env)
+    )
+
+    settings = build_settings(env)
+
+    assert (
+        settings.platform_notice_request_body_limit_bytes
+        == DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES
+    )
+    assert (
+        settings.stripe_webhook_request_body_limit_bytes
+        == DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES
+    )
+
+
+def test_request_body_limit_settings_accept_positive_overrides():
+    settings = build_settings(
+        local_env(
+            PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES="1024",
+            STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES="2048",
+        )
+    )
+
+    assert settings.platform_notice_request_body_limit_bytes == 1024
+    assert settings.stripe_webhook_request_body_limit_bytes == 2048
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES", "0"),
+        ("PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES", "-1"),
+        ("PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES", "large"),
+        ("STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES", "0"),
+        ("STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES", "-1"),
+        ("STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES", "large"),
+    ],
+)
+def test_request_body_limit_settings_reject_unsafe_values(name, value):
+    with pytest.raises(SettingsError, match=name):
+        build_settings(local_env(**{name: value}))
 
 
 def test_stripe_disabled_does_not_require_unused_secrets():

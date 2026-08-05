@@ -45,6 +45,8 @@ _STATUS_ERROR_CODES: dict[int, str] = {
     status.HTTP_404_NOT_FOUND: "API.NOT_FOUND",
     status.HTTP_405_METHOD_NOT_ALLOWED: "API.METHOD_NOT_ALLOWED",
     status.HTTP_409_CONFLICT: "API.CONFLICT",
+    status.HTTP_413_CONTENT_TOO_LARGE: "API.REQUEST_BODY_TOO_LARGE",
+    status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: "API.UNSUPPORTED_CONTENT_ENCODING",
     HTTP_STATUS_UNPROCESSABLE_ENTITY: "API.VALIDATION_FAILED",
     status.HTTP_500_INTERNAL_SERVER_ERROR: "API.UNEXPECTED",
     status.HTTP_503_SERVICE_UNAVAILABLE: "API.SERVICE_UNAVAILABLE",
@@ -56,6 +58,8 @@ _STATUS_MESSAGES: dict[int, str] = {
     status.HTTP_404_NOT_FOUND: "Not found.",
     status.HTTP_405_METHOD_NOT_ALLOWED: "Method not allowed.",
     status.HTTP_409_CONFLICT: "Conflict.",
+    status.HTTP_413_CONTENT_TOO_LARGE: "Request body is too large.",
+    status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: "Unsupported content encoding.",
     HTTP_STATUS_UNPROCESSABLE_ENTITY: VALIDATION_FAILED_MESSAGE,
     status.HTTP_500_INTERNAL_SERVER_ERROR: GENERIC_UNEXPECTED_MESSAGE,
     status.HTTP_503_SERVICE_UNAVAILABLE: "Service unavailable.",
@@ -102,6 +106,29 @@ def register_exception_handlers(app) -> None:
     app.add_exception_handler(
         Exception,
         handle_unexpected_exception,
+    )
+
+
+def public_error_response(
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+    detail: Any,
+    details: Mapping[str, Any] | None = None,
+    correlation_id: str | None = None,
+    headers: Mapping[str, str] | None = None,
+) -> JSONResponse:
+    """Build a stable public error response for app-owned middleware."""
+
+    return _public_error_response(
+        status_code=status_code,
+        code=code,
+        message=message,
+        detail=detail,
+        details=details,
+        correlation_id=correlation_id,
+        headers=headers,
     )
 
 
