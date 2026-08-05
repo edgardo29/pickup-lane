@@ -109,7 +109,16 @@ RELEASE_IDENTITY_ENV_NAMES = (
     "RENDER_GIT_COMMIT",
     "VERCEL_GIT_COMMIT_SHA",
 )
+SOURCE_REVISION_ENV_NAMES = frozenset(
+    {
+        "SOURCE_REVISION",
+        "GITHUB_SHA",
+        "RENDER_GIT_COMMIT",
+        "VERCEL_GIT_COMMIT_SHA",
+    }
+)
 _MAX_RELEASE_IDENTITY_LENGTH = 80
+_FULL_GIT_COMMIT_SHA_LENGTHS = frozenset({40, 64})
 
 _LOCAL_HOSTNAMES = frozenset(
     {
@@ -123,6 +132,7 @@ _LOCAL_HOSTNAMES = frozenset(
 _UNSAFE_PRODUCTION_LIKE_DB_NAME_PARTS = ("dev", "local", "test")
 _UNSAFE_PRODUCTION_DB_NAME_PARTS = ("staging", "preview")
 _DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+_FULL_GIT_COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]+$")
 
 
 class BackendSettings(BaseModel):
@@ -390,19 +400,37 @@ def _parse_release_identity(env: Mapping[str, str]) -> str:
         value = raw_value.strip()
         if not value:
             continue
+        if value != raw_value:
+            _fail(name, "must not contain whitespace")
         if len(value) > _MAX_RELEASE_IDENTITY_LENGTH:
             _fail(name, "must be concise")
         if any(character.isspace() for character in value):
             _fail(name, "must not contain whitespace")
-        if any(character in value for character in ("\x00", "/", "\\", "@")):
+        if any(character in value for character in ("\x00", "/", "\\", "@", ":")):
             _fail(name, "must not contain sensitive or path-like characters")
-        if contains_sensitive_text(value):
-            _fail(name, "must not contain sensitive data")
-        parsed = urlsplit(value)
-        if parsed.scheme and parsed.netloc:
-            _fail(name, "must not be a URL")
+        if name in SOURCE_REVISION_ENV_NAMES:
+            if _is_full_git_commit_sha(value):
+                return value.lower()
+            _validate_release_identity_text(name, value)
+            _fail(name, "must be a full Git commit SHA")
+        _validate_release_identity_text(name, value)
         return value
     return DEFAULT_RELEASE_IDENTITY
+
+
+def _is_full_git_commit_sha(value: str) -> bool:
+    return (
+        len(value) in _FULL_GIT_COMMIT_SHA_LENGTHS
+        and bool(_FULL_GIT_COMMIT_SHA_RE.fullmatch(value))
+    )
+
+
+def _validate_release_identity_text(name: str, value: str) -> None:
+    if contains_sensitive_text(value):
+        _fail(name, "must not contain sensitive data")
+    parsed = urlsplit(value)
+    if parsed.scheme and parsed.netloc:
+        _fail(name, "must not be a URL")
 
 
 def _parse_allowed_hosts(env: Mapping[str, str], app_env: AppEnvironment) -> tuple[str, ...]:
