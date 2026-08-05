@@ -6,6 +6,7 @@ import pytest
 from backend.settings import (
     BACKEND_ENVIRONMENT_VARIABLES,
     AppEnvironment,
+    DEFAULT_RELEASE_IDENTITY,
     SettingsError,
     build_settings,
     get_inbox_token_secret,
@@ -30,6 +31,8 @@ PRODUCTION_DATABASE_URL = (
 PRODUCTION_ALLOWED_HOSTS = "api.example.net,admin-api.example.net"
 PRODUCTION_ORIGINS = "https://app.example.net,https://admin.example.net"
 FIREBASE_ADMIN_JSON = '{"type":"service_account","project_id":"pickup-lane-synthetic"}'
+CI_MERGE_COMMIT_SHA = "61f14285517180d22f1d5e71af278d815040e63c"
+NORMAL_GITHUB_SHA = "c1d68518c606f5b704b02bd9639fb76189c07a82"
 
 
 def local_env(**overrides):
@@ -119,6 +122,59 @@ def test_deployed_markers_require_explicit_production_like_environment():
 
     settings = build_settings(production_like_env("preview", RENDER="true"))
     assert settings.app_env == AppEnvironment.PREVIEW
+
+
+@pytest.mark.parametrize("commit_sha", [CI_MERGE_COMMIT_SHA, NORMAL_GITHUB_SHA])
+def test_source_revision_full_git_commit_sha_is_accepted(commit_sha):
+    settings = build_settings(backend_test_env(GITHUB_SHA=commit_sha.upper()))
+
+    assert settings.release_identity == commit_sha
+
+
+def test_minimal_database_settings_accept_github_merge_sha():
+    settings = build_settings(
+        backend_test_env(APP_ENV="ci", GITHUB_SHA=CI_MERGE_COMMIT_SHA),
+        validate_full=False,
+    )
+
+    assert settings.release_identity == CI_MERGE_COMMIT_SHA
+    assert settings.database_url_value == TEST_DATABASE_URL
+
+
+def test_release_identity_falls_back_when_no_source_revision_is_supplied():
+    settings = build_settings(backend_test_env())
+
+    assert settings.release_identity == DEFAULT_RELEASE_IDENTITY
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "555-555-0123",
+        "a" * 39,
+        "a" * 65,
+        f"{NORMAL_GITHUB_SHA} ",
+        "release candidate",
+        "release/path",
+        "https://" + "release.example/path",
+        "release" + "@example.test",
+        "postgresql://" + "db.example.test/release",
+        "sk_" + "test_" + "syntheticvalue",
+        "user:pass",
+    ],
+)
+def test_source_revision_non_sha_sensitive_or_unsafe_values_are_rejected(value):
+    with pytest.raises(SettingsError, match="GITHUB_SHA"):
+        build_settings(backend_test_env(GITHUB_SHA=value))
+
+
+def test_generic_release_label_still_uses_sensitive_text_validation():
+    settings = build_settings(backend_test_env(RELEASE_IDENTITY="commit.abc123"))
+
+    assert settings.release_identity == "commit.abc123"
+
+    with pytest.raises(SettingsError, match="RELEASE_IDENTITY"):
+        build_settings(backend_test_env(RELEASE_IDENTITY="555-555-0123"))
 
 
 @pytest.mark.parametrize(

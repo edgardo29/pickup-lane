@@ -101,6 +101,25 @@ Current non-legacy runtime tests cover:
 Existing WS02-01 settings and EN-02 observability tests continue to own typed
 environment isolation, provider-free import, and release/event metadata safety.
 
+## Post-Merge CI Correction
+
+A post-merge CI false positive was discovered after WS02-03. Alembic startup
+loaded minimal database settings and rejected a valid source revision because
+the value was passed through generic free-text phone detection.
+
+This was a CI/settings validation defect, not a failed database migration and
+not credential exposure.
+
+The correction preserves the global redaction and sensitive-text detector.
+Source-revision validation is narrowed structurally: full Git commit SHA values
+from source-revision environment variables are accepted as immutable release
+identity, while generic release labels and unsafe non-SHA values continue
+through the existing safety validation path.
+
+Regression tests cover accepted source revisions, rejected unsafe non-SHA
+values, fallback release identity behavior, and the minimal settings path used
+by migration startup.
+
 ## Repository-Proven Facts
 
 - README documents the intended backend as a Render web service.
