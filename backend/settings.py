@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
@@ -42,6 +43,7 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
         "INBOX_TOKEN_SECRET",
         "FIREBASE_ADMIN_CREDENTIALS_JSON",
         "FIREBASE_ADMIN_CREDENTIALS",
+        "ALLOWED_HOSTS",
         "CORS_ALLOWED_ORIGINS",
         "ENABLE_API_DOCS",
         "ENABLE_DB_HEALTH",
@@ -76,6 +78,7 @@ TRUE_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 FALSE_ENV_VALUES = frozenset({"0", "false", "no", "off"})
 
 DEFAULT_CORS_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
+DEFAULT_ALLOWED_HOSTS = ("localhost", "127.0.0.1", "testserver")
 DEFAULT_R2_ALLOWED_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 DEDICATED_TEST_DATABASE_NAME = "pickup_lane_test_db"
 SUPPORTED_STRIPE_CURRENCY = "USD"
@@ -83,6 +86,8 @@ SUPPORTED_STRIPE_CURRENCY = "USD"
 DOCUMENTED_PLACEHOLDER_VALUES = frozenset(
     {
         "replace-with-independent-secret",
+        "replace-with-postgresql-url",
+        "replace-with-api-hosts",
         "replace-with-firebase-admin-json",
         "replace-with-stripe-secret-key",
         "replace-with-stripe-publishable-key",
@@ -117,6 +122,7 @@ _LOCAL_HOSTNAMES = frozenset(
 
 _UNSAFE_PRODUCTION_LIKE_DB_NAME_PARTS = ("dev", "local", "test")
 _UNSAFE_PRODUCTION_DB_NAME_PARTS = ("staging", "preview")
+_DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
 
 class BackendSettings(BaseModel):
@@ -128,6 +134,7 @@ class BackendSettings(BaseModel):
     inbox_token_secret: SecretStr | None = None
     firebase_admin_credentials_json: SecretStr | None = None
     firebase_admin_credentials: SecretStr | None = None
+    allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     cors_allowed_origins: tuple[str, ...]
     cors_allow_credentials: bool = True
     enable_api_docs: bool
@@ -247,6 +254,7 @@ def build_settings(
 
     database_url = _parse_database_url(env, app_env)
     release_identity = _parse_release_identity(env)
+    allowed_hosts = _parse_allowed_hosts(env, app_env) if validate_full else DEFAULT_ALLOWED_HOSTS
     cors_origins = _parse_cors_origins(env, app_env) if validate_full else DEFAULT_CORS_ORIGINS
     enable_api_docs = (
         _parse_bool(env, "ENABLE_API_DOCS", default=not app_env.is_production_like)
@@ -278,6 +286,7 @@ def build_settings(
         release_identity=release_identity,
         database_url=SecretStr(database_url),
         inbox_token_secret=SecretStr(inbox_token_secret) if inbox_token_secret else None,
+        allowed_hosts=allowed_hosts,
         cors_allowed_origins=cors_origins,
         enable_api_docs=enable_api_docs,
         enable_db_health=enable_db_health,
@@ -394,6 +403,53 @@ def _parse_release_identity(env: Mapping[str, str]) -> str:
             _fail(name, "must not be a URL")
         return value
     return DEFAULT_RELEASE_IDENTITY
+
+
+def _parse_allowed_hosts(env: Mapping[str, str], app_env: AppEnvironment) -> tuple[str, ...]:
+    raw_value = _optional_text(env, "ALLOWED_HOSTS")
+    if raw_value is None:
+        if app_env.is_production_like:
+            _fail("ALLOWED_HOSTS", "must be explicit in production-like environments")
+        return DEFAULT_ALLOWED_HOSTS
+
+    allowed_hosts: list[str] = []
+    for raw_host in raw_value.split(","):
+        host = _normalize_allowed_host(raw_host)
+        if host == "*":
+            _fail("ALLOWED_HOSTS", "must not use a global wildcard")
+        if _is_documented_placeholder(host):
+            _fail("ALLOWED_HOSTS", "must not use a documented placeholder value")
+        if app_env.is_production_like and _is_local_host(host):
+            _fail("ALLOWED_HOSTS", "must not include localhost in production-like environments")
+        allowed_hosts.append(host)
+
+    if not allowed_hosts:
+        _fail("ALLOWED_HOSTS", "must not be empty")
+
+    return tuple(dict.fromkeys(allowed_hosts))
+
+
+def _normalize_allowed_host(raw_host: str) -> str:
+    host = raw_host.strip().lower().rstrip(".")
+    if not host:
+        _fail("ALLOWED_HOSTS", "must not include blank hosts")
+    if any(ord(character) < 32 or ord(character) == 127 for character in raw_host):
+        _fail("ALLOWED_HOSTS", "must not contain control characters")
+    if "://" in host or any(character in host for character in ("/", "?", "#", "@", "\\")):
+        _fail("ALLOWED_HOSTS", "must contain host names only")
+    if ":" in host:
+        _fail("ALLOWED_HOSTS", "must not include ports")
+    if host == "*":
+        return host
+    if len(host) > 253:
+        _fail("ALLOWED_HOSTS", "must contain valid host names")
+
+    labels = host.split(".")
+    if not labels or any(not label for label in labels):
+        _fail("ALLOWED_HOSTS", "must contain valid host names")
+    if not all(_DNS_LABEL_RE.fullmatch(label) for label in labels):
+        _fail("ALLOWED_HOSTS", "must contain valid host names")
+    return host
 
 
 def _parse_cors_origins(

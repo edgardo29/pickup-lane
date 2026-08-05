@@ -5,6 +5,9 @@ from fastapi import FastAPI, Response, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import MutableHeaders
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.database import check_database_connection, dispose_database_engine
 from backend.routes import (
@@ -68,6 +71,43 @@ from backend.settings import BackendSettings, get_settings
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 NO_STORE_CACHE_CONTROL = "no-store"
+API_REFERRER_POLICY = "no-referrer"
+CONTENT_TYPE_OPTIONS = "nosniff"
+DOCUMENTATION_FRAME_ANCESTORS = "frame-ancestors 'none'"
+DOCUMENTATION_FRAME_OPTIONS = "DENY"
+DOCUMENTATION_PERMISSIONS_POLICY = (
+    "accelerometer=(), ambient-light-sensor=(), autoplay=(), camera=(), "
+    "display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), "
+    "gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), "
+    "usb=(), xr-spatial-tracking=()"
+)
+DOCUMENTATION_PATHS = ("/docs", "/redoc")
+OPENAPI_SCHEMA_PATH = "/openapi.json"
+HEALTH_PATHS = frozenset({"/live", "/ready", "/db-health"})
+
+
+class ResponseSecurityHeadersMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = str(scope.get("path") or "")
+
+        async def send_with_security_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                _apply_response_security_headers(
+                    headers,
+                    path=path,
+                    status_code=int(message["status"]),
+                )
+            await send(message)
+
+        await self.app(scope, receive, send_with_security_headers)
 
 
 @asynccontextmanager
@@ -101,6 +141,12 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=list(backend_settings.allowed_hosts),
+        www_redirect=False,
+    )
+    app.add_middleware(ResponseSecurityHeadersMiddleware)
 
     @app.get("/")
     def read_root():
@@ -177,6 +223,82 @@ def _health_response(
             "release": getattr(app.state, "release_identity", "source-unavailable"),
         },
     )
+
+
+def _apply_response_security_headers(
+    headers: MutableHeaders,
+    *,
+    path: str,
+    status_code: int,
+) -> None:
+    if _is_redirect_response(status_code) or _is_static_path(path):
+        return
+
+    content_type = headers.get("content-type", "")
+    if _is_documentation_html_response(path, content_type):
+        _apply_documentation_security_headers(headers)
+        return
+
+    if _is_fastapi_owned_api_response(
+        path=path,
+        status_code=status_code,
+        content_type=content_type,
+    ):
+        _apply_api_security_headers(headers)
+
+
+def _apply_api_security_headers(headers: MutableHeaders) -> None:
+    headers.setdefault("X-Content-Type-Options", CONTENT_TYPE_OPTIONS)
+    headers.setdefault("Referrer-Policy", API_REFERRER_POLICY)
+    headers.setdefault("Cache-Control", NO_STORE_CACHE_CONTROL)
+
+
+def _apply_documentation_security_headers(headers: MutableHeaders) -> None:
+    _apply_api_security_headers(headers)
+    headers.setdefault("Content-Security-Policy", DOCUMENTATION_FRAME_ANCESTORS)
+    headers.setdefault("X-Frame-Options", DOCUMENTATION_FRAME_OPTIONS)
+    headers.setdefault("Permissions-Policy", DOCUMENTATION_PERMISSIONS_POLICY)
+
+
+def _is_redirect_response(status_code: int) -> bool:
+    return 300 <= status_code < 400
+
+
+def _is_static_path(path: str) -> bool:
+    return path == "/static" or path.startswith("/static/")
+
+
+def _is_documentation_html_response(path: str, content_type: str) -> bool:
+    return (
+        any(
+            path == docs_path or path.startswith(f"{docs_path}/")
+            for docs_path in DOCUMENTATION_PATHS
+        )
+        and _is_html_response(content_type)
+    )
+
+
+def _is_fastapi_owned_api_response(
+    *,
+    path: str,
+    status_code: int,
+    content_type: str,
+) -> bool:
+    return (
+        path in HEALTH_PATHS
+        or path == OPENAPI_SCHEMA_PATH
+        or status_code == status.HTTP_204_NO_CONTENT
+        or status_code >= status.HTTP_400_BAD_REQUEST
+        or _is_json_response(content_type)
+    )
+
+
+def _is_json_response(content_type: str) -> bool:
+    return content_type.lower().split(";", maxsplit=1)[0].strip() == "application/json"
+
+
+def _is_html_response(content_type: str) -> bool:
+    return content_type.lower().split(";", maxsplit=1)[0].strip() == "text/html"
 
 
 def _include_routers(app: FastAPI) -> None:

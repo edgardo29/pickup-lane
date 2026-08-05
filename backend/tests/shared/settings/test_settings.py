@@ -27,6 +27,7 @@ PRODUCTION_DATABASE_URL = (
     "postgresql+psycopg://app_user:app_password@db.example.net:5432/"
     "pickup_lane"
 )
+PRODUCTION_ALLOWED_HOSTS = "api.example.net,admin-api.example.net"
 PRODUCTION_ORIGINS = "https://app.example.net,https://admin.example.net"
 FIREBASE_ADMIN_JSON = '{"type":"service_account","project_id":"pickup-lane-synthetic"}'
 
@@ -60,6 +61,7 @@ def production_like_env(app_env="production", **overrides):
             "DATABASE_URL": PRODUCTION_DATABASE_URL,
             "INBOX_TOKEN_SECRET": "synthetic-independent-inbox-token",
             "FIREBASE_ADMIN_CREDENTIALS_JSON": FIREBASE_ADMIN_JSON,
+            "ALLOWED_HOSTS": PRODUCTION_ALLOWED_HOSTS,
             "CORS_ALLOWED_ORIGINS": PRODUCTION_ORIGINS,
             "ENABLE_API_DOCS": "false",
             "ENABLE_DB_HEALTH": "false",
