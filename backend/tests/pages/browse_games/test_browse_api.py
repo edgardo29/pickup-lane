@@ -21,6 +21,33 @@ def test_browse_game_cards_caps_limit(client: TestClient):
     assert response.json()["limit"] == 100
 
 
+def test_browse_game_cards_default_limit_and_route_validation(client: TestClient):
+    starts_on = (datetime.now(UTC) + timedelta(days=7)).date().isoformat()
+
+    default_response = client.get(
+        "/games/browse",
+        params={"starts_on": starts_on},
+    )
+    rejected_min_response = client.get(
+        "/games/browse",
+        params={"starts_on": starts_on, "limit": 0},
+    )
+    invalid_cursor_response = client.get(
+        "/games/browse",
+        params={"starts_on": starts_on, "cursor": "x" * 2000},
+    )
+    oversized_cursor_response = client.get(
+        "/games/browse",
+        params={"starts_on": starts_on, "cursor": "x" * 2001},
+    )
+
+    assert default_response.status_code == 200, default_response.text
+    assert default_response.json()["limit"] == 40
+    assert rejected_min_response.status_code == 422, rejected_min_response.text
+    assert invalid_cursor_response.status_code == 400, invalid_cursor_response.text
+    assert oversized_cursor_response.status_code == 422, oversized_cursor_response.text
+
+
 def test_browse_game_cards_invalid_cursor_returns_400(client: TestClient):
     response = client.get(
         "/games/browse",

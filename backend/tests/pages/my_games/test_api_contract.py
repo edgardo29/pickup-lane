@@ -78,6 +78,21 @@ def test_my_games_limit_validation_accepts_one_hundred_and_caps_above_max(
     assert rejected_response.status_code == 422, rejected_response.text
 
 
+@pytest.mark.parametrize("path", ["/my-games", "/my-games/need-a-sub"])
+def test_my_games_cursor_route_validation_uses_two_thousand_character_max(
+    client: TestClient,
+    path: str,
+):
+    user = create_user(client)
+    authenticate_as(user["id"])
+
+    invalid_cursor_response = client.get(path, params={"cursor": "x" * 2000})
+    oversized_cursor_response = client.get(path, params={"cursor": "x" * 2001})
+
+    assert invalid_cursor_response.status_code == 400, invalid_cursor_response.text
+    assert oversized_cursor_response.status_code == 422, oversized_cursor_response.text
+
+
 def test_my_games_response_item_bucket_matches_requested_view(
     client: TestClient,
     my_games_factory,
