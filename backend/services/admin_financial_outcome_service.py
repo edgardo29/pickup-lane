@@ -324,6 +324,11 @@ def resolve_outcome_context(
             if payload.amount_cents is not None
             else host_publish_fee.amount_cents
         )
+        if amount_cents > host_publish_fee.amount_cents:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="amount_cents exceeds the eligible target amount.",
+            )
     else:
         if payload.host_user_id is None:
             raise HTTPException(
@@ -333,6 +338,11 @@ def resolve_outcome_context(
         host_user_id = payload.host_user_id
         get_active_user_or_404(db, host_user_id)
         amount_cents = payload.amount_cents if payload.amount_cents is not None else 0
+        if amount_cents > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="amount_cents exceeds the eligible target amount.",
+            )
 
     if target_game_id is not None:
         game = get_active_game_or_404(db, target_game_id)

@@ -1,11 +1,16 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 MAX_REVIEW_CASE_NOTE_BODY_LENGTH = 1000
+AdminReviewClosureOutcome = Literal[
+    "enforcement_applied",
+    "no_action_needed",
+    "invalid_signal",
+]
 
 
 class AdminReviewTargetFields(BaseModel):
@@ -64,8 +69,8 @@ class AdminContentModerationFindingRead(BaseModel):
 class AdminReviewCaseClose(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    outcome: str
-    reason: str
+    outcome: AdminReviewClosureOutcome
+    reason: str = Field(min_length=1, max_length=1000)
     idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)
 
 

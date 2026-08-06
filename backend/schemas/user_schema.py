@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -54,12 +54,10 @@ class UserRead(BaseModel):
 class UserUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    email: str | None = None
-    email_verified_at: datetime | None = None
-    phone: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=30)
+    first_name: str | None = Field(default=None, max_length=100)
+    last_name: str | None = Field(default=None, max_length=100)
     date_of_birth: date | None = None
-    profile_photo_url: str | None = None
-    home_city: str | None = None
-    home_state: str | None = None
+    home_city: str | None = Field(default=None, max_length=120)
+    home_state: str | None = Field(default=None, max_length=120)

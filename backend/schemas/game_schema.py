@@ -1,9 +1,15 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+MIN_TOTAL_SPOTS = 6
+MAX_TOTAL_SPOTS = 99
+MAX_PRICE_PER_PLAYER_CENTS = 99_900
+MAX_PLAYER_GUESTS_PER_BOOKING = 2
+MAX_CANCEL_REASON_LENGTH = 500
+MAX_AUTO_CHARGE_CONSENT_VERSION_LENGTH = 50
 
 
 # GameCreate defines the fields the client is allowed to send when creating a
@@ -36,13 +42,13 @@ class GameCreate(BaseModel):
     game_player_group: str = "coed"
     skill_level: str = "any"
     environment_type: str
-    total_spots: int
-    price_per_player_cents: int
+    total_spots: int = Field(ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
+    price_per_player_cents: int = Field(ge=0, le=MAX_PRICE_PER_PLAYER_CENTS)
     currency: str = "USD"
     minimum_age: int | None = None
     allow_guests: bool = True
-    max_guests_per_booking: int = 2
-    host_guest_max: int | None = None
+    max_guests_per_booking: int = Field(default=2, ge=0, le=MAX_PLAYER_GUESTS_PER_BOOKING)
+    host_guest_max: int | None = Field(default=None, ge=0)
     waitlist_enabled: bool = True
     is_chat_enabled: bool = True
     policy_mode: str
@@ -54,7 +60,7 @@ class GameCreate(BaseModel):
     cancelled_at: datetime | None = None
     cancelled_by_user_id: UUID | None = None
     cancellation_source: str | None = None
-    cancel_reason: str | None = None
+    cancel_reason: str | None = Field(default=None, max_length=MAX_CANCEL_REASON_LENGTH)
     completed_at: datetime | None = None
     completed_by_user_id: UUID | None = None
 
@@ -219,13 +225,17 @@ class GameUpdate(BaseModel):
     game_player_group: str | None = None
     skill_level: str | None = None
     environment_type: str | None = None
-    total_spots: int | None = None
-    price_per_player_cents: int | None = None
+    total_spots: int | None = Field(default=None, ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
+    price_per_player_cents: int | None = Field(
+        default=None, ge=0, le=MAX_PRICE_PER_PLAYER_CENTS
+    )
     currency: str | None = None
     minimum_age: int | None = None
     allow_guests: bool | None = None
-    max_guests_per_booking: int | None = None
-    host_guest_max: int | None = None
+    max_guests_per_booking: int | None = Field(
+        default=None, ge=0, le=MAX_PLAYER_GUESTS_PER_BOOKING
+    )
+    host_guest_max: int | None = Field(default=None, ge=0)
     waitlist_enabled: bool | None = None
     is_chat_enabled: bool | None = None
     policy_mode: str | None = None
@@ -237,7 +247,7 @@ class GameUpdate(BaseModel):
     cancelled_at: datetime | None = None
     cancelled_by_user_id: UUID | None = None
     cancellation_source: str | None = None
-    cancel_reason: str | None = None
+    cancel_reason: str | None = Field(default=None, max_length=MAX_CANCEL_REASON_LENGTH)
     completed_at: datetime | None = None
     completed_by_user_id: UUID | None = None
 
@@ -259,8 +269,10 @@ class GameHostEdit(BaseModel):
     game_player_group: str | None = None
     skill_level: str | None = None
     environment_type: str | None = None
-    total_spots: int | None = None
-    price_per_player_cents: int | None = None
+    total_spots: int | None = Field(default=None, ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
+    price_per_player_cents: int | None = Field(
+        default=None, ge=0, le=MAX_PRICE_PER_PLAYER_CENTS
+    )
     custom_rules_text: str | None = None
     game_notes: str | None = None
     parking_notes: str | None = None
@@ -269,10 +281,12 @@ class GameHostEdit(BaseModel):
 class GameJoinCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    guest_count: int = 0
+    guest_count: int = Field(default=0, ge=0, le=MAX_PLAYER_GUESTS_PER_BOOKING)
     payment_method_id: UUID | None = None
     auto_charge_consent_accepted: bool = False
-    auto_charge_consent_version: str | None = None
+    auto_charge_consent_version: str | None = Field(
+        default=None, max_length=MAX_AUTO_CHARGE_CONSENT_VERSION_LENGTH
+    )
 
 
 class GameJoinRead(BaseModel):
@@ -298,7 +312,11 @@ class GameLeaveRead(BaseModel):
 class GameGuestAddCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    guest_count: int = 1
+    guest_count: int = Field(default=1, ge=1)
+
+
+class GameBookingGuestAddCreate(GameGuestAddCreate):
+    guest_count: int = Field(default=1, ge=1, le=MAX_PLAYER_GUESTS_PER_BOOKING)
 
 
 class GameGuestAddRead(BaseModel):
@@ -311,7 +329,7 @@ class GameGuestAddRead(BaseModel):
 class GameGuestRemoveCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    remove_count: int
+    remove_count: int = Field(ge=1)
 
 
 class GameGuestRemoveRead(BaseModel):
@@ -324,4 +342,4 @@ class GameGuestRemoveRead(BaseModel):
 class GameCancelCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    cancel_reason: str | None = None
+    cancel_reason: str | None = Field(default=None, max_length=MAX_CANCEL_REASON_LENGTH)

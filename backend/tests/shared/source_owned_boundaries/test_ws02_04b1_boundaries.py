@@ -962,7 +962,7 @@ def test_game_chat_boundaries_enforce_body_page_and_history_caps(
     )
 
     assert exact_response.status_code == 201, exact_response.text
-    assert_stable_error(long_response, status_code=400)
+    assert_stable_error(long_response, status_code=422)
 
     seed_game_chat_messages(
         chat_id=chat["id"],
@@ -1005,7 +1005,7 @@ def test_need_a_sub_chat_boundaries_enforce_body_page_and_history_caps(
     )
 
     assert exact_response.status_code == 201, exact_response.text
-    assert_stable_error(long_response, status_code=400)
+    assert_stable_error(long_response, status_code=422)
 
     seed_sub_chat_messages(
         chat_id=chat["id"],

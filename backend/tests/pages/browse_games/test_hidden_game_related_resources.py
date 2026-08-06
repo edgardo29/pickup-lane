@@ -17,7 +17,6 @@ def _create_community_game_detail_as_host(
         f"/community-game-details/games/{game_id}/host-edit",
         json={
             "payment_methods_snapshot": [{"type": "venmo", "value": "@host"}],
-            "payment_instructions_snapshot": "Pay the host after joining.",
         },
     )
     assert response.status_code == 200, response.text

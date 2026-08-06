@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -14,7 +14,15 @@ class AuthSyncUserRequest(BaseModel):
 class AuthDeleteAccountRequest(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    confirmation: str
+    confirmation: str = Field(min_length=1)
+
+    @field_validator("confirmation")
+    @classmethod
+    def require_delete_confirmation(cls, value: str) -> str:
+        stripped = value.strip()
+        if stripped.upper() != "DELETE":
+            raise ValueError("confirmation must be DELETE.")
+        return stripped
 
 
 class AuthEmailAvailabilityRead(BaseModel):

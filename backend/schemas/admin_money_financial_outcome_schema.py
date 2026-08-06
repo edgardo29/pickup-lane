@@ -1,23 +1,32 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+AdminMoneyFinancialOutcome = Literal[
+    "no_fee_charged",
+    "refund",
+    "credit",
+    "forfeit",
+    "manual_review",
+]
 
 
 class AdminMoneyFinancialOutcomeCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    outcome: str
+    outcome: AdminMoneyFinancialOutcome
     reason: str = Field(min_length=3, max_length=1000)
     internal_note: str | None = Field(default=None, max_length=1000)
     idempotency_key: str = Field(min_length=8, max_length=160)
     host_publish_fee_id: UUID | None = None
     host_user_id: UUID | None = None
     target_game_id: UUID | None = None
-    amount_cents: int | None = None
+    amount_cents: int | None = Field(default=None, ge=0)
+
 
 class AdminMoneyFinancialOutcomeRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -12,7 +12,7 @@ class ChatMessageCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     chat_id: UUID
-    message_body: str
+    message_body: str = Field(max_length=300)
 
 
 # ChatMessageRead defines the chat message payload returned by the API.

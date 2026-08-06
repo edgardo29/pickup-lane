@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -8,7 +8,7 @@ REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 class GameCheckoutPaymentIntentCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    guest_count: int = 0
+    guest_count: int = Field(default=0, ge=0, le=2)
     payment_method_id: UUID | None = None
     return_url: str | None = None
 

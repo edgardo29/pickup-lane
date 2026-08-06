@@ -1,11 +1,15 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from backend.schemas.community_payment_schema import CommunityPaymentMethodSnapshot
 from backend.schemas.game_schema import GameRead
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+MAX_TOTAL_SPOTS = 99
+MIN_TOTAL_SPOTS = 6
+MAX_PRICE_PER_PLAYER_CENTS = 99_900
 
 
 class CommunityGameVenuePayload(BaseModel):
@@ -30,15 +34,25 @@ class CommunityGamePublishCreate(BaseModel):
     game_player_group: str = "coed"
     skill_level: str = "any"
     environment_type: str
-    total_spots: int
-    price_per_player_cents: int
+    total_spots: int = Field(ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
+    price_per_player_cents: int = Field(ge=0, le=MAX_PRICE_PER_PLAYER_CENTS)
     venue: CommunityGameVenuePayload
-    payment_methods_snapshot: list[dict] = Field(default_factory=list)
-    payment_instructions_snapshot: str | None = None
+    payment_methods_snapshot: list[CommunityPaymentMethodSnapshot] = Field(
+        default_factory=list,
+        max_length=2,
+    )
+    payment_instructions_snapshot: None = None
     custom_rules_text: str | None = None
     game_notes: str | None = None
     parking_notes: str | None = None
     payment_method_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def reject_duplicate_payment_methods(self) -> "CommunityGamePublishCreate":
+        method_types = [method.type for method in self.payment_methods_snapshot]
+        if len(method_types) != len(set(method_types)):
+            raise ValueError("payment_methods_snapshot must not contain duplicate types.")
+        return self
 
 
 class CommunityGamePublishRead(BaseModel):

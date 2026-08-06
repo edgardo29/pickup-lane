@@ -1,9 +1,17 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+SupportResolutionOutcome = Literal[
+    "handled_externally",
+    "retried_successfully",
+    "no_action_needed",
+    "duplicate",
+    "invalid_flag",
+]
 
 
 class SupportFlagRead(BaseModel):
@@ -35,6 +43,6 @@ class SupportFlagRead(BaseModel):
 class SupportFlagResolve(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    outcome: str
-    reason: str
+    outcome: SupportResolutionOutcome
+    reason: str = Field(min_length=1, max_length=1000)
     idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)

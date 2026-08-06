@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,8 @@ from backend.services.image_rules import VALID_IMAGE_ROLES
 
 VALID_IMAGE_STATUSES = {"pending_upload", "active", "hidden", "removed"}
 PUBLIC_IMAGE_STATUSES = {"active"}
+SELECTED_IMAGE_STATUSES = {"pending_upload", "active"}
+MAX_ACTIVE_SELECTED_VENUE_IMAGES = 3
 
 
 def build_venue_image_conflict_detail(exc: IntegrityError) -> str:
@@ -161,6 +163,23 @@ def validate_upload_request(upload_request: VenueImageUploadCreate) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Image is larger than the configured upload limit.",
+        )
+
+
+def validate_selected_image_capacity(db: Session, venue_id: uuid.UUID) -> None:
+    selected_image_count = db.scalar(
+        select(func.count())
+        .select_from(VenueImage)
+        .where(
+            VenueImage.venue_id == venue_id,
+            VenueImage.deleted_at.is_(None),
+            VenueImage.image_status.in_(SELECTED_IMAGE_STATUSES),
+        )
+    )
+    if int(selected_image_count or 0) >= MAX_ACTIVE_SELECTED_VENUE_IMAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A venue can have at most 3 selected images.",
         )
 
 
@@ -313,6 +332,7 @@ def create_venue_image_upload(
 ) -> VenueImageUploadRead:
     get_active_venue_or_404(db, venue_id)
     validate_upload_request(upload_request)
+    validate_selected_image_capacity(db, venue_id)
 
     try:
         storage_config = get_r2_storage_config()

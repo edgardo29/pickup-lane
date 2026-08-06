@@ -59,7 +59,7 @@ class SubPostCreate(BaseModel):
     country_code: CountryCode = "US"
     neighborhood: str | None = Field(default=None, max_length=120)
     subs_needed: int = Field(ge=1, le=MAX_SUB_POST_TOTAL_SUBS)
-    price_due_at_venue_cents: int = Field(default=0, ge=0)
+    price_due_at_venue_cents: int = Field(default=0, ge=0, le=99_900)
     currency: Currency = "USD"
     payment_note: str | None = Field(default=None, max_length=500)
     notes: str | None = Field(default=None, max_length=500)
@@ -118,7 +118,7 @@ class SubPostUpdate(BaseModel):
     country_code: CountryCode | None = None
     neighborhood: str | None = Field(default=None, max_length=120)
     subs_needed: int | None = Field(default=None, ge=1, le=MAX_SUB_POST_TOTAL_SUBS)
-    price_due_at_venue_cents: int | None = Field(default=None, ge=0)
+    price_due_at_venue_cents: int | None = Field(default=None, ge=0, le=99_900)
     currency: Currency | None = None
     payment_note: str | None = Field(default=None, max_length=500)
     notes: str | None = Field(default=None, max_length=500)

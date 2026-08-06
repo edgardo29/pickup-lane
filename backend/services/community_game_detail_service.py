@@ -318,12 +318,14 @@ def upsert_host_community_game_detail_workflow(
         db_community_game_detail = CommunityGameDetail(
             id=uuid.uuid4(),
             game_id=game_id,
-            payment_methods_snapshot=detail_update.payment_methods_snapshot,
+            payment_methods_snapshot=[
+                method.model_dump() for method in detail_update.payment_methods_snapshot
+            ],
             payment_instructions_snapshot=detail_update.payment_instructions_snapshot,
         )
     else:
         db_community_game_detail.payment_methods_snapshot = (
-            detail_update.payment_methods_snapshot
+            [method.model_dump() for method in detail_update.payment_methods_snapshot]
         )
         db_community_game_detail.payment_instructions_snapshot = (
             detail_update.payment_instructions_snapshot
