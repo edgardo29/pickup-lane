@@ -5,17 +5,14 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameStatusHistory, User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    GameStatusHistoryCreate,
     GameStatusHistoryRead,
-    GameStatusHistoryUpdate,
 )
 from backend.services.auth_service import require_active_admin
 from backend.services.status_history_service import (
-    create_game_status_history_record,
     get_game_status_history_record,
     list_game_status_history_records,
-    update_game_status_history_record,
 )
 
 router = APIRouter(prefix="/game-status-history", tags=["game_status_history"])
@@ -23,16 +20,19 @@ router = APIRouter(prefix="/game-status-history", tags=["game_status_history"])
 
 @router.post(
     "",
-    response_model=GameStatusHistoryRead,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_410_GONE,
 )
 def create_game_status_history(
-    game_status_history: GameStatusHistoryCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> GameStatusHistory:
+) -> None:
     del current_admin
-    return create_game_status_history_record(db, game_status_history)
+    raise_retired_mutation_route(
+        code="game_status_history_scaffold_removed",
+        message=(
+            "Direct game status history creation is no longer supported. "
+            "History is recorded by product-owned workflows."
+        ),
+    )
 
 
 @router.get(
@@ -72,14 +72,17 @@ def list_game_status_history(
 
 @router.patch(
     "/{history_id}",
-    response_model=GameStatusHistoryRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_game_status_history(
     history_id: uuid.UUID,
-    history_update: GameStatusHistoryUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> GameStatusHistory:
-    del current_admin
-    return update_game_status_history_record(db, history_id, history_update)
+) -> None:
+    del history_id, current_admin
+    raise_retired_mutation_route(
+        code="game_status_history_scaffold_removed",
+        message=(
+            "Direct game status history updates are no longer supported. "
+            "History is recorded by product-owned workflows."
+        ),
+    )

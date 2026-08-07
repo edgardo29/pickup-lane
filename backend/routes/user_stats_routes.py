@@ -5,27 +5,31 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User, UserStats
-from backend.schemas import UserStatsCreate, UserStatsRead, UserStatsUpdate
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
+from backend.schemas import UserStatsRead
 from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.user_stats_service import (
-    create_user_stats_workflow,
     get_current_user_stats,
     get_user_stats_record,
     list_user_stats as list_user_stats_workflow,
-    update_user_stats_workflow,
 )
 
 router = APIRouter(prefix="/user-stats", tags=["user_stats"])
 
 
-# Admin-only endpoint for protected cached stats creation.
-@router.post("", response_model=UserStatsRead, status_code=status.HTTP_201_CREATED)
+# Retired public/admin scaffold. Stats remain internally service-owned.
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_user_stats(
-    user_stats: UserStatsCreate,
-    db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
-) -> UserStats:
-    return create_user_stats_workflow(db, user_stats)
+) -> None:
+    del _current_admin
+    raise_retired_mutation_route(
+        code="user_stats_scaffold_removed",
+        message=(
+            "Direct user stats creation is no longer supported. Stats are "
+            "maintained by product-owned workflows."
+        ),
+    )
 
 
 @router.get("/me", response_model=UserStatsRead, status_code=status.HTTP_200_OK)
@@ -56,12 +60,17 @@ def list_user_stats(
     return list_user_stats_workflow(db, user_id=user_id)
 
 
-# Admin-only endpoint for protected cached stats updates.
-@router.patch("/{user_id}", response_model=UserStatsRead, status_code=status.HTTP_200_OK)
+# Retired public/admin scaffold. Stats remain internally service-owned.
+@router.patch("/{user_id}", status_code=status.HTTP_410_GONE)
 def update_user_stats(
     user_id: uuid.UUID,
-    user_stats_update: UserStatsUpdate,
-    db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
-) -> UserStats:
-    return update_user_stats_workflow(db, user_id, user_stats_update)
+) -> None:
+    del user_id, _current_admin
+    raise_retired_mutation_route(
+        code="user_stats_scaffold_removed",
+        message=(
+            "Direct user stats updates are no longer supported. Stats are "
+            "maintained by product-owned workflows."
+        ),
+    )

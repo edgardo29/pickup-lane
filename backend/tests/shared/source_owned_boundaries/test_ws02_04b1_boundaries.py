@@ -114,6 +114,10 @@ def run_client_as_user(client: TestClient, user_id: str, request_fn):
 
 
 def create_venue_via_api(client: TestClient, admin_user_id: str) -> dict:
+    del client
+    from backend.schemas import VenueCreate, VenueRead
+    from backend.services.venue_service import create_venue_record
+
     payload = {
         "address_line_1": "123 Boundary Ave",
         "approved_by_user_id": admin_user_id,
@@ -126,13 +130,9 @@ def create_venue_via_api(client: TestClient, admin_user_id: str) -> dict:
         "state": "IL",
         "venue_status": "approved",
     }
-    response = run_client_as_user(
-        client,
-        admin_user_id,
-        lambda: client.post("/venues", json=payload),
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        venue = create_venue_record(db, VenueCreate.model_validate(payload))
+        return VenueRead.model_validate(venue).model_dump(mode="json")
 
 
 def create_game_via_api(client: TestClient, admin_user_id: str, venue: dict) -> dict:
@@ -179,6 +179,12 @@ def create_game_participant_via_api(
     user_id: str,
     game_id: str,
 ) -> dict:
+    del client, admin_user_id
+    from backend.schemas import GameParticipantCreate, GameParticipantRead
+    from backend.services.game_participant_service import (
+        create_game_participant_workflow,
+    )
+
     payload = {
         "attendance_status": "unknown",
         "booking_id": None,
@@ -192,13 +198,12 @@ def create_game_participant_via_api(
         "roster_order": 1,
         "user_id": user_id,
     }
-    response = run_client_as_user(
-        client,
-        admin_user_id,
-        lambda: client.post("/game-participants", json=payload),
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        participant = create_game_participant_workflow(
+            db,
+            GameParticipantCreate.model_validate(payload),
+        )
+        return GameParticipantRead.model_validate(participant).model_dump(mode="json")
 
 
 def create_game_chat_via_api(
@@ -206,16 +211,21 @@ def create_game_chat_via_api(
     admin_user_id: str,
     game_id: str,
 ) -> dict:
-    response = run_client_as_user(
-        client,
-        admin_user_id,
-        lambda: client.post(
-            "/game-chats",
-            json={"chat_status": "active", "game_id": game_id},
-        ),
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
+    del client
+    from backend.schemas import GameChatCreate, GameChatRead
+    from backend.services.game_chat_service import create_game_chat_record
+
+    with SessionLocal() as db:
+        admin_user = db.get(User, UUID(admin_user_id))
+        assert admin_user is not None
+        game_chat = create_game_chat_record(
+            db,
+            GameChatCreate.model_validate(
+                {"chat_status": "active", "game_id": game_id},
+            ),
+            admin_user,
+        )
+        return GameChatRead.model_validate(game_chat).model_dump(mode="json")
 
 
 def create_sub_post_via_api(

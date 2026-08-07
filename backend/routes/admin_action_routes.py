@@ -5,11 +5,10 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    AdminActionCreate,
     AdminActionDetailRead,
     AdminActionLogListRead,
-    AdminActionNoteCreate,
     AdminActionRead,
 )
 from backend.services.admin_action_policy import ADMIN_ACTION_TARGET_FIELDS
@@ -18,8 +17,6 @@ from backend.services.admin_action_display_service import (
     serialize_admin_action_detail_read,
 )
 from backend.services.admin_action_service import (
-    append_admin_action_note,
-    create_admin_action,
     get_admin_action_for_viewer_or_404,
     list_admin_actions,
     serialize_admin_action_reads,
@@ -45,18 +42,18 @@ def reject_unsupported_log_params(request: Request) -> None:
         )
 
 
-@router.post("", response_model=AdminActionRead, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_admin_action_route(
-    admin_action: AdminActionCreate,
     current_user: User = Depends(require_active_admin),
-    db: Session = Depends(get_db),
-) -> AdminActionRead:
-    created_action = create_admin_action(
-        db,
-        admin_user=current_user,
-        payload=admin_action,
+) -> None:
+    del current_user
+    raise_retired_mutation_route(
+        code="admin_action_scaffold_removed",
+        message=(
+            "Direct admin action creation is no longer supported. Audit actions "
+            "are recorded by product-owned admin workflows."
+        ),
     )
-    return serialize_admin_action_reads(db, [created_action])[0]
 
 
 @router.get(
@@ -102,22 +99,20 @@ def get_admin_action_route(
 
 @router.post(
     "/{admin_action_id}/notes",
-    response_model=AdminActionRead,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_410_GONE,
 )
 def append_admin_action_note_route(
     admin_action_id: uuid.UUID,
-    note: AdminActionNoteCreate,
     current_user: User = Depends(require_active_admin),
-    db: Session = Depends(get_db),
-) -> AdminActionRead:
-    admin_action = append_admin_action_note(
-        db,
-        admin_user=current_user,
-        target_admin_action_id=admin_action_id,
-        payload=note,
+) -> None:
+    del admin_action_id, current_user
+    raise_retired_mutation_route(
+        code="admin_action_note_scaffold_removed",
+        message=(
+            "Direct admin action notes are no longer supported. Admin action "
+            "history is recorded by product-owned workflows."
+        ),
     )
-    return serialize_admin_action_reads(db, [admin_action])[0]
 
 
 @router.get("", response_model=list[AdminActionRead], status_code=status.HTTP_200_OK)

@@ -5,17 +5,14 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import ParticipantStatusHistory, User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    ParticipantStatusHistoryCreate,
     ParticipantStatusHistoryRead,
-    ParticipantStatusHistoryUpdate,
 )
 from backend.services.auth_service import require_active_admin
 from backend.services.status_history_service import (
-    create_participant_status_history_record,
     get_participant_status_history_record,
     list_participant_status_history_records,
-    update_participant_status_history_record,
 )
 
 router = APIRouter(
@@ -26,16 +23,19 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=ParticipantStatusHistoryRead,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_410_GONE,
 )
 def create_participant_status_history(
-    participant_status_history: ParticipantStatusHistoryCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> ParticipantStatusHistory:
+) -> None:
     del current_admin
-    return create_participant_status_history_record(db, participant_status_history)
+    raise_retired_mutation_route(
+        code="participant_status_history_scaffold_removed",
+        message=(
+            "Direct participant status history creation is no longer supported. "
+            "History is recorded by product-owned workflows."
+        ),
+    )
 
 
 @router.get(
@@ -75,18 +75,17 @@ def list_participant_status_history(
 
 @router.patch(
     "/{history_id}",
-    response_model=ParticipantStatusHistoryRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_participant_status_history(
     history_id: uuid.UUID,
-    history_update: ParticipantStatusHistoryUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> ParticipantStatusHistory:
-    del current_admin
-    return update_participant_status_history_record(
-        db,
-        history_id,
-        history_update,
+) -> None:
+    del history_id, current_admin
+    raise_retired_mutation_route(
+        code="participant_status_history_scaffold_removed",
+        message=(
+            "Direct participant status history updates are no longer supported. "
+            "History is recorded by product-owned workflows."
+        ),
     )

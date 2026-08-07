@@ -5,22 +5,19 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameChat, User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    GameChatCreate,
     GameChatEnsureCreate,
     GameChatRead,
     GameChatReadStateRead,
-    GameChatUpdate,
 )
 from backend.services.auth_service import require_active_user, require_active_admin
 from backend.services.game_chat_service import (
-    create_game_chat_record,
     get_game_chat_or_404,
     get_game_chat_read_state_record,
     list_game_chat_records,
     mark_game_chat_read_workflow,
     ensure_game_chat_for_game_workflow,
-    update_game_chat_record,
 )
 
 router = APIRouter(prefix="/game-chats", tags=["game_chats"])
@@ -28,13 +25,18 @@ router = APIRouter(prefix="/game-chats", tags=["game_chats"])
 
 # This route creates the room-level chat record for a game after validating the
 # game can currently support chat.
-@router.post("", response_model=GameChatRead, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_game_chat(
-    game_chat: GameChatCreate,
     current_admin: User = Depends(require_active_admin),
-    db: Session = Depends(get_db),
-) -> GameChat:
-    return create_game_chat_record(db, game_chat, current_admin)
+) -> None:
+    del current_admin
+    raise_retired_mutation_route(
+        code="game_chat_scaffold_removed",
+        message=(
+            "Direct game chat creation is no longer supported. Use scoped "
+            "game and Need-a-Sub chat workflows."
+        ),
+    )
 
 
 @router.post(
@@ -115,18 +117,17 @@ def list_game_chats(
 # lock lifecycle timestamp aligned with chat_status.
 @router.patch(
     "/{game_chat_id}",
-    response_model=GameChatRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_game_chat(
     game_chat_id: uuid.UUID,
-    game_chat_update: GameChatUpdate,
     current_admin: User = Depends(require_active_admin),
-    db: Session = Depends(get_db),
-) -> GameChat:
-    return update_game_chat_record(
-        db,
-        game_chat_id,
-        game_chat_update,
-        current_admin,
+) -> None:
+    del game_chat_id, current_admin
+    raise_retired_mutation_route(
+        code="game_chat_scaffold_removed",
+        message=(
+            "Direct game chat updates are no longer supported. Use scoped "
+            "game and Need-a-Sub chat workflows."
+        ),
     )

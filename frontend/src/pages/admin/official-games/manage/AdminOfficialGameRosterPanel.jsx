@@ -56,16 +56,6 @@ function getRemovalState(participant, hostUserId, canPreviewRemovals) {
     }
   }
 
-  if (
-    participant.participant_status === 'pending_payment'
-    || participant.participant_type === 'admin_added'
-  ) {
-    return {
-      action: 'remove',
-      title: 'Remove player',
-    }
-  }
-
   return {
     action: canPreviewRemovals ? 'preview' : 'disabled',
     title: canPreviewRemovals
@@ -171,7 +161,6 @@ function AdminOfficialGameRosterPanel({
   game,
   isSaving,
   onAddPlayer,
-  onRemovePlayer,
   onPreviewRemoval,
   onSearchUsers,
   participants,
@@ -182,7 +171,6 @@ function AdminOfficialGameRosterPanel({
   const [searchError, setSearchError] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
   const [pendingAddUser, setPendingAddUser] = useState(null)
-  const [pendingRemoveParticipant, setPendingRemoveParticipant] = useState(null)
   const [activeRosterView, setActiveRosterView] = useState('active')
   const searchRequestIdRef = useRef(0)
   const activeParticipants = participants.filter((participant) =>
@@ -302,20 +290,6 @@ function AdminOfficialGameRosterPanel({
       setSearchResults([])
       setSearchState('idle')
       setSearchError('')
-    }
-  }
-
-  async function handleConfirmRemovePlayer() {
-    if (!pendingRemoveParticipant) {
-      return
-    }
-
-    const didRemove = await onRemovePlayer({
-      participant: pendingRemoveParticipant,
-      reason: '',
-    })
-    if (didRemove) {
-      setPendingRemoveParticipant(null)
     }
   }
 
@@ -460,7 +434,6 @@ function AdminOfficialGameRosterPanel({
               canPreviewRemovals,
             )
             const isPreview = removalState.action === 'preview'
-            const isRemove = removalState.action === 'remove'
             const metaLabel = getActiveRosterMetaLabel(participant)
             const email = getParticipantEmail(participant)
 
@@ -492,16 +465,13 @@ function AdminOfficialGameRosterPanel({
                     className={[
                       'admin-official-icon-button',
                       isPreview ? 'admin-official-icon-button--preview' : '',
-                      isRemove ? 'admin-official-icon-button--danger' : '',
                     ].filter(Boolean).join(' ')}
-                    disabled={isSaving || (!isPreview && !isRemove)}
+                    disabled={isSaving || !isPreview}
                     title={removalState.title}
                     type="button"
                     onClick={() => {
                       if (isPreview) {
                         onPreviewRemoval(participant)
-                      } else if (isRemove) {
-                        setPendingRemoveParticipant(participant)
                       }
                     }}
                   >
@@ -573,16 +543,6 @@ function AdminOfficialGameRosterPanel({
         />
       )}
 
-      {pendingRemoveParticipant && (
-        <AdminOfficialGameSimpleConfirmModal
-          confirmLabel="Remove player"
-          isSaving={isSaving}
-          title={`Remove ${pendingRemoveParticipant.display_name_snapshot}?`}
-          variant="danger"
-          onClose={() => setPendingRemoveParticipant(null)}
-          onConfirm={handleConfirmRemovePlayer}
-        />
-      )}
     </>
   )
 }

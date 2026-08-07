@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Booking, User, WaitlistEntry
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
     AdminOfficialGameCancelExecute,
     AdminOfficialGameCancellationPreviewRead,
@@ -14,12 +15,12 @@ from backend.schemas import (
     AdminOfficialGameCreate,
     AdminOfficialGameHostAssign,
     AdminOfficialGameHostRemove,
+    AdminOfficialGameHostRemovalExecute,
     AdminOfficialGameListRead,
     AdminOfficialGameMoneyRead,
     AdminOfficialGameParticipantRead,
     AdminOfficialGamePlayerAdd,
     AdminOfficialGamePlayerRemovalExecute,
-    AdminOfficialGamePlayerRemove,
     AdminOfficialGamePlayerRemovalPreviewRead,
     AdminOfficialGamePlayerRemovalResultRead,
     AdminOfficialGameRead,
@@ -53,7 +54,6 @@ from backend.services.official_game_roster_service import (
     add_official_game_player,
     assign_official_game_host,
     remove_official_game_host,
-    remove_official_game_player,
     search_official_game_add_player_users,
 )
 from backend.services.official_game_service import (
@@ -402,23 +402,21 @@ def add_admin_official_game_player(
 
 @router.delete(
     "/{game_id}/participants/{participant_id}",
-    response_model=GameParticipantRead,
+    status_code=status.HTTP_410_GONE,
 )
 def remove_admin_official_game_player(
     game_id: uuid.UUID,
     participant_id: uuid.UUID,
-    remove_request: AdminOfficialGamePlayerRemove | None = None,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> GameParticipantRead:
-    participant = remove_official_game_player(
-        db,
-        admin_user=current_admin,
-        game_id=game_id,
-        participant_id=participant_id,
-        remove_request=remove_request or AdminOfficialGamePlayerRemove(),
+) -> None:
+    del game_id, participant_id, current_admin
+    raise_retired_mutation_route(
+        code="official_game_player_delete_removed",
+        message=(
+            "Direct official-game player DELETE removal is no longer supported. "
+            "Use the official-game player removal preview and execute actions."
+        ),
     )
-    return participant
 
 
 @router.post(
@@ -459,10 +457,25 @@ def execute_admin_official_game_player_removal(
     )
 
 
-@router.delete("/{game_id}/host", response_model=AdminOfficialGameRead)
+@router.delete("/{game_id}/host", status_code=status.HTTP_410_GONE)
 def remove_admin_official_game_host(
     game_id: uuid.UUID,
-    remove_request: AdminOfficialGameHostRemove | None = None,
+    current_admin: User = Depends(require_active_admin),
+) -> None:
+    del game_id, current_admin
+    raise_retired_mutation_route(
+        code="official_game_host_delete_removed",
+        message=(
+            "Direct official-game host DELETE removal is no longer supported. "
+            "Use the official-game host removal action."
+        ),
+    )
+
+
+@router.post("/{game_id}/host/remove", response_model=AdminOfficialGameRead)
+def remove_admin_official_game_host_action(
+    game_id: uuid.UUID,
+    remove_request: AdminOfficialGameHostRemovalExecute,
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameRead:
@@ -470,6 +483,6 @@ def remove_admin_official_game_host(
         db,
         admin_user=current_admin,
         game_id=game_id,
-        remove_request=remove_request or AdminOfficialGameHostRemove(),
+        remove_request=AdminOfficialGameHostRemove(reason=remove_request.reason),
     )
     return AdminOfficialGameRead(game=game)

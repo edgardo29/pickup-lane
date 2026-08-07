@@ -5,27 +5,30 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User, Venue
-from backend.schemas import VenueCreate, VenueRead, VenueUpdate
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
+from backend.schemas import VenueRead
 from backend.services.auth_service import require_active_admin
 from backend.services.venue_service import (
-    create_venue_record,
     delete_venue_record,
     get_public_venue_or_404,
     list_public_venue_records,
-    update_venue_record,
 )
 
 router = APIRouter(prefix="/venues", tags=["venues"])
 
 
-@router.post("", response_model=VenueRead, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_venue(
-    venue: VenueCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> Venue:
+) -> None:
     del current_admin
-    return create_venue_record(db, venue)
+    raise_retired_mutation_route(
+        code="venue_scaffold_removed",
+        message=(
+            "Direct venue creation is no longer supported. Use product-owned "
+            "game creation or admin venue-image workflows."
+        ),
+    )
 
 
 @router.get("/{venue_id}", response_model=VenueRead, status_code=status.HTTP_200_OK)
@@ -41,15 +44,19 @@ def list_venues(
     return list_public_venue_records(db, include_inactive=include_inactive)
 
 
-@router.patch("/{venue_id}", response_model=VenueRead, status_code=status.HTTP_200_OK)
+@router.patch("/{venue_id}", status_code=status.HTTP_410_GONE)
 def update_venue(
     venue_id: uuid.UUID,
-    venue_update: VenueUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> Venue:
-    del current_admin
-    return update_venue_record(db, venue_id, venue_update)
+) -> None:
+    del venue_id, current_admin
+    raise_retired_mutation_route(
+        code="venue_scaffold_removed",
+        message=(
+            "Direct venue updates are no longer supported. Use product-owned "
+            "game creation or admin venue-image workflows."
+        ),
+    )
 
 
 @router.delete("/{venue_id}", response_model=VenueRead, status_code=status.HTTP_200_OK)

@@ -5,17 +5,14 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import BookingPolicyAcceptance, User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    BookingPolicyAcceptanceCreate,
     BookingPolicyAcceptanceRead,
-    BookingPolicyAcceptanceUpdate,
 )
 from backend.services.auth_service import require_active_admin
 from backend.services.booking_policy_acceptance_service import (
-    create_booking_policy_acceptance_record,
     get_booking_policy_acceptance_record,
     list_booking_policy_acceptance_records,
-    update_booking_policy_acceptance_record,
 )
 
 router = APIRouter(
@@ -26,16 +23,19 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=BookingPolicyAcceptanceRead,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_410_GONE,
 )
 def create_booking_policy_acceptance(
-    booking_policy_acceptance: BookingPolicyAcceptanceCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> BookingPolicyAcceptance:
+) -> None:
     del current_admin
-    return create_booking_policy_acceptance_record(db, booking_policy_acceptance)
+    raise_retired_mutation_route(
+        code="booking_policy_acceptance_scaffold_removed",
+        message=(
+            "Direct booking policy acceptance creation is no longer supported. "
+            "Booking policy state is recorded by product-owned workflows."
+        ),
+    )
 
 
 @router.get(
@@ -73,18 +73,17 @@ def list_booking_policy_acceptances(
 
 @router.patch(
     "/{booking_policy_acceptance_id}",
-    response_model=BookingPolicyAcceptanceRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_booking_policy_acceptance(
     booking_policy_acceptance_id: uuid.UUID,
-    booking_policy_acceptance_update: BookingPolicyAcceptanceUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> BookingPolicyAcceptance:
-    del current_admin
-    return update_booking_policy_acceptance_record(
-        db,
-        booking_policy_acceptance_id,
-        booking_policy_acceptance_update,
+) -> None:
+    del booking_policy_acceptance_id, current_admin
+    raise_retired_mutation_route(
+        code="booking_policy_acceptance_scaffold_removed",
+        message=(
+            "Direct booking policy acceptance updates are no longer supported. "
+            "Booking policy state is recorded by product-owned workflows."
+        ),
     )

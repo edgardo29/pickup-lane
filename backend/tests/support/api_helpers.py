@@ -7,6 +7,11 @@ from backend.tests.support.factories import unique_suffix
 
 
 def create_venue(client: TestClient, user_id: str, **overrides: object) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import VenueCreate, VenueRead
+    from backend.services.venue_service import create_venue_record
+
     payload = {
         "name": "CI Test Field",
         "address_line_1": "123 Test Ave",
@@ -21,13 +26,9 @@ def create_venue(client: TestClient, user_id: str, **overrides: object) -> dict:
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/venues", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        venue = create_venue_record(db, VenueCreate.model_validate(payload))
+        return VenueRead.model_validate(venue).model_dump(mode="json")
 
 
 def create_game(
@@ -87,6 +88,11 @@ def create_game(
 def create_booking(
     client: TestClient, user_id: str, game_id: str, **overrides: object
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import BookingCreate, BookingRead
+    from backend.services.booking_service import create_booking_workflow
+
     payload = {
         "game_id": game_id,
         "buyer_user_id": user_id,
@@ -110,13 +116,9 @@ def create_booking(
             datetime.now(UTC) + timedelta(minutes=2)
         ).isoformat()
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/bookings", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        booking = create_booking_workflow(db, BookingCreate.model_validate(payload))
+        return BookingRead.model_validate(booking).model_dump(mode="json")
 
 
 def create_game_participant(
@@ -126,6 +128,13 @@ def create_game_participant(
     booking_id: str | None = None,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import GameParticipantCreate, GameParticipantRead
+    from backend.services.game_participant_service import (
+        create_game_participant_workflow,
+    )
+
     payload = {
         "game_id": game_id,
         "booking_id": booking_id,
@@ -141,18 +150,22 @@ def create_game_participant(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/game-participants", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        participant = create_game_participant_workflow(
+            db,
+            GameParticipantCreate.model_validate(payload),
+        )
+        return GameParticipantRead.model_validate(participant).model_dump(mode="json")
 
 
 def create_waitlist_entry(
     client: TestClient, user_id: str, game_id: str, **overrides: object
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import WaitlistEntryCreate, WaitlistEntryRead
+    from backend.services.waitlist_entry_service import create_waitlist_entry_workflow
+
     payload = {
         "game_id": game_id,
         "user_id": user_id,
@@ -161,13 +174,12 @@ def create_waitlist_entry(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/waitlist-entries", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        waitlist_entry = create_waitlist_entry_workflow(
+            db,
+            WaitlistEntryCreate.model_validate(payload),
+        )
+        return WaitlistEntryRead.model_validate(waitlist_entry).model_dump(mode="json")
 
 
 def create_game_image(
@@ -176,6 +188,11 @@ def create_game_image(
     uploaded_by_user_id: str | None = None,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import GameImageCreate, GameImageRead
+    from backend.services.game_image_service import create_game_image_record
+
     payload = {
         "game_id": game_id,
         "uploaded_by_user_id": uploaded_by_user_id,
@@ -189,10 +206,9 @@ def create_game_image(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/game-images", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        game_image = create_game_image_record(
+            db,
+            GameImageCreate.model_validate(payload),
+        )
+        return GameImageRead.model_validate(game_image).model_dump(mode="json")

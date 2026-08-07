@@ -194,6 +194,7 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCreate,
     AdminOfficialGameHostAssign,
     AdminOfficialGameHostRemove,
+    AdminOfficialGameHostRemovalExecute,
     AdminOfficialGameListRead,
     AdminOfficialGameMoneyRead,
     AdminOfficialGameParticipantRead,

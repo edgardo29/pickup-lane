@@ -5,18 +5,15 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import HostPublishFee, User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    HostPublishFeeCreate,
     HostPublishFeeRead,
-    HostPublishFeeUpdate,
 )
 from backend.services.auth_service import require_active_user, require_active_admin
 from backend.services.host_publish_fee_service import (
-    create_host_publish_fee_record,
     get_host_publish_fee_record,
     list_current_host_publish_fee_records,
     list_host_publish_fee_records,
-    update_host_publish_fee_record,
 )
 
 router = APIRouter(prefix="/host-publish-fees", tags=["host_publish_fees"])
@@ -24,16 +21,19 @@ router = APIRouter(prefix="/host-publish-fees", tags=["host_publish_fees"])
 
 @router.post(
     "",
-    response_model=HostPublishFeeRead,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_410_GONE,
 )
 def create_host_publish_fee(
-    host_publish_fee: HostPublishFeeCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> HostPublishFee:
+) -> None:
     del current_admin
-    return create_host_publish_fee_record(db, host_publish_fee)
+    raise_retired_mutation_route(
+        code="host_publish_fee_scaffold_removed",
+        message=(
+            "Direct host publish fee creation is no longer supported. Use "
+            "product-owned publish and payment workflows."
+        ),
+    )
 
 
 @router.get(
@@ -85,18 +85,17 @@ def list_host_publish_fees(
 
 @router.patch(
     "/{host_publish_fee_id}",
-    response_model=HostPublishFeeRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_host_publish_fee(
     host_publish_fee_id: uuid.UUID,
-    host_publish_fee_update: HostPublishFeeUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> HostPublishFee:
-    del current_admin
-    return update_host_publish_fee_record(
-        db,
-        host_publish_fee_id,
-        host_publish_fee_update,
+) -> None:
+    del host_publish_fee_id, current_admin
+    raise_retired_mutation_route(
+        code="host_publish_fee_scaffold_removed",
+        message=(
+            "Direct host publish fee updates are no longer supported. Use "
+            "product-owned publish and payment workflows."
+        ),
     )

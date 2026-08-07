@@ -5,17 +5,14 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import BookingStatusHistory, User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    BookingStatusHistoryCreate,
     BookingStatusHistoryRead,
-    BookingStatusHistoryUpdate,
 )
 from backend.services.auth_service import require_active_admin
 from backend.services.status_history_service import (
-    create_booking_status_history_record,
     get_booking_status_history_record,
     list_booking_status_history_records,
-    update_booking_status_history_record,
 )
 
 router = APIRouter(prefix="/booking-status-history", tags=["booking_status_history"])
@@ -23,16 +20,19 @@ router = APIRouter(prefix="/booking-status-history", tags=["booking_status_histo
 
 @router.post(
     "",
-    response_model=BookingStatusHistoryRead,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_410_GONE,
 )
 def create_booking_status_history(
-    booking_status_history: BookingStatusHistoryCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> BookingStatusHistory:
+) -> None:
     del current_admin
-    return create_booking_status_history_record(db, booking_status_history)
+    raise_retired_mutation_route(
+        code="booking_status_history_scaffold_removed",
+        message=(
+            "Direct booking status history creation is no longer supported. "
+            "History is recorded by product-owned workflows."
+        ),
+    )
 
 
 @router.get(
@@ -72,14 +72,17 @@ def list_booking_status_history(
 
 @router.patch(
     "/{history_id}",
-    response_model=BookingStatusHistoryRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_booking_status_history(
     history_id: uuid.UUID,
-    history_update: BookingStatusHistoryUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> BookingStatusHistory:
-    del current_admin
-    return update_booking_status_history_record(db, history_id, history_update)
+) -> None:
+    del history_id, current_admin
+    raise_retired_mutation_route(
+        code="booking_status_history_scaffold_removed",
+        message=(
+            "Direct booking status history updates are no longer supported. "
+            "History is recorded by product-owned workflows."
+        ),
+    )
