@@ -275,6 +275,7 @@ from backend.schemas.game_image_schema import (
 from backend.schemas.game_schema import (
     GameCancelCreate,
     GameAvailabilityRead,
+    GameBookingGuestAddCreate,
     GameCardListRead,
     GameCardRead,
     GameCreate,
@@ -621,6 +622,7 @@ __all__ = [
     "GameImageUpdate",
     "GameCancelCreate",
     "GameAvailabilityRead",
+    "GameBookingGuestAddCreate",
     "GameCardListRead",
     "GameCardRead",
     "GameCreate",

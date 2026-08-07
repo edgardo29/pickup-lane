@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,6 +11,16 @@ from backend.schemas.payment_schema import PaymentRead
 from backend.schemas.refund_schema import RefundRead
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+AdminOfficialRemovalOutcome = Literal[
+    "remove_only",
+    "release_pending_hold_and_remove_party",
+    "refund_cash_and_remove_party",
+    "restore_credit_and_remove_party",
+    "refund_cash_restore_credit_and_remove_party",
+]
+MAX_PRICE_PER_PLAYER_CENTS = 99_900
+MAX_TOTAL_SPOTS = 99
+MIN_TOTAL_SPOTS = 6
 
 
 class AdminOfficialGameVenuePayload(BaseModel):
@@ -37,15 +48,15 @@ class AdminOfficialGameCreate(BaseModel):
     game_player_group: str = "coed"
     skill_level: str = "any"
     environment_type: str
-    total_spots: int
-    price_per_player_cents: int
+    total_spots: int = Field(ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
+    price_per_player_cents: int = Field(ge=0, le=MAX_PRICE_PER_PLAYER_CENTS)
     allow_guests: bool = True
-    max_guests_per_booking: int = 2
+    max_guests_per_booking: int = Field(default=2, ge=0, le=2)
     waitlist_enabled: bool = True
     is_chat_enabled: bool = True
     game_notes: str | None = None
     parking_notes: str | None = None
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=1000)
     replacement_for_game_id: UUID | None = None
 
 
@@ -60,41 +71,45 @@ class AdminOfficialGameUpdate(BaseModel):
     game_player_group: str | None = None
     skill_level: str | None = None
     environment_type: str | None = None
-    total_spots: int | None = None
-    price_per_player_cents: int | None = None
+    total_spots: int | None = Field(default=None, ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
+    price_per_player_cents: int | None = Field(
+        default=None,
+        ge=0,
+        le=MAX_PRICE_PER_PLAYER_CENTS,
+    )
     allow_guests: bool | None = None
-    max_guests_per_booking: int | None = None
+    max_guests_per_booking: int | None = Field(default=None, ge=0, le=2)
     waitlist_enabled: bool | None = None
     is_chat_enabled: bool | None = None
     game_notes: str | None = None
     parking_notes: str | None = None
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class AdminOfficialGameHostAssign(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     host_user_id: UUID
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class AdminOfficialGameHostRemove(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class AdminOfficialGamePlayerAdd(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     user_id: UUID
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class AdminOfficialGamePlayerRemove(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class AdminOfficialGameUserSearchEligibilityRead(BaseModel):
@@ -122,7 +137,7 @@ class AdminOfficialGamePlayerRemovalExecute(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     preview_token: str = Field(min_length=64, max_length=64)
-    outcome: str
+    outcome: AdminOfficialRemovalOutcome
     reason: str = Field(min_length=1, max_length=1000)
 
 

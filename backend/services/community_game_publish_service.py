@@ -421,7 +421,9 @@ def create_published_community_game_records(
         CommunityGameDetail(
             id=uuid.uuid4(),
             game_id=game_id,
-            payment_methods_snapshot=publish_request.payment_methods_snapshot,
+            payment_methods_snapshot=[
+                method.model_dump() for method in publish_request.payment_methods_snapshot
+            ],
             payment_instructions_snapshot=(
                 publish_request.payment_instructions_snapshot
             ),

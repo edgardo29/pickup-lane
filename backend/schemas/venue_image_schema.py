@@ -1,9 +1,12 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+VenueImageRole = Literal["card", "gallery"]
+VenueImageStatus = Literal["pending_upload", "active", "hidden", "removed"]
 
 
 class VenueImageUploadCreate(BaseModel):
@@ -12,9 +15,9 @@ class VenueImageUploadCreate(BaseModel):
     file_name: str = Field(min_length=1, max_length=255)
     content_type: str = Field(min_length=1, max_length=120)
     size_bytes: int = Field(gt=0)
-    image_role: str = "gallery"
+    image_role: VenueImageRole = "gallery"
     is_primary: bool = False
-    sort_order: int = Field(default=0, ge=0)
+    sort_order: int = Field(default=0, ge=0, le=2)
     alt_text: str | None = Field(default=None, max_length=280)
     caption: str | None = Field(default=None, max_length=280)
 
@@ -28,10 +31,10 @@ class VenueImageCompleteUpload(BaseModel):
 class VenueImageUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    image_role: str | None = None
-    image_status: str | None = None
+    image_role: VenueImageRole | None = None
+    image_status: VenueImageStatus | None = None
     is_primary: bool | None = None
-    sort_order: int | None = Field(default=None, ge=0)
+    sort_order: int | None = Field(default=None, ge=0, le=2)
     alt_text: str | None = Field(default=None, max_length=280)
     caption: str | None = Field(default=None, max_length=280)
     reason: str | None = Field(default=None, max_length=500)

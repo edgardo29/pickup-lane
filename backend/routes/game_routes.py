@@ -37,6 +37,7 @@ from backend.services.game_roster_service import (
 )
 from backend.schemas import (
     GameCancelCreate,
+    GameBookingGuestAddCreate,
     GameCardListRead,
     GameCreate,
     GameGuestAddCreate,
@@ -99,7 +100,7 @@ def leave_game(
 )
 def add_booking_game_guests(
     game_id: uuid.UUID,
-    guest_request: GameGuestAddCreate,
+    guest_request: GameBookingGuestAddCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> GameGuestAddRead:

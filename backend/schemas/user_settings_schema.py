@@ -1,9 +1,11 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
+LocationPermissionStatus = Literal["unknown", "allowed", "denied", "skipped"]
 
 
 # UserSettingsCreate defines the fields the client is allowed to send when
@@ -17,9 +19,9 @@ class UserSettingsCreate(BaseModel):
     email_notifications_enabled: bool = False
     sms_notifications_enabled: bool = False
     marketing_opt_in: bool = False
-    location_permission_status: str = "unknown"
-    selected_city: str | None = None
-    selected_state: str | None = None
+    location_permission_status: LocationPermissionStatus = "unknown"
+    selected_city: str | None = Field(default=None, max_length=120)
+    selected_state: str | None = Field(default=None, max_length=120)
 
 
 # UserSettingsRead defines the settings payload returned by the API.
@@ -49,6 +51,6 @@ class UserSettingsUpdate(BaseModel):
     email_notifications_enabled: bool | None = None
     sms_notifications_enabled: bool | None = None
     marketing_opt_in: bool | None = None
-    location_permission_status: str | None = None
-    selected_city: str | None = None
-    selected_state: str | None = None
+    location_permission_status: LocationPermissionStatus | None = None
+    selected_city: str | None = Field(default=None, max_length=120)
+    selected_state: str | None = Field(default=None, max_length=120)
