@@ -194,10 +194,10 @@ export async function assignAdminOfficialGameHost({
 }
 
 export async function removeAdminOfficialGameHost({ firebaseUser, gameId, reason }) {
-  return apiRequest(`/admin/official-games/${gameId}/host`, {
-    method: 'DELETE',
+  return apiRequest(`/admin/official-games/${gameId}/host/remove`, {
+    method: 'POST',
     headers: await getAdminHeaders(firebaseUser, true),
-    body: JSON.stringify(reason ? { reason } : {}),
+    body: JSON.stringify({ reason }),
   })
 }
 
@@ -214,19 +214,6 @@ export async function addAdminOfficialGamePlayer({
       user_id: userId,
       ...(reason ? { reason } : {}),
     }),
-  })
-}
-
-export async function removeAdminOfficialGamePlayer({
-  firebaseUser,
-  gameId,
-  participantId,
-  reason,
-}) {
-  return apiRequest(`/admin/official-games/${gameId}/participants/${participantId}`, {
-    method: 'DELETE',
-    headers: await getAdminHeaders(firebaseUser, true),
-    body: JSON.stringify(reason ? { reason } : {}),
   })
 }
 

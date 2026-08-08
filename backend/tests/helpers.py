@@ -151,6 +151,11 @@ def get_roster_as_admin(client: TestClient, path: str):
 
 
 def create_user_settings(client: TestClient, user_id: str, **overrides: object) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import UserSettingsCreate, UserSettingsRead
+    from backend.services.user_settings_service import create_user_settings_workflow
+
     payload = {
         "user_id": user_id,
         "selected_city": "Chicago",
@@ -158,13 +163,12 @@ def create_user_settings(client: TestClient, user_id: str, **overrides: object) 
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/user-settings", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        user_settings = create_user_settings_workflow(
+            db,
+            UserSettingsCreate.model_validate(payload),
+        )
+        return UserSettingsRead.model_validate(user_settings).model_dump(mode="json")
 
 
 def create_user_payment_method(
@@ -259,6 +263,11 @@ def mock_checkout_payment_method_verification(
 
 
 def create_venue(client: TestClient, user_id: str, **overrides: object) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import VenueCreate, VenueRead
+    from backend.services.venue_service import create_venue_record
+
     payload = {
         "name": "CI Test Field",
         "address_line_1": "123 Test Ave",
@@ -273,13 +282,9 @@ def create_venue(client: TestClient, user_id: str, **overrides: object) -> dict:
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/venues", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        venue = create_venue_record(db, VenueCreate.model_validate(payload))
+        return VenueRead.model_validate(venue).model_dump(mode="json")
 
 
 def create_game(
@@ -395,6 +400,11 @@ def create_sub_post(client: TestClient, owner_user_id: str, **overrides: object)
 def create_booking(
     client: TestClient, user_id: str, game_id: str, **overrides: object
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import BookingCreate, BookingRead
+    from backend.services.booking_service import create_booking_workflow
+
     payload = {
         "game_id": game_id,
         "buyer_user_id": user_id,
@@ -413,16 +423,9 @@ def create_booking(
     if payload["booking_status"] == "pending_payment" and payload.get("expires_at") is None:
         payload["expires_at"] = (datetime.now(UTC) + timedelta(minutes=2)).isoformat()
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post(
-            "/bookings",
-            json=payload,
-        ),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        booking = create_booking_workflow(db, BookingCreate.model_validate(payload))
+        return BookingRead.model_validate(booking).model_dump(mode="json")
 
 
 def create_game_participant(
@@ -432,6 +435,13 @@ def create_game_participant(
     booking_id: str | None = None,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import GameParticipantCreate, GameParticipantRead
+    from backend.services.game_participant_service import (
+        create_game_participant_workflow,
+    )
+
     payload = {
         "game_id": game_id,
         "booking_id": booking_id,
@@ -447,18 +457,22 @@ def create_game_participant(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/game-participants", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        participant = create_game_participant_workflow(
+            db,
+            GameParticipantCreate.model_validate(payload),
+        )
+        return GameParticipantRead.model_validate(participant).model_dump(mode="json")
 
 
 def create_waitlist_entry(
     client: TestClient, user_id: str, game_id: str, **overrides: object
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import WaitlistEntryCreate, WaitlistEntryRead
+    from backend.services.waitlist_entry_service import create_waitlist_entry_workflow
+
     payload = {
         "game_id": game_id,
         "user_id": user_id,
@@ -467,13 +481,12 @@ def create_waitlist_entry(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/waitlist-entries", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        waitlist_entry = create_waitlist_entry_workflow(
+            db,
+            WaitlistEntryCreate.model_validate(payload),
+        )
+        return WaitlistEntryRead.model_validate(waitlist_entry).model_dump(mode="json")
 
 
 def create_payment(
@@ -540,19 +553,28 @@ def create_refund(
 
 
 def create_game_chat(client: TestClient, game_id: str, **overrides: object) -> dict:
+    from backend.database import SessionLocal
+    from backend.models import User
+    from backend.schemas import GameChatCreate, GameChatRead
+    from backend.services.game_chat_service import create_game_chat_record
+
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
     payload = {
         "game_id": game_id,
         "chat_status": "active",
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/game-chats", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        admin_user = db.get(User, UUID(admin["id"]))
+        assert admin_user is not None
+        game_chat = create_game_chat_record(
+            db,
+            GameChatCreate.model_validate(payload),
+            admin_user,
+        )
+        return GameChatRead.model_validate(game_chat).model_dump(mode="json")
 
 
 def create_chat_message(
@@ -620,6 +642,11 @@ def create_game_status_history(
     game_id: str,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import GameStatusHistoryCreate, GameStatusHistoryRead
+    from backend.services.status_history_service import create_game_status_history_record
+
     payload = {
         "game_id": game_id,
         "old_publish_status": "draft",
@@ -631,13 +658,12 @@ def create_game_status_history(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/game-status-history", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        history = create_game_status_history_record(
+            db,
+            GameStatusHistoryCreate.model_validate(payload),
+        )
+        return GameStatusHistoryRead.model_validate(history).model_dump(mode="json")
 
 
 def create_booking_status_history(
@@ -645,6 +671,16 @@ def create_booking_status_history(
     booking_id: str,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import (
+        BookingStatusHistoryCreate,
+        BookingStatusHistoryRead,
+    )
+    from backend.services.status_history_service import (
+        create_booking_status_history_record,
+    )
+
     payload = {
         "booking_id": booking_id,
         "old_booking_status": "pending_payment",
@@ -656,13 +692,12 @@ def create_booking_status_history(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/booking-status-history", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        history = create_booking_status_history_record(
+            db,
+            BookingStatusHistoryCreate.model_validate(payload),
+        )
+        return BookingStatusHistoryRead.model_validate(history).model_dump(mode="json")
 
 
 def create_participant_status_history(
@@ -670,6 +705,16 @@ def create_participant_status_history(
     participant_id: str,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import (
+        ParticipantStatusHistoryCreate,
+        ParticipantStatusHistoryRead,
+    )
+    from backend.services.status_history_service import (
+        create_participant_status_history_record,
+    )
+
     payload = {
         "participant_id": participant_id,
         "old_participant_status": "pending_payment",
@@ -681,13 +726,14 @@ def create_participant_status_history(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/participant-status-history", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        history = create_participant_status_history_record(
+            db,
+            ParticipantStatusHistoryCreate.model_validate(payload),
+        )
+        return ParticipantStatusHistoryRead.model_validate(history).model_dump(
+            mode="json"
+        )
 
 
 def create_user_stats(
@@ -695,6 +741,11 @@ def create_user_stats(
     user_id: str,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import UserStatsCreate, UserStatsRead
+    from backend.services.user_stats_service import create_user_stats_workflow
+
     payload = {
         "user_id": user_id,
         "games_played_count": 3,
@@ -705,13 +756,12 @@ def create_user_stats(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/user-stats", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        user_stats = create_user_stats_workflow(
+            db,
+            UserStatsCreate.model_validate(payload),
+        )
+        return UserStatsRead.model_validate(user_stats).model_dump(mode="json")
 
 
 def create_admin_action(
@@ -719,7 +769,15 @@ def create_admin_action(
     admin_user_id: str,
     **overrides: object,
 ) -> dict:
-    authenticate_as(admin_user_id)
+    del client
+    from backend.database import SessionLocal
+    from backend.models import User
+    from backend.schemas import AdminActionCreate
+    from backend.services.admin_action_service import (
+        create_admin_action as create_admin_action_record,
+        serialize_admin_action_reads,
+    )
+
     payload = {
         "action_type": "suspend_user",
         "reason": "CI admin action row",
@@ -727,10 +785,17 @@ def create_admin_action(
     }
     payload.update(overrides)
 
-    response = client.post("/admin/actions", json=payload)
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        admin_user = db.get(User, UUID(admin_user_id))
+        assert admin_user is not None
+        admin_action = create_admin_action_record(
+            db,
+            admin_user=admin_user,
+            payload=AdminActionCreate.model_validate(payload),
+        )
+        return serialize_admin_action_reads(db, [admin_action])[0].model_dump(
+            mode="json"
+        )
 
 
 def create_payment_event(
@@ -812,19 +877,30 @@ def create_booking_policy_acceptance(
     policy_document_id: str,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import (
+        BookingPolicyAcceptanceCreate,
+        BookingPolicyAcceptanceRead,
+    )
+    from backend.services.booking_policy_acceptance_service import (
+        create_booking_policy_acceptance_record,
+    )
+
     payload = {
         "booking_id": booking_id,
         "policy_document_id": policy_document_id,
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/booking-policy-acceptances", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        acceptance = create_booking_policy_acceptance_record(
+            db,
+            BookingPolicyAcceptanceCreate.model_validate(payload),
+        )
+        return BookingPolicyAcceptanceRead.model_validate(acceptance).model_dump(
+            mode="json"
+        )
 
 
 def create_venue_approval_request(
@@ -832,6 +908,16 @@ def create_venue_approval_request(
     submitted_by_user_id: str,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import (
+        VenueApprovalRequestCreate,
+        VenueApprovalRequestRead,
+    )
+    from backend.services.venue_approval_request_service import (
+        create_venue_approval_request_record,
+    )
+
     payload = {
         "submitted_by_user_id": submitted_by_user_id,
         "requested_name": "CI Requested Soccer Field",
@@ -843,13 +929,14 @@ def create_venue_approval_request(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/venue-approval-requests", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        approval_request = create_venue_approval_request_record(
+            db,
+            VenueApprovalRequestCreate.model_validate(payload),
+        )
+        return VenueApprovalRequestRead.model_validate(approval_request).model_dump(
+            mode="json"
+        )
 
 
 def create_game_image(
@@ -858,6 +945,11 @@ def create_game_image(
     uploaded_by_user_id: str | None = None,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import GameImageCreate, GameImageRead
+    from backend.services.game_image_service import create_game_image_record
+
     payload = {
         "game_id": game_id,
         "uploaded_by_user_id": uploaded_by_user_id,
@@ -869,13 +961,12 @@ def create_game_image(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/game-images", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        game_image = create_game_image_record(
+            db,
+            GameImageCreate.model_validate(payload),
+        )
+        return GameImageRead.model_validate(game_image).model_dump(mode="json")
 
 
 def create_community_game_detail(
@@ -904,6 +995,11 @@ def create_host_publish_fee(
     host_user_id: str,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import HostPublishFeeCreate, HostPublishFeeRead
+    from backend.services.host_publish_fee_service import create_host_publish_fee_record
+
     payload = {
         "game_id": game_id,
         "host_user_id": host_user_id,
@@ -914,10 +1010,11 @@ def create_host_publish_fee(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/host-publish-fees", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        host_publish_fee = create_host_publish_fee_record(
+            db,
+            HostPublishFeeCreate.model_validate(payload),
+        )
+        return HostPublishFeeRead.model_validate(host_publish_fee).model_dump(
+            mode="json"
+        )

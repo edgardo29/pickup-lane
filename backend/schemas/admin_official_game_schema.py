@@ -99,6 +99,12 @@ class AdminOfficialGameHostRemove(BaseModel):
     reason: str | None = Field(default=None, max_length=1000)
 
 
+class AdminOfficialGameHostRemovalExecute(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    reason: str = Field(min_length=1, max_length=1000)
+
+
 class AdminOfficialGamePlayerAdd(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 

@@ -5,32 +5,34 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User, WaitlistEntry
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
     CurrentUserWaitlistEntryRead,
-    WaitlistEntryCreate,
     WaitlistEntryRead,
-    WaitlistEntryUpdate,
 )
 from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.waitlist_entry_service import (
-    create_waitlist_entry_workflow,
     get_waitlist_entry_for_user_or_404,
     list_current_user_waitlist_entries,
     list_waitlist_entries as list_waitlist_entries_workflow,
-    update_waitlist_entry_workflow,
 )
 
 router = APIRouter(prefix="/waitlist-entries", tags=["waitlist_entries"])
 
 
-# Admin-only endpoint for protected waitlist entry creation.
-@router.post("", response_model=WaitlistEntryRead, status_code=status.HTTP_201_CREATED)
+# Retired public/admin scaffold. Supported waitlist mutations are service-owned.
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_waitlist_entry(
-    waitlist_entry: WaitlistEntryCreate,
-    db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
-) -> WaitlistEntry:
-    return create_waitlist_entry_workflow(db, waitlist_entry)
+) -> None:
+    del _current_admin
+    raise_retired_mutation_route(
+        code="waitlist_entry_scaffold_removed",
+        message=(
+            "Direct waitlist-entry creation is no longer supported. Use "
+            "product-owned waitlist workflows."
+        ),
+    )
 
 
 @router.get(
@@ -76,16 +78,20 @@ def list_waitlist_entries(
     )
 
 
-# Admin-only endpoint for protected waitlist entry updates.
+# Retired public/admin scaffold. Supported waitlist mutations are service-owned.
 @router.patch(
     "/{waitlist_entry_id}",
-    response_model=WaitlistEntryRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_waitlist_entry(
     waitlist_entry_id: uuid.UUID,
-    waitlist_entry_update: WaitlistEntryUpdate,
-    db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
-) -> WaitlistEntry:
-    return update_waitlist_entry_workflow(db, waitlist_entry_id, waitlist_entry_update)
+) -> None:
+    del waitlist_entry_id, _current_admin
+    raise_retired_mutation_route(
+        code="waitlist_entry_scaffold_removed",
+        message=(
+            "Direct waitlist-entry updates are no longer supported. Use "
+            "product-owned waitlist workflows."
+        ),
+    )

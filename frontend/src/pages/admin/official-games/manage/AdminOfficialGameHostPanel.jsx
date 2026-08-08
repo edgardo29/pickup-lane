@@ -32,6 +32,7 @@ function AdminOfficialGameHostPanel({
   const [hostUserId, setHostUserId] = useState(game.host_user_id ?? '')
   const [pendingHostParticipant, setPendingHostParticipant] = useState(null)
   const [isRemoveHostConfirmOpen, setIsRemoveHostConfirmOpen] = useState(false)
+  const [removeHostReason, setRemoveHostReason] = useState('')
   const currentHostParticipant = useMemo(
     () => participants.find((participant) =>
       participant.user_id === game.host_user_id
@@ -72,9 +73,10 @@ function AdminOfficialGameHostPanel({
   }
 
   async function handleConfirmRemoveHost() {
-    const didRemove = await onRemoveHost('')
+    const didRemove = await onRemoveHost(removeHostReason.trim())
     if (didRemove) {
       setIsRemoveHostConfirmOpen(false)
+      setRemoveHostReason('')
     }
   }
 
@@ -138,7 +140,10 @@ function AdminOfficialGameHostPanel({
                 disabled={isSaving || !game.host_user_id}
                 title="Remove host"
                 type="button"
-                onClick={() => setIsRemoveHostConfirmOpen(true)}
+                onClick={() => {
+                  setRemoveHostReason('')
+                  setIsRemoveHostConfirmOpen(true)
+                }}
               >
                 <span>Remove host</span>
               </button>
@@ -161,10 +166,19 @@ function AdminOfficialGameHostPanel({
         <AdminOfficialGameSimpleConfirmModal
           confirmLabel="Remove host"
           isSaving={isSaving}
+          reasonLabel="Internal reason"
+          reasonMaxLength={1000}
+          reasonPlaceholder="Required host removal reason"
+          reasonValue={removeHostReason}
+          requireReason
           title="Remove host?"
           variant="danger"
-          onClose={() => setIsRemoveHostConfirmOpen(false)}
+          onClose={() => {
+            setIsRemoveHostConfirmOpen(false)
+            setRemoveHostReason('')
+          }}
           onConfirm={handleConfirmRemoveHost}
+          onReasonChange={setRemoveHostReason}
         />
       )}
     </>

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.services.auth_service import get_optional_current_app_user, require_active_admin, require_active_user
 from backend.schemas import (
     SubPostCancel,
@@ -18,7 +19,6 @@ from backend.schemas import (
     SubPostListRead,
     SubPostPublicRead,
     SubPostRead,
-    SubPostRemove,
     SubPostUpdate,
 )
 from backend.services.need_a_sub_post_service import (
@@ -28,7 +28,6 @@ from backend.services.need_a_sub_post_service import (
     list_owner_sub_posts,
     list_sub_post_cards,
     list_visible_sub_posts,
-    remove_sub_post_workflow,
     update_sub_post_workflow,
 )
 from backend.services.sub_post_chat_service import (
@@ -248,19 +247,17 @@ def cancel_need_a_sub_post(
 
 @router.patch(
     "/{sub_post_id}/remove",
-    response_model=SubPostRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def remove_need_a_sub_post(
     sub_post_id: uuid.UUID,
-    payload: SubPostRemove,
-    db: Session = Depends(get_db),
     current_user: User = Depends(require_active_admin),
-) -> dict:
-    return remove_sub_post_workflow(
-        db,
-        current_user,
-        sub_post_id,
-        payload.remove_reason,
-        payload.idempotency_key,
+) -> None:
+    del sub_post_id, current_user
+    raise_retired_mutation_route(
+        code="need_a_sub_legacy_remove_route_removed",
+        message=(
+            "This Need-a-Sub removal path is no longer supported. Use the "
+            "admin Need-a-Sub removal action."
+        ),
     )

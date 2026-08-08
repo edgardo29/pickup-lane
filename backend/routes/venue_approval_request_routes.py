@@ -5,17 +5,14 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User, VenueApprovalRequest
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    VenueApprovalRequestCreate,
     VenueApprovalRequestRead,
-    VenueApprovalRequestUpdate,
 )
 from backend.services.auth_service import require_active_admin
 from backend.services.venue_approval_request_service import (
-    create_venue_approval_request_record,
     get_venue_approval_request_record,
     list_venue_approval_request_records,
-    update_venue_approval_request_record,
 )
 
 router = APIRouter(
@@ -26,16 +23,19 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=VenueApprovalRequestRead,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_410_GONE,
 )
 def create_venue_approval_request(
-    venue_approval_request: VenueApprovalRequestCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> VenueApprovalRequest:
+) -> None:
     del current_admin
-    return create_venue_approval_request_record(db, venue_approval_request)
+    raise_retired_mutation_route(
+        code="venue_approval_request_scaffold_removed",
+        message=(
+            "Direct venue approval request creation is no longer supported. "
+            "Use product-owned venue approval workflows."
+        ),
+    )
 
 
 @router.get(
@@ -77,18 +77,17 @@ def list_venue_approval_requests(
 
 @router.patch(
     "/{venue_approval_request_id}",
-    response_model=VenueApprovalRequestRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_venue_approval_request(
     venue_approval_request_id: uuid.UUID,
-    venue_approval_request_update: VenueApprovalRequestUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> VenueApprovalRequest:
-    del current_admin
-    return update_venue_approval_request_record(
-        db,
-        venue_approval_request_id,
-        venue_approval_request_update,
+) -> None:
+    del venue_approval_request_id, current_admin
+    raise_retired_mutation_route(
+        code="venue_approval_request_scaffold_removed",
+        message=(
+            "Direct venue approval request updates are no longer supported. "
+            "Use product-owned venue approval workflows."
+        ),
     )

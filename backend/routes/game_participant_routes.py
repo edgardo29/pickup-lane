@@ -5,34 +5,37 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameParticipant, User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    GameParticipantCreate,
     GameParticipantRead,
-    GameParticipantUpdate,
     PublicGameParticipantRead,
 )
 from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.game_participant_service import (
-    create_game_participant_workflow,
     get_game_participant_for_user_or_404,
     list_game_participants as list_game_participants_workflow,
-    update_game_participant_workflow,
 )
 from backend.services.game_service import list_current_user_game_participants
 
 router = APIRouter(prefix="/game-participants", tags=["game_participants"])
 
 
-# Admin-only endpoint for protected roster row creation.
+# Retired public/admin scaffold. Supported roster mutations are service-owned.
 @router.post(
-    "", response_model=GameParticipantRead, status_code=status.HTTP_201_CREATED
+    "",
+    status_code=status.HTTP_410_GONE,
 )
 def create_game_participant(
-    participant: GameParticipantCreate,
-    db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
-) -> GameParticipant:
-    return create_game_participant_workflow(db, participant)
+) -> None:
+    del _current_admin
+    raise_retired_mutation_route(
+        code="game_participant_scaffold_removed",
+        message=(
+            "Direct roster-row creation is no longer supported. Use product-owned "
+            "join, checkout, waitlist, roster, or admin workflows."
+        ),
+    )
 
 
 @router.get(
@@ -82,16 +85,20 @@ def list_game_participants(
     )
 
 
-# Admin-only endpoint for protected roster row updates.
+# Retired public/admin scaffold. Supported roster mutations are service-owned.
 @router.patch(
     "/{participant_id}",
-    response_model=GameParticipantRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_game_participant(
     participant_id: uuid.UUID,
-    participant_update: GameParticipantUpdate,
-    db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
-) -> GameParticipant:
-    return update_game_participant_workflow(db, participant_id, participant_update)
+) -> None:
+    del participant_id, _current_admin
+    raise_retired_mutation_route(
+        code="game_participant_scaffold_removed",
+        message=(
+            "Direct roster-row updates are no longer supported. Use product-owned "
+            "join, checkout, waitlist, roster, or admin workflows."
+        ),
+    )

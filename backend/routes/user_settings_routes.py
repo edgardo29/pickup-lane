@@ -5,27 +5,31 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import UserSettings, User
-from backend.schemas import UserSettingsCreate, UserSettingsRead, UserSettingsUpdate
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
+from backend.schemas import UserSettingsRead, UserSettingsUpdate
 from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.user_settings_service import (
-    create_user_settings_workflow,
     get_current_user_settings,
     get_user_settings_or_404,
     update_current_user_settings,
-    update_user_settings_workflow,
 )
 
 router = APIRouter(prefix="/user-settings", tags=["user-settings"])
 
 
-# This route creates the one-to-one settings record for an existing user.
-@router.post("", response_model=UserSettingsRead, status_code=status.HTTP_201_CREATED)
+# Retired generic write scaffold. `/user-settings/me` remains the active surface.
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_user_settings(
-    user_settings: UserSettingsCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> UserSettings:
-    return create_user_settings_workflow(db, user_settings)
+) -> None:
+    del current_admin
+    raise_retired_mutation_route(
+        code="user_settings_scaffold_removed",
+        message=(
+            "Direct user settings creation is no longer supported. Use the "
+            "current user's settings endpoint."
+        ),
+    )
 
 
 @router.get("/me", response_model=UserSettingsRead, status_code=status.HTTP_200_OK)
@@ -57,14 +61,20 @@ def get_user_settings(
     return get_user_settings_or_404(db, user_id)
 
 
-# This route applies partial updates to an existing settings record.
+# Retired generic write scaffold. `/user-settings/me` remains the active surface.
 @router.patch(
-    "/{user_id}", response_model=UserSettingsRead, status_code=status.HTTP_200_OK
+    "/{user_id}",
+    status_code=status.HTTP_410_GONE,
 )
 def update_user_settings(
     user_id: uuid.UUID,
-    user_settings_update: UserSettingsUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> UserSettings:
-    return update_user_settings_workflow(db, user_id, user_settings_update)
+) -> None:
+    del user_id, current_admin
+    raise_retired_mutation_route(
+        code="user_settings_scaffold_removed",
+        message=(
+            "Direct user settings updates are no longer supported. Use the "
+            "current user's settings endpoint."
+        ),
+    )

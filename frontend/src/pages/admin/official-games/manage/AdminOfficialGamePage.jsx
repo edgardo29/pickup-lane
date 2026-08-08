@@ -41,7 +41,6 @@ import {
   previewAdminOfficialGameCancellation,
   previewAdminOfficialGamePlayerRemoval,
   removeAdminOfficialGameHost,
-  removeAdminOfficialGamePlayer,
   searchAdminOfficialGameUsers,
 } from '../shared/adminOfficialGamesApi.js'
 import {
@@ -835,18 +834,6 @@ function AdminOfficialGamePageContent({ gameId }) {
     })
   }, [currentUser, gameId])
 
-  function handleRemovePlayer({ participant, reason }) {
-    return runMutation(
-      () => removeAdminOfficialGamePlayer({
-        firebaseUser: currentUser,
-        gameId,
-        participantId: participant.id,
-        reason,
-      }),
-      'Player removed.',
-    )
-  }
-
   async function handlePreviewRemoval(participant) {
     const requestId = removalPreviewRequestIdRef.current + 1
     removalPreviewRequestIdRef.current = requestId
@@ -1127,7 +1114,6 @@ function AdminOfficialGamePageContent({ gameId }) {
                   participants={participants}
                   onAddPlayer={handleAddPlayer}
                   onPreviewRemoval={handlePreviewRemoval}
-                  onRemovePlayer={handleRemovePlayer}
                   onSearchUsers={handleSearchRosterUsers}
                 />
               </section>

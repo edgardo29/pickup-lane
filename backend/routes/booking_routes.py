@@ -5,27 +5,31 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Booking, User
-from backend.schemas import BookingCreate, BookingRead, BookingUpdate
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
+from backend.schemas import BookingRead
 from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.booking_service import (
-    create_booking_workflow,
     get_booking_for_user_or_404,
     list_bookings as list_bookings_workflow,
     list_current_user_bookings,
-    update_booking_workflow,
 )
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 
-# Admin-only endpoint for protected booking creation.
-@router.post("", response_model=BookingRead, status_code=status.HTTP_201_CREATED)
+# Retired public/admin scaffold. Supported booking mutations are service-owned.
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_booking(
-    booking: BookingCreate,
-    db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
-) -> Booking:
-    return create_booking_workflow(db, booking)
+) -> None:
+    del _current_admin
+    raise_retired_mutation_route(
+        code="booking_scaffold_removed",
+        message=(
+            "Direct booking creation is no longer supported. Use product-owned "
+            "join, checkout, roster, payment, or admin workflows."
+        ),
+    )
 
 
 @router.get("/me", response_model=list[BookingRead], status_code=status.HTTP_200_OK)
@@ -66,12 +70,17 @@ def list_bookings(
     )
 
 
-# Admin-only endpoint for protected booking updates.
-@router.patch("/{booking_id}", response_model=BookingRead, status_code=status.HTTP_200_OK)
+# Retired public/admin scaffold. Supported booking mutations are service-owned.
+@router.patch("/{booking_id}", status_code=status.HTTP_410_GONE)
 def update_booking(
     booking_id: uuid.UUID,
-    booking_update: BookingUpdate,
-    db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
-) -> Booking:
-    return update_booking_workflow(db, booking_id, booking_update)
+) -> None:
+    del booking_id, _current_admin
+    raise_retired_mutation_route(
+        code="booking_scaffold_removed",
+        message=(
+            "Direct booking updates are no longer supported. Use product-owned "
+            "join, checkout, roster, payment, or admin workflows."
+        ),
+    )

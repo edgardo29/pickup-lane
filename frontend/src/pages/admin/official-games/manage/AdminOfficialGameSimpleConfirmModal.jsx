@@ -6,6 +6,12 @@ function AdminOfficialGameSimpleConfirmModal({
   isSaving,
   onClose,
   onConfirm,
+  onReasonChange,
+  reasonLabel,
+  reasonMaxLength = 1000,
+  reasonPlaceholder = '',
+  reasonValue = '',
+  requireReason = false,
   title,
   variant = 'primary',
 }) {
@@ -32,6 +38,8 @@ function AdminOfficialGameSimpleConfirmModal({
       ? 'admin-official-button--danger-solid'
       : 'admin-official-button--primary',
   ].join(' ')
+  const shouldCollectReason = Boolean(onReasonChange)
+  const reasonIsMissing = shouldCollectReason && requireReason && !reasonValue.trim()
 
   return (
     <div className="admin-official-modal-backdrop" role="presentation" onClick={onClose}>
@@ -47,6 +55,19 @@ function AdminOfficialGameSimpleConfirmModal({
           {description && <p>{description}</p>}
         </div>
 
+        {shouldCollectReason && (
+          <label className="admin-official-textarea-field">
+            <span>{reasonLabel || 'Internal reason'}</span>
+            <textarea
+              maxLength={reasonMaxLength}
+              placeholder={reasonPlaceholder}
+              value={reasonValue}
+              onChange={(event) => onReasonChange(event.target.value)}
+            />
+            <small>{reasonValue.length}/{reasonMaxLength}</small>
+          </label>
+        )}
+
         <div className="admin-official-confirm-modal__actions">
           <button
             className="admin-official-button"
@@ -58,7 +79,7 @@ function AdminOfficialGameSimpleConfirmModal({
           </button>
           <button
             className={confirmClassName}
-            disabled={isSaving}
+            disabled={isSaving || reasonIsMissing}
             type="button"
             onClick={onConfirm}
           >

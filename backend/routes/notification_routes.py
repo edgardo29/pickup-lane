@@ -1,10 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas.notification_schema import NotificationRead
 from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.notification_service import (
@@ -17,25 +18,21 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 def _raise_admin_notification_scaffold_removed() -> None:
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail={
-            "code": "notification_admin_scaffold_removed",
-            "message": (
-                "Admin notification creation, broad listing, and mutation are "
-                "not supported. Use Notification Lookup or product-owned "
-                "notification workflows."
-            ),
-        },
+    raise_retired_mutation_route(
+        code="notification_admin_scaffold_removed",
+        message=(
+            "Admin notification creation, broad listing, and mutation are "
+            "not supported. Use Notification Lookup or product-owned "
+            "notification workflows."
+        ),
     )
 
 
 @router.post("", status_code=status.HTTP_410_GONE)
 def create_notification(
-    notification: dict[str, object] | None = Body(default=None),
     current_user: User = Depends(require_active_admin),
 ) -> None:
-    del notification, current_user
+    del current_user
     _raise_admin_notification_scaffold_removed()
 
 
@@ -122,8 +119,7 @@ def mark_notification_read(
 )
 def update_notification(
     notification_id: uuid.UUID,
-    notification_update: dict[str, object] | None = Body(default=None),
     current_user: User = Depends(require_active_admin),
 ) -> None:
-    del notification_id, notification_update, current_user
+    del notification_id, current_user
     _raise_admin_notification_scaffold_removed()

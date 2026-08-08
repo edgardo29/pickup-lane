@@ -5,29 +5,32 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameImage, User
-from backend.schemas import GameImageCreate, GameImageRead, GameImageUpdate
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
+from backend.schemas import GameImageRead
 from backend.services.auth_service import require_active_admin
 from backend.services.game_image_service import (
-    create_game_image_record,
     get_admin_game_image_record,
     get_public_game_image_record,
     list_admin_game_image_records,
     list_public_game_image_records,
-    update_game_image_record,
 )
 
 router = APIRouter(prefix="/game-images", tags=["game_images"])
 admin_router = APIRouter(prefix="/admin/game-images", tags=["admin_game_images"])
 
 
-@router.post("", response_model=GameImageRead, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_game_image(
-    game_image: GameImageCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> GameImage:
+) -> None:
     del current_admin
-    return create_game_image_record(db, game_image)
+    raise_retired_mutation_route(
+        code="game_image_scaffold_removed",
+        message=(
+            "Direct game-image creation is no longer supported. Use the "
+            "authorized venue-image upload workflow."
+        ),
+    )
 
 
 @router.get(
@@ -61,17 +64,20 @@ def list_game_images(
 
 @router.patch(
     "/{game_image_id}",
-    response_model=GameImageRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_game_image(
     game_image_id: uuid.UUID,
-    game_image_update: GameImageUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> GameImage:
-    del current_admin
-    return update_game_image_record(db, game_image_id, game_image_update)
+) -> None:
+    del game_image_id, current_admin
+    raise_retired_mutation_route(
+        code="game_image_scaffold_removed",
+        message=(
+            "Direct game-image updates are no longer supported. Use the "
+            "authorized venue-image upload workflow."
+        ),
+    )
 
 
 @admin_router.get(
