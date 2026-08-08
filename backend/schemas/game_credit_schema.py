@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
@@ -15,15 +15,29 @@ class GameCreditIssueCreate(BaseModel):
     source_game_id: UUID | None = None
     source_booking_id: UUID | None = None
     source_payment_id: UUID | None = None
-    idempotency_key: str | None = None
-    note: str | None = None
+    idempotency_key: str | None = Field(default=None, max_length=160)
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("idempotency_key", "note", mode="before")
+    @classmethod
+    def trim_optional_text(cls, value):
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class GameCreditReverseCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    idempotency_key: str | None = None
-    note: str | None = None
+    idempotency_key: str | None = Field(default=None, max_length=160)
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("idempotency_key", "note", mode="before")
+    @classmethod
+    def trim_optional_text(cls, value):
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class GameCreditRead(BaseModel):

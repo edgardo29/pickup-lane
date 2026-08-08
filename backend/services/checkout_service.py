@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -48,6 +49,7 @@ from backend.services.payment_method_service import (
     get_current_user_saved_payment_method_for_checkout,
 )
 from backend.services.payment_rules import PENDING_PAYMENT_STATUSES
+from backend.settings import get_settings
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
@@ -66,6 +68,7 @@ from backend.services.user_service import get_user_display_name
 CHECKOUT_HOLD_MINUTES = 2
 MINIMUM_USD_PAYMENT_INTENT_AMOUNT_CENTS = 50
 STRIPE_PAYMENTS_DISABLED_DETAIL = "Stripe payments are disabled for this demo."
+CHECKOUT_RETURN_URL_INVALID_DETAIL = "Checkout return URL is not supported."
 
 
 def get_locked_active_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
@@ -130,6 +133,58 @@ def require_stripe_payments_enabled() -> None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=STRIPE_PAYMENTS_DISABLED_DETAIL,
         )
+
+
+def validate_checkout_return_url(
+    return_url: str | None,
+    *,
+    game_id: uuid.UUID,
+) -> str | None:
+    if return_url is None:
+        return None
+
+    normalized = return_url.strip()
+    if not normalized:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=CHECKOUT_RETURN_URL_INVALID_DETAIL,
+        )
+
+    parsed = urlsplit(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=CHECKOUT_RETURN_URL_INVALID_DETAIL,
+        )
+    if parsed.username is not None or parsed.password is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=CHECKOUT_RETURN_URL_INVALID_DETAIL,
+        )
+    if parsed.query or parsed.fragment:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=CHECKOUT_RETURN_URL_INVALID_DETAIL,
+        )
+
+    origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    allowed_origins = {
+        allowed.rstrip("/") for allowed in get_settings().cors_allowed_origins
+    }
+    if origin not in allowed_origins:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=CHECKOUT_RETURN_URL_INVALID_DETAIL,
+        )
+
+    expected_path = f"/games/{game_id}/checkout"
+    if parsed.path != expected_path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=CHECKOUT_RETURN_URL_INVALID_DETAIL,
+        )
+
+    return normalized
 
 
 def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) -> None:
@@ -486,6 +541,10 @@ def create_game_checkout_payment_intent_workflow(
     checkout_request: GameCheckoutPaymentIntentCreate,
     current_user: User,
 ) -> GameCheckoutPaymentIntentRead:
+    return_url = validate_checkout_return_url(
+        checkout_request.return_url,
+        game_id=game_id,
+    )
     now = datetime.now(timezone.utc)
     db_game = get_locked_active_game_or_404(db, game_id)
     require_checkout_game_open(db_game, current_user, now)
@@ -566,7 +625,7 @@ def create_game_checkout_payment_intent_workflow(
                         payment_method_id=(
                             saved_payment_method.stripe_payment_method_id
                         ),
-                        return_url=checkout_request.return_url,
+                        return_url=return_url,
                     )
                 except StripeConfigError as exc:
                     raise HTTPException(
@@ -756,7 +815,7 @@ def create_game_checkout_payment_intent_workflow(
             payment_intent = confirm_payment_intent(
                 payment_intent.id,
                 payment_method_id=saved_payment_method.stripe_payment_method_id,
-                return_url=checkout_request.return_url,
+                return_url=return_url,
             )
             stripe_status = payment_intent.status
 

@@ -515,13 +515,22 @@ def create_payment(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/payments", json=payload),
-    )
+    from backend.database import SessionLocal
+    from backend.models import User
+    from backend.schemas import PaymentCreate, PaymentRead
+    from backend.services.payment_service import create_payment_record
 
-    assert response.status_code == 201, response.text
-    return response.json()
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    with SessionLocal() as db:
+        admin_user = db.get(User, UUID(admin["id"]))
+        assert admin_user is not None
+        payment = create_payment_record(
+            db,
+            admin_user=admin_user,
+            payload=PaymentCreate.model_validate(payload),
+        )
+        return PaymentRead.model_validate(payment).model_dump(mode="json")
 
 
 def create_refund(
@@ -543,13 +552,22 @@ def create_refund(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/refunds", json=payload),
-    )
+    from backend.database import SessionLocal
+    from backend.models import User
+    from backend.schemas import RefundCreate, RefundRead
+    from backend.services.refund_service import create_refund_record
 
-    assert response.status_code == 201, response.text
-    return response.json()
+    admin = create_user(client)
+    set_user_role(admin["id"], "admin")
+    with SessionLocal() as db:
+        admin_user = db.get(User, UUID(admin["id"]))
+        assert admin_user is not None
+        refund = create_refund_record(
+            db,
+            admin_user=admin_user,
+            payload=RefundCreate.model_validate(payload),
+        )
+        return RefundRead.model_validate(refund).model_dump(mode="json")
 
 
 def create_game_chat(client: TestClient, game_id: str, **overrides: object) -> dict:
@@ -815,13 +833,17 @@ def create_payment_event(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/payment-events", json=payload),
-    )
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import PaymentEventCreate, PaymentEventRead
+    from backend.services.payment_event_service import create_payment_event_record
 
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        payment_event = create_payment_event_record(
+            db,
+            PaymentEventCreate.model_validate(payload),
+        )
+        return PaymentEventRead.model_validate(payment_event).model_dump(mode="json")
 
 
 def create_policy_document(

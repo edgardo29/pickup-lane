@@ -14,7 +14,11 @@ Covered boundaries:
 - Venue image declared upload size/type and stored-object verification.
 - WS02-04B2A2B1 route lifecycle cleanup for retired body-bearing mutation
   scaffolds and their active replacement workflows.
+- WS02-04B2A2B2 opaque provider/payment inputs, checkout return URL ownership,
+  payment/refund/event generic mutation retirement, retained payment-event
+  repair bounds, and source-derived game-credit issue/reverse behavior.
 
 This folder is cross-domain by design because WS02-04B1 is a governance pass
-for source-owned API limits, not a single product page. Page-level browse and
-My Games pagination coverage remains in `backend/tests/pages/`.
+for source-owned API limits, and later WS02-04B2 splits continue that
+cross-domain request-boundary work. Page-level browse and My Games pagination
+coverage remains in `backend/tests/pages/`.

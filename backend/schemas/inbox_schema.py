@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.schemas.notification_schema import NotificationActionRead
 
@@ -48,4 +48,11 @@ class InboxCountsRead(BaseModel):
 class InboxGlobalSeenUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    seen_token: str
+    seen_token: str = Field(min_length=1, max_length=512)
+
+    @field_validator("seen_token", mode="before")
+    @classmethod
+    def trim_seen_token(cls, value):
+        if isinstance(value, str):
+            return value.strip()
+        return value
