@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import PaymentEvent, User
-from backend.schemas import PaymentEventCreate, PaymentEventRead, PaymentEventUpdate
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
+from backend.schemas import PaymentEventRead, PaymentEventUpdate
 from backend.services.auth_service import require_active_admin
 from backend.services.payment_event_service import (
-    create_payment_event_record,
     get_payment_event_record,
     list_payment_event_records,
     update_payment_event_record,
@@ -17,16 +17,18 @@ from backend.services.payment_event_service import (
 router = APIRouter(prefix="/payment-events", tags=["payment_events"])
 
 
-# This route records one durable provider webhook/event row. The current payment
-# status remains on the payments table; this is the event audit record.
-@router.post("", response_model=PaymentEventRead, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_payment_event(
-    payment_event: PaymentEventCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> PaymentEvent:
+) -> None:
     del current_admin
-    return create_payment_event_record(db, payment_event)
+    raise_retired_mutation_route(
+        code="payment_event_generic_creation_removed",
+        message=(
+            "Generic payment-event creation is retired. Signed webhook "
+            "processing owns provider event creation."
+        ),
+    )
 
 
 # This route fetches a single payment provider event by its internal UUID.

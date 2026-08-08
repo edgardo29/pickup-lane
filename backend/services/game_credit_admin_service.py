@@ -1,8 +1,9 @@
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,13 @@ VALID_CREDIT_REASONS = {
     "admin_credit",
     "support_adjustment",
 }
+
+
+@dataclass(frozen=True)
+class CreditSourceContext:
+    source_booking: Booking | None
+    source_payment: Payment | None
+    payment_booking: Booking | None
 
 
 def get_active_credit_user_or_404(db: Session, user_id: uuid.UUID) -> User:
@@ -220,7 +228,7 @@ def validate_credit_source_references(
     source_game_id: uuid.UUID | None,
     source_booking_id: uuid.UUID | None,
     source_payment_id: uuid.UUID | None,
-) -> None:
+) -> CreditSourceContext:
     validate_official_source_game(db, source_game_id)
     source_booking = get_source_booking_or_404(db, source_booking_id)
     source_payment = get_source_payment_or_404(db, source_payment_id)
@@ -252,6 +260,140 @@ def validate_credit_source_references(
         source_payment=source_payment,
         payment_booking=payment_booking,
     )
+    return CreditSourceContext(
+        source_booking=source_booking,
+        source_payment=source_payment,
+        payment_booking=payment_booking,
+    )
+
+
+def normalize_optional_operation_text(value: str | None) -> str | None:
+    normalized = (value or "").strip()
+    return normalized or None
+
+
+def require_credit_issue_idempotency_key_available(
+    db: Session,
+    idempotency_key: str | None,
+) -> None:
+    if idempotency_key is None:
+        return
+
+    existing_credit_id = db.scalar(
+        select(GameCredit.id).where(GameCredit.idempotency_key == idempotency_key)
+    )
+    if existing_credit_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A game credit with this idempotency key already exists.",
+        )
+
+
+def require_credit_usage_idempotency_key_available(
+    db: Session,
+    idempotency_key: str | None,
+) -> None:
+    if idempotency_key is None:
+        return
+
+    existing_usage_id = db.scalar(
+        select(GameCreditUsage.id).where(
+            GameCreditUsage.idempotency_key == idempotency_key
+        )
+    )
+    if existing_usage_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A game credit usage with this idempotency key already exists.",
+        )
+
+
+def source_context_amounts(context: CreditSourceContext) -> list[int]:
+    amounts: list[int] = []
+    if context.source_payment is not None:
+        amounts.append(context.source_payment.amount_cents)
+    if context.source_booking is not None:
+        amounts.append(context.source_booking.total_cents)
+    if context.payment_booking is not None:
+        amounts.append(context.payment_booking.total_cents)
+    return amounts
+
+
+def source_context_reference_filter(context: CreditSourceContext):
+    source_filters = []
+    if context.source_payment is not None:
+        source_filters.append(GameCredit.source_payment_id == context.source_payment.id)
+    if context.source_booking is not None:
+        source_filters.append(GameCredit.source_booking_id == context.source_booking.id)
+    if context.payment_booking is not None:
+        source_filters.append(GameCredit.source_booking_id == context.payment_booking.id)
+    return or_(*source_filters) if source_filters else None
+
+
+def get_existing_credit_total_for_source(
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+    context: CreditSourceContext,
+) -> int:
+    source_filter = source_context_reference_filter(context)
+    if source_filter is None:
+        return 0
+
+    return (
+        db.scalar(
+            select(func.coalesce(func.sum(GameCredit.amount_cents), 0)).where(
+                GameCredit.user_id == user_id,
+                GameCredit.credit_status != "reversed",
+                source_filter,
+            )
+        )
+        or 0
+    )
+
+
+def get_remaining_eligible_credit_amount(
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+    context: CreditSourceContext,
+) -> int:
+    source_amounts = source_context_amounts(context)
+    if not source_amounts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Game credit issue requires a source booking or payment with "
+                "server-derived eligible value."
+            ),
+        )
+
+    source_maximum = min(source_amounts)
+    existing_total = get_existing_credit_total_for_source(
+        db,
+        user_id=user_id,
+        context=context,
+    )
+    return max(source_maximum - existing_total, 0)
+
+
+def validate_source_eligible_credit_amount(
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+    amount_cents: int,
+    context: CreditSourceContext,
+) -> None:
+    remaining_eligible_amount = get_remaining_eligible_credit_amount(
+        db,
+        user_id=user_id,
+        context=context,
+    )
+    if amount_cents > remaining_eligible_amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Game credit amount exceeds the source-derived eligible amount.",
+        )
 
 
 def issue_admin_game_credit(
@@ -267,7 +409,7 @@ def issue_admin_game_credit(
         )
 
     get_active_credit_user_or_404(db, payload.user_id)
-    validate_credit_source_references(
+    source_context = validate_credit_source_references(
         db,
         user_id=payload.user_id,
         source_game_id=payload.source_game_id,
@@ -275,7 +417,17 @@ def issue_admin_game_credit(
         source_payment_id=payload.source_payment_id,
     )
 
-    idempotency_key = payload.idempotency_key or (
+    explicit_idempotency_key = normalize_optional_operation_text(payload.idempotency_key)
+    note = normalize_optional_operation_text(payload.note)
+    require_credit_issue_idempotency_key_available(db, explicit_idempotency_key)
+    validate_source_eligible_credit_amount(
+        db,
+        user_id=payload.user_id,
+        amount_cents=payload.amount_cents,
+        context=source_context,
+    )
+
+    idempotency_key = explicit_idempotency_key or (
         f"admin-credit:{admin_user.id}:{payload.user_id}:{uuid.uuid4()}"
     )
     now = datetime.now(timezone.utc)
@@ -292,7 +444,7 @@ def issue_admin_game_credit(
         source_payment_id=payload.source_payment_id,
         issued_by_user_id=admin_user.id,
         idempotency_key=idempotency_key,
-        note=payload.note,
+        note=note,
         created_at=now,
         updated_at=now,
     )
@@ -309,7 +461,7 @@ def issue_admin_game_credit(
             target_booking_id=payload.source_booking_id,
             target_payment_id=payload.source_payment_id,
             target_game_credit_id=game_credit.id,
-            reason=payload.note,
+            reason=note,
             metadata={
                 "amount_cents": payload.amount_cents,
                 "credit_reason": payload.credit_reason,
@@ -368,7 +520,10 @@ def reverse_admin_game_credit(
             detail="Only active credit with available value can be reversed.",
         )
 
-    idempotency_key = payload.idempotency_key or (
+    explicit_idempotency_key = normalize_optional_operation_text(payload.idempotency_key)
+    note = normalize_optional_operation_text(payload.note)
+    require_credit_usage_idempotency_key_available(db, explicit_idempotency_key)
+    idempotency_key = explicit_idempotency_key or (
         f"reverse-credit:{game_credit.id}:{uuid.uuid4()}"
     )
     usage = GameCreditUsage(
@@ -402,7 +557,7 @@ def reverse_admin_game_credit(
             target_booking_id=game_credit.source_booking_id,
             target_payment_id=game_credit.source_payment_id,
             target_game_credit_id=game_credit.id,
-            reason=payload.note,
+            reason=note,
             metadata={"game_credit_id": game_credit.id},
         )
         db.add(game_credit)

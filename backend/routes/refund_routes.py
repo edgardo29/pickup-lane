@@ -5,27 +5,33 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Refund, User
-from backend.schemas import RefundCreate, RefundRead, RefundUpdate
-from backend.services.auth_service import get_current_app_user, require_active_account, require_active_admin
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
+from backend.schemas import RefundRead
+from backend.services.auth_service import (
+    get_current_app_user,
+    require_active_account,
+    require_active_admin,
+)
 from backend.services.refund_service import (
-    create_refund_record,
     get_refund_for_user_or_404,
     list_refunds as list_refunds_workflow,
-    update_refund_record,
 )
 
 router = APIRouter(prefix="/refunds", tags=["refunds"])
 
 
-# This route records a Stripe-backed refund request or refund result after
-# validating the payment and optional booking/participant scope.
-@router.post("", response_model=RefundRead, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_refund(
-    refund: RefundCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> Refund:
-    return create_refund_record(db, admin_user=current_admin, payload=refund)
+) -> None:
+    del current_admin
+    raise_retired_mutation_route(
+        code="refund_generic_mutation_removed",
+        message=(
+            "Generic refund creation is retired. Use supported refund, retry, "
+            "or reconcile workflows."
+        ),
+    )
 
 
 # This route fetches a single refund record by its internal UUID.
@@ -68,18 +74,16 @@ def list_refunds(
     )
 
 
-# This route applies partial updates to an existing refund record while keeping
-# references, amount limits, and lifecycle timestamps aligned with status.
-@router.patch("/{refund_id}", response_model=RefundRead, status_code=status.HTTP_200_OK)
+@router.patch("/{refund_id}", status_code=status.HTTP_410_GONE)
 def update_refund(
     refund_id: uuid.UUID,
-    refund_update: RefundUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> Refund:
-    return update_refund_record(
-        db,
-        admin_user=current_admin,
-        refund_id=refund_id,
-        payload=refund_update,
+) -> None:
+    del refund_id, current_admin
+    raise_retired_mutation_route(
+        code="refund_generic_mutation_removed",
+        message=(
+            "Generic refund updates are retired. Use supported refund, retry, "
+            "or reconcile workflows."
+        ),
     )

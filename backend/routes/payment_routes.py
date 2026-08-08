@@ -5,27 +5,33 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Payment, User
-from backend.schemas import PaymentCreate, PaymentRead, PaymentUpdate
-from backend.services.auth_service import get_current_app_user, require_active_account, require_active_admin
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
+from backend.schemas import PaymentRead
+from backend.services.auth_service import (
+    get_current_app_user,
+    require_active_account,
+    require_active_admin,
+)
 from backend.services.payment_service import (
-    create_payment_record,
     get_payment_for_user_or_404,
     list_payments as list_payments_workflow,
-    update_payment_record,
 )
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 
-# This route records a Stripe-backed payment attempt or payment result after
-# validating the payer and any booking/game references.
-@router.post("", response_model=PaymentRead, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_410_GONE)
 def create_payment(
-    payment: PaymentCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> Payment:
-    return create_payment_record(db, admin_user=current_admin, payload=payment)
+) -> None:
+    del current_admin
+    raise_retired_mutation_route(
+        code="payment_generic_mutation_removed",
+        message=(
+            "Generic payment creation is retired. Use checkout, signed webhook, "
+            "or supported admin-money workflows."
+        ),
+    )
 
 
 # This route fetches a single payment record by its internal UUID.
@@ -62,20 +68,19 @@ def list_payments(
     )
 
 
-# This route applies partial updates to an existing payment record while
-# keeping references and payment lifecycle timestamps aligned with status.
 @router.patch(
-    "/{payment_id}", response_model=PaymentRead, status_code=status.HTTP_200_OK
+    "/{payment_id}",
+    status_code=status.HTTP_410_GONE,
 )
 def update_payment(
     payment_id: uuid.UUID,
-    payment_update: PaymentUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> Payment:
-    return update_payment_record(
-        db,
-        admin_user=current_admin,
-        payment_id=payment_id,
-        payload=payment_update,
+) -> None:
+    del payment_id, current_admin
+    raise_retired_mutation_route(
+        code="payment_generic_mutation_removed",
+        message=(
+            "Generic payment updates are retired. Use checkout, signed webhook, "
+            "or supported admin-money workflows."
+        ),
     )
