@@ -17,6 +17,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
 from backend.observability.request_body_limits import (
+    DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES,
     DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES,
     DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES,
 )
@@ -155,6 +156,9 @@ class BackendSettings(BaseModel):
     cors_allow_credentials: bool = True
     enable_api_docs: bool
     enable_db_health: bool
+    ordinary_json_request_body_limit_bytes: int = (
+        DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES
+    )
     platform_notice_request_body_limit_bytes: int = (
         DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES
     )
@@ -288,6 +292,11 @@ def build_settings(
         if validate_full
         else False
     )
+    ordinary_json_request_body_limit_bytes = _parse_positive_int(
+        env,
+        "ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES",
+        default=DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES,
+    )
     platform_notice_request_body_limit_bytes = _parse_positive_int(
         env,
         "PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES",
@@ -322,6 +331,7 @@ def build_settings(
         cors_allowed_origins=cors_origins,
         enable_api_docs=enable_api_docs,
         enable_db_health=enable_db_health,
+        ordinary_json_request_body_limit_bytes=ordinary_json_request_body_limit_bytes,
         platform_notice_request_body_limit_bytes=platform_notice_request_body_limit_bytes,
         stripe_webhook_request_body_limit_bytes=stripe_webhook_request_body_limit_bytes,
         **stripe_values,
