@@ -5,17 +5,14 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import PolicyAcceptance, User
+from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    PolicyAcceptanceCreate,
     PolicyAcceptanceRead,
-    PolicyAcceptanceUpdate,
 )
 from backend.services.auth_service import require_active_admin
 from backend.services.policy_acceptance_service import (
-    create_policy_acceptance_record,
     get_policy_acceptance_record,
     list_policy_acceptance_records,
-    update_policy_acceptance_record,
 )
 
 router = APIRouter(prefix="/policy-acceptances", tags=["policy_acceptances"])
@@ -23,16 +20,19 @@ router = APIRouter(prefix="/policy-acceptances", tags=["policy_acceptances"])
 
 @router.post(
     "",
-    response_model=PolicyAcceptanceRead,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_410_GONE,
 )
 def create_policy_acceptance(
-    policy_acceptance: PolicyAcceptanceCreate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> PolicyAcceptance:
+) -> None:
     del current_admin
-    return create_policy_acceptance_record(db, policy_acceptance)
+    raise_retired_mutation_route(
+        code="policy_acceptance_generic_mutation_removed",
+        message=(
+            "Generic policy acceptance creation is retired. Acceptance evidence "
+            "must be recorded by a supported server-owned workflow."
+        ),
+    )
 
 
 @router.get(
@@ -70,18 +70,17 @@ def list_policy_acceptances(
 
 @router.patch(
     "/{policy_acceptance_id}",
-    response_model=PolicyAcceptanceRead,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_410_GONE,
 )
 def update_policy_acceptance(
     policy_acceptance_id: uuid.UUID,
-    policy_acceptance_update: PolicyAcceptanceUpdate,
-    db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> PolicyAcceptance:
-    del current_admin
-    return update_policy_acceptance_record(
-        db,
-        policy_acceptance_id,
-        policy_acceptance_update,
+) -> None:
+    del policy_acceptance_id, current_admin
+    raise_retired_mutation_route(
+        code="policy_acceptance_generic_mutation_removed",
+        message=(
+            "Generic policy acceptance updates are retired. Acceptance evidence "
+            "must remain owned by supported server-owned workflows."
+        ),
     )

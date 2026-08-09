@@ -17,6 +17,9 @@ Covered boundaries:
 - WS02-04B2A2B2 opaque provider/payment inputs, checkout return URL ownership,
   payment/refund/event generic mutation retirement, retained payment-event
   repair bounds, and source-derived game-credit issue/reverse behavior.
+- WS02-04B2A2B3 policy/legal request ownership cleanup for retired generic
+  policy document authoring and policy acceptance mutation routes while managed
+  read behavior remains available.
 
 This folder is cross-domain by design because WS02-04B1 is a governance pass
 for source-owned API limits, and later WS02-04B2 splits continue that
