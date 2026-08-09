@@ -12,57 +12,33 @@ MAX_CANCEL_REASON_LENGTH = 500
 MAX_AUTO_CHARGE_CONSENT_VERSION_LENGTH = 50
 
 
-# GameCreate defines the fields the client is allowed to send when creating a
-# game record. Server-managed timestamps remain outside the request body.
+# GameCreate defines the fields an admin caller is allowed to send when using
+# the generic game creation route. Identity, lifecycle, payment mode, location
+# snapshots, and other workflow-owned fields are derived in the service.
 class GameCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
     game_type: str
-    payment_collection_type: str
-    publish_status: str = "draft"
-    game_status: str = "active"
-    public_visibility_status: str = "visible"
-    join_enforcement_status: str = "open"
     title: str
     description: str | None = None
     venue_id: UUID
-    venue_name_snapshot: str
-    address_snapshot: str
-    city_snapshot: str
-    state_snapshot: str
-    neighborhood_snapshot: str | None = None
     host_user_id: UUID | None = None
-    created_by_user_id: UUID
     starts_at: datetime
     ends_at: datetime
-    starts_on_local: date | None = None
     timezone: str = "America/Chicago"
-    sport_type: str = "soccer"
     format_label: str
     game_player_group: str = "coed"
     skill_level: str = "any"
     environment_type: str
     total_spots: int = Field(ge=MIN_TOTAL_SPOTS, le=MAX_TOTAL_SPOTS)
     price_per_player_cents: int = Field(ge=0, le=MAX_PRICE_PER_PLAYER_CENTS)
-    currency: str = "USD"
-    minimum_age: int | None = None
     allow_guests: bool = True
     max_guests_per_booking: int = Field(default=2, ge=0, le=MAX_PLAYER_GUESTS_PER_BOOKING)
-    host_guest_max: int | None = Field(default=None, ge=0)
     waitlist_enabled: bool = True
     is_chat_enabled: bool = True
-    policy_mode: str
     custom_rules_text: str | None = None
-    custom_cancellation_text: str | None = None
     game_notes: str | None = None
     parking_notes: str | None = None
-    published_at: datetime | None = None
-    cancelled_at: datetime | None = None
-    cancelled_by_user_id: UUID | None = None
-    cancellation_source: str | None = None
-    cancel_reason: str | None = Field(default=None, max_length=MAX_CANCEL_REASON_LENGTH)
-    completed_at: datetime | None = None
-    completed_by_user_id: UUID | None = None
 
 
 # GameRead defines the game payload returned by the API. from_attributes lets
@@ -195,32 +171,16 @@ class MyGamesListRead(BaseModel):
     limit: int = 40
 
 
-# GameUpdate supports partial game updates, so every field is optional and only
-# provided values should be applied by the route.
+# GameUpdate supports partial generic admin edits. It intentionally excludes
+# server-owned lifecycle, identity, provider/payment, and snapshot fields.
 class GameUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    game_type: str | None = None
-    payment_collection_type: str | None = None
-    publish_status: str | None = None
-    game_status: str | None = None
-    public_visibility_status: str | None = None
-    join_enforcement_status: str | None = None
     title: str | None = None
     description: str | None = None
-    venue_id: UUID | None = None
-    venue_name_snapshot: str | None = None
-    address_snapshot: str | None = None
-    city_snapshot: str | None = None
-    state_snapshot: str | None = None
-    neighborhood_snapshot: str | None = None
-    host_user_id: UUID | None = None
-    created_by_user_id: UUID | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
-    starts_on_local: date | None = None
     timezone: str | None = None
-    sport_type: str | None = None
     format_label: str | None = None
     game_player_group: str | None = None
     skill_level: str | None = None
@@ -229,27 +189,15 @@ class GameUpdate(BaseModel):
     price_per_player_cents: int | None = Field(
         default=None, ge=0, le=MAX_PRICE_PER_PLAYER_CENTS
     )
-    currency: str | None = None
-    minimum_age: int | None = None
     allow_guests: bool | None = None
     max_guests_per_booking: int | None = Field(
         default=None, ge=0, le=MAX_PLAYER_GUESTS_PER_BOOKING
     )
-    host_guest_max: int | None = Field(default=None, ge=0)
     waitlist_enabled: bool | None = None
     is_chat_enabled: bool | None = None
-    policy_mode: str | None = None
     custom_rules_text: str | None = None
-    custom_cancellation_text: str | None = None
     game_notes: str | None = None
     parking_notes: str | None = None
-    published_at: datetime | None = None
-    cancelled_at: datetime | None = None
-    cancelled_by_user_id: UUID | None = None
-    cancellation_source: str | None = None
-    cancel_reason: str | None = Field(default=None, max_length=MAX_CANCEL_REASON_LENGTH)
-    completed_at: datetime | None = None
-    completed_by_user_id: UUID | None = None
 
 
 # GameHostEdit is the safer host-facing edit contract. It intentionally exposes

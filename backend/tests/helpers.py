@@ -4,6 +4,30 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+GAME_CREATE_REQUEST_FIELDS = {
+    "allow_guests",
+    "custom_rules_text",
+    "description",
+    "ends_at",
+    "environment_type",
+    "format_label",
+    "game_player_group",
+    "game_type",
+    "game_notes",
+    "host_user_id",
+    "is_chat_enabled",
+    "max_guests_per_booking",
+    "parking_notes",
+    "price_per_player_cents",
+    "skill_level",
+    "starts_at",
+    "timezone",
+    "title",
+    "total_spots",
+    "venue_id",
+    "waitlist_enabled",
+}
+
 
 def unique_suffix() -> str:
     # Generate unique values for fields with database uniqueness constraints
@@ -317,20 +341,20 @@ def create_game(
         "max_guests_per_booking": 2,
         "waitlist_enabled": True,
         "is_chat_enabled": True,
-        "policy_mode": "official_standard",
     }
-    payload.update(overrides)
+    request_overrides = {
+        key: value for key, value in overrides.items() if key in GAME_CREATE_REQUEST_FIELDS
+    }
+    seeded_overrides = {
+        key: value for key, value in overrides.items() if key not in GAME_CREATE_REQUEST_FIELDS
+    }
+    payload.update(request_overrides)
     if "total_spots" in overrides and "format_label" not in overrides:
         total_spots = int(payload["total_spots"])
         if total_spots < 10:
             side_size = max(3, total_spots // 2)
             payload["format_label"] = f"{side_size}v{side_size}"
-
-    if (
-        payload["game_type"] == "community"
-        and "payment_collection_type" not in overrides
-    ):
-        payload["payment_collection_type"] = "external_host"
+    payload = {key: value for key, value in payload.items() if key in GAME_CREATE_REQUEST_FIELDS}
 
     response = run_as_temporary_admin(
         client,
@@ -338,7 +362,55 @@ def create_game(
     )
 
     assert response.status_code == 201, response.text
-    return response.json()
+    game = response.json()
+    seeded_overrides.setdefault("created_by_user_id", user_id)
+    return apply_seeded_game_overrides(game["id"], seeded_overrides)
+
+
+def apply_seeded_game_overrides(game_id: str, overrides: dict[str, object]) -> dict:
+    if not overrides:
+        return {}
+
+    from backend.database import SessionLocal
+    from backend.models import Game
+    from backend.schemas import GameRead
+
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        db_game = db.get(Game, UUID(game_id))
+        assert db_game is not None
+
+        for field_name, value in overrides.items():
+            assert hasattr(db_game, field_name), field_name
+            setattr(db_game, field_name, value)
+
+        if db_game.publish_status == "published" and db_game.published_at is None:
+            db_game.published_at = now
+        if db_game.publish_status != "published":
+            db_game.published_at = None
+
+        if db_game.game_status == "cancelled":
+            db_game.cancelled_at = db_game.cancelled_at or now
+            db_game.cancellation_source = db_game.cancellation_source or "host"
+            db_game.completed_at = None
+            db_game.completed_by_user_id = None
+        elif db_game.game_status == "completed":
+            db_game.completed_at = db_game.completed_at or now
+            db_game.cancelled_at = None
+            db_game.cancelled_by_user_id = None
+            db_game.cancellation_source = None
+            db_game.cancel_reason = None
+        else:
+            db_game.cancelled_at = None
+            db_game.cancelled_by_user_id = None
+            db_game.cancellation_source = None
+            db_game.cancel_reason = None
+            db_game.completed_at = None
+            db_game.completed_by_user_id = None
+
+        db.commit()
+        db.refresh(db_game)
+        return GameRead.model_validate(db_game).model_dump(mode="json")
 
 
 def build_sub_post_payload(**overrides: object) -> dict:
