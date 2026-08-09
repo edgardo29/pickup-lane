@@ -36,6 +36,10 @@ from backend.services.chat_moderation_service import (
     build_safe_message_preview,
     detect_chat_message,
 )
+from backend.services.chat_rate_limit_service import (
+    CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES,
+    enforce_visible_text_chat_rate_limit,
+)
 from backend.services.moderation_surfacing_service import (
     surface_need_a_sub_chat_message_text,
 )
@@ -46,7 +50,7 @@ logger = logging.getLogger(__name__)
 MAX_SUB_CHAT_MESSAGE_LENGTH = 300
 MAX_SUB_CHAT_MESSAGES_PER_PAGE = 50
 MAX_SUB_CHAT_MESSAGES_TOTAL = 200
-MAX_SUB_CHAT_MESSAGES_PER_MINUTE = 5
+MAX_SUB_CHAT_MESSAGES_PER_MINUTE = CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES
 SUB_CHAT_ACCESS_GRACE_HOURS = 24
 VISIBLE_MESSAGE_STATUS = "visible"
 NO_LONGER_IN_GAME_LABEL = "No longer in game"
@@ -453,24 +457,15 @@ def validate_sender_rate_limit(
     sender_user_id: uuid.UUID,
     current_time: datetime,
 ) -> None:
-    window_start = ensure_aware(current_time) - timedelta(minutes=1)
-    message_count = db.scalar(
-        select(func.count())
-        .select_from(SubPostChatMessage)
-        .where(
-            SubPostChatMessage.chat_id == chat_id,
-            SubPostChatMessage.sender_user_id == sender_user_id,
-            SubPostChatMessage.message_type == "text",
-            SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
-            SubPostChatMessage.created_at >= window_start,
-        )
-    ) or 0
-
-    if message_count >= MAX_SUB_CHAT_MESSAGES_PER_MINUTE:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Slow down before sending another Need a Sub chat message.",
-        )
+    enforce_visible_text_chat_rate_limit(
+        db,
+        limiter_category="need_a_sub_chat",
+        message_model=SubPostChatMessage,
+        chat_id=chat_id,
+        sender_user_id=sender_user_id,
+        current_time=ensure_aware(current_time),
+        visible_status=VISIBLE_MESSAGE_STATUS,
+    )
 
 
 def validate_total_message_limit(db: Session, chat_id: uuid.UUID) -> None:
