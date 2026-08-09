@@ -11,9 +11,14 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.database import check_database_connection, dispose_database_engine
+from backend.observability.http_contracts import RouteMatch, private_route_matches
 from backend.observability.http_errors import (
     CorrelationIdMiddleware,
     register_exception_handlers,
+)
+from backend.observability.openapi_contracts import (
+    install_openapi_contracts,
+    mark_tombstone_routes_deprecated,
 )
 from backend.observability.request_body_limits import (
     PLATFORM_NOTICE_CREATE_PATH,
@@ -81,6 +86,7 @@ from backend.settings import BackendSettings, get_settings
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 NO_STORE_CACHE_CONTROL = "no-store"
+PRIVATE_NO_STORE_CACHE_CONTROL = "private, no-store"
 API_REFERRER_POLICY = "no-referrer"
 CONTENT_TYPE_OPTIONS = "nosniff"
 DOCUMENTATION_FRAME_ANCESTORS = "frame-ancestors 'none'"
@@ -99,8 +105,14 @@ SPECIAL_BODY_ROUTE_KEYS = frozenset({("POST", PLATFORM_NOTICE_CREATE_PATH)})
 
 
 class ResponseSecurityHeadersMiddleware:
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        private_routes: tuple[RouteMatch, ...] = (),
+    ) -> None:
         self.app = app
+        self._private_routes = private_routes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -108,13 +120,16 @@ class ResponseSecurityHeadersMiddleware:
             return
 
         path = str(scope.get("path") or "")
+        method = str(scope.get("method") or "").upper()
 
         async def send_with_security_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = MutableHeaders(scope=message)
                 _apply_response_security_headers(
                     headers,
+                    method=method,
                     path=path,
+                    private_routes=self._private_routes,
                     status_code=int(message["status"]),
                 )
             await send(message)
@@ -194,6 +209,8 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
             return {"message": "Database connection is working"}
 
     _include_routers(app)
+    mark_tombstone_routes_deprecated(app.routes)
+    install_openapi_contracts(app)
     _add_application_middleware(app, backend_settings)
     return app
 
@@ -252,7 +269,10 @@ def _add_application_middleware(app: FastAPI, backend_settings: BackendSettings)
         allowed_hosts=list(backend_settings.allowed_hosts),
         www_redirect=False,
     )
-    app.add_middleware(ResponseSecurityHeadersMiddleware)
+    app.add_middleware(
+        ResponseSecurityHeadersMiddleware,
+        private_routes=private_route_matches(app.routes),
+    )
     app.add_middleware(CorrelationIdMiddleware)
 
 
@@ -289,7 +309,9 @@ def _is_special_body_route(path: str, methods: frozenset[str]) -> bool:
 def _apply_response_security_headers(
     headers: MutableHeaders,
     *,
+    method: str,
     path: str,
+    private_routes: tuple[RouteMatch, ...],
     status_code: int,
 ) -> None:
     if _is_redirect_response(status_code) or _is_static_path(path):
@@ -300,22 +322,31 @@ def _apply_response_security_headers(
         _apply_documentation_security_headers(headers)
         return
 
+    cache_control = (
+        PRIVATE_NO_STORE_CACHE_CONTROL
+        if _matches_private_route(method=method, path=path, private_routes=private_routes)
+        else NO_STORE_CACHE_CONTROL
+    )
     if _is_fastapi_owned_api_response(
         path=path,
         status_code=status_code,
         content_type=content_type,
     ):
-        _apply_api_security_headers(headers)
+        _apply_api_security_headers(headers, cache_control=cache_control)
 
 
-def _apply_api_security_headers(headers: MutableHeaders) -> None:
+def _apply_api_security_headers(
+    headers: MutableHeaders,
+    *,
+    cache_control: str = NO_STORE_CACHE_CONTROL,
+) -> None:
     headers.setdefault("X-Content-Type-Options", CONTENT_TYPE_OPTIONS)
     headers.setdefault("Referrer-Policy", API_REFERRER_POLICY)
-    headers.setdefault("Cache-Control", NO_STORE_CACHE_CONTROL)
+    headers.setdefault("Cache-Control", cache_control)
 
 
 def _apply_documentation_security_headers(headers: MutableHeaders) -> None:
-    _apply_api_security_headers(headers)
+    _apply_api_security_headers(headers, cache_control=NO_STORE_CACHE_CONTROL)
     headers.setdefault("Content-Security-Policy", DOCUMENTATION_FRAME_ANCESTORS)
     headers.setdefault("X-Frame-Options", DOCUMENTATION_FRAME_OPTIONS)
     headers.setdefault("Permissions-Policy", DOCUMENTATION_PERMISSIONS_POLICY)
@@ -360,6 +391,15 @@ def _is_json_response(content_type: str) -> bool:
 
 def _is_html_response(content_type: str) -> bool:
     return content_type.lower().split(";", maxsplit=1)[0].strip() == "text/html"
+
+
+def _matches_private_route(
+    *,
+    method: str,
+    path: str,
+    private_routes: tuple[RouteMatch, ...],
+) -> bool:
+    return any(route.matches(method=method, path=path) for route in private_routes)
 
 
 def _include_routers(app: FastAPI) -> None:

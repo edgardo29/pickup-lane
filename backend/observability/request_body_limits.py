@@ -27,9 +27,13 @@ UNSUPPORTED_CONTENT_ENCODING_MESSAGE = "Unsupported content encoding."
 UNSUPPORTED_CONTENT_ENCODING_DETAIL = (
     "Compressed request bodies are not supported for this endpoint."
 )
+UNSUPPORTED_MEDIA_TYPE_CODE = "API.UNSUPPORTED_MEDIA_TYPE"
+UNSUPPORTED_MEDIA_TYPE_MESSAGE = "Unsupported media type."
+UNSUPPORTED_MEDIA_TYPE_DETAIL = "This endpoint accepts JSON request bodies."
 
 _CONTENT_ENCODING_HEADER = b"content-encoding"
 _CONTENT_LENGTH_HEADER = b"content-length"
+_CONTENT_TYPE_HEADER = b"content-type"
 _STRIPE_SIGNATURE_HEADER = b"stripe-signature"
 
 
@@ -103,6 +107,10 @@ class RequestBodyLimitMiddleware:
             await self._send_request_body_too_large(scope, receive, send)
             return
 
+        if _has_explicit_non_json_content_type(scope, request_limit):
+            await self._send_unsupported_media_type(scope, receive, send)
+            return
+
         response_started = False
 
         async def send_with_state(message: Message) -> None:
@@ -166,6 +174,20 @@ class RequestBodyLimitMiddleware:
         )
         await response(scope, receive, send)
 
+    async def _send_unsupported_media_type(
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        response = public_error_response(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            code=UNSUPPORTED_MEDIA_TYPE_CODE,
+            message=UNSUPPORTED_MEDIA_TYPE_MESSAGE,
+            detail=UNSUPPORTED_MEDIA_TYPE_DETAIL,
+        )
+        await response(scope, receive, send)
+
 
 class _CountingReceive:
     def __init__(self, receive: Receive, limit_bytes: int) -> None:
@@ -208,6 +230,29 @@ def _has_unsupported_content_encoding(scope: Scope) -> bool:
         if any(encoding and encoding != "identity" for encoding in encodings):
             return True
     return False
+
+
+def _has_explicit_non_json_content_type(
+    scope: Scope,
+    request_limit: RequestBodyLimit,
+) -> bool:
+    if request_limit.name == "stripe_webhook":
+        return False
+
+    values = [
+        value.decode("latin-1").strip().lower()
+        for name, value in _raw_headers(scope)
+        if name.lower() == _CONTENT_TYPE_HEADER
+    ]
+    if not values:
+        return False
+
+    return any(not _is_json_media_type(value) for value in values)
+
+
+def _is_json_media_type(value: str) -> bool:
+    media_type = value.split(";", maxsplit=1)[0].strip()
+    return media_type == "application/json" or media_type.endswith("+json")
 
 
 def _single_valid_content_length(scope: Scope) -> int | None:
