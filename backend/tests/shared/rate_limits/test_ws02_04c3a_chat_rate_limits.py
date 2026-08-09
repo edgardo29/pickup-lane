@@ -401,7 +401,7 @@ def assert_rate_limited_response(response, *, sender_id: str, chat_id: str) -> N
     assert response.headers["Access-Control-Allow-Credentials"] == "true"
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["Referrer-Policy"] == "no-referrer"
-    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["Cache-Control"] == "private, no-store"
     assert sender_id not in response.text
     assert chat_id not in response.text
     assert "seeded" not in response.text

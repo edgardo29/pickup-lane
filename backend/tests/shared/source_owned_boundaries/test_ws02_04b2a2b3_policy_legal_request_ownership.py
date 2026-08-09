@@ -55,7 +55,7 @@ def assert_tombstone_response(
     absent_values: tuple[str, ...] = (),
 ) -> None:
     assert response.status_code == 410, response.text
-    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["cache-control"] == "private, no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["access-control-allow-origin"] == CORS_ORIGIN
 

@@ -992,7 +992,7 @@ def test_oversized_rejection_uses_stable_error_cors_correlation_and_security_hea
     assert response.headers["Access-Control-Allow-Credentials"] == "true"
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["Referrer-Policy"] == "no-referrer"
-    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["Cache-Control"] == "private, no-store"
     assert "submitted-body-marker" not in response.text
     assert "synthetic-signature" not in response.text
 
