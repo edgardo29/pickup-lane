@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, GameParticipant, Payment, User, WaitlistEntry
+from backend.observability.timeouts import PublicTimeoutError
 from backend.schemas.checkout_schema import (
     GameCheckoutPaymentIntentCreate,
     GameCheckoutPaymentIntentRead,
@@ -595,6 +596,8 @@ def create_game_checkout_payment_intent_workflow(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
             ) from exc
+        except PublicTimeoutError:
+            raise
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -632,6 +635,8 @@ def create_game_checkout_payment_intent_workflow(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                         detail=str(exc),
                     ) from exc
+                except PublicTimeoutError:
+                    raise
                 except Exception as exc:
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
@@ -848,6 +853,9 @@ def create_game_checkout_payment_intent_workflow(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        db.rollback()
+        raise
     except HTTPException:
         db.rollback()
         raise

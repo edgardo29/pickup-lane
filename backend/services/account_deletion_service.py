@@ -21,6 +21,7 @@ from backend.models import (
     UserSettings,
     WaitlistEntry,
 )
+from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
 from backend.schemas.auth_schema import AuthDeleteAccountRequest
 from backend.services.auth_service import get_authenticated_user_from_token
 from backend.services.game_rules import (
@@ -242,6 +243,14 @@ def detach_account_saved_payment_methods(
                     payment_method_id=payment_method.id,
                     method_status=payment_method.method_status,
                     error_type="stripe_config_error",
+                )
+            )
+        except DependencyMutationTimeoutUnknownError:
+            failures.append(
+                SavedPaymentMethodCleanupFailure(
+                    payment_method_id=payment_method.id,
+                    method_status=payment_method.method_status,
+                    error_type="stripe_detach_outcome_unknown",
                 )
             )
         except Exception:
@@ -1042,6 +1051,23 @@ def delete_account_workflow(
             response_status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             response_detail=str(exc),
         )
+    except DependencyMutationTimeoutUnknownError:
+        record_account_delete_partial_failure(
+            db,
+            user_id=user.id,
+            created_by_user_id=user.id,
+            clear_auth_link=False,
+            metadata={
+                "auth_identity_deleted": "unknown",
+                "app_cleanup_completed": False,
+                "failure_type": "firebase_delete_outcome_unknown",
+            },
+            summary=(
+                "Firebase deletion timed out, and account deletion requires "
+                "support follow-up."
+            ),
+        )
+        raise
     except Exception as exc:
         restore_self_delete_staged_account_after_firebase_failure(
             db,

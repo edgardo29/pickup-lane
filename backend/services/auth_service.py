@@ -13,6 +13,7 @@ from backend.firebase_admin_client import (
     verify_firebase_token,
 )
 from backend.models import User
+from backend.observability.timeouts import PublicTimeoutError
 from backend.services.hosting_access_service import apply_verified_hosting_eligibility
 from backend.services.user_service import build_user_conflict_detail
 
@@ -61,6 +62,8 @@ def get_decoded_firebase_token(authorization: str | None) -> dict:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

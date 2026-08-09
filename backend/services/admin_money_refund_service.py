@@ -19,6 +19,7 @@ from backend.models import (
     RefundEvent,
     User,
 )
+from backend.observability.timeouts import PublicTimeoutError
 from backend.schemas.admin_money_refund_schema import (
     AdminMoneyRefundDetailRead,
     AdminMoneyRefundReconcileCreate,
@@ -659,6 +660,9 @@ def retry_admin_money_refund(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Stripe refunds are not configured.",
         ) from exc
+    except PublicTimeoutError:
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(
@@ -880,6 +884,9 @@ def reconcile_admin_money_refund(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Stripe refunds are not configured.",
         ) from exc
+    except PublicTimeoutError:
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(

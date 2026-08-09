@@ -26,6 +26,7 @@ from backend.models import (
     User,
     WaitlistEntry,
 )
+from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
 from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCancelExecute,
     AdminOfficialGameCancellationBookingImpactRead,
@@ -926,6 +927,19 @@ def create_official_cancellation_refunds(
             )
             summary["refund_failed_count"] += 1
             continue
+        except DependencyMutationTimeoutUnknownError:
+            create_cancellation_refund_record(
+                db,
+                payment,
+                booking,
+                current_user,
+                now,
+                provider_refund_id=None,
+                refund_status="processing",
+                reason_code="stripe_refund_timeout_unknown",
+            )
+            summary["refund_processing_count"] += 1
+            continue
         except Exception:
             create_cancellation_refund_record(
                 db,
@@ -974,6 +988,11 @@ def create_cancellation_refund_record(
     refund_status: str,
     reason_code: str,
 ) -> Refund:
+    provider_status = (
+        "unknown"
+        if provider_refund_id is None and reason_code == "stripe_refund_timeout_unknown"
+        else refund_status if provider_refund_id is not None else None
+    )
     refund = Refund(
         id=uuid.uuid4(),
         payment_id=payment.id,
@@ -983,8 +1002,8 @@ def create_cancellation_refund_record(
         provider="stripe",
         provider_refund_id=provider_refund_id,
         provider_charge_id=payment.provider_charge_id,
-        provider_status=refund_status if provider_refund_id is not None else None,
-        provider_status_observed_at=now if provider_refund_id is not None else None,
+        provider_status=provider_status,
+        provider_status_observed_at=now if provider_status is not None else None,
         last_refund_event_at=now,
         amount_cents=payment.amount_cents,
         currency=payment.currency,
@@ -1013,7 +1032,7 @@ def create_cancellation_refund_record(
         provider="stripe",
         provider_refund_id=provider_refund_id,
         provider_charge_id=payment.provider_charge_id,
-        provider_status=refund_status if provider_refund_id is not None else None,
+        provider_status=provider_status,
         new_refund_status=refund_status,
         reason_code=reason_code,
         summary="Official-game cancellation refund result recorded.",
