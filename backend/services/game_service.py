@@ -109,27 +109,84 @@ def get_active_user_or_404(db: Session, user_id: uuid.UUID, detail: str) -> User
     return db_user
 
 
-def create_game_workflow(db: Session, game: GameCreate) -> Game:
+def build_game_address_snapshot(venue: Venue) -> str:
+    return venue.address_line_1
+
+
+def build_game_create_data(
+    game: GameCreate,
+    admin_user: User,
+    venue: Venue,
+) -> dict[str, object]:
+    request_data = game.model_dump()
+    game_type = request_data["game_type"]
+    is_official = game_type == "official"
+    price_per_player_cents = request_data["price_per_player_cents"]
+    host_user_id = request_data.get("host_user_id")
+
+    return {
+        "game_type": game_type,
+        "payment_collection_type": (
+            "in_app"
+            if is_official
+            else "external_host"
+            if price_per_player_cents > 0
+            else "none"
+        ),
+        "publish_status": "published",
+        "game_status": "active",
+        "public_visibility_status": "visible",
+        "join_enforcement_status": "open",
+        "title": request_data["title"],
+        "description": request_data.get("description"),
+        "venue_id": venue.id,
+        "venue_name_snapshot": venue.name,
+        "address_snapshot": build_game_address_snapshot(venue),
+        "city_snapshot": venue.city,
+        "state_snapshot": venue.state,
+        "neighborhood_snapshot": venue.neighborhood,
+        "host_user_id": None if is_official else host_user_id or admin_user.id,
+        "created_by_user_id": admin_user.id,
+        "starts_at": request_data["starts_at"],
+        "ends_at": request_data["ends_at"],
+        "timezone": request_data["timezone"],
+        "sport_type": "soccer",
+        "format_label": request_data["format_label"],
+        "game_player_group": request_data["game_player_group"],
+        "skill_level": request_data["skill_level"],
+        "environment_type": request_data["environment_type"],
+        "total_spots": request_data["total_spots"],
+        "price_per_player_cents": price_per_player_cents,
+        "currency": "USD",
+        "minimum_age": None if is_official else 18,
+        "allow_guests": request_data["allow_guests"],
+        "max_guests_per_booking": request_data["max_guests_per_booking"],
+        "host_guest_max": None,
+        "waitlist_enabled": request_data["waitlist_enabled"],
+        "is_chat_enabled": request_data["is_chat_enabled"],
+        "policy_mode": "official_standard" if is_official else "custom_hosted",
+        "custom_rules_text": request_data.get("custom_rules_text"),
+        "custom_cancellation_text": None,
+        "game_notes": request_data.get("game_notes"),
+        "parking_notes": request_data.get("parking_notes"),
+        "published_at": None,
+        "cancelled_at": None,
+        "cancelled_by_user_id": None,
+        "cancellation_source": None,
+        "cancel_reason": None,
+        "completed_at": None,
+        "completed_by_user_id": None,
+    }
+
+
+def create_game_workflow(db: Session, game: GameCreate, admin_user: User) -> Game:
+    venue = get_active_venue_or_404(db, game.venue_id)
     game_data = normalize_official_game_invariants(
-        game.model_dump(), is_create=True
-    )
-    get_active_venue_or_404(db, game_data["venue_id"])
-    get_active_user_or_404(
-        db, game_data["created_by_user_id"], "Created-by user not found."
+        build_game_create_data(game, admin_user, venue), is_create=True
     )
 
     if game_data["host_user_id"] is not None:
         get_active_user_or_404(db, game_data["host_user_id"], "Host user not found.")
-
-    if game_data["cancelled_by_user_id"] is not None:
-        get_active_user_or_404(
-            db, game_data["cancelled_by_user_id"], "Cancelled-by user not found."
-        )
-
-    if game_data["completed_by_user_id"] is not None:
-        get_active_user_or_404(
-            db, game_data["completed_by_user_id"], "Completed-by user not found."
-        )
 
     normalized_game_data = normalize_official_game_invariants(
         normalize_game_lifecycle_fields(game_data), is_create=True
@@ -1134,35 +1191,8 @@ def update_game_workflow(
     old_game_status = db_game.game_status
 
     update_data = game_update.model_dump(exclude_unset=True)
-    if "game_type" in update_data and update_data["game_type"] != db_game.game_type:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="game_type cannot be changed after creation.",
-        )
-
     reject_official_location_change(db_game, update_data)
     reject_direct_official_host_change(db_game, update_data)
-
-    if game_update.venue_id is not None:
-        get_active_venue_or_404(db, game_update.venue_id)
-
-    if game_update.created_by_user_id is not None:
-        get_active_user_or_404(
-            db, game_update.created_by_user_id, "Created-by user not found."
-        )
-
-    if game_update.host_user_id is not None:
-        get_active_user_or_404(db, game_update.host_user_id, "Host user not found.")
-
-    if game_update.cancelled_by_user_id is not None:
-        get_active_user_or_404(
-            db, game_update.cancelled_by_user_id, "Cancelled-by user not found."
-        )
-
-    if game_update.completed_by_user_id is not None:
-        get_active_user_or_404(
-            db, game_update.completed_by_user_id, "Completed-by user not found."
-        )
 
     now = datetime.now(timezone.utc)
     require_game_not_started(db_game, now, "Games cannot be edited after start time.")

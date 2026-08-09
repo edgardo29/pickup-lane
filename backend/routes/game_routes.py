@@ -64,9 +64,9 @@ router = APIRouter(prefix="/games", tags=["games"])
 def create_game(
     game: GameCreate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_active_admin),
 ) -> Game:
-    return create_game_workflow(db, game)
+    return create_game_workflow(db, game, current_admin)
 
 
 @router.post(

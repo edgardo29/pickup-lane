@@ -65,24 +65,15 @@ def game_create_payload(**overrides: object) -> dict:
     starts_at, ends_at = future_window()
     payload = {
         "game_type": "community",
-        "payment_collection_type": "external_host",
-        "publish_status": "published",
-        "game_status": "active",
         "title": "A2A Match",
         "venue_id": uuid4(),
-        "venue_name_snapshot": "A2A Field",
-        "address_snapshot": "10 Boundaries Ave",
-        "city_snapshot": "Chicago",
-        "state_snapshot": "IL",
         "host_user_id": uuid4(),
-        "created_by_user_id": uuid4(),
         "starts_at": starts_at,
         "ends_at": ends_at,
         "format_label": "5v5",
         "environment_type": "indoor",
         "total_spots": 10,
         "price_per_player_cents": 1200,
-        "policy_mode": "custom_hosted",
     }
     payload.update(overrides)
     return payload
@@ -208,11 +199,11 @@ def test_active_game_request_schemas_enforce_two_guest_booking_maximum(
     assert_invalid(schema_class, invalid_payload)
 
 
-def test_host_guest_max_remains_separate_from_player_guest_maximum() -> None:
-    GameCreate.model_validate(game_create_payload(host_guest_max=3))
-    GameUpdate.model_validate({"host_guest_max": 3})
+def test_generic_game_requests_do_not_accept_direct_host_guest_max() -> None:
     assert_invalid(GameCreate, game_create_payload(host_guest_max=-1))
+    assert_invalid(GameCreate, game_create_payload(host_guest_max=3))
     assert_invalid(GameUpdate, {"host_guest_max": -1})
+    assert_invalid(GameUpdate, {"host_guest_max": 3})
 
 
 @pytest.mark.parametrize(
