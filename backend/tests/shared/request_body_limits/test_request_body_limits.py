@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -15,6 +16,7 @@ from backend.main import create_app
 import backend.main as main_module
 from backend.observability.correlation import CORRELATION_ID_HEADER
 from backend.observability.request_body_limits import (
+    DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES,
     DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES,
     DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES,
     PLATFORM_NOTICE_CREATE_PATH,
@@ -22,6 +24,7 @@ from backend.observability.request_body_limits import (
     STRIPE_WEBHOOK_PATH,
     UNSUPPORTED_CONTENT_ENCODING_CODE,
     RequestBodyLimitMiddleware,
+    RequestBodyLimitRoute,
 )
 from backend.routes import stripe_webhook_routes
 from backend.settings import AppEnvironment, BackendSettings
@@ -93,9 +96,25 @@ def runtime_settings() -> BackendSettings:
     )
 
 
-def limited_app(inner_app: RecordingBodyApp) -> RequestBodyLimitMiddleware:
+def ordinary_route(path: str = "/ordinary-json") -> RequestBodyLimitRoute:
+    return RequestBodyLimitRoute(
+        path=path,
+        methods=frozenset({"POST"}),
+        path_regex=re.compile(f"^{re.escape(path)}$"),
+    )
+
+
+def limited_app(
+    inner_app: RecordingBodyApp,
+    *,
+    ordinary_json_body_routes: tuple[RequestBodyLimitRoute, ...] = (),
+) -> RequestBodyLimitMiddleware:
     return RequestBodyLimitMiddleware(
         inner_app,
+        ordinary_json_request_body_limit_bytes=(
+            DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES
+        ),
+        ordinary_json_body_routes=ordinary_json_body_routes,
         platform_notice_request_body_limit_bytes=(
             DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES
         ),
@@ -204,6 +223,195 @@ async def _invoke_asgi(
     )
 
 
+def test_app_registers_retained_ordinary_body_routes_from_fastapi_metadata():
+    app = create_app(settings=runtime_settings())
+    middleware = next(
+        middleware
+        for middleware in app.user_middleware
+        if middleware.cls is RequestBodyLimitMiddleware
+    )
+    ordinary_routes = middleware.kwargs["ordinary_json_body_routes"]
+    route_keys = {
+        (method, route.path)
+        for route in ordinary_routes
+        for method in route.methods
+    }
+
+    assert len(route_keys) == 81
+    assert ("PATCH", "/users/me") in route_keys
+    assert ("POST", "/games/{game_id}/join") in route_keys
+    assert ("POST", "/admin/platform-notices") not in route_keys
+    assert ("POST", STRIPE_WEBHOOK_PATH) not in route_keys
+    assert all(method not in {"GET", "HEAD", "OPTIONS"} for method, _ in route_keys)
+
+
+@pytest.mark.parametrize(
+    "body_size",
+    [
+        DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES - 1,
+        DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES,
+    ],
+)
+def test_ordinary_json_route_class_accepts_body_at_or_below_limit(body_size: int):
+    inner_app = RecordingBodyApp()
+    body = b"x" * body_size
+
+    response = invoke_asgi(
+        limited_app(inner_app, ordinary_json_body_routes=(ordinary_route(),)),
+        method="POST",
+        path="/ordinary-json",
+        chunks=[body],
+        headers=[
+            *host_headers(),
+            ("Content-Length", str(body_size)),
+            ("Content-Type", "application/json"),
+        ],
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert inner_app.bodies == [body]
+    assert inner_app.mutations == 1
+
+
+def test_ordinary_json_declared_length_above_limit_rejects_before_downstream():
+    inner_app = RecordingBodyApp()
+
+    response = invoke_asgi(
+        limited_app(inner_app, ordinary_json_body_routes=(ordinary_route(),)),
+        method="POST",
+        path="/ordinary-json",
+        chunks=[b""],
+        headers=[
+            *host_headers(),
+            ("Content-Length", str(DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES + 1)),
+            ("Content-Type", "application/json"),
+        ],
+    )
+
+    body = response.json()
+    assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
+    assert body["code"] == REQUEST_BODY_TOO_LARGE_CODE
+    assert inner_app.calls == 0
+    assert response.receive_calls == 0
+
+
+def test_ordinary_json_actual_body_above_limit_rejects_before_mutation():
+    inner_app = RecordingBodyApp()
+
+    response = invoke_asgi(
+        limited_app(inner_app, ordinary_json_body_routes=(ordinary_route(),)),
+        method="POST",
+        path="/ordinary-json",
+        chunks=[
+            b"x" * DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES,
+            b"y",
+        ],
+        headers=[*host_headers(), ("Content-Type", "application/json")],
+    )
+
+    body = response.json()
+    assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
+    assert body["code"] == REQUEST_BODY_TOO_LARGE_CODE
+    assert inner_app.calls == 1
+    assert inner_app.mutations == 0
+
+
+def test_ordinary_json_declared_length_below_actual_does_not_bypass_limit():
+    inner_app = RecordingBodyApp()
+
+    response = invoke_asgi(
+        limited_app(inner_app, ordinary_json_body_routes=(ordinary_route(),)),
+        method="POST",
+        path="/ordinary-json",
+        chunks=[
+            b"x" * DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES,
+            b"y",
+        ],
+        headers=[
+            *host_headers(),
+            ("Content-Length", "1"),
+            ("Content-Type", "application/json"),
+        ],
+    )
+
+    assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
+    assert inner_app.mutations == 0
+
+
+def test_ordinary_json_missing_content_length_uses_actual_bytes():
+    inner_app = RecordingBodyApp()
+
+    response = invoke_asgi(
+        limited_app(inner_app, ordinary_json_body_routes=(ordinary_route(),)),
+        method="POST",
+        path="/ordinary-json",
+        chunks=[b"x" * (DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES + 1)],
+        headers=[*host_headers(), ("Content-Type", "application/json")],
+    )
+
+    assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
+    assert inner_app.mutations == 0
+
+
+def test_ordinary_json_chunked_body_receives_actual_byte_enforcement():
+    inner_app = RecordingBodyApp()
+
+    response = invoke_asgi(
+        limited_app(inner_app, ordinary_json_body_routes=(ordinary_route(),)),
+        method="POST",
+        path="/ordinary-json",
+        chunks=[
+            b"x" * (DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES // 2),
+            b"y" * ((DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES // 2) + 1),
+        ],
+        headers=[*host_headers(), ("Content-Type", "application/json")],
+    )
+
+    assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
+    assert inner_app.mutations == 0
+
+
+def test_ordinary_json_malformed_body_below_limit_reaches_existing_parser():
+    app = create_app(settings=runtime_settings())
+
+    with TestClient(app) as client:
+        response = client.patch(
+            "/users/me",
+            content=b"{malformed",
+            headers={
+                "Host": ALLOWED_HOST,
+                "Content-Type": "application/json",
+            },
+        )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert REQUEST_BODY_TOO_LARGE_CODE not in response.text
+
+
+def test_ordinary_json_oversized_malformed_body_rejects_before_parser():
+    app = create_app(settings=runtime_settings())
+    body = b'{"submitted_marker":"' + (
+        b"x" * DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES
+    )
+
+    with TestClient(app) as client:
+        response = client.patch(
+            "/users/me",
+            content=body,
+            headers={
+                "Host": ALLOWED_HOST,
+                "Content-Type": "application/json",
+                "Origin": ALLOWED_ORIGIN,
+            },
+        )
+
+    response_body = response.json()
+    assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
+    assert response_body["code"] == REQUEST_BODY_TOO_LARGE_CODE
+    assert "submitted_marker" not in response.text
+    assert response.headers["Access-Control-Allow-Origin"] == ALLOWED_ORIGIN
+
+
 @pytest.mark.parametrize(
     "body_size",
     [
@@ -229,6 +437,29 @@ def test_platform_notice_route_class_accepts_body_at_or_below_limit(body_size: i
     assert response.status_code == status.HTTP_200_OK
     assert inner_app.bodies == [body]
     assert inner_app.mutations == 1
+
+
+def test_platform_notice_special_class_precedes_ordinary_route_match():
+    inner_app = RecordingBodyApp()
+    body = b"x" * (DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES + 1)
+
+    response = invoke_asgi(
+        limited_app(
+            inner_app,
+            ordinary_json_body_routes=(ordinary_route(PLATFORM_NOTICE_CREATE_PATH),),
+        ),
+        method="POST",
+        path=PLATFORM_NOTICE_CREATE_PATH,
+        chunks=[body],
+        headers=[
+            *host_headers(),
+            ("Content-Length", str(len(body))),
+            ("Content-Type", "application/json"),
+        ],
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert inner_app.bodies == [body]
 
 
 def test_platform_notice_declared_length_above_limit_rejects_before_downstream():
@@ -676,7 +907,49 @@ def test_limited_request_classes_allow_identity_content_encoding(path, headers):
     assert inner_app.bodies == [b"identity-body"]
 
 
-def test_unrelated_ordinary_route_keeps_current_content_encoding_behavior():
+def test_ordinary_json_route_rejects_non_identity_content_encoding():
+    inner_app = RecordingBodyApp()
+
+    response = invoke_asgi(
+        limited_app(inner_app, ordinary_json_body_routes=(ordinary_route(),)),
+        method="POST",
+        path="/ordinary-json",
+        chunks=[b"compressed-body"],
+        headers=[
+            *host_headers(),
+            ("Content-Encoding", "gzip"),
+            ("Content-Type", "application/json"),
+        ],
+    )
+
+    body = response.json()
+    assert response.status_code == status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+    assert body["code"] == UNSUPPORTED_CONTENT_ENCODING_CODE
+    assert "compressed-body" not in response.body.decode("utf-8")
+    assert inner_app.calls == 0
+    assert response.receive_calls == 0
+
+
+def test_ordinary_json_route_allows_identity_content_encoding():
+    inner_app = RecordingBodyApp()
+
+    response = invoke_asgi(
+        limited_app(inner_app, ordinary_json_body_routes=(ordinary_route(),)),
+        method="POST",
+        path="/ordinary-json",
+        chunks=[b"identity-body"],
+        headers=[
+            *host_headers(),
+            ("Content-Encoding", "identity"),
+            ("Content-Type", "application/json"),
+        ],
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert inner_app.bodies == [b"identity-body"]
+
+
+def test_unclassified_body_route_keeps_current_content_encoding_behavior():
     inner_app = RecordingBodyApp()
     body = b"x" * (DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES + 1)
 
@@ -779,6 +1052,8 @@ def test_non_http_scopes_are_not_limited(scope_type):
 
     middleware = RequestBodyLimitMiddleware(
         app,
+        ordinary_json_request_body_limit_bytes=1,
+        ordinary_json_body_routes=(),
         platform_notice_request_body_limit_bytes=1,
         stripe_webhook_request_body_limit_bytes=1,
     )

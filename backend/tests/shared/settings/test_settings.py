@@ -7,6 +7,7 @@ from backend.settings import (
     BACKEND_ENVIRONMENT_VARIABLES,
     AppEnvironment,
     DEFAULT_RELEASE_IDENTITY,
+    DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES,
     DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES,
     DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES,
     SettingsError,
@@ -304,6 +305,10 @@ def test_request_body_limit_defaults_apply_in_every_environment(app_env):
     settings = build_settings(env)
 
     assert (
+        settings.ordinary_json_request_body_limit_bytes
+        == DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES
+    )
+    assert (
         settings.platform_notice_request_body_limit_bytes
         == DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES
     )
@@ -316,11 +321,13 @@ def test_request_body_limit_defaults_apply_in_every_environment(app_env):
 def test_request_body_limit_settings_accept_positive_overrides():
     settings = build_settings(
         local_env(
+            ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES="512",
             PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES="1024",
             STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES="2048",
         )
     )
 
+    assert settings.ordinary_json_request_body_limit_bytes == 512
     assert settings.platform_notice_request_body_limit_bytes == 1024
     assert settings.stripe_webhook_request_body_limit_bytes == 2048
 
@@ -328,6 +335,9 @@ def test_request_body_limit_settings_accept_positive_overrides():
 @pytest.mark.parametrize(
     ("name", "value"),
     [
+        ("ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES", "0"),
+        ("ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES", "-1"),
+        ("ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES", "large"),
         ("PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES", "0"),
         ("PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES", "-1"),
         ("PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES", "large"),

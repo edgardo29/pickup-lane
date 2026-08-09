@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, Response, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import MutableHeaders
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -14,7 +15,11 @@ from backend.observability.http_errors import (
     CorrelationIdMiddleware,
     register_exception_handlers,
 )
-from backend.observability.request_body_limits import RequestBodyLimitMiddleware
+from backend.observability.request_body_limits import (
+    PLATFORM_NOTICE_CREATE_PATH,
+    RequestBodyLimitMiddleware,
+    RequestBodyLimitRoute,
+)
 from backend.routes import (
     admin_actions_router,
     admin_rejected_attempts_router,
@@ -89,6 +94,8 @@ DOCUMENTATION_PERMISSIONS_POLICY = (
 DOCUMENTATION_PATHS = ("/docs", "/redoc")
 OPENAPI_SCHEMA_PATH = "/openapi.json"
 HEALTH_PATHS = frozenset({"/live", "/ready", "/db-health"})
+BODYLESS_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+SPECIAL_BODY_ROUTE_KEYS = frozenset({("POST", PLATFORM_NOTICE_CREATE_PATH)})
 
 
 class ResponseSecurityHeadersMiddleware:
@@ -139,29 +146,6 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     app.state.release_identity = backend_settings.release_identity
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-    app.add_middleware(
-        RequestBodyLimitMiddleware,
-        platform_notice_request_body_limit_bytes=(
-            backend_settings.platform_notice_request_body_limit_bytes
-        ),
-        stripe_webhook_request_body_limit_bytes=(
-            backend_settings.stripe_webhook_request_body_limit_bytes
-        ),
-    )
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=list(backend_settings.cors_allowed_origins),
-        allow_credentials=backend_settings.cors_allow_credentials,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=list(backend_settings.allowed_hosts),
-        www_redirect=False,
-    )
-    app.add_middleware(ResponseSecurityHeadersMiddleware)
-    app.add_middleware(CorrelationIdMiddleware)
     register_exception_handlers(app)
 
     @app.get("/")
@@ -210,6 +194,7 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
             return {"message": "Database connection is working"}
 
     _include_routers(app)
+    _add_application_middleware(app, backend_settings)
     return app
 
 
@@ -239,6 +224,66 @@ def _health_response(
             "release": getattr(app.state, "release_identity", "source-unavailable"),
         },
     )
+
+
+def _add_application_middleware(app: FastAPI, backend_settings: BackendSettings) -> None:
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        ordinary_json_request_body_limit_bytes=(
+            backend_settings.ordinary_json_request_body_limit_bytes
+        ),
+        ordinary_json_body_routes=_ordinary_json_body_routes(app),
+        platform_notice_request_body_limit_bytes=(
+            backend_settings.platform_notice_request_body_limit_bytes
+        ),
+        stripe_webhook_request_body_limit_bytes=(
+            backend_settings.stripe_webhook_request_body_limit_bytes
+        ),
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(backend_settings.cors_allowed_origins),
+        allow_credentials=backend_settings.cors_allow_credentials,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=list(backend_settings.allowed_hosts),
+        www_redirect=False,
+    )
+    app.add_middleware(ResponseSecurityHeadersMiddleware)
+    app.add_middleware(CorrelationIdMiddleware)
+
+
+def _ordinary_json_body_routes(app: FastAPI) -> tuple[RequestBodyLimitRoute, ...]:
+    routes: list[RequestBodyLimitRoute] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if not route.dependant.body_params:
+            continue
+
+        methods = frozenset(
+            method
+            for method in route.methods
+            if method.upper() not in BODYLESS_METHODS
+        )
+        if not methods or _is_special_body_route(route.path, methods):
+            continue
+
+        routes.append(
+            RequestBodyLimitRoute(
+                path=route.path,
+                methods=frozenset(method.upper() for method in methods),
+                path_regex=route.path_regex,
+            )
+        )
+    return tuple(routes)
+
+
+def _is_special_body_route(path: str, methods: frozenset[str]) -> bool:
+    return any((method, path) in SPECIAL_BODY_ROUTE_KEYS for method in methods)
 
 
 def _apply_response_security_headers(

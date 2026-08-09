@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from re import Pattern
+from typing import Iterable
 
 from fastapi import status
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -10,6 +12,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from backend.observability.http_errors import public_error_response
 
 
+DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES = 64 * 1024
 DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES = 160 * 1024
 DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES = 64 * 1024
 
@@ -42,6 +45,18 @@ class RequestBodyLimit:
     limit_bytes: int
 
 
+@dataclass(frozen=True)
+class RequestBodyLimitRoute:
+    """A route-derived request-body class selected from FastAPI metadata."""
+
+    path: str
+    methods: frozenset[str]
+    path_regex: Pattern[str]
+
+    def matches(self, *, method: str, path: str) -> bool:
+        return method in self.methods and bool(self.path_regex.match(path))
+
+
 class RequestBodyLimitMiddleware:
     """Count request bytes for the approved limited request classes only."""
 
@@ -49,10 +64,17 @@ class RequestBodyLimitMiddleware:
         self,
         app: ASGIApp,
         *,
+        ordinary_json_request_body_limit_bytes: int,
+        ordinary_json_body_routes: Iterable[RequestBodyLimitRoute],
         platform_notice_request_body_limit_bytes: int,
         stripe_webhook_request_body_limit_bytes: int,
     ) -> None:
         self.app = app
+        self._ordinary_json_limit = RequestBodyLimit(
+            name="ordinary_json",
+            limit_bytes=ordinary_json_request_body_limit_bytes,
+        )
+        self._ordinary_json_body_routes = tuple(ordinary_json_body_routes)
         self._platform_notice_limit = RequestBodyLimit(
             name="platform_notice_create",
             limit_bytes=platform_notice_request_body_limit_bytes,
@@ -101,14 +123,19 @@ class RequestBodyLimitMiddleware:
         method = str(scope.get("method") or "").upper()
         path = _normalized_path(scope)
 
-        if method == "POST" and path == PLATFORM_NOTICE_CREATE_PATH:
-            return self._platform_notice_limit
         if (
             method == "POST"
             and path == STRIPE_WEBHOOK_PATH
             and _has_header(scope, _STRIPE_SIGNATURE_HEADER)
         ):
             return self._stripe_webhook_limit
+        if method == "POST" and path == PLATFORM_NOTICE_CREATE_PATH:
+            return self._platform_notice_limit
+        if any(
+            route.matches(method=method, path=path)
+            for route in self._ordinary_json_body_routes
+        ):
+            return self._ordinary_json_limit
         return None
 
     async def _send_request_body_too_large(
