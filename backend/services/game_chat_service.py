@@ -31,6 +31,10 @@ from backend.services.chat_moderation_service import (
     build_safe_message_preview,
     detect_chat_message,
 )
+from backend.services.chat_rate_limit_service import (
+    CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES,
+    enforce_visible_text_chat_rate_limit,
+)
 from backend.services.game_participant_rules import ROSTER_USER_PARTICIPANT_TYPES
 from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.moderation_surfacing_service import surface_game_chat_message_text
@@ -48,7 +52,7 @@ TERMINAL_CHAT_STATUSES = {"closed"}
 MAX_CHAT_MESSAGE_LENGTH = 300
 MAX_CHAT_MESSAGES_PER_PAGE = 50
 MAX_CHAT_MESSAGES_TOTAL = 200
-MAX_CHAT_MESSAGES_PER_MINUTE = 5
+MAX_CHAT_MESSAGES_PER_MINUTE = CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES
 VALID_VISIBILITY_STATUSES = {"visible", "removed"}
 VALID_REVIEW_STATUSES = {"clear", "needs_review", "reviewed"}
 
@@ -543,24 +547,15 @@ def validate_sender_rate_limit(
     sender_user_id: uuid.UUID,
     current_time: datetime,
 ) -> None:
-    window_start = ensure_timezone(current_time) - timedelta(minutes=1)
-    message_count = db.scalar(
-        select(func.count())
-        .select_from(ChatMessage)
-        .where(
-            ChatMessage.chat_id == chat_id,
-            ChatMessage.sender_user_id == sender_user_id,
-            ChatMessage.message_type == "text",
-            ChatMessage.visibility_status == "visible",
-            ChatMessage.created_at >= window_start,
-        )
-    ) or 0
-
-    if message_count >= MAX_CHAT_MESSAGES_PER_MINUTE:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Slow down before sending another game chat message.",
-        )
+    enforce_visible_text_chat_rate_limit(
+        db,
+        limiter_category="game_chat",
+        message_model=ChatMessage,
+        chat_id=chat_id,
+        sender_user_id=sender_user_id,
+        current_time=ensure_timezone(current_time),
+        visible_status="visible",
+    )
 
 
 def validate_total_message_limit(db: Session, chat_id: uuid.UUID) -> None:
