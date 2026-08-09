@@ -850,6 +850,13 @@ def create_policy_document(
     client: TestClient,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import PolicyDocumentCreate, PolicyDocumentRead
+    from backend.services.policy_document_service import (
+        create_policy_document_record,
+    )
+
     payload = {
         "policy_type": "privacy_policy",
         "version": f"v-{unique_suffix()[:8]}",
@@ -861,13 +868,14 @@ def create_policy_document(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/policy-documents", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        policy_document = create_policy_document_record(
+            db,
+            PolicyDocumentCreate.model_validate(payload),
+        )
+        return PolicyDocumentRead.model_validate(policy_document).model_dump(
+            mode="json"
+        )
 
 
 def create_policy_acceptance(
@@ -876,6 +884,13 @@ def create_policy_acceptance(
     policy_document_id: str,
     **overrides: object,
 ) -> dict:
+    del client
+    from backend.database import SessionLocal
+    from backend.schemas import PolicyAcceptanceCreate, PolicyAcceptanceRead
+    from backend.services.policy_acceptance_service import (
+        create_policy_acceptance_record,
+    )
+
     payload = {
         "user_id": user_id,
         "policy_document_id": policy_document_id,
@@ -884,13 +899,14 @@ def create_policy_acceptance(
     }
     payload.update(overrides)
 
-    response = run_as_temporary_admin(
-        client,
-        lambda: client.post("/policy-acceptances", json=payload),
-    )
-
-    assert response.status_code == 201, response.text
-    return response.json()
+    with SessionLocal() as db:
+        policy_acceptance = create_policy_acceptance_record(
+            db,
+            PolicyAcceptanceCreate.model_validate(payload),
+        )
+        return PolicyAcceptanceRead.model_validate(policy_acceptance).model_dump(
+            mode="json"
+        )
 
 
 def create_booking_policy_acceptance(

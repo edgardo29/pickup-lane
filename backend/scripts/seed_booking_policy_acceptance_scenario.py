@@ -239,17 +239,8 @@ def main() -> None:
     for label, value in ids.items():
         print(f"{label}: {value}")
     print("")
-    print("POST /booking-policy-acceptances body:")
-    print("{")
-    print(
-        '  "booking_id": '
-        f'"{ids["booking_policy_acceptance_booking_id"]}",'
-    )
-    print(
-        '  "policy_document_id": '
-        f'"{ids["booking_policy_acceptance_document_id"]}"'
-    )
-    print("}")
+    print("Generic booking-policy-acceptance API creation is retired.")
+    print("This script seeds local scenario data directly through internal setup.")
 
 
 if __name__ == "__main__":

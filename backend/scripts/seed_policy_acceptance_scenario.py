@@ -105,13 +105,8 @@ def main() -> None:
     for label, value in ids.items():
         print(f"{label}: {value}")
     print("")
-    print("POST /policy-acceptances body:")
-    print("{")
-    print(f'  "user_id": "{ids["policy_acceptance_user_id"]}",')
-    print(f'  "policy_document_id": "{ids["policy_acceptance_document_id"]}",')
-    print('  "ip_address": "127.0.0.1",')
-    print('  "user_agent": "Postman local test"')
-    print("}")
+    print("Generic policy-acceptance API creation is retired.")
+    print("This script seeds local scenario data directly through internal setup.")
 
 
 if __name__ == "__main__":

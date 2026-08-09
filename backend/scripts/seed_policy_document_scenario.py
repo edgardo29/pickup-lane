@@ -81,16 +81,8 @@ def main() -> None:
     for label, value in ids.items():
         print(f"{label}: {value}")
     print("")
-    print("POST /policy-documents body:")
-    print("{")
-    print('  "policy_type": "privacy_policy",')
-    print('  "version": "v1.0",')
-    print('  "title": "Pickup Lane Privacy Policy",')
-    print('  "content_url": null,')
-    print('  "content_text": "This is a test privacy policy for local development.",')
-    print(f'  "effective_at": "{datetime.now(UTC).isoformat()}",')
-    print('  "is_active": true')
-    print("}")
+    print("Generic policy-document API authoring is retired.")
+    print("This script seeds local scenario data directly through internal setup.")
 
 
 if __name__ == "__main__":
