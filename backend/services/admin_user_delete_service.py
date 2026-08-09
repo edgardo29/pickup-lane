@@ -27,6 +27,7 @@ from backend.models import (
     UserPaymentMethod,
     WaitlistEntry,
 )
+from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
 from backend.schemas.admin_user_schema import (
     AdminUserDeleteCreate,
     AdminUserDeleteImpactGameRead,
@@ -939,6 +940,23 @@ def delete_admin_user(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
             ) from exc
+        except DependencyMutationTimeoutUnknownError:
+            record_admin_delete_partial_failure(
+                db,
+                admin_user_id=admin_user.id,
+                user_id=user_id,
+                clear_auth_link=False,
+                metadata={
+                    "auth_identity_deleted": "unknown",
+                    "app_cleanup_completed": False,
+                    "failure_type": "firebase_delete_outcome_unknown",
+                },
+                summary=(
+                    "Firebase deletion timed out, and account deletion "
+                    "requires support follow-up."
+                ),
+            )
+            raise
         except Exception as exc:
             target_user.account_status = previous_account_status
             target_user.updated_at = datetime.now(timezone.utc)

@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 from typing import Any
 
+from backend.observability.timeouts import (
+    DependencyMutationTimeoutUnknownError,
+    DependencyReadTimeoutError,
+    is_timeout_like_exception,
+)
 from backend.settings import SUPPORTED_STRIPE_CURRENCY, SettingsError, get_settings
 
 DEFAULT_STRIPE_CURRENCY = SUPPORTED_STRIPE_CURRENCY
@@ -8,6 +13,12 @@ DEFAULT_STRIPE_CURRENCY = SUPPORTED_STRIPE_CURRENCY
 
 class StripeConfigError(RuntimeError):
     """Raised when Stripe cannot be called safely from this environment."""
+
+
+@dataclass(frozen=True)
+class StripeClientPair:
+    read: Any
+    mutation: Any
 
 
 @dataclass(frozen=True)
@@ -89,6 +100,37 @@ def get_stripe_module() -> Any:
     if not stripe_payments_enabled():
         raise StripeConfigError("Stripe payments are disabled for this demo.")
 
+    stripe = _import_stripe_module()
+
+    stripe.api_key = get_stripe_secret_key()
+    return stripe
+
+
+def get_stripe_client_pair() -> StripeClientPair:
+    settings = _stripe_settings()
+    if not settings.enable_stripe_payments:
+        raise StripeConfigError("Stripe payments are disabled for this demo.")
+
+    stripe = _import_stripe_module()
+    secret_key = settings.stripe_secret_key_value
+    if not secret_key:
+        raise StripeConfigError("STRIPE_SECRET_KEY is not configured.")
+
+    return StripeClientPair(
+        read=_build_stripe_client(
+            stripe,
+            secret_key=secret_key,
+            timeout_seconds=settings.stripe_read_timeout_seconds,
+        ),
+        mutation=_build_stripe_client(
+            stripe,
+            secret_key=secret_key,
+            timeout_seconds=settings.stripe_mutation_timeout_seconds,
+        ),
+    )
+
+
+def _import_stripe_module() -> Any:
     try:
         import stripe
     except ModuleNotFoundError as exc:
@@ -96,8 +138,19 @@ def get_stripe_module() -> Any:
             "The Stripe Python SDK is not installed. Install backend requirements first."
         ) from exc
 
-    stripe.api_key = get_stripe_secret_key()
     return stripe
+
+
+def _build_stripe_client(
+    stripe: Any,
+    *,
+    secret_key: str,
+    timeout_seconds: int,
+) -> Any:
+    return stripe.StripeClient(
+        secret_key,
+        http_client=stripe.RequestsClient(timeout=timeout_seconds),
+    )
 
 
 def _stripe_settings():
@@ -187,12 +240,17 @@ def create_customer(
     idempotency_key: str,
     metadata: dict[str, object],
 ) -> StripeCustomerResult:
-    stripe = get_stripe_module()
-    customer = stripe.Customer.create(
-        email=email,
-        name=name,
-        metadata=normalize_metadata(metadata),
-        idempotency_key=idempotency_key,
+    client = get_stripe_client_pair().mutation
+    customer = _call_stripe_mutation(
+        "customer.create",
+        lambda: client.v1.customers.create(
+            {
+                "email": email,
+                "name": name,
+                "metadata": normalize_metadata(metadata),
+            },
+            options={"idempotency_key": idempotency_key},
+        ),
     )
     return StripeCustomerResult(id=customer.id)
 
@@ -203,51 +261,71 @@ def create_setup_intent(
     idempotency_key: str,
     metadata: dict[str, object],
 ) -> StripeSetupIntentResult:
-    stripe = get_stripe_module()
-    setup_intent = stripe.SetupIntent.create(
-        customer=customer_id,
-        payment_method_types=["card"],
-        usage="off_session",
-        metadata=normalize_metadata(metadata),
-        idempotency_key=idempotency_key,
+    client = get_stripe_client_pair().mutation
+    setup_intent = _call_stripe_mutation(
+        "setup_intent.create",
+        lambda: client.v1.setup_intents.create(
+            {
+                "customer": customer_id,
+                "payment_method_types": ["card"],
+                "usage": "off_session",
+                "metadata": normalize_metadata(metadata),
+            },
+            options={"idempotency_key": idempotency_key},
+        ),
     )
     return extract_setup_intent_result(setup_intent)
 
 
 def retrieve_setup_intent(setup_intent_id: str) -> StripeSetupIntentResult:
-    stripe = get_stripe_module()
-    setup_intent = stripe.SetupIntent.retrieve(setup_intent_id)
+    client = get_stripe_client_pair().read
+    setup_intent = _call_stripe_read(
+        "setup_intent.retrieve",
+        lambda: client.v1.setup_intents.retrieve(setup_intent_id),
+    )
     return extract_setup_intent_result(setup_intent)
 
 
 def retrieve_payment_method(
     payment_method_id: str,
 ) -> StripePaymentMethodCardResult:
-    stripe = get_stripe_module()
-    payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
+    client = get_stripe_client_pair().read
+    payment_method = _call_stripe_read(
+        "payment_method.retrieve",
+        lambda: client.v1.payment_methods.retrieve(payment_method_id),
+    )
     return extract_card_payment_method_result(payment_method)
 
 
 def detach_payment_method(payment_method_id: str) -> None:
-    stripe = get_stripe_module()
-    stripe.PaymentMethod.detach(payment_method_id)
+    client = get_stripe_client_pair().mutation
+    _call_stripe_mutation(
+        "payment_method.detach",
+        lambda: client.v1.payment_methods.detach(payment_method_id),
+    )
 
 
 def set_customer_default_payment_method(
     *, customer_id: str, payment_method_id: str
 ) -> None:
-    stripe = get_stripe_module()
-    stripe.Customer.modify(
-        customer_id,
-        invoice_settings={"default_payment_method": payment_method_id},
+    client = get_stripe_client_pair().mutation
+    _call_stripe_mutation(
+        "customer.default_payment_method.set",
+        lambda: client.v1.customers.update(
+            customer_id,
+            {"invoice_settings": {"default_payment_method": payment_method_id}},
+        ),
     )
 
 
 def clear_customer_default_payment_method(*, customer_id: str) -> None:
-    stripe = get_stripe_module()
-    stripe.Customer.modify(
-        customer_id,
-        invoice_settings={"default_payment_method": None},
+    client = get_stripe_client_pair().mutation
+    _call_stripe_mutation(
+        "customer.default_payment_method.clear",
+        lambda: client.v1.customers.update(
+            customer_id,
+            {"invoice_settings": {"default_payment_method": None}},
+        ),
     )
 
 
@@ -259,18 +337,23 @@ def create_payment_intent(
     metadata: dict[str, object],
     customer_id: str | None = None,
 ) -> StripePaymentIntentResult:
-    stripe = get_stripe_module()
+    client = get_stripe_client_pair().mutation
     payment_intent_payload: dict[str, object] = {
         "amount": amount_cents,
         "currency": currency.lower(),
         "payment_method_types": ["card"],
         "metadata": normalize_metadata(metadata),
-        "idempotency_key": idempotency_key,
     }
     if customer_id is not None:
         payment_intent_payload["customer"] = customer_id
 
-    payment_intent = stripe.PaymentIntent.create(**payment_intent_payload)
+    payment_intent = _call_stripe_mutation(
+        "payment_intent.create",
+        lambda: client.v1.payment_intents.create(
+            payment_intent_payload,
+            options={"idempotency_key": idempotency_key},
+        ),
+    )
 
     return extract_payment_intent_result(payment_intent)
 
@@ -291,17 +374,24 @@ def confirm_payment_intent(
     if off_session:
         confirm_payload["off_session"] = True
 
-    payment_intent = stripe.PaymentIntent.confirm(
-        payment_intent_id,
-        **confirm_payload,
+    client = get_stripe_client_pair().mutation
+    payment_intent = _call_stripe_mutation(
+        "payment_intent.confirm",
+        lambda: client.v1.payment_intents.confirm(
+            payment_intent_id,
+            confirm_payload,
+        ),
     )
 
     return extract_payment_intent_result(payment_intent)
 
 
 def retrieve_payment_intent(payment_intent_id: str) -> StripePaymentIntentResult:
-    stripe = get_stripe_module()
-    payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+    client = get_stripe_client_pair().read
+    payment_intent = _call_stripe_read(
+        "payment_intent.retrieve",
+        lambda: client.v1.payment_intents.retrieve(payment_intent_id),
+    )
 
     return extract_payment_intent_result(payment_intent)
 
@@ -318,20 +408,28 @@ def create_refund(
     if currency.upper() != DEFAULT_STRIPE_CURRENCY:
         raise StripeConfigError("Pickup Lane Stripe refunds currently support USD only.")
 
-    stripe = get_stripe_module()
-    refund = stripe.Refund.create(
-        charge=charge_id,
-        amount=amount_cents,
-        metadata=normalize_metadata(metadata),
-        idempotency_key=idempotency_key,
+    client = get_stripe_client_pair().mutation
+    refund = _call_stripe_mutation(
+        "refund.create",
+        lambda: client.v1.refunds.create(
+            {
+                "charge": charge_id,
+                "amount": amount_cents,
+                "metadata": normalize_metadata(metadata),
+            },
+            options={"idempotency_key": idempotency_key},
+        ),
     )
 
     return extract_refund_result(refund)
 
 
 def retrieve_refund(refund_id: str) -> StripeRefundResult:
-    stripe = get_stripe_module()
-    refund = stripe.Refund.retrieve(refund_id)
+    client = get_stripe_client_pair().read
+    refund = _call_stripe_read(
+        "refund.retrieve",
+        lambda: client.v1.refunds.retrieve(refund_id),
+    )
 
     return extract_refund_result(refund)
 
@@ -340,6 +438,30 @@ def construct_webhook_event(payload: bytes, signature: str) -> Any:
     stripe = get_stripe_module()
     webhook_secret = get_stripe_webhook_secret()
     return stripe.Webhook.construct_event(payload, signature, webhook_secret)
+
+
+def _call_stripe_read(operation: str, call):
+    try:
+        return call()
+    except Exception as exc:
+        if is_timeout_like_exception(exc):
+            raise DependencyReadTimeoutError(
+                provider_kind="stripe",
+                operation=f"stripe.{operation}",
+            ) from exc
+        raise
+
+
+def _call_stripe_mutation(operation: str, call):
+    try:
+        return call()
+    except Exception as exc:
+        if is_timeout_like_exception(exc):
+            raise DependencyMutationTimeoutUnknownError(
+                provider_kind="stripe",
+                operation=f"stripe.{operation}",
+            ) from exc
+        raise
 
 
 def map_payment_intent_status(payment_intent_status: str) -> str:

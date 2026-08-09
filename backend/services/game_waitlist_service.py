@@ -16,6 +16,7 @@ from backend.models import (
     UserPaymentMethod,
     WaitlistEntry,
 )
+from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
 from backend.schemas.game_schema import GameJoinCreate
 from backend.services.game_rules import (
     AUTO_CHARGE_CONSENT_VERSION_MAX_LENGTH,
@@ -450,6 +451,13 @@ def attempt_paid_waitlist_auto_promotion(
             failure_message=str(exc),
         )
         return "failed", 0
+    except DependencyMutationTimeoutUnknownError:
+        payment.payment_status = "processing"
+        payment.failure_code = None
+        payment.failure_message = None
+        payment.updated_at = now
+        db.add(payment)
+        return "processing", len(booking_participants)
     except Exception as exc:
         mark_paid_waitlist_auto_promotion_failed(
             db,

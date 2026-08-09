@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
@@ -59,6 +60,9 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
         "STRIPE_PUBLISHABLE_KEY",
         "STRIPE_WEBHOOK_SECRET",
         "STRIPE_CURRENCY",
+        "STRIPE_READ_TIMEOUT_SECONDS",
+        "STRIPE_MUTATION_TIMEOUT_SECONDS",
+        "FIREBASE_HTTP_TIMEOUT_SECONDS",
         "R2_ACCOUNT_ID",
         "R2_ACCESS_KEY_ID",
         "R2_SECRET_ACCESS_KEY",
@@ -68,6 +72,11 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
         "R2_READ_URL_MINUTES",
         "R2_MAX_IMAGE_BYTES",
         "R2_ALLOWED_IMAGE_TYPES",
+        "R2_METADATA_CONNECT_TIMEOUT_SECONDS",
+        "R2_METADATA_READ_TIMEOUT_SECONDS",
+        "DB_POOL_WAIT_TIMEOUT_SECONDS",
+        "DB_STATEMENT_TIMEOUT_MILLISECONDS",
+        "DB_LOCK_TIMEOUT_MILLISECONDS",
     }
 )
 
@@ -89,6 +98,14 @@ DEFAULT_ALLOWED_HOSTS = ("localhost", "127.0.0.1", "testserver")
 DEFAULT_R2_ALLOWED_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 DEDICATED_TEST_DATABASE_NAME = "pickup_lane_test_db"
 SUPPORTED_STRIPE_CURRENCY = "USD"
+DEFAULT_STRIPE_READ_TIMEOUT_SECONDS = 6
+DEFAULT_STRIPE_MUTATION_TIMEOUT_SECONDS = 15
+DEFAULT_FIREBASE_HTTP_TIMEOUT_SECONDS = 8
+DEFAULT_R2_METADATA_CONNECT_TIMEOUT_SECONDS = 2
+DEFAULT_R2_METADATA_READ_TIMEOUT_SECONDS = 6
+DEFAULT_DB_POOL_WAIT_TIMEOUT_SECONDS = 2
+DEFAULT_DB_STATEMENT_TIMEOUT_MILLISECONDS = 12_000
+DEFAULT_DB_LOCK_TIMEOUT_MILLISECONDS = 2_000
 
 DOCUMENTED_PLACEHOLDER_VALUES = frozenset(
     {
@@ -142,6 +159,13 @@ _DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 _FULL_GIT_COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]+$")
 
 
+@dataclass(frozen=True)
+class DatabaseTimeoutSettings:
+    pool_wait_timeout_seconds: int
+    statement_timeout_milliseconds: int
+    lock_timeout_milliseconds: int
+
+
 class BackendSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -170,6 +194,9 @@ class BackendSettings(BaseModel):
     stripe_publishable_key: SecretStr | None = None
     stripe_webhook_secret: SecretStr | None = None
     stripe_currency: str = SUPPORTED_STRIPE_CURRENCY
+    stripe_read_timeout_seconds: int = DEFAULT_STRIPE_READ_TIMEOUT_SECONDS
+    stripe_mutation_timeout_seconds: int = DEFAULT_STRIPE_MUTATION_TIMEOUT_SECONDS
+    firebase_http_timeout_seconds: int = DEFAULT_FIREBASE_HTTP_TIMEOUT_SECONDS
     r2_account_id: str | None = None
     r2_access_key_id: SecretStr | None = None
     r2_secret_access_key: SecretStr | None = None
@@ -179,6 +206,13 @@ class BackendSettings(BaseModel):
     r2_read_url_minutes: int = 60
     r2_max_image_bytes: int = 8 * 1024 * 1024
     r2_allowed_image_types: frozenset[str] = DEFAULT_R2_ALLOWED_IMAGE_TYPES
+    r2_metadata_connect_timeout_seconds: int = (
+        DEFAULT_R2_METADATA_CONNECT_TIMEOUT_SECONDS
+    )
+    r2_metadata_read_timeout_seconds: int = DEFAULT_R2_METADATA_READ_TIMEOUT_SECONDS
+    db_pool_wait_timeout_seconds: int = DEFAULT_DB_POOL_WAIT_TIMEOUT_SECONDS
+    db_statement_timeout_milliseconds: int = DEFAULT_DB_STATEMENT_TIMEOUT_MILLISECONDS
+    db_lock_timeout_milliseconds: int = DEFAULT_DB_LOCK_TIMEOUT_MILLISECONDS
 
     @property
     def is_production_like(self) -> bool:
@@ -251,9 +285,24 @@ def _cached_database_url() -> str:
     return build_settings(load_dotenv_file=True, validate_full=False).database_url_value
 
 
+def get_database_timeout_settings() -> DatabaseTimeoutSettings:
+    return _cached_database_timeout_settings()
+
+
+@lru_cache(maxsize=1)
+def _cached_database_timeout_settings() -> DatabaseTimeoutSettings:
+    settings = build_settings(load_dotenv_file=True, validate_full=False)
+    return DatabaseTimeoutSettings(
+        pool_wait_timeout_seconds=settings.db_pool_wait_timeout_seconds,
+        statement_timeout_milliseconds=settings.db_statement_timeout_milliseconds,
+        lock_timeout_milliseconds=settings.db_lock_timeout_milliseconds,
+    )
+
+
 def reset_settings_cache() -> None:
     _cached_settings.cache_clear()
     _cached_database_url.cache_clear()
+    _cached_database_timeout_settings.cache_clear()
 
 
 def get_inbox_token_secret(settings: BackendSettings | None = None) -> str:
@@ -307,6 +356,7 @@ def build_settings(
         "STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES",
         default=DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES,
     )
+    timeout_values = _parse_timeout_settings(env)
 
     if app_env is AppEnvironment.PRODUCTION and enable_api_docs:
         _fail("ENABLE_API_DOCS", "must be disabled in production")
@@ -334,6 +384,7 @@ def build_settings(
         ordinary_json_request_body_limit_bytes=ordinary_json_request_body_limit_bytes,
         platform_notice_request_body_limit_bytes=platform_notice_request_body_limit_bytes,
         stripe_webhook_request_body_limit_bytes=stripe_webhook_request_body_limit_bytes,
+        **timeout_values,
         **stripe_values,
         **firebase_values,
         **r2_values,
@@ -696,6 +747,66 @@ def _empty_r2_settings() -> dict[str, object]:
         "r2_read_url_minutes": 60,
         "r2_max_image_bytes": 8 * 1024 * 1024,
         "r2_allowed_image_types": DEFAULT_R2_ALLOWED_IMAGE_TYPES,
+    }
+
+
+def _parse_timeout_settings(env: Mapping[str, str]) -> dict[str, int]:
+    stripe_read_timeout_seconds = _parse_positive_int(
+        env,
+        "STRIPE_READ_TIMEOUT_SECONDS",
+        default=DEFAULT_STRIPE_READ_TIMEOUT_SECONDS,
+    )
+    stripe_mutation_timeout_seconds = _parse_positive_int(
+        env,
+        "STRIPE_MUTATION_TIMEOUT_SECONDS",
+        default=DEFAULT_STRIPE_MUTATION_TIMEOUT_SECONDS,
+    )
+    firebase_http_timeout_seconds = _parse_positive_int(
+        env,
+        "FIREBASE_HTTP_TIMEOUT_SECONDS",
+        default=DEFAULT_FIREBASE_HTTP_TIMEOUT_SECONDS,
+    )
+    r2_metadata_connect_timeout_seconds = _parse_positive_int(
+        env,
+        "R2_METADATA_CONNECT_TIMEOUT_SECONDS",
+        default=DEFAULT_R2_METADATA_CONNECT_TIMEOUT_SECONDS,
+    )
+    r2_metadata_read_timeout_seconds = _parse_positive_int(
+        env,
+        "R2_METADATA_READ_TIMEOUT_SECONDS",
+        default=DEFAULT_R2_METADATA_READ_TIMEOUT_SECONDS,
+    )
+    db_pool_wait_timeout_seconds = _parse_positive_int(
+        env,
+        "DB_POOL_WAIT_TIMEOUT_SECONDS",
+        default=DEFAULT_DB_POOL_WAIT_TIMEOUT_SECONDS,
+    )
+    db_statement_timeout_milliseconds = _parse_positive_int(
+        env,
+        "DB_STATEMENT_TIMEOUT_MILLISECONDS",
+        default=DEFAULT_DB_STATEMENT_TIMEOUT_MILLISECONDS,
+    )
+    db_lock_timeout_milliseconds = _parse_positive_int(
+        env,
+        "DB_LOCK_TIMEOUT_MILLISECONDS",
+        default=DEFAULT_DB_LOCK_TIMEOUT_MILLISECONDS,
+    )
+
+    if db_lock_timeout_milliseconds >= db_statement_timeout_milliseconds:
+        _fail(
+            "DB_LOCK_TIMEOUT_MILLISECONDS",
+            "must be less than DB_STATEMENT_TIMEOUT_MILLISECONDS",
+        )
+
+    return {
+        "stripe_read_timeout_seconds": stripe_read_timeout_seconds,
+        "stripe_mutation_timeout_seconds": stripe_mutation_timeout_seconds,
+        "firebase_http_timeout_seconds": firebase_http_timeout_seconds,
+        "r2_metadata_connect_timeout_seconds": r2_metadata_connect_timeout_seconds,
+        "r2_metadata_read_timeout_seconds": r2_metadata_read_timeout_seconds,
+        "db_pool_wait_timeout_seconds": db_pool_wait_timeout_seconds,
+        "db_statement_timeout_milliseconds": db_statement_timeout_milliseconds,
+        "db_lock_timeout_milliseconds": db_lock_timeout_milliseconds,
     }
 
 

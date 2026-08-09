@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.observability.timeouts import PublicTimeoutError
 from backend.models import User, UserPaymentMethod
 from backend.services.stripe_service import (
     StripeConfigError,
@@ -72,6 +73,8 @@ def ensure_stripe_customer_id(db: Session, current_user: User) -> str:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -120,6 +123,8 @@ def create_saved_payment_method_setup_intent(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -262,6 +267,8 @@ def sync_saved_payment_method(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -289,6 +296,8 @@ def sync_saved_payment_method(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -354,6 +363,8 @@ def sync_saved_payment_method(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
             ) from exc
+        except PublicTimeoutError:
+            raise
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -435,6 +446,8 @@ def set_default_saved_payment_method(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -479,6 +492,8 @@ def detach_saved_payment_method(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -523,6 +538,8 @@ def detach_saved_payment_method(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
             ) from exc
+        except PublicTimeoutError:
+            raise
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -618,6 +635,8 @@ def verify_saved_payment_method_with_stripe(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

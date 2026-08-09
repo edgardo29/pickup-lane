@@ -20,6 +20,7 @@ from backend.models import (
     Refund,
     User,
 )
+from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
 from backend.schemas.admin_money_financial_outcome_schema import (
     AdminMoneyFinancialOutcomeCreate,
     AdminMoneyFinancialOutcomeRead,
@@ -679,6 +680,11 @@ def apply_refund_outcome(
     except StripeConfigError:
         refund.refund_status = "failed"
         financial_outcome.failure_reason = "Stripe refunds are not configured."
+    except DependencyMutationTimeoutUnknownError:
+        refund.provider_status = "unknown"
+        refund.provider_status_observed_at = now
+        refund.refund_status = "processing"
+        financial_outcome.failure_reason = None
     except Exception:
         refund.refund_status = "failed"
         financial_outcome.failure_reason = (

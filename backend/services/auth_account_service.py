@@ -14,6 +14,10 @@ from backend.firebase_admin_client import (
     firebase_email_exists,
 )
 from backend.models import User, UserSettings, UserStats
+from backend.observability.timeouts import (
+    DependencyMutationTimeoutUnknownError,
+    PublicTimeoutError,
+)
 from backend.schemas.auth_schema import AuthEmailAvailabilityRead, AuthSyncUserRequest
 from backend.services.account_deletion_service import (
     lock_user_and_active_admins_for_account_removal,
@@ -97,6 +101,8 @@ def check_email_availability_workflow(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -315,6 +321,9 @@ def cleanup_unfinished_account_workflow(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except DependencyMutationTimeoutUnknownError:
+        db.rollback()
+        raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(

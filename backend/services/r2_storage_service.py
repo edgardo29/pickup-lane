@@ -4,8 +4,14 @@ from urllib.parse import quote
 
 import boto3
 from botocore.client import Config
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import (
+    BotoCoreError,
+    ClientError,
+    ConnectTimeoutError,
+    ReadTimeoutError,
+)
 
+from backend.observability.timeouts import DependencyReadTimeoutError
 from backend.settings import (
     DEFAULT_R2_ALLOWED_IMAGE_TYPES,
     SettingsError,
@@ -51,6 +57,8 @@ class R2StorageConfig:
     read_url_minutes: int
     max_image_bytes: int
     allowed_image_types: frozenset[str]
+    metadata_connect_timeout_seconds: int
+    metadata_read_timeout_seconds: int
 
 
 DEFAULT_ALLOWED_IMAGE_TYPES = DEFAULT_R2_ALLOWED_IMAGE_TYPES
@@ -90,6 +98,10 @@ def get_r2_storage_config() -> R2StorageConfig:
         read_url_minutes=settings.r2_read_url_minutes,
         max_image_bytes=settings.r2_max_image_bytes,
         allowed_image_types=settings.r2_allowed_image_types,
+        metadata_connect_timeout_seconds=(
+            settings.r2_metadata_connect_timeout_seconds
+        ),
+        metadata_read_timeout_seconds=settings.r2_metadata_read_timeout_seconds,
     )
 
 
@@ -111,6 +123,8 @@ def get_r2_client(config: R2StorageConfig | None = None):
         config=Config(
             signature_version="s3v4",
             s3={"addressing_style": "path"},
+            connect_timeout=storage_config.metadata_connect_timeout_seconds,
+            read_timeout=storage_config.metadata_read_timeout_seconds,
         ),
     )
 
@@ -192,6 +206,11 @@ def get_object_properties(object_key: str) -> R2ObjectProperties:
             ) from exc
         raise R2StorageError(
             "Cloudflare R2 could not verify the uploaded image."
+        ) from exc
+    except (ConnectTimeoutError, ReadTimeoutError) as exc:
+        raise DependencyReadTimeoutError(
+            provider_kind="r2",
+            operation="r2.metadata.head",
         ) from exc
     except BotoCoreError as exc:
         raise R2StorageError(

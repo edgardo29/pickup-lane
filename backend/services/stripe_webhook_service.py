@@ -68,6 +68,7 @@ from backend.services.payment_rules import (
     COLLECTED_PAYMENT_STATUSES,
     PENDING_PAYMENT_STATUSES,
 )
+from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
@@ -869,6 +870,11 @@ def create_late_payment_refund_record(
     refund_status: str,
     reason_code: str,
 ) -> Refund:
+    provider_status = (
+        "unknown"
+        if provider_refund_id is None and reason_code == "stripe_refund_timeout_unknown"
+        else refund_status if provider_refund_id is not None else None
+    )
     refund = Refund(
         id=uuid.uuid4(),
         payment_id=payment.id,
@@ -878,8 +884,8 @@ def create_late_payment_refund_record(
         provider="stripe",
         provider_refund_id=provider_refund_id,
         provider_charge_id=payment.provider_charge_id,
-        provider_status=refund_status if provider_refund_id is not None else None,
-        provider_status_observed_at=now if provider_refund_id is not None else None,
+        provider_status=provider_status,
+        provider_status_observed_at=now if provider_status is not None else None,
         last_refund_event_at=now,
         amount_cents=payment.amount_cents,
         currency=payment.currency,
@@ -907,7 +913,7 @@ def create_late_payment_refund_record(
         provider="stripe",
         provider_refund_id=provider_refund_id,
         provider_charge_id=payment.provider_charge_id,
-        provider_status=refund_status if provider_refund_id is not None else None,
+        provider_status=provider_status,
         new_refund_status=refund_status,
         reason_code=reason_code,
         summary="Late successful checkout payment refund result recorded.",
@@ -994,6 +1000,16 @@ def create_late_payment_refund_if_needed(
             provider_refund_id=None,
             refund_status="failed",
             reason_code="stripe_refunds_not_configured",
+        )
+    except DependencyMutationTimeoutUnknownError:
+        return create_late_payment_refund_record(
+            db,
+            payment=payment,
+            booking=booking,
+            now=now,
+            provider_refund_id=None,
+            refund_status="processing",
+            reason_code="stripe_refund_timeout_unknown",
         )
     except Exception:
         return create_late_payment_refund_record(

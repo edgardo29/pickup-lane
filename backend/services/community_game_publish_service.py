@@ -17,6 +17,7 @@ from backend.models import (
     User,
     Venue,
 )
+from backend.observability.timeouts import PublicTimeoutError
 from backend.schemas.community_publish_attempt_schema import (
     CommunityPublishAttemptStatusRead,
 )
@@ -747,6 +748,9 @@ def create_paid_publish_attempt(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_publish_conflict_detail(exc),
         ) from exc
+    except PublicTimeoutError:
+        db.rollback()
+        raise
     except HTTPException:
         db.rollback()
         raise
@@ -771,6 +775,8 @@ def create_paid_publish_attempt(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    except PublicTimeoutError:
+        raise
     except Exception as exc:
         locked_attempt = db.scalars(
             select(CommunityPublishAttempt)

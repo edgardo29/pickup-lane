@@ -29,6 +29,7 @@ from backend.observability.redaction import (
     contains_sensitive_text,
     redact_value,
 )
+from backend.observability.timeouts import public_timeout_contract
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +181,31 @@ async def handle_unexpected_exception(
 ) -> JSONResponse:
     """Hide unhandled exception details behind the EN-02 public descriptor."""
 
-    del request, exc
+    del request
+    timeout_contract = public_timeout_contract(exc)
+    if timeout_contract is not None:
+        correlation_id = _current_or_generated_correlation_id()
+        logger.warning(
+            "Application operation timed out.",
+            extra={
+                "pickup_lane_error": redact_value(
+                    {
+                        **timeout_contract.telemetry_labels,
+                        "correlation_id": correlation_id,
+                    }
+                )
+            },
+        )
+        return _public_error_response(
+            status_code=timeout_contract.status_code,
+            code=timeout_contract.code,
+            message=timeout_contract.message,
+            detail=timeout_contract.detail,
+            details=timeout_contract.details,
+            correlation_id=correlation_id,
+        )
+
+    del exc
     correlation_id = _current_or_generated_correlation_id()
     logger.error(
         "Unhandled application exception.",
