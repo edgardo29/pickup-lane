@@ -3,34 +3,43 @@ from __future__ import annotations
 import socket
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import Column, Integer, MetaData, Table
+from sqlalchemy.dialects import postgresql
 
 import backend.tests.conftest as backend_conftest
+from backend.tests.support import environment_safety
 from backend.tests.support.environment_safety import (
     DEDICATED_TEST_DATABASE_NAME,
-    MODEL_MODULE_FILE_EXCLUSIONS,
     NETWORK_BLOCKED_MESSAGE,
+    NON_APPLICATION_CLEANUP_TABLE_EXCLUSIONS,
     EnvironmentSafetyError,
-    assert_cleanup_table_inventory_complete,
+    assert_cleanup_schema_state,
     build_allowed_database_network,
+    build_cleanup_truncate_statement,
+    cleanup_application_tables,
+    cleanup_table_key,
     database_socket_allowed,
-    discover_model_module_names,
+    database_table_keys_for_cleanup,
     guard_socket_connect,
     guard_socket_connect_ex,
     guard_socket_create_connection,
+    import_model_package,
     registered_sqlalchemy_table_names,
     socket_address_allowed,
+    validate_backend_test_app_env,
     validate_dedicated_test_database_url,
 )
 
 
 SAFE_DATABASE_URL = (
-    "postgresql+psycopg://postgres:postgres@localhost:5432/"
+    "postgresql+psycopg://localhost:5432/"
     f"{DEDICATED_TEST_DATABASE_NAME}"
 )
 SAFE_DATABASE_HOST_URL = (
-    "postgresql+psycopg://postgres:postgres@test-db.local:5544/"
+    "postgresql+psycopg://test-db.local:5544/"
     f"{DEDICATED_TEST_DATABASE_NAME}"
 )
 
@@ -65,11 +74,10 @@ def _fake_allowed_network():
 
 
 def _remove_registered_table(table_name: str) -> None:
-    from backend.database import Base
-
-    table = Base.metadata.tables.get(table_name)
-    if table is not None:
-        Base.metadata.remove(table)
+    for table in environment_safety.registered_sqlalchemy_tables():
+        if table.name == table_name:
+            table.metadata.remove(table)
+            return
 
 
 def _drop_modules_with_prefix(prefix: str) -> None:
@@ -82,36 +90,66 @@ def _write_temp_model_package(
     tmp_path: Path,
     *,
     package_name: str,
-    module_name: str,
     table_name: str,
 ) -> None:
     package_dir = tmp_path / package_name
     package_dir.mkdir()
-    (package_dir / "__init__.py").write_text("# temporary model package\n")
-    (package_dir / f"{module_name}.py").write_text(
+    (package_dir / "__init__.py").write_text(
+        "from .records import TemporaryExportedModel\n\n"
+        "__all__ = ('TemporaryExportedModel',)\n"
+    )
+    (package_dir / "records.py").write_text(
         "from sqlalchemy import Column, Integer\n"
         "from backend.database import Base\n\n"
-        "class TemporaryUnimportedModel(Base):\n"
+        "class TemporaryExportedModel(Base):\n"
         f"    __tablename__ = {table_name!r}\n"
         "    id = Column(Integer, primary_key=True)\n"
     )
+    (package_dir / "helpers.py").write_text("VALUE = 1\n")
+
+
+def _metadata_tables(*names: str) -> tuple[Table, ...]:
+    metadata = MetaData()
+    return tuple(
+        Table(name, metadata, Column("id", Integer, primary_key=True))
+        for name in names
+    )
+
+
+@pytest.mark.parametrize(
+    "app_env",
+    [None, "", "local", "ci", "preview", "staging", "production"],
+)
+def test_backend_test_app_env_must_be_exactly_test(app_env: str | None):
+    with pytest.raises(EnvironmentSafetyError):
+        validate_backend_test_app_env(app_env)
+
+
+def test_backend_test_app_env_accepts_test():
+    validate_backend_test_app_env("test")
 
 
 @pytest.mark.parametrize(
     "database_url",
     [
-        f"postgresql://postgres:postgres@localhost:5432/{DEDICATED_TEST_DATABASE_NAME}",
-        f"postgresql+psycopg://postgres:postgres@localhost:5432/{DEDICATED_TEST_DATABASE_NAME}",
+        f"postgresql://localhost:5432/{DEDICATED_TEST_DATABASE_NAME}",
         (
-            "postgresql+psycopg://postgres:postgres@localhost:5432/"
-            f"{DEDICATED_TEST_DATABASE_NAME}?sslmode=disable"
-        ),
-        f"postgresql+psycopg://postgres:postgres@127.0.0.1:5432/{DEDICATED_TEST_DATABASE_NAME}",
-        f"postgresql+psycopg://postgres:postgres@[::1]:5432/{DEDICATED_TEST_DATABASE_NAME}",
-        (
-            "postgresql+psycopg://user%40example:p%2Fss@localhost:5432/"
+            "postgresql+psycopg://localhost:5432/"
             f"{DEDICATED_TEST_DATABASE_NAME}"
         ),
+        (
+            "postgresql+psycopg://localhost:5432/"
+            f"{DEDICATED_TEST_DATABASE_NAME}?sslmode=disable"
+        ),
+        (
+            "postgresql+psycopg://127.0.0.1:5432/"
+            f"{DEDICATED_TEST_DATABASE_NAME}"
+        ),
+        (
+            "postgresql+psycopg://[::1]:5432/"
+            f"{DEDICATED_TEST_DATABASE_NAME}"
+        ),
+        f"postgresql+psycopg://localhost/{DEDICATED_TEST_DATABASE_NAME}",
     ],
 )
 def test_accepts_repository_dedicated_postgresql_database_url_forms(database_url: str):
@@ -126,19 +164,19 @@ def test_accepts_repository_dedicated_postgresql_database_url_forms(database_url
 @pytest.mark.parametrize(
     "database_url",
     [
-        "postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_db_dev",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_staging_db",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_production_db",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_test_db_backup",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/test",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_prod_test_db",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/",
+        "postgresql+psycopg://localhost:5432/pickup_lane_db_dev",
+        "postgresql+psycopg://localhost:5432/pickup_lane_staging_db",
+        "postgresql+psycopg://localhost:5432/pickup_lane_production_db",
+        "postgresql+psycopg://localhost:5432/pickup_lane_test_db_backup",
+        "postgresql+psycopg://localhost:5432/test",
+        "postgresql+psycopg://localhost:5432/pickup_lane_prod_test_db",
+        "postgresql+psycopg://localhost:5432/",
         "postgresql+psycopg:///pickup_lane_test_db",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_test_db%20",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/pickup%5Flane%5Ftest%5Fdb",
+        "postgresql+psycopg://localhost:5432/pickup_lane_test_db%20",
+        "postgresql+psycopg://localhost:5432/pickup%5Flane%5Ftest%5Fdb",
         "sqlite:///pickup_lane_test_db",
-        "mysql://postgres:postgres@localhost:5432/pickup_lane_test_db",
-        "postgres://postgres:postgres@localhost:5432/pickup_lane_test_db",
+        "mysql://localhost:5432/pickup_lane_test_db",
+        "postgres://localhost:5432/pickup_lane_test_db",
         "not-a-database-url",
     ],
 )
@@ -147,129 +185,335 @@ def test_rejects_unsafe_ambiguous_or_non_postgresql_database_urls(database_url: 
         validate_dedicated_test_database_url(database_url)
 
 
-def test_session_validation_rejects_unsafe_database_before_cleanup(monkeypatch):
-    cleanup_calls: list[str] = []
+def test_root_validation_rejects_app_env_before_database_metadata(monkeypatch):
+    metadata_calls: list[str] = []
 
     def fail_if_called(*_args, **_kwargs):
-        cleanup_calls.append("called")
+        metadata_calls.append("called")
 
-    monkeypatch.setattr(
-        backend_conftest,
-        "assert_cleanup_table_inventory_complete",
-        fail_if_called,
-    )
+    monkeypatch.setenv("APP_ENV", "local")
+    monkeypatch.setattr(backend_conftest, "registered_sqlalchemy_tables", fail_if_called)
+
+    with pytest.raises(EnvironmentSafetyError):
+        backend_conftest._validate_backend_test_environment(SAFE_DATABASE_URL)
+
+    assert metadata_calls == []
+
+
+def test_root_validation_rejects_unsafe_database_before_metadata(monkeypatch):
+    metadata_calls: list[str] = []
+
+    def fail_if_called(*_args, **_kwargs):
+        metadata_calls.append("called")
+
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setattr(backend_conftest, "registered_sqlalchemy_tables", fail_if_called)
 
     with pytest.raises(EnvironmentSafetyError):
         backend_conftest._validate_backend_test_environment(
-            "postgresql+psycopg://postgres:postgres@localhost:5432/pickup_lane_db_dev"
+            "postgresql+psycopg://localhost:5432/pickup_lane_db_dev"
         )
 
-    assert cleanup_calls == []
+    assert metadata_calls == []
 
 
-def test_discovers_all_existing_backend_model_modules():
+def test_backend_model_package_import_surface_populates_cleanup_metadata():
     import backend.models as backend_models
 
-    model_path = Path(next(iter(backend_models.__path__)))
-    expected_modules = tuple(
-        f"backend.models.{path.stem}"
-        for path in sorted(model_path.glob("*_model.py"), key=lambda candidate: candidate.name)
-    )
+    exported_table_names = set()
+    for export_name in backend_models.__all__:
+        exported_model = getattr(backend_models, export_name)
+        table = getattr(exported_model, "__table__", None)
+        assert table is not None, export_name
+        exported_table_names.add(table.name)
 
-    assert discover_model_module_names() == expected_modules
+    cleanup_table_names = registered_sqlalchemy_table_names()
+
+    assert exported_table_names
+    assert exported_table_names <= cleanup_table_names
 
 
-def test_unexpected_non_model_python_file_requires_explicit_exclusion(
+def test_model_package_import_controls_cleanup_targets_without_filename_scan(
     monkeypatch,
     tmp_path,
 ):
-    package_name = "temporary_non_model_package"
-    package_dir = tmp_path / package_name
-    package_dir.mkdir()
-    (package_dir / "__init__.py").write_text("# temporary package\n")
-    (package_dir / "helpers.py").write_text("VALUE = 1\n")
-
-    monkeypatch.syspath_prepend(str(tmp_path))
-    _drop_modules_with_prefix(package_name)
-
-    with pytest.raises(EnvironmentSafetyError):
-        discover_model_module_names(package_name)
-
-    exclusions = {
-        **MODEL_MODULE_FILE_EXCLUSIONS,
-        "helpers.py": "Temporary support module used to prove explicit exclusions.",
-    }
-    assert discover_model_module_names(package_name, excluded_files=exclusions) == ()
-
-
-def test_model_module_exclusions_require_documented_reason():
-    with pytest.raises(EnvironmentSafetyError):
-        discover_model_module_names(
-            "backend.models",
-            excluded_files={"__init__.py": ""},
-        )
-
-
-def test_unimported_model_module_cannot_evade_cleanup_inventory(
-    monkeypatch,
-    tmp_path,
-):
-    package_name = "temporary_unimported_models"
-    table_name = "temporary_unimported_inventory_table"
+    package_name = "temporary_exported_models"
+    table_name = "temporary_exported_cleanup_table"
 
     _write_temp_model_package(
         tmp_path,
         package_name=package_name,
-        module_name="hidden_table_model",
         table_name=table_name,
     )
     monkeypatch.syspath_prepend(str(tmp_path))
     _drop_modules_with_prefix(package_name)
 
     try:
-        registered_tables = registered_sqlalchemy_table_names(model_package=package_name)
-
-        assert table_name in registered_tables
-        with pytest.raises(EnvironmentSafetyError) as exc_info:
-            assert_cleanup_table_inventory_complete(
-                backend_conftest.TEST_TABLES,
-                excluded_tables=backend_conftest.CLEANUP_TABLE_EXCLUSIONS,
-                registered_tables=registered_tables,
-            )
-        assert table_name in str(exc_info.value)
+        assert table_name in registered_sqlalchemy_table_names(model_package=package_name)
     finally:
         _remove_registered_table(table_name)
         _drop_modules_with_prefix(package_name)
 
 
-def test_cleanup_inventory_detects_missing_registered_table():
+def test_model_package_import_failure_is_reported_as_safety_error():
+    with pytest.raises(EnvironmentSafetyError):
+        import_model_package("missing_cleanup_model_package")
+
+
+def test_cleanup_targets_are_derived_from_registered_sqlalchemy_metadata():
+    table_names = registered_sqlalchemy_table_names()
+
+    assert table_names
+    assert "alembic_version" not in table_names
+    assert all("." not in table_name for table_name in table_names)
+
+
+def test_cleanup_schema_state_allows_only_documented_non_application_exclusions():
+    assert_cleanup_schema_state(
+        metadata_table_keys={"users"},
+        database_table_keys={"users", "alembic_version"},
+    )
+
+    assert NON_APPLICATION_CLEANUP_TABLE_EXCLUSIONS == {
+        "alembic_version": "Alembic migration bookkeeping table; not application data.",
+    }
+
+
+def test_cleanup_schema_state_rejects_application_table_exclusion():
     with pytest.raises(EnvironmentSafetyError) as exc_info:
-        assert_cleanup_table_inventory_complete(
-            ("users",),
-            registered_tables={"users", "new_domain_table"},
+        assert_cleanup_schema_state(
+            metadata_table_keys={"users"},
+            database_table_keys={"users"},
+            excluded_database_tables={"users": "Do not clean app rows."},
         )
 
-    assert "new_domain_table" in str(exc_info.value)
+    assert "may not omit SQLAlchemy application table" in str(exc_info.value)
 
 
-def test_cleanup_inventory_requires_documented_exclusion_reason():
+def test_cleanup_schema_state_requires_documented_exclusion_reason():
     with pytest.raises(EnvironmentSafetyError) as exc_info:
-        assert_cleanup_table_inventory_complete(
-            ("users",),
-            excluded_tables={"append_only_audit_log": ""},
-            registered_tables={"users", "append_only_audit_log"},
+        assert_cleanup_schema_state(
+            metadata_table_keys={"users"},
+            database_table_keys={"users", "append_only_audit_log"},
+            excluded_database_tables={"append_only_audit_log": ""},
         )
 
     assert "requires a documented reason" in str(exc_info.value)
 
 
-def test_cleanup_inventory_currently_covers_registered_sqlalchemy_tables(monkeypatch):
-    monkeypatch.setenv("DATABASE_URL", SAFE_DATABASE_URL)
+def test_unknown_database_schema_state_fails_safely():
+    with pytest.raises(EnvironmentSafetyError) as exc_info:
+        assert_cleanup_schema_state(
+            metadata_table_keys={"users"},
+            database_table_keys={"users", "new_untracked_table"},
+        )
 
-    assert_cleanup_table_inventory_complete(
-        backend_conftest.TEST_TABLES,
-        excluded_tables=backend_conftest.CLEANUP_TABLE_EXCLUSIONS,
-        registered_tables=registered_sqlalchemy_table_names(),
+    assert "unhandled PostgreSQL table" in str(exc_info.value)
+    assert "new_untracked_table" in str(exc_info.value)
+
+
+def test_missing_metadata_table_in_database_fails_safely():
+    with pytest.raises(EnvironmentSafetyError) as exc_info:
+        assert_cleanup_schema_state(
+            metadata_table_keys={"users", "games"},
+            database_table_keys={"users", "alembic_version"},
+        )
+
+    assert "missing metadata table" in str(exc_info.value)
+    assert "games" in str(exc_info.value)
+
+
+def test_database_table_key_discovery_uses_metadata_schemas(monkeypatch):
+    metadata = MetaData()
+    tables = (
+        Table("users", metadata, Column("id", Integer, primary_key=True)),
+        Table(
+            "tenant_records",
+            metadata,
+            Column("id", Integer, primary_key=True),
+            schema="tenant_one",
+        ),
+    )
+    inspected_schemas: list[str | None] = []
+
+    class FakeInspector:
+        def get_table_names(self, *, schema=None):
+            inspected_schemas.append(schema)
+            if schema is None:
+                return ["users", "alembic_version"]
+            if schema == "tenant_one":
+                return ["tenant_records"]
+            return []
+
+    monkeypatch.setattr(
+        environment_safety,
+        "inspect",
+        lambda connection: FakeInspector(),
+    )
+
+    assert database_table_keys_for_cleanup(object(), tables) == {
+        "users",
+        "alembic_version",
+        "tenant_one.tenant_records",
+    }
+    assert inspected_schemas == [None, "tenant_one"]
+
+
+def test_cleanup_truncate_sql_quotes_and_schema_qualifies_targets():
+    metadata = MetaData()
+    tables = (
+        Table("select", metadata, Column("id", Integer, primary_key=True)),
+        Table(
+            "child table",
+            metadata,
+            Column("id", Integer, primary_key=True),
+            schema="app schema",
+        ),
+    )
+
+    statement = build_cleanup_truncate_statement(tables, postgresql.dialect())
+
+    assert statement.startswith("TRUNCATE TABLE ")
+    assert '"select"' in statement
+    assert '"app schema"."child table"' in statement
+    assert statement.endswith(" RESTART IDENTITY CASCADE")
+
+
+def test_cleanup_application_tables_executes_checked_truncate(monkeypatch):
+    tables = _metadata_tables("users", "games")
+    schema_checks: list[tuple[str, ...]] = []
+    executed_sql: list[str] = []
+
+    class FakeConnection:
+        dialect = postgresql.dialect()
+
+        def execute(self, statement):
+            executed_sql.append(str(statement))
+
+    def fake_schema_check(connection, metadata_tables, *, excluded_database_tables=None):
+        del connection, excluded_database_tables
+        schema_checks.append(tuple(cleanup_table_key(table) for table in metadata_tables))
+
+    monkeypatch.setattr(
+        environment_safety,
+        "assert_database_schema_matches_cleanup_metadata",
+        fake_schema_check,
+    )
+
+    plan = cleanup_application_tables(FakeConnection(), metadata_tables=tables)
+
+    assert schema_checks == [("users", "games")]
+    assert executed_sql == [
+        'TRUNCATE TABLE "games", "users" RESTART IDENTITY CASCADE',
+    ]
+    assert plan.table_keys == ("users", "games")
+
+
+def test_cleanup_application_tables_rejects_empty_metadata_targets(monkeypatch):
+    monkeypatch.setattr(
+        environment_safety,
+        "assert_database_schema_matches_cleanup_metadata",
+        lambda *_args, **_kwargs: None,
+    )
+
+    with pytest.raises(EnvironmentSafetyError):
+        cleanup_application_tables(
+            SimpleNamespace(dialect=postgresql.dialect(), execute=lambda statement: None),
+            metadata_tables=(),
+        )
+
+
+class _FakeMarkerRequest:
+    def __init__(self, marker_name: str | None):
+        self.node = self
+        self.marker_name = marker_name
+
+    def get_closest_marker(self, marker_name: str):
+        if marker_name == self.marker_name:
+            return object()
+        return None
+
+
+def test_no_db_cleanup_is_the_only_root_cleanup_bypass():
+    assert not backend_conftest._test_uses_database(
+        _FakeMarkerRequest("no_db_cleanup")
+    )
+    assert backend_conftest._test_uses_database(_FakeMarkerRequest(None))
+
+
+def test_clean_database_runs_before_and_after_cleanup(monkeypatch):
+    cleanup_calls: list[str] = []
+    cleanup_seen_overrides: list[dict[str, object]] = []
+    events: list[tuple[str, object]] = []
+
+    class FakeTransaction:
+        def __enter__(self):
+            events.append(("begin", len(cleanup_calls)))
+
+        def __exit__(self, exc_type, exc, traceback):
+            del exc_type, exc, traceback
+            events.append(("end", len(cleanup_calls)))
+
+    class FakeConnection:
+        dialect = postgresql.dialect()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            del exc_type, exc, traceback
+
+        def execute(self, statement, params=None):
+            events.append(("execute", (str(statement), params)))
+
+        def commit(self):
+            events.append(("commit", len(cleanup_calls)))
+
+        def begin(self):
+            return FakeTransaction()
+
+        def in_transaction(self):
+            return False
+
+    fake_connection = FakeConnection()
+    fake_app = SimpleNamespace(dependency_overrides={"existing": object()})
+    fake_engine = SimpleNamespace(connect=lambda: fake_connection)
+
+    def fake_cleanup(connection):
+        assert connection is fake_connection
+        cleanup_seen_overrides.append(dict(fake_app.dependency_overrides))
+        cleanup_calls.append("cleanup")
+
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("DATABASE_URL", SAFE_DATABASE_URL)
+    monkeypatch.setitem(
+        sys.modules,
+        "backend.database",
+        SimpleNamespace(engine=fake_engine),
+    )
+    monkeypatch.setitem(sys.modules, "backend.main", SimpleNamespace(app=fake_app))
+    monkeypatch.setattr(backend_conftest, "cleanup_application_tables", fake_cleanup)
+
+    generator = backend_conftest.clean_database.__wrapped__(
+        _FakeMarkerRequest(None),
+        object(),
+    )
+    next(generator)
+    fake_app.dependency_overrides["during_test"] = object()
+
+    with pytest.raises(StopIteration):
+        next(generator)
+
+    assert cleanup_calls == ["cleanup", "cleanup"]
+    assert cleanup_seen_overrides == [{}, {}]
+    assert fake_app.dependency_overrides == {}
+    assert events[0] == (
+        "execute",
+        ("SELECT pg_advisory_lock(:lock_id)", {"lock_id": 917263514}),
+    )
+    assert events[-2] == (
+        "execute",
+        ("SELECT pg_advisory_unlock(:lock_id)", {"lock_id": 917263514}),
     )
 
 
@@ -280,6 +524,11 @@ def test_configured_test_database_socket_access_is_permitted():
     assert socket_address_allowed(("192.0.2.10", 5544), allowed_network)
     assert socket_address_allowed(("2001:db8::10", 5544, 0, 0), allowed_network)
     assert database_socket_allowed(("127.0.0.1", 5432), SAFE_DATABASE_URL)
+
+
+def test_network_guard_without_database_blocks_all_destinations():
+    assert not socket_address_allowed(("localhost", 5432), None)
+    assert not socket_address_allowed(("api.stripe.com", 443), None)
 
 
 @pytest.mark.parametrize(

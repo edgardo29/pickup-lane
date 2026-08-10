@@ -1,0 +1,17 @@
+schema_version: 1
+domain: games
+authoritative_sources:
+  - docs/agent-notes/game-details.md
+  - docs/production-readiness/planning/ws05-02-payment-booking-state-machines.md
+behaviors:
+  - id: GAMES-001
+    summary: Authenticated eligible users can request to join an open game.
+    source: docs/agent-notes/game-details.md
+test_refs:
+  - backend/tests/games/test_api_join.py::test_eligible_user_can_join_open_game
+applicability:
+  - Provider checkout behavior is covered by payments after WS05 reconstruction.
+known_gaps:
+  - GAMES-GAP-001 provider sandbox checkout remains deferred to WS05.
+external_boundaries:
+  - Stripe is mocked at the application-owned boundary in the standard suite.
