@@ -103,7 +103,7 @@ def test_signed_out_game_detail_masks_host_only_fields(client: TestClient) -> No
     assert "policy_mode" not in signed_out_body
     assert "deleted_at" not in signed_out_body
 
-    authenticate_optional_as(host["id"])
+    authenticate_optional_as(host["id"], target_app=client.app)
     host_response = client.get(f"/games/{game['id']}")
 
     assert host_response.status_code == status.HTTP_200_OK

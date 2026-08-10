@@ -244,7 +244,10 @@ def test_stripe_mutation_timeout_is_unknown_outcome_and_preserves_idempotency(
 def test_firebase_initialization_uses_shared_http_timeout(monkeypatch):
     captured: dict[str, object] = {}
     fake_credential = object()
-    fake_settings = SimpleNamespace(firebase_http_timeout_seconds=8)
+    fake_settings = SimpleNamespace(
+        firebase_http_timeout_seconds=8,
+        firebase_project_id="pickup-lane-synthetic",
+    )
 
     monkeypatch.setattr(firebase_admin_client.firebase_admin, "_apps", {}, raising=False)
     monkeypatch.setattr(firebase_admin_client, "_firebase_settings", lambda: fake_settings)
@@ -268,7 +271,10 @@ def test_firebase_initialization_uses_shared_http_timeout(monkeypatch):
 
     assert captured == {
         "credential": fake_credential,
-        "options": {"httpTimeout": 8},
+        "options": {
+            "httpTimeout": 8,
+            "projectId": "pickup-lane-synthetic",
+        },
     }
 
 

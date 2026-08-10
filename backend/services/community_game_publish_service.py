@@ -88,12 +88,8 @@ def get_verified_community_host_or_404(db: Session, user_id: uuid.UUID) -> User:
             detail="Active account required.",
         )
 
-    if db_user.email_verified_at is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Verify your email before publishing.",
-        )
-
+    # Current email verification is Firebase-authoritative and enforced before
+    # this service runs.
     require_community_publish_hosting_access(db_user)
     return db_user
 

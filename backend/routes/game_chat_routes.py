@@ -11,7 +11,11 @@ from backend.schemas import (
     GameChatRead,
     GameChatReadStateRead,
 )
-from backend.services.auth_service import require_active_user, require_active_admin
+from backend.services.auth_service import (
+    require_active_admin,
+    require_active_user,
+    require_verified_user,
+)
 from backend.services.game_chat_service import (
     get_game_chat_or_404,
     get_game_chat_read_state_record,
@@ -47,7 +51,7 @@ def create_game_chat(
 def ensure_game_chat_for_game(
     game_id: uuid.UUID,
     payload: GameChatEnsureCreate,
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
     db: Session = Depends(get_db),
 ) -> GameChatRead:
     return ensure_game_chat_for_game_workflow(db, game_id, payload, current_user)

@@ -40,7 +40,13 @@ from backend.services.need_a_sub_post_service import (
 from backend.services.need_a_sub_rules import MAX_WAITLIST_REQUESTS_PER_POST
 from backend.services.payment_method_service import MAX_ACTIVE_PAYMENT_METHODS
 from backend.services.platform_notice_service import MAX_SELECTED_PLATFORM_NOTICE_USERS
-from backend.services.auth_service import get_current_app_user, get_optional_current_app_user
+from backend.services.auth_service import (
+    VerifiedFirebaseIdentity,
+    get_current_app_user,
+    get_optional_current_app_user,
+    get_verified_firebase_identity,
+    require_verified_user,
+)
 from backend.services.stripe_service import (
     StripePaymentMethodCardResult,
     StripeSetupIntentResult,
@@ -88,16 +94,34 @@ def authenticate_client_as(client: TestClient, user_id: str) -> None:
             assert db_user is not None
             return db_user
 
+    def override_firebase_identity() -> VerifiedFirebaseIdentity:
+        with SessionLocal() as db:
+            db_user = db.get(User, UUID(user_id))
+            assert db_user is not None
+            return VerifiedFirebaseIdentity(
+                auth_user_id=db_user.auth_user_id,
+                email=db_user.email,
+                email_verified=True,
+            )
+
     client.app.dependency_overrides[get_current_app_user] = override_current_user
     client.app.dependency_overrides[get_optional_current_app_user] = override_current_user
+    client.app.dependency_overrides[get_verified_firebase_identity] = (
+        override_firebase_identity
+    )
+    client.app.dependency_overrides[require_verified_user] = override_current_user
 
 
 def run_client_as_user(client: TestClient, user_id: str, request_fn):
     overrides = client.app.dependency_overrides
     previous_current = overrides.get(get_current_app_user)
     previous_optional = overrides.get(get_optional_current_app_user)
+    previous_identity = overrides.get(get_verified_firebase_identity)
+    previous_verified = overrides.get(require_verified_user)
     had_current = get_current_app_user in overrides
     had_optional = get_optional_current_app_user in overrides
+    had_identity = get_verified_firebase_identity in overrides
+    had_verified = require_verified_user in overrides
 
     authenticate_client_as(client, user_id)
     try:
@@ -111,6 +135,14 @@ def run_client_as_user(client: TestClient, user_id: str, request_fn):
             overrides[get_optional_current_app_user] = previous_optional
         else:
             overrides.pop(get_optional_current_app_user, None)
+        if had_identity:
+            overrides[get_verified_firebase_identity] = previous_identity
+        else:
+            overrides.pop(get_verified_firebase_identity, None)
+        if had_verified:
+            overrides[require_verified_user] = previous_verified
+        else:
+            overrides.pop(require_verified_user, None)
 
 
 def create_venue_via_api(client: TestClient, admin_user_id: str) -> dict:

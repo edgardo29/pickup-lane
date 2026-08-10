@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import ChatMessage, User
 from backend.schemas import ChatMessageCreate, ChatMessageParticipantRead
-from backend.services.auth_service import require_active_user
+from backend.services.auth_service import require_active_user, require_verified_user
 from backend.services.game_chat_service import (
     create_chat_message_record,
     get_chat_message_record,
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/chat-messages", tags=["chat_messages"])
 )
 def create_chat_message(
     chat_message: ChatMessageCreate,
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
     db: Session = Depends(get_db),
 ) -> ChatMessage:
     return create_chat_message_record(db, chat_message, current_user)

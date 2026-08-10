@@ -19,7 +19,12 @@ from backend.schemas import (
     PaymentEventUpdate,
     UserUpdate,
 )
-from backend.services.auth_service import get_current_app_user
+from backend.services.auth_service import (
+    VerifiedFirebaseIdentity,
+    get_current_app_user,
+    get_verified_firebase_identity,
+    require_verified_user,
+)
 from backend.tests.helpers import create_user, create_venue, set_user_role
 
 
@@ -58,7 +63,21 @@ def authenticate_as(client: TestClient, user_id: str) -> None:
             assert db_user is not None
             return db_user
 
+    def override_firebase_identity() -> VerifiedFirebaseIdentity:
+        with SessionLocal() as db:
+            db_user = db.get(User, UUID(user_id))
+            assert db_user is not None
+            return VerifiedFirebaseIdentity(
+                auth_user_id=db_user.auth_user_id,
+                email=db_user.email,
+                email_verified=True,
+            )
+
     client.app.dependency_overrides[get_current_app_user] = override_current_user
+    client.app.dependency_overrides[get_verified_firebase_identity] = (
+        override_firebase_identity
+    )
+    client.app.dependency_overrides[require_verified_user] = override_current_user
 
 
 def game_count() -> int:

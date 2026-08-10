@@ -98,6 +98,7 @@ def _install_synthetic_backend_test_settings() -> None:
     os.environ.setdefault("STRIPE_PUBLISHABLE_KEY", "synthetic-stripe-publishable-key")
     os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "synthetic-stripe-webhook-secret")
     os.environ.setdefault("STRIPE_CURRENCY", "USD")
+    os.environ.setdefault("FIREBASE_PROJECT_ID", "pickup-lane-synthetic")
 
 
 def _is_safe_test_database(database_url: str) -> bool:

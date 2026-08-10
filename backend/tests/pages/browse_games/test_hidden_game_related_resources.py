@@ -43,7 +43,7 @@ def test_hidden_community_game_detail_list_by_game_id_allows_host_with_private_c
         game_id=game["id"],
     )
 
-    authenticate_optional_as(host["id"])
+    authenticate_optional_as(host["id"], target_app=client.app)
     response = client.get(f"/community-game-details?game_id={game['id']}")
 
     assert response.status_code == 200, response.text
@@ -73,7 +73,7 @@ def test_hidden_community_detail_list_by_game_id_returns_404_for_unauthorized_us
     )
 
     anonymous_response = client.get(f"/community-game-details?game_id={game['id']}")
-    authenticate_optional_as(unrelated_user["id"])
+    authenticate_optional_as(unrelated_user["id"], target_app=client.app)
     unrelated_response = client.get(f"/community-game-details?game_id={game['id']}")
 
     assert anonymous_response.status_code == 404, anonymous_response.text

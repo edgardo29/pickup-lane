@@ -20,7 +20,6 @@ export function ProfileEditForm({
     }
 
     return {
-      email: currentUser.email || '',
       first_name: currentUser.first_name || '',
       home_city: currentUser.home_city || settings.selected_city || '',
       home_state: currentUser.home_state || settings.selected_state || '',
@@ -50,7 +49,6 @@ export function ProfileEditForm({
 
     try {
       const profilePayload = {
-        email: trimmedForm.email,
         first_name: trimmedForm.first_name,
         home_city: trimmedForm.home_city || null,
         home_state: trimmedForm.home_state || null,
@@ -108,13 +106,6 @@ export function ProfileEditForm({
           required
           value={form.last_name}
           onChange={(value) => updateField('last_name', value)}
-        />
-        <ProfileEditField
-          label="Email"
-          required
-          type="email"
-          value={form.email}
-          onChange={(value) => updateField('email', value)}
         />
         <ProfileEditField
           label="Phone"

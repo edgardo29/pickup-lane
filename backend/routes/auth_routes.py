@@ -14,7 +14,7 @@ from backend.services.auth_account_service import (
     cleanup_unfinished_account_workflow,
     sync_user_workflow,
 )
-from backend.services.auth_service import get_current_app_user
+from backend.services.auth_service import get_synced_current_app_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -32,7 +32,7 @@ def check_email_availability(
 
 @router.get("/me", response_model=SelfUserRead, status_code=status.HTTP_200_OK)
 def read_current_app_user(
-    current_user: User = Depends(get_current_app_user),
+    current_user: User = Depends(get_synced_current_app_user),
 ) -> User:
     return current_user
 

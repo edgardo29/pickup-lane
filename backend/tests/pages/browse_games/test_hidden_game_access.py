@@ -161,7 +161,7 @@ def test_hidden_game_detail_returns_404_for_unrelated_user(client: TestClient):
         public_visibility_status="hidden",
     )
 
-    authenticate_optional_as(unrelated_user["id"])
+    authenticate_optional_as(unrelated_user["id"], target_app=client.app)
     response = client.get(f"/games/{game['id']}")
 
     assert response.status_code == 404, response.text
@@ -183,7 +183,7 @@ def test_hidden_game_host_can_view_detail_and_roster_with_private_cache(
         public_visibility_status="hidden",
     )
 
-    authenticate_optional_as(host["id"])
+    authenticate_optional_as(host["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -207,7 +207,7 @@ def test_hidden_game_admin_can_view_detail_and_roster_with_private_cache(
         public_visibility_status="hidden",
     )
 
-    authenticate_optional_as(admin["id"])
+    authenticate_optional_as(admin["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -247,7 +247,7 @@ def test_hidden_game_invalid_admin_states_do_not_grant_detail_or_roster_access(
         public_visibility_status="hidden",
     )
 
-    authenticate_optional_as(admin["id"])
+    authenticate_optional_as(admin["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -269,7 +269,7 @@ def test_hidden_confirmed_participant_can_view_detail_and_roster_with_private_ca
     )
     create_game_participant(client, confirmed_player["id"], game["id"])
 
-    authenticate_optional_as(confirmed_player["id"])
+    authenticate_optional_as(confirmed_player["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -308,7 +308,7 @@ def test_hidden_valid_pending_participant_can_view_detail_and_roster_with_privat
         roster_order=None,
     )
 
-    authenticate_optional_as(pending_player["id"])
+    authenticate_optional_as(pending_player["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -347,7 +347,7 @@ def test_hidden_game_expired_pending_participant_cannot_view_detail_or_roster(
         roster_order=None,
     )
 
-    authenticate_optional_as(pending_player["id"])
+    authenticate_optional_as(pending_player["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -375,7 +375,7 @@ def test_hidden_waitlisted_participant_without_waitlist_entry_cannot_view_detail
         roster_order=None,
     )
 
-    authenticate_optional_as(waitlisted_player["id"])
+    authenticate_optional_as(waitlisted_player["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -405,7 +405,7 @@ def test_hidden_game_pending_booking_buyer_can_view_detail_but_not_roster(
         expires_at=_future_iso(),
     )
 
-    authenticate_optional_as(booking_buyer["id"])
+    authenticate_optional_as(booking_buyer["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -454,7 +454,7 @@ def test_hidden_game_booking_buyer_without_remaining_participant_cannot_view_det
         **booking_overrides,
     )
 
-    authenticate_optional_as(booking_buyer["id"])
+    authenticate_optional_as(booking_buyer["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -513,7 +513,7 @@ def test_hidden_game_booking_buyer_with_only_cancelled_slot_cannot_view_detail(
         roster_order=None,
     )
 
-    authenticate_optional_as(booking_buyer["id"])
+    authenticate_optional_as(booking_buyer["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -567,7 +567,7 @@ def test_hidden_game_booking_buyer_with_remaining_active_slot_can_view_detail_on
         display_name_snapshot="Guest Player",
     )
 
-    authenticate_optional_as(booking_buyer["id"])
+    authenticate_optional_as(booking_buyer["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -599,7 +599,7 @@ def test_hidden_game_expired_pending_booking_buyer_cannot_view_detail(
     )
     _expire_booking(booking["id"])
 
-    authenticate_optional_as(booking_buyer["id"])
+    authenticate_optional_as(booking_buyer["id"], target_app=client.app)
     response = client.get(f"/games/{game['id']}")
 
     assert response.status_code == 404, response.text
@@ -630,7 +630,7 @@ def test_hidden_game_active_waitlist_states_can_view_detail_only(
         waitlist_status,
     )
 
-    authenticate_optional_as(waitlist_user["id"])
+    authenticate_optional_as(waitlist_user["id"], target_app=client.app)
     detail_response = client.get(f"/games/{game['id']}")
     roster_response = client.get(f"/games/{game['id']}/participants")
 
@@ -678,7 +678,7 @@ def test_hidden_game_inactive_waitlist_states_do_not_grant_detail_access(
         waitlist_status,
     )
 
-    authenticate_optional_as(waitlist_user["id"])
+    authenticate_optional_as(waitlist_user["id"], target_app=client.app)
     response = client.get(f"/games/{game['id']}")
 
     assert response.status_code == 404, response.text
@@ -718,7 +718,7 @@ def test_hidden_game_accepted_waitlist_access_comes_from_confirmed_participant(
         "accepted",
     )
 
-    authenticate_optional_as(waitlist_user["id"])
+    authenticate_optional_as(waitlist_user["id"], target_app=client.app)
     waitlist_only_response = client.get(f"/games/{game['id']}")
     assert waitlist_only_response.status_code == 404, waitlist_only_response.text
 
