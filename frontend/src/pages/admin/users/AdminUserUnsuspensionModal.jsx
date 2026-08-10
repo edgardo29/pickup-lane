@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import { unsuspendAdminUser } from '../shared/adminApi.js'
 import { formatAdminUserDateTime } from './adminUserFormatters.js'
 
@@ -15,6 +16,7 @@ function AdminUserUnsuspensionModal({
   onUnsuspended,
   user,
 }) {
+  const { runWithStepUp } = useStepUp()
   const [reason, setReason] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [executionError, setExecutionError] = useState('')
@@ -50,12 +52,15 @@ function AdminUserUnsuspensionModal({
     setExecutionError('')
 
     try {
-      const nextResult = await unsuspendAdminUser({
-        firebaseUser,
-        idempotencyKey,
-        reason: reason.trim(),
-        userId: user.id,
-      })
+      const nextResult = await runWithStepUp(
+        () => unsuspendAdminUser({
+          firebaseUser,
+          idempotencyKey,
+          reason: reason.trim(),
+          userId: user.id,
+        }),
+        { actionLabel: 'unsuspend this account' },
+      )
       setResult(nextResult)
       onUnsuspended(nextResult)
     } catch (error) {

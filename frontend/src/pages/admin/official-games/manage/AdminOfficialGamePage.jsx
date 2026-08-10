@@ -12,6 +12,7 @@ import {
   UsersIcon,
 } from '../../../../components/BrowseIcons.jsx'
 import { useAuth } from '../../../../hooks/useAuth.js'
+import { useStepUp } from '../../../../hooks/useStepUp.js'
 import { buildMediaUrl } from '../../../../lib/apiClient.js'
 import '../../../../styles/admin/AdminOfficialGames.css'
 import AdminWorkspaceLayout from '../../shared/AdminWorkspaceLayout.jsx'
@@ -487,6 +488,7 @@ function AdminOfficialGameOverviewTab({
 
 function AdminOfficialGamePageContent({ gameId }) {
   const { currentUser } = useAuth()
+  const { runWithStepUp } = useStepUp()
   const {
     hasAdminAccess,
     isLoading: isAdminAccessLoading,
@@ -986,12 +988,15 @@ function AdminOfficialGamePageContent({ gameId }) {
     setCancelError('')
 
     try {
-      const result = await cancelAdminOfficialGame({
-        cancelReason: cancelReason.trim(),
-        firebaseUser: currentUser,
-        gameId,
-        previewToken: cancelPreview.preview_token,
-      })
+      const result = await runWithStepUp(
+        () => cancelAdminOfficialGame({
+          cancelReason: cancelReason.trim(),
+          firebaseUser: currentUser,
+          gameId,
+          previewToken: cancelPreview.preview_token,
+        }),
+        { actionLabel: 'cancel this official game' },
+      )
       setCancelResult(result)
       setGame(result.game)
       await refreshWorkspace()

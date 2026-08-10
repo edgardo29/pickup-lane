@@ -13,7 +13,7 @@ from backend.schemas.platform_notice_schema import (
     PlatformNoticeRead,
     PlatformNoticeRecipientListRead,
 )
-from backend.services.auth_service import require_active_admin
+from backend.services.auth_service import require_active_admin, require_recent_active_admin
 from backend.services.platform_notice_service import (
     cancel_platform_notice,
     create_platform_notice,
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/admin/platform-notices", tags=["platform_notices"])
 )
 def create_platform_notice_route(
     payload: PlatformNoticeCreate,
-    current_user: User = Depends(require_active_admin),
+    current_user: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeCreateResultRead:
     return create_platform_notice(db, creator_user=current_user, payload=payload)
@@ -102,7 +102,7 @@ def list_platform_notice_recipients_route(
 def cancel_platform_notice_route(
     notice_id: uuid.UUID,
     payload: PlatformNoticeCancel,
-    current_user: User = Depends(require_active_admin),
+    current_user: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> PlatformNoticeRead:
     return cancel_platform_notice(

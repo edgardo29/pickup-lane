@@ -8,6 +8,7 @@ import {
   Search,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import '../../../styles/admin/AdminMoney.css'
 import {
   AuditSection,
@@ -49,6 +50,7 @@ function buildRefundRetryIdempotencyKey(refundId) {
 function AdminMoneyRefundPage() {
   const { refundId } = useParams()
   const { currentUser } = useAuth()
+  const { runWithStepUp } = useStepUp()
   const [detail, setDetail] = useState(null)
   const [loadState, setLoadState] = useState('loading')
   const [pageError, setPageError] = useState('')
@@ -192,12 +194,16 @@ function AdminMoneyRefundPage() {
     })
 
     try {
-      const nextDetail = await retryAdminMoneyRefund({
-        firebaseUser: currentUser,
-        refundId,
-        reason,
-        idempotencyKey: buildRefundRetryIdempotencyKey(refundId),
-      })
+      const idempotencyKey = buildRefundRetryIdempotencyKey(refundId)
+      const nextDetail = await runWithStepUp(
+        () => retryAdminMoneyRefund({
+          firebaseUser: currentUser,
+          refundId,
+          reason,
+          idempotencyKey,
+        }),
+        { actionLabel: 'retry this refund' },
+      )
 
       setDetail(nextDetail)
       setRetryForm({ reason: '', refundId })
@@ -239,12 +245,16 @@ function AdminMoneyRefundPage() {
     })
 
     try {
-      const nextDetail = await reconcileAdminMoneyRefund({
-        firebaseUser: currentUser,
-        refundId,
-        reason,
-        idempotencyKey: buildRefundRetryIdempotencyKey(`reconcile:${refundId}`),
-      })
+      const idempotencyKey = buildRefundRetryIdempotencyKey(`reconcile:${refundId}`)
+      const nextDetail = await runWithStepUp(
+        () => reconcileAdminMoneyRefund({
+          firebaseUser: currentUser,
+          refundId,
+          reason,
+          idempotencyKey,
+        }),
+        { actionLabel: 'reconcile this refund' },
+      )
 
       setDetail(nextDetail)
       setReconcileForm({ reason: '', refundId })

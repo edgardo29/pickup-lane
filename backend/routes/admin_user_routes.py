@@ -48,7 +48,7 @@ from backend.services.admin_user_hosting_service import (
     restore_admin_user_hosting,
 )
 from backend.services.admin_user_role_service import change_user_role
-from backend.services.auth_service import require_active_admin
+from backend.services.auth_service import require_active_admin, require_recent_active_admin
 
 router = APIRouter(prefix="/admin/users", tags=["admin_users"])
 
@@ -164,7 +164,7 @@ def delete_admin_user_route(
     user_id: uuid.UUID,
     payload: AdminUserDeleteCreate,
     request: Request,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserDeleteResultRead:
     route = request.scope.get("route")
@@ -187,7 +187,7 @@ def delete_admin_user_route(
 def change_admin_user_role_route(
     user_id: uuid.UUID,
     payload: AdminUserRoleChangeCreate,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserRoleChangeResultRead:
     return change_user_role(
@@ -273,7 +273,7 @@ def suspend_admin_user_route(
     user_id: uuid.UUID,
     payload: AdminUserSuspendCreate,
     request: Request,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserSuspendResultRead:
     route = request.scope.get("route")
@@ -296,7 +296,7 @@ def suspend_admin_user_route(
 def unsuspend_admin_user_route(
     user_id: uuid.UUID,
     payload: AdminUserUnsuspendCreate,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserUnsuspendResultRead:
     return unsuspend_admin_user(

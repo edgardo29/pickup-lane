@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import { createAdminFinancialOutcome } from '../shared/adminFinancialOutcomeApi.js'
 import {
   cancelAdminCommunityGame,
@@ -165,6 +166,7 @@ function AdminCommunityGameActionModal({
   onClose,
   onCompleted,
 }) {
+  const { runWithStepUp } = useStepUp()
   const config = ACTION_CONFIG[action]
   const [reason, setReason] = useState('')
   const [financialOutcome, setFinancialOutcome] = useState(
@@ -232,15 +234,18 @@ function AdminCommunityGameActionModal({
 
       if (shouldRecordFinancialOutcome) {
         try {
-          await createAdminFinancialOutcome({
-            firebaseUser,
-            payload: buildFinancialOutcomePayload({
-              detail,
-              financialOutcome,
-              financialOutcomeIdempotencyKey,
-              reason: normalizedReason,
+          await runWithStepUp(
+            () => createAdminFinancialOutcome({
+              firebaseUser,
+              payload: buildFinancialOutcomePayload({
+                detail,
+                financialOutcome,
+                financialOutcomeIdempotencyKey,
+                reason: normalizedReason,
+              }),
             }),
-          })
+            { actionLabel: 'record this financial outcome' },
+          )
         } catch (error) {
           onCompleted(actionResult, { keepOpen: true })
           throw new Error(

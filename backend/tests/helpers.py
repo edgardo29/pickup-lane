@@ -159,6 +159,7 @@ def authenticate_as(user_id: str, target_app=None) -> None:
                 auth_user_id=db_user.auth_user_id,
                 email=db_user.email,
                 email_verified=True,
+                authenticated_at=datetime.now(UTC),
             )
 
     app_with_overrides.dependency_overrides[get_current_app_user] = override_current_user

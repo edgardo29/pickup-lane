@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
+import { useStepUp } from '../../hooks/useStepUp.js'
 import { getNotificationSummary } from './profileFormatters.js'
 import { buildSettingsRows } from './settingsRows.jsx'
 import { useAddPasswordSettings } from './useAddPasswordSettings.js'
@@ -16,6 +17,7 @@ export function useSettingsPageModel() {
     deleteAccount,
     logout,
   } = useAuth()
+  const { confirmStepUp, runWithStepUp } = useStepUp()
   const {
     currentUser,
     gameCreditBalance,
@@ -36,13 +38,21 @@ export function useSettingsPageModel() {
     () => ({ ...settings, ...(settingsOverride || {}) }),
     [settings, settingsOverride],
   )
-  const deleteSettings = useDeleteAccountSettings({ deleteAccount, logout, navigate })
+  const deleteSettings = useDeleteAccountSettings({
+    deleteAccount,
+    logout,
+    navigate,
+    runWithStepUp,
+  })
   const notificationSettings = useNotificationSettings({
     effectiveSettings,
     firebaseUser: authUser,
     setSettingsOverride,
   })
-  const passwordSettings = useAddPasswordSettings({ addPasswordToCurrentAccount })
+  const passwordSettings = useAddPasswordSettings({
+    addPasswordToCurrentAccount,
+    confirmStepUp,
+  })
   const defaultPaymentMethod =
     paymentMethods.find((method) => method.is_default) || paymentMethods[0] || null
   const providerIds = authUser?.providerData?.map((provider) => provider.providerId) ?? []

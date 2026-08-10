@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -27,7 +28,10 @@ def _stub_firebase_tokens(monkeypatch, token_payloads: dict[str, dict]) -> None:
         payload = token_payloads.get(id_token)
         if payload is None:
             raise ValueError("Invalid token")
-        return payload
+        return {
+            "auth_time": int(datetime.now(UTC).timestamp()),
+            **payload,
+        }
 
     monkeypatch.setattr(
         "backend.services.auth_service.verify_firebase_token",
@@ -57,11 +61,14 @@ def test_auth_sync_user_creates_and_returns_existing_user(
     )
     assert create_response.status_code == 200, create_response.text
     created_user = create_response.json()
-    assert created_user["auth_user_id"] == token_payload["uid"]
     assert created_user["email"] == token_payload["email"].lower()
     assert created_user["first_name"] is None
     assert created_user["date_of_birth"] is None
     assert created_user["hosting_status"] == "eligible"
+    with SessionLocal() as db:
+        db_user = db.get(User, UUID(created_user["id"]))
+        assert db_user is not None
+        assert db_user.auth_user_id == token_payload["uid"]
 
     settings_response = run_as_temporary_admin(
         client,

@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { getAuthErrorMessage } from '../../lib/authErrors.js'
 import { isValidPassword } from './profileValidation.js'
 
-export function useAddPasswordSettings({ addPasswordToCurrentAccount }) {
+export function useAddPasswordSettings({
+  addPasswordToCurrentAccount,
+  confirmStepUp = async () => {},
+}) {
   const [isPasswordOpen, setIsPasswordOpen] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -40,6 +43,7 @@ export function useAddPasswordSettings({ addPasswordToCurrentAccount }) {
     }
 
     try {
+      await confirmStepUp({ actionLabel: 'add password sign-in' })
       await addPasswordToCurrentAccount(newPassword)
       setNewPassword('')
       setConfirmPassword('')

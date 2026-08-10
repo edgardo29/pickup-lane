@@ -8,6 +8,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import '../../../styles/admin/AdminMoney.css'
 import {
   ContextSection,
@@ -90,6 +91,7 @@ function getIssueRetryKind(moneyIssue, refund) {
 function AdminMoneyIssuePage() {
   const { moneyIssueId } = useParams()
   const { currentUser } = useAuth()
+  const { runWithStepUp } = useStepUp()
   const [detail, setDetail] = useState(null)
   const [loadState, setLoadState] = useState('loading')
   const [pageError, setPageError] = useState('')
@@ -188,29 +190,37 @@ function AdminMoneyIssuePage() {
     try {
       let nextDetail
       if (retryKind === 'refund') {
-        await retryAdminMoneyRefund({
-          firebaseUser: currentUser,
-          refundId: detail.money_issue.target_refund_id,
-          reason,
-          idempotencyKey: buildMoneyIssueIdempotencyKey(
-            'admin-money-refund-retry',
-            detail.money_issue.target_refund_id,
-          ),
-        })
+        const idempotencyKey = buildMoneyIssueIdempotencyKey(
+          'admin-money-refund-retry',
+          detail.money_issue.target_refund_id,
+        )
+        await runWithStepUp(
+          () => retryAdminMoneyRefund({
+            firebaseUser: currentUser,
+            refundId: detail.money_issue.target_refund_id,
+            reason,
+            idempotencyKey,
+          }),
+          { actionLabel: 'retry this refund' },
+        )
         nextDetail = await getAdminMoneyIssue({
           firebaseUser: currentUser,
           moneyIssueId,
         })
       } else {
-        nextDetail = await retryAdminMoneyIssueCredit({
-          firebaseUser: currentUser,
+        const idempotencyKey = buildMoneyIssueIdempotencyKey(
+          'admin-money-issue-credit-retry',
           moneyIssueId,
-          reason,
-          idempotencyKey: buildMoneyIssueIdempotencyKey(
-            'admin-money-issue-credit-retry',
+        )
+        nextDetail = await runWithStepUp(
+          () => retryAdminMoneyIssueCredit({
+            firebaseUser: currentUser,
             moneyIssueId,
-          ),
-        })
+            reason,
+            idempotencyKey,
+          }),
+          { actionLabel: 'retry this credit repair' },
+        )
       }
 
       setDetail(nextDetail)
@@ -279,14 +289,21 @@ function AdminMoneyIssuePage() {
     setResolveStatus({ error: '', message: '', state: 'submitting' })
 
     try {
-      const nextDetail = await resolveAdminMoneyIssue({
-        firebaseUser: currentUser,
+      const idempotencyKey = buildMoneyIssueIdempotencyKey(
+        'admin-money-issue-resolve',
         moneyIssueId,
-        reason: note,
-        resolutionExternalReference: externalReference,
-        resolutionReasonCode: resolveForm.reasonCode,
-        idempotencyKey: buildMoneyIssueIdempotencyKey('admin-money-issue-resolve', moneyIssueId),
-      })
+      )
+      const nextDetail = await runWithStepUp(
+        () => resolveAdminMoneyIssue({
+          firebaseUser: currentUser,
+          moneyIssueId,
+          reason: note,
+          resolutionExternalReference: externalReference,
+          resolutionReasonCode: resolveForm.reasonCode,
+          idempotencyKey,
+        }),
+        { actionLabel: 'resolve this money issue' },
+      )
 
       setDetail(nextDetail)
       setResolveForm({

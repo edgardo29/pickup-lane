@@ -24,6 +24,7 @@ import {
   setDefaultPaymentMethod,
 } from '../../lib/paymentMethodsApi.js'
 import { useAuth } from '../../hooks/useAuth.js'
+import { useStepUp } from '../../hooks/useStepUp.js'
 import { PaymentCardIcon } from './ProfileIcons.jsx'
 import { capitalize } from './profileFormatters.js'
 import { ProfileShell } from './ProfileShell.jsx'
@@ -44,6 +45,7 @@ function getSafeReturnPath(value) {
 
 export function PaymentMethodsPage() {
   const { currentUser: firebaseUser } = useAuth()
+  const { runWithStepUp } = useStepUp()
   const location = useLocation()
   const searchParams = new URLSearchParams(location.search)
   const returnTo = getSafeReturnPath(searchParams.get('returnTo'))
@@ -162,7 +164,10 @@ export function PaymentMethodsPage() {
     setSuccessMessage('')
 
     try {
-      await setDefaultPaymentMethod(firebaseUser, paymentMethodId)
+      await runWithStepUp(
+        () => setDefaultPaymentMethod(firebaseUser, paymentMethodId),
+        { actionLabel: 'change your default card' },
+      )
       await loadPaymentMethods()
       setActiveMenuPaymentMethodId('')
       setSuccessMessage('Default payment method updated.')
@@ -188,7 +193,10 @@ export function PaymentMethodsPage() {
     setSuccessMessage('')
 
     try {
-      await removePaymentMethod(firebaseUser, removeCandidate.id)
+      await runWithStepUp(
+        () => removePaymentMethod(firebaseUser, removeCandidate.id),
+        { actionLabel: 'remove this card' },
+      )
       await loadPaymentMethods()
       setRemoveCandidate(null)
       setActiveMenuPaymentMethodId('')

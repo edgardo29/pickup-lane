@@ -11,7 +11,7 @@ from backend.schemas import (
     UserPaymentMethodSetupIntentRead,
     UserPaymentMethodSyncCreate,
 )
-from backend.services.auth_service import require_active_user
+from backend.services.auth_service import require_active_user, require_recent_active_user
 from backend.services.payment_method_service import (
     create_saved_payment_method_setup_intent,
     detach_saved_payment_method,
@@ -97,7 +97,7 @@ def get_current_user_payment_method(
 )
 def set_current_user_default_payment_method(
     payment_method_id: uuid.UUID,
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_recent_active_user),
     db: Session = Depends(get_db),
 ) -> UserPaymentMethod:
     return set_default_saved_payment_method(db, current_user, payment_method_id)
@@ -110,7 +110,7 @@ def set_current_user_default_payment_method(
 )
 def detach_current_user_payment_method(
     payment_method_id: uuid.UUID,
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_recent_active_user),
     db: Session = Depends(get_db),
 ) -> UserPaymentMethod:
     return detach_saved_payment_method(db, current_user, payment_method_id)

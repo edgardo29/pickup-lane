@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { buildAuthProviderAccountActions } from './authProviderAccountActions.js'
 import { buildAuthProviderCredentialActions } from './authProviderCredentialActions.js'
 import { buildAuthProviderGoogleActions } from './authProviderGoogleActions.js'
+import { buildAuthProviderReauthenticationActions } from './authProviderReauthenticationActions.js'
 import { buildAuthProviderVerificationActions } from './authProviderVerificationActions.js'
 
 export function useAuthProviderValue({
@@ -48,6 +49,9 @@ export function useAuthProviderValue({
         loadExistingAppUser,
         setPendingGoogleSignup,
         setPendingSignup,
+      }),
+      ...buildAuthProviderReauthenticationActions({
+        firebaseUser,
       }),
       ...buildAuthProviderVerificationActions({
         firebaseUser,

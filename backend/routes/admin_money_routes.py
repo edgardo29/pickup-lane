@@ -55,7 +55,7 @@ from backend.services.admin_money_issue_service import (
 from backend.services.admin_money_user_service import (
     get_admin_money_user_detail,
 )
-from backend.services.auth_service import require_active_admin
+from backend.services.auth_service import require_active_admin, require_recent_active_admin
 
 router = APIRouter(prefix="/admin/money", tags=["admin_money"])
 MONEY_ISSUE_LIST_QUERY_PARAMS = frozenset(
@@ -109,7 +109,7 @@ MONEY_CREDIT_LIST_QUERY_PARAMS = frozenset(
 )
 def create_admin_money_financial_outcome_route(
     payload: AdminMoneyFinancialOutcomeCreate,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyFinancialOutcomeRead:
     return create_admin_financial_outcome(
@@ -215,7 +215,7 @@ def get_admin_money_issue_route(
 def resolve_admin_money_issue_route(
     money_issue_id: uuid.UUID,
     payload: AdminMoneyIssueResolveCreate,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyIssueDetailRead:
     return resolve_admin_money_issue(
@@ -234,7 +234,7 @@ def resolve_admin_money_issue_route(
 def retry_admin_money_issue_credit_route(
     money_issue_id: uuid.UUID,
     payload: AdminMoneyIssueCreditRetryCreate,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyIssueDetailRead:
     return retry_admin_money_issue_credit(
@@ -422,7 +422,7 @@ def get_admin_money_refund(
 def retry_admin_money_refund_route(
     refund_id: uuid.UUID,
     payload: AdminMoneyRefundRetryCreate,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyRefundDetailRead:
     return retry_admin_money_refund(
@@ -465,7 +465,7 @@ def list_admin_money_refund_events_route(
 def reconcile_admin_money_refund_route(
     refund_id: uuid.UUID,
     payload: AdminMoneyRefundReconcileCreate,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyRefundDetailRead:
     return reconcile_admin_money_refund(

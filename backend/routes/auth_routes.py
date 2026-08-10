@@ -15,6 +15,7 @@ from backend.services.auth_account_service import (
     sync_user_workflow,
 )
 from backend.services.auth_service import get_synced_current_app_user
+from backend.services.auth_service import require_recent_app_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -60,6 +61,7 @@ def cleanup_unfinished_account(
 @router.delete("/account", response_model=SelfUserRead, status_code=status.HTTP_200_OK)
 def delete_account(
     payload: AuthDeleteAccountRequest,
+    _current_user: User = Depends(require_recent_app_user),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> User:

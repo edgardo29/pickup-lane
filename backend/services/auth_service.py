@@ -1,7 +1,8 @@
 """Firebase authentication and route dependencies."""
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import math
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
@@ -16,10 +17,13 @@ from backend.firebase_admin_client import (
 )
 from backend.models import User
 from backend.observability.timeouts import PublicTimeoutError
+from backend.settings import get_settings
 from backend.services.hosting_access_service import apply_verified_hosting_eligibility
 from backend.services.user_service import build_user_conflict_detail
 
 ADMIN_ROLE = "admin"
+RECENT_AUTH_REQUIRED_CODE = "AUTH.RECENT_AUTH_REQUIRED"
+RECENT_AUTH_REQUIRED_MESSAGE = "Confirm your identity to continue."
 
 
 @dataclass(frozen=True)
@@ -27,6 +31,7 @@ class VerifiedFirebaseIdentity:
     auth_user_id: str
     email: str | None
     email_verified: bool
+    authenticated_at: datetime | None = None
     provider_account_active: bool = True
 
 
@@ -103,6 +108,7 @@ def get_verified_firebase_identity_from_authorization(
         auth_user_id=auth_user_id,
         email=email.strip().lower() if isinstance(email, str) else None,
         email_verified=bool(decoded_token.get("email_verified")),
+        authenticated_at=parse_provider_authenticated_at(decoded_token),
         provider_account_active=True,
     )
 
@@ -120,6 +126,67 @@ def get_decoded_firebase_token(authorization: str | None) -> dict:
         "email": identity.email,
         "email_verified": identity.email_verified,
     }
+
+
+def parse_provider_authenticated_at(decoded_token: dict) -> datetime | None:
+    auth_time = decoded_token.get("auth_time")
+    if isinstance(auth_time, bool) or not isinstance(auth_time, int | float):
+        return None
+    if not math.isfinite(auth_time) or auth_time < 0:
+        return None
+
+    try:
+        authenticated_at = datetime.fromtimestamp(auth_time, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+    return authenticated_at
+
+
+def is_recent_authentication(
+    identity: VerifiedFirebaseIdentity,
+    *,
+    now: datetime,
+    window: timedelta,
+) -> bool:
+    authenticated_at = identity.authenticated_at
+    if authenticated_at is None:
+        return False
+
+    if authenticated_at.tzinfo is None:
+        return False
+
+    authenticated_at = authenticated_at.astimezone(timezone.utc)
+    now = now.astimezone(timezone.utc)
+    age = now - authenticated_at
+    return timedelta(0) <= age <= window
+
+
+def recent_authentication_window() -> timedelta:
+    return timedelta(seconds=get_settings().recent_authentication_window_seconds)
+
+
+def recent_authentication_error_detail() -> dict[str, str]:
+    return {
+        "code": RECENT_AUTH_REQUIRED_CODE,
+        "message": RECENT_AUTH_REQUIRED_MESSAGE,
+    }
+
+
+def require_recent_authentication(
+    identity: VerifiedFirebaseIdentity = Depends(get_verified_firebase_identity),
+) -> VerifiedFirebaseIdentity:
+    if not is_recent_authentication(
+        identity,
+        now=datetime.now(timezone.utc),
+        window=recent_authentication_window(),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=recent_authentication_error_detail(),
+        )
+
+    return identity
 
 
 def get_auth_user_id_from_token(authorization: str | None) -> str:
@@ -310,6 +377,20 @@ def require_active_user(
     return current_user
 
 
+def require_recent_app_user(
+    current_user: User = Depends(get_current_app_user),
+    _identity: VerifiedFirebaseIdentity = Depends(require_recent_authentication),
+) -> User:
+    return current_user
+
+
+def require_recent_active_user(
+    current_user: User = Depends(require_active_user),
+    _identity: VerifiedFirebaseIdentity = Depends(require_recent_authentication),
+) -> User:
+    return current_user
+
+
 def require_verified_user(
     current_user: User = Depends(require_active_user),
     identity: VerifiedFirebaseIdentity = Depends(get_verified_firebase_identity),
@@ -352,4 +433,11 @@ def require_active_admin(
     current_user: User = Depends(require_verified_user),
 ) -> User:
     require_active_admin_user(current_user)
+    return current_user
+
+
+def require_recent_active_admin(
+    current_user: User = Depends(require_active_admin),
+    _identity: VerifiedFirebaseIdentity = Depends(require_recent_authentication),
+) -> User:
     return current_user
