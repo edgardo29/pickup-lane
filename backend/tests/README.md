@@ -196,7 +196,7 @@ The supported manifest convention is documented by:
 
 The active checker validates manifest syntax and schema only where a domain
 provides a manifest. It does not require manifests for every future domain
-during Phase 1.
+during EN-01 foundation work.
 
 Runtime behavior is proven by focused pytest selections. The checker does not
 run pytest for a target and does not replace requirement review.
@@ -211,7 +211,7 @@ Use the narrowest command that proves the current change:
 - one provider integration suite only when explicitly approved
 
 Do not use the broad current backend product suite as acceptance evidence for
-Phase 1 foundation/tooling changes.
+EN-01 foundation/tooling changes.
 
 ## Reconstructing A Domain Later
 
@@ -234,7 +234,7 @@ contract.
 
 CI will eventually execute the progressively rebuilt authoritative backend
 suite against PostgreSQL, plus separated integration and release-evidence
-checks where approved. Phase 1 does not wire the entire current backend product
+checks where approved. EN-01 does not wire the entire current backend product
 collection into CI.
 
 Retries remain diagnostic only. Failure artifacts must be useful, sanitized,
