@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShieldBan } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import {
   previewAdminUserSuspension,
   suspendAdminUser,
@@ -27,6 +28,7 @@ function AdminUserSuspensionModal({
   onSuspended,
   user,
 }) {
+  const { runWithStepUp } = useStepUp()
   const [preview, setPreview] = useState(null)
   const [loadState, setLoadState] = useState('loading')
   const [previewError, setPreviewError] = useState('')
@@ -92,13 +94,16 @@ function AdminUserSuspensionModal({
     setExecutionError('')
 
     try {
-      const nextResult = await suspendAdminUser({
-        firebaseUser,
-        idempotencyKey,
-        previewToken: preview.preview_token,
-        reason: reason.trim(),
-        userId: user.id,
-      })
+      const nextResult = await runWithStepUp(
+        () => suspendAdminUser({
+          firebaseUser,
+          idempotencyKey,
+          previewToken: preview.preview_token,
+          reason: reason.trim(),
+          userId: user.id,
+        }),
+        { actionLabel: 'suspend this account' },
+      )
       setResult(nextResult)
       onSuspended(nextResult)
     } catch (error) {

@@ -29,6 +29,7 @@ from backend.observability.redaction import (
     contains_sensitive_text,
     redact_value,
 )
+from backend.observability.telemetry import TelemetryLabelError, validate_error_code
 from backend.observability.timeouts import public_timeout_contract
 
 logger = logging.getLogger(__name__)
@@ -167,10 +168,11 @@ async def handle_http_exception(
     default_message = _default_status_message(exc.status_code)
     detail = _sanitize_detail(exc.detail, fallback=default_message)
     message = _message_from_detail(detail, fallback=default_message)
+    code = _error_code_from_detail(detail) or _error_code_for_status(exc.status_code)
 
     return _public_error_response(
         status_code=exc.status_code,
-        code=_error_code_for_status(exc.status_code),
+        code=code,
         message=message,
         detail=detail,
         headers=exc.headers,
@@ -274,6 +276,16 @@ def _current_or_generated_correlation_id() -> str:
 
 def _error_code_for_status(status_code: int) -> str:
     return _STATUS_ERROR_CODES.get(status_code, "API.HTTP_ERROR")
+
+
+def _error_code_from_detail(detail: Any) -> str | None:
+    if not isinstance(detail, Mapping):
+        return None
+
+    try:
+        return validate_error_code(detail.get("code"))
+    except TelemetryLabelError:
+        return None
 
 
 def _default_status_message(status_code: int) -> str:

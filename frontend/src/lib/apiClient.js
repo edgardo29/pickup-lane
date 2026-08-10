@@ -1,10 +1,13 @@
+const viteEnv = import.meta.env ?? {}
+
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? 'http://127.0.0.1:8000'
+  viteEnv.VITE_API_BASE_URL?.replace(/\/$/, '') ?? 'http://127.0.0.1:8000'
 
 export class ApiRequestError extends Error {
-  constructor(message, { detail = null, status = 0 } = {}) {
+  constructor(message, { code = '', detail = null, status = 0 } = {}) {
     super(message)
     this.name = 'ApiRequestError'
+    this.code = code
     this.detail = detail
     this.status = status
   }
@@ -22,9 +25,10 @@ export async function apiRequest(path, options = {}) {
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null)
     const detail = errorBody?.detail
+    const code = getApiErrorCode(errorBody)
     throw new ApiRequestError(
       formatApiErrorMessage(detail, response.status),
-      { detail, status: response.status },
+      { code, detail, status: response.status },
     )
   }
 
@@ -33,6 +37,11 @@ export async function apiRequest(path, options = {}) {
   }
 
   return response.json()
+}
+
+export function getApiErrorCode(errorBody) {
+  const code = errorBody?.code || errorBody?.detail?.code || ''
+  return typeof code === 'string' ? code : ''
 }
 
 export function buildApiUrl(path) {
@@ -62,6 +71,10 @@ function formatApiErrorMessage(detail, status) {
 
   if (Array.isArray(detail) && detail.length > 0) {
     return formatValidationDetail(detail[0])
+  }
+
+  if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
+    return detail.message
   }
 
   return `Request failed with status ${status}`

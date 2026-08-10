@@ -1,6 +1,11 @@
 import { useState } from 'react'
 
-export function useDeleteAccountSettings({ deleteAccount, logout, navigate }) {
+export function useDeleteAccountSettings({
+  deleteAccount,
+  logout,
+  navigate,
+  runWithStepUp = (action) => action(),
+}) {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [deleteStatus, setDeleteStatus] = useState('idle')
@@ -24,7 +29,10 @@ export function useDeleteAccountSettings({ deleteAccount, logout, navigate }) {
     setDeleteError('')
 
     try {
-      await deleteAccount(deleteConfirmation)
+      await runWithStepUp(
+        () => deleteAccount(deleteConfirmation),
+        { actionLabel: 'delete your account' },
+      )
       setDeleteStatus('success')
       window.setTimeout(() => {
         logout().finally(() => {

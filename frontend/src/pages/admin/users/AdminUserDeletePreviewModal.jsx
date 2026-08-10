@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import {
   deleteAdminUser,
   previewAdminUserDeleteImpact,
@@ -135,6 +136,7 @@ function AdminUserDeletePreviewModal({
   const [idempotencyKey, setIdempotencyKey] = useState(
     () => createIdempotencyKey(user.id),
   )
+  const { runWithStepUp } = useStepUp()
 
   useEffect(() => {
     let isMounted = true
@@ -198,13 +200,16 @@ function AdminUserDeletePreviewModal({
     setExecutionError('')
 
     try {
-      const nextResult = await deleteAdminUser({
-        firebaseUser,
-        idempotencyKey,
-        previewToken: preview.preview_token,
-        reason: reason.trim(),
-        userId: user.id,
-      })
+      const nextResult = await runWithStepUp(
+        () => deleteAdminUser({
+          firebaseUser,
+          idempotencyKey,
+          previewToken: preview.preview_token,
+          reason: reason.trim(),
+          userId: user.id,
+        }),
+        { actionLabel: 'delete this account' },
+      )
       setResult(nextResult)
       onDeleted?.(nextResult)
     } catch (error) {

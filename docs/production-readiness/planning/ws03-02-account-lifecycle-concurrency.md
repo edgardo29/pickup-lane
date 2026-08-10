@@ -87,7 +87,7 @@ WS03-02 validation used focused backend lifecycle/concurrency tests, shared auth
 
 ## Handoffs
 
-- WS03-03: recent auth, MFA, App Check, step-up, and other advanced auth controls remain unstarted.
+- WS03-03A now covers source-owned recent auth and frontend step-up; MFA, App Check, provider credential governance, and provider evidence remain deferred to WS03-03B.
 - WS03-04: full IDOR/object authorization review remains deferred.
 - WS04: broad database architecture, migration, transaction, and locking framework work remains deferred.
 - Durable deletion cleanup retries and reconciliation remain deferred to WS05.

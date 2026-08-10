@@ -111,6 +111,7 @@ def authenticate_client_as(client: TestClient, user_id: str) -> None:
                 auth_user_id=db_user.auth_user_id,
                 email=db_user.email,
                 email_verified=True,
+                authenticated_at=datetime.now(UTC),
             )
 
     client.app.dependency_overrides[get_current_app_user] = override_current_user

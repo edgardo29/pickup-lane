@@ -34,7 +34,7 @@ from backend.schemas import (
     CurrentUserWaitlistEntryRead,
     GameParticipantRead,
 )
-from backend.services.auth_service import require_active_admin
+from backend.services.auth_service import require_active_admin, require_recent_active_admin
 from backend.services.game_cancellation_service import (
     build_official_game_cancellation_preview as preview_official_game_cancellation,
     execute_official_game_cancellation,
@@ -354,7 +354,7 @@ def execute_admin_official_game_cancellation(
     game_id: uuid.UUID,
     cancel_request: AdminOfficialGameCancelExecute,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
 ) -> AdminOfficialGameCancellationResultRead:
     return execute_official_game_cancellation(
         db,

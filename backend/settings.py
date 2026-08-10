@@ -102,6 +102,7 @@ SUPPORTED_STRIPE_CURRENCY = "USD"
 DEFAULT_STRIPE_READ_TIMEOUT_SECONDS = 6
 DEFAULT_STRIPE_MUTATION_TIMEOUT_SECONDS = 15
 DEFAULT_FIREBASE_HTTP_TIMEOUT_SECONDS = 8
+DEFAULT_RECENT_AUTHENTICATION_WINDOW_SECONDS = 5 * 60
 DEFAULT_R2_METADATA_CONNECT_TIMEOUT_SECONDS = 2
 DEFAULT_R2_METADATA_READ_TIMEOUT_SECONDS = 6
 DEFAULT_DB_POOL_WAIT_TIMEOUT_SECONDS = 2
@@ -200,6 +201,9 @@ class BackendSettings(BaseModel):
     stripe_read_timeout_seconds: int = DEFAULT_STRIPE_READ_TIMEOUT_SECONDS
     stripe_mutation_timeout_seconds: int = DEFAULT_STRIPE_MUTATION_TIMEOUT_SECONDS
     firebase_http_timeout_seconds: int = DEFAULT_FIREBASE_HTTP_TIMEOUT_SECONDS
+    recent_authentication_window_seconds: int = (
+        DEFAULT_RECENT_AUTHENTICATION_WINDOW_SECONDS
+    )
     r2_account_id: str | None = None
     r2_access_key_id: SecretStr | None = None
     r2_secret_access_key: SecretStr | None = None

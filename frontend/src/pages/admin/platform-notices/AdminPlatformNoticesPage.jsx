@@ -14,6 +14,7 @@ import {
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
 import { SkeletonBlock } from '../../../components/skeleton/index.js'
 import { useAuth } from '../../../hooks/useAuth.js'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import '../../../styles/admin/AdminPlatformNotices.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
 import {
@@ -832,6 +833,7 @@ function NoticeDetail({
 
 function AdminPlatformNoticesPage() {
   const { currentUser } = useAuth()
+  const { runWithStepUp } = useStepUp()
   const location = useLocation()
   const navigate = useNavigate()
   const { noticeId } = useParams()
@@ -1185,14 +1187,17 @@ function AdminPlatformNoticesPage() {
     setSubmitState('saving')
     setStepError('')
     try {
-      const response = await createPlatformNotice({
-        firebaseUser: currentUser,
-        payload: buildPlatformNoticeCreatePayload({
-          form,
-          idempotencyKey: publishKeyRef.current,
-          selectedUsers,
+      const response = await runWithStepUp(
+        () => createPlatformNotice({
+          firebaseUser: currentUser,
+          payload: buildPlatformNoticeCreatePayload({
+            form,
+            idempotencyKey: publishKeyRef.current,
+            selectedUsers,
+          }),
         }),
-      })
+        { actionLabel: 'publish this platform notice' },
+      )
       resetCreateFlow()
       navigate(`/admin/platform-notices/${response.notice.id}`)
     } catch (error) {
@@ -1268,11 +1273,14 @@ function AdminPlatformNoticesPage() {
     setCancelState('saving')
     setCancelError('')
     try {
-      const response = await cancelPlatformNotice({
-        firebaseUser: currentUser,
-        noticeId,
-        payload: buildPlatformNoticeCancelPayload(reason),
-      })
+      const response = await runWithStepUp(
+        () => cancelPlatformNotice({
+          firebaseUser: currentUser,
+          noticeId,
+          payload: buildPlatformNoticeCancelPayload(reason),
+        }),
+        { actionLabel: 'cancel this platform notice' },
+      )
       setNotice(response)
       setCancelOpen(false)
       setCancelReason('')

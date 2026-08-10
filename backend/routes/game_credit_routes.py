@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import GameCredit, User
-from backend.services.auth_service import get_current_app_user, require_active_admin
+from backend.services.auth_service import (
+    get_current_app_user,
+    require_recent_active_admin,
+)
 from backend.schemas import (
     GameCreditBalanceRead,
     GameCreditIssueCreate,
@@ -54,7 +57,7 @@ def list_game_credits(
 )
 def issue_game_credit(
     payload: GameCreditIssueCreate,
-    current_user: User = Depends(require_active_admin),
+    current_user: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> GameCredit:
     return issue_admin_game_credit(db, admin_user=current_user, payload=payload)
@@ -68,7 +71,7 @@ def issue_game_credit(
 def reverse_game_credit(
     game_credit_id: uuid.UUID,
     payload: GameCreditReverseCreate,
-    current_user: User = Depends(require_active_admin),
+    current_user: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> GameCredit:
     return reverse_admin_game_credit(
