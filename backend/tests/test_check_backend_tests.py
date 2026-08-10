@@ -167,6 +167,25 @@ def test_checker_keeps_no_db_cleanup_from_bypassing_database_cleanup(tmp_path):
     assert {"MRK005", "MRK006"} <= rule_ids
 
 
+def test_checker_blocks_direct_database_import_with_no_db_cleanup(tmp_path):
+    repo = _make_repo(tmp_path)
+    _write_test(
+        repo,
+        "infrastructure/test_bad_direct_database_import.py",
+        "import pytest\n\n"
+        "from backend.database import SessionLocal\n\n"
+        "pytestmark = pytest.mark.no_db_cleanup\n\n"
+        "def test_direct_database_import():\n"
+        "    assert SessionLocal is not None\n",
+    )
+
+    result = run_checker(["infrastructure"], cwd=repo)
+
+    rule_ids = {issue.rule_id for issue in result.issues}
+    assert result.state == "FAIL"
+    assert "MRK007" in rule_ids
+
+
 def test_checker_validates_traceability_manifest_schema(tmp_path):
     repo = _make_repo(tmp_path)
     _write_test(

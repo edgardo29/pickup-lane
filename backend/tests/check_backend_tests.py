@@ -342,6 +342,15 @@ def _check_python_files(target: ScanTarget, result: CheckResult) -> None:
                         "no_db_cleanup tests must not request the shared client fixture",
                         _location(path, target, node.lineno),
                     )
+            for node in ast.walk(tree):
+                if _imports_backend_database(node):
+                    result.add_issue(
+                        "MRK007",
+                        "failure",
+                        "no_db_cleanup tests must not directly import "
+                        "backend.database",
+                        _location(path, target, getattr(node, "lineno", None)),
+                    )
 
 
 def _check_support_dependency_direction(target: ScanTarget, result: CheckResult) -> None:
@@ -481,6 +490,23 @@ def _imported_module_name(node: ast.AST) -> str | None:
             return module
         return module
     return None
+
+
+def _imports_backend_database(node: ast.AST) -> bool:
+    if isinstance(node, ast.Import):
+        return any(
+            alias.name == "backend.database"
+            or alias.name.startswith("backend.database.")
+            for alias in node.names
+        )
+    if isinstance(node, ast.ImportFrom):
+        module = node.module or ""
+        if module == "backend.database" or module.startswith("backend.database."):
+            return True
+        return module == "backend" and any(
+            alias.name == "database" for alias in node.names
+        )
+    return False
 
 
 def _location(path: Path, target: ScanTarget, line_number: int | None = None) -> str:

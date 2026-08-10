@@ -146,7 +146,13 @@ def _record_isolation_evidence(item: Any) -> None:
     if not path_text:
         return
     database_url = os.environ.get("DATABASE_URL", "")
-    parsed_database_name = _database_name_from_url(database_url)
+    from backend.tests.support.environment_safety import (
+        registered_sqlalchemy_tables,
+        validate_dedicated_test_database_url,
+    )
+
+    parsed_database = validate_dedicated_test_database_url(database_url)
+    parsed_database_name = parsed_database.database_name
     assert _is_dedicated_test_database_name(parsed_database_name), (
         "runtime evidence requires DATABASE_URL to point to a dedicated test database"
     )
@@ -154,7 +160,6 @@ def _record_isolation_evidence(item: Any) -> None:
     from sqlalchemy import text
 
     from backend.database import engine
-    from backend.tests.conftest import TEST_TABLES
 
     recorder = EvidenceRecorder(Path(path_text), item.nodeid)
     with engine.connect() as connection:
@@ -168,7 +173,7 @@ def _record_isolation_evidence(item: Any) -> None:
         current_database = str(identity["database_name"])
         assert current_database == parsed_database_name
         assert _is_dedicated_test_database_name(current_database)
-        table_counts = _cleanup_table_counts(connection, TEST_TABLES)
+        table_counts = _cleanup_table_counts(connection, registered_sqlalchemy_tables())
 
     nonempty_tables = {
         table: count for table, count in table_counts.items() if count != 0
@@ -194,26 +199,29 @@ def _record_isolation_evidence(item: Any) -> None:
     )
 
 
-def _database_name_from_url(database_url: str) -> str:
-    parsed = urlparse(database_url)
-    return parsed.path.rsplit("/", maxsplit=1)[-1]
-
-
 def _is_dedicated_test_database_name(database_name: str) -> bool:
-    normalized = database_name.lower()
-    banned = {"dev", "development", "stage", "staging", "prod", "production"}
-    return bool(normalized) and "test" in normalized and not any(
-        banned_name in normalized for banned_name in banned
-    )
+    from backend.tests.support.environment_safety import DEDICATED_TEST_DATABASE_NAME
+
+    return database_name == DEDICATED_TEST_DATABASE_NAME
 
 
-def _cleanup_table_counts(connection: Any, tables: tuple[str, ...]) -> dict[str, int]:
+def _cleanup_table_counts(connection: Any, tables: tuple[Any, ...]) -> dict[str, int]:
     from sqlalchemy import text
+
+    from backend.tests.support.environment_safety import (
+        cleanup_table_key,
+        quoted_table_identifier,
+    )
 
     selects = []
     for table in tables:
-        _validate_identifier(table)
-        selects.append(f"SELECT '{table}' AS table_name, count(*) AS row_count FROM {table}")
+        table_key = cleanup_table_key(table)
+        table_label = table_key.replace("'", "''")
+        selects.append(
+            "SELECT "
+            f"'{table_label}' AS table_name, "
+            f"count(*) AS row_count FROM {quoted_table_identifier(table, connection.dialect)}"
+        )
     rows = connection.execute(text(" UNION ALL ".join(selects))).mappings().all()
     return {str(row["table_name"]): int(row["row_count"]) for row in rows}
 

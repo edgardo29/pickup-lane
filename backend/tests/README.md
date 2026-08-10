@@ -119,7 +119,7 @@ Do not create markers for `auth`, `games`, `payments`, `pages`, `shared`, or
 other ownership concepts. Unknown markers fail under strict marker validation.
 `no_db_cleanup` is not a product-test shortcut; it must not be combined with
 database/concurrency/migration markers or tests that request the shared
-`client` fixture.
+`client` fixture, and it must not directly import `backend.database`.
 
 ## PostgreSQL Safety
 
@@ -142,9 +142,18 @@ pickup_lane_test_db
 The name match is exact. A database is not safe merely because its name contains
 `test`.
 
-Phase 1 does not replace the existing root `conftest.py`, manual
-`TEST_TABLES` cleanup, advisory lock, or network guard. Those remain active
-until the Phase 2 infrastructure rewrite.
+The root `conftest.py` owns only global mechanics: synthetic test-safe settings,
+settings-cache reset, exact environment and database validation, the shared test
+client, dependency override cleanup, database cleanup orchestration, and the
+standard-suite network guard.
+
+Database cleanup targets are derived from imported SQLAlchemy model metadata,
+then checked against the connected PostgreSQL schema before destructive cleanup.
+Only narrow non-application objects such as `alembic_version` may be excluded.
+Cleanup truncates the metadata tables with quoted identifiers, `RESTART
+IDENTITY`, and `CASCADE` before and after DB-using tests while retaining the
+single-worker advisory lock. The harness does not auto-create/drop databases or
+support parallel-worker database naming yet.
 
 ## Provider Isolation
 

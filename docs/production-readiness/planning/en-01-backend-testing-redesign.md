@@ -1,6 +1,6 @@
 # EN-01 Backend Testing Architecture Redesign
 
-Status: Phase 1 backend test foundation redesign.
+Status: Phase 2 backend test infrastructure cleanup.
 
 Branch: `pr/EN-01-backend-test-redesign`
 
@@ -101,11 +101,34 @@ schemas, models, migrations, frontend tests, Playwright tests, provider suites,
 CI gates, DB cleanup rewrite, root fixture overhaul, or network-guard rewrite
 are included.
 
-## Phase 2 Deferrals
+## Phase 2 Scope
 
-- Root `conftest.py` architecture review.
-- DB cleanup replacement.
-- Network guard replacement.
+Phase 2 keeps the approved domain-first architecture and updates only backend
+test infrastructure mechanics.
+
+The root `conftest.py` is narrowed to global orchestration: synthetic test-safe
+settings, settings-cache reset, exact `APP_ENV=test` validation, exact
+`pickup_lane_test_db` PostgreSQL validation, the shared test client, dependency
+override cleanup, network guard installation, and DB cleanup orchestration.
+
+The manual `TEST_TABLES` inventory is replaced by SQLAlchemy metadata-derived
+cleanup targets. Before truncation, the connected PostgreSQL schema is checked
+against those targets and only narrow non-application exclusions such as
+`alembic_version` are allowed. Cleanup uses quoted metadata table identifiers
+with `TRUNCATE ... RESTART IDENTITY CASCADE` before and after DB-using tests
+under the existing single-worker advisory lock.
+
+The standard-suite network guard remains local pytest infrastructure. It allows
+only the configured dedicated PostgreSQL test database host and port and blocks
+provider or arbitrary external sockets during ordinary backend tests.
+
+No product tests are moved or rewritten. No product coverage is added. No
+application routes, services, schemas, models, migrations, frontend tests,
+Playwright tests, provider integration suites, broad CI gates, parallel
+database naming, or DB auto-create/drop behavior are included.
+
+## Remaining Deferrals After Phase 2
+
 - Provider fake architecture.
 - Current-test inventory and domain reconstruction.
 - CI suite selection and release evidence gates.
