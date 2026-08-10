@@ -9,7 +9,8 @@ export function getAuthErrorMessage(error) {
 
   if (
     normalized.includes('invalid-credential') ||
-    normalized.includes('wrong-password')
+    normalized.includes('wrong-password') ||
+    normalized.includes('user-not-found')
   ) {
     return 'Email or password is incorrect.'
   }
@@ -44,10 +45,6 @@ export function getAuthErrorMessage(error) {
 
   if (normalized.includes('network-request-failed') || normalized.includes('failed to fetch')) {
     return 'Network issue. Check your connection and try again.'
-  }
-
-  if (normalized.includes('user-not-found')) {
-    return 'No account was found with that email.'
   }
 
   return 'Something went wrong. Please try again.'
