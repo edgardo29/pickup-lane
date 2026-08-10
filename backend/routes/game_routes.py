@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.services.auth_service import (
     get_optional_current_app_user,
-    require_active_user,
     require_active_admin,
+    require_verified_user,
 )
 from backend.models import (
     Game,
@@ -78,7 +78,7 @@ def join_game(
     game_id: uuid.UUID,
     join_request: GameJoinCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> GameJoinRead:
     return join_game_roster_workflow(db, game_id, join_request, current_user)
 
@@ -90,7 +90,7 @@ def leave_game(
     game_id: uuid.UUID,
     leave_request: GameLeaveCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> GameLeaveRead:
     return leave_game_roster_workflow(db, game_id, current_user)
 
@@ -104,7 +104,7 @@ def add_booking_game_guests(
     game_id: uuid.UUID,
     guest_request: GameBookingGuestAddCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> GameGuestAddRead:
     return add_booking_game_guests_workflow(db, game_id, guest_request, current_user)
 
@@ -118,7 +118,7 @@ def add_host_game_guests(
     game_id: uuid.UUID,
     guest_request: GameGuestAddCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> GameGuestAddRead:
     return add_host_game_guests_workflow(db, game_id, guest_request, current_user)
 
@@ -132,7 +132,7 @@ def remove_game_guests(
     game_id: uuid.UUID,
     guest_request: GameGuestRemoveCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> GameGuestRemoveRead:
     return remove_game_guests_workflow(db, game_id, guest_request, current_user)
 
@@ -145,7 +145,7 @@ def remove_game_guests(
 def cancel_game(
     game_id: uuid.UUID,
     cancel_request: GameCancelCreate,
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
     db: Session = Depends(get_db),
 ) -> GameDetailRead:
     game = cancel_game_state_workflow(db, game_id, cancel_request, current_user)
@@ -238,7 +238,7 @@ def host_edit_game(
     game_id: uuid.UUID,
     game_update: GameHostEdit,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> GameDetailRead:
     game = host_edit_game_workflow(db, game_id, game_update, current_user)
     return build_game_detail_read(game, current_user)

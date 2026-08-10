@@ -7,7 +7,12 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
-from backend.services.auth_service import get_optional_current_app_user, require_active_admin, require_active_user
+from backend.services.auth_service import (
+    get_optional_current_app_user,
+    require_active_admin,
+    require_active_user,
+    require_verified_user,
+)
 from backend.schemas import (
     SubPostCancel,
     SubPostChatEnsureCreate,
@@ -46,7 +51,7 @@ router = APIRouter(prefix="/need-a-sub/posts", tags=["need_a_sub_posts"])
 def create_need_a_sub_post(
     sub_post: SubPostCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> dict:
     return create_sub_post_workflow(db, current_user, sub_post)
 
@@ -118,7 +123,7 @@ def ensure_need_a_sub_chat(
     sub_post_id: uuid.UUID,
     payload: SubPostChatEnsureCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> SubPostChatRead:
     return ensure_sub_post_chat_workflow(db, sub_post_id, payload, current_user)
 
@@ -193,7 +198,7 @@ def create_need_a_sub_chat_message(
     sub_post_id: uuid.UUID,
     payload: SubPostChatMessageCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> dict:
     return create_sub_post_chat_message_workflow(
         db,
@@ -221,7 +226,7 @@ def update_need_a_sub_post(
     sub_post_id: uuid.UUID,
     payload: SubPostUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> dict:
     return update_sub_post_workflow(db, current_user, sub_post_id, payload)
 
@@ -235,7 +240,7 @@ def cancel_need_a_sub_post(
     sub_post_id: uuid.UUID,
     payload: SubPostCancel,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> dict:
     return cancel_sub_post_workflow(
         db,

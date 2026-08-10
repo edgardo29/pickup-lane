@@ -17,6 +17,7 @@ from backend.services.auth_service import (
     get_optional_current_app_user,
     require_active_user,
     require_active_admin,
+    require_verified_user,
 )
 from backend.services.community_game_detail_service import (
     create_community_game_detail_workflow,
@@ -52,7 +53,7 @@ def upsert_host_community_game_detail(
     game_id: uuid.UUID,
     detail_update: CommunityGameDetailHostUpsert,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> CommunityGameDetail:
     return upsert_host_community_game_detail_workflow(
         db, game_id, detail_update, current_user

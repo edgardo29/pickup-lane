@@ -2,7 +2,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth'
-import { auth } from '../lib/firebase.js'
+import { auth, ensureAuthPersistence } from '../lib/firebase.js'
 import { hasCompleteProfile } from './authProviderHelpers.js'
 
 const googleProvider = new GoogleAuthProvider()
@@ -17,6 +17,7 @@ export function buildAuthProviderGoogleActions({
       setPendingGoogleSignup(true)
 
       try {
+        await ensureAuthPersistence()
         const credential = await signInWithPopup(auth, googleProvider)
         const existingUser = await loadExistingAppUser(credential.user)
 

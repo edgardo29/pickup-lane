@@ -256,7 +256,7 @@ def test_firebase_delete_timeout_does_not_call_provider_twice(
 ) -> None:
     calls: list[str] = []
 
-    def timed_out_delete(_auth_user_id: str) -> None:
+    def timed_out_delete(*_args, **_kwargs) -> None:
         calls.append("delete")
         raise TimeoutError("private provider diagnostic")
 

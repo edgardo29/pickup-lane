@@ -49,6 +49,7 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
         "INBOX_TOKEN_SECRET",
         "FIREBASE_ADMIN_CREDENTIALS_JSON",
         "FIREBASE_ADMIN_CREDENTIALS",
+        "FIREBASE_PROJECT_ID",
         "ALLOWED_HOSTS",
         "CORS_ALLOWED_ORIGINS",
         "ENABLE_API_DOCS",
@@ -113,6 +114,7 @@ DOCUMENTED_PLACEHOLDER_VALUES = frozenset(
         "replace-with-postgresql-url",
         "replace-with-api-hosts",
         "replace-with-firebase-admin-json",
+        "replace-with-firebase-project-id",
         "replace-with-stripe-secret-key",
         "replace-with-stripe-publishable-key",
         "replace-with-stripe-webhook-secret",
@@ -175,6 +177,7 @@ class BackendSettings(BaseModel):
     inbox_token_secret: SecretStr | None = None
     firebase_admin_credentials_json: SecretStr | None = None
     firebase_admin_credentials: SecretStr | None = None
+    firebase_project_id: str | None = None
     allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     cors_allowed_origins: tuple[str, ...]
     cors_allow_credentials: bool = True
@@ -650,6 +653,7 @@ def _parse_firebase_admin_settings(
 ) -> dict[str, object]:
     credentials_json = _optional_text(env, "FIREBASE_ADMIN_CREDENTIALS_JSON")
     credentials_path = _optional_text(env, "FIREBASE_ADMIN_CREDENTIALS")
+    project_id = _optional_text(env, "FIREBASE_PROJECT_ID")
 
     if credentials_json:
         if app_env.is_production_like and _is_documented_placeholder(credentials_json):
@@ -673,11 +677,20 @@ def _parse_firebase_admin_settings(
     if app_env.is_production_like and not (credentials_json or credentials_path):
         _fail("FIREBASE_ADMIN_CREDENTIALS_JSON", "is required in production-like environments")
 
+    if project_id:
+        if app_env.is_production_like and _is_documented_placeholder(project_id):
+            _fail("FIREBASE_PROJECT_ID", "must not use a documented placeholder value")
+        if not _DNS_LABEL_RE.fullmatch(project_id):
+            _fail("FIREBASE_PROJECT_ID", "must be a valid Firebase project id")
+    elif app_env.is_production_like:
+        _fail("FIREBASE_PROJECT_ID", "is required in production-like environments")
+
     return {
         "firebase_admin_credentials_json": SecretStr(credentials_json)
         if credentials_json
         else None,
         "firebase_admin_credentials": SecretStr(credentials_path) if credentials_path else None,
+        "firebase_project_id": project_id,
     }
 
 
@@ -685,6 +698,7 @@ def _empty_firebase_settings() -> dict[str, object]:
     return {
         "firebase_admin_credentials_json": None,
         "firebase_admin_credentials": None,
+        "firebase_project_id": None,
     }
 
 

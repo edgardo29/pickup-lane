@@ -28,7 +28,7 @@ from backend.services.auth_service import (
     commit_user_sync,
     get_active_user_by_auth_id,
     get_auth_user_id_from_token,
-    get_decoded_firebase_token,
+    get_verified_firebase_identity_from_authorization,
     sync_email_verification_from_firebase,
 )
 from backend.services.hosting_access_service import (
@@ -99,7 +99,7 @@ def check_email_availability_workflow(
     except FirebaseAdminConfigError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail="Could not check email availability. Please try again.",
         ) from exc
     except PublicTimeoutError:
         raise
@@ -122,8 +122,8 @@ def has_complete_profile(user: User) -> bool:
 def build_sync_user_payload_from_token(
     authorization: str | None,
 ) -> AuthSyncUserRequest:
-    decoded_token = get_decoded_firebase_token(authorization)
-    email = decoded_token.get("email")
+    identity = get_verified_firebase_identity_from_authorization(authorization)
+    email = identity.email
 
     if not isinstance(email, str) or not email.strip():
         raise HTTPException(
@@ -132,9 +132,9 @@ def build_sync_user_payload_from_token(
         )
 
     return AuthSyncUserRequest(
-        auth_user_id=decoded_token["uid"],
+        auth_user_id=identity.auth_user_id,
         email=email.strip().lower(),
-        email_verified=bool(decoded_token.get("email_verified")),
+        email_verified=identity.email_verified,
     )
 
 
@@ -319,7 +319,7 @@ def cleanup_unfinished_account_workflow(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail="Firebase could not clean up this sign-up. Please try again.",
         ) from exc
     except DependencyMutationTimeoutUnknownError:
         db.rollback()

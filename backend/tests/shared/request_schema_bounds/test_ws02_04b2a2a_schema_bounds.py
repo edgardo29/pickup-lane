@@ -235,7 +235,6 @@ def test_guest_removal_requires_positive_remove_count() -> None:
 def test_active_profile_updates_reject_dormant_or_server_managed_fields() -> None:
     UserUpdate.model_validate(
         {
-            "email": "player@example.com",
             "phone": "+15555550123",
             "first_name": "Alex",
             "last_name": "Player",
@@ -243,6 +242,7 @@ def test_active_profile_updates_reject_dormant_or_server_managed_fields() -> Non
             "home_state": "Illinois",
         }
     )
+    assert_invalid(UserUpdate, {"email": "player@example.com"})
     assert_invalid(UserUpdate, {"profile_photo_url": "https://example.invalid/photo.jpg"})
     assert_invalid(UserUpdate, {"email_verified_at": datetime.now(timezone.utc)})
 
@@ -250,7 +250,6 @@ def test_active_profile_updates_reject_dormant_or_server_managed_fields() -> Non
 @pytest.mark.parametrize(
     ("field_name", "value"),
     (
-        ("email", "a" * 256),
         ("phone", "1" * 31),
         ("first_name", "a" * 101),
         ("last_name", "a" * 101),

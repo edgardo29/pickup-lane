@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import SubPostRequest, User
-from backend.services.auth_service import require_active_user
+from backend.services.auth_service import require_active_user, require_verified_user
 from backend.schemas import (
     SubPostRequestAction,
     SubPostRequestCreate,
@@ -34,7 +34,7 @@ def request_need_a_sub_spot(
     sub_post_id: uuid.UUID,
     payload: SubPostRequestCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> SubPostRequest:
     return create_request(db, current_user, sub_post_id, payload.sub_post_position_id)
 
@@ -72,7 +72,7 @@ def list_my_need_a_sub_requests(
 def accept_need_a_sub_request(
     request_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> SubPostRequest:
     return owner_accept_request(db, current_user, request_id)
 
@@ -86,7 +86,7 @@ def decline_need_a_sub_request(
     request_id: uuid.UUID,
     payload: SubPostRequestAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> SubPostRequest:
     return owner_decline_request(db, current_user, request_id, payload.reason)
 
@@ -99,7 +99,7 @@ def decline_need_a_sub_request(
 def cancel_my_need_a_sub_request(
     request_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> SubPostRequest:
     return requester_cancel_request(db, current_user, request_id)
 
@@ -113,7 +113,7 @@ def cancel_need_a_sub_request_by_owner(
     request_id: uuid.UUID,
     payload: SubPostRequestAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> SubPostRequest:
     return owner_cancel_request(db, current_user, request_id, payload.reason)
 
@@ -127,6 +127,6 @@ def report_need_a_sub_no_show(
     request_id: uuid.UUID,
     payload: SubPostRequestAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
 ) -> SubPostRequest:
     return owner_report_no_show(db, current_user, request_id, payload.reason)

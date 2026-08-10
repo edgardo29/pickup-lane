@@ -77,7 +77,6 @@ class AdminUserRead(UserRead):
 class UserUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=30)
     first_name: str | None = Field(default=None, max_length=100)
     last_name: str | None = Field(default=None, max_length=100)

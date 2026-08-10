@@ -24,7 +24,12 @@ from backend.schemas.game_credit_schema import GameCreditIssueCreate, GameCredit
 from backend.schemas.inbox_schema import InboxGlobalSeenUpdate
 from backend.schemas.payment_event_schema import PaymentEventUpdate
 from backend.schemas.user_payment_method_schema import UserPaymentMethodSyncCreate
-from backend.services.auth_service import get_current_app_user
+from backend.services.auth_service import (
+    VerifiedFirebaseIdentity,
+    get_current_app_user,
+    get_verified_firebase_identity,
+    require_verified_user,
+)
 from backend.services.checkout_service import validate_checkout_return_url
 from backend.services.inbox_service import encode_global_seen_token
 from backend.services.stripe_service import (
@@ -52,8 +57,24 @@ def authenticate_client_as(client: TestClient, user_id: str) -> None:
             assert db_user is not None
             return db_user
 
+    def override_firebase_identity() -> VerifiedFirebaseIdentity:
+        with SessionLocal() as db:
+            db_user = db.get(User, UUID(user_id))
+            assert db_user is not None
+            return VerifiedFirebaseIdentity(
+                auth_user_id=db_user.auth_user_id,
+                email=db_user.email,
+                email_verified=True,
+            )
+
     app.dependency_overrides[get_current_app_user] = override_current_user
     client.app.dependency_overrides[get_current_app_user] = override_current_user
+    app.dependency_overrides[get_verified_firebase_identity] = override_firebase_identity
+    client.app.dependency_overrides[get_verified_firebase_identity] = (
+        override_firebase_identity
+    )
+    app.dependency_overrides[require_verified_user] = override_current_user
+    client.app.dependency_overrides[require_verified_user] = override_current_user
 
 
 def assert_stable_error(response, *, status_code: int) -> dict:

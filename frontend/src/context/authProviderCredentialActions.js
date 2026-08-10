@@ -7,7 +7,7 @@ import {
   signInWithEmailAndPassword,
   verifyPasswordResetCode,
 } from 'firebase/auth'
-import { auth } from '../lib/firebase.js'
+import { auth, ensureAuthPersistence } from '../lib/firebase.js'
 
 export function buildAuthProviderCredentialActions({
   firebaseUser,
@@ -41,6 +41,7 @@ export function buildAuthProviderCredentialActions({
       setFirebaseUser(auth.currentUser)
     },
     signInWithEmail: async (email, password) => {
+      await ensureAuthPersistence()
       const credential = await signInWithEmailAndPassword(auth, email, password)
       const existingUser = await loadExistingAppUser(credential.user)
       setPendingSignup(null)
@@ -48,6 +49,7 @@ export function buildAuthProviderCredentialActions({
       return existingUser
     },
     signUpWithEmail: async (email, password) => {
+      await ensureAuthPersistence()
       const credential = await createUserWithEmailAndPassword(auth, email, password)
       const syncedUser = await syncAndStoreUser(credential.user)
       setPendingSignup(null)

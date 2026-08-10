@@ -10,7 +10,7 @@ from backend.schemas import (
     CommunityGamePublishRead,
     CommunityPublishAttemptStatusRead,
 )
-from backend.services.auth_service import require_active_user
+from backend.services.auth_service import require_active_user, require_verified_user
 from backend.services.community_game_publish_service import (
     get_community_publish_attempt_status_workflow,
     publish_community_game_workflow,
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/community-games", tags=["community_games"])
 )
 def publish_community_game(
     publish_request: CommunityGamePublishCreate,
-    current_user: User = Depends(require_active_user),
+    current_user: User = Depends(require_verified_user),
     db: Session = Depends(get_db),
 ) -> CommunityGamePublishRead:
     return publish_community_game_workflow(db, publish_request, current_user)

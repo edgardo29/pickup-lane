@@ -67,6 +67,7 @@ def production_like_env(app_env="production", **overrides):
             "DATABASE_URL": PRODUCTION_DATABASE_URL,
             "INBOX_TOKEN_SECRET": "synthetic-independent-inbox-token",
             "FIREBASE_ADMIN_CREDENTIALS_JSON": FIREBASE_ADMIN_JSON,
+            "FIREBASE_PROJECT_ID": "pickup-lane-synthetic",
             "ALLOWED_HOSTS": PRODUCTION_ALLOWED_HOSTS,
             "CORS_ALLOWED_ORIGINS": PRODUCTION_ORIGINS,
             "ENABLE_API_DOCS": "false",
@@ -398,11 +399,30 @@ def test_firebase_admin_json_is_validated_without_provider_initialization():
     )
 
     assert settings.firebase_admin_credentials_json_value == FIREBASE_ADMIN_JSON
+    assert settings.firebase_project_id == "pickup-lane-synthetic"
 
 
 def test_firebase_admin_json_rejects_malformed_values():
     with pytest.raises(SettingsError, match="FIREBASE_ADMIN_CREDENTIALS_JSON"):
         build_settings(production_like_env(FIREBASE_ADMIN_CREDENTIALS_JSON="not-json"))
+
+
+@pytest.mark.parametrize(
+    "project_id",
+    [
+        "replace-with-firebase-project-id",
+        "UPPERCASE-PROJECT",
+        "invalid_project",
+    ],
+)
+def test_firebase_project_id_rejects_unsafe_values(project_id):
+    with pytest.raises(SettingsError, match="FIREBASE_PROJECT_ID"):
+        build_settings(production_like_env(FIREBASE_PROJECT_ID=project_id))
+
+
+def test_production_like_requires_firebase_project_id():
+    with pytest.raises(SettingsError, match="FIREBASE_PROJECT_ID"):
+        build_settings(production_like_env(FIREBASE_PROJECT_ID=None))
 
 
 def test_production_like_firebase_admin_path_must_be_readable():
