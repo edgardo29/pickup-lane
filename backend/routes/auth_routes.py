@@ -6,7 +6,7 @@ from backend.models import User
 from backend.schemas import (
     AuthDeleteAccountRequest,
     AuthEmailAvailabilityRead,
-    UserRead,
+    SelfUserRead,
 )
 from backend.services.account_deletion_service import delete_account_workflow
 from backend.services.auth_account_service import (
@@ -30,7 +30,7 @@ def check_email_availability(
     return check_email_availability_workflow(email, db)
 
 
-@router.get("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+@router.get("/me", response_model=SelfUserRead, status_code=status.HTTP_200_OK)
 def read_current_app_user(
     current_user: User = Depends(get_current_app_user),
 ) -> User:
@@ -39,7 +39,7 @@ def read_current_app_user(
 
 @router.post(
     "/sync-user",
-    response_model=UserRead,
+    response_model=SelfUserRead,
     status_code=status.HTTP_200_OK,
 )
 def sync_user(
@@ -57,7 +57,7 @@ def cleanup_unfinished_account(
     cleanup_unfinished_account_workflow(authorization, db)
 
 
-@router.delete("/account", response_model=UserRead, status_code=status.HTTP_200_OK)
+@router.delete("/account", response_model=SelfUserRead, status_code=status.HTTP_200_OK)
 def delete_account(
     payload: AuthDeleteAccountRequest,
     authorization: str | None = Header(default=None),

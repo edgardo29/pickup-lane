@@ -36,6 +36,21 @@ class GameImageRead(BaseModel):
     deleted_at: datetime | None
 
 
+class GameImagePublicRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    game_id: UUID
+    image_url: str
+    image_role: str
+    is_primary: bool
+    sort_order: int
+
+
+class GameImageAdminRead(GameImageRead):
+    pass
+
+
 # GameImageUpdate supports partial image metadata updates.
 class GameImageUpdate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG

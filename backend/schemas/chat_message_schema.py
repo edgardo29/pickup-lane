@@ -38,3 +38,17 @@ class ChatMessageRead(BaseModel):
     removed_source: str | None = None
     restored_at: datetime | None = None
     restored_by_user_id: UUID | None = None
+
+
+class ChatMessageParticipantRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    chat_id: UUID
+    sender_user_id: UUID | None
+    message_type: str
+    message_body: str
+    is_pinned: bool
+    pinned_at: datetime | None
+    created_at: datetime
+    updated_at: datetime

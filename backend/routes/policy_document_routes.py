@@ -7,7 +7,7 @@ from backend.database import get_db
 from backend.models import PolicyDocument, User
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
-    PolicyDocumentRead,
+    PolicyDocumentPublicRead,
 )
 from backend.services.auth_service import require_active_admin
 from backend.services.policy_document_service import (
@@ -34,7 +34,7 @@ def create_policy_document(
 
 @router.get(
     "/{policy_document_id}",
-    response_model=PolicyDocumentRead,
+    response_model=PolicyDocumentPublicRead,
     status_code=status.HTTP_200_OK,
 )
 def get_policy_document(
@@ -44,7 +44,11 @@ def get_policy_document(
     return get_public_policy_document_record(db, policy_document_id)
 
 
-@router.get("", response_model=list[PolicyDocumentRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "",
+    response_model=list[PolicyDocumentPublicRead],
+    status_code=status.HTTP_200_OK,
+)
 def list_policy_documents(
     policy_type: str | None = None,
     is_active: bool | None = None,

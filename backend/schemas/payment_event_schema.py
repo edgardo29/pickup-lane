@@ -31,7 +31,6 @@ class PaymentEventRead(BaseModel):
     provider: str
     provider_event_id: str
     event_type: str
-    raw_payload: dict[str, Any]
     processing_status: str
     processed_at: datetime | None
     processing_error: str | None

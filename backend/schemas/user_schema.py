@@ -49,6 +49,29 @@ class UserRead(BaseModel):
     deleted_at: datetime | None
 
 
+class SelfUserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    role: str
+    email: str | None
+    email_verified_at: datetime | None
+    phone: str | None
+    first_name: str | None
+    last_name: str | None
+    date_of_birth: date | None
+    profile_photo_url: str | None
+    home_city: str | None
+    home_state: str | None
+    account_status: str
+    hosting_status: str
+    member_since: datetime
+
+
+class AdminUserRead(UserRead):
+    pass
+
+
 # UserUpdate supports partial profile updates, so every field is optional and
 # only provided values should be applied by the route.
 class UserUpdate(BaseModel):

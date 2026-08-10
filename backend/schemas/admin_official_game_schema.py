@@ -7,8 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.schemas.game_schema import GameRead
 from backend.schemas.game_credit_schema import GameCreditRead, GameCreditUsageRead
 from backend.schemas.game_participant_schema import GameParticipantRead
-from backend.schemas.payment_schema import PaymentRead
-from backend.schemas.refund_schema import RefundRead
+from backend.schemas.payment_schema import AdminPaymentRead
+from backend.schemas.refund_schema import AdminRefundRead
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 AdminOfficialRemovalOutcome = Literal[
@@ -307,8 +307,8 @@ class AdminOfficialGameCancellationResultRead(BaseModel):
 
 
 class AdminOfficialGameMoneyRead(BaseModel):
-    payments: list[PaymentRead] = Field(default_factory=list)
-    refunds: list[RefundRead] = Field(default_factory=list)
+    payments: list[AdminPaymentRead] = Field(default_factory=list)
+    refunds: list[AdminRefundRead] = Field(default_factory=list)
     credits: list[GameCreditRead] = Field(default_factory=list)
     credit_usages: list[GameCreditUsageRead] = Field(default_factory=list)
 

@@ -17,6 +17,7 @@ from backend.models import (
 )
 from backend.services.community_game_edit_service import host_edit_game_workflow
 from backend.services.game_service import (
+    build_game_detail_read,
     create_game_workflow,
     delete_game_workflow,
     get_game_or_404,
@@ -45,6 +46,7 @@ from backend.schemas import (
     GameGuestRemoveCreate,
     GameGuestRemoveRead,
     GameHostEdit,
+    GameDetailRead,
     GameParticipantCountRead,
     GameJoinCreate,
     GameJoinRead,
@@ -137,7 +139,7 @@ def remove_game_guests(
 
 @router.post(
     "/{game_id}/cancel",
-    response_model=GameRead,
+    response_model=GameDetailRead,
     status_code=status.HTTP_200_OK,
 )
 def cancel_game(
@@ -145,8 +147,9 @@ def cancel_game(
     cancel_request: GameCancelCreate,
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
-) -> Game:
-    return cancel_game_state_workflow(db, game_id, cancel_request, current_user)
+) -> GameDetailRead:
+    game = cancel_game_state_workflow(db, game_id, cancel_request, current_user)
+    return build_game_detail_read(game, current_user)
 
 
 @router.get(
@@ -198,23 +201,23 @@ def list_game_roster_participants(
 
 
 # This route fetches a single game record by its internal UUID.
-@router.get("/{game_id}", response_model=GameRead, status_code=status.HTTP_200_OK)
+@router.get("/{game_id}", response_model=GameDetailRead, status_code=status.HTTP_200_OK)
 def get_game(
     game_id: uuid.UUID,
     response: Response,
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_current_app_user),
-) -> Game:
+) -> GameDetailRead:
     game = get_public_game_or_404(db, game_id, current_user)
     if game.public_visibility_status == "hidden":
         response.headers["Cache-Control"] = "private, no-store"
-    return game
+    return build_game_detail_read(game, current_user)
 
 
 # This route returns game records currently stored in the app database.
-@router.get("", response_model=list[GameRead], status_code=status.HTTP_200_OK)
-def list_games(db: Session = Depends(get_db)) -> list[Game]:
-    return list_games_workflow(db)
+@router.get("", response_model=list[GameDetailRead], status_code=status.HTTP_200_OK)
+def list_games(db: Session = Depends(get_db)) -> list[GameDetailRead]:
+    return [build_game_detail_read(game) for game in list_games_workflow(db)]
 
 
 # This route applies partial updates to an existing game record.
@@ -229,15 +232,16 @@ def update_game(
 
 
 @router.patch(
-    "/{game_id}/host-edit", response_model=GameRead, status_code=status.HTTP_200_OK
+    "/{game_id}/host-edit", response_model=GameDetailRead, status_code=status.HTTP_200_OK
 )
 def host_edit_game(
     game_id: uuid.UUID,
     game_update: GameHostEdit,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
-) -> Game:
-    return host_edit_game_workflow(db, game_id, game_update, current_user)
+) -> GameDetailRead:
+    game = host_edit_game_workflow(db, game_id, game_update, current_user)
+    return build_game_detail_read(game, current_user)
 
 
 # This route performs a soft delete so the game record remains available for

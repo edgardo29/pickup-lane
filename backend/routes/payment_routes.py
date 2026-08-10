@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Payment, User
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
-from backend.schemas import PaymentRead
+from backend.schemas import PaymentSummaryRead
 from backend.services.auth_service import (
     get_current_app_user,
     require_active_account,
@@ -35,7 +35,11 @@ def create_payment(
 
 
 # This route fetches a single payment record by its internal UUID.
-@router.get("/{payment_id}", response_model=PaymentRead, status_code=status.HTTP_200_OK)
+@router.get(
+    "/{payment_id}",
+    response_model=PaymentSummaryRead,
+    status_code=status.HTTP_200_OK,
+)
 def get_payment(
     payment_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -46,7 +50,7 @@ def get_payment(
 
 
 # This route returns payment records currently stored in the app database.
-@router.get("", response_model=list[PaymentRead], status_code=status.HTTP_200_OK)
+@router.get("", response_model=list[PaymentSummaryRead], status_code=status.HTTP_200_OK)
 def list_payments(
     payer_user_id: uuid.UUID | None = None,
     booking_id: uuid.UUID | None = None,

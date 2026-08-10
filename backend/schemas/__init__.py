@@ -230,6 +230,7 @@ from backend.schemas.booking_status_history_schema import (
 )
 from backend.schemas.chat_message_schema import (
     ChatMessageCreate,
+    ChatMessageParticipantRead,
     ChatMessageRead,
 )
 from backend.schemas.checkout_schema import (
@@ -270,6 +271,8 @@ from backend.schemas.game_credit_schema import (
 )
 from backend.schemas.game_image_schema import (
     GameImageCreate,
+    GameImageAdminRead,
+    GameImagePublicRead,
     GameImageRead,
     GameImageUpdate,
 )
@@ -280,6 +283,7 @@ from backend.schemas.game_schema import (
     GameCardListRead,
     GameCardRead,
     GameCreate,
+    GameDetailRead,
     GameGuestAddCreate,
     GameGuestAddRead,
     GameHostEdit,
@@ -334,7 +338,13 @@ from backend.schemas.payment_event_schema import (
     PaymentEventRead,
     PaymentEventUpdate,
 )
-from backend.schemas.payment_schema import PaymentCreate, PaymentRead, PaymentUpdate
+from backend.schemas.payment_schema import (
+    AdminPaymentRead,
+    PaymentCreate,
+    PaymentRead,
+    PaymentSummaryRead,
+    PaymentUpdate,
+)
 from backend.schemas.policy_acceptance_schema import (
     PolicyAcceptanceCreate,
     PolicyAcceptanceRead,
@@ -342,6 +352,7 @@ from backend.schemas.policy_acceptance_schema import (
 )
 from backend.schemas.policy_document_schema import (
     PolicyDocumentCreate,
+    PolicyDocumentPublicRead,
     PolicyDocumentRead,
     PolicyDocumentUpdate,
 )
@@ -355,9 +366,16 @@ from backend.schemas.platform_notice_schema import (
     PlatformNoticeRecipientListRead,
     PlatformNoticeRecipientRead,
 )
-from backend.schemas.refund_schema import RefundCreate, RefundRead, RefundUpdate
+from backend.schemas.refund_schema import (
+    AdminRefundRead,
+    RefundCreate,
+    RefundRead,
+    RefundSummaryRead,
+    RefundUpdate,
+)
 from backend.schemas.sub_post_chat_message_schema import (
     SubPostChatMessageCreate,
+    SubPostChatMessageParticipantRead,
     SubPostChatMessageRead,
 )
 from backend.schemas.sub_post_chat_read_schema import SubPostChatReadStateRead
@@ -394,7 +412,13 @@ from backend.schemas.sub_post_schema import (
 )
 from backend.schemas.sub_post_status_history_schema import SubPostStatusHistoryRead
 from backend.schemas.support_flag_schema import SupportFlagRead, SupportFlagResolve
-from backend.schemas.user_schema import UserCreate, UserRead, UserUpdate
+from backend.schemas.user_schema import (
+    AdminUserRead,
+    SelfUserRead,
+    UserCreate,
+    UserRead,
+    UserUpdate,
+)
 from backend.schemas.user_settings_schema import (
     UserSettingsCreate,
     UserSettingsRead,
@@ -417,7 +441,9 @@ from backend.schemas.venue_approval_request_schema import (
     VenueApprovalRequestUpdate,
 )
 from backend.schemas.venue_image_schema import (
+    VenueImageAdminRead,
     VenueImageCompleteUpload,
+    VenueImagePublicRead,
     VenueImageRead,
     VenueImageUpdate,
     VenueImageUploadCreate,
@@ -468,6 +494,8 @@ __all__ = [
     "AdminCommunityGameSupportSafeRead",
     "AdminCommunityGameSupportFlagSummaryRead",
     "AdminMeRead",
+    "AdminPaymentRead",
+    "AdminRefundRead",
     "AdminMoneyAuditActionSummaryRead",
     "AdminMoneyBookingContextRead",
     "AdminMoneyCreditDetailRead",
@@ -567,6 +595,7 @@ __all__ = [
     "AdminOfficialGameRemovalParticipantRead",
     "AdminOfficialGameUpdate",
     "AdminOfficialGameVenuePayload",
+    "AdminUserRead",
     "AuthSyncUserRequest",
     "AuthDeleteAccountRequest",
     "AuthEmailAvailabilityRead",
@@ -580,6 +609,7 @@ __all__ = [
     "BookingStatusHistoryRead",
     "BookingStatusHistoryUpdate",
     "ChatMessageCreate",
+    "ChatMessageParticipantRead",
     "ChatMessageRead",
     "GameCheckoutPaymentIntentCreate",
     "GameCheckoutPaymentIntentRead",
@@ -619,6 +649,8 @@ __all__ = [
     "GameCreditReverseCreate",
     "GameCreditUsageRead",
     "GameImageCreate",
+    "GameImageAdminRead",
+    "GameImagePublicRead",
     "GameImageRead",
     "GameImageUpdate",
     "GameCancelCreate",
@@ -627,6 +659,7 @@ __all__ = [
     "GameCardListRead",
     "GameCardRead",
     "GameCreate",
+    "GameDetailRead",
     "GameGuestAddCreate",
     "GameGuestAddRead",
     "GameHostEdit",
@@ -665,11 +698,13 @@ __all__ = [
     "NotificationUpdate",
     "PaymentCreate",
     "PaymentRead",
+    "PaymentSummaryRead",
     "PaymentUpdate",
     "PaymentEventCreate",
     "PaymentEventRead",
     "PaymentEventUpdate",
     "PolicyDocumentCreate",
+    "PolicyDocumentPublicRead",
     "PolicyDocumentRead",
     "PolicyDocumentUpdate",
     "PolicyAcceptanceCreate",
@@ -685,7 +720,9 @@ __all__ = [
     "PlatformNoticeRecipientRead",
     "RefundCreate",
     "RefundRead",
+    "RefundSummaryRead",
     "RefundUpdate",
+    "SelfUserRead",
     "MyNeedASubCardRead",
     "MyNeedASubListRead",
     "SubPostCreate",
@@ -702,6 +739,7 @@ __all__ = [
     "SubPostChatRead",
     "SubPostChatUpdate",
     "SubPostChatMessageCreate",
+    "SubPostChatMessageParticipantRead",
     "SubPostChatMessageRead",
     "SubPostChatReadStateRead",
     "SubPostPositionCreate",
@@ -716,7 +754,9 @@ __all__ = [
     "VenueApprovalRequestCreate",
     "VenueApprovalRequestRead",
     "VenueApprovalRequestUpdate",
+    "VenueImageAdminRead",
     "VenueImageCompleteUpload",
+    "VenueImagePublicRead",
     "VenueImageRead",
     "VenueImageUpdate",
     "VenueImageUploadCreate",
