@@ -6,6 +6,7 @@ import {
   getCurrentGuestCount,
   getParticipantSummary,
 } from './gameParticipantSelectors.js'
+import { sortDisplayImages } from './gameImageSelectors.js'
 
 const JOIN_WINDOW_MINUTES = 5
 
@@ -130,13 +131,7 @@ function getConfirmLabel({
 }
 
 function getPrimaryImage(images, game) {
-  const image = images
-    .slice()
-    .sort(
-      (first, second) =>
-        Number(second.is_primary) - Number(first.is_primary) ||
-        first.sort_order - second.sort_order,
-    )[0]
+  const image = sortDisplayImages(images || [])[0]
 
   if (image?.image_url) {
     return buildMediaUrl(image.image_url)

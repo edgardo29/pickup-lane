@@ -38,6 +38,18 @@ class PolicyDocumentRead(BaseModel):
     updated_at: datetime
 
 
+class PolicyDocumentPublicRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    policy_type: str
+    version: str
+    title: str
+    content_url: str | None
+    content_text: str | None
+    effective_at: datetime
+
+
 # PolicyDocumentUpdate supports partial policy document updates, so every field
 # is optional and only provided values should be applied by the route.
 class PolicyDocumentUpdate(BaseModel):

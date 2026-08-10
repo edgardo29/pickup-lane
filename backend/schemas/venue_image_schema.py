@@ -73,8 +73,25 @@ class VenueImageRead(BaseModel):
     deleted_at: datetime | None
 
 
+class VenueImagePublicRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    venue_id: UUID
+    image_url: str
+    image_role: str
+    is_primary: bool
+    sort_order: int
+    alt_text: str | None
+    caption: str | None
+
+
+class VenueImageAdminRead(VenueImageRead):
+    pass
+
+
 class VenueImageUploadRead(BaseModel):
-    image: VenueImageRead
+    image: VenueImageAdminRead
     upload_url: str
     upload_headers: dict[str, str]
     expires_at: datetime

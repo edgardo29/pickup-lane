@@ -36,3 +36,19 @@ class SubPostChatMessageRead(BaseModel):
     removed_source: str | None = None
     restored_at: datetime | None = None
     restored_by_user_id: UUID | None = None
+
+
+class SubPostChatMessageParticipantRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    chat_id: UUID
+    sender_user_id: UUID | None
+    sender_display_name_snapshot: str
+    sender_initials_snapshot: str
+    sender_is_current_chat_member: bool = True
+    sender_status_label: str | None = None
+    message_type: str
+    message_body: str
+    created_at: datetime
+    updated_at: datetime

@@ -7,6 +7,7 @@ import {
   getCurrentGuestCount,
   getParticipantSummary,
 } from './gameParticipantSelectors.js'
+import { sortDisplayImages } from './gameImageSelectors.js'
 import { buildGameDetailsViewModel } from './gameDetailsViewModel.jsx'
 
 export function useGameDetailsDerivedState({
@@ -23,14 +24,7 @@ export function useGameDetailsDerivedState({
 }) {
   const images = useMemo(
     () => {
-      const galleryImages = gameImages
-        .slice()
-        .sort(
-          (first, second) =>
-            Number(second.is_primary) - Number(first.is_primary) ||
-            first.sort_order - second.sort_order ||
-            new Date(first.created_at) - new Date(second.created_at),
-        )
+      const galleryImages = sortDisplayImages(gameImages || [])
         .map((image) => buildMediaUrl(image.image_url))
 
       if (galleryImages.length === 0 && game?.game_type === 'community') {

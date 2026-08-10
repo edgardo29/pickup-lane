@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 
 from backend.models import User, Venue, VenueImage
 from backend.schemas.venue_image_schema import (
+    VenueImageAdminRead,
     VenueImageCompleteUpload,
+    VenueImagePublicRead,
     VenueImageRead,
     VenueImageUpdate,
     VenueImageUploadCreate,
@@ -254,6 +256,32 @@ def build_venue_image_read(venue_image: VenueImage) -> VenueImageRead:
     )
 
 
+def build_public_venue_image_read(venue_image: VenueImage) -> VenueImagePublicRead:
+    try:
+        image_url = create_object_read_url(venue_image.storage_object_key)
+    except R2StorageConfigError as exc:
+        raise storage_config_error_response(exc) from exc
+    except R2StorageError as exc:
+        raise storage_provider_error_response(exc) from exc
+
+    return VenueImagePublicRead(
+        id=venue_image.id,
+        venue_id=venue_image.venue_id,
+        image_url=image_url,
+        image_role=venue_image.image_role,
+        is_primary=venue_image.is_primary,
+        sort_order=venue_image.sort_order,
+        alt_text=venue_image.alt_text,
+        caption=venue_image.caption,
+    )
+
+
+def build_admin_venue_image_read(venue_image: VenueImage) -> VenueImageAdminRead:
+    return VenueImageAdminRead(
+        **build_venue_image_read(venue_image).model_dump(mode="python")
+    )
+
+
 def list_venue_images_statement(
     *,
     venue_id: uuid.UUID | None,
@@ -282,7 +310,7 @@ def list_public_venue_images(
     db: Session,
     *,
     venue_id: uuid.UUID | None,
-) -> list[VenueImageRead]:
+) -> list[VenueImagePublicRead]:
     venue_images = db.scalars(
         list_venue_images_statement(
             venue_id=venue_id,
@@ -290,7 +318,7 @@ def list_public_venue_images(
             public_only=True,
         )
     ).all()
-    return [build_venue_image_read(venue_image) for venue_image in venue_images]
+    return [build_public_venue_image_read(venue_image) for venue_image in venue_images]
 
 
 def check_venue_image_upload_readiness(db: Session) -> dict[str, bool]:
@@ -311,7 +339,7 @@ def list_admin_venue_images(
     *,
     venue_id: uuid.UUID,
     image_status: str | None,
-) -> list[VenueImageRead]:
+) -> list[VenueImageAdminRead]:
     get_active_venue_or_404(db, venue_id)
     venue_images = db.scalars(
         list_venue_images_statement(
@@ -320,7 +348,7 @@ def list_admin_venue_images(
             public_only=False,
         )
     ).all()
-    return [build_venue_image_read(venue_image) for venue_image in venue_images]
+    return [build_admin_venue_image_read(venue_image) for venue_image in venue_images]
 
 
 def create_venue_image_upload(
@@ -408,7 +436,7 @@ def create_venue_image_upload(
         ) from exc
 
     return VenueImageUploadRead(
-        image=build_venue_image_read(venue_image),
+        image=build_admin_venue_image_read(venue_image),
         upload_url=upload_ticket.upload_url,
         upload_headers=upload_ticket.upload_headers,
         expires_at=upload_ticket.expires_at,
@@ -421,7 +449,7 @@ def complete_venue_image_upload(
     venue_image_id: uuid.UUID,
     complete_request: VenueImageCompleteUpload | None = None,
     current_admin: User,
-) -> VenueImageRead:
+) -> VenueImageAdminRead:
     venue_image = get_venue_image_or_404(db, venue_image_id)
     if venue_image.image_status == "removed":
         raise HTTPException(
@@ -512,7 +540,7 @@ def complete_venue_image_upload(
             detail=build_venue_image_conflict_detail(exc),
         ) from exc
 
-    return build_venue_image_read(venue_image)
+    return build_admin_venue_image_read(venue_image)
 
 
 def update_venue_image(
@@ -521,7 +549,7 @@ def update_venue_image(
     venue_image_id: uuid.UUID,
     image_update: VenueImageUpdate,
     current_admin: User,
-) -> VenueImageRead:
+) -> VenueImageAdminRead:
     venue_image = get_venue_image_or_404(db, venue_image_id)
     update_data = image_update.model_dump(exclude_unset=True)
     reason = clean_optional_text(update_data.pop("reason", None))
@@ -592,4 +620,4 @@ def update_venue_image(
             detail=build_venue_image_conflict_detail(exc),
         ) from exc
 
-    return build_venue_image_read(venue_image)
+    return build_admin_venue_image_read(venue_image)

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import GameImage, User
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
-from backend.schemas import GameImageRead
+from backend.schemas import GameImageAdminRead, GameImagePublicRead
 from backend.services.auth_service import require_active_admin
 from backend.services.game_image_service import (
     get_admin_game_image_record,
@@ -35,7 +35,7 @@ def create_game_image(
 
 @router.get(
     "/{game_image_id}",
-    response_model=GameImageRead,
+    response_model=GameImagePublicRead,
     status_code=status.HTTP_200_OK,
 )
 def get_game_image(
@@ -45,7 +45,11 @@ def get_game_image(
     return get_public_game_image_record(db, game_image_id)
 
 
-@router.get("", response_model=list[GameImageRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "",
+    response_model=list[GameImagePublicRead],
+    status_code=status.HTTP_200_OK,
+)
 def list_game_images(
     game_id: uuid.UUID | None = None,
     uploaded_by_user_id: uuid.UUID | None = None,
@@ -82,7 +86,7 @@ def update_game_image(
 
 @admin_router.get(
     "/{game_image_id}",
-    response_model=GameImageRead,
+    response_model=GameImageAdminRead,
     status_code=status.HTTP_200_OK,
 )
 def get_admin_game_image(
@@ -96,7 +100,7 @@ def get_admin_game_image(
 
 @admin_router.get(
     "",
-    response_model=list[GameImageRead],
+    response_model=list[GameImageAdminRead],
     status_code=status.HTTP_200_OK,
 )
 def list_admin_game_images(

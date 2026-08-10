@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import User
-from backend.schemas import UserRead, UserUpdate
+from backend.schemas import AdminUserRead, SelfUserRead, UserUpdate
 from backend.services.auth_service import get_current_app_user, require_active_admin
 from backend.services.user_service import (
     get_current_user_profile,
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 # This route returns all user profiles currently stored in the app database.
-@router.get("", response_model=list[UserRead], status_code=status.HTTP_200_OK)
+@router.get("", response_model=list[AdminUserRead], status_code=status.HTTP_200_OK)
 def list_users(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
@@ -30,7 +30,7 @@ def list_users(
 # Generic user mutations are intentionally disabled. Account creation, profile
 # edits, and admin support actions must use narrower authenticated workflows
 # instead of client-supplied identity CRUD.
-@router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AdminUserRead, status_code=status.HTTP_201_CREATED)
 def create_user(
     current_admin: User = Depends(require_active_admin),
 ) -> User:
@@ -38,7 +38,7 @@ def create_user(
     reject_generic_user_mutation()
 
 
-@router.get("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+@router.get("/me", response_model=SelfUserRead, status_code=status.HTTP_200_OK)
 def get_my_user_profile(
     current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
@@ -46,7 +46,7 @@ def get_my_user_profile(
     return get_current_user_profile(db, current_user)
 
 
-@router.patch("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+@router.patch("/me", response_model=SelfUserRead, status_code=status.HTTP_200_OK)
 def update_my_user_profile(
     user_update: UserUpdate,
     current_user: User = Depends(get_current_app_user),
@@ -60,7 +60,7 @@ def update_my_user_profile(
 
 
 # This route fetches a single user profile by the app's internal UUID.
-@router.get("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
+@router.get("/{user_id}", response_model=AdminUserRead, status_code=status.HTTP_200_OK)
 def get_user(
     user_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -69,7 +69,7 @@ def get_user(
     return get_user_profile_or_404(db, user_id)
 
 
-@router.patch("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
+@router.patch("/{user_id}", response_model=AdminUserRead, status_code=status.HTTP_200_OK)
 def update_user(
     user_id: uuid.UUID,
     current_admin: User = Depends(require_active_admin),
@@ -78,7 +78,7 @@ def update_user(
     reject_generic_user_mutation()
 
 
-@router.delete("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
+@router.delete("/{user_id}", response_model=AdminUserRead, status_code=status.HTTP_200_OK)
 def delete_user(
     user_id: uuid.UUID,
     current_admin: User = Depends(require_active_admin),

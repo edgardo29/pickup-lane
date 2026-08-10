@@ -61,6 +61,27 @@ class RefundRead(BaseModel):
     updated_at: datetime
 
 
+class RefundSummaryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    payment_id: UUID
+    booking_id: UUID | None
+    participant_id: UUID | None
+    host_publish_fee_id: UUID | None
+    amount_cents: int
+    currency: str
+    refund_reason: str
+    refund_status: str
+    requested_at: datetime
+    refunded_at: datetime | None
+    created_at: datetime
+
+
+class AdminRefundRead(RefundRead):
+    pass
+
+
 # RefundUpdate supports partial refund updates, so every field is optional and
 # only provided values should be applied by the route.
 class RefundUpdate(BaseModel):

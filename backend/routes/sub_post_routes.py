@@ -12,7 +12,7 @@ from backend.schemas import (
     SubPostCancel,
     SubPostChatEnsureCreate,
     SubPostChatMessageCreate,
-    SubPostChatMessageRead,
+    SubPostChatMessageParticipantRead,
     SubPostChatRead,
     SubPostChatReadStateRead,
     SubPostCreate,
@@ -165,7 +165,7 @@ def mark_need_a_sub_chat_read(
 
 @router.get(
     "/{sub_post_id}/chat/messages",
-    response_model=list[SubPostChatMessageRead],
+    response_model=list[SubPostChatMessageParticipantRead],
     status_code=status.HTTP_200_OK,
 )
 def list_need_a_sub_chat_messages(
@@ -186,7 +186,7 @@ def list_need_a_sub_chat_messages(
 
 @router.post(
     "/{sub_post_id}/chat/messages",
-    response_model=SubPostChatMessageRead,
+    response_model=SubPostChatMessageParticipantRead,
     status_code=status.HTTP_201_CREATED,
 )
 def create_need_a_sub_chat_message(

@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.schemas import (
+    VenueImageAdminRead,
     VenueImageCompleteUpload,
-    VenueImageRead,
+    VenueImagePublicRead,
     VenueImageUpdate,
     VenueImageUploadCreate,
     VenueImageUploadRead,
@@ -26,11 +27,11 @@ public_router = APIRouter(prefix="/venue-images", tags=["venue_images"])
 admin_router = APIRouter(tags=["admin_venue_images"])
 
 
-@public_router.get("", response_model=list[VenueImageRead])
+@public_router.get("", response_model=list[VenueImagePublicRead])
 def list_venue_images(
     venue_id: uuid.UUID | None = Query(default=None),
     db: Session = Depends(get_db),
-) -> list[VenueImageRead]:
+) -> list[VenueImagePublicRead]:
     return list_public_venue_images(db, venue_id=venue_id)
 
 
@@ -45,14 +46,14 @@ def check_admin_venue_image_upload_readiness(
 
 @admin_router.get(
     "/admin/venues/{venue_id}/images",
-    response_model=list[VenueImageRead],
+    response_model=list[VenueImageAdminRead],
 )
 def list_admin_venue_images(
     venue_id: uuid.UUID,
     image_status: str | None = Query(default=None),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> list[VenueImageRead]:
+) -> list[VenueImageAdminRead]:
     del current_admin
     return list_admin_venue_images_workflow(
         db,
@@ -82,14 +83,14 @@ def create_admin_venue_image_upload_url(
 
 @admin_router.post(
     "/admin/venue-images/{venue_image_id}/complete",
-    response_model=VenueImageRead,
+    response_model=VenueImageAdminRead,
 )
 def complete_admin_venue_image_upload(
     venue_image_id: uuid.UUID,
     complete_request: VenueImageCompleteUpload | None = None,
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> VenueImageRead:
+) -> VenueImageAdminRead:
     return complete_venue_image_upload(
         db,
         venue_image_id=venue_image_id,
@@ -100,14 +101,14 @@ def complete_admin_venue_image_upload(
 
 @admin_router.patch(
     "/admin/venue-images/{venue_image_id}",
-    response_model=VenueImageRead,
+    response_model=VenueImageAdminRead,
 )
 def update_admin_venue_image(
     venue_image_id: uuid.UUID,
     image_update: VenueImageUpdate,
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
-) -> VenueImageRead:
+) -> VenueImageAdminRead:
     return update_venue_image(
         db,
         venue_image_id=venue_image_id,

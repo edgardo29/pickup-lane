@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Refund, User
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
-from backend.schemas import RefundRead
+from backend.schemas import RefundSummaryRead
 from backend.services.auth_service import (
     get_current_app_user,
     require_active_account,
@@ -35,7 +35,11 @@ def create_refund(
 
 
 # This route fetches a single refund record by its internal UUID.
-@router.get("/{refund_id}", response_model=RefundRead, status_code=status.HTTP_200_OK)
+@router.get(
+    "/{refund_id}",
+    response_model=RefundSummaryRead,
+    status_code=status.HTTP_200_OK,
+)
 def get_refund(
     refund_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -46,7 +50,7 @@ def get_refund(
 
 
 # This route returns refund records currently stored in the app database.
-@router.get("", response_model=list[RefundRead], status_code=status.HTTP_200_OK)
+@router.get("", response_model=list[RefundSummaryRead], status_code=status.HTTP_200_OK)
 def list_refunds(
     payment_id: uuid.UUID | None = None,
     booking_id: uuid.UUID | None = None,

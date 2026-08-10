@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import ChatMessage, User
-from backend.schemas import ChatMessageCreate, ChatMessageRead
+from backend.schemas import ChatMessageCreate, ChatMessageParticipantRead
 from backend.services.auth_service import require_active_user
 from backend.services.game_chat_service import (
     create_chat_message_record,
@@ -17,7 +17,11 @@ from backend.services.game_chat_service import (
 router = APIRouter(prefix="/chat-messages", tags=["chat_messages"])
 
 
-@router.post("", response_model=ChatMessageRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ChatMessageParticipantRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_chat_message(
     chat_message: ChatMessageCreate,
     current_user: User = Depends(require_active_user),
@@ -28,7 +32,7 @@ def create_chat_message(
 
 @router.get(
     "/{chat_message_id}",
-    response_model=ChatMessageRead,
+    response_model=ChatMessageParticipantRead,
     status_code=status.HTTP_200_OK,
 )
 def get_chat_message(
@@ -39,7 +43,11 @@ def get_chat_message(
     return get_chat_message_record(db, chat_message_id, current_user)
 
 
-@router.get("", response_model=list[ChatMessageRead], status_code=status.HTTP_200_OK)
+@router.get(
+    "",
+    response_model=list[ChatMessageParticipantRead],
+    status_code=status.HTTP_200_OK,
+)
 def list_chat_messages(
     chat_id: uuid.UUID | None = None,
     sender_user_id: uuid.UUID | None = None,

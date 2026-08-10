@@ -29,6 +29,7 @@ from backend.schemas.game_schema import (
     GameCardListRead,
     GameCardRead,
     GameCreate,
+    GameDetailRead,
     GameTimeGroupRead,
     GameUpdate,
     MyGameCardRead,
@@ -83,6 +84,56 @@ COMMUNITY_CONTENT_REVIEW_AUTO_CLOSE_REASONS = {
     "completed": "Community Game was completed before moderation review was completed.",
     "expired": "Community Game expired before moderation review was completed.",
 }
+
+
+def build_game_detail_read(
+    game: Game,
+    current_user: User | None = None,
+) -> GameDetailRead:
+    is_host_or_admin = current_user is not None and (
+        current_user.id == game.host_user_id or user_is_active_admin(current_user)
+    )
+    return GameDetailRead(
+        id=game.id,
+        game_type=game.game_type,
+        payment_collection_type=game.payment_collection_type,
+        publish_status=game.publish_status,
+        game_status=game.game_status,
+        public_visibility_status=game.public_visibility_status,
+        join_enforcement_status=game.join_enforcement_status,
+        title=game.title,
+        description=game.description,
+        venue_id=game.venue_id,
+        venue_name_snapshot=game.venue_name_snapshot,
+        address_snapshot=game.address_snapshot,
+        city_snapshot=game.city_snapshot,
+        state_snapshot=game.state_snapshot,
+        neighborhood_snapshot=game.neighborhood_snapshot,
+        host_user_id=game.host_user_id if is_host_or_admin else None,
+        starts_at=game.starts_at,
+        ends_at=game.ends_at,
+        starts_on_local=game.starts_on_local,
+        timezone=game.timezone,
+        format_label=game.format_label,
+        game_player_group=game.game_player_group,
+        skill_level=game.skill_level,
+        environment_type=game.environment_type,
+        total_spots=game.total_spots,
+        price_per_player_cents=game.price_per_player_cents,
+        currency=game.currency,
+        minimum_age=game.minimum_age,
+        allow_guests=game.allow_guests,
+        max_guests_per_booking=game.max_guests_per_booking,
+        host_guest_max=game.host_guest_max if is_host_or_admin else 0,
+        waitlist_enabled=game.waitlist_enabled,
+        is_chat_enabled=game.is_chat_enabled,
+        custom_rules_text=game.custom_rules_text,
+        custom_cancellation_text=game.custom_cancellation_text,
+        game_notes=game.game_notes,
+        parking_notes=game.parking_notes,
+        cancelled_at=game.cancelled_at,
+        cancel_reason=game.cancel_reason,
+    )
 
 
 def get_active_venue_or_404(db: Session, venue_id: uuid.UUID) -> Venue:

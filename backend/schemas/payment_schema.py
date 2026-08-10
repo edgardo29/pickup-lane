@@ -56,6 +56,25 @@ class PaymentRead(BaseModel):
     updated_at: datetime
 
 
+class PaymentSummaryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    payer_user_id: UUID
+    booking_id: UUID | None
+    game_id: UUID | None
+    payment_type: str
+    amount_cents: int
+    currency: str
+    payment_status: str
+    paid_at: datetime | None
+    created_at: datetime
+
+
+class AdminPaymentRead(PaymentRead):
+    pass
+
+
 # PaymentUpdate supports partial payment updates, so every field is optional
 # and only provided values should be applied by the route.
 class PaymentUpdate(BaseModel):

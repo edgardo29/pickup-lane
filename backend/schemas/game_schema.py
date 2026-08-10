@@ -98,6 +98,50 @@ class GameRead(BaseModel):
     deleted_at: datetime | None
 
 
+class GameDetailRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    game_type: str
+    payment_collection_type: str
+    publish_status: str
+    game_status: str
+    public_visibility_status: str
+    join_enforcement_status: str
+    title: str
+    description: str | None
+    venue_id: UUID
+    venue_name_snapshot: str
+    address_snapshot: str
+    city_snapshot: str
+    state_snapshot: str
+    neighborhood_snapshot: str | None
+    host_user_id: UUID | None = None
+    starts_at: datetime
+    ends_at: datetime
+    starts_on_local: date
+    timezone: str
+    format_label: str
+    game_player_group: str
+    skill_level: str
+    environment_type: str
+    total_spots: int
+    price_per_player_cents: int
+    currency: str
+    minimum_age: int | None
+    allow_guests: bool
+    max_guests_per_booking: int
+    host_guest_max: int = 0
+    waitlist_enabled: bool
+    is_chat_enabled: bool
+    custom_rules_text: str | None
+    custom_cancellation_text: str | None
+    game_notes: str | None
+    parking_notes: str | None
+    cancelled_at: datetime | None
+    cancel_reason: str | None
+
+
 class GameAvailabilityRead(BaseModel):
     status: str
     occupied_spots: int
