@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import importlib
 import socket
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import inspect, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.schema import Table
 
 
-TEST_APP_ENV = "test"
 DEDICATED_TEST_DATABASE_NAME = "pickup_lane_test_db"
-NON_APPLICATION_CLEANUP_TABLE_EXCLUSIONS = {
-    "alembic_version": "Alembic migration bookkeeping table; not application data.",
+MODEL_MODULE_FILE_EXCLUSIONS = {
+    "__init__.py": "Package initializer and export surface; not a model module.",
 }
 NETWORK_BLOCKED_MESSAGE = (
     "EN-01 network safety guard blocked external network access during standard "
@@ -40,20 +38,6 @@ class AllowedDatabaseNetwork:
     host: str
     port: int
     allowed_hosts: frozenset[str]
-
-
-@dataclass(frozen=True)
-class CleanupPlan:
-    table_keys: tuple[str, ...]
-    truncate_sql: str
-
-
-def validate_backend_test_app_env(app_env: str | None) -> None:
-    if app_env != TEST_APP_ENV:
-        raise EnvironmentSafetyError(
-            "Automated backend tests require APP_ENV='test'; got "
-            f"{app_env!r}."
-        )
 
 
 def parse_database_url(database_url: str) -> ParsedDatabaseUrl:
@@ -98,193 +82,117 @@ def validate_dedicated_test_database_url(database_url: str) -> ParsedDatabaseUrl
     return parsed
 
 
-def import_model_package(model_package: str = "backend.models") -> object:
-    try:
-        return importlib.import_module(model_package)
-    except Exception as exc:  # noqa: BLE001 - expose import failure as safety setup.
-        raise EnvironmentSafetyError(
-            f"Could not import SQLAlchemy model package {model_package!r} for "
-            "backend test cleanup target discovery."
-        ) from exc
+def _validated_file_exclusions(
+    excluded_files: Mapping[str, str] | None,
+) -> Mapping[str, str]:
+    exclusions = MODEL_MODULE_FILE_EXCLUSIONS if excluded_files is None else excluded_files
+    for filename, reason in exclusions.items():
+        if not reason.strip():
+            raise EnvironmentSafetyError(
+                f"Model module exclusion for {filename!r} requires a documented reason."
+            )
+    return exclusions
 
 
-def registered_sqlalchemy_tables(
-    *,
+def discover_model_module_names(
     model_package: str = "backend.models",
-) -> tuple[Table, ...]:
-    # Use the same package-level model import surface as Alembic and
-    # application code so cleanup target discovery follows the app metadata
-    # contract instead of test-only filename scanning.
-    import_model_package(model_package)
-    from backend.database import Base
-
-    tables = tuple(
-        sorted(
-            Base.metadata.tables.values(),
-            key=lambda table: (table.schema or "", table.name),
-        )
-    )
-    if not tables:
+    *,
+    excluded_files: Mapping[str, str] | None = None,
+) -> tuple[str, ...]:
+    package = importlib.import_module(model_package)
+    package_paths = getattr(package, "__path__", None)
+    if not package_paths:
         raise EnvironmentSafetyError(
-            "No SQLAlchemy application tables are registered for backend test cleanup."
+            f"Model package {model_package!r} does not expose a filesystem path."
         )
-    return tables
+
+    exclusions = _validated_file_exclusions(excluded_files)
+    package_path = Path(next(iter(package_paths))).resolve()
+    module_names: list[str] = []
+
+    for path in sorted(package_path.glob("*.py"), key=lambda candidate: candidate.name):
+        if path.name in exclusions:
+            continue
+        if not path.name.endswith("_model.py"):
+            raise EnvironmentSafetyError(
+                "Unexpected Python file in model package "
+                f"{model_package!r}: {path.name!r}. Add an explicit documented "
+                "non-model exclusion or rename the model module to end with "
+                "'_model.py'."
+            )
+        module_names.append(f"{model_package}.{path.stem}")
+
+    return tuple(module_names)
+
+
+def import_model_modules(
+    model_package: str = "backend.models",
+    *,
+    excluded_files: Mapping[str, str] | None = None,
+) -> tuple[str, ...]:
+    module_names = discover_model_module_names(
+        model_package,
+        excluded_files=excluded_files,
+    )
+    for module_name in module_names:
+        importlib.import_module(module_name)
+    return module_names
 
 
 def registered_sqlalchemy_table_names(
     *,
     model_package: str = "backend.models",
+    excluded_model_files: Mapping[str, str] | None = None,
 ) -> set[str]:
-    return {
-        cleanup_table_key(table)
-        for table in registered_sqlalchemy_tables(
-            model_package=model_package,
-        )
-    }
+    # Import every model module before reading metadata so unexported model
+    # files cannot silently avoid cleanup-inventory validation.
+    import_model_modules(model_package, excluded_files=excluded_model_files)
+    from backend.database import Base
+
+    return set(Base.metadata.tables)
 
 
-def cleanup_table_key(table: Table) -> str:
-    return _format_table_key(table.schema, table.name)
-
-
-def _format_table_key(schema: str | None, table_name: str) -> str:
-    return f"{schema}.{table_name}" if schema else table_name
-
-
-def _validated_cleanup_exclusions(
-    excluded_database_tables: Mapping[str, str] | None,
-) -> Mapping[str, str]:
-    exclusions = (
-        NON_APPLICATION_CLEANUP_TABLE_EXCLUSIONS
-        if excluded_database_tables is None
-        else excluded_database_tables
-    )
-    for table, reason in exclusions.items():
+def missing_cleanup_tables(
+    cleanup_tables: Iterable[str],
+    *,
+    excluded_tables: Mapping[str, str] | None = None,
+    registered_tables: Iterable[str] | None = None,
+) -> list[str]:
+    excluded_tables = excluded_tables or {}
+    for table, reason in excluded_tables.items():
         if not reason.strip():
             raise EnvironmentSafetyError(
                 f"Cleanup exclusion for table {table!r} requires a documented reason."
             )
-    return exclusions
+
+    registered = (
+        set(registered_tables)
+        if registered_tables is not None
+        else registered_sqlalchemy_table_names()
+    )
+    cleanup = set(cleanup_tables)
+    excluded = set(excluded_tables)
+    return sorted(registered - cleanup - excluded)
 
 
-def assert_cleanup_schema_state(
+def assert_cleanup_table_inventory_complete(
+    cleanup_tables: Iterable[str],
     *,
-    metadata_table_keys: Iterable[str],
-    database_table_keys: Iterable[str],
-    excluded_database_tables: Mapping[str, str] | None = None,
+    excluded_tables: Mapping[str, str] | None = None,
+    registered_tables: Iterable[str] | None = None,
 ) -> None:
-    metadata_keys = set(metadata_table_keys)
-    database_keys = set(database_table_keys)
-    exclusions = _validated_cleanup_exclusions(excluded_database_tables)
-    excluded_keys = set(exclusions)
-
-    app_exclusions = sorted(metadata_keys & excluded_keys)
-    if app_exclusions:
-        formatted = ", ".join(app_exclusions)
+    missing = missing_cleanup_tables(
+        cleanup_tables,
+        excluded_tables=excluded_tables,
+        registered_tables=registered_tables,
+    )
+    if missing:
+        formatted = ", ".join(missing)
         raise EnvironmentSafetyError(
-            "Backend test cleanup exclusions may not omit SQLAlchemy "
-            f"application table(s): {formatted}."
+            "Backend test cleanup inventory is missing registered SQLAlchemy "
+            f"table(s): {formatted}. Add the table to TEST_TABLES or document "
+            "an explicit cleanup exclusion."
         )
-
-    missing_database_tables = sorted(metadata_keys - database_keys)
-    unhandled_database_tables = sorted(database_keys - metadata_keys - excluded_keys)
-    if missing_database_tables or unhandled_database_tables:
-        parts: list[str] = []
-        if missing_database_tables:
-            parts.append(
-                "missing metadata table(s) in PostgreSQL: "
-                + ", ".join(missing_database_tables)
-            )
-        if unhandled_database_tables:
-            parts.append(
-                "unhandled PostgreSQL table(s): "
-                + ", ".join(unhandled_database_tables)
-            )
-        raise EnvironmentSafetyError(
-            "PostgreSQL test database schema does not match SQLAlchemy cleanup "
-            f"metadata ({'; '.join(parts)}). Rebuild the dedicated test database "
-            "or document a narrow non-application exclusion."
-        )
-
-
-def database_table_keys_for_cleanup(
-    connection,
-    metadata_tables: Sequence[Table],
-) -> set[str]:
-    inspector = inspect(connection)
-    schemas = sorted(
-        {table.schema for table in metadata_tables},
-        key=lambda schema: schema or "",
-    )
-    table_keys: set[str] = set()
-    for schema in schemas:
-        for table_name in inspector.get_table_names(schema=schema):
-            table_keys.add(_format_table_key(schema, table_name))
-    return table_keys
-
-
-def assert_database_schema_matches_cleanup_metadata(
-    connection,
-    metadata_tables: Sequence[Table],
-    *,
-    excluded_database_tables: Mapping[str, str] | None = None,
-) -> None:
-    assert_cleanup_schema_state(
-        metadata_table_keys=[cleanup_table_key(table) for table in metadata_tables],
-        database_table_keys=database_table_keys_for_cleanup(connection, metadata_tables),
-        excluded_database_tables=excluded_database_tables,
-    )
-
-
-def quoted_table_identifier(table: Table, dialect) -> str:
-    preparer = dialect.identifier_preparer
-    table_name = preparer.quote_identifier(table.name)
-    if table.schema:
-        return f"{preparer.quote_identifier(table.schema)}.{table_name}"
-    return table_name
-
-
-def build_cleanup_truncate_statement(
-    metadata_tables: Sequence[Table],
-    dialect,
-) -> str:
-    if not metadata_tables:
-        raise EnvironmentSafetyError(
-            "Backend test cleanup requires at least one SQLAlchemy application table."
-        )
-
-    table_targets = [
-        quoted_table_identifier(table, dialect)
-        for table in sorted(
-            metadata_tables,
-            key=lambda table: (table.schema or "", table.name),
-        )
-    ]
-    return f"TRUNCATE TABLE {', '.join(table_targets)} RESTART IDENTITY CASCADE"
-
-
-def cleanup_application_tables(
-    connection,
-    *,
-    metadata_tables: Sequence[Table] | None = None,
-    excluded_database_tables: Mapping[str, str] | None = None,
-) -> CleanupPlan:
-    tables = (
-        registered_sqlalchemy_tables()
-        if metadata_tables is None
-        else tuple(metadata_tables)
-    )
-    assert_database_schema_matches_cleanup_metadata(
-        connection,
-        tables,
-        excluded_database_tables=excluded_database_tables,
-    )
-    truncate_sql = build_cleanup_truncate_statement(tables, connection.dialect)
-    connection.execute(text(truncate_sql))
-    return CleanupPlan(
-        table_keys=tuple(cleanup_table_key(table) for table in tables),
-        truncate_sql=truncate_sql,
-    )
 
 
 def build_allowed_database_network(
