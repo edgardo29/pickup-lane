@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "EN03-CTRL-001",
+      "owning_pass": "EN-03",
+      "source_controls": ["OPS-005", "OPS-025"],
+      "state": "covered_elsewhere",
+      "scope": "governance",
+      "reason": "Repository governance, register, checklist, and non-closure review are the current proof; provider-dashboard access facts require later external evidence."
+    },
+    {
+      "id": "EN03-SECRET-001",
+      "owning_pass": "EN-03",
+      "source_controls": ["OPS-006", "OPS-007"],
+      "state": "covered_elsewhere",
+      "scope": "governance",
+      "reason": "Repository secret lifecycle, classification, and credential-safety review are the current proof; managed secret storage, deployed injection, rotation, revocation, and owner proof require later external evidence."
+    },
+    {
+      "id": "EN03-BOUNDARY-001",
+      "owning_pass": "EN-03",
+      "source_controls": ["OPS-006", "EN-03 master blueprint"],
+      "state": "covered_elsewhere",
+      "scope": "planning",
+      "reason": "Repository source and configuration boundary review are the current proof; frontend bundle, deployment, and runtime binding proof require later external evidence."
+    },
+    {
+      "id": "EN03-INDEPENDENCE-001",
+      "owning_pass": "EN-03",
+      "source_controls": ["OPS-006", "OPS-007"],
+      "state": "required",
+      "scope": "platform/secrets"
+    },
+    {
+      "id": "EN03-EVIDENCE-001",
+      "owning_pass": "EN-03",
+      "source_controls": ["OPS-025"],
+      "state": "covered_elsewhere",
+      "scope": "governance",
+      "reason": "Evidence handling standards, checklist, metadata, staleness, open-gap, and repository-safety review are the current proof; sanitized provider evidence packages require later external evidence."
+    },
+    {
+      "id": "EN03-SCOPE-001",
+      "owning_pass": "EN-03",
+      "source_controls": [
+        "EN-03 master blueprint",
+        "finalized remediation plan non-closure/evidence boundary"
+      ],
+      "state": "covered_elsewhere",
+      "scope": "planning",
+      "reason": "Canonical-plan and final scope review protect against false closure; provider and runtime proof require later external evidence."
+    }
+  ]
+}
