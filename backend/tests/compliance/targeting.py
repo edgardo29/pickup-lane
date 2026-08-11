@@ -1,9 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 
-from .report import CheckResult
+from .report import CheckResult, Scope
+
+
+TRUSTED_ROOTS = frozenset(
+    {
+        "domains",
+        "workflows",
+        "platform",
+        "migrations",
+        "provider_contract",
+        "checker",
+    }
+)
+UNTRUSTED_APPLICATION_ROOTS = frozenset({"pages", "shared"})
+HISTORICAL_ROOTS = frozenset({"legacy"})
+SUPPORT_ROOTS = frozenset({"support", "compliance"})
+IGNORED_DIR_NAMES = frozenset({"__pycache__", ".pytest_cache"})
 
 
 @dataclass(frozen=True)
@@ -12,166 +29,199 @@ class Target:
     tests_root: Path
     path: Path
     relative_path: Path
-    scope: str
-    contract_dir: Path
+    scope: Scope
     files: tuple[Path, ...]
-    is_legacy: bool
+
+    @property
+    def display(self) -> str:
+        return str(self.relative_path)
 
 
-_BROAD_TARGETS = {
-    Path("."),
-    Path("backend/tests"),
-    Path("pages"),
-    Path("shared"),
-    Path("support"),
-    Path("legacy"),
-}
-_IGNORED_LEAF_DIR_NAMES = {"__pycache__"}
-
-
-def resolve_target(argv_targets: list[str], cwd: Path | None = None) -> tuple[Target | None, CheckResult | None]:
-    cwd = (cwd or Path.cwd()).resolve()
-    repo_root = _find_repo_root(cwd)
+def resolve_target(
+    *,
+    scope: Scope,
+    target_text: str | None,
+    cwd: Path | None = None,
+) -> tuple[Target | None, CheckResult | None]:
+    repo_root = _find_repo_root((cwd or Path.cwd()).resolve())
     tests_root = repo_root / "backend" / "tests"
-    raw_target = " ".join(argv_targets) if argv_targets else ""
 
-    if len(argv_targets) != 1:
-        result = CheckResult(target=raw_target or "<missing>", scope=None)
-        result.forced_state = "USAGE_ERROR"
-        result.add_issue("TGT001", "failure", "exactly one target path is required")
-        return None, result
-
-    target_text = argv_targets[0]
-    raw_path = Path(target_text)
-    if raw_path == Path("."):
-        result = CheckResult(target=target_text, scope=None)
-        result.forced_state = "USAGE_ERROR"
-        result.add_issue("TGT003", "failure", f"broad target is not allowed: {target_text}")
-        return None, result
-    if raw_path.is_absolute():
-        target_path = raw_path.resolve()
+    if scope == "suite" and not target_text:
+        requested_path = tests_root
+        target_path = tests_root
+    elif not target_text:
+        return None, _usage(target_text or "<missing>", scope, "target path is required", "TGT001")
     else:
-        candidate_from_repo = (repo_root / raw_path).resolve()
-        candidate_from_tests = (tests_root / raw_path).resolve()
-        target_path = candidate_from_repo if candidate_from_repo.exists() else candidate_from_tests
+        raw = Path(target_text)
+        requested_path = raw if raw.is_absolute() else repo_root / raw
+        target_path = requested_path.resolve()
+        if not _is_under(target_path, tests_root):
+            requested_path = tests_root / raw
+            target_path = requested_path.resolve()
 
-    try:
-        relative_path = target_path.relative_to(tests_root)
-    except ValueError:
-        result = CheckResult(target=target_text, scope=None)
-        result.forced_state = "USAGE_ERROR"
-        result.add_issue("TGT002", "failure", "target must resolve under backend/tests")
-        return None, result
+    if not _is_under(target_path, tests_root):
+        return None, _usage(target_text or str(target_path), scope, "target must resolve under backend/tests", "TGT002")
 
+    if _path_has_symlink_component(requested_path, tests_root):
+        return None, _usage(
+            target_text or str(target_path),
+            scope,
+            "trusted test targets must not use symlinked path components",
+            "TGT013",
+        )
+
+    relative_path = target_path.relative_to(tests_root)
     normalized = relative_path if str(relative_path) != "." else Path(".")
-    if normalized == Path("legacy"):
-        result = CheckResult(target=target_text, scope=None)
-        result.forced_state = "USAGE_ERROR"
-        result.add_issue("TGT008", "failure", "broad legacy target is not allowed")
-        return None, result
-    if normalized in _BROAD_TARGETS or Path("backend/tests") / normalized in _BROAD_TARGETS:
-        result = CheckResult(target=target_text, scope=None)
-        result.forced_state = "USAGE_ERROR"
-        result.add_issue("TGT003", "failure", f"broad target is not allowed: {target_text}")
-        return None, result
+    parts = normalized.parts
 
-    if "support" in normalized.parts:
-        result = CheckResult(target=target_text, scope=None)
-        result.forced_state = "USAGE_ERROR"
-        result.add_issue("TGT005", "failure", "support targets are not checkable")
-        return None, result
+    if any(part in HISTORICAL_ROOTS for part in parts):
+        return None, _usage(
+            target_text or str(normalized),
+            scope,
+            "historical/out-of-scope tests are excluded from trusted discovery",
+            "TGT003",
+        )
+    if parts and parts[0] in UNTRUSTED_APPLICATION_ROOTS:
+        return None, _usage(
+            target_text or str(normalized),
+            scope,
+            "existing backend application tests are not trusted production-readiness evidence",
+            "TGT004",
+        )
+    if parts and parts[0] in SUPPORT_ROOTS:
+        return None, _usage(
+            target_text or str(normalized),
+            scope,
+            "support and checker implementation modules are not direct compliance targets",
+            "TGT005",
+        )
+
+    if scope == "suite":
+        if target_path != tests_root:
+            return None, _usage(
+                target_text or str(normalized),
+                scope,
+                "suite scope target must be backend/tests or omitted",
+                "TGT006",
+            )
+        files = trusted_test_files(tests_root)
+        if not files:
+            return None, _usage("backend/tests", scope, "suite scope found no trusted test files", "TGT007")
+        return Target(repo_root, tests_root, tests_root, Path("."), scope, files), None
 
     if not target_path.exists():
-        result = CheckResult(target=target_text, scope=None)
-        result.forced_state = "USAGE_ERROR"
-        result.add_issue("TGT004", "failure", "target does not exist")
-        return None, result
+        return None, _usage(target_text or str(normalized), scope, "target does not exist", "TGT008")
 
-    is_legacy = normalized.parts[:1] == ("legacy",)
+    if scope == "file":
+        if not target_path.is_file() or not _is_test_file(target_path):
+            return None, _usage(
+                target_text or str(normalized),
+                scope,
+                "file scope target must be one trusted test_*.py file",
+                "TGT009",
+            )
+        if not _trusted_test_file(requested_path, tests_root):
+            return None, _usage(
+                target_text or str(normalized),
+                scope,
+                "file scope target must belong to a trusted testing root",
+                "TGT010",
+            )
+        return Target(repo_root, tests_root, target_path, normalized, scope, (target_path,)), None
 
-    if target_path.is_file():
-        if target_path.name == "conftest.py" or target_path.name.startswith("_") or target_path.name in {"helpers.py", "__init__.py"}:
-            result = CheckResult(target=target_text, scope=None)
-            result.forced_state = "USAGE_ERROR"
-            result.add_issue("TGT006", "failure", "target must be a concrete test_*.py file")
-            return None, result
-        if not target_path.name.startswith("test_") or target_path.suffix != ".py":
-            result = CheckResult(target=target_text, scope=None)
-            result.forced_state = "USAGE_ERROR"
-            result.add_issue("TGT006", "failure", "target must be a concrete test_*.py file")
-            return None, result
-        if normalized.parts[:1] not in {("pages",), ("shared",), ("legacy",)}:
-            result = CheckResult(target=target_text, scope=None)
-            result.forced_state = "USAGE_ERROR"
-            result.add_issue("TGT004", "failure", "test file target must belong to pages, shared, or legacy")
-            return None, result
-        return (
-            Target(
-                repo_root=repo_root,
-                tests_root=tests_root,
-                path=target_path,
-                relative_path=normalized,
-                scope="file",
-                contract_dir=target_path.parent,
-                files=(target_path,),
-                is_legacy=is_legacy,
-            ),
-            None,
+    if scope == "domain":
+        if not target_path.is_dir():
+            return None, _usage(target_text or str(normalized), scope, "domain scope target must be a directory", "TGT011")
+        if not parts or parts[0] not in TRUSTED_ROOTS:
+            return None, _usage(
+                target_text or str(normalized),
+                scope,
+                "domain scope target must belong to a trusted testing root",
+                "TGT010",
+            )
+        files = tuple(
+            sorted(
+                path
+                for path in target_path.rglob("test_*.py")
+                if _trusted_test_file(path, tests_root)
+            )
         )
+        if not files:
+            return None, _usage(target_text or str(normalized), scope, "domain scope found no trusted test files", "TGT007")
+        return Target(repo_root, tests_root, target_path, normalized, scope, files), None
 
-    if target_path.is_dir():
-        if normalized.parts[:1] == ("legacy",) and len(normalized.parts) == 1:
-            result = CheckResult(target=target_text, scope=None)
-            result.forced_state = "USAGE_ERROR"
-            result.add_issue("TGT008", "failure", "broad legacy target is not allowed")
-            return None, result
-        if normalized.parts[:1] not in {("pages",), ("shared",), ("legacy",)}:
-            result = CheckResult(target=target_text, scope=None)
-            result.forced_state = "USAGE_ERROR"
-            result.add_issue("TGT004", "failure", "directory target must belong to pages, shared, or legacy")
-            return None, result
-        if any(
-            child.is_dir()
-            for child in target_path.iterdir()
-            if not _is_ignored_leaf_child(child)
-        ):
-            result = CheckResult(target=target_text, scope=None)
-            result.forced_state = "USAGE_ERROR"
-            result.add_issue("TGT004", "failure", "directory target must be a leaf directory")
-            return None, result
-        files = tuple(sorted(target_path.glob("test_*.py")))
-        if not files and not (target_path / "_backend_test_contract.py").exists():
-            result = CheckResult(target=target_text, scope=None)
-            result.forced_state = "USAGE_ERROR"
-            result.add_issue("TGT007", "failure", "directory target must contain test files or a contract")
-            return None, result
-        return (
-            Target(
-                repo_root=repo_root,
-                tests_root=tests_root,
-                path=target_path,
-                relative_path=normalized,
-                scope="directory",
-                contract_dir=target_path,
-                files=files,
-                is_legacy=is_legacy,
-            ),
-            None,
+    return None, _usage(target_text or "<missing>", scope, f"unsupported scope: {scope}", "TGT012")
+
+
+def trusted_test_files(tests_root: Path) -> tuple[Path, ...]:
+    files: list[Path] = []
+    for root_name in sorted(TRUSTED_ROOTS):
+        root = tests_root / root_name
+        if not root.exists() or _path_has_symlink_component(root, tests_root):
+            continue
+        files.extend(
+            path
+            for path in root.rglob("test_*.py")
+            if _trusted_test_file(path, tests_root)
         )
-
-    result = CheckResult(target=target_text, scope=None)
-    result.forced_state = "USAGE_ERROR"
-    result.add_issue("TGT004", "failure", "target must be a file or directory")
-    return None, result
+    return tuple(sorted(files))
 
 
 def _find_repo_root(cwd: Path) -> Path:
-    current = cwd
-    for candidate in (current, *current.parents):
+    for candidate in (cwd, *cwd.parents):
         if (candidate / "backend" / "tests").exists():
             return candidate
     return cwd
 
 
-def _is_ignored_leaf_child(path: Path) -> bool:
-    return path.name.startswith(".") or path.name in _IGNORED_LEAF_DIR_NAMES
+def _trusted_path(relative_path: Path) -> bool:
+    parts = relative_path.parts
+    return bool(parts) and parts[0] in TRUSTED_ROOTS and not any(part in HISTORICAL_ROOTS for part in parts)
+
+
+def _trusted_test_file(path: Path, tests_root: Path) -> bool:
+    if not _is_test_file(path) or _is_ignored_path(path):
+        return False
+    if _path_has_symlink_component(path, tests_root):
+        return False
+    resolved = path.resolve()
+    if not _is_under(resolved, tests_root):
+        return False
+    return _trusted_path(resolved.relative_to(tests_root))
+
+
+def _path_has_symlink_component(path: Path, tests_root: Path) -> bool:
+    absolute_path = Path(os.path.abspath(path))
+    absolute_root = Path(os.path.abspath(tests_root))
+    try:
+        relative_path = absolute_path.relative_to(absolute_root)
+    except ValueError:
+        return True
+    current = absolute_root
+    for part in relative_path.parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+    return False
+
+
+def _is_ignored_path(path: Path) -> bool:
+    return any(part in IGNORED_DIR_NAMES for part in path.parts)
+
+
+def _is_test_file(path: Path) -> bool:
+    return path.name.startswith("test_") and path.suffix == ".py"
+
+
+def _is_under(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def _usage(target: str, scope: Scope | None, message: str, rule_id: str) -> CheckResult:
+    result = CheckResult(target=target, scope=scope, forced_state="USAGE_ERROR")
+    result.add_issue(rule_id, "failure", message)
+    return result

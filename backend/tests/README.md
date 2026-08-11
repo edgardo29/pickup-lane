@@ -2,215 +2,143 @@
 
 ## Purpose
 
-The backend-test compliance checker enforces the backend testing standards defined in `docs/agent-notes/backend-testing.md`.
+The backend test compliance checker validates machine-verifiable testing
+foundation rules for trusted backend test scopes. It is a compliance verifier,
+not a semantic certification engine and not a pytest runtime runner.
 
-It checks exactly one target at a time:
+Checker `PASS` means only that the requested scope satisfies applicable
+machine-verifiable Pickup Lane test-compliance rules and that required declared
+machine-readable evidence is internally consistent. Human adequacy review
+remains separate.
 
-- one specific backend `test_*.py` file
-- one leaf page/domain test directory
+## Trusted Architecture
 
-It does not scan the entire backend test suite.
+Trusted production-readiness backend tests are organized by ownership:
 
-## Production-Readiness Evidence Rules
-
-The production-readiness taxonomy builds around this checker. It does not
-replace it.
-
-Current backend evidence uses these categories:
-
-- Checker-certified leaf-domain tests: organized page or shared-domain tests
-  with a `_backend_test_contract.py` that pass this checker for the selected
-  target.
-- Organized but not yet checker-certified tests: current page or shared-domain
-  tests that live in the organized tree but do not yet have a contract for their
-  leaf target.
-- Shared backend tests: tests for rules used by more than one page or feature.
-- Checker and compliance self-tests: tests for the backend test harness itself,
-  not application-domain evidence.
-- Legacy historical tests: old valid coverage under `backend/tests/legacy/`.
-
-My Games is currently the contract-certified pilot:
-
-- `backend/tests/pages/my_games/_backend_test_contract.py`
-- `backend/tests/pages/my_games/`
-
-Organized tests without a contract are not yet checker-certified for their
-domain. Empty categories must not be presented as existing coverage.
-
-`backend/tests/legacy/` is historical. It can contain useful scenarios for
-future migration, but it does not count as current production-readiness evidence
-and ordinary current-test discovery excludes it. Do not delete, move, rewrite,
-or count legacy tests as part of EN-01.
-
-Standard backend tests must use synthetic data and must not use development,
-staging, or production resources. Backend test URLs must use a PostgreSQL
-SQLAlchemy driver, such as `postgresql://` or `postgresql+psycopg://`. The
-dedicated PostgreSQL test database name is exactly `pickup_lane_test_db`; a
-database is not accepted merely because its name contains `test`.
-
-Standard backend tests must not make live provider calls. Firebase, Stripe, R2,
-email, and other provider behavior must be mocked at the application-owned
-boundary unless a later provider-integration suite has explicit approved
-sandbox or emulator configuration. Ordinary backend tests may open network
-sockets only to the configured PostgreSQL test host and exact port from the
-approved `DATABASE_URL`; EN-01 does not perform protocol inspection after that
-host-and-port decision. Every other network endpoint is prohibited.
-
-Retries are diagnostic only. A retry success does not erase the original
-failure or become clean evidence by itself. Flaky tests require an owner, a
-reason, and a repair or removal plan.
-
-## Required Contract
-
-Each checked leaf page/domain directory requires `_backend_test_contract.py`.
-
-The contract is the machine-readable review record for the directory. It represents finalized requirements, authoritative state matrices, scenario applicability, ownership decisions, structured effects, exact time boundaries, gaps, conflicts, and review decisions that cannot be reliably derived from the test AST alone.
-
-Example only: `pages/my_games/_backend_test_contract.py`.
-
-## Static And Contract Usage
-
-Run from the repository root:
-
-```bash
-backend/.venv/bin/python \
-  backend/tests/check_backend_tests.py \
-  pages/my_games
+```text
+backend/tests/
+  domains/
+  workflows/
+  platform/
+  migrations/
+  provider_contract/
+  support/
+  checker/
 ```
 
-One-file example:
+- `domains/` owns stable business and domain invariants.
+- `workflows/` owns cross-domain orchestration whose integration is itself the
+  contract.
+- `platform/` owns global backend, API, framework, and security behavior.
+- `migrations/` owns Alembic and schema-history testing.
+- `provider_contract/` owns explicit provider, emulator, sandbox, or
+  test-resource verification.
+- `support/` owns reusable test infrastructure only.
+- `checker/` owns checker, compliance, and environment-safety self-tests.
 
-```bash
-backend/.venv/bin/python \
-  backend/tests/check_backend_tests.py \
-  pages/my_games/test_api_contract.py
+Existing backend application tests are not trusted production-readiness evidence
+until future work derives them from authoritative requirements under this
+system. Historical/out-of-scope tests are excluded from trusted discovery and
+are not inputs to current test design.
+
+## Requirement Declarations And Metadata
+
+Stable requirement IDs are declared once in:
+
+```text
+backend/tests/support/requirements/en01.json
 ```
 
-Single-file checks load the containing directory contract and report file-level compliance only. They do not certify the full feature or domain.
+The declaration file stores only machine-needed identity: requirement ID,
+owning pass, source controls, current machine state, and scope where needed.
+It does not store product specifications, scenarios, assertions, or exact
+pytest node IDs.
 
-## Runtime Usage
+Pytest tests declare the stable requirement IDs they prove with:
 
-Runtime mode requires:
-
-- a dedicated test database
-- `APP_ENV=test`
-- `DATABASE_URL` pointing to that test database
-- synthetic local-only backend secrets for settings that tests exercise
-- the required tables/schema already existing
-
-Example:
-
-```bash
-APP_ENV=test \
-DATABASE_URL='postgresql+psycopg://USER:PASSWORD@localhost:5432/pickup_lane_test_db' \
-INBOX_TOKEN_SECRET='synthetic-inbox-test-token' \
-backend/.venv/bin/python \
-  backend/tests/check_backend_tests.py \
-  pages/my_games \
-  --runtime
+```python
+@pytest.mark.requirement("EN01-R3")
+def test_exact_database_name_is_required():
+    ...
 ```
 
-Never use development, staging, or production databases.
+One test may declare multiple requirements, and one requirement may map to many
+tests. Exact current pytest node IDs are generated from pytest collection.
 
-The checker does not automatically create, migrate, reset, drop, or truncate databases. Database-changing commands still require explicit user approval.
+## Human Testing Records
 
-## Mutation Hardening
+Human testing/risk records are concise and scope-owned. The EN-01 foundation
+record lives at:
 
-Mutation testing is optional targeted hardening. It is not required for normal directory `PASS`.
-
-Example:
-
-```bash
-APP_ENV=test \
-DATABASE_URL='postgresql+psycopg://USER:PASSWORD@localhost:5432/pickup_lane_test_db' \
-INBOX_TOKEN_SECRET='synthetic-inbox-test-token' \
-backend/.venv/bin/python \
-  backend/tests/check_backend_tests.py \
-  pages/my_games \
-  --runtime \
-  --mutations
+```text
+backend/tests/checker/TESTING_RECORD.md
 ```
 
-Mutation status is reported separately:
+These records explain useful risks, scenarios, boundaries, owning layers, gaps,
+and adequacy conclusions. They do not duplicate every Python test, exact node
+ID, or product specification.
 
-- `NOT_REQUESTED`: mutation hardening was not requested.
-- `PASSED`: requested mutation hardening completed with no surviving protected mutants.
-- `FAILED`: protected mutants survived.
-- `DEFERRED`: mutation hardening was not completed, for example due to runtime caps.
-- `UNSUPPORTED`: mutation hardening cannot run with the declared target, tooling, or safety configuration.
+## Checker Commands
 
-## Accepted Targets
+Run from the repository root.
 
-- one `test_*.py` file
-- one leaf page/domain directory
+File scope:
 
-## Rejected Targets
+```bash
+backend/.venv/bin/python backend/tests/check_backend_tests.py \
+  --scope file backend/tests/checker/test_checker_foundation.py
+```
 
-- `.`
-- `backend/tests`
-- `pages`
-- `shared`
-- `support`
-- broad `legacy`
-- multiple target paths
-- `conftest.py` or support/helper files as the direct target
+Domain/subtree scope:
 
-## Result Meanings
+```bash
+backend/.venv/bin/python backend/tests/check_backend_tests.py \
+  --scope domain backend/tests/checker
+```
 
-- `PASS` / exit code `0`: no failures or blockers remain for the requested scope.
-- `FAIL` / exit code `1`: definite violations were found.
-- `BLOCKED` / exit code `2`: required evidence or review is missing.
-- `USAGE_ERROR` / exit code `3`: the CLI target or options are invalid.
-- `INTERNAL_ERROR` / exit code `4`: the checker itself crashed.
+Suite scope:
 
-## Starting A New Page Or Domain
+```bash
+backend/.venv/bin/python backend/tests/check_backend_tests.py \
+  --scope suite
+```
 
-The checker validates backend testing work, but it does not discover every feature requirement by itself. The finalized page/domain specification, `docs/agent-notes/app-testing-standards.md`, and the page Markdown checklist define the required testing surface.
+The checker performs pytest collection for node ID generation only. Pytest
+remains the runtime authority for executing tests, fixtures, assertions, and
+normal pytest/JUnit artifacts.
 
-For every new page or backend domain, read:
+## Result States
 
-- the page or domain specification, such as `docs/agent-notes/browse-games.md`
-- `docs/agent-notes/app-testing-standards.md`
-- `docs/agent-notes/backend-testing.md`
-- `backend/tests/README.md`
-- relevant routes, services, schemas, models, migrations, provider adapters, workers, infrastructure, and existing tests
+- `PASS` / exit code `0`: applicable machine-verifiable compliance rules pass.
+- `FAIL` / exit code `1`: definite machine-verifiable compliance violation.
+- `BLOCKED` / exit code `2`: required authority, evidence, or prerequisite is
+  missing, unresolved, or explicitly blocked.
+- `USAGE_ERROR` / exit code `3`: invocation, arguments, target, or scope is
+  invalid.
+- `INTERNAL_ERROR` / exit code `4`: checker malfunctioned unexpectedly.
 
-For this project, the backend testing wave includes every applicable non-UI area identified by `docs/agent-notes/app-testing-standards.md`, including:
+## Safety Foundation
 
-- API contracts
-- authentication and authorization
-- security and private-data exposure
-- service and domain behavior
-- PostgreSQL behavior and persisted effects
-- pagination, sorting, cursors, filtering, caching, and time boundaries
-- transactions, rollback, idempotency, retries, and concurrency when applicable
-- provider boundaries, webhooks, workers, and infrastructure when applicable
+Standard backend tests must use synthetic non-production data and resources.
+The exact dedicated PostgreSQL test database name is:
 
-Required sequence:
+```text
+pickup_lane_test_db
+```
 
-1. Review and correct the page specification.
-2. Expand the page Markdown backend checklist with all applicable scenarios, edge cases, exclusions, safeguards, and not-applicable decisions.
-3. Review existing tests against that checklist.
-4. Create or update the leaf `_backend_test_contract.py`.
-5. Run checker static/contract mode.
-6. Correct genuine specification, production-code, contract, or test gaps.
-7. Run checker runtime mode using the dedicated PostgreSQL test database.
-8. Update the page Markdown checklist with completed scenarios, verification counts, remaining gaps, and the backend completion statement.
-9. Do not claim completion unless the checker passes and no required backend checklist items remain incomplete.
+Unsafe database configuration fails before cleanup. Ordinary backend tests block
+uncontrolled external network access and may use only explicitly allowed local
+or test infrastructure for their suite. Provider-contract tests are separate
+and must use test-mode, emulator, sandbox, or equivalent resources when later
+implemented.
 
-## Recommended Workflow
+Retries are diagnostic only and must not silently turn an initial failure into
+clean evidence. Failure artifacts must be sanitized before becoming
+production-readiness evidence.
 
-1. Read the finalized page/domain specification, `docs/agent-notes/app-testing-standards.md`, `docs/agent-notes/backend-testing.md`, this README, and the page-specific Markdown checklist.
-2. Create or update the leaf directory `_backend_test_contract.py` from the corrected specification and checklist.
-3. Run static/contract mode.
-4. Correct genuine findings in the right source: specification, contract, tests, production behavior, or checker.
-5. Run runtime mode with the safe dedicated test database.
-6. Update the page-specific Markdown checklist with completed scenarios, verification counts, remaining gaps, and the backend completion statement.
-7. Use mutation testing only when useful as optional hardening.
-8. Do not claim completion while required failures, blockers, or backend checklist gaps remain.
+## EN-01 Validation
 
-## Maintenance Rule
-
-Do not modify the checker merely to make a target pass.
-
-Modify checker code only when a confirmed checker defect or false positive has been demonstrated. Production behavior, tests, contracts, or specifications must be corrected based on the actual source of the problem.
+EN-01 is validated by checker, environment-safety, traceability,
+suite-separation, browser-quality, retry/flake, artifact, and fixture/support
+self-tests. Do not create application-domain pilot tests to prove the
+foundation.

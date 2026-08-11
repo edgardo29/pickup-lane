@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import backend.tests.conftest as backend_conftest
+from backend.settings import reset_settings_cache
 from backend.tests.support.environment_safety import (
     DEDICATED_TEST_DATABASE_NAME,
     MODEL_MODULE_FILE_EXCLUSIONS,
@@ -35,7 +36,19 @@ SAFE_DATABASE_HOST_URL = (
 )
 
 
-pytestmark = pytest.mark.no_db_cleanup
+pytestmark = [
+    pytest.mark.no_db_cleanup,
+    pytest.mark.requirement("EN01-R3", "EN01-R4", "EN01-R5", "EN01-R6", "EN01-R9"),
+]
+
+
+@pytest.fixture(autouse=True)
+def safe_database_url_for_model_imports(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("DATABASE_URL", SAFE_DATABASE_URL)
+    reset_settings_cache()
+    yield
+    reset_settings_cache()
 
 
 @pytest.fixture(scope="session")

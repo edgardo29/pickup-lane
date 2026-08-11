@@ -3,14 +3,21 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import cast
 
-from compliance.contracts import load_contract
-from compliance.mutations import evaluate_mutation_requirement, run_mutation_preflight, run_mutations
-from compliance.repository import analyze_repository
-from compliance.report import CheckResult, merge_results, render_report
-from compliance.runtime import evaluate_runtime_requirement, run_runtime_validation
-from compliance.static_analysis import analyze_static, collect_tests
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from compliance.discovery import collect_requirement_metadata
+from compliance.policies import analyze_policy, load_suite_policy
+from compliance.report import CheckResult, Scope, merge_results, render_report
+from compliance.requirements import load_requirement_declarations
 from compliance.targeting import resolve_target
+from compliance.traceability import build_traceability
+
+
+VALID_SCOPES = {"file", "domain", "suite"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,8 +25,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = run_checker(argv)
     except Exception as exc:  # noqa: BLE001 - top-level guard for checker bugs.
-        result = CheckResult(target=" ".join(argv) or "<missing>", scope=None, forced_state="INTERNAL_ERROR")
-        result.add_issue("INTERNAL", "failure", f"checker internal error: {exc}")
+        result = CheckResult(
+            target=" ".join(argv) or "<missing>",
+            scope=None,
+            forced_state="INTERNAL_ERROR",
+        )
+        result.add_issue("INTERNAL001", "failure", f"checker internal error: {exc}")
         result.commands_run.append(_checker_invocation(argv))
     print(render_report(result))
     return result.exit_code
@@ -27,98 +38,84 @@ def main(argv: list[str] | None = None) -> int:
 
 def run_checker(argv: list[str]) -> CheckResult:
     invocation = _checker_invocation(argv)
-    parse_result = _parse_args(argv)
-    if isinstance(parse_result, CheckResult):
-        parse_result.commands_run.append(invocation)
-        return parse_result
-    target_args, runtime_requested, mutations_requested = parse_result
+    parsed = _parse_args(argv)
+    if isinstance(parsed, CheckResult):
+        parsed.commands_run.append(invocation)
+        return parsed
+    scope, target_text = parsed
 
-    target, target_error = resolve_target(target_args, cwd=Path.cwd())
+    target, target_error = resolve_target(scope=scope, target_text=target_text, cwd=Path.cwd())
     if target_error is not None:
         target_error.commands_run.append(invocation)
         return target_error
     assert target is not None
 
-    base = CheckResult(target=str(target.relative_path), scope=target.scope)  # type: ignore[arg-type]
+    base = CheckResult(target=target.display, scope=target.scope)
     base.commands_run.append(invocation)
-    if runtime_requested and mutations_requested:
-        base.completion["Verification"] = "static, contract, repository, runtime, and optional mutation hardening checker run"
-    elif runtime_requested:
-        base.completion["Verification"] = "static, contract, repository, and runtime evidence checker run"
-    else:
-        base.completion["Verification"] = "static, contract, and repository checker run only"
-    base.commands_not_run.extend(
+
+    declarations, declaration_result = load_requirement_declarations(
+        target.tests_root / "support" / "requirements" / "en01.json"
+    )
+    suite_policy, suite_policy_result = load_suite_policy(
+        target.tests_root / "support" / "suite_policy.json"
+    )
+    policy_result = analyze_policy(target, suite_policy)
+    collection, collection_result = collect_requirement_metadata(target, declarations)
+    traceability_result = build_traceability(
+        declarations=declarations,
+        usages=collection.usages,
+        scope=target.scope,
+        target=target.display,
+    )
+
+    return merge_results(
+        base,
         [
-            "migrations",
-            "application servers",
-            "database reset/create/drop/truncate commands",
-            "external services",
-        ]
+            declaration_result,
+            suite_policy_result,
+            policy_result,
+            collection_result,
+            traceability_result,
+        ],
     )
-
-    static_index, collect_result = collect_tests(target)
-    contract, contract_result = load_contract(target, set(static_index.tests))
-    results = [collect_result, contract_result]
-    if contract is None:
-        return merge_results(base, results)
-
-    results.append(analyze_static(target, contract, static_index))
-    results.append(analyze_repository(target, static_index))
-    results.append(evaluate_runtime_requirement(contract, runtime_requested))
-    results.append(evaluate_mutation_requirement(contract, runtime_requested, mutations_requested))
-
-    mutation_preflight_result: CheckResult | None = None
-    if mutations_requested:
-        mutation_preflight_result = run_mutation_preflight(target, contract)
-        results.append(mutation_preflight_result)
-
-    if runtime_requested:
-        results.append(run_runtime_validation(target, contract))
-    else:
-        base.commands_not_run.append("pytest target with compliance evidence plugin")
-
-    mutation_preflight_status = (
-        mutation_preflight_result.completion.get("Mutation Preflight")
-        if mutation_preflight_result is not None
-        else None
-    )
-    if mutations_requested and mutation_preflight_status == "passed":
-        results.append(run_mutations(target, contract))
-    elif mutations_requested:
-        base.commands_not_run.append("mutmut run for declared mutation targets (mutation preflight deferred or unsupported)")
-    else:
-        base.commands_not_run.append("mutmut run for declared mutation targets")
-
-    return merge_results(base, results)
 
 
 def _checker_invocation(argv: list[str]) -> str:
-    return " ".join(["python", "check_backend_tests.py", *argv]).strip()
+    return " ".join(["python", "backend/tests/check_backend_tests.py", *argv]).strip()
 
 
-def _parse_args(argv: list[str]) -> tuple[list[str], bool, bool] | CheckResult:
-    runtime_requested = False
-    mutations_requested = False
+def _parse_args(argv: list[str]) -> tuple[Scope, str | None] | CheckResult:
+    scope: str | None = None
     targets: list[str] = []
-
-    for arg in argv:
-        if arg == "--runtime":
-            runtime_requested = True
-        elif arg == "--mutations":
-            mutations_requested = True
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg == "--scope":
+            index += 1
+            if index >= len(argv):
+                return _usage(" ".join(argv), "--scope requires one of: file, domain, suite", "CLI001")
+            scope = argv[index]
+        elif arg.startswith("--scope="):
+            scope = arg.split("=", 1)[1]
         elif arg.startswith("--"):
-            result = CheckResult(target=" ".join(argv) or "<missing>", scope=None, forced_state="USAGE_ERROR")
-            result.add_issue("CLI001", "failure", f"unsupported option: {arg}")
-            return result
+            return _usage(" ".join(argv), f"unsupported option: {arg}", "CLI002")
         else:
             targets.append(arg)
+        index += 1
 
-    if mutations_requested and not runtime_requested:
-        result = CheckResult(target=" ".join(targets) or "<missing>", scope=None, forced_state="USAGE_ERROR")
-        result.add_issue("MUT001", "failure", "--mutations requires --runtime")
-        return result
+    if scope not in VALID_SCOPES:
+        return _usage(" ".join(argv), "--scope must be one of: file, domain, suite", "CLI001")
+    if len(targets) > 1:
+        return _usage(" ".join(targets), "at most one target path is allowed", "CLI003")
+    if scope != "suite" and not targets:
+        return _usage(" ".join(argv), "file and domain scopes require a target path", "CLI004")
+    return cast(Scope, scope), targets[0] if targets else None
 
-    return targets, runtime_requested, mutations_requested
+
+def _usage(target: str, message: str, rule_id: str) -> CheckResult:
+    result = CheckResult(target=target or "<missing>", scope=None, forced_state="USAGE_ERROR")
+    result.add_issue(rule_id, "failure", message)
+    return result
 
 
 if __name__ == "__main__":

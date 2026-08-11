@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "EN01-R1",
+      "owning_pass": "EN-01",
+      "source_controls": ["TST-001", "TST-003"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R2",
+      "owning_pass": "EN-01",
+      "source_controls": ["TST-001", "TST-004"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R3",
+      "owning_pass": "EN-01",
+      "source_controls": ["TST-010"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R4",
+      "owning_pass": "EN-01",
+      "source_controls": ["TST-010"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R5",
+      "owning_pass": "EN-01",
+      "source_controls": ["TST-004", "TST-010"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R6",
+      "owning_pass": "EN-01",
+      "source_controls": ["TST-010"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R7",
+      "owning_pass": "EN-01",
+      "source_controls": ["TST-011", "FDN-05"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R8",
+      "owning_pass": "EN-01",
+      "source_controls": ["TST-001", "GOV-005"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R9",
+      "owning_pass": "EN-01",
+      "source_controls": ["EN-01"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R10",
+      "owning_pass": "EN-01",
+      "source_controls": ["EN-01"],
+      "state": "required",
+      "scope": "checker"
+    },
+    {
+      "id": "EN01-R11",
+      "owning_pass": "EN-01",
+      "source_controls": ["TST-001", "TST-004", "TST-010", "TST-011"],
+      "state": "required",
+      "scope": "checker"
+    }
+  ]
+}
