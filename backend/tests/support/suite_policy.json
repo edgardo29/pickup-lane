@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "suite_types": {
+    "ordinary": {
+      "allows_uncontrolled_network": false,
+      "allows_production_resources": false
+    },
+    "full_stack": {
+      "allows_uncontrolled_network": false,
+      "allows_production_resources": false
+    },
+    "provider_contract": {
+      "allows_uncontrolled_network": false,
+      "allows_production_resources": false,
+      "requires_explicit_network_opt_in": true
+    }
+  },
+  "trusted_roots": {
+    "checker": "ordinary",
+    "domains": "ordinary",
+    "workflows": "ordinary",
+    "platform": "ordinary",
+    "migrations": "ordinary",
+    "provider_contract": "provider_contract"
+  },
+  "untrusted_application_roots": ["pages", "shared"],
+  "historical_roots": ["legacy"]
+}
