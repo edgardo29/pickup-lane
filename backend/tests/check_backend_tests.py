@@ -54,7 +54,7 @@ def run_checker(argv: list[str]) -> CheckResult:
     base.commands_run.append(invocation)
 
     declarations, declaration_result = load_requirement_declarations(
-        target.tests_root / "support" / "requirements" / "en01.json"
+        target.tests_root / "support" / "requirements"
     )
     suite_policy, suite_policy_result = load_suite_policy(
         target.tests_root / "support" / "suite_policy.json"

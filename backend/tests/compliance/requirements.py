@@ -9,7 +9,9 @@ from typing import Any
 from .report import CheckResult
 
 
-REQUIREMENT_ID_RE = re.compile(r"^[A-Z]+[0-9]+-R[0-9]+$")
+REQUIREMENT_ID_RE = re.compile(
+    r"^[A-Z]+[0-9]+-(?:R[0-9]+|[A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)*-[0-9]+)$"
+)
 VALID_REQUIREMENT_STATES = frozenset(
     {
         "required",
@@ -33,7 +35,7 @@ REASON_REQUIRED_STATES = frozenset(
     }
 )
 DEFAULT_REQUIREMENT_DECLARATION_PATH = (
-    Path(__file__).resolve().parents[1] / "support" / "requirements" / "en01.json"
+    Path(__file__).resolve().parents[1] / "support" / "requirements"
 )
 
 
@@ -52,16 +54,33 @@ def load_requirement_declarations(
 ) -> tuple[dict[str, RequirementDeclaration], CheckResult]:
     result = CheckResult(target=str(path), scope=None)
     if not path.exists():
+        result.add_issue("REQ001", "blocker", "canonical requirement declaration path is missing", str(path))
+        return {}, result
+
+    paths = tuple(sorted(path.glob("*.json"))) if path.is_dir() else (path,)
+    if not paths:
         result.add_issue("REQ001", "blocker", "canonical requirement declaration file is missing", str(path))
         return {}, result
 
+    declarations: dict[str, RequirementDeclaration] = {}
     try:
-        raw = json.loads(path.read_text())
+        for declaration_path in paths:
+            raw = json.loads(declaration_path.read_text())
+            parsed = parse_requirement_declarations(raw, result, location=str(declaration_path))
+            for requirement_id, declaration in parsed.items():
+                if requirement_id in declarations:
+                    result.add_issue(
+                        "REQ005",
+                        "failure",
+                        f"duplicate canonical requirement declaration: {requirement_id}",
+                        str(declaration_path),
+                    )
+                    continue
+                declarations[requirement_id] = declaration
     except json.JSONDecodeError as exc:
         result.add_issue("REQ002", "failure", f"canonical requirement declarations are not valid JSON: {exc}", str(path))
         return {}, result
 
-    declarations = parse_requirement_declarations(raw, result, location=str(path))
     result.summary["Requirement declarations"] = f"{len(declarations)} loaded"
     return declarations, result
 

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "EN02-CORR-001",
+      "owning_pass": "EN-02",
+      "source_controls": ["API-M15", "FDN-07"],
+      "state": "required",
+      "scope": "platform/observability"
+    },
+    {
+      "id": "EN02-CORR-002",
+      "owning_pass": "EN-02",
+      "source_controls": ["API-M15", "FDN-07"],
+      "state": "required",
+      "scope": "platform/observability"
+    },
+    {
+      "id": "EN02-EVENT-001",
+      "owning_pass": "EN-02",
+      "source_controls": ["API-M15", "OPS-010"],
+      "state": "required",
+      "scope": "platform/observability"
+    },
+    {
+      "id": "EN02-REDACT-001",
+      "owning_pass": "EN-02",
+      "source_controls": ["API-M15", "OPS-010"],
+      "state": "required",
+      "scope": "platform/observability"
+    },
+    {
+      "id": "EN02-PUBLIC-001",
+      "owning_pass": "EN-02",
+      "source_controls": ["API-M15", "API-M12", "OPS-010"],
+      "state": "required",
+      "scope": "platform/observability"
+    },
+    {
+      "id": "EN02-TEL-001",
+      "owning_pass": "EN-02",
+      "source_controls": ["API-M15", "OPS-010"],
+      "state": "required",
+      "scope": "platform/observability"
+    },
+    {
+      "id": "EN02-SCOPE-001",
+      "owning_pass": "EN-02",
+      "source_controls": ["FDN-07", "ADM-006", "OPS-008", "OPS-010"],
+      "state": "covered_elsewhere",
+      "scope": "planning",
+      "reason": "Scope boundaries are documented in the canonical EN-02 plan and reviewed in the EN-02 diff; they do not require a product-runtime pytest node."
+    }
+  ]
+}

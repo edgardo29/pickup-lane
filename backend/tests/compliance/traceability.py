@@ -34,6 +34,8 @@ def build_traceability(
 
     if scope in {"domain", "suite"}:
         for declaration in declarations.values():
+            if not _declaration_applies_to_target(declaration, scope, target):
+                continue
             mapped = result.traceability.get(declaration.owning_pass, {}).get(declaration.requirement_id, [])
             if declaration.state == "blocked":
                 reason = _safe_reason_summary(declaration.reason)
@@ -54,6 +56,25 @@ def build_traceability(
     result.summary["Traceability passes"] = str(len(result.traceability))
     result.summary["Traceability requirements"] = str(sum(len(items) for items in result.traceability.values()))
     return result
+
+
+def _declaration_applies_to_target(
+    declaration: RequirementDeclaration,
+    scope: Scope,
+    target: str,
+) -> bool:
+    if scope == "suite":
+        return True
+    if not declaration.scope:
+        return True
+
+    declaration_scope = declaration.scope.strip("/")
+    target_scope = target.strip("/")
+    return (
+        declaration_scope == target_scope
+        or declaration_scope.startswith(f"{target_scope}/")
+        or target_scope.startswith(f"{declaration_scope}/")
+    )
 
 
 def _safe_reason_summary(reason: str | None) -> str:

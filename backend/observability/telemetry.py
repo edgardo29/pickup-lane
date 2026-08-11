@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import re
+from types import MappingProxyType
 from urllib.parse import urlsplit
 
 from backend.observability.redaction import contains_sensitive_text
@@ -109,16 +110,17 @@ def validate_telemetry_label(name: object, value: object) -> str:
     return value
 
 
-def validate_telemetry_labels(labels: Mapping[str, str] | None) -> dict[str, str]:
-    """Validate a label mapping and return a deterministic plain dictionary."""
+def validate_telemetry_labels(labels: Mapping[str, str] | None) -> Mapping[str, str]:
+    """Validate a label mapping and return immutable deterministic storage."""
 
     if labels is None:
-        return {}
+        return MappingProxyType({})
 
-    return {
+    validated = {
         name: validate_telemetry_label(name, value)
         for name, value in sorted(labels.items())
     }
+    return MappingProxyType(validated)
 
 
 def validate_error_code(value: object) -> str:
