@@ -12,7 +12,11 @@ import check_backend_tests as checker_module
 from check_backend_tests import run_checker
 from compliance.policies import parse_suite_policy
 from compliance.report import CheckResult
-from compliance.requirements import parse_requirement_declarations
+from compliance.requirements import (
+    load_requirement_declarations,
+    parse_requirement_declarations,
+    valid_requirement_id,
+)
 from compliance.targeting import resolve_target, trusted_test_files
 
 
@@ -141,6 +145,87 @@ def test_file_domain_and_suite_scopes_generate_traceability(tmp_path, monkeypatc
     assert domain_result.state == "PASS"
     assert suite_result.state == "PASS"
     assert suite_result.traceability["EN-01"]["EN01-R1"] == [
+        "backend/tests/checker/test_foundation.py::test_foundation_rule"
+    ]
+
+
+def test_requirement_declarations_load_multiple_pass_files_and_en02_ids(tmp_path):
+    requirements_dir = tmp_path / "requirements"
+    _write(
+        requirements_dir / "en01.json",
+        json.dumps(_requirements_payload("EN01-R1"), indent=2),
+    )
+    _write(
+        requirements_dir / "en02.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "requirements": [
+                    {
+                        "id": "EN02-CORR-001",
+                        "owning_pass": "EN-02",
+                        "source_controls": ["API-M15"],
+                        "state": "required",
+                        "scope": "platform/observability",
+                    }
+                ],
+            },
+            indent=2,
+        ),
+    )
+
+    declarations, result = load_requirement_declarations(requirements_dir)
+
+    assert result.state == "PASS"
+    assert valid_requirement_id("EN02-CORR-001")
+    assert set(declarations) == {"EN01-R1", "EN02-CORR-001"}
+    assert declarations["EN02-CORR-001"].owning_pass == "EN-02"
+
+
+def test_domain_traceability_completeness_uses_requirement_scope(tmp_path, monkeypatch):
+    repo = _make_repo(
+        tmp_path,
+        requirements=_requirements_payload("EN01-R1"),
+        test_text=_trusted_test('"EN01-R1"'),
+    )
+    _write(
+        repo / "backend" / "tests" / "support" / "requirements" / "en02.json",
+        json.dumps(
+            {
+                "schema_version": 1,
+                "requirements": [
+                    {
+                        "id": "EN02-CORR-001",
+                        "owning_pass": "EN-02",
+                        "source_controls": ["API-M15"],
+                        "state": "required",
+                        "scope": "platform/observability",
+                    }
+                ],
+            },
+            indent=2,
+        ),
+    )
+    _write(
+        repo / "backend" / "tests" / "platform" / "observability" / "test_correlation.py",
+        "import pytest\n\n"
+        "pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.requirement('EN02-CORR-001')]\n\n"
+        "def test_en02_correlation():\n"
+        "    assert True\n",
+    )
+    monkeypatch.chdir(repo)
+
+    platform_result = run_checker(["--scope", "domain", "backend/tests/platform/observability"])
+    checker_result = run_checker(["--scope", "domain", "backend/tests/checker"])
+    suite_result = run_checker(["--scope", "suite"])
+
+    assert platform_result.state == "PASS"
+    assert checker_result.state == "PASS"
+    assert suite_result.state == "PASS"
+    assert platform_result.traceability["EN-02"]["EN02-CORR-001"] == [
+        "backend/tests/platform/observability/test_correlation.py::test_en02_correlation"
+    ]
+    assert checker_result.traceability["EN-01"]["EN01-R1"] == [
         "backend/tests/checker/test_foundation.py::test_foundation_rule"
     ]
 

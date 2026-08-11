@@ -43,16 +43,16 @@ are not inputs to current test design.
 
 ## Requirement Declarations And Metadata
 
-Stable requirement IDs are declared once in:
+Stable requirement IDs are declared once in pass-owned JSON files under:
 
 ```text
-backend/tests/support/requirements/en01.json
+backend/tests/support/requirements/
 ```
 
-The declaration file stores only machine-needed identity: requirement ID,
-owning pass, source controls, current machine state, and scope where needed.
-It does not store product specifications, scenarios, assertions, or exact
-pytest node IDs.
+Each declaration file stores only machine-needed identity: requirement ID,
+owning pass, source controls, current machine state, and scope where needed. It
+does not store product specifications, scenarios, assertions, or exact pytest
+node IDs.
 
 Pytest tests declare the stable requirement IDs they prove with:
 

@@ -178,7 +178,7 @@ def database_timeout_from_exception(exc: BaseException) -> DatabaseTimeoutError 
     return None
 
 
-def cancellation_telemetry_labels(*, operation: str) -> dict[str, str]:
+def cancellation_telemetry_labels(*, operation: str) -> Mapping[str, str]:
     return validate_telemetry_labels(
         {
             "operation": operation,

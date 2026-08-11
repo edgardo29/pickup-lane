@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
 
 from backend.observability.correlation import validate_correlation_id
@@ -49,7 +50,7 @@ class PublicErrorDescriptor:
         if self.correlation_id is not None:
             payload["correlation_id"] = self.correlation_id
         if self.details is not None:
-            payload["details"] = self.details
+            payload["details"] = _to_plain_public_value(self.details)
         return payload
 
 
@@ -61,13 +62,14 @@ def _validate_public_message(value: object) -> str:
     return value
 
 
-def _validate_public_details(details: Mapping[str, Any]) -> dict[str, Any]:
+def _validate_public_details(details: Mapping[str, Any]) -> Mapping[str, Any]:
     if not isinstance(details, Mapping):
         raise PublicErrorError("Public error details must be a mapping.")
-    return {
+    validated = {
         _validate_detail_key(key): _validate_detail_value(value)
         for key, value in sorted(details.items())
     }
+    return MappingProxyType(validated)
 
 
 def _validate_detail_key(key: object) -> str:
@@ -86,7 +88,7 @@ def _validate_detail_value(value: Any) -> Any:
     if isinstance(value, Mapping):
         return _validate_public_details(value)
     if _is_non_string_sequence(value):
-        return [_validate_detail_value(item) for item in value]
+        return tuple(_validate_detail_value(item) for item in value)
     if isinstance(value, str):
         return _validate_public_message(value)
     if value is None or isinstance(value, bool | int | float):
@@ -96,3 +98,11 @@ def _validate_detail_value(value: Any) -> Any:
 
 def _is_non_string_sequence(value: Any) -> bool:
     return isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray)
+
+
+def _to_plain_public_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _to_plain_public_value(item) for key, item in value.items()}
+    if _is_non_string_sequence(value):
+        return [_to_plain_public_value(item) for item in value]
+    return value
