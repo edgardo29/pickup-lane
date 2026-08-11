@@ -2,16 +2,28 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import socket
+import subprocess
+import sys
+import tempfile
+import time
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
+from queue import Empty, Queue
+from threading import Thread
 from typing import Any
 from urllib.parse import urlparse
+
+from .contracts import Contract
+from .report import CheckResult
+from .targeting import Target
 
 
 EVIDENCE_ENV = "BACKEND_TEST_EVIDENCE_PATH"
 NETWORK_BLOCK_ENV = "BACKEND_TEST_BLOCK_NETWORK"
+RUNTIME_HEARTBEAT_SECONDS = 30
 
 try:
     import pytest
@@ -38,6 +50,13 @@ class EvidenceRecorder:
 
     def register_fixture_value(self, name: str, value: Any) -> None:
         self.fixture_values[name] = value
+
+
+@dataclass(frozen=True)
+class RuntimeProcessResult:
+    returncode: int
+    stdout: str
+    stderr: str = ""
 
 
 def pytest_configure(config: Any) -> None:
@@ -127,13 +146,7 @@ def _record_isolation_evidence(item: Any) -> None:
     if not path_text:
         return
     database_url = os.environ.get("DATABASE_URL", "")
-    from backend.tests.support.environment_safety import (
-        registered_sqlalchemy_tables,
-        validate_dedicated_test_database_url,
-    )
-
-    parsed_database = validate_dedicated_test_database_url(database_url)
-    parsed_database_name = parsed_database.database_name
+    parsed_database_name = _database_name_from_url(database_url)
     assert _is_dedicated_test_database_name(parsed_database_name), (
         "runtime evidence requires DATABASE_URL to point to a dedicated test database"
     )
@@ -141,6 +154,7 @@ def _record_isolation_evidence(item: Any) -> None:
     from sqlalchemy import text
 
     from backend.database import engine
+    from backend.tests.conftest import TEST_TABLES
 
     recorder = EvidenceRecorder(Path(path_text), item.nodeid)
     with engine.connect() as connection:
@@ -154,7 +168,7 @@ def _record_isolation_evidence(item: Any) -> None:
         current_database = str(identity["database_name"])
         assert current_database == parsed_database_name
         assert _is_dedicated_test_database_name(current_database)
-        table_counts = _cleanup_table_counts(connection, registered_sqlalchemy_tables())
+        table_counts = _cleanup_table_counts(connection, TEST_TABLES)
 
     nonempty_tables = {
         table: count for table, count in table_counts.items() if count != 0
@@ -180,29 +194,26 @@ def _record_isolation_evidence(item: Any) -> None:
     )
 
 
+def _database_name_from_url(database_url: str) -> str:
+    parsed = urlparse(database_url)
+    return parsed.path.rsplit("/", maxsplit=1)[-1]
+
+
 def _is_dedicated_test_database_name(database_name: str) -> bool:
-    from backend.tests.support.environment_safety import DEDICATED_TEST_DATABASE_NAME
-
-    return database_name == DEDICATED_TEST_DATABASE_NAME
-
-
-def _cleanup_table_counts(connection: Any, tables: tuple[Any, ...]) -> dict[str, int]:
-    from sqlalchemy import text
-
-    from backend.tests.support.environment_safety import (
-        cleanup_table_key,
-        quoted_table_identifier,
+    normalized = database_name.lower()
+    banned = {"dev", "development", "stage", "staging", "prod", "production"}
+    return bool(normalized) and "test" in normalized and not any(
+        banned_name in normalized for banned_name in banned
     )
+
+
+def _cleanup_table_counts(connection: Any, tables: tuple[str, ...]) -> dict[str, int]:
+    from sqlalchemy import text
 
     selects = []
     for table in tables:
-        table_key = cleanup_table_key(table)
-        table_label = table_key.replace("'", "''")
-        selects.append(
-            "SELECT "
-            f"'{table_label}' AS table_name, "
-            f"count(*) AS row_count FROM {quoted_table_identifier(table, connection.dialect)}"
-        )
+        _validate_identifier(table)
+        selects.append(f"SELECT '{table}' AS table_name, count(*) AS row_count FROM {table}")
     rows = connection.execute(text(" UNION ALL ".join(selects))).mappings().all()
     return {str(row["table_name"]): int(row["row_count"]) for row in rows}
 
@@ -539,6 +550,316 @@ class RollbackAssertion(AbstractContextManager["RollbackAssertion"]):
             }
         )
         return True
+
+
+def evaluate_runtime_requirement(contract: Contract, requested: bool) -> CheckResult:
+    result = CheckResult(target=str(contract.path.parent), scope=None)
+    required = _runtime_required_ids(contract)
+    required_ids = [item_id for _kind, item_id in sorted(required)]
+    if required and not requested:
+        result.add_issue(
+            "RUN002",
+            "blocker",
+            "runtime evidence is required but --runtime was not requested",
+        )
+        result.commands_not_run.append("pytest target with compliance evidence plugin")
+        result.completion["Runtime Evidence"] = (
+            f"required but not run; declared ids: {', '.join(required_ids)}"
+        )
+    elif required:
+        result.completion["Runtime Evidence"] = (
+            f"requested; declared ids: {', '.join(required_ids)}"
+        )
+    else:
+        result.completion["Runtime Evidence"] = "not required; no effects, constraints, or time boundaries declared"
+    return result
+
+
+def run_runtime_validation(target: Target, contract: Contract) -> CheckResult:
+    result = CheckResult(target=str(target.relative_path), scope=target.scope)  # type: ignore[arg-type]
+    required = _runtime_required_ids(contract)
+    if not required:
+        result.commands_not_run.append("pytest target with compliance evidence plugin (no runtime evidence declared)")
+        result.completion["Runtime Evidence"] = "not run; no runtime evidence declared"
+        return result
+
+    evidence_path = Path(tempfile.mkdtemp(prefix="backend-test-compliance-")) / "evidence.jsonl"
+    pytest_target = str(target.path)
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-p",
+        "compliance.runtime",
+        pytest_target,
+    ]
+    env = os.environ.copy()
+    env[EVIDENCE_ENV] = str(evidence_path)
+    env[NETWORK_BLOCK_ENV] = "1"
+    env["PYTHONPATH"] = f"{target.tests_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
+    completed = _run_pytest_with_heartbeat(command, cwd=target.repo_root, env=env)
+    result.commands_run.append(" ".join(command))
+    if completed.returncode != 0:
+        output_path = evidence_path.with_name("pytest-output.txt")
+        output_path.write_text(
+            "\n".join(
+                [
+                    "$ " + " ".join(command),
+                    "",
+                    "STDOUT:",
+                    completed.stdout,
+                    "",
+                    "STDERR:",
+                    completed.stderr,
+                ]
+            )
+        )
+        result.add_issue(
+            "RUN003",
+            "failure",
+            f"targeted pytest runtime validation failed; captured output: {output_path}",
+        )
+        result.completion["Runtime Evidence"] = (
+            f"runtime pytest failed before evidence could be validated; "
+            f"captured output: {output_path}"
+        )
+        return result
+    records = _read_evidence(evidence_path)
+    _validate_runtime_records(contract, records, result)
+    result.completion["Runtime Evidence"] = f"{len(records)} evidence record(s) captured"
+    return result
+
+
+def _run_pytest_with_heartbeat(command: list[str], *, cwd: Path, env: dict[str, str]) -> RuntimeProcessResult:
+    started_at = time.monotonic()
+    last_heartbeat = started_at
+    output_queue: Queue[str] = Queue()
+    output: list[str] = []
+    process = subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+        start_new_session=True,
+    )
+
+    def read_output() -> None:
+        assert process.stdout is not None
+        for line in process.stdout:
+            output_queue.put(line)
+
+    reader = Thread(target=read_output, daemon=True)
+    reader.start()
+    try:
+        while process.poll() is None:
+            _drain_process_output(output_queue, output)
+            now = time.monotonic()
+            if now - last_heartbeat >= RUNTIME_HEARTBEAT_SECONDS:
+                elapsed = int(now - started_at)
+                print(
+                    f"[backend-test-checker] runtime pytest still running after {elapsed}s",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                last_heartbeat = now
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        _terminate_process(process)
+        raise
+
+    reader.join(timeout=1)
+    _drain_process_output(output_queue, output)
+    return RuntimeProcessResult(
+        returncode=process.returncode if process.returncode is not None else 124,
+        stdout="".join(output),
+    )
+
+
+def _drain_process_output(output_queue: Queue[str], output: list[str]) -> None:
+    while True:
+        try:
+            line = output_queue.get_nowait()
+        except Empty:
+            return
+        output.append(line)
+        print(line, end="", file=sys.stderr, flush=True)
+
+
+def _terminate_process(process: subprocess.Popen[str]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except (AttributeError, ProcessLookupError, PermissionError):
+        process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (AttributeError, ProcessLookupError, PermissionError):
+            process.kill()
+        process.wait(timeout=5)
+
+
+def _runtime_required_ids(contract: Contract) -> set[tuple[str, str]]:
+    required: set[tuple[str, str]] = set()
+    for effect in contract.scoped_data.get("effects", []) or []:
+        if isinstance(effect, dict) and effect.get("id"):
+            required.add(("effect", str(effect["id"])))
+    for constraint in contract.scoped_data.get("constraints", []) or []:
+        if isinstance(constraint, dict) and constraint.get("id"):
+            required.add(("constraint", str(constraint["id"])))
+    for boundary in contract.scoped_data.get("time_boundaries", []) or []:
+        if isinstance(boundary, dict) and boundary.get("id"):
+            required.add(("time_boundary", str(boundary["id"])))
+    return required
+
+
+def _read_evidence(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    records = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        records.append(json.loads(line))
+    return records
+
+
+def _validate_runtime_records(contract: Contract, records: list[dict[str, Any]], result: CheckResult) -> None:
+    effect_records: dict[str, dict[str, Any]] = {
+        str(record.get("effect_id")): record
+        for record in records
+        if record.get("type") in {"effect", "rollback"} and record.get("effect_id")
+    }
+    constraint_records: dict[str, dict[str, Any]] = {
+        str(record.get("constraint_id")): record
+        for record in records
+        if record.get("type") == "constraint" and record.get("constraint_id")
+    }
+    time_records_by_id: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        if record.get("type") == "time_boundary" and record.get("time_id"):
+            time_records_by_id.setdefault(str(record["time_id"]), []).append(record)
+
+    for effect in contract.scoped_data.get("effects", []) or []:
+        if not isinstance(effect, dict):
+            continue
+        rule_id = _runtime_rule_for_effect(effect)
+        record = effect_records.get(str(effect.get("id")))
+        if record is None:
+            result.add_issue(rule_id, "blocker", f"missing runtime effect evidence: {effect.get('id')}")
+            continue
+        _validate_effect_record(effect, record, rule_id, result)
+    for constraint in contract.scoped_data.get("constraints", []) or []:
+        if not isinstance(constraint, dict):
+            continue
+        record = constraint_records.get(str(constraint.get("id")))
+        if record is None:
+            result.add_issue("RUN006", "blocker", f"missing runtime constraint evidence: {constraint.get('id')}")
+            continue
+        expected_identifier = constraint.get("expected_database_identifier")
+        if record.get("expected_identifier") != expected_identifier:
+            result.add_issue("RUN006", "failure", f"constraint evidence identifier mismatch: {constraint.get('id')}")
+    for boundary in contract.scoped_data.get("time_boundaries", []) or []:
+        if not isinstance(boundary, dict):
+            continue
+        records_for_boundary = time_records_by_id.get(str(boundary.get("id")), [])
+        if not records_for_boundary:
+            result.add_issue("RUN009", "blocker", f"missing runtime time-boundary evidence: {boundary.get('id')}")
+            continue
+        expected_cases = set(boundary.get("boundary_cases", []))
+        observed_cases = {record.get("boundary") for record in records_for_boundary}
+        if expected_cases and not expected_cases.issubset(observed_cases):
+            missing = sorted(expected_cases - observed_cases)
+            result.add_issue("RUN009", "blocker", f"missing time-boundary case evidence for {boundary.get('id')}: {missing}")
+        if any("baseline" not in record for record in records_for_boundary):
+            result.add_issue("RUN010", "blocker", f"time-boundary evidence lacks controlled baseline: {boundary.get('id')}")
+
+    if _runtime_required_ids(contract) and not _has_isolation_evidence(records):
+        result.add_issue(
+            "RUN007",
+            "blocker",
+            "runtime database isolation evidence is required; include rollback or deterministic cleanup evidence",
+        )
+
+
+def _has_isolation_evidence(records: list[dict[str, Any]]) -> bool:
+    for record in records:
+        if record.get("type") == "rollback" and record.get("assertion") == "passed":
+            return True
+        if (
+            record.get("type") == "isolation"
+            and record.get("assertion") == "passed"
+            and record.get("cleanup_complete") is True
+            and _is_dedicated_test_database_name(str(record.get("database_name", "")))
+        ):
+            return True
+    return False
+
+
+def _runtime_rule_for_effect(effect: dict[str, Any]) -> str:
+    if effect.get("kind") == "external_call_count":
+        return "RUN008"
+    if effect.get("phase") == "idempotency":
+        return "RUN005"
+    if effect.get("phase") == "rollback":
+        return "RUN006"
+    return "RUN004"
+
+
+def _validate_effect_record(effect: dict[str, Any], record: dict[str, Any], rule_id: str, result: CheckResult) -> None:
+    effect_id = effect.get("id")
+    if record.get("kind") != effect.get("kind"):
+        result.add_issue(rule_id, "failure", f"runtime evidence kind mismatch: {effect_id}")
+    if effect.get("model") and record.get("model") and effect.get("model") != record.get("model"):
+        result.add_issue(rule_id, "failure", f"runtime evidence model mismatch: {effect_id}")
+    if effect.get("table") and record.get("table") and effect.get("table") != record.get("table"):
+        result.add_issue(rule_id, "failure", f"runtime evidence table mismatch: {effect_id}")
+    before = effect.get("before")
+    if isinstance(before, dict):
+        if not isinstance(record.get("before"), dict):
+            result.add_issue(rule_id, "failure", f"runtime evidence lacks before snapshot: {effect_id}")
+        else:
+            _validate_snapshot_record(before, record["before"], rule_id, effect_id, "before", result)
+    after = effect.get("after")
+    if isinstance(after, dict):
+        expected_expect = after.get("expect")
+        expected_value = after.get("value")
+        if "equals" in after:
+            expected_expect = "equals"
+            expected_value = after["equals"]
+        elif "in" in after:
+            expected_expect = "in"
+            expected_value = after["in"]
+        if expected_expect and record.get("expect") != expected_expect:
+            result.add_issue(rule_id, "failure", f"runtime evidence expectation mismatch: {effect_id}")
+        if expected_value is not None and record.get("value") != expected_value:
+            result.add_issue(rule_id, "failure", f"runtime evidence value mismatch: {effect_id}")
+        if "delta" in after and record.get("delta") != after.get("delta"):
+            result.add_issue(rule_id, "failure", f"runtime evidence delta mismatch: {effect_id}")
+        if isinstance(record.get("after"), dict):
+            _validate_snapshot_record(after, record["after"], rule_id, effect_id, "after", result)
+
+
+def _validate_snapshot_record(
+    expectation: dict[str, Any],
+    snapshot: dict[str, Any],
+    rule_id: str,
+    effect_id: Any,
+    phase: str,
+    result: CheckResult,
+) -> None:
+    try:
+        _assert_snapshot_expectation(expectation, snapshot, label=phase)
+    except AssertionError as exc:
+        result.add_issue(
+            rule_id,
+            "failure",
+            f"runtime evidence {phase} snapshot mismatch for {effect_id}: {exc}",
+        )
 
 
 def _snapshot(
