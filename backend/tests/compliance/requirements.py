@@ -10,7 +10,8 @@ from .report import CheckResult
 
 
 REQUIREMENT_ID_RE = re.compile(
-    r"^[A-Z]+[0-9]+-(?:R[0-9]+|[A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)*-[0-9]+)$"
+    r"^(?:[A-Z]+[0-9][0-9A-Z]*(?:-[0-9][0-9A-Z]*)*|[A-Z]{3,}(?:-[0-9][0-9A-Z]*)+)-"
+    r"(?:R[0-9]+|[A-Z][A-Z0-9]*(?:-[A-Z][A-Z0-9]*)*-[0-9]+)$"
 )
 VALID_REQUIREMENT_STATES = frozenset(
     {
