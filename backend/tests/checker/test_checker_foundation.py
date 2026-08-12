@@ -182,6 +182,67 @@ def test_requirement_declarations_load_multiple_pass_files_and_en02_ids(tmp_path
     assert declarations["EN02-CORR-001"].owning_pass == "EN-02"
 
 
+def test_requirement_id_validator_accepts_existing_and_canonical_pass_formats():
+    valid_ids = {
+        "EN01-R1",
+        "EN02-CORR-001",
+        "EN03-SCOPE-001",
+        "WS02-01-R1",
+        "WS02-02-R1",
+        "WS03-03A-R1",
+        "WS02-04B2A2C-R1",
+        "GOV-01-R1",
+        "WS02-01-ENV-001",
+    }
+
+    assert all(valid_requirement_id(requirement_id) for requirement_id in valid_ids)
+
+
+def test_requirement_declarations_parse_canonical_workstream_pass_ids():
+    result = CheckResult(target="synthetic", scope="suite")
+
+    declarations = parse_requirement_declarations(
+        {
+            "schema_version": 1,
+            "requirements": [
+                {
+                    "id": "WS02-01-R1",
+                    "owning_pass": "WS02-01",
+                    "source_controls": ["GOV-002"],
+                    "state": "required",
+                    "scope": "platform/settings",
+                }
+            ],
+        },
+        result,
+    )
+
+    assert result.state == "PASS"
+    assert set(declarations) == {"WS02-01-R1"}
+    assert declarations["WS02-01-R1"].owning_pass == "WS02-01"
+
+
+def test_requirement_id_validator_rejects_malformed_workstream_ids():
+    malformed_ids = {
+        "ws02-01-R1",
+        "WS02--01-R1",
+        "WS02-01R1",
+        "WS02-01-",
+        "WS02-01-r1",
+        "WS02/01-R1",
+        " WS02-01-R1",
+        "WS02-01-R1 ",
+        "GOV-R1",
+        "WS-02-R1",
+        "WS02-ABC-R1",
+        "WS02-01-ENV",
+        "WS02-01-ENV-",
+        "WS02-01-ENV-ABC",
+    }
+
+    assert not any(valid_requirement_id(requirement_id) for requirement_id in malformed_ids)
+
+
 def test_domain_traceability_completeness_uses_requirement_scope(tmp_path, monkeypatch):
     repo = _make_repo(
         tmp_path,
