@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-02-R1",
+      "owning_pass": "WS02-02",
+      "source_controls": ["API-M03", "API-M17", "OPS-001"],
+      "state": "required",
+      "scope": "platform/runtime"
+    },
+    {
+      "id": "WS02-02-R2",
+      "owning_pass": "WS02-02",
+      "source_controls": ["API-M03", "API-M17", "WS02-01"],
+      "state": "required",
+      "scope": "platform/runtime"
+    },
+    {
+      "id": "WS02-02-R3",
+      "owning_pass": "WS02-02",
+      "source_controls": ["API-M03", "API-M17", "OPS-001"],
+      "state": "required",
+      "scope": "platform/runtime"
+    },
+    {
+      "id": "WS02-02-R4",
+      "owning_pass": "WS02-02",
+      "source_controls": ["API-M17"],
+      "state": "required",
+      "scope": "platform/runtime"
+    },
+    {
+      "id": "WS02-02-R5",
+      "owning_pass": "WS02-02",
+      "source_controls": ["API-M17", "OPS-004"],
+      "state": "required",
+      "scope": "platform/runtime"
+    },
+    {
+      "id": "WS02-02-R6",
+      "owning_pass": "WS02-02",
+      "source_controls": ["API-M17", "WS02-05"],
+      "state": "required",
+      "scope": "platform/runtime"
+    },
+    {
+      "id": "WS02-02-R7",
+      "owning_pass": "WS02-02",
+      "source_controls": ["API-M17", "FDN-06", "FDN-07"],
+      "state": "required",
+      "scope": "platform/runtime"
+    },
+    {
+      "id": "WS02-02-R8",
+      "owning_pass": "WS02-02",
+      "source_controls": ["API-M03", "OPS-001", "DBP-01", "FDN-04"],
+      "state": "required",
+      "scope": "platform/runtime"
+    },
+    {
+      "id": "WS02-02-R9",
+      "owning_pass": "WS02-02",
+      "source_controls": ["OPS-002", "OPS-003", "OPS-004", "FDN-06", "WS02-02"],
+      "state": "covered_elsewhere",
+      "scope": "governance",
+      "reason": "The canonical WS02-02 plan and release/rollback record template preserve the repository-owned evidence boundary. Actual deployment, platform hardening, rollback, and forward-fix execution remain external or later evidence."
+    },
+    {
+      "id": "WS02-02-R10",
+      "owning_pass": "WS02-02",
+      "source_controls": ["API-M03", "OPS-001", "OPS-002", "OPS-003", "OPS-004", "DBP-01"],
+      "state": "deferred",
+      "scope": "planning",
+      "reason": "Verified provider topology, platform limits, process and instance design, and deployment-wide connection-budget inputs are not yet available. Gate B must not fabricate versioned deployment/runtime configuration or numeric topology values."
+    }
+  ]
+}
