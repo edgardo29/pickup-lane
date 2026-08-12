@@ -89,9 +89,15 @@ The existing response-security-header middleware still applies the WS02-03
 source-owned headers to application-owned API responses and middleware-owned
 error responses where applicable.
 
-## Current Test Evidence
+## Historical Test Evidence
 
-Current non-legacy tests under `backend/tests/shared/api_errors/` cover:
+This section records the evidence used when WS02-04A was completed. After the
+EN-01 testing reset, `backend/tests/shared/` is historical archive material, not
+current trusted production-readiness evidence. Future trusted coverage for this
+behavior must be re-derived from current authority under the EN-01 architecture.
+
+At the time of this WS02 pass, tests under
+`backend/tests/shared/api_errors/` covered:
 
 - request-validation error shape
 - malformed JSON error shape
