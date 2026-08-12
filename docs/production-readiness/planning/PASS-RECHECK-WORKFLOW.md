@@ -83,7 +83,8 @@ files, record their path and change presence for provenance only.
 
 ## 4. Requirement-By-Requirement Provenance Model
 
-For every material authoritative obligation, Phase 1 must answer:
+For every material authoritative obligation, Gate A zero-trust recheck must
+answer:
 
 ```text
 What does authority require?
@@ -132,7 +133,7 @@ available to inspect.
 
 ## 6. Reverse-Direction Scope Audit
 
-Phase 1 must also audit implementation back toward authority:
+Gate A zero-trust recheck must also audit implementation back toward authority:
 
 ```text
 AUTHORITY -> IMPLEMENTATION
@@ -257,10 +258,16 @@ Important conclusions should be identifiable as one of:
 Label inferences and support them. Do not silently convert unknowns into
 assumptions.
 
-## 13. Permanent Phase Workflow
+## 13. Permanent Four-Gate Workflow
 
-Each phase does exactly its assigned job, stops for human review, and does not
-begin the next phase.
+Each gate does exactly its assigned job, stops at its approval boundary, and
+does not begin the next gate. The four-gate model groups approvals for speed;
+it does not remove audit depth, evidence design, independent review, security
+review, or Git publication safeguards.
+
+There is no Fast Lane, Full Lane, pre-pass risk score, or risk-classification
+process. Additional gates are allowed only for concrete discovered blockers as
+defined below.
 
 ### Pass Initialization
 
@@ -277,7 +284,13 @@ At the start of each pass recheck:
 Unexpected local work, divergence, or conflicting branch state causes a stop,
 not automatic cleanup, rebase, reset, restore, stash, or deletion.
 
-### Phase 1 - Zero-Trust Audit
+### Gate A - Reconciliation And Design
+
+Gate A is one comprehensive reasoning run before implementation. It contains
+the former zero-trust audit, canonical-plan reconciliation, and test/evidence
+design responsibilities.
+
+#### A1. Zero-Trust Recheck
 
 Read-only after branch creation.
 
@@ -286,16 +299,16 @@ Reconcile:
 ```text
 AUTHORITATIVE REQUIREMENTS
 -> ORIGINAL PLAN
--> ORIGINAL IMPLEMENTATION / PR
+-> ORIGINAL IMPLEMENTATION / PR / ACTUAL DIFF
 -> ORIGINAL OMISSIONS
+-> IMPLEMENTATION-TO-AUTHORITY EXTRA SCOPE
 -> MATERIAL LATER EVOLUTION
 -> CURRENT FULL REPOSITORY STATE
 -> NEGATIVE SPACE
--> IMPLEMENTATION-TO-AUTHORITY EXTRA SCOPE
 -> BYPASS / SINGLE-OWNER STATE
 -> DEPENDENCIES / CROSS-PASS HANDOFFS
 -> TRACKED ARTIFACT STATE
--> EXTERNAL-EVIDENCE BOUNDARY
+-> REPOSITORY / EXTERNAL-EVIDENCE BOUNDARY
 ```
 
 No plan edits, implementation edits, test design, tests, requirement JSON, or
@@ -317,42 +330,49 @@ security-policy, operational, or other owner decision that is not already
 approved in authoritative records, stop. Report the unresolved question, why
 existing authority does not resolve it, and which requirement is affected. Do
 not invent policy, silently choose a value or behavior, or continue into later
-phases until the required decision exists.
+gate work until the required decision exists.
 
-End with human review.
+#### A2. Finalize The Canonical Pass Plan
 
-### Phase 2 - Finalize Canonical Pass Plan
+If A1 has no unresolved blocker, update only the canonical pass plan using the
+approved audit, current authority, and `PASS-PLANNING-TEMPLATE.md`.
 
-Inputs are the approved Phase 1 audit, current authority, and
-`PASS-PLANNING-TEMPLATE.md`.
+The plan must define:
 
-Only reconcile and finalize the canonical pass plan. The plan defines what must
-be true; it does not implement corrections. Do not design tests, create
-requirement JSON, or create `TESTING_RECORD.md`.
+- stable requirements;
+- technical contracts;
+- scope and non-goals;
+- pass-owned outputs;
+- handoffs;
+- evidence categories;
+- completion criteria.
 
-Once approved, freeze the plan unless concrete contradictory evidence later
-requires reopening it.
+The plan defines what must be true; it does not implement corrections. Do not
+change production code, tracked configuration, governance artifacts,
+requirement JSON, `TESTING_RECORD.md`, or tests in Gate A.
 
-### Phase 3A - Pass-Owned Implementation Correction
+#### A3. Correction And Evidence Design
 
-Run only when the approved audit or plan proves a pass-owned implementation or
-artifact correction is required. Depending on the pass, this may include
-production source, tracked configuration, governance or document artifacts, or
-repository-owned operational artifacts.
+Using the reconciled plan, design:
 
-Do not modify production merely because testing is inconvenient. Do not add
-unrelated refactors. Do not write full trusted evidence here; only run narrow
-syntax, loadability, or safety validation when needed to establish that the
-correction itself is coherent.
+- exact production or configuration corrections, if any;
+- exact governance, document, or repository-owned operational artifacts, if
+  any;
+- exact testing-infrastructure compatibility corrections, if any;
+- stable requirement IDs and declaration states;
+- source controls, scopes, and required reasons for declarations;
+- requirement-to-risk reasoning;
+- meaningful scenarios, boundaries, and failure modes;
+- safeguards;
+- lowest reliable proof layer;
+- executable versus non-executable evidence;
+- covered-elsewhere evidence;
+- external or later-pass gaps;
+- exact Gate B file set.
 
-If no implementation or artifact correction is required, explicitly skip this
-phase.
-
-### Phase 3B - Read-Only Test / Evidence Design Gate
-
-Before designing evidence, read the accepted testing architecture and
-standards. Testing standards define how proof is organized; they do not define
-product behavior.
+Before designing evidence, read the accepted testing architecture and standards.
+Testing standards define how proof is organized; they do not define product
+behavior.
 
 Design requirement-by-requirement:
 
@@ -371,9 +391,9 @@ authoritative requirement
 Include deliberate negative cases, boundaries, failure transformations, and
 concurrency, timing, provider, or database layers only where materially
 required. Do not create blind Cartesian combinations. Historical tests remain
-out of bounds. No files are changed in this phase.
+out of bounds.
 
-For every requirement or meaningful requirement group, decide before Phase 4:
+For every requirement or meaningful requirement group, decide before Gate B:
 
 - correct trusted owning test or evidence location;
 - exact evidence artifact types needed;
@@ -387,41 +407,127 @@ For every requirement or meaningful requirement group, decide before Phase 4:
 - what repository-owned evidence is sufficient;
 - what remains external or deliberately deferred.
 
-### Phase 4 - Trusted Test / Evidence Implementation
+#### Gate A Feasibility Check
 
-Implement only the approved Phase 3B design.
+Before Gate A may be approved, verify the proposed design against current
+repository machinery. At minimum confirm:
 
-As applicable, create stable requirement declaration JSON, `TESTING_RECORD.md`,
-fresh trusted executable tests, and repository-owned non-executable evidence
-under the accepted EN-01 architecture.
+- requirement IDs are accepted by the checker;
+- declaration states, scopes, source controls, and reasons are
+  schema-compatible;
+- proposed trusted roots or subtrees are allowed by suite policy;
+- proposed paths do not conflict with current files;
+- required proof layers actually exist;
+- PostgreSQL, provider/network, browser, migration, concurrency, and
+  controlled-time needs are explicitly decided;
+- the exact Gate B file set is feasible;
+- no hidden prerequisite or owner decision remains.
+
+This is analysis and validation only. Do not create the proposed implementation
+artifacts during Gate A.
+
+#### Gate A Human Approval
+
+Gate A returns material findings, a requirement reconciliation matrix, the
+updated canonical plan, exact correction design, exact evidence design, exact
+Gate B file set, and blockers.
+
+The canonical plan, requirements, correction design, evidence design, and Gate
+B file set become frozen only after human approval.
+
+### Gate B - Approved Implementation
+
+Gate B implements exactly the approved Gate A design. It contains the former
+pass-owned correction and trusted test/evidence implementation
+responsibilities.
+
+#### B1. Pass-Owned Corrections And Artifacts
+
+As approved, this may include:
+
+- production source;
+- tracked configuration;
+- governance or document artifacts;
+- repository-owned operational artifacts;
+- narrow testing-infrastructure compatibility corrections.
+
+Do not modify production merely because testing is inconvenient. Do not add
+unrelated refactors. If no implementation or artifact correction is approved,
+explicitly skip that portion.
+
+#### B2. Trusted Test And Evidence Implementation
+
+As approved, create stable requirement declaration JSON, `TESTING_RECORD.md`,
+fresh trusted executable tests, and legitimate non-executable repository
+evidence under the accepted EN-01 architecture.
 
 Tests are derived from authority and the approved pass plan, never from
-historical tests. Validate focused tests, relevant prerequisite regressions,
-checker file/domain/suite scopes as appropriate, generated traceability,
-syntax/compile, environment/database/network/provider safety, and
-`git diff --check`.
+historical tests.
+
+#### Required Order
+
+Use this implementation order:
+
+```text
+approved source/config/artifact corrections
+-> approved supporting infrastructure corrections
+-> requirement metadata
+-> TESTING_RECORD
+-> trusted executable/non-executable evidence
+-> focused validation
+-> checker and generated traceability
+-> STOP
+```
 
 Implement the approved proof architecture rather than quietly redesigning it.
 Do not change production code merely to make a test pass. If current production
-contradicts the approved plan, stop and reopen the appropriate earlier phase.
+contradicts the approved plan, stop and return to Gate A.
 
-### Phase 5 - Independent Test / Evidence Adequacy Review
+If Gate B unexpectedly needs another production file, another requirement,
+another proof layer, provider access, PostgreSQL, browser evidence, migration
+evidence, concurrency evidence, controlled-time evidence, or broader scope,
+stop and return to Gate A. Gate B must not silently expand or redesign the
+pass. Tests must not redefine behavior or cause requirements to be weakened.
+
+Validate focused tests, relevant prerequisite regressions, checker
+file/domain/suite scopes as appropriate, generated traceability,
+syntax/compile, environment/database/network/provider safety, and
+`git diff --check`.
+
+Gate B ends with an implementation and validation report. It does not commit or
+push.
+
+### Gate C - Independent Final Review
+
+Gate C must be a new, independent, read-only run. It combines the former
+evidence adequacy and whole-pass local review responsibilities without removing
+either review obligation.
+
+Gate C never modifies repository content. When Gate C finds a defect, it
+returns `corrections required` and defines the exact authorized correction
+scope. A separate scoped correction run performs only the approved changes.
+After the correction, a new independent read-only Gate C re-review is required
+before approval or Gate D. Gate C must not fix files during the review run,
+silently transition from review into implementation, or review an agent's own
+unapproved correction in the same run.
+
+#### C1. Evidence Adequacy Review
 
 Read-only review of the implemented proof. Evaluate whether the evidence
 actually covers the approved risks and proves the intended safeguards. Do not
 approve merely because commands are green.
 
 Check for missing risks, weak assertions, tests passing for the wrong reason,
-wrong proof layers, implementation-detail coupling, missing persisted-effect
-proof, missing rejected-side-effect proof, missing idempotency, concurrency, or
-boundary proof where applicable, unsupported adequacy claims, fake pytest used
-for documentary or provider facts, and redundant evidence without distinct risk
-value.
+wrong proof layers, implementation-detail coupling, incorrect requirement
+markers, over-tagging, under-tagging, static-test false confidence,
+ambient-state or isolation defects, missing persisted-effect proof, missing
+rejected-side-effect proof, missing idempotency, concurrency, or boundary proof
+where applicable, dishonest `covered_elsewhere`, `TESTING_RECORD.md`
+overclaims, unsupported adequacy claims, fake pytest used for documentary or
+provider facts, generated traceability defects, and redundant evidence without
+distinct risk value.
 
-If a real deficiency exists, allow one tightly scoped correction round. Do not
-casually reopen the whole pass.
-
-### Phase 6 - Whole-Pass Local Review
+#### C2. Whole-Pass Consistency Review
 
 Read-only review of the complete pass together:
 
@@ -433,6 +539,7 @@ AUTHORITY
 <-> TESTING_RECORD
 <-> EXECUTABLE / NON-EXECUTABLE EVIDENCE
 <-> GENERATED TRACEABILITY
+<-> EXTERNAL / LATER-PASS GAPS
 ```
 
 Review all material issues in one pass. Do not drip-feed cosmetic findings.
@@ -447,19 +554,52 @@ local change set, verify no unexpected files are present, and verify repository
 contents remain unchanged by the read-only review. Do not require unrelated
 full-repository validation when the approved pass scope does not justify it.
 
-Green commands alone are not sufficient for whole-pass approval. Phase 6 must
+Green commands alone are not sufficient for whole-pass approval. Gate C must
 review semantic consistency and evidence adequacy, not merely test execution.
 
-End with exactly one outcome:
+#### Post-Gate C Correction Routing
+
+Gate C reports correction routing; it does not perform the correction.
+
+A narrow evidence defect is limited to affected evidence files, such as a
+missing test scenario, weak assertion, wrong marker, testing-record
+overstatement, or narrow static-test defect. Gate C returns
+`corrections required`, defines the affected evidence files and exact
+correction scope, then stops. A separate scoped correction run modifies only
+those files, reruns affected validation, and is followed by a new targeted
+independent read-only Gate C re-review.
+
+An implementation mistake inside the already-approved frozen design may use a
+separate scoped correction run only when the authoritative contract, canonical
+plan, requirement set, proof layer, approved file set, and pass scope remain
+unchanged. The correction run fixes only that approved mistake, reruns affected
+evidence, and is followed by a new full independent read-only Gate C review.
+
+Return to Gate A when a finding requires a new requirement, changed
+requirement, new owner decision, new proof layer, expanded file set, broader
+pass scope, or material plan revision. No post-Gate C correction run may make
+these changes under Gate C authorization.
+
+Do not impose an artificial maximum number of correction rounds. Every
+correction round must be followed by a new independent read-only Gate C review,
+using either the targeted or full route authorized by the prior Gate C finding.
+Approval requires a genuinely clean independent review.
+
+End with exactly one semantic outcome:
 
 - approved for Git finalization;
 - corrections required.
 
-Do not commit or push during this phase.
+When the outcome is `corrections required`, report the material finding, the
+affected requirement or contract, the exact authorized correction scope, and
+whether the next review is a targeted Gate C re-review, a full Gate C re-review,
+or a return to Gate A. Gate C itself leaves repository contents unchanged.
 
-### Phase 7 - Git / PR Finalization
+Do not commit or push during Gate C.
 
-Run only after Phase 6 approval. This phase is mechanical.
+### Gate D - Git And PR Finalization
+
+Run only after Gate C approval. This gate is mechanical.
 
 Verify the accepted baseline, exact approved change set, no unexpected files,
 no staged contamination, secret/confidential-data safety, and diff integrity.
@@ -484,17 +624,79 @@ history, or temporary debugging information.
 
 The user merges manually.
 
-## 14. Freeze Rule
+## 14. Additional Intermediate Gates
 
-Once a phase receives human approval, its result is frozen. A later phase may
-reopen it only when concrete evidence demonstrates a material contradiction.
+Do not create lanes or risk scores.
+
+An additional intermediate gate is allowed only when a concrete discovered
+blocker cannot safely fit within the four standard gates. Examples include:
+
+- unresolved owner or policy decision;
+- real provider-account mutation;
+- destructive migration or real-data transformation;
+- irreversible operational action;
+- required external evidence that must be gathered before implementation;
+- another concrete issue requiring independent approval before Gate B can
+  continue.
+
+The extra gate must address only the discovered blocker. Do not create
+speculative process merely because a pass sounds high risk.
+
+## 15. Freeze Rule
+
+After Gate A approval, the canonical plan, requirements, correction design,
+evidence design, and authorized Gate B file set are frozen unless concrete
+contradictory evidence requires returning to Gate A.
+
+After Gate C approval, no semantic changes are permitted in Gate D.
 
 Do not rewrite a plan because a test name is inconvenient, change production
 merely to satisfy a test, weaken a requirement to make evidence pass, redesign
-scenarios while implementing them, reopen approved phases for cosmetic
-preferences, or allow scope creep between phases.
+scenarios while implementing them, reopen approved gates for cosmetic
+preferences, or allow scope creep between gates.
 
-## 15. Test And Evidence Principles
+## 16. Safe Efficiency Rules
+
+Efficiency comes from grouped approval points and targeted evidence, not from
+skipping analysis.
+
+### Targeted Authority Reading
+
+For each pass, read fully:
+
+- authority-order entry point;
+- workflow;
+- current pass plan;
+- relevant blueprint entry;
+- relevant control or decision sections;
+- original implementation diff;
+- relevant prerequisite and downstream plans;
+- current implementation areas.
+
+Large audit, checklist, and remediation records may be searched by pass or
+control identifier and expanded where relevant instead of reread end to end
+without purpose.
+
+### Exception-Oriented Reporting
+
+The analysis remains comprehensive. Reports should emphasize material findings,
+corrections, unusual ownership or proof decisions, remaining gaps, and
+blockers.
+
+A mandatory requirement reconciliation or completion matrix prevents
+requirements from disappearing despite shorter prose.
+
+### Pass-Family Research Reuse
+
+Related split passes may reuse already accepted common authority, history, and
+repository reconnaissance.
+
+Each pass or subpass still requires its own requirements, current-state
+verdict, implementation or artifacts, evidence, traceability, remaining gaps,
+and final approval. Shared research does not create family-wide automatic
+approval.
+
+## 17. Test And Evidence Principles
 
 Use the accepted EN-01 architecture and current testing documents for detailed
 mechanics. Permanent proof principles include:
@@ -517,9 +719,9 @@ mechanics. Permanent proof principles include:
 - generated pytest-node traceability rather than manually maintained node IDs;
 - passing tests alone are never sufficient evidence of production readiness.
 
-## 16. Security And Confidentiality
+## 18. Security And Confidentiality
 
-Throughout all phases, do not publish or echo real passwords, API keys, tokens,
+Throughout all gates, do not publish or echo real passwords, API keys, tokens,
 private keys, database credentials, webhook secrets, signed or private URLs,
 recovery codes, personal or private user data, payment data, raw provider
 evidence, provider-private dashboard links, or local secrets.
@@ -527,12 +729,12 @@ evidence, provider-private dashboard links, or local secrets.
 Synthetic placeholders must be obviously synthetic. If sensitive material is
 discovered, report location and category only, not the value.
 
-## 17. Human Review And Stop Discipline
+## 19. Human Review And Stop Discipline
 
 Each Codex prompt should explicitly state:
 
 ```text
-Do only this phase. Do not begin the next phase.
+Do only this gate. Do not begin the next gate.
 ```
 
 This prevents mixed audit and implementation work, repeated redesign,
