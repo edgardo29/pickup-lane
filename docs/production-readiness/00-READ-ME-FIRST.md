@@ -1,15 +1,17 @@
 # Pickup Lane Production-Readiness Authoritative Documentation Bundle
 
-## Current execution status
+## Execution status
 
-- Trusted repository baseline: `0a2236f97db681c77c7b091aace071544254b03e`
-- `BASE-00` is complete.
-- Current working branch: `pr/GOV-01`
-- `GOV-01` read-only inspection is complete.
-- No GOV-01 documentation commit has been made from this bundle yet.
-- No technical implementation pass has begun.
+This document does not maintain mutable branch, SHA, or current-pass status.
 
-The master blueprint was written before BASE-00 was completed. Where its original starting instructions still say to run BASE-00, this current status record takes precedence for execution status only. It does not alter the blueprint's architecture, pass definitions, dependencies, or controls.
+Determine current execution state from:
+
+1. current accepted `origin/develop`;
+2. current local repository state;
+3. the currently approved pass-specific instruction.
+
+Do not rely on historical baseline SHAs, branch names, or previously recorded
+pass status as current execution state.
 
 ## Authority order
 
@@ -35,6 +37,8 @@ Only the final approved decision records and the v4 inventory showing 27 approve
 
 ### `planning/`
 The finalized remediation plan and master execution blueprint.
+The reusable pass recheck process for revalidating already-implemented passes
+lives at [`PASS-RECHECK-WORKFLOW.md`](planning/PASS-RECHECK-WORKFLOW.md).
 
 ## Excluded intentionally
 
