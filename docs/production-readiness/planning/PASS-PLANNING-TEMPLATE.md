@@ -67,8 +67,10 @@ Use these rules throughout:
 - Testing And Evidence explains how the requirements are proven.
 - Detailed scenario inventories, edge cases, failure cases, and adequacy
   reasoning belong in the appropriate `TESTING_RECORD.md` when that testing
-  architecture applies. The planning document may summarize major risks, but it
-  should not duplicate the entire testing record.
+  architecture applies. Use
+  `docs/production-readiness/planning/TESTING-RECORD-TEMPLATE.md` when creating
+  or reconciling those records. The planning document may summarize major
+  risks, but it should not duplicate the entire testing record.
 - Explain control IDs and relationships instead of listing identifiers without
   context.
 - Separate what this pass establishes from what remains for later passes or

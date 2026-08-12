@@ -163,7 +163,12 @@ the related controls can close.
 
 ## Tests Added
 
-Current non-legacy tests were added under
+This section records the evidence used when WS02-03 was completed. After the
+EN-01 testing reset, `backend/tests/shared/` is historical archive material, not
+current trusted production-readiness evidence. Future trusted coverage for this
+behavior must be re-derived from current authority under the EN-01 architecture.
+
+At the time of this WS02 pass, tests were added under
 `backend/tests/shared/http_security/`.
 
 They cover host configuration, Host validation, CORS exactness and credentialed

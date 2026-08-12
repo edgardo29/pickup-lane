@@ -83,7 +83,13 @@ If future evidence shows a missing database invariant, pause before adding a mig
 
 ## Validation Notes
 
-WS03-02 validation used focused backend lifecycle/concurrency tests, shared authentication regressions, the full current backend suite, frontend unit tests, frontend lint/build, Python compile, diff/static checks, and a sensitive-content scan. The backend test-contract checker cannot currently certify `backend/tests/shared/authentication` because that existing shared test folder has no `_backend_test_contract.py`; WS03-02 does not add a new contract framework. `ruff` is not installed in the current backend virtualenv and was not introduced as new tooling.
+This section records the evidence used when WS03-02 was completed. After the
+EN-01 testing reset, `backend/tests/shared/` and `_backend_test_contract.py`
+references are historical archive context, not current trusted
+production-readiness evidence. Future trusted coverage for this behavior must
+be re-derived from current authority under the EN-01 architecture.
+
+WS03-02 validation used focused backend lifecycle/concurrency tests, shared authentication regressions, the full current backend suite, frontend unit tests, frontend lint/build, Python compile, diff/static checks, and a sensitive-content scan. The backend test-contract checker could not certify `backend/tests/shared/authentication` because that existing shared test folder had no `_backend_test_contract.py`; WS03-02 did not add a new contract framework. `ruff` was not installed in the current backend virtualenv and was not introduced as new tooling.
 
 ## Handoffs
 

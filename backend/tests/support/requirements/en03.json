@@ -20,7 +20,7 @@
     {
       "id": "EN03-BOUNDARY-001",
       "owning_pass": "EN-03",
-      "source_controls": ["OPS-006", "EN-03 master blueprint"],
+      "source_controls": ["OPS-006", "EN-03"],
       "state": "covered_elsewhere",
       "scope": "planning",
       "reason": "Repository source and configuration boundary review are the current proof; frontend bundle, deployment, and runtime binding proof require later external evidence."
@@ -44,8 +44,12 @@
       "id": "EN03-SCOPE-001",
       "owning_pass": "EN-03",
       "source_controls": [
-        "EN-03 master blueprint",
-        "finalized remediation plan non-closure/evidence boundary"
+        "OPS-005",
+        "OPS-006",
+        "OPS-007",
+        "OPS-025",
+        "EN-03",
+        "WS10-02"
       ],
       "state": "covered_elsewhere",
       "scope": "planning",

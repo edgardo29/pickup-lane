@@ -13,6 +13,22 @@ remains separate.
 
 ## Trusted Architecture
 
+The current backend test tree is:
+
+```text
+backend/tests/
+  checker/
+  compliance/
+  platform/
+  support/
+  legacy/
+```
+
+`legacy/` is a historical archive only. It is not trusted production-readiness
+evidence, is excluded from trusted discovery, is not part of normal validation,
+does not define current expected behavior, and is not required to remain
+runnable.
+
 Trusted production-readiness backend tests are organized by ownership:
 
 ```text
@@ -35,6 +51,11 @@ backend/tests/
   test-resource verification.
 - `support/` owns reusable test infrastructure only.
 - `checker/` owns checker, compliance, and environment-safety self-tests.
+
+`domains/`, `workflows/`, `migrations/`, and `provider_contract/` are reserved
+trusted roots in suite policy. Do not create placeholder directories for them;
+create a root only when reviewed, current trusted coverage exists for that
+ownership area.
 
 Existing backend application tests are not trusted production-readiness evidence
 until future work derives them from authoritative requirements under this
@@ -76,7 +97,11 @@ backend/tests/checker/TESTING_RECORD.md
 
 These records explain useful risks, scenarios, boundaries, owning layers, gaps,
 and adequacy conclusions. They do not duplicate every Python test, exact node
-ID, or product specification.
+ID, or product specification. The reusable standard for these records lives at:
+
+```text
+docs/production-readiness/planning/TESTING-RECORD-TEMPLATE.md
+```
 
 ## Checker Commands
 

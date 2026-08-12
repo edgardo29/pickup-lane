@@ -15,7 +15,7 @@ authoritative proof layer is outside a backend pytest assertion.
 ## Authoritative Basis
 
 - Approved canonical EN-03 planning document.
-- EN-03 zero-trust audit result and Path A evidence boundary.
+- Canonical EN-03 repository/provider evidence boundary and non-closure guidance.
 - EN-01 trusted testing taxonomy and checker architecture.
 - Production-readiness requirements, governance registers, checklist artifacts, and
   non-closure guidance.

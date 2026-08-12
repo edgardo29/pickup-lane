@@ -225,21 +225,8 @@ def client() -> TestClient:
 
 
 @pytest.fixture(autouse=True)
-def enable_stripe_payments_for_existing_tests(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("ENABLE_STRIPE_PAYMENTS", "true")
-    monkeypatch.setenv("STRIPE_SECRET_KEY", "synthetic-stripe-secret-key")
-    monkeypatch.setenv("STRIPE_PUBLISHABLE_KEY", "synthetic-stripe-publishable-key")
-    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "synthetic-stripe-webhook-secret")
-    monkeypatch.setenv("INBOX_TOKEN_SECRET", "synthetic-inbox-test-token")
-    reset_settings_cache()
-    yield
-    reset_settings_cache()
-
-
-@pytest.fixture(autouse=True)
 def clean_database(
     request: pytest.FixtureRequest,
-    enable_stripe_payments_for_existing_tests,
 ):
     if not _test_uses_database(request):
         yield
