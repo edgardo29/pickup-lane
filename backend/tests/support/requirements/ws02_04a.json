@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-04A-R1",
+      "owning_pass": "WS02-04A",
+      "source_controls": ["API-M12", "API-M15", "EN-02", "FE-M04"],
+      "state": "required",
+      "scope": "platform/api_errors"
+    },
+    {
+      "id": "WS02-04A-R2",
+      "owning_pass": "WS02-04A",
+      "source_controls": ["API-M12", "API-M09", "EN-02"],
+      "state": "required",
+      "scope": "platform/api_errors"
+    },
+    {
+      "id": "WS02-04A-R3",
+      "owning_pass": "WS02-04A",
+      "source_controls": [
+        "API-M12",
+        "API-M09",
+        "API-M10",
+        "API-M11",
+        "EN-02",
+        "WS02-04B2A1",
+        "WS02-04C1",
+        "WS02-04C3A",
+        "WS02-05A"
+      ],
+      "state": "required",
+      "scope": "platform/api_errors"
+    },
+    {
+      "id": "WS02-04A-R4",
+      "owning_pass": "WS02-04A",
+      "source_controls": ["API-M12", "API-M13", "API-M15", "FDN-07", "EN-02"],
+      "state": "required",
+      "scope": "platform/api_errors"
+    },
+    {
+      "id": "WS02-04A-R5",
+      "owning_pass": "WS02-04A",
+      "source_controls": ["API-M12", "API-M15", "OPS-010", "EN-02", "WS02-04C1"],
+      "state": "required",
+      "scope": "platform/api_errors"
+    },
+    {
+      "id": "WS02-04A-R6",
+      "owning_pass": "WS02-04A",
+      "source_controls": [
+        "API-M12",
+        "API-M08",
+        "API-M16",
+        "API-M17",
+        "API-M18",
+        "API-M19",
+        "WS02-02",
+        "WS02-03",
+        "WS02-05A"
+      ],
+      "state": "required",
+      "scope": "platform/api_errors"
+    },
+    {
+      "id": "WS02-04A-R7",
+      "owning_pass": "WS02-04A",
+      "source_controls": ["API-M12", "API-M15", "EN-02", "WS02-02"],
+      "state": "required",
+      "scope": "platform/api_errors"
+    },
+    {
+      "id": "WS02-04A-R8",
+      "owning_pass": "WS02-04A",
+      "source_controls": ["API-M12", "API-M15", "API-M19", "OPS-010", "OPS-025", "WS10-02"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Provider-generated errors, edge/CDN/WAF errors, deployed error/header precedence, public staging captures, provider timeout payloads, and sanitized provider/runtime evidence cannot be proven by local repository tests and remain external evidence."
+    }
+  ]
+}
