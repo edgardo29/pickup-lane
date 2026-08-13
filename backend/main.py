@@ -102,6 +102,13 @@ OPENAPI_SCHEMA_PATH = "/openapi.json"
 HEALTH_PATHS = frozenset({"/live", "/ready", "/db-health"})
 BODYLESS_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 SPECIAL_BODY_ROUTE_KEYS = frozenset({("POST", PLATFORM_NOTICE_CREATE_PATH)})
+APPLICATION_CORS_ALLOWED_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE")
+APPLICATION_CORS_ALLOWED_HEADERS = (
+    "Accept",
+    "Authorization",
+    "Content-Type",
+    "X-Request-ID",
+)
 
 
 class ResponseSecurityHeadersMiddleware:
@@ -261,8 +268,8 @@ def _add_application_middleware(app: FastAPI, backend_settings: BackendSettings)
         CORSMiddleware,
         allow_origins=list(backend_settings.cors_allowed_origins),
         allow_credentials=backend_settings.cors_allow_credentials,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=list(APPLICATION_CORS_ALLOWED_METHODS),
+        allow_headers=list(APPLICATION_CORS_ALLOWED_HEADERS),
     )
     app.add_middleware(
         TrustedHostMiddleware,

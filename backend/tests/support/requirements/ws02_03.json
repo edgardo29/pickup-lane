@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-03-R1",
+      "owning_pass": "WS02-03",
+      "source_controls": ["API-M04", "API-M05", "API-M06", "API-M07", "API-M08", "FDN-02"],
+      "state": "covered_elsewhere",
+      "scope": "planning",
+      "reason": "The canonical WS02-03 plan contains the FDN-02 response-class ownership matrix. Executable source conformance and bypass resistance are proven separately by R5, R6, R7, and R9."
+    },
+    {
+      "id": "WS02-03-R2",
+      "owning_pass": "WS02-03",
+      "source_controls": ["API-M05", "WS02-01"],
+      "state": "required",
+      "scope": "platform/http_security"
+    },
+    {
+      "id": "WS02-03-R3",
+      "owning_pass": "WS02-03",
+      "source_controls": ["API-M05", "API-M08", "WS02-02"],
+      "state": "required",
+      "scope": "platform/http_security"
+    },
+    {
+      "id": "WS02-03-R4",
+      "owning_pass": "WS02-03",
+      "source_controls": ["API-M07", "API-M05", "WS02-01"],
+      "state": "required",
+      "scope": "platform/http_security"
+    },
+    {
+      "id": "WS02-03-R5",
+      "owning_pass": "WS02-03",
+      "source_controls": ["API-M08", "FDN-02", "API-M16", "WS02-05"],
+      "state": "required",
+      "scope": "platform/http_security"
+    },
+    {
+      "id": "WS02-03-R6",
+      "owning_pass": "WS02-03",
+      "source_controls": ["API-M08", "FDN-02", "FDN-03", "WS02-05"],
+      "state": "required",
+      "scope": "platform/http_security"
+    },
+    {
+      "id": "WS02-03-R7",
+      "owning_pass": "WS02-03",
+      "source_controls": ["API-M04", "API-M05", "API-M06", "FDN-02"],
+      "state": "required",
+      "scope": "platform/http_security"
+    },
+    {
+      "id": "WS02-03-R8",
+      "owning_pass": "WS02-03",
+      "source_controls": ["API-M04", "API-M05", "API-M06", "API-M07", "API-M08", "OPS-025", "WS10-02"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Actual edge/origin topology, TLS/HSTS behavior, canonical-host and direct-origin behavior, trusted-proxy behavior, deployed CORS, provider header precedence, redirect traces, proxy-spoof observations, and staging response captures remain unverified external evidence. The canonical provider-evidence checklist and the WS02-03 evidence profile preserve these gaps without fabricating provider facts."
+    },
+    {
+      "id": "WS02-03-R9",
+      "owning_pass": "WS02-03",
+      "source_controls": ["API-M04", "API-M05", "API-M07", "API-M08", "WS02-02"],
+      "state": "required",
+      "scope": "platform/http_security"
+    }
+  ]
+}
