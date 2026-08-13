@@ -43,9 +43,11 @@ requirements, and tests do not define production behavior. A historical
 implementation does not become authority merely because it was merged.
 
 The current accepted `develop` branch is the repository source of truth for
-current implementation state. Historical branches, old prompts, old tests, and
-past PR descriptions are provenance unless a current authoritative source
-explicitly adopts them.
+current implementation state. Historical branches, old prompts, past PR
+descriptions, and other permitted historical implementation artifacts are
+provenance unless a current authoritative source explicitly adopts them. The
+excluded test tree defined below is never used for provenance or
+production-readiness reasoning.
 
 ## 3. Original Implementation As Provenance
 
@@ -72,14 +74,23 @@ actual original commit diff and changed-file set before concluding what the
 original pass implemented. The diff establishes what changed, not what should
 be true.
 
-### Historical Test Restriction
+### Excluded Test Tree
 
-Historical or pre-reset tests remain outside behavioral reasoning.
+For production-readiness work, `backend/tests/legacy/` is treated as
+nonexistent.
 
-Do not read historical test contents, execute them, derive expected behavior or
-scenarios from them, compare current behavior against them, or repair current
-production code to satisfy them. If an original PR contains historical test
-files, record their path and change presence for provenance only.
+Do not read, search, inspect, execute, inventory, count, cite, use for
+provenance, include in original-PR changed-file summaries, use for requirement
+discovery, use for scenario or assertion design, use for implementation
+reasoning, use for evidence design, compare with current implementation, or use
+to confirm current behavior.
+
+Do not record files from this tree by path or changed-file presence for
+provenance. Legitimate provenance outside the excluded tree remains allowed:
+current authoritative documents, current accepted source/configuration and
+governance files, production Git history outside the excluded tree, and fresh
+trusted evidence created under EN-01 may still be used within the authority
+rules above.
 
 ## 4. Requirement-By-Requirement Provenance Model
 
@@ -228,6 +239,21 @@ frontend-public configuration, backend-private configuration, and
 repository-owned evidence.
 
 Do not expand pass scope merely because an adjacent artifact exists.
+
+### Pass Plan Scope Rule
+
+A pass plan must remain within the material scope of that pass.
+
+A pass plan may contain artifacts, requirements, dependencies, integrations,
+evidence, controls, and ownership boundaries only when they materially define,
+implement, govern, constrain, or prove that pass.
+
+Do not include unrelated repository housekeeping in a pass plan merely because
+it may be completed on the same branch or included in the same PR. Examples of
+unrelated material that must remain outside a feature or pass plan include
+global workflow maintenance, program-context or onboarding documentation,
+unrelated documentation cleanup, branch or PR housekeeping, and unrelated
+process changes.
 
 ## 12. Repository, External Evidence, And Fact Classification
 
@@ -547,11 +573,14 @@ Require correction only for issues affecting correctness, evidence
 truthfulness, security, scope, maintainability, traceability, or production
 readiness.
 
-As applicable, rerun the approved relevant validation, inspect the complete
-local pass change set, review actual generated traceability, run
+Review the current validation results from the final changed state, inspect the
+complete local pass change set, review actual generated traceability, run
 `git diff --check`, perform a secret/confidential-data review of the complete
 local change set, verify no unexpected files are present, and verify repository
-contents remain unchanged by the read-only review. Do not require unrelated
+contents remain unchanged by the read-only review. Gate C does not
+automatically rerun already-current successful validation. Gate C may run only
+the smallest relevant test or check when it has a concrete stated reason, and
+the reason and exact rerun must be reported. Do not require unrelated
 full-repository validation when the approved pass scope does not justify it.
 
 Green commands alone are not sufficient for whole-pass approval. Gate C must
@@ -561,19 +590,51 @@ review semantic consistency and evidence adequacy, not merely test execution.
 
 Gate C reports correction routing; it does not perform the correction.
 
+The run that modifies files owns post-change validation. The independent
+read-only reviewer owns semantic review.
+
+When an approved correction changes an executable or shared artifact, including
+production source, configuration, tests, requirement metadata, testing
+infrastructure, or another executable/shared artifact, the correction run must
+run affected targeted validation, run the full relevant regression, checker,
+and traceability validation required for the corrected final pass state,
+correct any in-scope failures before handing the work back, and report a fully
+validated corrected repository state.
+
+Documentation-only corrections do not automatically require unrelated
+application test suites. They require only validation materially affected by the
+documentation change.
+
+The subsequent Gate C re-review remains independent, semantic, and read-only.
+Gate C must not automatically rerun already-current successful validation when
+no relevant artifact changed after that validation. Gate C may run the smallest
+relevant test or check only when there is a concrete reason, such as missing,
+ambiguous, suspicious, or potentially misleading evidence, or a specific result
+that needs reproduction.
+
 A narrow evidence defect is limited to affected evidence files, such as a
 missing test scenario, weak assertion, wrong marker, testing-record
 overstatement, or narrow static-test defect. Gate C returns
 `corrections required`, defines the affected evidence files and exact
 correction scope, then stops. A separate scoped correction run modifies only
-those files, reruns affected validation, and is followed by a new targeted
-independent read-only Gate C re-review.
+those files. If the correction changes executable or shared artifacts,
+including tests, requirement metadata, testing infrastructure, or executable
+evidence, the correction run must run affected targeted validation, run the full
+relevant regression, checker, and traceability validation required for the
+corrected final pass state, and correct in-scope failures before handoff. If
+the correction is documentation-only, the correction run must run only
+validation materially affected by the documentation change and must not
+automatically run unrelated application suites. The correction is followed by
+the required targeted independent read-only Gate C re-review.
 
 An implementation mistake inside the already-approved frozen design may use a
 separate scoped correction run only when the authoritative contract, canonical
 plan, requirement set, proof layer, approved file set, and pass scope remain
-unchanged. The correction run fixes only that approved mistake, reruns affected
-evidence, and is followed by a new full independent read-only Gate C review.
+unchanged. The correction run fixes only that approved mistake, runs affected
+targeted validation, runs the full relevant regression, checker, and
+traceability validation required for the corrected final pass state, corrects
+any in-scope failures before handoff, and is followed by a new full independent
+read-only Gate C review.
 
 Return to Gate A when a finding requires a new requirement, changed
 requirement, new owner decision, new proof layer, expanded file set, broader

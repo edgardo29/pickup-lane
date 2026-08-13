@@ -68,6 +68,11 @@ _STATUS_MESSAGES: dict[int, str] = {
     status.HTTP_500_INTERNAL_SERVER_ERROR: GENERIC_UNEXPECTED_MESSAGE,
     status.HTTP_503_SERVICE_UNAVAILABLE: "Service unavailable.",
 }
+_APPROVED_HTTP_EXCEPTION_HEADERS: dict[int, dict[str, str]] = {
+    status.HTTP_401_UNAUTHORIZED: {"www-authenticate": "WWW-Authenticate"},
+    status.HTTP_405_METHOD_NOT_ALLOWED: {"allow": "Allow"},
+    status.HTTP_429_TOO_MANY_REQUESTS: {"retry-after": "Retry-After"},
+}
 
 
 class CorrelationIdMiddleware:
@@ -175,7 +180,7 @@ async def handle_http_exception(
         code=code,
         message=message,
         detail=detail,
-        headers=exc.headers,
+        headers=_approved_http_exception_headers(exc.status_code, exc.headers),
     )
 
 
@@ -276,6 +281,22 @@ def _current_or_generated_correlation_id() -> str:
 
 def _error_code_for_status(status_code: int) -> str:
     return _STATUS_ERROR_CODES.get(status_code, "API.HTTP_ERROR")
+
+
+def _approved_http_exception_headers(
+    status_code: int,
+    headers: Mapping[str, str] | None,
+) -> dict[str, str]:
+    approved_names = _APPROVED_HTTP_EXCEPTION_HEADERS.get(status_code)
+    if not approved_names or not headers:
+        return {}
+
+    filtered: dict[str, str] = {}
+    for name, value in headers.items():
+        canonical_name = approved_names.get(name.lower())
+        if canonical_name is not None:
+            filtered[canonical_name] = value
+    return filtered
 
 
 def _error_code_from_detail(detail: Any) -> str | None:
