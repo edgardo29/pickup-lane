@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-04B1-R1",
+      "owning_pass": "WS02-04B1",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B1", "IAM-017"],
+      "state": "required",
+      "scope": "workflows/source_owned_boundaries"
+    },
+    {
+      "id": "WS02-04B1-R2",
+      "owning_pass": "WS02-04B1",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B1", "WS02-04A"],
+      "state": "required",
+      "scope": "workflows/source_owned_boundaries"
+    },
+    {
+      "id": "WS02-04B1-R3",
+      "owning_pass": "WS02-04B1",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B1", "DB-013"],
+      "state": "required",
+      "scope": "workflows/source_owned_boundaries"
+    },
+    {
+      "id": "WS02-04B1-R4",
+      "owning_pass": "WS02-04B1",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B1"],
+      "state": "required",
+      "scope": "workflows/source_owned_boundaries"
+    },
+    {
+      "id": "WS02-04B1-R5",
+      "owning_pass": "WS02-04B1",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B1", "DB-007"],
+      "state": "required",
+      "scope": "workflows/source_owned_boundaries"
+    },
+    {
+      "id": "WS02-04B1-R6",
+      "owning_pass": "WS02-04B1",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B1", "PAY-008"],
+      "state": "required",
+      "scope": "workflows/source_owned_boundaries"
+    },
+    {
+      "id": "WS02-04B1-R7",
+      "owning_pass": "WS02-04B1",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B1", "API-M11", "WS02-04C3A"],
+      "state": "required",
+      "scope": "workflows/source_owned_boundaries"
+    },
+    {
+      "id": "WS02-04B1-R8",
+      "owning_pass": "WS02-04B1",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B1", "STO-005", "STO-006", "DBP-03", "WS06-02"],
+      "state": "required",
+      "scope": "workflows/source_owned_boundaries"
+    },
+    {
+      "id": "WS02-04B1-R9",
+      "owning_pass": "WS02-04B1",
+      "source_controls": [
+        "API-M09",
+        "GOV-006",
+        "DB-005",
+        "DB-006",
+        "DB-007",
+        "DB-013",
+        "PAY-008",
+        "STO-005",
+        "STO-006",
+        "STO-009",
+        "DBP-03",
+        "DBP-04",
+        "API-M10",
+        "API-M11",
+        "API-M13",
+        "API-M14",
+        "API-M16",
+        "API-M18",
+        "API-M19"
+      ],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Database concurrency and cursor invariants, saved-card provider lifecycle and cleanup, venue-image content safety, publication, and R2 lifecycle, body/header/URL/ingress/provider limits, timeout, retry, backpressure, rate, and abuse controls, HTTP/OpenAPI/cache compatibility, and staging, deployment, provider, and runtime evidence remain with later owners and cannot be closed by local WS02-04B1 source tests."
+    }
+  ]
+}

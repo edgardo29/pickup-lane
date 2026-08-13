@@ -80,7 +80,7 @@ def get_platform_notice_route(
 )
 def list_platform_notice_recipients_route(
     notice_id: uuid.UUID,
-    cursor: str | None = None,
+    cursor: str | None = Query(default=None, max_length=2000),
     limit: int = Query(default=50, ge=1, le=100),
     current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
