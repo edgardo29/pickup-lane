@@ -461,6 +461,18 @@ Gate B file set, and blockers.
 The canonical plan, requirements, correction design, evidence design, and Gate
 B file set become frozen only after human approval.
 
+#### Gate A Review Completion Rule
+
+Before approving Gate A or issuing a Gate A correction instruction, the
+reviewer must complete review of the full Gate A report and the complete
+canonical plan, including authority alignment, numeric-value authority,
+cross-pass ownership, current repository truth, requirements, correction
+design, evidence design, completion criteria, and the exact Gate B editable
+file set.
+
+Return all material findings together. After corrections, review the complete
+corrected Gate A state, not only the sections changed by the correction.
+
 ### Gate B - Approved Implementation
 
 Gate B implements exactly the approved Gate A design. It contains the former

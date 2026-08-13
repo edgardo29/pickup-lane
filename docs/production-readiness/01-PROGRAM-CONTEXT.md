@@ -321,29 +321,29 @@ After WS02-04A, the next planned child pass is WS02-04B1 using
 Last verified: 2026-08-13
 
 Accepted `develop` baseline:
-`5d2246d9f078c5b99e1fa89e254d545074ad834c`
+`e1cff5c1666556c04f1a88cdc138bfabcc370f27`
 
 Current branch:
-`pr/WS02-04A-remediation`
+`pr/WS02-04B1-remediation`
 
 Current pass:
-`WS02-04A - Stable Backend Error Contracts`
+`WS02-04B1 - Source-Owned Boundaries`
 
 Current state:
-Gate C approved. Documentation housekeeping is in progress before Gate D.
+Gate A reconciliation/design complete and awaiting human approval.
 
 Completed merged rechecks:
 
 - WS02-01
 - WS02-02
 - WS02-03
+- WS02-04A
 
 Next immediate action:
-Complete this documentation housekeeping, then perform WS02-04A Gate D.
+Human Gate A approval, then Gate B implementation/evidence.
 
 Next planned pass:
-`WS02-04B1 - Source-Owned Boundaries` using
-`docs/production-readiness/planning/ws02-04b1-source-owned-boundaries.md`.
+Not applicable - the current pass remains in Gate A approval.
 
 > This snapshot is convenience context, not authority. Verify current Git state
 > before relying on branch, SHA, gate, PR, or next-pass information.
