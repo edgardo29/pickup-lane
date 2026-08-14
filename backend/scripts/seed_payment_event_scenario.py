@@ -230,23 +230,9 @@ def main() -> None:
     for label, value in ids.items():
         print(f"{label}: {value}")
     print("")
-    print("POST /payment-events body:")
-    print("{")
-    print(f'  "payment_id": "{ids["payment_event_payment_id"]}",')
-    print('  "provider": "stripe",')
-    print('  "provider_event_id": "evt_dev_payment_event_001",')
-    print('  "event_type": "payment_intent.succeeded",')
-    print('  "raw_payload": {')
-    print('    "id": "evt_dev_payment_event_001",')
-    print('    "type": "payment_intent.succeeded",')
-    print('    "data": {')
-    print('      "object": {')
-    print('        "id": "pi_dev_payment_event"')
-    print("      }")
-    print("    }")
-    print("  },")
-    print('  "processing_status": "pending"')
-    print("}")
+    print("Payment-event creation note:")
+    print("Generic payment-event creation is retired.")
+    print("Signed Stripe webhook processing owns provider-event creation.")
 
 
 if __name__ == "__main__":
