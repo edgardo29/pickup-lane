@@ -288,7 +288,7 @@ def _ordinary_json_body_routes(app: FastAPI) -> tuple[RequestBodyLimitRoute, ...
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
-        if not route.dependant.body_params:
+        if route.body_field is None:
             continue
 
         methods = frozenset(

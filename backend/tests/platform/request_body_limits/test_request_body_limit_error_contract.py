@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import Body, FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
+from backend.observability.request_body_limits import (
+    RequestBodyLimitMiddleware,
+    RequestBodyLimitRoute,
+)
 from backend.settings import build_settings, reset_settings_cache
 
 pytestmark = pytest.mark.no_db_cleanup
@@ -47,6 +53,30 @@ def _create_app(monkeypatch: pytest.MonkeyPatch, **overrides: str | None):
         validate_full=True,
     )
     return main_module.create_app(settings)
+
+
+def _synthetic_ordinary_app(*, limit_bytes: int = 1024) -> FastAPI:
+    app = FastAPI()
+
+    @app.post("/ordinary")
+    def ordinary_route(payload: dict = Body(...)):
+        return payload
+
+    route = next(route for route in app.routes if isinstance(route, APIRoute))
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        ordinary_json_request_body_limit_bytes=limit_bytes,
+        ordinary_json_body_routes=(
+            RequestBodyLimitRoute(
+                path=route.path,
+                methods=frozenset({"POST"}),
+                path_regex=route.path_regex,
+            ),
+        ),
+        platform_notice_request_body_limit_bytes=163_840,
+        stripe_webhook_request_body_limit_bytes=65_536,
+    )
+    return app
 
 
 def _assert_common_safe_error_contract(response, *, expected_status: int, expected_code: str) -> None:
@@ -129,3 +159,87 @@ def test_platform_notice_unsupported_content_encoding_uses_safe_stable_415(
         expected_code="API.UNSUPPORTED_CONTENT_ENCODING",
     )
     assert response.json()["detail"] == "Compressed request bodies are not supported for this endpoint."
+
+
+@pytest.mark.requirement("WS02-04B2A2C-R6")
+def test_ordinary_oversized_body_uses_safe_stable_413(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _create_app(monkeypatch, ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES="16")
+
+    with TestClient(app, follow_redirects=False, raise_server_exceptions=False) as client:
+        response = client.patch(
+            "/users/me",
+            headers={
+                "Host": "testserver",
+                "Origin": _ALLOWED_ORIGIN,
+                "X-Request-ID": _REQUEST_ID,
+                "Content-Type": "application/json",
+                "Authorization": _PRIVATE_HEADER,
+                "X-Private-Token": _PRIVATE_HEADER,
+            },
+            content=_PRIVATE_BODY,
+        )
+
+    _assert_common_safe_error_contract(
+        response,
+        expected_status=413,
+        expected_code="API.REQUEST_BODY_TOO_LARGE",
+    )
+    assert response.json()["detail"] == "Request body exceeds the approved application limit."
+
+
+@pytest.mark.requirement("WS02-04B2A2C-R6")
+def test_ordinary_unsupported_content_encoding_uses_safe_stable_415(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _create_app(monkeypatch, ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES="1024")
+
+    with TestClient(app, follow_redirects=False, raise_server_exceptions=False) as client:
+        response = client.patch(
+            "/users/me",
+            headers={
+                "Host": "testserver",
+                "Origin": _ALLOWED_ORIGIN,
+                "X-Request-ID": _REQUEST_ID,
+                "Content-Type": "application/json",
+                "Content-Encoding": "gzip",
+                "Authorization": _PRIVATE_HEADER,
+                "X-Private-Token": _PRIVATE_HEADER,
+            },
+            content=_PRIVATE_BODY,
+        )
+
+    _assert_common_safe_error_contract(
+        response,
+        expected_status=415,
+        expected_code="API.UNSUPPORTED_CONTENT_ENCODING",
+    )
+    assert response.json()["detail"] == "Compressed request bodies are not supported for this endpoint."
+
+
+@pytest.mark.requirement("WS02-04B2A2C-R6")
+def test_supported_json_request_remains_compatible_with_ordinary_limit() -> None:
+    app = _synthetic_ordinary_app(limit_bytes=1024)
+
+    with TestClient(app, follow_redirects=False, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/ordinary",
+            headers={"Content-Type": "application/json"},
+            content=b'{"value":"accepted"}',
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"value": "accepted"}
+
+
+@pytest.mark.requirement("WS02-04B2A2C-R6")
+def test_missing_content_type_is_not_rejected_by_a2c_size_limiter() -> None:
+    app = _synthetic_ordinary_app(limit_bytes=1024)
+
+    with TestClient(app, follow_redirects=False, raise_server_exceptions=False) as client:
+        response = client.post("/ordinary", content=b'{"value":"accepted"}')
+
+    assert response.status_code == 422
+    assert "API.UNSUPPORTED_MEDIA_TYPE" not in response.text
+    assert "API.UNSUPPORTED_CONTENT_ENCODING" not in response.text
