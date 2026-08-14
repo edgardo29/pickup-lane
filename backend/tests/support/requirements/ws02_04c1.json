@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-04C1-R1",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "GOV-006", "FDN-04", "WS02-04C1", "WS02-01"],
+      "state": "required",
+      "scope": "platform/operation_timeouts"
+    },
+    {
+      "id": "WS02-04C1-R2",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "GOV-006", "FDN-04", "WS02-04C1", "WS02-04C2", "PAY-002", "JOB-M05"],
+      "state": "required",
+      "scope": "platform/operation_timeouts"
+    },
+    {
+      "id": "WS02-04C1-R3",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "GOV-006", "FDN-04", "WS02-04C1", "WS03-02"],
+      "state": "required",
+      "scope": "platform/operation_timeouts"
+    },
+    {
+      "id": "WS02-04C1-R4",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "GOV-006", "FDN-04", "WS02-04C1", "WS06"],
+      "state": "required",
+      "scope": "platform/operation_timeouts"
+    },
+    {
+      "id": "WS02-04C1-R5",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "DB-004", "DB-008", "GOV-006", "FDN-04", "WS02-04C1"],
+      "state": "required",
+      "scope": "platform/operation_timeouts"
+    },
+    {
+      "id": "WS02-04C1-R6",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "API-M12", "EN-02", "WS02-04A", "WS02-04C1"],
+      "state": "required",
+      "scope": "platform/operation_timeouts"
+    },
+    {
+      "id": "WS02-04C1-R7",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "API-M19", "WS02-04C1", "WS02-04C2"],
+      "state": "required",
+      "scope": "platform/operation_timeouts"
+    },
+    {
+      "id": "WS02-04C1-R8",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "JOB-M05", "PAY-002", "GOV-006", "WS02-04C1", "WS02-04C2", "WS03-02", "WS05"],
+      "state": "required",
+      "scope": "platform/operation_timeouts"
+    },
+    {
+      "id": "WS02-04C1-R9",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "GOV-006", "WS02-04C1", "WS02-04C2", "WS02-04B1", "WS02-04B2A1", "WS02-04B2A2C"],
+      "state": "required",
+      "scope": "platform/operation_timeouts"
+    },
+    {
+      "id": "WS02-04C1-R10",
+      "owning_pass": "WS02-04C1",
+      "source_controls": ["API-M10", "API-M19", "DB-002", "GOV-006", "FDN-04", "WS02-04C1", "WS02-04C2", "WS02-04C3A", "WS02-04C3B", "WS04", "WS05", "WS06", "WS09", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Global request and response deadlines, DB connect timeout, pool size and overflow, deployment-wide connection budget, transaction duration, idle-session timeout, process-server and proxy behavior, provider dashboards, live network behavior, retries, rate controls, durable workers, shutdown, telemetry dashboards, alerts, and permanent-host/runtime evidence remain later or external responsibilities and cannot be closed by local C1 source tests. DB connect timeout, pool sizing, overflow, provider connection caps, and deployment instance/process connection consumption are DB-002 / WS04-owned later database evidence."
+    }
+  ]
+}
