@@ -206,19 +206,38 @@ def validate_derived_credit_source_game(
     source_payment: Payment | None,
     payment_booking: Booking | None,
 ) -> None:
-    if source_game_id is not None:
-        return
-
+    authoritative_game_ids: set[uuid.UUID] = set()
     if source_booking is not None:
-        validate_official_source_game(db, source_booking.game_id)
-        return
+        authoritative_game_ids.add(source_booking.game_id)
+    if source_payment is not None:
+        if source_payment.game_id is not None:
+            authoritative_game_ids.add(source_payment.game_id)
+        if payment_booking is not None:
+            authoritative_game_ids.add(payment_booking.game_id)
+        if source_payment.game_id is None and payment_booking is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Source payment must belong to an official in-app game.",
+            )
 
-    if source_payment is not None and source_payment.game_id is not None:
-        validate_official_source_game(db, source_payment.game_id)
-        return
+    if len(authoritative_game_ids) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source payment, booking, and game references must agree.",
+        )
 
-    if payment_booking is not None:
-        validate_official_source_game(db, payment_booking.game_id)
+    authoritative_game_id = next(iter(authoritative_game_ids), None)
+    if (
+        source_game_id is not None
+        and authoritative_game_id is not None
+        and source_game_id != authoritative_game_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source game must agree with the source payment or booking.",
+        )
+
+    validate_official_source_game(db, authoritative_game_id or source_game_id)
 
 
 def validate_credit_source_references(
@@ -319,14 +338,43 @@ def source_context_amounts(context: CreditSourceContext) -> list[int]:
     return amounts
 
 
-def source_context_reference_filter(context: CreditSourceContext):
-    source_filters = []
-    if context.source_payment is not None:
-        source_filters.append(GameCredit.source_payment_id == context.source_payment.id)
+def source_context_booking_ids(context: CreditSourceContext) -> set[uuid.UUID]:
+    booking_ids: set[uuid.UUID] = set()
     if context.source_booking is not None:
-        source_filters.append(GameCredit.source_booking_id == context.source_booking.id)
+        booking_ids.add(context.source_booking.id)
     if context.payment_booking is not None:
-        source_filters.append(GameCredit.source_booking_id == context.payment_booking.id)
+        booking_ids.add(context.payment_booking.id)
+    if context.source_payment is not None and context.source_payment.booking_id is not None:
+        booking_ids.add(context.source_payment.booking_id)
+    return booking_ids
+
+
+def source_context_payment_ids(
+    db: Session,
+    context: CreditSourceContext,
+) -> set[uuid.UUID]:
+    payment_ids: set[uuid.UUID] = set()
+    if context.source_payment is not None:
+        payment_ids.add(context.source_payment.id)
+
+    booking_ids = source_context_booking_ids(context)
+    if booking_ids:
+        linked_payment_ids = db.scalars(
+            select(Payment.id).where(Payment.booking_id.in_(booking_ids))
+        ).all()
+        payment_ids.update(linked_payment_ids)
+
+    return payment_ids
+
+
+def source_context_reference_filter(db: Session, context: CreditSourceContext):
+    source_filters = []
+    payment_ids = source_context_payment_ids(db, context)
+    booking_ids = source_context_booking_ids(context)
+    if payment_ids:
+        source_filters.append(GameCredit.source_payment_id.in_(payment_ids))
+    if booking_ids:
+        source_filters.append(GameCredit.source_booking_id.in_(booking_ids))
     return or_(*source_filters) if source_filters else None
 
 
@@ -336,7 +384,7 @@ def get_existing_credit_total_for_source(
     user_id: uuid.UUID,
     context: CreditSourceContext,
 ) -> int:
-    source_filter = source_context_reference_filter(context)
+    source_filter = source_context_reference_filter(db, context)
     if source_filter is None:
         return 0
 

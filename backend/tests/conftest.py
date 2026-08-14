@@ -206,7 +206,7 @@ def _truncate_test_tables(connection, table_names: str) -> None:
     connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def client() -> TestClient:
     database_url = os.getenv("DATABASE_URL", "")
 
