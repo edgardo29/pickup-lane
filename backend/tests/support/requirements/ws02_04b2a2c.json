@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-04B2A2C-R1",
+      "owning_pass": "WS02-04B2A2C",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B2A1", "WS02-04B2A2C", "WS02-04B2A2B1", "WS02-04B2A2B2", "WS02-04B2A2B3"],
+      "state": "required",
+      "scope": "platform/request_body_limits"
+    },
+    {
+      "id": "WS02-04B2A2C-R2",
+      "owning_pass": "WS02-04B2A2C",
+      "source_controls": ["API-M09", "GOV-006", "FDN-04", "WS02-04B2A2C", "WS02-01"],
+      "state": "required",
+      "scope": "platform/request_body_limits"
+    },
+    {
+      "id": "WS02-04B2A2C-R3",
+      "owning_pass": "WS02-04B2A2C",
+      "source_controls": ["API-M09", "GOV-006", "FDN-04", "WS02-04B2A1", "WS02-04B2A2C"],
+      "state": "required",
+      "scope": "platform/request_body_limits"
+    },
+    {
+      "id": "WS02-04B2A2C-R4",
+      "owning_pass": "WS02-04B2A2C",
+      "source_controls": ["API-M09", "WS02-04B2A2C", "WS02-04B2A2A", "WS02-04B2A2B1", "WS02-04B2A2B2", "WS02-04B2A2B3"],
+      "state": "required",
+      "scope": "platform/request_body_limits"
+    },
+    {
+      "id": "WS02-04B2A2C-R5",
+      "owning_pass": "WS02-04B2A2C",
+      "source_controls": ["API-M09", "GOV-006", "WS02-04B2A1", "WS02-04B2A2C", "WS05"],
+      "state": "required",
+      "scope": "platform/request_body_limits"
+    },
+    {
+      "id": "WS02-04B2A2C-R6",
+      "owning_pass": "WS02-04B2A2C",
+      "source_controls": ["API-M09", "API-M12", "API-M13", "WS02-04A", "WS02-05A", "WS02-03", "EN-02", "WS02-04B2A2C"],
+      "state": "required",
+      "scope": "platform/request_body_limits"
+    },
+    {
+      "id": "WS02-04B2A2C-R7",
+      "owning_pass": "WS02-04B2A2C",
+      "source_controls": [
+        "API-M09",
+        "API-M13",
+        "API-M14",
+        "API-M18",
+        "GOV-006",
+        "FDN-04",
+        "WS02-04B2A1",
+        "WS02-04B2A2C",
+        "WS02-05A",
+        "WS02-05B1",
+        "WS02-05B2",
+        "WS05",
+        "WS06",
+        "WS09"
+      ],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "External ingress, edge, process-server, provider hard limits, request-line and header limits, form/multipart/file upload limits, direct R2 object-byte limits, permanent-host and staging precedence, runtime/load evidence, telemetry, dashboards, alerts, Stripe/provider dashboard proof, broad request/response ownership, and OpenAPI/cache/media contracts beyond the source-owned ordinary JSON boundary remain with their listed owners and cannot be closed by A2C local source tests."
+    }
+  ]
+}
