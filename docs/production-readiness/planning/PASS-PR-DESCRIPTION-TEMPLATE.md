@@ -33,9 +33,23 @@ WS02-03: Harden backend CORS and HTTP security boundaries
 
 Use a brief summary sized to the PR.
 
-Explain why the PR exists, the production-readiness outcome it establishes, and
-whether production behavior changed. Include the context needed for a reviewer
-to understand the work, but do not repeat the entire Changes section.
+Write the Summary for a reviewer who has not read the pass plan or internal
+production-readiness documents. Start by explaining in plain English what part
+of the product or system the PR affects, what problem or risk it addresses, and
+why the work exists. Then explain the high-level outcome and whether production
+behavior changed.
+
+The reader should understand what the PR actually does and why before
+encountering internal pass terminology, requirement IDs, control IDs, or
+specialized architecture language. Technical terminology is fine once its
+meaning and context are clear.
+
+For example, prefer explaining that a change prevents client-supplied payment
+information from being treated as proof of a real payment before describing the
+change as "payment input ownership."
+
+The Summary is not a shortened Changes section. It should provide context,
+meaning, and the overall outcome without repeating all implementation details.
 
 ### Changes
 
@@ -96,6 +110,12 @@ Do not include this section when there is no meaningful reviewer focus.
 PR descriptions must:
 
 - use plain engineering language;
+- make the Summary understandable without requiring the reviewer to read the
+  pass plan first;
+- explain the product or system meaning before introducing internal terminology,
+  requirement IDs, or control IDs;
+- prefer concrete descriptions of behavior, risk, and outcome over abstract
+  production-readiness language;
 - preserve technical precision;
 - explain uncommon internal terminology;
 - distinguish production changes from test, evidence, and documentation
@@ -123,8 +143,12 @@ entirely when there is no meaningful reviewer focus.
 ```markdown
 ## Summary
 
-[Explain why this PR exists, the outcome it establishes, and whether production
-behavior changes.]
+[Explain in plain English what part of the product/system this PR is about and
+what problem or risk it addresses. Write this so a reviewer can understand the
+context without reading the pass plan.]
+
+[Then explain the high-level outcome and whether production behavior changes.
+Introduce internal terminology only after its meaning is clear.]
 
 ## Changes
 
