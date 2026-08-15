@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-04C2-R1",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "JOB-M05", "GOV-006", "FDN-04", "WS02-04C2", "WS02-01"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R2",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "JOB-M05", "GOV-006", "FDN-04", "WS02-04C2", "WS02-04C1"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R3",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "JOB-M05", "PAY-002", "GOV-006", "WS02-04C1", "WS02-04C2", "WS02-04B2A2B2", "WS03-02"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R4",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "JOB-M05", "PAY-002", "GOV-006", "WS02-04C1", "WS02-04C2"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R5",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "JOB-M05", "PAY-002", "GOV-006", "WS02-04C2", "WS02-04B2A2B2", "WS05"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R6",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "JOB-M05", "PAY-002", "GOV-006", "WS02-04C2", "WS02-04C1", "WS02-04B2A2B2", "WS03-02", "WS05"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R7",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "JOB-M05", "PAY-002", "GOV-006", "WS02-04C2", "WS02-04B2A2B2", "WS05"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R8",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M11", "API-M10", "JOB-M05", "GOV-006", "WS02-04C2", "WS02-04B1", "WS02-04C3A", "WS02-04C3B", "WS05"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R9",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "JOB-M05", "PAY-002", "GOV-006", "WS02-04C2", "WS03-02", "WS05"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R10",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "API-M12", "API-M15", "EN-02", "OPS-010", "WS02-04C2"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation"
+    },
+    {
+      "id": "WS02-04C2-R11",
+      "owning_pass": "WS02-04C2",
+      "source_controls": ["API-M10", "API-M11", "API-M19", "DB-002", "GOV-006", "FDN-04", "JOB-M05", "PAY-002", "WS02-04C2", "WS02-04C3A", "WS02-04C3B", "WS04", "WS05", "WS06", "WS09", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Rate controls, abuse controls, provider dashboard delivery/retry settings, live provider retry behavior, permanent runtime topology, durable worker implementation, queue tables, leases, scheduler cadence, worker retry counts, worker concurrency, poison policy, global request/response deadlines, database connection budgets, load evidence, telemetry dashboards, alerts, and provider concurrency limits remain later or external responsibilities and cannot be closed by local C2 source tests."
+    }
+  ]
+}
