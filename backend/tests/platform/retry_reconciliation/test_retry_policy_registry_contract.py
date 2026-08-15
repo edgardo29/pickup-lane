@@ -1,0 +1,170 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+import backend.services.provider_retry_policy as retry_policy
+
+pytestmark = pytest.mark.no_db_cleanup
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_EXPECTED_CLASSES = {
+    "SAFE_READ",
+    "IDEMPOTENT_MUTATION",
+    "RECONCILE_BEFORE_RETRY",
+    "MANUAL_REPAIR",
+    "PROVIDER_REDELIVERY",
+    "NO_AUTOMATIC_RETRY",
+}
+
+
+def _by_context() -> dict[str, retry_policy.ProviderOperationRetryPolicy]:
+    return {
+        policy.workflow_context: policy
+        for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES
+    }
+
+
+@pytest.mark.requirement("WS02-04C2-R1")
+def test_retry_classes_and_registry_shape_are_source_owned_and_declarative() -> None:
+    source = (_REPO_ROOT / "backend/services/provider_retry_policy.py").read_text()
+
+    assert {item.value for item in retry_policy.RetrySafetyClass} == _EXPECTED_CLASSES
+    assert "def retry" not in source
+    assert "sleep(" not in source
+    assert "asyncio" not in source
+    assert "@dataclass(frozen=True)" in source
+    assert "get_stripe_client_pair" not in source
+
+    for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES:
+        assert policy.workflow_context
+        assert policy.material_callers
+        assert policy.current_recovery
+        assert policy.application_automatic_retry_allowed is False
+
+
+@pytest.mark.requirement("WS02-04C2-R1", "WS02-04C2-R5", "WS02-04C2-R6")
+def test_workflow_specific_stripe_mutation_entries_are_truthful() -> None:
+    policies = _by_context()
+
+    assert policies["checkout_initial_create_before_provider_result"].operation == (
+        "stripe.payment_intent.create"
+    )
+    assert policies["checkout_initial_create_before_provider_result"].safety_class == (
+        retry_policy.RetrySafetyClass.NO_AUTOMATIC_RETRY
+    )
+    assert not policies[
+        "checkout_initial_create_before_provider_result"
+    ].identity_survives_replay
+    assert "rolls back" in policies[
+        "checkout_initial_create_before_provider_result"
+    ].current_recovery
+
+    assert policies["checkout_initial_confirm_after_checkpoint"].operation == (
+        "stripe.payment_intent.confirm"
+    )
+    assert policies["checkout_initial_confirm_after_checkpoint"].safety_class == (
+        retry_policy.RetrySafetyClass.RECONCILE_BEFORE_RETRY
+    )
+    assert policies["checkout_initial_confirm_after_checkpoint"].identity_survives_replay
+    assert "reacquires game serialization" in policies[
+        "checkout_initial_confirm_after_checkpoint"
+    ].current_recovery
+    assert "re-reads the persisted PaymentIntent" in policies[
+        "checkout_initial_confirm_after_checkpoint"
+    ].current_recovery
+
+    assert policies["saved_card_customer_creation"].safety_class == (
+        retry_policy.RetrySafetyClass.IDEMPOTENT_MUTATION
+    )
+    assert policies["saved_card_customer_creation"].client_retry_stable_idempotency
+    assert policies["saved_card_setup_intent_creation"].safety_class == (
+        retry_policy.RetrySafetyClass.NO_AUTOMATIC_RETRY
+    )
+    assert not policies["saved_card_setup_intent_creation"].client_retry_stable_idempotency
+
+
+@pytest.mark.requirement("WS02-04C2-R1", "WS02-04C2-R5")
+def test_operation_lookup_cannot_silently_select_the_wrong_context() -> None:
+    payment_create_policies = retry_policy.policies_by_operation(
+        "stripe.payment_intent.create"
+    )
+
+    assert {policy.workflow_context for policy in payment_create_policies} >= {
+        "checkout_initial_create_before_provider_result",
+        "community_publish_fee_initial_create",
+        "waitlist_auto_promotion_create",
+    }
+    with pytest.raises(ValueError, match="multiple retry-policy workflow contexts"):
+        retry_policy.policy_by_operation("stripe.payment_intent.create")
+
+    checkout_policy = retry_policy.policy_by_operation(
+        "stripe.payment_intent.create",
+        workflow_context="checkout_initial_create_before_provider_result",
+    )
+    assert checkout_policy.safety_class == retry_policy.RetrySafetyClass.NO_AUTOMATIC_RETRY
+
+    unambiguous_read = retry_policy.policy_by_operation("stripe.setup_intent.retrieve")
+    assert unambiguous_read.safety_class == retry_policy.RetrySafetyClass.SAFE_READ
+
+
+@pytest.mark.requirement("WS02-04C2-R1", "WS02-04C2-R5")
+def test_blanket_payment_intent_create_replay_claim_is_gone() -> None:
+    for policy in retry_policy.policies_by_operation("stripe.payment_intent.create"):
+        rendered = " ".join(
+            value
+            for value in (
+                policy.current_recovery,
+                policy.durable_follow_up or "",
+                policy.idempotency_identity_source or "",
+            )
+        ).lower()
+        assert "stable for checkout replay" not in rendered
+
+    checkout_policy = retry_policy.policy_by_operation_context(
+        "stripe.payment_intent.create",
+        "checkout_initial_create_before_provider_result",
+    )
+    assert checkout_policy.provider_idempotency_key_used
+    assert not checkout_policy.client_retry_stable_idempotency
+
+
+@pytest.mark.requirement("WS02-04C2-R8", "WS02-04C2-R9")
+def test_fanout_entries_and_durable_handoffs_are_complete_and_non_numeric() -> None:
+    assert {policy.workflow for policy in retry_policy.FANOUT_EXECUTION_POLICIES} == {
+        "platform_notice.selected_user_publish",
+        "game_chat.notification_rows",
+        "need_a_sub_chat.notification_rows",
+        "game_updated.notification_rows",
+        "waitlist.promotion",
+        "account_deletion.cleanup",
+        "official_game_cancellation.refunds",
+        "official_game_player_removal.refunds",
+        "community_publish_fee.financial_outcome_refund",
+        "late_checkout_payment.refund",
+    }
+    for policy in retry_policy.FANOUT_EXECUTION_POLICIES:
+        assert (
+            "sequential" in policy.execution_model
+            or policy.execution_model
+            in {"single_admin_state_gated_workflow", "single_webhook_repair_helper"}
+        )
+        assert policy.new_concurrency_allowed is False
+        assert policy.approved_concurrency_cap is None
+        assert policy.approved_batch_size is None
+
+    assert {handoff.workflow for handoff in retry_policy.DURABLE_WORK_HANDOFFS} == {
+        "provider_unknown_outcome_reconciliation",
+        "checkout_post_expiry_provider_reconciliation",
+        "account_deletion_cleanup_recovery",
+        "future_external_notification_delivery",
+        "future_platform_notice_external_delivery",
+        "durable_financial_reconciliation",
+    }
+    for handoff in retry_policy.DURABLE_WORK_HANDOFFS:
+        assert handoff.owner_pass == "WS05"
+        assert handoff.required_durable_properties
+        assert handoff.approved_worker_retry_attempts is None
+        assert handoff.approved_worker_concurrency is None
+        assert handoff.approved_lease_seconds is None

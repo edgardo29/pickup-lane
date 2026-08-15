@@ -536,6 +536,141 @@ def confirm_credit_covered_checkout(
     db.add(db_game)
 
 
+def resume_pending_checkout_with_locked_game(
+    db: Session,
+    db_game: Game,
+    checkout_request: GameCheckoutPaymentIntentCreate,
+    current_user: User,
+    *,
+    return_url: str | None,
+    party_size: int,
+    subtotal_cents: int,
+    now: datetime,
+) -> GameCheckoutPaymentIntentRead | None:
+    reusable_checkout = get_reusable_pending_checkout(
+        db,
+        db_game,
+        current_user,
+        party_size=party_size,
+        subtotal_cents=subtotal_cents,
+        now=now,
+    )
+    if reusable_checkout is None:
+        return None
+
+    booking, payment = reusable_checkout
+    saved_payment_method = None
+    if payment.payment_status == "requires_payment_method":
+        saved_payment_method = get_current_user_saved_payment_method_for_checkout(
+            db,
+            checkout_request.payment_method_id,
+            current_user,
+            now=now,
+        )
+        if saved_payment_method is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Choose a saved card before checkout.",
+            )
+
+    try:
+        payment_intent = retrieve_payment_intent(payment.provider_payment_intent_id)
+    except StripeConfigError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except PublicTimeoutError:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Stripe could not retrieve this payment intent.",
+        ) from exc
+
+    stripe_status = payment_intent.status
+    payment_status = map_payment_intent_status(stripe_status)
+    if payment_status not in PENDING_PAYMENT_STATUSES and stripe_status != "succeeded":
+        return None
+
+    if stripe_status == "requires_payment_method":
+        if saved_payment_method is None:
+            saved_payment_method = get_current_user_saved_payment_method_for_checkout(
+                db,
+                checkout_request.payment_method_id,
+                current_user,
+                now=now,
+            )
+            if saved_payment_method is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Choose a saved card before checkout.",
+                )
+        try:
+            payment_intent = confirm_payment_intent(
+                payment.provider_payment_intent_id,
+                payment_method_id=saved_payment_method.stripe_payment_method_id,
+                return_url=return_url,
+            )
+        except StripeConfigError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+        except PublicTimeoutError:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Stripe could not confirm this saved payment method.",
+            ) from exc
+
+        stripe_status = payment_intent.status
+
+    payment_status = keep_payment_pending_until_webhook(stripe_status)
+
+    payment.payment_status = payment_status
+    payment.provider_charge_id = payment_intent.latest_charge_id
+    payment.updated_at = now
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+    db.refresh(booking)
+    return build_checkout_response(
+        db,
+        booking,
+        payment,
+        payment_intent.client_secret,
+        stripe_status=stripe_status,
+    )
+
+
+def resume_serialized_pending_checkout(
+    db: Session,
+    game_id: uuid.UUID,
+    checkout_request: GameCheckoutPaymentIntentCreate,
+    current_user: User,
+    *,
+    return_url: str | None,
+    party_size: int,
+    subtotal_cents: int,
+    now: datetime,
+) -> GameCheckoutPaymentIntentRead | None:
+    db_game = get_locked_active_game_or_404(db, game_id)
+    require_checkout_game_open(db_game, current_user, now)
+    expire_stale_pending_checkouts(db, db_game, now)
+    return resume_pending_checkout_with_locked_game(
+        db,
+        db_game,
+        checkout_request,
+        current_user,
+        return_url=return_url,
+        party_size=party_size,
+        subtotal_cents=subtotal_cents,
+        now=now,
+    )
+
+
 def create_game_checkout_payment_intent_workflow(
     db: Session,
     game_id: uuid.UUID,
@@ -565,102 +700,18 @@ def create_game_checkout_payment_intent_workflow(
 
     expire_stale_pending_checkouts(db, db_game, now)
 
-    reusable_checkout = get_reusable_pending_checkout(
+    resumed_checkout = resume_pending_checkout_with_locked_game(
         db,
         db_game,
+        checkout_request,
         current_user,
+        return_url=return_url,
         party_size=party_size,
         subtotal_cents=subtotal_cents,
         now=now,
     )
-    if reusable_checkout is not None:
-        booking, payment = reusable_checkout
-        saved_payment_method = None
-        if payment.payment_status == "requires_payment_method":
-            saved_payment_method = get_current_user_saved_payment_method_for_checkout(
-                db,
-                checkout_request.payment_method_id,
-                current_user,
-                now=now,
-            )
-            if saved_payment_method is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Choose a saved card before checkout.",
-                )
-
-        try:
-            payment_intent = retrieve_payment_intent(payment.provider_payment_intent_id)
-        except StripeConfigError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=str(exc),
-            ) from exc
-        except PublicTimeoutError:
-            raise
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Stripe could not retrieve this payment intent.",
-            ) from exc
-
-        stripe_status = payment_intent.status
-        payment_status = map_payment_intent_status(stripe_status)
-        if payment_status in PENDING_PAYMENT_STATUSES or stripe_status == "succeeded":
-            if stripe_status == "requires_payment_method":
-                if saved_payment_method is None:
-                    saved_payment_method = (
-                        get_current_user_saved_payment_method_for_checkout(
-                            db,
-                            checkout_request.payment_method_id,
-                            current_user,
-                            now=now,
-                        )
-                    )
-                    if saved_payment_method is None:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Choose a saved card before checkout.",
-                        )
-                try:
-                    payment_intent = confirm_payment_intent(
-                        payment.provider_payment_intent_id,
-                        payment_method_id=(
-                            saved_payment_method.stripe_payment_method_id
-                        ),
-                        return_url=return_url,
-                    )
-                except StripeConfigError as exc:
-                    raise HTTPException(
-                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail=str(exc),
-                    ) from exc
-                except PublicTimeoutError:
-                    raise
-                except Exception as exc:
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail="Stripe could not confirm this saved payment method.",
-                    ) from exc
-
-                stripe_status = payment_intent.status
-
-            payment_status = keep_payment_pending_until_webhook(stripe_status)
-
-            payment.payment_status = payment_status
-            payment.provider_charge_id = payment_intent.latest_charge_id
-            payment.updated_at = now
-            db.add(payment)
-            db.commit()
-            db.refresh(payment)
-            db.refresh(booking)
-            return build_checkout_response(
-                db,
-                booking,
-                payment,
-                payment_intent.client_secret,
-                stripe_status=stripe_status,
-            )
+    if resumed_checkout is not None:
+        return resumed_checkout
 
     if get_existing_active_participant(db, db_game.id, current_user.id) is not None:
         raise HTTPException(
@@ -816,14 +867,6 @@ def create_game_checkout_payment_intent_workflow(
             customer_id=current_user.stripe_customer_id,
         )
         stripe_status = payment_intent.status
-        if saved_payment_method is not None:
-            payment_intent = confirm_payment_intent(
-                payment_intent.id,
-                payment_method_id=saved_payment_method.stripe_payment_method_id,
-                return_url=return_url,
-            )
-            stripe_status = payment_intent.status
-
         payment.provider_payment_intent_id = payment_intent.id
         payment.provider_charge_id = payment_intent.latest_charge_id
         payment.payment_status = keep_payment_pending_until_webhook(stripe_status)
@@ -832,6 +875,23 @@ def create_game_checkout_payment_intent_workflow(
         db.commit()
         db.refresh(booking)
         db.refresh(payment)
+
+        resumed_checkout = resume_serialized_pending_checkout(
+            db,
+            game_id,
+            checkout_request,
+            current_user,
+            return_url=return_url,
+            party_size=party_size,
+            subtotal_cents=subtotal_cents,
+            now=datetime.now(timezone.utc),
+        )
+        if resumed_checkout is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Checkout payment state could not be resumed.",
+            )
+        return resumed_checkout
     except StripeConfigError as exc:
         db.rollback()
         raise HTTPException(
