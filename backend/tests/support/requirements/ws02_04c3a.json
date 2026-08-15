@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-04C3A-R1",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3A", "WS02-04B1"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R2",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3A"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R3",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3A"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R4",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3A", "DB-002"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R5",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "AUTHZ-011", "WS02-04C3A", "WS03"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R6",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "API-M12", "GOV-006", "WS02-04C3A", "WS02-04A", "WS02-04C2"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R7",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "API-M12", "API-M15", "EN-02", "WS02-03", "WS02-04A", "WS02-04C3A"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R8",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "WS02-04C3A", "WS02-04B1", "WS03"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R9",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3A", "WS02-04C3B"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R10",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "API-M15", "EN-02", "OPS-010", "WS02-04C3A"],
+      "state": "required",
+      "scope": "platform/chat_rate_limits"
+    },
+    {
+      "id": "WS02-04C3A-R11",
+      "owning_pass": "WS02-04C3A",
+      "source_controls": ["API-M11", "API-M19", "GOV-006", "FDN-04", "WS02-04C3A", "WS02-04C3B", "WS02-03", "WS05", "WS08", "WS09", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Provider-cost/action rate values, authenticated non-chat throttles, anonymous/public abuse controls, trusted client-IP identity, forwarded-header trust, edge/WAF/CAPTCHA/auth-provider/provider-dashboard controls, permanent hosting/provider evidence, runtime/load validation, monitoring, alerts, and full API-M11 closure remain later or external responsibilities and cannot be closed by local C3A source tests."
+    }
+  ]
+}
