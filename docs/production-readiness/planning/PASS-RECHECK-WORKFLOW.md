@@ -284,7 +284,26 @@ Important conclusions should be identifiable as one of:
 Label inferences and support them. Do not silently convert unknowns into
 assumptions.
 
-## 13. Permanent Four-Gate Workflow
+## 13. Mandatory Gate Preflight
+
+Before drafting, issuing, approving, correcting, or executing any gate instruction
+
+1. reread this workflow;
+2. verify current repository state, including branch, baseline, staged files,
+   local changes, and current approved instruction;
+3. read the current or frozen pass plan for the gate;
+4. identify and read all applicable repository templates and required
+   engineering/testing standards for the gate;
+5. verify material ownership across authority, current source, prerequisite
+   passes, later-pass handoffs, and external/provider evidence boundaries;
+6. self-review the gate instruction for scope, editable files, validation,
+   stop boundary, security/confidentiality, and correction-routing clarity
+   before issuing it.
+
+A gate instruction is incomplete when an applicable repository template or
+required standard was not reviewed before the instruction was drafted.
+
+## 14. Permanent Four-Gate Workflow
 
 Each gate does exactly its assigned job, stops at its approval boundary, and
 does not begin the next gate. The four-gate model groups approvals for speed;
@@ -396,6 +415,10 @@ Using the reconciled plan, design:
 - external or later-pass gaps;
 - exact Gate B file set.
 
+When designing a `TESTING_RECORD.md`, use `TESTING-RECORD-TEMPLATE.md` and
+keep the design consistent with its required structure and evidence-quality
+rules.
+
 Before designing evidence, read the accepted testing architecture and standards.
 Testing standards define how proof is organized; they do not define product
 behavior.
@@ -499,6 +522,9 @@ As approved, create stable requirement declaration JSON, `TESTING_RECORD.md`,
 fresh trusted executable tests, and legitimate non-executable repository
 evidence under the accepted EN-01 architecture.
 
+Use `TESTING-RECORD-TEMPLATE.md` for any created or reconciled
+`TESTING_RECORD.md`.
+
 Tests are derived from authority and the approved pass plan, never from
 historical tests.
 
@@ -540,6 +566,10 @@ push.
 Gate C must be a new, independent, read-only run. It combines the former
 evidence adequacy and whole-pass local review responsibilities without removing
 either review obligation.
+
+Gate C review inputs must include the frozen plan, requirement declarations,
+`TESTING_RECORD.md`, implemented evidence, and current validation. Use
+`TESTING-RECORD-TEMPLATE.md` when reviewing testing-record compliance.
 
 Gate C never modifies repository content. When Gate C finds a defect, it
 returns `corrections required` and defines the exact authorized correction
@@ -677,6 +707,9 @@ Run only after Gate C approval. This gate is mechanical.
 Verify the accepted baseline, exact approved change set, no unexpected files,
 no staged contamination, secret/confidential-data safety, and diff integrity.
 
+Before drafting, creating, updating, or reviewing a PR title or body, read and
+follow `PASS-PR-DESCRIPTION-TEMPLATE.md`.
+
 Then stage only approved files, inspect the exact staged diff, create one pass
 commit unless the approved pass explicitly requires a different commit
 structure, push the existing remediation branch normally, create or update
@@ -697,7 +730,7 @@ history, or temporary debugging information.
 
 The user merges manually.
 
-## 14. Additional Intermediate Gates
+## 15. Additional Intermediate Gates
 
 Do not create lanes or risk scores.
 
@@ -715,7 +748,7 @@ blocker cannot safely fit within the four standard gates. Examples include:
 The extra gate must address only the discovered blocker. Do not create
 speculative process merely because a pass sounds high risk.
 
-## 15. Freeze Rule
+## 16. Freeze Rule
 
 After Gate A approval, the canonical plan, requirements, correction design,
 evidence design, and authorized Gate B file set are frozen unless concrete
@@ -728,7 +761,7 @@ merely to satisfy a test, weaken a requirement to make evidence pass, redesign
 scenarios while implementing them, reopen approved gates for cosmetic
 preferences, or allow scope creep between gates.
 
-## 16. Safe Efficiency Rules
+## 17. Safe Efficiency Rules
 
 Efficiency comes from grouped approval points and targeted evidence, not from
 skipping analysis.
@@ -769,7 +802,7 @@ verdict, implementation or artifacts, evidence, traceability, remaining gaps,
 and final approval. Shared research does not create family-wide automatic
 approval.
 
-## 17. Test And Evidence Principles
+## 18. Test And Evidence Principles
 
 Use the accepted EN-01 architecture and current testing documents for detailed
 mechanics. Permanent proof principles include:
@@ -792,7 +825,7 @@ mechanics. Permanent proof principles include:
 - generated pytest-node traceability rather than manually maintained node IDs;
 - passing tests alone are never sufficient evidence of production readiness.
 
-## 18. Security And Confidentiality
+## 19. Security And Confidentiality
 
 Throughout all gates, do not publish or echo real passwords, API keys, tokens,
 private keys, database credentials, webhook secrets, signed or private URLs,
@@ -802,7 +835,7 @@ evidence, provider-private dashboard links, or local secrets.
 Synthetic placeholders must be obviously synthetic. If sensitive material is
 discovered, report location and category only, not the value.
 
-## 19. Human Review And Stop Discipline
+## 20. Human Review And Stop Discipline
 
 Each Codex prompt should explicitly state:
 

@@ -13,6 +13,19 @@ Determine current execution state from:
 Do not rely on historical baseline SHAs, branch names, or previously recorded
 pass status as current execution state.
 
+## New session bootstrap
+
+Before any production-readiness pass work:
+
+1. Read this document, `01-PROGRAM-CONTEXT.md`, and
+   `planning/PASS-RECHECK-WORKFLOW.md`.
+2. Verify current Git/repository state and determine the current pass and gate
+   from current repository truth and the current approved instruction before
+   relying on historical prompts, PRs, branches, SHAs, or prior chat context.
+3. Load the current or frozen pass plan and every gate-specific repository
+   template or required engineering/testing standard before drafting or
+   executing that gate's instruction.
+
 ## Authority order
 
 1. Current repository tree at the trusted baseline and later accepted pass commits

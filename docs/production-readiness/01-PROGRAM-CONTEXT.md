@@ -14,7 +14,7 @@ It provides:
 - workflow overview;
 - trusted evidence overview;
 - pass-ordering guidance;
-- a small current-program snapshot.
+- mandatory gate document inputs.
 
 This document is orientation and navigation only. It does not override
 `docs/production-readiness/00-READ-ME-FIRST.md`, higher-authority controls or
@@ -316,74 +316,44 @@ After WS02-04A, the next planned child pass is WS02-04B1 using
 | Gate C | Independent semantic read-only review. |
 | Gate D | Mechanical Git and PR finalization. |
 
-## 12. Current Program Snapshot
+## 12. Mandatory Gate Document Matrix
 
-Last verified: 2026-08-13
+Applicable repository templates and standards are mandatory gate inputs, not
+optional references. A gate instruction is incomplete when an applicable
+repository template or required standard was not reviewed before drafting it.
 
-Accepted `develop` baseline:
-`e1cff5c1666556c04f1a88cdc138bfabcc370f27`
+| Gate | Mandatory gate inputs |
+|---|---|
+| Gate A | `PASS-PLANNING-TEMPLATE.md`, `TESTING-RECORD-TEMPLATE.md`, the current pass plan, and applicable engineering/testing standards. |
+| Gate B | The frozen plan, `TESTING-RECORD-TEMPLATE.md`, and applicable engineering/testing standards. |
+| Gate C | The frozen plan, requirement declaration, `TESTING_RECORD.md`, implemented evidence, and current validation. Use `TESTING-RECORD-TEMPLATE.md` when reviewing testing-record compliance. |
+| Gate D | The frozen plan, Gate C approval, and `PASS-PR-DESCRIPTION-TEMPLATE.md`. |
 
-Current branch:
-`pr/WS02-04B1-remediation`
+Gate-specific prompts may require additional authority, source, governance,
+testing, or evidence documents. The matrix is the durable minimum, not a cap.
 
-Current pass:
-`WS02-04B1 - Source-Owned Boundaries`
+## 13. New-Agent Bootstrap Reading Order
 
-Current state:
-Gate A reconciliation/design complete and awaiting human approval.
-
-Completed merged rechecks:
-
-- WS02-01
-- WS02-02
-- WS02-03
-- WS02-04A
-
-Next immediate action:
-Human Gate A approval, then Gate B implementation/evidence.
-
-Next planned pass:
-Not applicable - the current pass remains in Gate A approval.
-
-> This snapshot is convenience context, not authority. Verify current Git state
-> before relying on branch, SHA, gate, PR, or next-pass information.
-
-## 13. Current Snapshot Maintenance
-
-Update the snapshot at meaningful transitions:
-
-- after a pass is merged;
-- when a new pass begins;
-- when the accepted `develop` baseline changes;
-- when the next planned pass changes;
-- when work stops at a meaningful state that a new conversation may need to
-  resume from.
-
-Do not update it after every command, test run, checker run, minor correction,
-or routine validation result.
-
-The stable explanatory sections should change only when the program structure,
-workflow, terminology, document map, or required reading materially changes.
-
-## 14. New-Agent Bootstrap Reading Order
-
-1. Read `docs/production-readiness/01-PROGRAM-CONTEXT.md` completely.
-2. Read `docs/production-readiness/00-READ-ME-FIRST.md` and follow its
+1. Read `docs/production-readiness/00-READ-ME-FIRST.md` and follow its
    authority rules.
-3. Read the required repository-wide testing/engineering standards listed in
-   this document.
-4. Read `docs/production-readiness/planning/PASS-RECHECK-WORKFLOW.md`.
-5. Read the relevant templates for the task.
-6. Verify current Git state.
-7. Read the current canonical pass plan.
-8. Read only the authority/control/decision material relevant to that pass.
-9. Determine the current gate.
-10. Report that you are caught up.
-11. Do not begin implementation until explicitly instructed.
+2. Read `docs/production-readiness/01-PROGRAM-CONTEXT.md` completely.
+3. Read `docs/production-readiness/planning/PASS-RECHECK-WORKFLOW.md`.
+4. Verify current Git/repository state and determine the current pass and gate
+   from current repository truth and the current approved instruction.
+5. Read the current or frozen canonical pass plan.
+6. Read the applicable gate templates and required engineering/testing
+   standards from the matrix above.
+7. Read only the authority/control/decision material relevant to that pass.
+8. Report that you are caught up.
+9. Do not begin implementation until explicitly instructed.
 
-## 15. Suggested New-Chat Prompt
+## 14. Suggested New-Chat Prompt
 
-> We're continuing Pickup Lane production-readiness work. Read
-> `docs/production-readiness/01-PROGRAM-CONTEXT.md` completely, follow its
-> bootstrap instructions and linked required reading, then tell me when you're
-> caught up. Do not start work yet.
+> We're continuing Pickup Lane production-readiness work. Start from
+> `docs/production-readiness/00-READ-ME-FIRST.md`, then read
+> `docs/production-readiness/01-PROGRAM-CONTEXT.md` and
+> `docs/production-readiness/planning/PASS-RECHECK-WORKFLOW.md`. Verify current
+> repository truth, current pass, and current gate before relying on historical
+> chat, PR, branch, or SHA information. Load the gate-specific templates and
+> required standards for the current task, then tell me when you're caught up.
+> Do not start work yet.

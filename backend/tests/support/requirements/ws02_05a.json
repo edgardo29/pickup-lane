@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-05A-R1",
+      "owning_pass": "WS02-05A",
+      "source_controls": ["API-M13", "API-M09", "WS02-05A", "WS02-04B2A1", "WS02-04B2A2C", "WS02-04A"],
+      "state": "required",
+      "scope": "platform/http_contracts"
+    },
+    {
+      "id": "WS02-05A-R2",
+      "owning_pass": "WS02-05A",
+      "source_controls": ["API-M13", "API-M12", "WS02-05A", "WS02-04A"],
+      "state": "required",
+      "scope": "platform/http_contracts"
+    },
+    {
+      "id": "WS02-05A-R3",
+      "owning_pass": "WS02-05A",
+      "source_controls": ["API-M18", "API-M12", "WS02-05A", "WS02-04A"],
+      "state": "required",
+      "scope": "platform/http_contracts"
+    },
+    {
+      "id": "WS02-05A-R4",
+      "owning_pass": "WS02-05A",
+      "source_controls": ["API-M16", "API-M08", "FDN-02", "WS02-05A", "WS02-03"],
+      "state": "required",
+      "scope": "platform/http_contracts"
+    },
+    {
+      "id": "WS02-05A-R5",
+      "owning_pass": "WS02-05A",
+      "source_controls": ["API-M18", "FDN-03", "WS02-05A", "WS02-01", "WS02-03"],
+      "state": "required",
+      "scope": "platform/http_contracts"
+    },
+    {
+      "id": "WS02-05A-R6",
+      "owning_pass": "WS02-05A",
+      "source_controls": ["API-M13", "API-M18", "WS02-05A", "WS02-04B2A2B1"],
+      "state": "required",
+      "scope": "platform/http_contracts"
+    },
+    {
+      "id": "WS02-05A-R7",
+      "owning_pass": "WS02-05A",
+      "source_controls": ["API-M14", "API-M09", "DB-013", "GOV-006", "FDN-04", "WS02-05A", "WS02-04B1"],
+      "state": "required",
+      "scope": "platform/http_contracts"
+    },
+    {
+      "id": "WS02-05A-R8",
+      "owning_pass": "WS02-05A",
+      "source_controls": ["API-M13", "API-M14", "API-M16", "API-M18", "API-M19", "GOV-006", "FDN-03", "FDN-04", "WS02-05A", "WS02-03", "WS02-04", "WS02-05B1", "WS02-05B2", "WS03", "WS04", "WS07", "WS08", "WS09", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Permanent edge, CDN, proxy, TLS/HSTS, direct-origin, shared-cache, docs access, process-server, staging/runtime, public-versioning, external-provider, database query-plan/runtime, stale-cursor concurrency, bulk/export, broader HTTP-chain, telemetry/dashboard/alert, and unapproved numeric pagination-value evidence remain later or external responsibilities and cannot be closed by local WS02-05A source tests."
+    }
+  ]
+}
