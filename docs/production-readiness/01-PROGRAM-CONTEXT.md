@@ -189,6 +189,14 @@ Gate C is independent semantic read-only review. It verifies authority,
 implementation, evidence adequacy, scope, traceability, confidentiality, and
 the complete local pass state. It does not edit files.
 
+If Gate C requires a correction, the correction happens in a separate run.
+After that correction is validated, the corrected final pass must receive a new
+full independent Gate C review of the entire pass before Gate D. Correction-run
+validation may be proportional and targeted, and Gate C may rely on
+already-current green validation unless a concrete concern requires a focused
+reproduction, but final post-correction approval cannot come from a narrowed
+review.
+
 Gate D is mechanical Git and PR finalization after Gate C approval. It verifies
 the approved change set, stages approved files, commits, pushes normally,
 creates or updates the intended PR, reviews the remote PR, and stops before
