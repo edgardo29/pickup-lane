@@ -574,10 +574,16 @@ Gate C review inputs must include the frozen plan, requirement declarations,
 Gate C never modifies repository content. When Gate C finds a defect, it
 returns `corrections required` and defines the exact authorized correction
 scope. A separate scoped correction run performs only the approved changes.
-After the correction, a new independent read-only Gate C re-review is required
-before approval or Gate D. Gate C must not fix files during the review run,
-silently transition from review into implementation, or review an agent's own
-unapproved correction in the same run.
+After any correction that changes repository content, the corrected final pass
+must receive a new full independent, semantic, read-only Gate C review of the
+complete corrected pass before approval or Gate D. This full review is required
+regardless of whether the correction was narrow evidence, testing-record,
+requirement metadata, test, testing-infrastructure, approved
+production/configuration, documentation-only, or another correction within the
+already-frozen design. Gate C must not fix files during the review run,
+silently transition from review into implementation, review an agent's own
+unapproved correction in the same run, or grant final approval through a
+narrowed post-correction review.
 
 #### C1. Evidence Adequacy Review
 
@@ -647,7 +653,13 @@ Documentation-only corrections do not automatically require unrelated
 application test suites. They require only validation materially affected by the
 documentation change.
 
-The subsequent Gate C re-review remains independent, semantic, and read-only.
+After any correction run that changes repository content, the next semantic
+review is always a new full independent, semantic, read-only Gate C review of
+the complete corrected pass. There is no narrowed final Gate C approval path
+after a correction.
+
+Full Gate C review means the semantic review scope is the entire corrected
+pass. It does not mean automatically rerunning every successful test suite.
 Gate C must not automatically rerun already-current successful validation when
 no relevant artifact changed after that validation. Gate C may run the smallest
 relevant test or check only when there is a concrete reason, such as missing,
@@ -666,8 +678,9 @@ relevant regression, checker, and traceability validation required for the
 corrected final pass state, and correct in-scope failures before handoff. If
 the correction is documentation-only, the correction run must run only
 validation materially affected by the documentation change and must not
-automatically run unrelated application suites. The correction is followed by
-the required targeted independent read-only Gate C re-review.
+automatically run unrelated application suites. After validation, the corrected
+final pass must receive a new full independent, semantic, read-only Gate C
+review of the complete pass before approval or Gate D.
 
 An implementation mistake inside the already-approved frozen design may use a
 separate scoped correction run only when the authoritative contract, canonical
@@ -675,8 +688,8 @@ plan, requirement set, proof layer, approved file set, and pass scope remain
 unchanged. The correction run fixes only that approved mistake, runs affected
 targeted validation, runs the full relevant regression, checker, and
 traceability validation required for the corrected final pass state, corrects
-any in-scope failures before handoff, and is followed by a new full independent
-read-only Gate C review.
+any in-scope failures before handoff, and is followed by a new full
+independent, semantic, read-only Gate C review of the complete corrected pass.
 
 Return to Gate A when a finding requires a new requirement, changed
 requirement, new owner decision, new proof layer, expanded file set, broader
@@ -684,9 +697,9 @@ pass scope, or material plan revision. No post-Gate C correction run may make
 these changes under Gate C authorization.
 
 Do not impose an artificial maximum number of correction rounds. Every
-correction round must be followed by a new independent read-only Gate C review,
-using either the targeted or full route authorized by the prior Gate C finding.
-Approval requires a genuinely clean independent review.
+correction round that changes repository content must be followed by a new full
+independent, semantic, read-only Gate C review of the complete corrected pass.
+Approval requires a genuinely clean independent full-pass review.
 
 End with exactly one semantic outcome:
 
@@ -695,8 +708,10 @@ End with exactly one semantic outcome:
 
 When the outcome is `corrections required`, report the material finding, the
 affected requirement or contract, the exact authorized correction scope, and
-whether the next review is a targeted Gate C re-review, a full Gate C re-review,
-or a return to Gate A. Gate C itself leaves repository contents unchanged.
+whether the routing is a separate scoped correction run or a return to Gate A.
+After any scoped correction run that changes repository content, the next
+semantic review is a new full independent Gate C review of the complete
+corrected pass. Gate C itself leaves repository contents unchanged.
 
 Do not commit or push during Gate C.
 
