@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-05B2-R1",
+      "owning_pass": "WS02-05B2",
+      "source_controls": ["API-M14", "IAM-014", "WS02-05B2", "WS02-05A", "WS02-05B1"],
+      "state": "required",
+      "scope": "workflows/response_minimization",
+      "reason": "Public and ordinary game response fields are B2-owned and must be runtime-proven."
+    },
+    {
+      "id": "WS02-05B2-R2",
+      "owning_pass": "WS02-05B2",
+      "source_controls": ["API-M14", "IAM-014", "WS02-05B2", "WS02-05B1"],
+      "state": "required",
+      "scope": "workflows/response_minimization",
+      "reason": "Host/admin game response richness must be deliberate, not accidental public leakage."
+    },
+    {
+      "id": "WS02-05B2-R3",
+      "owning_pass": "WS02-05B2",
+      "source_controls": ["API-M14", "IAM-014", "WS02-05B2", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/response_minimization",
+      "reason": "User response fields must align with current identity authority."
+    },
+    {
+      "id": "WS02-05B2-R4",
+      "owning_pass": "WS02-05B2",
+      "source_controls": [
+        "API-M14",
+        "IAM-014",
+        "PAY-004",
+        "PAY-005",
+        "PAY-006",
+        "PAY-008",
+        "PAY-009",
+        "WS02-05B2",
+        "WS05"
+      ],
+      "state": "required",
+      "scope": "workflows/response_minimization",
+      "reason": "Ordinary financial responses must not expose provider/internal fields; provider correctness remains later."
+    },
+    {
+      "id": "WS02-05B2-R5",
+      "owning_pass": "WS02-05B2",
+      "source_controls": ["API-M14", "IAM-014", "STO-006", "STO-009", "WS02-05B2", "WS06"],
+      "state": "required",
+      "scope": "workflows/response_minimization",
+      "reason": "Public image responses must not expose storage/provider internals."
+    },
+    {
+      "id": "WS02-05B2-R6",
+      "owning_pass": "WS02-05B2",
+      "source_controls": ["API-M14", "IAM-014", "WS02-05B2", "WS02-04C3A"],
+      "state": "required",
+      "scope": "workflows/response_minimization",
+      "reason": "Participant chat responses must not expose moderation/admin evidence."
+    },
+    {
+      "id": "WS02-05B2-R7",
+      "owning_pass": "WS02-05B2",
+      "source_controls": ["API-M14", "GOV-006", "WS02-05B2", "WS02-04B2A2B3"],
+      "state": "required",
+      "scope": "workflows/response_minimization",
+      "reason": "Public policy/legal response fields are B2-owned while policy/legal writes remain elsewhere."
+    },
+    {
+      "id": "WS02-05B2-R8",
+      "owning_pass": "WS02-05B2",
+      "source_controls": ["API-M14", "API-M18", "IAM-014", "WS02-05B2", "WS02-05A"],
+      "state": "required",
+      "scope": "workflows/response_minimization",
+      "reason": "Runtime response filtering, OpenAPI truth, and bypass inventory are required for honest response-minimization evidence."
+    },
+    {
+      "id": "WS02-05B2-R9",
+      "owning_pass": "WS02-05B2",
+      "source_controls": ["API-M14", "API-M18", "WS02-05B2", "WS07"],
+      "state": "required",
+      "scope": "workflows/response_minimization",
+      "reason": "Current frontend caller compatibility is a B2 acceptance condition."
+    },
+    {
+      "id": "WS02-05B2-R10",
+      "owning_pass": "WS02-05B2",
+      "source_controls": [
+        "API-M13",
+        "API-M14",
+        "API-M16",
+        "API-M18",
+        "API-M19",
+        "IAM-014",
+        "PAY-004",
+        "PAY-005",
+        "PAY-006",
+        "PAY-008",
+        "PAY-009",
+        "STO-006",
+        "STO-009",
+        "WS02-05A",
+        "WS02-05B1",
+        "WS03-01",
+        "WS05",
+        "WS06",
+        "WS09",
+        "WS10"
+      ],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Later-owner and external evidence cannot be closed by B2 local response tests and must have no pytest mapping."
+    }
+  ]
+}
