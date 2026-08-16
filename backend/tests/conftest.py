@@ -206,6 +206,25 @@ def _truncate_test_tables(connection, table_names: str) -> None:
     connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
 
 
+def _clear_main_app_dependency_overrides() -> None:
+    import backend.main as main_module
+
+    main_module.app.dependency_overrides.clear()
+
+
+def _rebuild_shared_test_app():
+    # No-DB platform tests may import backend.main while settings are
+    # monkeypatched. Rebuild the shared app after those patches are restored so
+    # DB-backed tests do not inherit a stale module-level app.
+    reset_settings_cache()
+
+    import backend.main as main_module
+
+    main_module.app.dependency_overrides.clear()
+    main_module.app = main_module.create_app()
+    return main_module.app
+
+
 @pytest.fixture
 def client() -> TestClient:
     database_url = os.getenv("DATABASE_URL", "")
@@ -218,10 +237,13 @@ def client() -> TestClient:
     except EnvironmentSafetyError as exc:
         raise pytest.UsageError(str(exc)) from exc
 
-    from backend.main import app
+    app = _rebuild_shared_test_app()
 
-    with TestClient(app) as test_client:
-        yield test_client
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        _clear_main_app_dependency_overrides()
 
 
 @pytest.fixture(autouse=True)
@@ -242,7 +264,6 @@ def clean_database(
         raise pytest.UsageError(str(exc)) from exc
 
     from backend.database import engine
-    from backend.main import app
 
     table_names = ", ".join(TEST_TABLES)
 
@@ -254,7 +275,7 @@ def clean_database(
         connection.commit()
 
         try:
-            app.dependency_overrides.clear()
+            _clear_main_app_dependency_overrides()
 
             # Each test gets a clean database so tests can create the same
             # logical records without leaking state into the next test. The
@@ -265,14 +286,14 @@ def clean_database(
 
             yield
 
-            app.dependency_overrides.clear()
+            _clear_main_app_dependency_overrides()
 
             # Clean again after the test so a failed test does not leave rows
             # behind for the next local run.
             with connection.begin():
                 _truncate_test_tables(connection, table_names)
         finally:
-            app.dependency_overrides.clear()
+            _clear_main_app_dependency_overrides()
             if connection.in_transaction():
                 connection.rollback()
 

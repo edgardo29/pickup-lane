@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-05B1-R1",
+      "owning_pass": "WS02-05B1",
+      "source_controls": ["API-M14", "IAM-014", "WS02-05B1"],
+      "state": "required",
+      "scope": "workflows/request_ownership"
+    },
+    {
+      "id": "WS02-05B1-R2",
+      "owning_pass": "WS02-05B1",
+      "source_controls": ["API-M14", "IAM-014", "WS02-05B1"],
+      "state": "required",
+      "scope": "workflows/request_ownership"
+    },
+    {
+      "id": "WS02-05B1-R3",
+      "owning_pass": "WS02-05B1",
+      "source_controls": ["API-M14", "IAM-014", "WS02-05B1"],
+      "state": "required",
+      "scope": "workflows/request_ownership"
+    },
+    {
+      "id": "WS02-05B1-R4",
+      "owning_pass": "WS02-05B1",
+      "source_controls": ["API-M14", "IAM-014", "WS02-05B1"],
+      "state": "required",
+      "scope": "workflows/request_ownership"
+    },
+    {
+      "id": "WS02-05B1-R5",
+      "owning_pass": "WS02-05B1",
+      "source_controls": [
+        "API-M09",
+        "API-M14",
+        "IAM-014",
+        "WS02-04B2A2A",
+        "WS02-04B2A2B1",
+        "WS02-04B2A2B2",
+        "WS02-04B2A2B3",
+        "WS02-05B1",
+        "WS05"
+      ],
+      "state": "required",
+      "scope": "workflows/request_ownership"
+    },
+    {
+      "id": "WS02-05B1-R6",
+      "owning_pass": "WS02-05B1",
+      "source_controls": ["API-M14", "IAM-014", "WS02-05A", "WS02-05B1", "WS02-05B2", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/request_ownership"
+    },
+    {
+      "id": "WS02-05B1-R7",
+      "owning_pass": "WS02-05B1",
+      "source_controls": [
+        "API-M09",
+        "API-M13",
+        "API-M14",
+        "API-M18",
+        "API-M19",
+        "GOV-006",
+        "PAY-008",
+        "PAY-009",
+        "PAY-010",
+        "DB-005",
+        "DB-006",
+        "STO-005",
+        "STO-006",
+        "WS02-04B1",
+        "WS02-04B2A1",
+        "WS02-04B2A2A",
+        "WS02-04B2A2B1",
+        "WS02-04B2A2B2",
+        "WS02-04B2A2B3",
+        "WS02-04B2A2C",
+        "WS02-05A",
+        "WS02-05B1",
+        "WS02-05B2",
+        "WS03",
+        "WS05",
+        "WS06",
+        "WS08",
+        "WS09",
+        "WS10"
+      ],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Response minimization, HTTP media/cache/tombstone representation, ordinary request-body limits, identity/account authority, provider/payment/refund correctness, storage/provider evidence, DB race/concurrency proof, external ingress/runtime/deployment evidence, telemetry/dashboards/alerts, legal/privacy review, and future API versioning remain with their listed owners and cannot be closed by local B1 request-ownership evidence."
+    }
+  ]
+}
