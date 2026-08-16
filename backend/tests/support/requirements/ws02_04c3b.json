@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS02-04C3B-R1",
+      "owning_pass": "WS02-04C3B",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3B", "WS02-04C2"],
+      "state": "required",
+      "scope": "platform/provider_cost_rate_limits"
+    },
+    {
+      "id": "WS02-04C3B-R2",
+      "owning_pass": "WS02-04C3B",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3B"],
+      "state": "required",
+      "scope": "platform/provider_cost_rate_limits"
+    },
+    {
+      "id": "WS02-04C3B-R3",
+      "owning_pass": "WS02-04C3B",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3B", "WS02-04C2", "WS02-04C3A"],
+      "state": "required",
+      "scope": "platform/provider_cost_rate_limits"
+    },
+    {
+      "id": "WS02-04C3B-R4",
+      "owning_pass": "WS02-04C3B",
+      "source_controls": ["API-M11", "API-M10", "GOV-006", "FDN-04", "WS02-04C1", "WS02-04C2", "WS02-04B2A2B2", "WS02-04C3B"],
+      "state": "required",
+      "scope": "platform/provider_cost_rate_limits"
+    },
+    {
+      "id": "WS02-04C3B-R5",
+      "owning_pass": "WS02-04C3B",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3B", "WS04", "WS05"],
+      "state": "required",
+      "scope": "platform/provider_cost_rate_limits"
+    },
+    {
+      "id": "WS02-04C3B-R6",
+      "owning_pass": "WS02-04C3B",
+      "source_controls": ["API-M11", "GOV-006", "FDN-04", "WS02-04C3A", "WS02-04C3B"],
+      "state": "required",
+      "scope": "platform/provider_cost_rate_limits"
+    },
+    {
+      "id": "WS02-04C3B-R7",
+      "owning_pass": "WS02-04C3B",
+      "source_controls": ["API-M11", "API-M10", "API-M12", "GOV-006", "FDN-04", "WS02-04C1", "WS02-04C2", "WS02-04C3A", "WS02-04B2A2B2", "WS05", "WS06", "WS09"],
+      "state": "required",
+      "scope": "platform/provider_cost_rate_limits"
+    },
+    {
+      "id": "WS02-04C3B-R8",
+      "owning_pass": "WS02-04C3B",
+      "source_controls": ["API-M11", "API-M19", "GOV-006", "FDN-04", "OPS-010", "OPS-011", "OPS-016", "WS02-03", "WS02-04C3B", "WS03", "WS05", "WS06", "WS09", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Provider dashboards, real provider quotas and cost pressure, production request volume, abuse signals, trusted client-IP identity, forwarded-header trust, edge/WAF/CAPTCHA/auth-provider controls, runtime/load behavior, monitoring, alert thresholds, and full API-M11 closure remain later or external responsibilities and cannot be closed by local C3B source tests."
+    }
+  ]
+}
