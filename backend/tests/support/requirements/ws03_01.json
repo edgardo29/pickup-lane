@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-01-R1",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-001", "IAM-002", "IAM-004", "IDB-02", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Protected requests require project-bound Firebase ID-token verification, revocation checking, and header-only bearer transport."
+    },
+    {
+      "id": "WS03-01-R2",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-001", "IAM-004", "IAM-006", "EN-02", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Provider user state and safe provider failure handling are part of current identity authority."
+    },
+    {
+      "id": "WS03-01-R3",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-004", "IAM-006", "IAM-014", "IDB-02", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Local account state and local authorization must be applied after provider identity."
+    },
+    {
+      "id": "WS03-01-R4",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-004", "IAM-006", "IAM-007", "IDB-03", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Current Firebase verification, not stale local snapshots, gates sensitive WS03-01 actions."
+    },
+    {
+      "id": "WS03-01-R5",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-006", "IAM-007", "IAM-014", "IDB-02", "IDB-03", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Local email and verification timestamps are provider-derived snapshots only."
+    },
+    {
+      "id": "WS03-01-R6",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-006", "IAM-014", "IDB-02", "IDB-03", "WS02-05B1", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Ordinary users must not write verifier, provider, admin, or server-owned identity fields."
+    },
+    {
+      "id": "WS03-01-R7",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-004", "IAM-006", "IAM-007", "IAM-014", "IDB-02", "IDB-03", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Admin authority combines current verified provider identity with active local admin role."
+    },
+    {
+      "id": "WS03-01-R8",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-004", "IAM-007", "IAM-014", "IDB-03", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Active route/service inventory must detect WS03-01 identity-authority bypasses."
+    },
+    {
+      "id": "WS03-01-R9",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-002", "IAM-003", "IDB-01", "WS03-01", "WS07-02"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Source-level browser persistence, token transport, bounded read refresh, and no blind mutation replay must match the approved decision."
+    },
+    {
+      "id": "WS03-01-R10",
+      "owning_pass": "WS03-01",
+      "source_controls": ["IAM-001", "IAM-006", "WS02-01", "EN-03", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/identity_authority",
+      "reason": "Firebase project/settings source contracts are repository-proven without exposing provider secrets."
+    },
+    {
+      "id": "WS03-01-R11",
+      "owning_pass": "WS03-01",
+      "source_controls": [
+        "IAM-001",
+        "IAM-002",
+        "IAM-003",
+        "IAM-004",
+        "IAM-006",
+        "IAM-007",
+        "IAM-014",
+        "EN-03",
+        "WS03-03",
+        "WS07-02",
+        "WS08",
+        "WS10"
+      ],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "External provider/runtime/browser/operations facts cannot be closed by local WS03-01 pytest and must have zero pytest mappings."
+    }
+  ]
+}
