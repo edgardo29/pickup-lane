@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-02-R1",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-005", "IDB-02", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "Firebase UID must be the stable provider-to-local linkage key while PostgreSQL users.id remains the stable Pickup Lane identity."
+    },
+    {
+      "id": "WS03-02-R2",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-005", "WS04-02", "WS03-02"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "Simultaneous first login must create one local user through current PostgreSQL uniqueness and conflict handling."
+    },
+    {
+      "id": "WS03-02-R3",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-005", "IDB-02", "WS03-02"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "Provisioning must create and repair exactly one UserSettings row and one UserStats row for each local user."
+    },
+    {
+      "id": "WS03-02-R4",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-005", "IAM-009", "IDB-02", "IDB-03"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "Same-UID repeat sync may refresh provider snapshots and repair context rows but must preserve local identity and lifecycle authority."
+    },
+    {
+      "id": "WS03-02-R5",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-005", "IDB-02"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "A different Firebase UID with the same email snapshot must not take over, merge into, or relink an existing local account."
+    },
+    {
+      "id": "WS03-02-R6",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-005", "IAM-009", "IDB-02", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "Local account lifecycle states must remain PostgreSQL authority and must be enforced on new protected requests."
+    },
+    {
+      "id": "WS03-02-R7",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-009", "IDB-01", "WS02-04B2A2A", "WS03-02"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "Account deletion must distinguish safe local/provider failure states, support follow-up, auth-link handling, and no blind retry."
+    },
+    {
+      "id": "WS03-02-R8",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-009", "IDB-01", "IDB-02", "IDB-03"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "Repository-owned recovery, sign-in, and provider-side linking source must not expose account-not-found distinctions or local takeover authority."
+    },
+    {
+      "id": "WS03-02-R9",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-005", "IAM-009", "IAM-018", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "New protected requests must use current PostgreSQL role/account state rather than process-local account or role cache authority."
+    },
+    {
+      "id": "WS03-02-R10",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-018", "IDB-02", "IDB-03"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "Repository-owned local admin mutation paths must prevent removal of the final active local administrator."
+    },
+    {
+      "id": "WS03-02-R11",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-005", "IAM-009", "IAM-018", "WS03-01"],
+      "state": "required",
+      "scope": "workflows/account_lifecycle_concurrency",
+      "reason": "Active source inventory must fail closed for lifecycle, recovery, and admin bypasses in the WS03-02-owned boundary."
+    },
+    {
+      "id": "WS03-02-R12",
+      "owning_pass": "WS03-02",
+      "source_controls": ["IAM-009", "IAM-018", "WS04", "WS05", "WS07", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "External provider/runtime/operations facts cannot be closed by local WS03-02 pytest and must have zero pytest mappings."
+    }
+  ]
+}
