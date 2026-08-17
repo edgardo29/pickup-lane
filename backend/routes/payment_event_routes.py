@@ -7,7 +7,7 @@ from backend.database import get_db
 from backend.models import PaymentEvent, User
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import PaymentEventRead, PaymentEventUpdate
-from backend.services.auth_service import require_active_admin
+from backend.services.auth_service import require_active_admin, require_recent_active_admin
 from backend.services.payment_event_service import (
     get_payment_event_record,
     list_payment_event_records,
@@ -78,7 +78,7 @@ def update_payment_event(
     payment_event_id: uuid.UUID,
     payment_event_update: PaymentEventUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
 ) -> PaymentEvent:
     del current_admin
     return update_payment_event_record(db, payment_event_id, payment_event_update)

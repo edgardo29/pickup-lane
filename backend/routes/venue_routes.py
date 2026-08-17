@@ -7,7 +7,7 @@ from backend.database import get_db
 from backend.models import User, Venue
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import VenueRead
-from backend.services.auth_service import require_active_admin
+from backend.services.auth_service import require_active_admin, require_recent_active_admin
 from backend.services.venue_service import (
     delete_venue_record,
     get_public_venue_or_404,
@@ -63,7 +63,7 @@ def update_venue(
 def delete_venue(
     venue_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
 ) -> Venue:
     del current_admin
     return delete_venue_record(db, venue_id)

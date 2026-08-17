@@ -234,7 +234,7 @@ def preview_admin_user_hosting_restriction_route(
 def restrict_admin_user_hosting_route(
     user_id: uuid.UUID,
     payload: AdminUserRestrictHostingCreate,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserRestrictHostingResultRead:
     return restrict_admin_user_hosting(
@@ -253,7 +253,7 @@ def restrict_admin_user_hosting_route(
 def restore_admin_user_hosting_route(
     user_id: uuid.UUID,
     payload: AdminUserRestoreHostingCreate,
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminUserRestoreHostingResultRead:
     return restore_admin_user_hosting(

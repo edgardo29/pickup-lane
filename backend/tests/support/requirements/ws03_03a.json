@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-03A-R1",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-008", "IDB-01", "IDB-02", "WS03-01", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Provider auth_time is the only accepted source-owned recent-auth authority."
+    },
+    {
+      "id": "WS03-03A-R2",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-008", "GOV-006", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "The five-minute WS03-03A threshold and exact boundary behavior need controlled evidence after plan approval."
+    },
+    {
+      "id": "WS03-03A-R3",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-008", "EN-02", "WS02-04A", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Recent-auth denial must use the stable safe public error envelope."
+    },
+    {
+      "id": "WS03-03A-R4",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-004", "IAM-007", "IAM-008", "WS03-01", "WS03-02"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Recent-auth wrappers must preserve accepted identity, account-state, verified-email, and admin authority."
+    },
+    {
+      "id": "WS03-03A-R5",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-008", "IAM-017", "PAY-011", "ADM-013", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Current high-risk account/admin/terminal-lifecycle/financial-repair/notice/saved-card routes must require recent auth."
+    },
+    {
+      "id": "WS03-03A-R6",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-003", "IAM-008", "IDB-01", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Intentionally ungated and retired/non-executing routes must remain classified, and high-risk routes must not become silent bypasses."
+    },
+    {
+      "id": "WS03-03A-R7",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-008", "IDB-01", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Frontend password and Google step-up must use Firebase reauth safely and fail closed."
+    },
+    {
+      "id": "WS03-03A-R8",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-003", "FE-M04", "IDB-01", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Step-up retry must remain caller-owned with no blind global mutation replay."
+    },
+    {
+      "id": "WS03-03A-R9",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-005", "IAM-009", "IDB-02", "WS03-02", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Credential linking requires step-up and remains provider-owned without local relink authority."
+    },
+    {
+      "id": "WS03-03A-R10",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-006", "IAM-008", "IDB-02", "EN-03", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Freshness must not be persisted, mirrored, logged, or accepted as app-owned authority."
+    },
+    {
+      "id": "WS03-03A-R11",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-008", "IAM-010", "IAM-011", "EN-03", "WS03-03A"],
+      "state": "required",
+      "scope": "workflows/recent_auth_step_up",
+      "reason": "Negative-space inventory must fail closed for bypasses, admin mutation partition drift, route-family misclassification, and false provider/governance closure."
+    },
+    {
+      "id": "WS03-03A-R12",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-008", "WS03-03B", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Administrator MFA provider/governance evidence cannot be closed by local WS03-03A pytest and must have zero pytest mappings."
+    },
+    {
+      "id": "WS03-03A-R13",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-010", "IDB-04", "WS03-03B", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Firebase App Check provider/runtime evidence cannot be closed by local WS03-03A pytest and must have zero pytest mappings."
+    },
+    {
+      "id": "WS03-03A-R14",
+      "owning_pass": "WS03-03A",
+      "source_controls": ["IAM-011", "EN-03", "WS03-03B", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Firebase/GCP credential governance cannot be closed by local WS03-03A pytest and must have zero pytest mappings."
+    }
+  ]
+}

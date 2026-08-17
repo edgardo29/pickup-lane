@@ -182,7 +182,7 @@ SPECIALIZED_ROUTE_SPECS = (
         "POST",
         "/admin/official-games/{game_id}/participants/{participant_id}/remove",
         AdminOfficialGamePlayerRemovalExecute,
-        ACTIVE_ADMIN_DEPENDENCY,
+        RECENT_ACTIVE_ADMIN_DEPENDENCY,
     ),
     SpecializedRouteSpec(
         "POST",
@@ -242,7 +242,7 @@ SPECIALIZED_ROUTE_SPECS = (
         "POST",
         "/admin/community-games/{game_id}/cancel",
         AdminCommunityGameEnforcementActionCreate,
-        ACTIVE_ADMIN_DEPENDENCY,
+        RECENT_ACTIVE_ADMIN_DEPENDENCY,
     ),
     SpecializedRouteSpec(
         "POST",
