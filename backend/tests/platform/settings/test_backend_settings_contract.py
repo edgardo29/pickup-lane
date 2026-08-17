@@ -47,6 +47,7 @@ def _settings_env(app_env: str | None = "production", **overrides: str | None) -
         "ENABLE_DB_HEALTH": "false",
         "FIREBASE_ADMIN_CREDENTIALS_JSON": _FIREBASE_ADMIN_JSON,
         "FIREBASE_PROJECT_ID": "pickup-lane-synthetic",
+        "FIREBASE_APP_CHECK_MODE": "disabled",
         "ENABLE_STRIPE_PAYMENTS": "false",
         "R2_ACCOUNT_ID": "synthetic-r2-account",
         "R2_ACCESS_KEY_ID": _R2_ACCESS_KEY_ID,
@@ -142,7 +143,7 @@ def test_environment_identity_normalizes_accepted_case_and_padding() -> None:
     assert settings.app_env is AppEnvironment.PRODUCTION
 
 
-@pytest.mark.requirement("WS02-01-R3", "WS02-01-R5")
+@pytest.mark.requirement("WS02-01-R3", "WS02-01-R5", "WS03-03B-R1")
 @pytest.mark.parametrize("app_env", ["preview", "staging", "production"])
 @pytest.mark.parametrize(
     "missing_name",
@@ -151,6 +152,7 @@ def test_environment_identity_normalizes_accepted_case_and_padding() -> None:
         "CORS_ALLOWED_ORIGINS",
         "FIREBASE_ADMIN_CREDENTIALS_JSON",
         "FIREBASE_PROJECT_ID",
+        "FIREBASE_APP_CHECK_MODE",
         "R2_ACCOUNT_ID",
     ],
 )
@@ -370,7 +372,7 @@ def test_r2_configuration_rejects_partial_or_unsafe_backend_values(
     )
 
 
-@pytest.mark.requirement("WS02-01-R5")
+@pytest.mark.requirement("WS02-01-R5", "WS03-03B-R1")
 def test_complete_backend_private_provider_config_is_accepted_without_provider_calls() -> None:
     settings = _build(
         _settings_env(
@@ -383,6 +385,7 @@ def test_complete_backend_private_provider_config_is_accepted_without_provider_c
     )
 
     assert settings.firebase_project_id == "pickup-lane-synthetic"
+    assert settings.firebase_app_check_mode.value == "disabled"
     assert settings.enable_stripe_payments is True
     assert settings.r2_configured is True
 

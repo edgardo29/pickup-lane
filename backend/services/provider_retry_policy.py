@@ -503,6 +503,19 @@ OTHER_PROVIDER_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...
         current_recovery="Safe read timeout returns dependency-read retry-later.",
     ),
     _read_policy(
+        operation="firebase.app_check.verify",
+        provider="firebase",
+        workflow_context="app_check_request_verification",
+        material_callers=(
+            "backend.firebase_admin_client.verify_firebase_app_check_token",
+        ),
+        current_recovery=(
+            "WS03-03B maps unavailable verification to a safe request-level "
+            "provider_unavailable response; no generic request replay or mutation "
+            "replay is approved."
+        ),
+    ),
+    _read_policy(
         operation="firebase.user.lookup",
         provider="firebase",
         workflow_context="authenticated_token_user_lookup",

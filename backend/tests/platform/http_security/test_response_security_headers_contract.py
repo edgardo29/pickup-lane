@@ -47,6 +47,7 @@ def _production_like_settings_env(app_env: str, **overrides: str | None) -> dict
         "ENABLE_DB_HEALTH": "false",
         "FIREBASE_ADMIN_CREDENTIALS_JSON": _FIREBASE_ADMIN_JSON,
         "FIREBASE_PROJECT_ID": "pickup-lane-synthetic",
+        "FIREBASE_APP_CHECK_MODE": "disabled",
         "ENABLE_STRIPE_PAYMENTS": "false",
         "R2_ACCOUNT_ID": "synthetic-r2-account",
         "R2_ACCESS_KEY_ID": "synthetic-r2-access-key-id",

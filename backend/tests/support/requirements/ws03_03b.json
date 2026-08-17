@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-03B-R1",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-010", "IDB-04", "WS02-01", "EN-03", "WS03-03B"],
+      "state": "required",
+      "scope": "workflows/app_check_provider_security",
+      "reason": "App Check mode/configuration and supported-web-app identity binding are source-owned and must be executable in trusted evidence."
+    },
+    {
+      "id": "WS03-03B-R2",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-010", "IDB-04", "IAM-003", "FE-M09", "WS03-03B"],
+      "state": "required",
+      "scope": "workflows/app_check_provider_security",
+      "reason": "Frontend transport and non-leakage are repository-owned browser-source behavior."
+    },
+    {
+      "id": "WS03-03B-R3",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-010", "IDB-04", "IAM-001", "WS03-01", "WS03-03B"],
+      "state": "required",
+      "scope": "workflows/app_check_provider_security",
+      "reason": "Backend verifier behavior must use provider verification, verified App ID comparison, and bounded outcomes."
+    },
+    {
+      "id": "WS03-03B-R4",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-010", "IDB-04", "WS02-03", "WS02-04A", "WS03-03B"],
+      "state": "required",
+      "scope": "workflows/app_check_provider_security",
+      "reason": "Mode enforcement, safe denial, and HTTP contract preservation are repository-owned."
+    },
+    {
+      "id": "WS03-03B-R5",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-010", "IDB-04", "WS02-03", "WS03-03B"],
+      "state": "required",
+      "scope": "workflows/app_check_provider_security",
+      "reason": "Route/caller classification must fail closed for current source drift."
+    },
+    {
+      "id": "WS03-03B-R6",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-008", "IAM-010", "IAM-011", "IDB-04", "WS03-03A", "WS03-03B"],
+      "state": "required",
+      "scope": "workflows/app_check_provider_security",
+      "reason": "App Check must preserve existing identity, authz, recent-auth, replay, and business safeguards."
+    },
+    {
+      "id": "WS03-03B-R7",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-010", "IAM-011", "EN-02", "EN-03", "WS03-03B"],
+      "state": "required",
+      "scope": "workflows/app_check_provider_security",
+      "reason": "Negative-space evidence must block bypasses, unsafe observation behavior, and false provider/governance closure."
+    },
+    {
+      "id": "WS03-03B-R8",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-008", "WS03-03B", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Administrator MFA provider/governance facts cannot be closed by local pytest and must have zero pytest mappings."
+    },
+    {
+      "id": "WS03-03B-R9",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-011", "EN-03", "OPS-005", "OPS-006", "OPS-007", "OPS-025", "WS03-03B", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Firebase/GCP credential-governance facts require sanitized provider/operations evidence and must have zero pytest mappings."
+    },
+    {
+      "id": "WS03-03B-R10",
+      "owning_pass": "WS03-03B",
+      "source_controls": ["IAM-010", "IDB-04", "WS03-03B", "WS10"],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Production App Check rollout evidence and approval remain external/runtime and must have zero pytest mappings."
+    }
+  ]
+}

@@ -31,6 +31,7 @@ def _production_like_env(**overrides: str | None) -> dict[str, str]:
         "ENABLE_API_DOCS": "false",
         "FIREBASE_ADMIN_CREDENTIALS_JSON": _FIREBASE_ADMIN_JSON,
         "FIREBASE_PROJECT_ID": "pickup-lane-synthetic",
+        "FIREBASE_APP_CHECK_MODE": "disabled",
         "STRIPE_SECRET_KEY": _STRIPE_SECRET_KEY,
         "STRIPE_WEBHOOK_SECRET": _STRIPE_WEBHOOK_SECRET,
         "R2_ACCOUNT_ID": "synthetic-r2-account",

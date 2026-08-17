@@ -81,6 +81,9 @@ from backend.routes import (
     venues_router,
     waitlist_entries_router,
 )
+from backend.services.app_check_middleware import AppCheckMiddleware
+from backend.services.app_check_policy import AppCheckRoutePolicy, build_app_check_route_policy
+from backend.services.app_check_service import APP_CHECK_HEADER_NAME
 from backend.settings import BackendSettings, get_settings
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -107,6 +110,7 @@ APPLICATION_CORS_ALLOWED_HEADERS = (
     "Accept",
     "Authorization",
     "Content-Type",
+    APP_CHECK_HEADER_NAME,
     "X-Request-ID",
 )
 
@@ -218,7 +222,9 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     _include_routers(app)
     mark_tombstone_routes_deprecated(app.routes)
     install_openapi_contracts(app)
-    _add_application_middleware(app, backend_settings)
+    app_check_route_policy = build_app_check_route_policy(app)
+    app.state.app_check_route_policy = app_check_route_policy
+    _add_application_middleware(app, backend_settings, app_check_route_policy)
     return app
 
 
@@ -250,7 +256,16 @@ def _health_response(
     )
 
 
-def _add_application_middleware(app: FastAPI, backend_settings: BackendSettings) -> None:
+def _add_application_middleware(
+    app: FastAPI,
+    backend_settings: BackendSettings,
+    app_check_route_policy: AppCheckRoutePolicy,
+) -> None:
+    app.add_middleware(
+        AppCheckMiddleware,
+        settings=backend_settings,
+        route_policy=app_check_route_policy,
+    )
     app.add_middleware(
         RequestBodyLimitMiddleware,
         ordinary_json_request_body_limit_bytes=(

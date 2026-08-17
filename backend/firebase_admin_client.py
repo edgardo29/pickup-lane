@@ -2,7 +2,8 @@ import json
 import os
 
 import firebase_admin
-from firebase_admin import auth, credentials
+from firebase_admin import app_check, auth, credentials
+from firebase_admin import exceptions as firebase_exceptions
 
 from backend.observability.timeouts import (
     DependencyMutationTimeoutUnknownError,
@@ -11,7 +12,24 @@ from backend.observability.timeouts import (
 )
 from backend.settings import SettingsError, get_settings
 
+try:  # pragma: no cover - import shape is owned by the installed Firebase SDK.
+    from jwt.exceptions import PyJWKClientError
+except ImportError:  # pragma: no cover
+    PyJWKClientError = ()  # type: ignore[assignment]
+
 FIREBASE_TOKEN_CLOCK_SKEW_SECONDS = 10
+FIREBASE_APP_CHECK_VERIFY_OPERATION = "firebase.app_check.verify"
+
+_APP_CHECK_PROVIDER_UNAVAILABLE_ERRORS = (
+    firebase_exceptions.AbortedError,
+    firebase_exceptions.CancelledError,
+    firebase_exceptions.DataLossError,
+    firebase_exceptions.DeadlineExceededError,
+    firebase_exceptions.InternalError,
+    firebase_exceptions.ResourceExhaustedError,
+    firebase_exceptions.UnavailableError,
+    firebase_exceptions.UnknownError,
+)
 
 
 class FirebaseAdminConfigError(RuntimeError):
@@ -19,6 +37,10 @@ class FirebaseAdminConfigError(RuntimeError):
 
 
 class FirebaseIdentityUnavailableError(RuntimeError):
+    pass
+
+
+class FirebaseAppCheckUnavailableError(RuntimeError):
     pass
 
 
@@ -115,6 +137,31 @@ def verify_firebase_token(id_token: str) -> dict:
             raise
         raise FirebaseIdentityUnavailableError(
             "Firebase identity state is unavailable."
+        ) from exc
+
+
+def verify_firebase_app_check_token(app_check_token: str) -> dict:
+    firebase_app = initialize_firebase_admin()
+    try:
+        return dict(app_check.verify_token(app_check_token, app=firebase_app))
+    except ValueError:
+        raise
+    except PyJWKClientError as exc:
+        raise FirebaseAppCheckUnavailableError(
+            "Firebase App Check verification is unavailable."
+        ) from exc
+    except _APP_CHECK_PROVIDER_UNAVAILABLE_ERRORS as exc:
+        raise FirebaseAppCheckUnavailableError(
+            "Firebase App Check verification is unavailable."
+        ) from exc
+    except Exception as exc:
+        if is_timeout_like_exception(exc):
+            raise DependencyReadTimeoutError(
+                provider_kind="firebase",
+                operation=FIREBASE_APP_CHECK_VERIFY_OPERATION,
+            ) from exc
+        raise FirebaseAppCheckUnavailableError(
+            "Firebase App Check verification is unavailable."
         ) from exc
 
 

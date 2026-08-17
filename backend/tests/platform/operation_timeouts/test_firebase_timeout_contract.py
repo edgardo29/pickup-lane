@@ -63,13 +63,34 @@ class _AuthModule:
         return None
 
 
+class _AppCheckModule:
+    def __init__(self) -> None:
+        self.verify_token_result = {"app_id": "1:123456789:web:supported"}
+        self.verify_token_exception: BaseException | None = None
+        self.verify_token_calls: list[dict[str, object]] = []
+
+    def verify_token(self, token, *, app=None):
+        self.verify_token_calls.append(
+            {"token": token, "app_name": getattr(app, "name", None)}
+        )
+        if self.verify_token_exception is not None:
+            raise self.verify_token_exception
+        return dict(self.verify_token_result)
+
+
 def _install_firebase_boundary(
     monkeypatch: pytest.MonkeyPatch,
     auth_module: _AuthModule,
+    app_check_module: _AppCheckModule | None = None,
 ) -> list[dict[str, object]]:
     initialize_calls: list[dict[str, object]] = []
 
     monkeypatch.setattr(firebase_client, "auth", auth_module)
+    monkeypatch.setattr(
+        firebase_client,
+        "app_check",
+        app_check_module or _AppCheckModule(),
+    )
     monkeypatch.setattr(
         firebase_client,
         "_firebase_settings",
@@ -210,6 +231,69 @@ def test_firebase_token_validation_failures_remain_auth_failures(
         firebase_client.verify_firebase_token("synthetic-token")
 
 
+@pytest.mark.requirement("WS02-04C1-R3")
+def test_firebase_app_check_verification_uses_existing_initialized_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_module = _AuthModule()
+    app_check_module = _AppCheckModule()
+    _install_firebase_boundary(monkeypatch, auth_module, app_check_module)
+
+    result = firebase_client.verify_firebase_app_check_token("synthetic-app-check-token")
+
+    assert result == {"app_id": "1:123456789:web:supported"}
+    assert app_check_module.verify_token_calls == [
+        {
+            "token": "synthetic-app-check-token",
+            "app_name": "synthetic-firebase-app",
+        }
+    ]
+
+
+@pytest.mark.requirement("WS02-04C1-R3")
+def test_firebase_app_check_timeout_maps_to_dependency_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_module = _AuthModule()
+    app_check_module = _AppCheckModule()
+    app_check_module.verify_token_exception = TimeoutError("app check timed out")
+    _install_firebase_boundary(monkeypatch, auth_module, app_check_module)
+
+    with pytest.raises(DependencyReadTimeoutError) as exc_info:
+        firebase_client.verify_firebase_app_check_token("synthetic-app-check-token")
+
+    assert exc_info.value.provider_kind == "firebase"
+    assert exc_info.value.operation == "firebase.app_check.verify"
+
+
+@pytest.mark.requirement("WS02-04C1-R3")
+def test_firebase_app_check_invalid_token_remains_validation_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_module = _AuthModule()
+    app_check_module = _AppCheckModule()
+    app_check_module.verify_token_exception = ValueError("invalid app check token")
+    _install_firebase_boundary(monkeypatch, auth_module, app_check_module)
+
+    with pytest.raises(ValueError, match="invalid app check token"):
+        firebase_client.verify_firebase_app_check_token("synthetic-app-check-token")
+
+
+@pytest.mark.requirement("WS02-04C1-R3")
+def test_firebase_app_check_provider_unavailable_is_not_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_module = _AuthModule()
+    app_check_module = _AppCheckModule()
+    app_check_module.verify_token_exception = firebase_client.PyJWKClientError(
+        "jwks unavailable"
+    )
+    _install_firebase_boundary(monkeypatch, auth_module, app_check_module)
+
+    with pytest.raises(firebase_client.FirebaseAppCheckUnavailableError):
+        firebase_client.verify_firebase_app_check_token("synthetic-app-check-token")
+
+
 @pytest.mark.requirement("WS02-04C1-R3", "WS02-04C1-R7")
 def test_firebase_non_timeout_and_cancellation_are_not_timeout_classified(
     monkeypatch: pytest.MonkeyPatch,
@@ -224,3 +308,16 @@ def test_firebase_non_timeout_and_cancellation_are_not_timeout_classified(
     auth_module.delete_user_exception = asyncio.CancelledError()
     with pytest.raises(asyncio.CancelledError):
         firebase_client.delete_firebase_user("firebase-user")
+
+
+@pytest.mark.requirement("WS02-04C1-R3", "WS02-04C1-R7")
+def test_firebase_app_check_cancellation_is_preserved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_module = _AuthModule()
+    app_check_module = _AppCheckModule()
+    app_check_module.verify_token_exception = asyncio.CancelledError()
+    _install_firebase_boundary(monkeypatch, auth_module, app_check_module)
+
+    with pytest.raises(asyncio.CancelledError):
+        firebase_client.verify_firebase_app_check_token("synthetic-app-check-token")

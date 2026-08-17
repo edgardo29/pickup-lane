@@ -35,6 +35,7 @@ _EXPECTED_POLICY_KEYS = {
     ("stripe.customer.default_payment_method.set", "saved_card_default_set"),
     ("stripe.customer.default_payment_method.clear", "saved_card_default_clear"),
     ("firebase.token.verify", "authenticated_request_identity"),
+    ("firebase.app_check.verify", "app_check_request_verification"),
     ("firebase.user.lookup", "authenticated_token_user_lookup"),
     ("firebase.user.lookup", "email_availability_lookup"),
     ("firebase.user.delete", "account_deletion_auth_cleanup"),
@@ -171,6 +172,20 @@ def test_c2_provider_operation_registry_matches_current_c3b_inventory() -> None:
         "admin_refund_reconcile_state_gate",
         "admin_credit_repair_state_gate",
     }
+
+    app_check_policy = retry_policy.policy_by_operation_context(
+        "firebase.app_check.verify",
+        "app_check_request_verification",
+    )
+    assert app_check_policy.operation == "firebase.app_check.verify"
+    assert app_check_policy.provider == "firebase"
+    assert app_check_policy.workflow_context == "app_check_request_verification"
+    assert app_check_policy.safety_class == retry_policy.RetrySafetyClass.SAFE_READ
+    assert app_check_policy.read_operation
+    assert app_check_policy.provider_mutation is False
+    assert app_check_policy.application_automatic_retry_allowed is False
+    assert app_check_policy.approved_retry_attempts is None
+    assert app_check_policy.approved_backoff_seconds is None
 
 
 @pytest.mark.requirement("WS02-04C3B-R1", "WS02-04C3B-R3")
