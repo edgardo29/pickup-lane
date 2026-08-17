@@ -892,7 +892,7 @@ function AdminOfficialGamePageContent({ gameId }) {
     setRemovalExecutionError('')
     setRemovalExecutionState('saving')
     try {
-      const result = await executeAdminOfficialGamePlayerRemoval({
+      const executeRemoval = () => executeAdminOfficialGamePlayerRemoval({
         firebaseUser: currentUser,
         gameId,
         participantId: previewParticipant.id,
@@ -900,6 +900,10 @@ function AdminOfficialGamePageContent({ gameId }) {
         outcome,
         reason,
       })
+      const result = await runWithStepUp(
+        executeRemoval,
+        { actionLabel: 'remove this official-game player' },
+      )
       setRemovalExecutionResult(result)
       await refreshWorkspace()
       setPageNotice(

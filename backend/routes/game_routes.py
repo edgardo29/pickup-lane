@@ -8,6 +8,7 @@ from backend.database import get_db
 from backend.services.auth_service import (
     get_optional_current_app_user,
     require_active_admin,
+    require_recent_active_admin,
     require_verified_user,
 )
 from backend.models import (
@@ -250,6 +251,6 @@ def host_edit_game(
 def delete_game(
     game_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
 ) -> Game:
     return delete_game_workflow(db, game_id, current_admin)

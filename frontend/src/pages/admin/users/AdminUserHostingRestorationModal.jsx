@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import { restoreAdminUserHosting } from '../shared/adminApi.js'
 import { formatAdminUserDateTime } from './adminUserFormatters.js'
 
@@ -15,6 +16,7 @@ function AdminUserHostingRestorationModal({
   onRestored,
   user,
 }) {
+  const { runWithStepUp } = useStepUp()
   const [reason, setReason] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [executionError, setExecutionError] = useState('')
@@ -50,12 +52,16 @@ function AdminUserHostingRestorationModal({
     setExecutionError('')
 
     try {
-      const nextResult = await restoreAdminUserHosting({
+      const executeRestoration = () => restoreAdminUserHosting({
         firebaseUser,
         idempotencyKey,
         reason: reason.trim(),
         userId: user.id,
       })
+      const nextResult = await runWithStepUp(
+        executeRestoration,
+        { actionLabel: 'restore hosting for this user' },
+      )
       setResult(nextResult)
       onRestored(nextResult)
     } catch (error) {

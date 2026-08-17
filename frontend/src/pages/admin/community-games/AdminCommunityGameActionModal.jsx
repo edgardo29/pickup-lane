@@ -225,12 +225,18 @@ function AdminCommunityGameActionModal({
     setExecutionError('')
 
     try {
-      const actionResult = await config.api({
+      const executeAction = () => config.api({
         firebaseUser,
         gameId: detail.game.id,
         idempotencyKey,
         reason: normalizedReason,
       })
+      const actionResult = action === 'cancel'
+        ? await runWithStepUp(
+          executeAction,
+          { actionLabel: 'cancel this community game' },
+        )
+        : await executeAction()
 
       if (shouldRecordFinancialOutcome) {
         try {

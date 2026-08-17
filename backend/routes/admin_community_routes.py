@@ -34,7 +34,10 @@ from backend.services.community_game_enforcement_service import (
     restore_community_game,
     resume_community_game_joining,
 )
-from backend.services.auth_service import require_active_admin
+from backend.services.auth_service import (
+    require_active_admin,
+    require_recent_active_admin,
+)
 from backend.services.chat_moderation_admin_service import (
     get_admin_game_chat_summary,
     list_admin_game_chat_messages,
@@ -356,7 +359,7 @@ def cancel_admin_community_game_route(
     game_id: uuid.UUID,
     payload: AdminCommunityGameEnforcementActionCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
 ) -> AdminCommunityGameEnforcementActionResultRead:
     return admin_cancel_community_game(
         db,

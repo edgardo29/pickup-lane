@@ -27,7 +27,7 @@ from backend.services.need_a_sub_enforcement_service import (
     remove_need_a_sub_post_by_admin,
     restore_need_a_sub_post,
 )
-from backend.services.auth_service import require_active_admin
+from backend.services.auth_service import require_active_admin, require_recent_active_admin
 from backend.services.chat_moderation_admin_service import (
     get_admin_need_a_sub_chat_summary,
     list_admin_need_a_sub_chat_messages,
@@ -161,7 +161,7 @@ def remove_admin_need_a_sub_post_route(
     post_id: uuid.UUID,
     payload: AdminNeedASubEnforcementActionCreate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
 ) -> AdminNeedASubEnforcementActionResultRead:
     return remove_need_a_sub_post_by_admin(
         db,

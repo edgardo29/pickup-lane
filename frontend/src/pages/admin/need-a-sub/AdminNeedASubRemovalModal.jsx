@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Eye, EyeOff, Trash2, X } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import {
   hideAdminNeedASubPost,
   removeAdminNeedASubPost,
@@ -54,6 +55,7 @@ function AdminNeedASubRemovalModal({
   onClose,
   onCompleted,
 }) {
+  const { runWithStepUp } = useStepUp()
   const config = ACTION_CONFIG[action]
   const [reason, setReason] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -90,12 +92,19 @@ function AdminNeedASubRemovalModal({
     setExecutionError('')
 
     try {
-      const result = await config.api({
+      const normalizedReason = reason.trim()
+      const executeAction = () => config.api({
         firebaseUser,
         idempotencyKey,
         postId: detail.post.id,
-        reason: reason.trim(),
+        reason: normalizedReason,
       })
+      const result = action === 'remove'
+        ? await runWithStepUp(
+          executeAction,
+          { actionLabel: 'remove this Need a Sub post' },
+        )
+        : await executeAction()
       onCompleted(result)
       onClose()
     } catch (error) {

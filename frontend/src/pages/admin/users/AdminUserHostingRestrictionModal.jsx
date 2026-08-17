@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ShieldOff } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
+import { useStepUp } from '../../../hooks/useStepUp.js'
 import {
   previewAdminUserHostingRestriction,
   restrictAdminUserHosting,
@@ -21,6 +22,7 @@ function AdminUserHostingRestrictionModal({
   onRestricted,
   user,
 }) {
+  const { runWithStepUp } = useStepUp()
   const [preview, setPreview] = useState(null)
   const [loadState, setLoadState] = useState('loading')
   const [previewError, setPreviewError] = useState('')
@@ -110,13 +112,17 @@ function AdminUserHostingRestrictionModal({
     setExecutionError('')
 
     try {
-      const nextResult = await restrictAdminUserHosting({
+      const executeRestriction = () => restrictAdminUserHosting({
         firebaseUser,
         idempotencyKey,
         previewToken: preview.preview_token,
         reason: reason.trim(),
         userId: user.id,
       })
+      const nextResult = await runWithStepUp(
+        executeRestriction,
+        { actionLabel: 'restrict hosting for this user' },
+      )
       setResult(nextResult)
       onRestricted(nextResult)
     } catch (error) {

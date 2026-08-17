@@ -446,7 +446,7 @@ def execute_admin_official_game_player_removal(
     participant_id: uuid.UUID,
     execute_request: AdminOfficialGamePlayerRemovalExecute,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_recent_active_admin),
 ) -> AdminOfficialGamePlayerRemovalResultRead:
     return execute_official_game_player_removal(
         db,
