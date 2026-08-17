@@ -28,6 +28,7 @@ def _settings_env(**overrides: str | None) -> dict[str, str]:
         "ENABLE_DB_HEALTH": "false",
         "FIREBASE_ADMIN_CREDENTIALS_JSON": FIREBASE_ADMIN_JSON,
         "FIREBASE_PROJECT_ID": SYNTHETIC_PROJECT_ID,
+        "FIREBASE_APP_CHECK_MODE": "disabled",
         "ENABLE_STRIPE_PAYMENTS": "false",
         "R2_ACCOUNT_ID": "synthetic-r2-account",
         "R2_ACCESS_KEY_ID": "synthetic-r2-access-key-id",
@@ -150,12 +151,13 @@ def test_firebase_admin_initialization_passes_configured_project_id_without_prov
     }
 
 
-@pytest.mark.requirement("WS03-01-R10")
+@pytest.mark.requirement("WS03-01-R10", "WS03-03B-R1", "WS03-03B-R6")
 def test_example_configuration_keeps_firebase_values_as_placeholders() -> None:
     text = (REPO_ROOT / "backend/.env.example").read_text()
 
     assert "FIREBASE_ADMIN_CREDENTIALS_JSON=replace-with-firebase-admin-json" in text
     assert "FIREBASE_PROJECT_ID=replace-with-firebase-project-id" in text
+    assert "FIREBASE_APP_CHECK_APP_ID=replace-with-firebase-app-check-app-id" in text
     assert "private_key" not in text
     assert "client_email" not in text
     assert SYNTHETIC_PROJECT_ID not in text

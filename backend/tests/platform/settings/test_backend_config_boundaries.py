@@ -70,6 +70,8 @@ _EXPECTED_FRONTEND_PUBLIC_NAMES = frozenset(
         "VITE_FIREBASE_MESSAGING_SENDER_ID",
         "VITE_FIREBASE_APP_ID",
         "VITE_FIREBASE_MEASUREMENT_ID",
+        "VITE_FIREBASE_APP_CHECK_MODE",
+        "VITE_FIREBASE_APP_CHECK_RECAPTCHA_ENTERPRISE_SITE_KEY",
         "VITE_ENABLE_STRIPE_PAYMENTS",
         "VITE_STRIPE_PUBLISHABLE_KEY",
     }
@@ -198,7 +200,7 @@ def test_authoritative_settings_owner_has_no_direct_runtime_or_provider_dependen
     assert _settings_side_effectful_imports(_CANONICAL_SETTINGS_OWNER) == ()
 
 
-@pytest.mark.requirement("WS02-01-R6")
+@pytest.mark.requirement("WS02-01-R6", "WS03-03B-R1", "WS03-03B-R2", "WS03-03B-R6")
 def test_frontend_public_config_uses_vite_names_and_excludes_backend_private_names() -> None:
     frontend_example_names = _parse_env_example_names(_FRONTEND_ROOT / ".env.example")
     frontend_source_names = _frontend_source_env_names()
@@ -214,7 +216,7 @@ def test_frontend_public_config_uses_vite_names_and_excludes_backend_private_nam
     } == set()
 
 
-@pytest.mark.requirement("WS02-01-R6", "WS02-01-R9")
+@pytest.mark.requirement("WS02-01-R6", "WS02-01-R9", "WS03-03B-R1")
 def test_backend_safe_example_names_are_declared_settings_names() -> None:
     backend_example_names = _parse_env_example_names(_BACKEND_ROOT / ".env.example")
 

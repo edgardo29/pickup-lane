@@ -20,11 +20,12 @@ _APPLICATION_CONFIGURED_HEADERS = [
     "Accept",
     "Authorization",
     "Content-Type",
+    "X-Firebase-AppCheck",
     "X-Request-ID",
 ]
 _STARLETTE_EFFECTIVE_HEADERS = (
     "Accept, Accept-Language, Authorization, Content-Language, Content-Type, "
-    "X-Request-ID"
+    "X-Firebase-AppCheck, X-Request-ID"
 )
 
 
@@ -152,7 +153,7 @@ def _manual_options_route_findings() -> list[str]:
     return findings
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.requirement("WS02-03-R4", "WS03-03B-R4", "WS03-03B-R6")
 def test_cors_middleware_uses_exact_configured_methods_and_application_headers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -168,7 +169,7 @@ def test_cors_middleware_uses_exact_configured_methods_and_application_headers(
     assert "*" not in middleware.kwargs["allow_headers"]
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.requirement("WS02-03-R4", "WS03-03B-R4")
 def test_allowed_preflight_uses_exact_methods_and_effective_starlette_headers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -216,7 +217,7 @@ def test_cors_header_matching_is_case_insensitive(
     assert response.headers["Access-Control-Allow-Headers"] == _STARLETTE_EFFECTIVE_HEADERS
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.requirement("WS02-03-R4", "WS03-03B-R4")
 @pytest.mark.parametrize("header_name", ["X-Custom-Header", "X-Admin", "X-Forwarded-Host"])
 def test_arbitrary_non_approved_preflight_headers_are_rejected(
     monkeypatch: pytest.MonkeyPatch,

@@ -145,6 +145,7 @@ def test_current_provider_wrapper_operations_have_retry_policy_entries() -> None
         "stripe.payment_intent.retrieve",
         "stripe.refund.create",
         "stripe.refund.retrieve",
+        "firebase.app_check.verify",
         "firebase.token.verify",
         "firebase.user.lookup",
         "firebase.user.delete",
@@ -161,12 +162,23 @@ def test_current_provider_wrapper_operations_have_retry_policy_entries() -> None
         "stripe.payment_intent.retrieve",
         "stripe.refund.retrieve",
         "r2.metadata.head",
+        "firebase.app_check.verify",
         "firebase.token.verify",
     ):
         policy = retry_policy.policy_by_operation(operation)
         assert policy.safety_class == retry_policy.RetrySafetyClass.SAFE_READ
         assert policy.read_operation
         assert not policy.provider_mutation
+
+    app_check_policy = retry_policy.policy_by_operation("firebase.app_check.verify")
+    assert app_check_policy.workflow_context == "app_check_request_verification"
+    assert app_check_policy.material_callers == (
+        "backend.firebase_admin_client.verify_firebase_app_check_token",
+    )
+    assert app_check_policy.application_automatic_retry_allowed is False
+    assert "provider_unavailable" in app_check_policy.current_recovery
+    assert "request replay" in app_check_policy.current_recovery
+    assert "mutation replay" in app_check_policy.current_recovery
 
 
 @pytest.mark.requirement("WS02-04C2-R3", "WS02-04C2-R5", "WS02-04C2-R6")

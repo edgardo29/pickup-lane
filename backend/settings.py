@@ -42,6 +42,16 @@ class AppEnvironment(str, Enum):
         return self in {self.PREVIEW, self.STAGING, self.PRODUCTION}
 
 
+class FirebaseAppCheckMode(str, Enum):
+    DISABLED = "disabled"
+    OBSERVE = "observe"
+    ENFORCED = "enforced"
+
+    @property
+    def requires_app_id(self) -> bool:
+        return self in {self.OBSERVE, self.ENFORCED}
+
+
 BACKEND_ENVIRONMENT_VARIABLES = frozenset(
     {
         "APP_ENV",
@@ -50,6 +60,8 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
         "FIREBASE_ADMIN_CREDENTIALS_JSON",
         "FIREBASE_ADMIN_CREDENTIALS",
         "FIREBASE_PROJECT_ID",
+        "FIREBASE_APP_CHECK_MODE",
+        "FIREBASE_APP_CHECK_APP_ID",
         "ALLOWED_HOSTS",
         "CORS_ALLOWED_ORIGINS",
         "ENABLE_API_DOCS",
@@ -117,6 +129,7 @@ DOCUMENTED_PLACEHOLDER_VALUES = frozenset(
         "replace-with-api-hosts",
         "replace-with-firebase-admin-json",
         "replace-with-firebase-project-id",
+        "replace-with-firebase-app-check-app-id",
         "replace-with-stripe-secret-key",
         "replace-with-stripe-publishable-key",
         "replace-with-stripe-webhook-secret",
@@ -180,6 +193,8 @@ class BackendSettings(BaseModel):
     firebase_admin_credentials_json: SecretStr | None = None
     firebase_admin_credentials: SecretStr | None = None
     firebase_project_id: str | None = None
+    firebase_app_check_mode: FirebaseAppCheckMode = FirebaseAppCheckMode.DISABLED
+    firebase_app_check_app_id: str | None = None
     allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     cors_allowed_origins: tuple[str, ...]
     cors_allow_credentials: bool = True
@@ -377,6 +392,11 @@ def build_settings(
         if validate_full
         else _empty_firebase_settings()
     )
+    app_check_values = (
+        _parse_firebase_app_check_settings(env, app_env)
+        if validate_full
+        else _empty_firebase_app_check_settings()
+    )
     r2_values = _parse_r2_settings(env, app_env) if validate_full else _empty_r2_settings()
     inbox_token_secret = _parse_inbox_token_secret(env, app_env, database_url, validate_full)
 
@@ -395,6 +415,7 @@ def build_settings(
         **timeout_values,
         **stripe_values,
         **firebase_values,
+        **app_check_values,
         **r2_values,
     )
 
@@ -704,6 +725,44 @@ def _empty_firebase_settings() -> dict[str, object]:
         "firebase_admin_credentials_json": None,
         "firebase_admin_credentials": None,
         "firebase_project_id": None,
+    }
+
+
+def _parse_firebase_app_check_settings(
+    env: Mapping[str, str],
+    app_env: AppEnvironment,
+) -> dict[str, object]:
+    raw_mode = _optional_text(env, "FIREBASE_APP_CHECK_MODE")
+    if raw_mode is None:
+        if app_env.is_production_like:
+            _fail("FIREBASE_APP_CHECK_MODE", "must be explicit in production-like environments")
+        mode = FirebaseAppCheckMode.DISABLED
+    else:
+        try:
+            mode = FirebaseAppCheckMode(raw_mode.lower())
+        except ValueError:
+            _fail("FIREBASE_APP_CHECK_MODE", "must be one of disabled, observe, or enforced")
+
+    app_id = _optional_text(env, "FIREBASE_APP_CHECK_APP_ID")
+    if mode.requires_app_id and not app_id:
+        _fail("FIREBASE_APP_CHECK_APP_ID", "is required when Firebase App Check is observe or enforced")
+    if app_id and app_env.is_production_like and _is_documented_placeholder(app_id):
+        _fail("FIREBASE_APP_CHECK_APP_ID", "must not use a documented placeholder value")
+
+    firebase_project_id = _optional_text(env, "FIREBASE_PROJECT_ID")
+    if app_id and firebase_project_id and app_id == firebase_project_id:
+        _fail("FIREBASE_APP_CHECK_APP_ID", "must be separate from FIREBASE_PROJECT_ID")
+
+    return {
+        "firebase_app_check_mode": mode,
+        "firebase_app_check_app_id": app_id,
+    }
+
+
+def _empty_firebase_app_check_settings() -> dict[str, object]:
+    return {
+        "firebase_app_check_mode": FirebaseAppCheckMode.DISABLED,
+        "firebase_app_check_app_id": None,
     }
 
 

@@ -1,3 +1,5 @@
+import { APP_CHECK_HEADER_NAME, getAppCheckToken } from './appCheck.js'
+
 const viteEnv = import.meta.env ?? {}
 
 export const API_BASE_URL =
@@ -14,12 +16,21 @@ export class ApiRequestError extends Error {
 }
 
 export async function apiRequest(path, options = {}) {
+  const headers = {
+    Accept: 'application/json',
+    ...options.headers,
+  }
+  const appCheckToken = shouldAttachAppCheck(path)
+    ? await getAppCheckToken()
+    : null
+
+  if (appCheckToken) {
+    headers[APP_CHECK_HEADER_NAME] = appCheckToken
+  }
+
   const response = await fetch(buildApiUrl(path), {
     ...options,
-    headers: {
-      Accept: 'application/json',
-      ...options.headers,
-    },
+    headers,
   })
 
   if (!response.ok) {
@@ -37,6 +48,10 @@ export async function apiRequest(path, options = {}) {
   }
 
   return response.json()
+}
+
+export function shouldAttachAppCheck(path) {
+  return !/^(https?:)?\/\//i.test(path) && !/^data:/i.test(path)
 }
 
 export function getApiErrorCode(errorBody) {
