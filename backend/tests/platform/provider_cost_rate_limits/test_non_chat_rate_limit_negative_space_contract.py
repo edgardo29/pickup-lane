@@ -134,11 +134,11 @@ def test_no_generic_non_chat_rate_limiter_middleware_or_provider_cost_counter() 
 def test_existing_product_limits_are_not_reclassified_as_c3b_rate_controls() -> None:
     c3b_plan = (
         _REPO_ROOT
-        / "docs/production-readiness/planning/ws02-04c3b-provider-cost-rate-limit-deferral.md"
+        / "docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md"
     ).read_text()
     source_owned_closeout = (
         _REPO_ROOT
-        / "docs/production-readiness/planning/ws02-04-source-owned-closeout.md"
+        / "docs/production-readiness/planning/passes/ws02/ws02-04-source-owned-closeout.md"
     ).read_text()
 
     assert "product collection caps" in c3b_plan

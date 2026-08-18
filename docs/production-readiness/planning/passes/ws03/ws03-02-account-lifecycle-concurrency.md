@@ -83,7 +83,7 @@ what must be true. Historical PR #127 remains provenance only. Its changed
 files were:
 
 1. `backend/tests/shared/authentication/test_ws03_02_account_lifecycle_concurrency.py`
-2. `docs/production-readiness/planning/ws03-02-account-lifecycle-concurrency.md`
+2. `docs/production-readiness/planning/passes/ws03/ws03-02-account-lifecycle-concurrency.md`
 3. `frontend/src/lib/authErrors.js`
 4. `frontend/tests/unit/authErrors.test.js`
 
@@ -475,7 +475,7 @@ admin identities are named, recoverable, MFA-protected, or properly offboarded.
 
 Gate A modifies only this canonical plan:
 
-1. `docs/production-readiness/planning/ws03-02-account-lifecycle-concurrency.md`
+1. `docs/production-readiness/planning/passes/ws03/ws03-02-account-lifecycle-concurrency.md`
 
 Gate A does not create tests, requirement JSON, a `TESTING_RECORD.md`,
 production source changes, frontend source changes, migrations, commits, or a
@@ -722,7 +722,7 @@ Gate B must stop and return for Gate A correction if any of these occur:
 
 After this Gate A correction, the proposed frozen plan is this exact file:
 
-`docs/production-readiness/planning/ws03-02-account-lifecycle-concurrency.md`
+`docs/production-readiness/planning/passes/ws03/ws03-02-account-lifecycle-concurrency.md`
 
 The Gate A final report must include:
 

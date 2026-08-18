@@ -241,7 +241,7 @@ clients.
 WS02-04A owns:
 
 - the canonical pass plan at
-  `docs/production-readiness/planning/ws02-04a-stable-error-contracts.md`;
+  `docs/production-readiness/planning/passes/ws02/ws02-04a-stable-error-contracts.md`;
 - the stable error contract implementation in `backend/observability/http_errors.py`;
 - interaction with canonical app construction in `backend/main.py`;
 - source-owned body-limit, media-type, timeout, and rate-limit error classes

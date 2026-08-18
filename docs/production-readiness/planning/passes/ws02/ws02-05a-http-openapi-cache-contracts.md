@@ -386,7 +386,7 @@ backend/tests/platform/http_contracts/TESTING_RECORD.md
 ```
 
 The testing record must follow
-`docs/production-readiness/planning/TESTING-RECORD-TEMPLATE.md` and explain:
+`docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` and explain:
 
 - scope and non-scope;
 - requirement meanings;
@@ -599,7 +599,7 @@ Gate B may edit exactly these 7 files:
 The complete WS02-05A recheck change set is expected to be exactly these 8
 files:
 
-1. `docs/production-readiness/planning/ws02-05a-http-openapi-cache-contracts.md`
+1. `docs/production-readiness/planning/passes/ws02/ws02-05a-http-openapi-cache-contracts.md`
 2. `backend/observability/pagination_contracts.py`
 3. `backend/tests/support/requirements/ws02_05a.json`
 4. `backend/tests/platform/http_contracts/TESTING_RECORD.md`

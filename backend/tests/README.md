@@ -100,7 +100,7 @@ and adequacy conclusions. They do not duplicate every Python test, exact node
 ID, or product specification. The reusable standard for these records lives at:
 
 ```text
-docs/production-readiness/planning/TESTING-RECORD-TEMPLATE.md
+docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md
 ```
 
 ## Checker Commands

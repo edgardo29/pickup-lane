@@ -216,7 +216,7 @@ Pass-owned governance artifacts:
 
 - `docs/production-readiness/decisions/ws02-04b2a2a-active-request-rules-approved.md`
 - `docs/production-readiness/governance/limits-and-thresholds-register.md`
-- `docs/production-readiness/planning/ws02-04b2a2a-active-workflow-schema-bounds.md`
+- `docs/production-readiness/planning/passes/ws02/ws02-04b2a2a-active-workflow-schema-bounds.md`
 
 The editable evidence set for implementation is limited to:
 

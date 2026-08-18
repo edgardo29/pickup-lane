@@ -16,23 +16,41 @@ scope.
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes. |
 | Current reconciliation point | Accepted `develop` after WS03-03B. |
 | Current accepted develop SHA at reconciliation | `39d07e71366b3177bd380f3c07eade0bb0210406` |
-| Original blueprint register | 42 parent-level planned passes in `pickup-lane-master-production-readiness-blueprint.md`. |
+| Original blueprint register | 42 parent-level planned passes in `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md`. |
 | Accepted executable requirement declarations through this point | 25 files under `backend/tests/support/requirements/`. |
 | Next pass selected by this register? | No. The owner must explicitly select the next intake or pass. |
 
-## 2. How To Use This Register
+The recorded accepted `develop` SHA is a historical reconciliation basis for
+this register version. It is not a mutable instruction and is not the
+current-session source of truth. Current execution always comes from current
+`origin/develop` plus the approved instruction.
+
+## 2. Program Summary
+
+| Metric | Count | Meaning |
+|---|---:|---|
+| Original blueprint parent-level entries | 42 | Parent-level entries mirrored from the master blueprint. |
+| Accepted/completed parent-level entries | 13 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through `WS03-03`. |
+| Remaining parent-level entries | 29 | Parent-level entries not yet selected or completed in this register. |
+| Accepted executable passes with requirement declarations | 25 | Current accepted executable declaration files under `backend/tests/support/requirements/`. |
+| Remaining actual executable-pass count | Unknown | Future executable-unit count depends on owner selection and Stage 0 intake decisions. |
+
+Count magnitude is not completion proof or control-closure proof. Controls
+close only through accepted evidence and reassessment.
+
+## 3. How To Use This Register
 
 Before selecting or designing a future production-readiness pass:
 
 1. Read the read-first document, program context, and applicable workflow.
 2. Identify the relevant parent blueprint pass.
 3. Check this register for accepted child passes and remaining parent scope.
-4. Use `PASS-INTAKE-TEMPLATE.md` when a parent pass needs decomposition or
-   readiness review.
+4. Use `docs/production-readiness/planning/templates/PASS-INTAKE-TEMPLATE.md`
+   when a parent pass needs decomposition or readiness review.
 5. Do not infer the next pass from alphabetical order, filename order, or the
    last accepted PR.
 
-## 3. Original Blueprint Parent-Pass Register
+## 4. Original Blueprint Parent-Pass Register
 
 The table below mirrors the original 42 parent-level planned passes for
 navigation. It does not replace the master blueprint.
@@ -82,40 +100,59 @@ navigation. It does not replace the master blueprint.
 | `CLOSE-01` | Cross-workstream evidence completeness and discrepancy sweep | Not yet selected in this register. Requires all workstream exit gates. |
 | `CLOSE-02` | Fresh 163-control reassessment and production-readiness decision | Not yet selected in this register. Requires `CLOSE-01` and all correction/retest passes. |
 
-## 4. Accepted Executable Passes
+## 5. Accepted Executable Passes
 
 The following executable passes have accepted requirement declarations in the
 current repository. Counts are declaration counts, not proof-strength ratings.
+Every path in the Plan column is relative to
+`docs/production-readiness/planning/`.
 
 | Executable pass | Blueprint parent | Plan | Requirement declaration | Requirements | Required | Covered elsewhere | Deferred | Current trusted scope |
 |---|---|---|---|---:|---:|---:|---:|---|
-| `EN-01` | `EN-01` | `en-01-test-taxonomy-and-isolation-baseline.md` | `en01.json` | 11 | 11 | 0 | 0 | `checker` |
-| `EN-02` | `EN-02` | `en-02-correlation-event-envelope-redaction-contract.md` | `en02.json` | 7 | 6 | 1 | 0 | `platform/observability` plus planning |
-| `EN-03` | `EN-03` | `en-03-secrets-control-plane-evidence-foundation.md` | `en03.json` | 6 | 1 | 5 | 0 | `platform/secrets`, governance, planning |
-| `WS02-01` | `WS02-01` | `ws02-01-typed-settings-environment-isolation.md` | `ws02_01.json` | 11 | 8 | 3 | 0 | `platform/settings` plus governance/planning |
-| `WS02-02` | `WS02-02` | `ws02-02-runtime-lifecycle-health-deployability.md` | `ws02_02.json` | 10 | 8 | 1 | 1 | `platform/runtime` plus governance/planning |
-| `WS02-03` | `WS02-03` | `ws02-03-proxy-host-tls-cors-security-headers.md` | `ws02_03.json` | 9 | 7 | 1 | 1 | `platform/http_security` plus governance/planning |
-| `WS02-04A` | `WS02-04` | `ws02-04a-stable-error-contracts.md` | `ws02_04a.json` | 8 | 7 | 0 | 1 | `platform/api_errors` plus governance |
-| `WS02-04B1` | `WS02-04` | `ws02-04b1-source-owned-boundaries.md` | `ws02_04b1.json` | 9 | 8 | 0 | 1 | `workflows/source_owned_boundaries` plus governance |
-| `WS02-04B2A1` | `WS02-04` | `ws02-04b2a1-portable-request-boundaries.md` | `ws02_04b2a1.json` | 8 | 7 | 0 | 1 | `platform/request_body_limits` plus governance |
-| `WS02-04B2A2A` | `WS02-04` | `ws02-04b2a2a-active-workflow-schema-bounds.md` | `ws02_04b2a2a.json` | 7 | 6 | 0 | 1 | `workflows/active_request_schema_bounds` plus governance |
-| `WS02-04B2A2B1` | `WS02-04` | `ws02-04b2a2b1-route-lifecycle-cleanup.md` | `ws02_04b2a2b1.json` | 7 | 6 | 0 | 1 | `workflows/route_lifecycle_cleanup` plus governance |
-| `WS02-04B2A2B2` | `WS02-04` | `ws02-04b2a2b2-opaque-provider-payment-inputs.md` | `ws02_04b2a2b2.json` | 8 | 7 | 0 | 1 | `workflows/provider_payment_input_ownership` plus governance |
-| `WS02-04B2A2B3` | `WS02-04` | `ws02-04b2a2b3-policy-legal-request-ownership.md` | `ws02_04b2a2b3.json` | 6 | 5 | 0 | 1 | `workflows/policy_legal_request_ownership` plus governance |
-| `WS02-04B2A2C` | `WS02-04` | `ws02-04b2a2c-ordinary-json-request-body-limit.md` | `ws02_04b2a2c.json` | 7 | 6 | 0 | 1 | `platform/request_body_limits` plus governance |
-| `WS02-04C1` | `WS02-04` | `ws02-04c1-operation-timeouts-cancellation.md` | `ws02_04c1.json` | 10 | 9 | 0 | 1 | `platform/operation_timeouts` plus governance |
-| `WS02-04C2` | `WS02-04` | `ws02-04c2-retry-reconciliation-backpressure.md` | `ws02_04c2.json` | 11 | 10 | 0 | 1 | `platform/retry_reconciliation` plus governance |
-| `WS02-04C3A` | `WS02-04` | `ws02-04c3a-chat-rate-limit-contract.md` | `ws02_04c3a.json` | 11 | 10 | 0 | 1 | `platform/chat_rate_limits` plus governance |
-| `WS02-04C3B` | `WS02-04` | `ws02-04c3b-provider-cost-rate-limit-deferral.md` | `ws02_04c3b.json` | 8 | 7 | 0 | 1 | `platform/provider_cost_rate_limits` plus governance |
-| `WS02-05A` | `WS02-05` | `ws02-05a-http-openapi-cache-contracts.md` | `ws02_05a.json` | 8 | 7 | 0 | 1 | `platform/http_contracts` plus governance |
-| `WS02-05B1` | `WS02-05` | `ws02-05b1-request-ownership.md` | `ws02_05b1.json` | 7 | 6 | 0 | 1 | `workflows/request_ownership` plus governance |
-| `WS02-05B2` | `WS02-05` | `ws02-05b2-response-minimization.md` | `ws02_05b2.json` | 10 | 9 | 0 | 1 | `workflows/response_minimization` plus governance |
-| `WS03-01` | `WS03-01` | `ws03-01-identity-authority.md` | `ws03_01.json` | 11 | 10 | 0 | 1 | `workflows/identity_authority` plus governance |
-| `WS03-02` | `WS03-02` | `ws03-02-account-lifecycle-concurrency.md` | `ws03_02.json` | 12 | 11 | 0 | 1 | `workflows/account_lifecycle_concurrency` plus governance |
-| `WS03-03A` | `WS03-03` | `ws03-03a-recent-auth-step-up.md` | `ws03_03a.json` | 14 | 11 | 0 | 3 | `workflows/recent_auth_step_up` plus governance |
-| `WS03-03B` | `WS03-03` | `ws03-03b-app-check-admin-mfa-firebase-governance.md` | `ws03_03b.json` | 10 | 7 | 0 | 3 | `workflows/app_check_provider_security` plus governance |
+| `EN-01` | `EN-01` | `passes/en/en-01-test-taxonomy-and-isolation-baseline.md` | `en01.json` | 11 | 11 | 0 | 0 | `checker` |
+| `EN-02` | `EN-02` | `passes/en/en-02-correlation-event-envelope-redaction-contract.md` | `en02.json` | 7 | 6 | 1 | 0 | `platform/observability` plus planning |
+| `EN-03` | `EN-03` | `passes/en/en-03-secrets-control-plane-evidence-foundation.md` | `en03.json` | 6 | 1 | 5 | 0 | `platform/secrets`, governance, planning |
+| `WS02-01` | `WS02-01` | `passes/ws02/ws02-01-typed-settings-environment-isolation.md` | `ws02_01.json` | 11 | 8 | 3 | 0 | `platform/settings` plus governance/planning |
+| `WS02-02` | `WS02-02` | `passes/ws02/ws02-02-runtime-lifecycle-health-deployability.md` | `ws02_02.json` | 10 | 8 | 1 | 1 | `platform/runtime` plus governance/planning |
+| `WS02-03` | `WS02-03` | `passes/ws02/ws02-03-proxy-host-tls-cors-security-headers.md` | `ws02_03.json` | 9 | 7 | 1 | 1 | `platform/http_security` plus governance/planning |
+| `WS02-04A` | `WS02-04` | `passes/ws02/ws02-04a-stable-error-contracts.md` | `ws02_04a.json` | 8 | 7 | 0 | 1 | `platform/api_errors` plus governance |
+| `WS02-04B1` | `WS02-04` | `passes/ws02/ws02-04b1-source-owned-boundaries.md` | `ws02_04b1.json` | 9 | 8 | 0 | 1 | `workflows/source_owned_boundaries` plus governance |
+| `WS02-04B2A1` | `WS02-04` | `passes/ws02/ws02-04b2a1-portable-request-boundaries.md` | `ws02_04b2a1.json` | 8 | 7 | 0 | 1 | `platform/request_body_limits` plus governance |
+| `WS02-04B2A2A` | `WS02-04` | `passes/ws02/ws02-04b2a2a-active-workflow-schema-bounds.md` | `ws02_04b2a2a.json` | 7 | 6 | 0 | 1 | `workflows/active_request_schema_bounds` plus governance |
+| `WS02-04B2A2B1` | `WS02-04` | `passes/ws02/ws02-04b2a2b1-route-lifecycle-cleanup.md` | `ws02_04b2a2b1.json` | 7 | 6 | 0 | 1 | `workflows/route_lifecycle_cleanup` plus governance |
+| `WS02-04B2A2B2` | `WS02-04` | `passes/ws02/ws02-04b2a2b2-opaque-provider-payment-inputs.md` | `ws02_04b2a2b2.json` | 8 | 7 | 0 | 1 | `workflows/provider_payment_input_ownership` plus governance |
+| `WS02-04B2A2B3` | `WS02-04` | `passes/ws02/ws02-04b2a2b3-policy-legal-request-ownership.md` | `ws02_04b2a2b3.json` | 6 | 5 | 0 | 1 | `workflows/policy_legal_request_ownership` plus governance |
+| `WS02-04B2A2C` | `WS02-04` | `passes/ws02/ws02-04b2a2c-ordinary-json-request-body-limit.md` | `ws02_04b2a2c.json` | 7 | 6 | 0 | 1 | `platform/request_body_limits` plus governance |
+| `WS02-04C1` | `WS02-04` | `passes/ws02/ws02-04c1-operation-timeouts-cancellation.md` | `ws02_04c1.json` | 10 | 9 | 0 | 1 | `platform/operation_timeouts` plus governance |
+| `WS02-04C2` | `WS02-04` | `passes/ws02/ws02-04c2-retry-reconciliation-backpressure.md` | `ws02_04c2.json` | 11 | 10 | 0 | 1 | `platform/retry_reconciliation` plus governance |
+| `WS02-04C3A` | `WS02-04` | `passes/ws02/ws02-04c3a-chat-rate-limit-contract.md` | `ws02_04c3a.json` | 11 | 10 | 0 | 1 | `platform/chat_rate_limits` plus governance |
+| `WS02-04C3B` | `WS02-04` | `passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md` | `ws02_04c3b.json` | 8 | 7 | 0 | 1 | `platform/provider_cost_rate_limits` plus governance |
+| `WS02-05A` | `WS02-05` | `passes/ws02/ws02-05a-http-openapi-cache-contracts.md` | `ws02_05a.json` | 8 | 7 | 0 | 1 | `platform/http_contracts` plus governance |
+| `WS02-05B1` | `WS02-05` | `passes/ws02/ws02-05b1-request-ownership.md` | `ws02_05b1.json` | 7 | 6 | 0 | 1 | `workflows/request_ownership` plus governance |
+| `WS02-05B2` | `WS02-05` | `passes/ws02/ws02-05b2-response-minimization.md` | `ws02_05b2.json` | 10 | 9 | 0 | 1 | `workflows/response_minimization` plus governance |
+| `WS03-01` | `WS03-01` | `passes/ws03/ws03-01-identity-authority.md` | `ws03_01.json` | 11 | 10 | 0 | 1 | `workflows/identity_authority` plus governance |
+| `WS03-02` | `WS03-02` | `passes/ws03/ws03-02-account-lifecycle-concurrency.md` | `ws03_02.json` | 12 | 11 | 0 | 1 | `workflows/account_lifecycle_concurrency` plus governance |
+| `WS03-03A` | `WS03-03` | `passes/ws03/ws03-03a-recent-auth-step-up.md` | `ws03_03a.json` | 14 | 11 | 0 | 3 | `workflows/recent_auth_step_up` plus governance |
+| `WS03-03B` | `WS03-03` | `passes/ws03/ws03-03b-app-check-admin-mfa-firebase-governance.md` | `ws03_03b.json` | 10 | 7 | 0 | 3 | `workflows/app_check_provider_security` plus governance |
 
-## 5. Parent Decomposition Records
+## 6. Accepted Stage 0 Intake Records
+
+No intake records exist yet under the new forward implementation workflow.
+
+Historical WS02-04, WS02-05, and WS03-03 decompositions remain accepted. Do
+not fabricate retroactive intake records for them.
+
+Future accepted intake records use:
+
+```text
+docs/production-readiness/planning/passes/<family>/<parent-id>-intake.md
+```
+
+Once owner-approved, an intake record is a frozen Stage 0 artifact identified by
+path and SHA-256. It travels with the first substantive child pass or direct
+parent pass that makes the structure accepted; it is not a Gate B-editable file.
+
+## 7. Parent Decomposition Records
 
 ### WS02-04
 
@@ -137,7 +174,7 @@ Accepted executable children:
 11. `WS02-04C3A`
 12. `WS02-04C3B`
 
-Source-owned closeout: `ws02-04-source-owned-closeout.md`.
+Source-owned closeout: `passes/ws02/ws02-04-source-owned-closeout.md`.
 
 The closeout records source-owned completion for the approved repository-owned
 slices. It does not close provider, runtime, staging, durable-worker, or other
@@ -173,15 +210,28 @@ Accepted executable children:
 MFA plus Firebase/GCP credential-governance provider boundaries. Broader live
 provider/runtime/governance evidence remains later-owned.
 
-## 6. Remaining Parent Passes
+## 8. Remaining Parent Passes
 
 Every parent pass marked "not yet selected" requires explicit owner direction
-and Stage 0 intake before Gate A.
+and Stage 0 intake before Gate A according to blueprint dependencies.
 
 This register does not decide whether the next intake should be `WS03-04`,
 `WS04-01`, another parent pass, a correction, or a documentation task.
+The exact remaining executable-unit count is intentionally unknown.
 
-## 7. Register Maintenance Rules
+## 9. Parent Completion And Consistency Rules
+
+Maintain these invariants:
+
+- each child has one parent;
+- every parent obligation is allocated;
+- a decomposed parent completes only when all approved children complete;
+- no duplicate child ID;
+- no missing child;
+- no unapproved overlap;
+- summary counts equal detailed tables.
+
+## 10. Register Maintenance Rules
 
 Update this register when:
 
@@ -190,6 +240,23 @@ Update this register when:
 - a source-owned closeout is accepted;
 - an accepted pass is reverted or superseded;
 - a register entry is found stale during intake or Gate A.
+
+Register updates normally travel with the substantive pass PR that makes the
+new state true.
+
+Every substantive first-time executable pass must include this register in the
+exact Gate B editable file set because merge changes accepted execution state.
+Program/documentation maintenance and historical rechecks remain outside this
+automatic first-time-pass rule unless their explicit scope says otherwise.
+
+For a first child PR, include the frozen intake/decomposition reference,
+accepted first-child state, remaining child state, and incomplete parent state
+unless all children are complete. For later child PRs, update the register for
+that child's accepted state and the remaining parent state. For the final child
+PR, record final-child acceptance and mark the parent complete. If a parent is
+kept whole, update the register for direct parent completion in that substantive
+pass. Gate D never authors or semantically edits register content. Do not create
+routine tracker-only PRs.
 
 Do not update this register to:
 

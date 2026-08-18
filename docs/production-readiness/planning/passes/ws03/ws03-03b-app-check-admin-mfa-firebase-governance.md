@@ -725,7 +725,7 @@ The expected final pass changed-file set is exactly 31 files relative to the
 accepted baseline:
 
 1. the frozen canonical plan:
-   `docs/production-readiness/planning/ws03-03b-app-check-admin-mfa-firebase-governance.md`;
+   `docs/production-readiness/planning/passes/ws03/ws03-03b-app-check-admin-mfa-firebase-governance.md`;
 2. the exact 30 Gate B editable files listed above.
 
 No other file is authorized by this Gate A plan.
@@ -757,7 +757,7 @@ source-owned limiter boundary, and external/provider/runtime deferrals must
 remain unchanged.
 
 Do not add or edit
-`docs/production-readiness/planning/ws02-04c3b-provider-cost-rate-limit-deferral.md`,
+`docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md`,
 `backend/tests/platform/provider_cost_rate_limits/TESTING_RECORD.md`,
 `backend/tests/platform/provider_cost_rate_limits/test_c3b_boundary_and_handoff_contract.py`,
 `backend/tests/platform/provider_cost_rate_limits/test_provider_cost_rate_limit_deferral_contract.py`,

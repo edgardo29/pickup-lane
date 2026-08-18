@@ -80,7 +80,7 @@ Do not include raw URLs to private dashboards, signed object URLs, invite links,
 Approved Git locations for EN-03 evidence handling are:
 
 - `docs/production-readiness/governance/` for standards, registers, and reusable checklists
-- `docs/production-readiness/planning/` for pass-specific sanitized findings and control mapping
+- `docs/production-readiness/planning/passes/` for pass-specific sanitized findings and control mapping
 
 Do not add raw screenshots, raw exports, provider ZIP files, billing files, credentials, local `.env` files, key files, recovery documents, or private provider payloads anywhere in the repository.
 
