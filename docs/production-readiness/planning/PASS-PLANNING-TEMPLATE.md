@@ -5,11 +5,15 @@
 | Field | Value |
 |---|---|
 | Pass | `[PASS-ID]` |
+| Blueprint parent pass | `[Parent PASS-ID and title]` |
+| Execution mode | `[First-time implementation / Recheck / Closeout / other]` |
 | Track | `[WSxx / PROGRAM / GOVERNANCE / other canonical track]` |
 | Type | `[Domain implementation / API / Database / Migration / Provider / Frontend / CI / Operations / other pass type]` |
 | Primary controls | `[CONTROL-ID, CONTROL-ID]` |
 | Authority basis | `[Primary controls / decision records / blueprint entry / other authoritative sources]` |
 | Depends on | `[PASS-ID / prerequisite / None]` |
+| Intake record | `[path or Not applicable]` |
+| Requirement declaration | `[path or Not applicable]` |
 | Trusted test scope | `[path or Not applicable]` |
 
 ## How To Use This Template
@@ -33,6 +37,14 @@ pass-specific planning or instructions. Lower-level planning cannot silently
 override higher authority. If authoritative sources conflict, stop, document
 and resolve the conflict before pass work continues, and do not guess or
 silently choose one source.
+
+For a first-time executable pass, use
+`PASS-IMPLEMENTATION-WORKFLOW.md` and the approved intake or equivalent owner
+instruction. If the work starts from a parent blueprint pass, use
+`PASS-INTAKE-TEMPLATE.md` and `PASS-EXECUTION-REGISTER.md` before Gate A to
+establish the parent pass, executable pass ID, decomposition rationale,
+dependencies, and non-overlap. For an already-implemented pass recheck, use
+`PASS-RECHECK-WORKFLOW.md`.
 
 Use progressive detail:
 
@@ -84,6 +96,23 @@ Use these rules throughout:
 A developer unfamiliar with Pickup Lane should be able to understand the
 purpose, scope, risks, technical contract, evidence model, and completion
 conditions without needing oral history from the original author.
+
+## Executable Pass Identity And Intake
+
+Every planning document must identify the pass it is actually designing.
+
+For first-time implementation, state the parent blueprint pass and whether the
+parent is implemented directly or decomposed into this executable child pass.
+The plan must preserve the parent intent while defining a reviewable,
+non-overlapping implementation scope.
+
+When an intake exists, link it in the At A Glance table and carry forward its
+approved parent/child boundary, dependencies, stop conditions, and non-goals.
+When intake is not applicable, explain why in the relevant scope or authority
+section.
+
+This template does not select the next pass. Pass selection comes from explicit
+owner direction and the current execution register.
 
 ## 1. Purpose
 

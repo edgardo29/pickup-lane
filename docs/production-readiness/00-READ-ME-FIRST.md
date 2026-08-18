@@ -18,7 +18,10 @@ pass status as current execution state.
 Before any production-readiness pass work:
 
 1. Read this document, `01-PROGRAM-CONTEXT.md`, and
-   `planning/PASS-RECHECK-WORKFLOW.md`.
+   the applicable workflow:
+   `planning/PASS-IMPLEMENTATION-WORKFLOW.md` for first-time pass
+   implementation or `planning/PASS-RECHECK-WORKFLOW.md` for revalidating an
+   already-implemented pass.
 2. Verify current Git/repository state and determine the current pass and gate
    from current repository truth and the current approved instruction before
    relying on historical prompts, PRs, branches, SHAs, or prior chat context.
@@ -50,8 +53,16 @@ Only the final approved decision records and the v4 inventory showing 27 approve
 
 ### `planning/`
 The finalized remediation plan and master execution blueprint.
-The reusable pass recheck process for revalidating already-implemented passes
-lives at [`PASS-RECHECK-WORKFLOW.md`](planning/PASS-RECHECK-WORKFLOW.md).
+The forward implementation workflow for first-time executable passes lives at
+[`PASS-IMPLEMENTATION-WORKFLOW.md`](planning/PASS-IMPLEMENTATION-WORKFLOW.md).
+The pass intake template lives at
+[`PASS-INTAKE-TEMPLATE.md`](planning/PASS-INTAKE-TEMPLATE.md).
+The execution register that distinguishes original blueprint parent passes
+from accepted executable passes lives at
+[`PASS-EXECUTION-REGISTER.md`](planning/PASS-EXECUTION-REGISTER.md).
+The historical pass recheck process for revalidating already-implemented
+passes lives at
+[`PASS-RECHECK-WORKFLOW.md`](planning/PASS-RECHECK-WORKFLOW.md).
 
 ## Excluded intentionally
 

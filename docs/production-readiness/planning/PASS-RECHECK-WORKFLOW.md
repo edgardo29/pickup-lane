@@ -5,6 +5,12 @@ implemented Pickup Lane production-readiness pass. It is process guidance only.
 It does not define product behavior and does not override the authority order in
 `docs/production-readiness/00-READ-ME-FIRST.md`.
 
+Use `PASS-IMPLEMENTATION-WORKFLOW.md` for first-time executable pass
+implementation. Use `PASS-INTAKE-TEMPLATE.md` and
+`PASS-EXECUTION-REGISTER.md` before Gate A when a parent blueprint pass needs
+intake, decomposition, or readiness review. This recheck workflow preserves the
+historical revalidation process; it does not select or start future passes.
+
 ## 1. Purpose And Applicability
 
 Use this workflow when rechecking an already-implemented pass against current
@@ -13,8 +19,8 @@ has changed since the pass was first implemented.
 
 Distinguish three kinds of work:
 
-- Greenfield implementation creates an approved pass for the first time from
-  authority and the current pass plan.
+- First-time implementation creates an approved executable pass from authority,
+  approved intake when applicable, and current accepted `develop`.
 - Pass recheck or revalidation verifies whether an already-implemented pass
   still agrees with authority, current repository behavior, current ownership,
   and current evidence standards.
