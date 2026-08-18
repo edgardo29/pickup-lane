@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-04A-R1",
+      "owning_pass": "WS03-04A",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "IAM-017",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/authorization_matrix_foundation",
+      "reason": "The authorization matrix must enumerate every current registered FastAPI APIRoute method/path pair except implicit HEAD and OPTIONS, including public, health, provider-callback, retired/tombstone, authenticated, self-owned, relationship, and admin routes."
+    },
+    {
+      "id": "WS03-04A-R2",
+      "owning_pass": "WS03-04A",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "IAM-017",
+        "GOV-006",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/authorization_matrix_foundation",
+      "reason": "The matrix artifact must use a structured schema for route identity, source metadata, deterministically serialized authorization dependencies, route disposition, owner/disposition reasons, negative-proof ownership, authorization dimensions, concealment, and canonical gap references."
+    },
+    {
+      "id": "WS03-04A-R3",
+      "owning_pass": "WS03-04A",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "IAM-017",
+        "WS03-04B",
+        "WS03-04C",
+        "WS03-04D"
+      ],
+      "state": "required",
+      "scope": "workflows/authorization_matrix_foundation",
+      "reason": "Every route/action must have exactly one approved behavioral child owner or explicit non-WS03-04 disposition, every family must be homogeneous, mixed prefixes must be split, and WS03-04A must not be a route or family behavioral owner."
+    },
+    {
+      "id": "WS03-04A-R4",
+      "owning_pass": "WS03-04A",
+      "source_controls": [
+        "IAM-012",
+        "IAM-016",
+        "IDB-01",
+        "IDB-02",
+        "IDB-03",
+        "IDB-04",
+        "WS03-01",
+        "WS03-02",
+        "WS03-03A",
+        "WS03-03B"
+      ],
+      "state": "required",
+      "scope": "workflows/authorization_matrix_foundation",
+      "reason": "Protected-route classification must come from backend dependencies and source policy rather than frontend guards, and every route disposition must have a concrete reason."
+    },
+    {
+      "id": "WS03-04A-R5",
+      "owning_pass": "WS03-04A",
+      "source_controls": [
+        "IAM-013",
+        "IAM-015",
+        "IAM-017",
+        "ADM-007",
+        "ADM-013",
+        "ADM-015",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/authorization_matrix_foundation",
+      "reason": "The matrix must identify required authorization dimensions and expected negative-proof ownership for object IDs, nested resources, relationships, workflow states, list/search or export-like surfaces, writable fields, functions, roles, and concealment semantics."
+    },
+    {
+      "id": "WS03-04A-R6",
+      "owning_pass": "WS03-04A",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "IAM-017",
+        "TST-005",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/authorization_matrix_foundation",
+      "reason": "The route and authorization-dependency drift guard must fail closed for missing routes, stale entries, changed serialized auth dependencies, protected routes without backend auth classification, and undefined policy without an explicit owner or blocker disposition."
+    },
+    {
+      "id": "WS03-04A-R7",
+      "owning_pass": "WS03-04A",
+      "source_controls": [
+        "EN-01",
+        "GOV-006",
+        "WS03-01",
+        "WS03-02",
+        "WS03-03A",
+        "WS03-03B",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/authorization_matrix_foundation",
+      "reason": "Requirement declarations, pytest markers, testing record, and matrix metadata must be traceable to accepted repository source/test truth, classify accepted predecessor evidence correctly, and avoid backend/tests/legacy."
+    },
+    {
+      "id": "WS03-04A-R8",
+      "owning_pass": "WS03-04A",
+      "source_controls": [
+        "IAM-010",
+        "IAM-011",
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "IAM-017",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/authorization_matrix_foundation",
+      "reason": "Negative-space evidence must prevent false closure from frontend-only guards, App Check, recent-auth, broad active-admin checks, provider/runtime observations, generated OpenAPI alone, or local pytest mappings to external/provider/governance facts."
+    },
+    {
+      "id": "WS03-04A-R9",
+      "owning_pass": "WS03-04A",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "IAM-017",
+        "WS03-04B",
+        "WS03-04C",
+        "WS03-04D",
+        "WS04",
+        "WS08",
+        "WS09",
+        "WS10"
+      ],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Final behavioral authorization closure for self-owned, relationship, admin, provider/runtime, database-concurrency, export, unmask, read-audit, and parent-gap disposition remains outside WS03-04A and must have zero local pytest mappings in this pass."
+    }
+  ]
+}

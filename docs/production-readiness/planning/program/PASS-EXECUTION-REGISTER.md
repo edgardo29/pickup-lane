@@ -14,10 +14,10 @@ scope.
 | Field | Value |
 |---|---|
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes. |
-| Current reconciliation point | Accepted `develop` after WS03-03B. |
-| Current accepted develop SHA at reconciliation | `39d07e71366b3177bd380f3c07eade0bb0210406` |
+| Current reconciliation point | Proposed accepted `develop` state after the substantive `WS03-04A` PR merges. |
+| Current accepted develop SHA at reconciliation | Merge SHA to be established by the substantive `WS03-04A` PR; accepted baseline before this pass was `22855d0d0b8e67be733de1fea6e3771f0587cfa9`. |
 | Original blueprint register | 42 parent-level planned passes in `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md`. |
-| Accepted executable requirement declarations through this point | 25 files under `backend/tests/support/requirements/`. |
+| Accepted executable requirement declarations through this point | 26 files under `backend/tests/support/requirements/` once the substantive `WS03-04A` PR merges. |
 | Next pass selected by this register? | No. The owner must explicitly select the next intake or pass. |
 
 The recorded accepted `develop` SHA is a historical reconciliation basis for
@@ -32,8 +32,8 @@ current-session source of truth. Current execution always comes from current
 | Original blueprint parent-level entries | 42 | Parent-level entries mirrored from the master blueprint. |
 | Accepted/completed parent-level entries | 13 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through `WS03-03`. |
 | Remaining parent-level entries | 29 | Parent-level entries not yet selected or completed in this register. |
-| Accepted executable passes with requirement declarations | 25 | Current accepted executable declaration files under `backend/tests/support/requirements/`. |
-| Remaining actual executable-pass count | Unknown | Future executable-unit count depends on owner selection and Stage 0 intake decisions. |
+| Accepted executable passes with requirement declarations | 26 | Current accepted executable declaration files under `backend/tests/support/requirements/` once the substantive `WS03-04A` PR merges. |
+| Remaining actual executable-pass count | Unknown | Future executable-unit count depends on owner selection, accepted decomposition, and remaining `WS03-04B`/`WS03-04C`/`WS03-04D` execution. |
 
 Count magnitude is not completion proof or control-closure proof. Controls
 close only through accepted evidence and reassessment.
@@ -70,7 +70,7 @@ navigation. It does not replace the master blueprint.
 | `WS03-01` | Identity authority and verifier-controlled field protection | Accepted executable pass. |
 | `WS03-02` | Provisioning, account-state lifecycle, and concurrent first login | Accepted executable pass. |
 | `WS03-03` | High-risk authentication and Firebase control verification | Decomposed into accepted executable child passes `WS03-03A` and `WS03-03B`. |
-| `WS03-04` | Complete authorization matrix and negative proof | Not yet selected in this register. Requires intake before implementation. |
+| `WS03-04` | Complete authorization matrix and negative proof | Decomposed into `WS03-04A`, `WS03-04B`, `WS03-04C`, and `WS03-04D`; `WS03-04A` accepted once the substantive PR merges; parent incomplete with B/C/D remaining. |
 | `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | Not yet selected in this register. Requires intake before implementation. |
 | `WS04-01` | Database engine/session lifecycle, connection budget, and least-privilege roles | Not yet selected in this register. Requires intake before implementation. |
 | `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Not yet selected in this register. Requires intake before implementation. |
@@ -134,10 +134,13 @@ Every path in the Plan column is relative to
 | `WS03-02` | `WS03-02` | `passes/ws03/ws03-02-account-lifecycle-concurrency.md` | `ws03_02.json` | 12 | 11 | 0 | 1 | `workflows/account_lifecycle_concurrency` plus governance |
 | `WS03-03A` | `WS03-03` | `passes/ws03/ws03-03a-recent-auth-step-up.md` | `ws03_03a.json` | 14 | 11 | 0 | 3 | `workflows/recent_auth_step_up` plus governance |
 | `WS03-03B` | `WS03-03` | `passes/ws03/ws03-03b-app-check-admin-mfa-firebase-governance.md` | `ws03_03b.json` | 10 | 7 | 0 | 3 | `workflows/app_check_provider_security` plus governance |
+| `WS03-04A` | `WS03-04` | `passes/ws03/ws03-04a-authorization-matrix-foundation.md` | `ws03_04a.json` | 9 | 8 | 0 | 1 | `workflows/authorization_matrix_foundation` plus governance |
 
 ## 6. Accepted Stage 0 Intake Records
 
-No intake records exist yet under the new forward implementation workflow.
+| Parent pass | Intake record | SHA-256 | Accepted by executable pass | Accepted state |
+|---|---|---|---|---|
+| `WS03-04` | `docs/production-readiness/planning/passes/ws03/ws03-04-intake.md` | `e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4` | `WS03-04A` | Becomes accepted when the substantive `WS03-04A` PR merges into `develop`. |
 
 Historical WS02-04, WS02-05, and WS03-03 decompositions remain accepted. Do
 not fabricate retroactive intake records for them.
@@ -209,6 +212,45 @@ Accepted executable children:
 `WS03-03B` owns source Firebase App Check foundation and records administrator
 MFA plus Firebase/GCP credential-governance provider boundaries. Broader live
 provider/runtime/governance evidence remains later-owned.
+
+### WS03-04
+
+Original parent: `WS03-04 - Complete authorization matrix and negative proof`.
+
+Approved Stage 0 intake:
+`docs/production-readiness/planning/passes/ws03/ws03-04-intake.md`
+
+Frozen intake SHA-256:
+`e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4`
+
+Approved executable children:
+
+1. `WS03-04A`
+2. `WS03-04B`
+3. `WS03-04C`
+4. `WS03-04D`
+
+Approved dependency graph:
+`WS03-04A -> {WS03-04B, WS03-04C} -> WS03-04D`
+
+`WS03-04A` owns the authorization matrix foundation and route drift guard.
+It records every current FastAPI route/action key, deterministic backend
+authorization dependencies, child-owner or non-WS03-04 dispositions, source
+traceability, and canonical uncovered gaps. It does not prove final behavioral
+authorization closure.
+
+`WS03-04B` remains for self-owned account, notification, inbox, saved-card,
+credit, payment, refund, and host-fee surfaces.
+
+`WS03-04C` remains for games, community games, checkout, bookings,
+participants, waitlists, chats/messages, My Games, and Need-a-Sub relationship
+surfaces.
+
+`WS03-04D` remains for admin/high-risk route proof and final parent-gap
+disposition after both B and C complete.
+
+Parent `WS03-04` remains incomplete after A. B and C may proceed independently
+after A; D follows completion of both B and C.
 
 ## 8. Remaining Parent Passes
 
