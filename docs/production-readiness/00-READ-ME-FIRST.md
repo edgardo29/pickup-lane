@@ -18,11 +18,19 @@ pass status as current execution state.
 Before any production-readiness pass work:
 
 1. Read this document, `01-PROGRAM-CONTEXT.md`, and
-   `planning/PASS-RECHECK-WORKFLOW.md`.
+   the applicable workflow:
+   `planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md` for first-time pass
+   implementation or `planning/workflows/PASS-RECHECK-WORKFLOW.md` for
+   revalidating a pass already accepted into `develop`, or formally
+   revalidating historical implementation that predates the current workflow.
 2. Verify current Git/repository state and determine the current pass and gate
    from current repository truth and the current approved instruction before
    relying on historical prompts, PRs, branches, SHAs, or prior chat context.
-3. Load the current or frozen pass plan and every gate-specific repository
+3. For first-time pass implementation, read
+   `planning/program/PASS-EXECUTION-REGISTER.md`, the implementation workflow,
+   the approved intake record when one exists, and the current executable-pass
+   plan or planning template.
+4. Load the current or frozen pass plan and every gate-specific repository
    template or required engineering/testing standard before drafting or
    executing that gate's instruction.
 
@@ -37,6 +45,19 @@ Before any production-readiness pass work:
 
 Stop when two authoritative records conflict. Do not guess or silently reconcile them.
 
+`planning/program/PASS-EXECUTION-REGISTER.md` is accepted-state navigation, not
+product authority. Approved intake constrains child structure and parent
+obligation allocation, but it cannot override audits, decisions, the final
+remediation plan, the master blueprint, or current repository truth.
+
+Intake approval does not authorize implementation. The next pass requires
+explicit owner direction.
+
+Approved intake records and approved canonical plans are frozen gate artifacts.
+Gate instructions identify their approved SHA-256 values. Gate B, Gate C, and
+Gate D verify those values; intake content changes return to Stage 0, and
+canonical-plan content changes return to Gate A.
+
 ## Bundle contents
 
 ### `governance/`
@@ -50,8 +71,16 @@ Only the final approved decision records and the v4 inventory showing 27 approve
 
 ### `planning/`
 The finalized remediation plan and master execution blueprint.
-The reusable pass recheck process for revalidating already-implemented passes
-lives at [`PASS-RECHECK-WORKFLOW.md`](planning/PASS-RECHECK-WORKFLOW.md).
+The forward implementation workflow for first-time executable passes lives at
+[`PASS-IMPLEMENTATION-WORKFLOW.md`](planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md).
+The pass intake template lives at
+[`PASS-INTAKE-TEMPLATE.md`](planning/templates/PASS-INTAKE-TEMPLATE.md).
+The execution register that distinguishes original blueprint parent passes
+from accepted executable passes lives at
+[`PASS-EXECUTION-REGISTER.md`](planning/program/PASS-EXECUTION-REGISTER.md).
+The historical pass recheck process for accepted or historical implementation
+revalidation lives at
+[`PASS-RECHECK-WORKFLOW.md`](planning/workflows/PASS-RECHECK-WORKFLOW.md).
 
 ## Excluded intentionally
 
@@ -59,4 +88,8 @@ This bundle does not include superseded decision inventories, draft remediation 
 
 ## Codex restriction
 
-Reading this bundle does not authorize implementation. Codex must act only on the currently approved pass-specific prompt and stop at that prompt's boundaries.
+Reading this bundle does not authorize implementation. Gate C approval also
+does not authorize staging, committing, pushing, PR creation, or PR updates.
+Only an explicit Gate D instruction authorizes publication mechanics. Codex
+must act only on the currently approved pass-specific prompt and stop at that
+prompt's boundaries.

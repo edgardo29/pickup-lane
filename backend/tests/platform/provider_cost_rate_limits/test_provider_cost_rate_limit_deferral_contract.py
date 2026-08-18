@@ -8,9 +8,9 @@ pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
-_C3B_PLAN = "docs/production-readiness/planning/ws02-04c3b-provider-cost-rate-limit-deferral.md"
+_C3B_PLAN = "docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md"
 _LIMITS_REGISTER = "docs/production-readiness/governance/limits-and-thresholds-register.md"
-_SOURCE_OWNED_CLOSEOUT = "docs/production-readiness/planning/ws02-04-source-owned-closeout.md"
+_SOURCE_OWNED_CLOSEOUT = "docs/production-readiness/planning/passes/ws02/ws02-04-source-owned-closeout.md"
 
 
 def _read(relative_path: str) -> str:
@@ -91,7 +91,7 @@ def test_no_numeric_c3b_rate_policy_or_generic_limiter_artifact_is_approved() ->
 def test_c3a_chat_is_the_only_approved_source_owned_rate_limit_exception() -> None:
     plan = _read(_C3B_PLAN)
     register = _read(_LIMITS_REGISTER)
-    c3a_plan = _read("docs/production-readiness/planning/ws02-04c3a-chat-rate-limit-contract.md")
+    c3a_plan = _read("docs/production-readiness/planning/passes/ws02/ws02-04c3a-chat-rate-limit-contract.md")
 
     assert "C3A owns the approved source-owned authenticated chat limiter only" in plan
     assert "C3B must not reuse that value elsewhere" in plan

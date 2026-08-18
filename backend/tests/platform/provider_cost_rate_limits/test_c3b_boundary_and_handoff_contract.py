@@ -17,12 +17,12 @@ def _read(relative_path: str) -> str:
 
 @pytest.mark.requirement("WS02-04C3B-R4", "WS02-04C3B-R7")
 def test_c1_c2_c3a_and_b2a2b2_boundaries_remain_distinct_from_c3b_rate_control() -> None:
-    c3b_plan = _read("docs/production-readiness/planning/ws02-04c3b-provider-cost-rate-limit-deferral.md")
-    c1_plan = _read("docs/production-readiness/planning/ws02-04c1-operation-timeouts-cancellation.md")
-    c2_plan = _read("docs/production-readiness/planning/ws02-04c2-retry-reconciliation-backpressure.md")
-    c3a_plan = _read("docs/production-readiness/planning/ws02-04c3a-chat-rate-limit-contract.md")
+    c3b_plan = _read("docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md")
+    c1_plan = _read("docs/production-readiness/planning/passes/ws02/ws02-04c1-operation-timeouts-cancellation.md")
+    c2_plan = _read("docs/production-readiness/planning/passes/ws02/ws02-04c2-retry-reconciliation-backpressure.md")
+    c3a_plan = _read("docs/production-readiness/planning/passes/ws02/ws02-04c3a-chat-rate-limit-contract.md")
     b2a2b2_plan = _read(
-        "docs/production-readiness/planning/ws02-04b2a2b2-opaque-provider-payment-inputs.md"
+        "docs/production-readiness/planning/passes/ws02/ws02-04b2a2b2-opaque-provider-payment-inputs.md"
     )
 
     assert "C1 owns current source-configured operation timeouts" in c3b_plan
@@ -64,8 +64,8 @@ def test_current_provider_retry_and_handoff_metadata_preserves_later_owners() ->
 
 @pytest.mark.requirement("WS02-04C3B-R2", "WS02-04C3B-R7")
 def test_external_runtime_provider_edge_and_api_m11_gaps_remain_open() -> None:
-    c3b_plan = _read("docs/production-readiness/planning/ws02-04c3b-provider-cost-rate-limit-deferral.md")
-    source_owned_closeout = _read("docs/production-readiness/planning/ws02-04-source-owned-closeout.md")
+    c3b_plan = _read("docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md")
+    source_owned_closeout = _read("docs/production-readiness/planning/passes/ws02/ws02-04-source-owned-closeout.md")
     audit_part_1 = _read("docs/production-readiness/audit-research/audit-part-1.md")
 
     for phrase in (

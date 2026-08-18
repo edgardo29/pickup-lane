@@ -5,11 +5,15 @@
 | Field | Value |
 |---|---|
 | Pass | `[PASS-ID]` |
+| Blueprint parent pass | `[Parent PASS-ID and title]` |
+| Execution mode | `[First-time implementation / Recheck / Closeout / other]` |
 | Track | `[WSxx / PROGRAM / GOVERNANCE / other canonical track]` |
 | Type | `[Domain implementation / API / Database / Migration / Provider / Frontend / CI / Operations / other pass type]` |
 | Primary controls | `[CONTROL-ID, CONTROL-ID]` |
 | Authority basis | `[Primary controls / decision records / blueprint entry / other authoritative sources]` |
 | Depends on | `[PASS-ID / prerequisite / None]` |
+| Intake record | `[path or Not applicable]` |
+| Requirement declaration | `[path or Not applicable]` |
 | Trusted test scope | `[path or Not applicable]` |
 
 ## How To Use This Template
@@ -33,6 +37,21 @@ pass-specific planning or instructions. Lower-level planning cannot silently
 override higher authority. If authoritative sources conflict, stop, document
 and resolve the conflict before pass work continues, and do not guess or
 silently choose one source.
+
+For a first-time executable pass, use
+`docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md`
+and an approved intake record. Owner direction selects the parent pass or
+remaining parent scope to evaluate; it does not replace Stage 0 intake. If the
+work starts from a parent blueprint pass, use
+`docs/production-readiness/planning/templates/PASS-INTAKE-TEMPLATE.md` and
+`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` before
+Gate A to establish the parent pass, executable pass ID, decomposition
+rationale, dependencies, and non-overlap. Historical accepted decompositions do
+not require retroactive intake creation. `Not applicable` is allowed for intake
+only for recheck, closeout, program, or other genuinely non-intake work. For a
+pass already accepted into `develop`, or historical implementation predating
+the current workflow, use
+`docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md`.
 
 Use progressive detail:
 
@@ -68,7 +87,7 @@ Use these rules throughout:
 - Detailed scenario inventories, edge cases, failure cases, and adequacy
   reasoning belong in the appropriate `TESTING_RECORD.md` when that testing
   architecture applies. Use
-  `docs/production-readiness/planning/TESTING-RECORD-TEMPLATE.md` when creating
+  `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` when creating
   or reconciling those records. The planning document may summarize major
   risks, but it should not duplicate the entire testing record.
 - Explain control IDs and relationships instead of listing identifiers without
@@ -84,6 +103,42 @@ Use these rules throughout:
 A developer unfamiliar with Pickup Lane should be able to understand the
 purpose, scope, risks, technical contract, evidence model, and completion
 conditions without needing oral history from the original author.
+
+## Executable Pass Identity And Intake
+
+Every planning document must identify the pass it is actually designing.
+
+For first-time implementation, state the parent blueprint pass and whether the
+parent is implemented directly or decomposed into this executable child pass.
+The plan must preserve the parent intent while defining a reviewable,
+non-overlapping implementation scope.
+
+When an intake exists, link it in the At A Glance table and carry forward its
+approved parent/child boundary, dependencies, stop conditions, and non-goals.
+When intake is not applicable, explain why in the relevant scope or authority
+section.
+
+For first-time implementation, an approved intake record is a frozen gate
+artifact. Stage 0 reports its exact path and SHA-256 before human approval; Gate
+instructions identify the approved intake-record SHA. Gate A and Gate B consume
+that record read-only unless a Stage 0 revision with a new SHA and new human
+approval changes it.
+
+For every executable pass, explain:
+
+- one primary outcome;
+- coherent requirement family;
+- why this is one safe merge/rollback or forward-fix unit;
+- parent contribution;
+- prerequisite state;
+- child handoff;
+- safe state after merge.
+
+When the pass is a child, identify allocated parent obligations and state that
+the plan does not reopen sibling-child scope.
+
+This template does not select the next pass. Pass selection comes from explicit
+owner direction and the current execution register.
 
 ## 1. Purpose
 
@@ -249,7 +304,82 @@ filenames are helpful when they clarify ownership, but artifact-level,
 resource-level, module-level, or concept-level ownership is often more stable
 and useful.
 
-## 6. Testing And Evidence
+Narrative ownership may use modules, resources, or artifact classes, but the
+final frozen repository file lists must use exact repository-relative paths.
+External/provider/runtime artifacts that are not repository files may be listed
+separately using stable artifact descriptions, owners, or evidence identifiers.
+
+The final Gate A plan must distinguish:
+
+| Scope item | Exact value |
+|---|---|
+| Frozen Stage 0 intake artifact | `[exact repository-relative path or Not applicable]` |
+| Frozen canonical plan artifact | `[exact repository-relative path]` |
+| Exact Gate B editable file set | `[exact repository-relative paths only]` |
+| Exact expected final pass changed-file set | `[exact repository-relative paths only]` |
+
+For a first substantive child pass, the expected final changed-file set is:
+
+- frozen Stage 0 intake record;
+- frozen Gate A canonical plan;
+- exact Gate B editable files, which include
+  `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`;
+- no additional repository file.
+
+The intake record and canonical plan are not Gate B-editable.
+
+For later children, the accepted intake record already exists in `develop`; it
+is read-only and normally does not appear in the new child diff. The expected
+final changed-file set is:
+
+- frozen Gate A canonical plan;
+- exact Gate B editable files, which include the execution register;
+- no additional repository file.
+
+For a parent implemented whole, the expected final changed-file set is:
+
+- frozen Stage 0 intake record;
+- frozen Gate A canonical plan;
+- exact Gate B editable files, which include the execution register;
+- no additional repository file.
+
+Every substantive first-time executable pass changes accepted execution state
+when merged. Therefore, Gate A must include
+`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` in the
+exact Gate B editable file set and design the exact register change. By default,
+the first child prepares the register update for accepted intake/decomposition,
+accepted first-child state, remaining child state, and incomplete parent state;
+later children prepare their own accepted state and remaining parent state; the
+final child marks the parent complete; and a parent kept whole prepares the
+direct parent completion update. Gate C reviews the proposed register state with
+the complete pass. Gate D never authors or semantically edits register content,
+and routine post-merge tracker-only PRs are not required.
+Program/documentation maintenance and historical rechecks remain outside this
+automatic first-time-pass rule unless their explicit scope says otherwise.
+
+## 6. Implementation Impact And Compatibility Review
+
+Document the Gate A repository-wide impact scan.
+
+Identify:
+
+- production callers;
+- frontend callers;
+- routes;
+- settings/config inventories;
+- CORS/header contracts;
+- provider/timeout/retry/rate inventories;
+- middleware assumptions;
+- schema/migration/database expectations;
+- trusted cross-pass tests;
+- compatibility files expected to change;
+- areas reviewed and found unaffected.
+
+This section should make the final file set predictable before Gate B. Do not
+wait for broad regression to discover obvious finite inventories, callers, or
+accepted compatibility contracts.
+
+## 7. Testing And Evidence
 
 Explain how the requirements are proven. Tests prove behavior; they do not
 define behavior. Authority and requirements define the behavior.
@@ -287,7 +417,25 @@ Summarize major risks and evidence coverage here. Keep detailed scenario
 inventories, edge cases, failure cases, and adequacy reasoning in the
 appropriate `TESTING_RECORD.md` when that record applies.
 
-## 7. Integration / Operational Expectations
+## 8. Validation Strategy
+
+Summarize the validation design. Do not require raw command dumps in the
+reusable template.
+
+Cover applicable:
+
+- focused scope;
+- compatibility scopes;
+- prerequisite regressions;
+- specialized frontend/browser/provider/migration/PostgreSQL/concurrency or
+  runtime proof;
+- checkers;
+- traceability;
+- broad regression;
+- final semantic sanity sweep;
+- diff/security/scope checks.
+
+## 9. Integration / Operational Expectations
 
 Explain what consumes, integrates with, or depends on this pass now or in later
 work.
@@ -308,7 +456,7 @@ Not applicable - [reason]
 
 Do not invent integration content.
 
-## 8. Not Part Of This Pass
+## 10. Not Part Of This Pass
 
 List explicit non-goals. This section protects pass boundaries and prevents
 scope creep.
@@ -324,7 +472,7 @@ Identify, where relevant:
 Do not use this section as an excuse to omit something actually required by the
 pass.
 
-## 9. Related Controls And Remaining Evidence
+## 11. Related Controls And Remaining Evidence
 
 Explain which controls or decisions the pass advances, what it establishes for
 each, and what remains later.
@@ -348,7 +496,19 @@ that conclusion.
 Use this optional subsection for secondary controls or decisions that are
 related to the pass but do not need a full table row.
 
-## 10. Completion Criteria
+## 12. Stop And Correction Boundaries
+
+State what discoveries:
+
+- remain Gate B implementation fixes;
+- require Gate A correction;
+- require Stage 0 revision;
+- remain external/later evidence.
+
+This section should prevent Gate B from silently expanding scope and should
+prevent Stage 0 structural questions from being hidden inside implementation.
+
+## 13. Completion Criteria
 
 Answer: "When is this pass complete?"
 
@@ -401,10 +561,16 @@ unfamiliar with the pass can answer:
   define correct behavior?
 - What systems, code, configuration, evidence, documents, resources, or
   operational responsibilities does the pass own?
+- What current callers, routes, inventories, compatibility files, and
+  materially affected documents were reviewed?
 - How is each requirement proven?
+- What validation strategy proves the focused pass and affected compatibility
+  scopes?
 - Where do detailed testing risks and scenarios live, when required?
 - What integrates with or consumes this work?
 - What is deliberately outside the pass?
+- Which discoveries stay in Gate B, require Gate A correction, require Stage 0
+  revision, or remain external/later evidence?
 - Which controls or decisions does the pass advance?
 - What evidence or work still remains later?
 - What makes the pass complete?

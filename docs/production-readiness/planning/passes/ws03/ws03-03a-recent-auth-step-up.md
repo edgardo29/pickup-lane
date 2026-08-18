@@ -685,7 +685,7 @@ decision/register row and was explicitly presented for human Gate A approval.
 
 Gate A modifies only this canonical plan:
 
-1. `docs/production-readiness/planning/ws03-03a-recent-auth-step-up.md`
+1. `docs/production-readiness/planning/passes/ws03/ws03-03a-recent-auth-step-up.md`
 
 Gate A does not create tests, requirement JSON, a `TESTING_RECORD.md`,
 production source changes, frontend source changes, frontend tests,
@@ -1193,7 +1193,7 @@ previous frozen SHA `710bcde8481d538cbfe3574a76140ab3d4203149e2bdad8a2a06f88181a
 
 The expected final pass changed-file set is exactly twenty-two files:
 
-1. `docs/production-readiness/planning/ws03-03a-recent-auth-step-up.md`
+1. `docs/production-readiness/planning/passes/ws03/ws03-03a-recent-auth-step-up.md`
 2. `backend/tests/support/requirements/ws03_03a.json`
 3. `backend/tests/workflows/recent_auth_step_up/TESTING_RECORD.md`
 4. `backend/tests/workflows/recent_auth_step_up/test_provider_auth_time_contract.py`

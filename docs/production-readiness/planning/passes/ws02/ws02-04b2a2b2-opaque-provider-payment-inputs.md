@@ -417,7 +417,7 @@ The Gate A governance and planning artifacts are:
 
 - `docs/production-readiness/decisions/ws02-04b2a2b2-provider-payment-input-rules-approved.md`
 - `docs/production-readiness/governance/limits-and-thresholds-register.md`
-- `docs/production-readiness/planning/ws02-04b2a2b2-opaque-provider-payment-inputs.md`
+- `docs/production-readiness/planning/passes/ws02/ws02-04b2a2b2-opaque-provider-payment-inputs.md`
 
 The decision record is the approving source for B2A2B2 numeric and policy
 values. The limits register records selected approved values and open handoffs.
@@ -580,7 +580,7 @@ Gate B must create:
 - `backend/tests/workflows/provider_payment_input_ownership/TESTING_RECORD.md`
 
 The record must use
-`docs/production-readiness/planning/TESTING-RECORD-TEMPLATE.md`, summarize
+`docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md`, summarize
 risks and evidence quality, and explicitly describe why local tests can prove
 source-owned behavior but cannot close provider dashboards, runtime deployment,
 durable reconciliation, or broader PAY controls.

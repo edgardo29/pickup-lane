@@ -9,7 +9,7 @@
 | Type | Backend provider retry/reconciliation policy, fanout/backpressure inventory, and trusted evidence reconstruction |
 | Primary controls | `API-M10`, `JOB-M05`, `PAY-002`, `GOV-006` |
 | Supporting controls | `API-M11`, `FDN-04`, `API-M12`, `API-M19`, `DB-002`, `WS02-04C1`, `WS02-04C3A`, `WS02-04C3B`, `WS05` |
-| Authority basis | Current accepted repository tree; `API-M10`; `API-M11`; `JOB-M05`; `PAY-002`; `GOV-006` / `FDN-04`; `docs/production-readiness/governance/limits-and-thresholds-register.md`; `docs/production-readiness/planning/ws02-04-source-owned-closeout.md`; accepted `WS02-04C1`; accepted payment/provider request-ownership passes; accepted account-deletion ownership; WS05 durable-work ownership |
+| Authority basis | Current accepted repository tree; `API-M10`; `API-M11`; `JOB-M05`; `PAY-002`; `GOV-006` / `FDN-04`; `docs/production-readiness/governance/limits-and-thresholds-register.md`; `docs/production-readiness/planning/passes/ws02/ws02-04-source-owned-closeout.md`; accepted `WS02-04C1`; accepted payment/provider request-ownership passes; accepted account-deletion ownership; WS05 durable-work ownership |
 | Depends on | `EN-01`; `EN-02`; `WS02-01`; `WS02-04A`; `WS02-04B1`; `WS02-04B2A2B2`; `WS02-04C1`; `WS03-02` |
 | Trusted test scope | `backend/tests/platform/retry_reconciliation/` |
 

@@ -551,7 +551,7 @@ Gate B must verify this approved canonical plan's SHA-256 remains unchanged.
 
 The complete expected pass change set is exactly 11 files:
 
-1. `docs/production-readiness/planning/ws02-04c1-operation-timeouts-cancellation.md`
+1. `docs/production-readiness/planning/passes/ws02/ws02-04c1-operation-timeouts-cancellation.md`
 2. `backend/tests/support/requirements/ws02_04c1.json`
 3. `backend/tests/platform/operation_timeouts/TESTING_RECORD.md`
 4. `backend/tests/platform/operation_timeouts/test_timeout_settings_contract.py`

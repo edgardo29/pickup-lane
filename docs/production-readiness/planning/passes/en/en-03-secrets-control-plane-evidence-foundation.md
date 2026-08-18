@@ -182,7 +182,7 @@ EN-03 owns the canonical plan and foundational governance artifacts needed to su
 
 | Artifact | EN-03 Role |
 |---|---|
-| `docs/production-readiness/planning/en-03-secrets-control-plane-evidence-foundation.md` | Canonical EN-03 planning document and authority reconciliation. |
+| `docs/production-readiness/planning/passes/en/en-03-secrets-control-plane-evidence-foundation.md` | Canonical EN-03 planning document and authority reconciliation. |
 | `docs/production-readiness/governance/provider-control-plane-register.md` | Sanitized provider/control-plane inventory and unresolved provider-access log. |
 | `docs/production-readiness/governance/secret-lifecycle-register.md` | Sanitized secret/configuration category and lifecycle register. |
 | `docs/production-readiness/governance/provider-evidence-handling-standard.md` | Safe evidence handling, redaction, metadata, traceability, and staleness rules. |

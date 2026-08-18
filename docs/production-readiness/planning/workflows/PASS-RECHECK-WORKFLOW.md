@@ -1,23 +1,35 @@
 # Production-Readiness Pass Recheck Workflow
 
-This document defines the reusable process for revalidating an already
-implemented Pickup Lane production-readiness pass. It is process guidance only.
-It does not define product behavior and does not override the authority order in
+This document defines the reusable process for revalidating a Pickup Lane
+production-readiness pass that is already accepted into `develop`, or historical
+implementation that predates the current workflow and is being formally
+revalidated. It is process guidance only. It does not define product behavior
+and does not override the authority order in
 `docs/production-readiness/00-READ-ME-FIRST.md`.
+
+Use `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md`
+for first-time executable pass implementation and for correction rounds on the
+same unmerged first-time pass. Normal recheck does not run Stage 0. When
+recheck discovers that an accepted parent/child decomposition is materially
+wrong, stop and route that structural problem to an explicitly approved Stage 0
+or program correction outside this recheck. Do not silently restructure pass
+families inside recheck Gate A.
 
 ## 1. Purpose And Applicability
 
-Use this workflow when rechecking an already-implemented pass against current
-repository truth, especially when the trusted testing or evidence architecture
-has changed since the pass was first implemented.
+Use this workflow when rechecking a pass already accepted into `develop`, or
+historical implementation that predates the current workflow and is being
+formally revalidated against current repository truth, especially when the
+trusted testing or evidence architecture has changed since the pass was first
+implemented.
 
 Distinguish three kinds of work:
 
-- Greenfield implementation creates an approved pass for the first time from
-  authority and the current pass plan.
-- Pass recheck or revalidation verifies whether an already-implemented pass
-  still agrees with authority, current repository behavior, current ownership,
-  and current evidence standards.
+- First-time implementation creates an approved executable pass from authority,
+  approved intake when applicable, and current accepted `develop`.
+- Pass recheck or revalidation verifies whether an already accepted pass or
+  historical implementation still agrees with authority, current repository
+  behavior, current ownership, and current evidence standards.
 - Testing or evidence reconstruction creates fresh trusted proof under the
   accepted EN-01 architecture when old tests or evidence are no longer trusted.
 
@@ -25,6 +37,12 @@ The objective is not merely to prove that current code passes tests. The
 objective is to establish that current repository truth is production-grade,
 matches authoritative requirements, has honest ownership, and has adequate
 evidence or explicit remaining gaps.
+
+This workflow applies to already accepted work or historical implementation
+being formally revalidated. It does not apply merely because source code has
+been written locally. It preserves the existing zero-trust recheck depth, but it
+does not select future passes, decompose new parent passes, or repair unmerged
+first-time implementation branches.
 
 ## 2. Core Authority Principle
 
@@ -380,7 +398,8 @@ gate work until the required decision exists.
 #### A2. Finalize The Canonical Pass Plan
 
 If A1 has no unresolved blocker, update only the canonical pass plan using the
-approved audit, current authority, and `PASS-PLANNING-TEMPLATE.md`.
+approved audit, current authority, and
+`docs/production-readiness/planning/templates/PASS-PLANNING-TEMPLATE.md`.
 
 The plan must define:
 
@@ -395,6 +414,8 @@ The plan must define:
 The plan defines what must be true; it does not implement corrections. Do not
 change production code, tracked configuration, governance artifacts,
 requirement JSON, `TESTING_RECORD.md`, or tests in Gate A.
+
+Gate A does not stage, commit, push, create a PR, or update a PR.
 
 #### A3. Correction And Evidence Design
 
@@ -415,7 +436,8 @@ Using the reconciled plan, design:
 - external or later-pass gaps;
 - exact Gate B file set.
 
-When designing a `TESTING_RECORD.md`, use `TESTING-RECORD-TEMPLATE.md` and
+When designing a `TESTING_RECORD.md`, use
+`docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` and
 keep the design consistent with its required structure and evidence-quality
 rules.
 
@@ -479,19 +501,34 @@ artifacts during Gate A.
 
 Gate A returns material findings, a requirement reconciliation matrix, the
 updated canonical plan, exact correction design, exact evidence design, exact
-Gate B file set, and blockers.
+Gate B file set, exact expected final pass changed-file set, exact validation
+strategy, and blockers.
 
-The canonical plan, requirements, correction design, evidence design, and Gate
-B file set become frozen only after human approval.
+At the end of Gate A, complete the corrected canonical plan, compute its
+SHA-256, and report the exact plan path and SHA. Human approval freezes that
+exact SHA. Do not embed a mutable SHA inside the canonical plan; the SHA belongs
+in Gate A reports and approved instructions.
+
+Gate A freezes these as distinct artifacts:
+
+- frozen canonical plan artifact;
+- exact Gate B editable file set using repository-relative paths;
+- exact expected final pass changed-file set using repository-relative paths;
+- exact validation strategy.
+
+The canonical plan, canonical-plan SHA, requirements, correction design,
+evidence design, Gate B file set, expected final pass changed-file set, and
+validation strategy become frozen only after human approval.
 
 #### Gate A Review Completion Rule
 
 Before approving Gate A or issuing a Gate A correction instruction, the
 reviewer must complete review of the full Gate A report and the complete
-canonical plan, including authority alignment, numeric-value authority,
-cross-pass ownership, current repository truth, requirements, correction
-design, evidence design, completion criteria, and the exact Gate B editable
-file set.
+canonical plan, including canonical-plan SHA, authority alignment,
+numeric-value authority, cross-pass ownership, current repository truth,
+requirements, correction design, evidence design, completion criteria, exact
+Gate B editable file set, exact expected final pass changed-file set, exact
+validation strategy, and blockers.
 
 Return all material findings together. After corrections, review the complete
 corrected Gate A state, not only the sections changed by the correction.
@@ -501,6 +538,13 @@ corrected Gate A state, not only the sections changed by the correction.
 Gate B implements exactly the approved Gate A design. It contains the former
 pass-owned correction and trusted test/evidence implementation
 responsibilities.
+
+Before editing, Gate B must verify branch, HEAD, accepted baseline, merge-base
+with that baseline, frozen canonical-plan path and SHA, exact Gate B editable
+file set, exact expected final changed-file set, and worktree/index state. Gate
+B must not edit the frozen canonical plan. Before handoff, Gate B must reverify
+baseline and merge-base, frozen canonical-plan SHA, actual/expected
+changed-file equality, and nothing staged.
 
 #### B1. Pass-Owned Corrections And Artifacts
 
@@ -522,8 +566,8 @@ As approved, create stable requirement declaration JSON, `TESTING_RECORD.md`,
 fresh trusted executable tests, and legitimate non-executable repository
 evidence under the accepted EN-01 architecture.
 
-Use `TESTING-RECORD-TEMPLATE.md` for any created or reconciled
-`TESTING_RECORD.md`.
+Use `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md`
+for any created or reconciled `TESTING_RECORD.md`.
 
 Tests are derived from authority and the approved pass plan, never from
 historical tests.
@@ -559,7 +603,7 @@ syntax/compile, environment/database/network/provider safety, and
 `git diff --check`.
 
 Gate B ends with an implementation and validation report. It does not commit or
-push.
+push, stage files, create a PR, or update a PR.
 
 ### Gate C - Independent Final Review
 
@@ -567,9 +611,13 @@ Gate C must be a new, independent, read-only run. It combines the former
 evidence adequacy and whole-pass local review responsibilities without removing
 either review obligation.
 
-Gate C review inputs must include the frozen plan, requirement declarations,
+Gate C must verify and report branch, HEAD, accepted baseline, merge-base with
+that baseline, frozen canonical-plan path and SHA, exact expected final
+changed-file set, exact actual changed-file set, actual/expected equality, and
+staged-file state. Review inputs must also include requirement declarations,
 `TESTING_RECORD.md`, implemented evidence, and current validation. Use
-`TESTING-RECORD-TEMPLATE.md` when reviewing testing-record compliance.
+`docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` when
+reviewing testing-record compliance.
 
 Gate C never modifies repository content. When Gate C finds a defect, it
 returns `corrections required` and defines the exact authorized correction
@@ -713,17 +761,29 @@ After any scoped correction run that changes repository content, the next
 semantic review is a new full independent Gate C review of the complete
 corrected pass. Gate C itself leaves repository contents unchanged.
 
+At review completion, confirm repository contents remain unchanged.
+
 Do not commit or push during Gate C.
 
 ### Gate D - Git And PR Finalization
 
-Run only after Gate C approval. This gate is mechanical.
+Gate C approval makes the rechecked pass eligible for Gate D. It does not
+automatically authorize staging, committing, pushing, PR creation, or PR
+updates. Run Gate D only after an explicit owner Gate D publication
+instruction. This gate is mechanical.
 
-Verify the accepted baseline, exact approved change set, no unexpected files,
-no staged contamination, secret/confidential-data safety, and diff integrity.
+Before staging, fetch remote metadata and verify branch, HEAD, accepted
+baseline, merge-base with that baseline, frozen canonical-plan SHA, current
+`origin/develop`, exact approved change set, no unexpected files, no staged
+contamination, secret/confidential-data safety, and diff integrity.
+
+If `origin/develop` differs from the accepted baseline, stop, report the
+divergence, do not automatically merge, rebase, reset, cherry-pick, or
+force-push, and require explicit owner-approved reconciliation.
 
 Before drafting, creating, updating, or reviewing a PR title or body, read and
-follow `PASS-PR-DESCRIPTION-TEMPLATE.md`.
+follow
+`docs/production-readiness/planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md`.
 
 Then stage only approved files, inspect the exact staged diff, create one pass
 commit unless the approved pass explicitly requires a different commit
@@ -765,9 +825,11 @@ speculative process merely because a pass sounds high risk.
 
 ## 16. Freeze Rule
 
-After Gate A approval, the canonical plan, requirements, correction design,
-evidence design, and authorized Gate B file set are frozen unless concrete
-contradictory evidence requires returning to Gate A.
+After Gate A approval, the canonical plan, canonical-plan SHA, requirements,
+correction design, evidence design, authorized Gate B file set, expected final
+pass changed-file set, and validation strategy are frozen unless concrete
+contradictory evidence requires returning to Gate A. Any plan content change
+returns to recheck Gate A, produces a new SHA, and requires new human approval.
 
 After Gate C approval, no semantic changes are permitted in Gate D.
 

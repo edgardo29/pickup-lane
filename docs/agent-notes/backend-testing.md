@@ -126,7 +126,7 @@ The concise human testing/risk record for a coherent owned test scope owns
 requirement-to-scenario reasoning. It should describe invariants, meaningful
 risks, edge cases, owning layer, gaps, blockers, deferrals, and adequacy
 conclusions. It must not duplicate every Python test or exact pytest node ID.
-Use `docs/production-readiness/planning/TESTING-RECORD-TEMPLATE.md` when
+Use `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` when
 creating or reconciling a `TESTING_RECORD.md`.
 
 Pytest tests declare the stable requirement IDs they prove with the registered

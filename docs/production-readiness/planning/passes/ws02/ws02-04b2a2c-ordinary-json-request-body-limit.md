@@ -8,7 +8,7 @@
 | Track | `WS02` |
 | Type | API/platform request-body limit recheck, configuration reconciliation, and trusted evidence reconstruction |
 | Primary controls | `API-M09`, `GOV-006` |
-| Authority basis | Current accepted repository tree; `API-M09`; `GOV-006` / `FDN-04`; `docs/production-readiness/governance/limits-and-thresholds-register.md`; `docs/production-readiness/planning/ws02-04-source-owned-closeout.md`; `docs/production-readiness/planning/ws02-04b2a1-portable-request-boundaries.md`; accepted adjacent `WS02-04B2A2A`, `WS02-04B2A2B1`, `WS02-04B2A2B2`, `WS02-04B2A2B3`, and `WS02-05A` plans |
+| Authority basis | Current accepted repository tree; `API-M09`; `GOV-006` / `FDN-04`; `docs/production-readiness/governance/limits-and-thresholds-register.md`; `docs/production-readiness/planning/passes/ws02/ws02-04-source-owned-closeout.md`; `docs/production-readiness/planning/passes/ws02/ws02-04b2a1-portable-request-boundaries.md`; accepted adjacent `WS02-04B2A2A`, `WS02-04B2A2B1`, `WS02-04B2A2B2`, `WS02-04B2A2B3`, and `WS02-05A` plans |
 | Depends on | `EN-01`; `EN-02`; `WS02-03`; `WS02-04A`; `WS02-04B2A1`; `WS02-04B2A2A`; `WS02-04B2A2B1`; `WS02-04B2A2B2`; `WS02-04B2A2B3`; `WS02-05A` |
 | Trusted test scope | `backend/tests/platform/request_body_limits/` |
 
@@ -418,7 +418,7 @@ set.
 The complete pass change set is expected to be exactly the Gate A plan plus the
 Gate B editable files:
 
-1. `docs/production-readiness/planning/ws02-04b2a2c-ordinary-json-request-body-limit.md`
+1. `docs/production-readiness/planning/passes/ws02/ws02-04b2a2c-ordinary-json-request-body-limit.md`
 2. `backend/main.py`
 3. `backend/settings.py`
 4. `backend/.env.example`

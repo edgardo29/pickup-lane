@@ -31,7 +31,7 @@ These WS01 artifacts are governance records. They are not proof that application
 | [Secret lifecycle register](secret-lifecycle-register.md) | Secret-name and configuration lifecycle register without values. | OPS-006, OPS-007 |
 | [Provider evidence handling standard](provider-evidence-handling-standard.md) | Rules for collecting, sanitizing, reviewing, storing, and replacing provider evidence. | OPS-025 |
 | [Provider evidence checklist](provider-evidence-checklist.md) | Reusable provider evidence checklist with no real account information. | OPS-005, OPS-006, OPS-007, OPS-025 |
-| [EN-03 secrets, control plane, and evidence foundation](../planning/en-03-secrets-control-plane-evidence-foundation.md) | Pass-specific scope, topology, boundaries, control mapping, and deferred evidence. | OPS-005, OPS-006, OPS-007, OPS-025 |
+| [EN-03 secrets, control plane, and evidence foundation](../planning/passes/en/en-03-secrets-control-plane-evidence-foundation.md) | Pass-specific scope, topology, boundaries, control mapping, and deferred evidence. | OPS-005, OPS-006, OPS-007, OPS-025 |
 
 ## Record Types
 

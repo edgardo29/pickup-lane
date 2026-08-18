@@ -209,7 +209,7 @@ dashboard configuration, Redis configuration, or deployment configuration.
 
 ### Gate A canonical plan artifact
 
-- `docs/production-readiness/planning/ws02-04c3b-provider-cost-rate-limit-deferral.md`
+- `docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md`
 
 This canonical plan is the Gate A plan artifact. After human approval, it is
 frozen and is not a Gate B editable file.
@@ -357,7 +357,7 @@ approved.
 
 ## 10. Completion Criteria
 
-- [ ] `docs/production-readiness/planning/ws02-04c3b-provider-cost-rate-limit-deferral.md` matches current authority and repository truth.
+- [ ] `docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md` matches current authority and repository truth.
 - [ ] `backend/tests/support/requirements/ws02_04c3b.json` declares R1-R8 with stable IDs, valid states, correct scopes, source controls, and a reason for the deferred requirement.
 - [ ] Trusted C3B static/source evidence exists under `backend/tests/platform/provider_cost_rate_limits`.
 - [ ] R1-R7 have truthful pytest mappings; R8 remains deferred with zero pytest mappings.

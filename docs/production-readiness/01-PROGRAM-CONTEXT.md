@@ -60,7 +60,8 @@ Pickup Lane application
 -> prerequisite EN work
 -> WS implementation passes
 -> EN-01 trusted evidence architecture
--> current pass-recheck program
+-> historical pass-recheck program through accepted WS03-03B work
+-> forward pass intake and implementation workflow
 -> independent review and Git/PR finalization
 ```
 
@@ -87,11 +88,17 @@ on:
 - EN-03: secrets, provider-control-plane, and safe evidence foundations.
 
 WS passes then implement and revalidate production-readiness workstream slices.
-Rechecks are needed because implementation may have evolved, original plans may
-have omissions, current repository truth may differ from the original PR, old
-evidence is not automatically trusted, fresh trusted evidence must be built
-from current authority under EN-01, and external/provider facts cannot be
-honestly proven by local tests.
+The historical recheck/revalidation phase through accepted WS03-03B work
+rebuilt trusted evidence for accepted historical slices where implementation had
+evolved, original plans had omissions, current repository truth differed from
+original PRs, or old evidence was not automatically trusted.
+
+Future production-readiness passes usually start from current authority and
+current accepted `develop` as first-time executable implementations. Those
+passes use explicit parent-pass intake and decomposition before Gate A.
+Correction rounds for a current unmerged first-time pass remain under the
+implementation workflow. Recheck is for previously accepted or merged
+implementation that is later revalidated or repaired.
 
 ## 4. Authority And Repository Truth
 
@@ -120,13 +127,16 @@ Do not duplicate or override the complete authority hierarchy here. Read
 | `docs/production-readiness/audit-research/` | Locked audit reports, consolidated 163-control checklist, research consolidation, and static inventory crosswalk. |
 | `docs/production-readiness/decisions/` | Approved decision records and final decision inventory. |
 | `docs/production-readiness/governance/` | Production ownership, environment, provider, secret, evidence, risk, exception, audit-process, and operational governance records. |
-| `docs/production-readiness/planning/pickup-lane-production-readiness-remediation-plan-final.md` | Final remediation plan and dependency-aware workstream program. |
-| `docs/production-readiness/planning/pickup-lane-master-production-readiness-blueprint.md` | Master implementation blueprint and planned pass register. |
-| `docs/production-readiness/planning/PASS-RECHECK-WORKFLOW.md` | Four-gate workflow for rechecking already implemented passes. |
-| `docs/production-readiness/planning/PASS-PLANNING-TEMPLATE.md` | Canonical reusable planning-document structure for production-readiness passes. |
-| `docs/production-readiness/planning/TESTING-RECORD-TEMPLATE.md` | Canonical reusable testing/risk-record structure. |
-| `docs/production-readiness/planning/PASS-PR-DESCRIPTION-TEMPLATE.md` | Standard PR description template for production-readiness passes. |
-| `docs/production-readiness/planning/` | Individual canonical pass plans. |
+| `docs/production-readiness/planning/program/pickup-lane-production-readiness-remediation-plan-final.md` | Final remediation plan and dependency-aware workstream program. |
+| `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md` | Master implementation blueprint and planned pass register. |
+| `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md` | Stage 0 plus four-gate workflow for implementing first-time executable passes. |
+| `docs/production-readiness/planning/templates/PASS-INTAKE-TEMPLATE.md` | Stage 0 template for parent-pass intake, readiness, and decomposition. |
+| `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` | Current register distinguishing original blueprint parent passes from accepted executable passes. |
+| `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` | Four-gate workflow for rechecking passes already accepted into `develop` or formally revalidating historical implementation that predates the workflow. |
+| `docs/production-readiness/planning/templates/PASS-PLANNING-TEMPLATE.md` | Canonical reusable planning-document structure for production-readiness passes. |
+| `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` | Canonical reusable testing/risk-record structure. |
+| `docs/production-readiness/planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md` | Standard PR description template for production-readiness passes. |
+| `docs/production-readiness/planning/passes/` | Individual canonical pass plans grouped by pass family. |
 | `docs/agent-notes/` | Selectively tracked durable repository engineering/testing standards used by this program. |
 | `backend/tests/support/requirements/` | Machine-readable stable requirement declarations. |
 | `backend/tests/checker/` | EN-01 checker and testing-foundation self-tests and testing record. |
@@ -171,23 +181,65 @@ not production-readiness authority and do not override
 guide. Frontend and Playwright standards are required only when their scopes
 apply.
 
-## 7. Four-Gate Recheck Workflow
+## 7. Forward Implementation And Recheck Workflows
 
-The exact process is defined by
-`docs/production-readiness/planning/PASS-RECHECK-WORKFLOW.md`.
+There are two durable production-readiness workflows.
 
-Gate A is reconciliation and design. It performs the zero-trust audit,
-reconciles the canonical pass plan, and freezes the exact implementation and
-evidence design after human approval.
+Use
+`docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md`
+when a pass is being implemented for the first time from current authority and
+current accepted `develop`. Forward-pass initialization starts from current
+synchronized `develop`, records the exact accepted baseline, and creates the
+approved local working branch before repository content is edited. The workflow
+begins with Stage 0 intake and decomposition, then uses Gate A through Gate D.
+Corrections to that unmerged first-time pass remain under the implementation
+workflow.
 
-Gate B is approved implementation and trusted evidence. It implements only the
-frozen Gate A file set, creates or updates requirement declarations/testing
-records/tests/evidence as approved, validates the result, and stops before Git
-publication.
+Use
+`docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md`
+when a pass already accepted into `develop`, or historical implementation that
+predates the current workflow, is being revalidated against current repository
+truth, current ownership, and current evidence standards.
 
-Gate C is independent semantic read-only review. It verifies authority,
-implementation, evidence adequacy, scope, traceability, confidentiality, and
-the complete local pass state. It does not edit files.
+Stage 0 belongs only to forward implementation. It uses
+`docs/production-readiness/planning/templates/PASS-INTAKE-TEMPLATE.md` and
+`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` to
+decide whether a parent blueprint pass should be implemented as one executable
+pass, decomposed into child passes, blocked for a prerequisite, or routed to an
+owner decision.
+Explicit owner direction selects the parent pass or remaining parent scope to
+evaluate; it does not replace Stage 0 intake. Gate A cannot begin merely because
+the owner named a parent pass. Stage 0 does not implement the pass and does not
+select later passes.
+
+Stage 0 completes the intake record, computes its SHA-256, reports the exact
+path and SHA, and only then receives human approval. Human approval applies to
+that exact path and SHA, which freezes the intake record before Gate A. Later
+children consume the already-merged intake record from current `develop`; they
+do not edit it unless parent structure requires an approved Stage 0 revision.
+Historical accepted decompositions remain exempt from retroactive intake
+creation.
+
+Every executable child receives a fresh Gate A. A later child's Gate A starts
+from current `develop` after prerequisite children merge; it does not blindly
+reuse a detailed plan from an older baseline. A parent completes only after all
+approved children complete and every parent obligation is accounted for. If a
+child is found too broad before Gate A freeze, return to Stage 0.
+
+For both workflows, Gate A designs and freezes the executable pass plan after
+human approval. The canonical plan is frozen by SHA after Gate A approval. Gate
+B edits neither the frozen intake record nor the frozen canonical plan; it edits
+only the exact approved Gate B editable file set. Every substantive first-time
+executable pass includes
+`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` in its
+Gate B editable set because merge changes accepted execution state. The exact
+final pass changed-file set is larger than the Gate B editable set only when it
+also contains frozen Stage 0 or Gate A artifacts that Gate B may not edit. Gate
+C is independent semantic read-only review of the complete pass state. Gate C
+approval makes a pass eligible for Gate D; it does not automatically authorize
+staging, committing, pushing, PR creation, or PR updates. Gate D is mechanical
+Git and PR finalization only after explicit owner Gate D authorization. The
+owner merges manually.
 
 If Gate C requires a correction, the correction happens in a separate run.
 After that correction is validated, the corrected final pass must receive a new
@@ -197,13 +249,18 @@ already-current green validation unless a concrete concern requires a focused
 reproduction, but final post-correction approval cannot come from a narrowed
 review.
 
-Gate D is mechanical Git and PR finalization after Gate C approval. It verifies
-the approved change set, stages approved files, commits, pushes normally,
-creates or updates the intended PR, reviews the remote PR, and stops before
-merge. The owner merges manually.
-
 The run that modifies files owns post-change validation. The read-only reviewer
 owns semantic review.
+
+For first-time implementation, source/configuration, required frontend support,
+requirement metadata, testing records, trusted evidence, and necessary
+compatibility updates ship as one coherent executable-pass outcome. Do not
+create testing-only follow-up passes for evidence required to prove the
+behavior being implemented.
+
+For new-pass Gate A, perform a current repository-wide impact scan before
+freezing scope so callers and accepted finite compatibility contracts are
+discovered early.
 
 ## 8. Trusted Evidence Model
 
@@ -275,26 +332,37 @@ target. Large pass families may have ordered child passes. Agents must verify
 the actual intended order before selecting the next pass and must not jump
 ahead based on alphabetical filenames.
 
-The current WS02-04 child-pass sequence is verified from
-`docs/production-readiness/planning/ws02-04-source-owned-closeout.md`:
+The current execution state is tracked in
+`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`.
 
-| Order | Pass | Planning document |
-|---|---|---|
-| 1 | WS02-04A - Stable Backend Error Contracts | `docs/production-readiness/planning/ws02-04a-stable-error-contracts.md` |
-| 2 | WS02-04B1 - Source-Owned Boundaries | `docs/production-readiness/planning/ws02-04b1-source-owned-boundaries.md` |
-| 3 | WS02-04B2A1 - Portable Request Boundaries | `docs/production-readiness/planning/ws02-04b2a1-portable-request-boundaries.md` |
-| 4 | WS02-04B2A2A - Active Workflow Schema Bounds | `docs/production-readiness/planning/ws02-04b2a2a-active-workflow-schema-bounds.md` |
-| 5 | WS02-04B2A2B1 - Route Lifecycle Cleanup | `docs/production-readiness/planning/ws02-04b2a2b1-route-lifecycle-cleanup.md` |
-| 6 | WS02-04B2A2B2 - Opaque Provider Payment Inputs | `docs/production-readiness/planning/ws02-04b2a2b2-opaque-provider-payment-inputs.md` |
-| 7 | WS02-04B2A2B3 - Policy Legal Request Ownership | `docs/production-readiness/planning/ws02-04b2a2b3-policy-legal-request-ownership.md` |
-| 8 | WS02-04B2A2C - Ordinary JSON Request Body Limit | `docs/production-readiness/planning/ws02-04b2a2c-ordinary-json-request-body-limit.md` |
-| 9 | WS02-04C1 - Operation Timeouts Cancellation | `docs/production-readiness/planning/ws02-04c1-operation-timeouts-cancellation.md` |
-| 10 | WS02-04C2 - Retry Reconciliation Backpressure | `docs/production-readiness/planning/ws02-04c2-retry-reconciliation-backpressure.md` |
-| 11 | WS02-04C3A - Chat Rate Limit Contract | `docs/production-readiness/planning/ws02-04c3a-chat-rate-limit-contract.md` |
-| 12 | WS02-04C3B - Provider Cost Rate Limit Deferral | `docs/production-readiness/planning/ws02-04c3b-provider-cost-rate-limit-deferral.md` |
+The master blueprint remains authoritative for the original parent-level
+42-pass register. The execution register records which parent passes have been
+implemented directly, which have accepted executable child passes, and which
+parent passes are not yet selected. It does not alter the blueprint, close
+controls, or choose the next pass.
 
-After WS02-04A, the next planned child pass is WS02-04B1 using
-`docs/production-readiness/planning/ws02-04b1-source-owned-boundaries.md`.
+Before a future first-time pass is designed, use the execution register and
+`docs/production-readiness/planning/templates/PASS-INTAKE-TEMPLATE.md` to
+identify the parent blueprint pass, any accepted children, any remaining parent
+scope, and whether decomposition or a stop condition is required. The next pass
+must come from explicit owner direction, not from alphabetical order, filename
+order, or the last accepted PR.
+
+Future intake records use:
+
+```text
+docs/production-readiness/planning/passes/<family>/<parent-id>-intake.md
+```
+
+By default, the first substantive child PR carries the approved intake record
+and Gate B prepares the execution-register update that becomes true when that PR
+merges: accepted intake/decomposition reference, accepted first-child state,
+remaining child state, and incomplete parent state unless all children are
+complete. Later children update the register for their own accepted result and
+remaining parent state, the final child marks the parent complete, and a parent
+kept whole records direct parent completion. Routine tracker-only register PRs
+are not the default. Execution-register changes are prepared inside the
+substantive pass, reviewed by Gate C, and published only through Gate D.
 
 ## 11. Key Terminology
 
@@ -303,10 +371,17 @@ After WS02-04A, the next planned child pass is WS02-04B1 using
 | Control | A production-readiness control from the locked checklist, such as `API-M12`. |
 | Requirement | A stable pass-owned obligation that states what must be true for that pass. |
 | Pass | A bounded production-readiness work unit with its own plan, evidence, review, and Git/PR finalization. |
+| Parent blueprint pass | One of the original parent-level planned passes in the master blueprint. |
+| Executable pass | A bounded parent or child pass that can be planned, implemented, evidenced, reviewed, and finalized as a coherent PR. |
 | Pass family | A larger workstream slice split into ordered child passes, such as WS02-04. |
-| Recheck | A zero-trust revalidation of an already implemented pass against current authority, source, and evidence standards. |
+| Intake | Stage 0 parent-pass readiness and decomposition work performed before Gate A for first-time implementation. |
+| Implementation workflow | The Stage 0 plus Gate A-D workflow for first-time executable pass implementation. |
+| Recheck | A zero-trust revalidation of a pass already accepted into `develop`, or historical implementation predating the current workflow, against current authority, source, and evidence standards. |
 | Accepted baseline | The exact accepted `develop` commit used as the starting point for a pass branch. |
-| Frozen plan | The approved Gate A plan, requirement set, correction design, evidence design, and file set. |
+| Frozen intake record | An owner-approved Stage 0 intake artifact identified by exact path and SHA-256. |
+| Frozen plan | The approved Gate A canonical plan, requirement set, correction design, evidence design, file sets, and SHA-256. |
+| Gate B editable file set | The exact repository-relative paths Gate B may modify. |
+| Expected final pass changed-file set | The complete exact repository-relative path set expected at Gate D, including frozen artifacts when applicable plus the exact Gate B editable files. |
 | Repository truth | The current accepted source/configuration/documentation state at the trusted baseline and accepted pass commits. |
 | Provenance | Historical evidence of what happened, such as PRs, commits, and diffs; provenance does not define requirements. |
 | Trusted evidence | Evidence produced from current authority under the accepted evidence architecture. |
@@ -332,10 +407,13 @@ repository template or required standard was not reviewed before drafting it.
 
 | Gate | Mandatory gate inputs |
 |---|---|
-| Gate A | `PASS-PLANNING-TEMPLATE.md`, `TESTING-RECORD-TEMPLATE.md`, the current pass plan, and applicable engineering/testing standards. |
-| Gate B | The frozen plan, `TESTING-RECORD-TEMPLATE.md`, and applicable engineering/testing standards. |
-| Gate C | The frozen plan, requirement declaration, `TESTING_RECORD.md`, implemented evidence, and current validation. Use `TESTING-RECORD-TEMPLATE.md` when reviewing testing-record compliance. |
-| Gate D | The frozen plan, Gate C approval, and `PASS-PR-DESCRIPTION-TEMPLATE.md`. |
+| Stage 0 intake | `workflows/PASS-IMPLEMENTATION-WORKFLOW.md`, `templates/PASS-INTAKE-TEMPLATE.md`, `program/PASS-EXECUTION-REGISTER.md`, the master blueprint parent entry, final remediation plan, applicable decisions/governance records, accepted prerequisite pass plans, and applicable engineering/testing standards. |
+| Gate A for first-time implementation | `workflows/PASS-IMPLEMENTATION-WORKFLOW.md`, approved intake record or already accepted historical decomposition where retroactive intake is explicitly not required, `templates/PASS-PLANNING-TEMPLATE.md`, `templates/TESTING-RECORD-TEMPLATE.md`, the current planning file when one exists, and applicable engineering/testing standards. |
+| Gate A for recheck | `workflows/PASS-RECHECK-WORKFLOW.md`, `templates/PASS-PLANNING-TEMPLATE.md`, `templates/TESTING-RECORD-TEMPLATE.md`, the current pass plan, and applicable engineering/testing standards. |
+| Gate B | The applicable workflow, frozen intake record when applicable, the frozen canonical plan, `templates/TESTING-RECORD-TEMPLATE.md`, and applicable engineering/testing standards. |
+| Gate C for first-time implementation | The applicable workflow, approved frozen intake record when one exists, frozen canonical plan, requirement declaration, `TESTING_RECORD.md`, implementation, executable/non-executable evidence, current validation, proposed execution-register content inside Gate B scope, and the exact expected final changed-file set. Use `templates/TESTING-RECORD-TEMPLATE.md` when reviewing testing-record compliance. |
+| Gate C for historical recheck | The recheck workflow, frozen canonical plan, requirement declaration, `TESTING_RECORD.md`, implementation, executable/non-executable evidence, current validation, and the exact expected final changed-file set. Intake is not normally required for historical recheck. Use `templates/TESTING-RECORD-TEMPLATE.md` when reviewing testing-record compliance. |
+| Gate D | The applicable workflow, frozen intake record when applicable, the frozen canonical plan, Gate C approval, explicit owner Gate D instruction, and `templates/PASS-PR-DESCRIPTION-TEMPLATE.md`. |
 
 Gate-specific prompts may require additional authority, source, governance,
 testing, or evidence documents. The matrix is the durable minimum, not a cap.
@@ -345,23 +423,33 @@ testing, or evidence documents. The matrix is the durable minimum, not a cap.
 1. Read `docs/production-readiness/00-READ-ME-FIRST.md` and follow its
    authority rules.
 2. Read `docs/production-readiness/01-PROGRAM-CONTEXT.md` completely.
-3. Read `docs/production-readiness/planning/PASS-RECHECK-WORKFLOW.md`.
-4. Verify current Git/repository state and determine the current pass and gate
+3. Read `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`.
+4. Read the applicable workflow:
+   `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md`
+   for first-time implementation or
+   `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` for
+   accepted or historical pass revalidation.
+5. Verify current Git/repository state and determine the current pass and gate
    from current repository truth and the current approved instruction.
-5. Read the current or frozen canonical pass plan.
-6. Read the applicable gate templates and required engineering/testing
+6. Read the approved intake when Stage 0 applies, then read the current or
+   frozen canonical pass plan when a pass/gate exists.
+7. Read the applicable gate templates and required engineering/testing
    standards from the matrix above.
-7. Read only the authority/control/decision material relevant to that pass.
-8. Report that you are caught up.
-9. Do not begin implementation until explicitly instructed.
+8. Read only the authority/control/decision material relevant to that pass.
+9. Report that you are caught up.
+10. Do not begin implementation until explicitly instructed.
 
 ## 14. Suggested New-Chat Prompt
 
 > We're continuing Pickup Lane production-readiness work. Start from
 > `docs/production-readiness/00-READ-ME-FIRST.md`, then read
 > `docs/production-readiness/01-PROGRAM-CONTEXT.md` and
-> `docs/production-readiness/planning/PASS-RECHECK-WORKFLOW.md`. Verify current
-> repository truth, current pass, and current gate before relying on historical
-> chat, PR, branch, or SHA information. Load the gate-specific templates and
-> required standards for the current task, then tell me when you're caught up.
-> Do not start work yet.
+> `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`. Then read
+> the applicable workflow for the current task:
+> `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md`
+> for first-time implementation or
+> `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` for
+> revalidation. Verify current repository truth, current pass, and current gate
+> before relying on historical chat, PR, branch, or SHA information. Load the
+> gate-specific templates and required standards for the current task, then
+> tell me when you're caught up. Do not start work yet.
