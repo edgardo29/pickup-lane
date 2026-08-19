@@ -54,10 +54,10 @@ returns it. When code and specification disagree, report the mismatch. Do not
 change the test expectation to match the code without confirming the intended
 behavior.
 
-Historical tests under `backend/tests/legacy/` may be inspected only as clues
-after expected behavior has been established independently from authoritative
-sources. They are not trusted production-readiness evidence and must not define
-current expected behavior.
+For production-readiness work, `backend/tests/legacy/` is treated as
+nonexistent. Do not read, search, list, execute, cite, derive from, use as
+provenance, use as requirements, use as scenarios, use as assertions, use as
+implementation guidance, or use as evidence for production-readiness work.
 
 ## Non-Negotiable Completion Gates
 
@@ -236,8 +236,10 @@ backend/tests/
   legacy/
 ```
 
-`legacy/` is a historical archive only. It is not trusted evidence, not an
-input to current test design, and does not need to remain executable.
+`legacy/` is a historical archive only. For production-readiness work it is
+treated as nonexistent: do not read, search, list, execute, cite, derive from,
+or use it as provenance, requirements, scenarios, assertions, implementation
+guidance, or evidence.
 
 Organize trusted production-readiness tests primarily by ownership. The
 long-term trusted ownership roots are:
@@ -265,7 +267,10 @@ for future work.
 Existing backend application tests are not trusted production-readiness evidence
 until future work derives them from authoritative requirements under the final
 testing system. Historical/out-of-scope tests are excluded from trusted
-discovery and are not inputs to current test design.
+discovery and are not inputs to current test design. This exclusion includes
+`backend/tests/legacy/`, which must not be read, searched, listed, executed,
+cited, or used for production-readiness provenance, requirements, scenarios,
+assertions, implementation guidance, or evidence.
 
 ### Placement Rules
 
@@ -275,8 +280,9 @@ discovery and are not inputs to current test design.
   it has a real cross-scope responsibility.
 - Requirement declarations belong under `backend/tests/support/requirements/`.
 - Suite execution policy belongs in `backend/tests/support/suite_policy.json`.
-- New or refactored tests must not import archived helpers from
-  `backend/tests/legacy/` or the removed pre-EN-01 helper paths.
+- New or refactored tests must not import, read, search, cite, or derive
+  behavior from archived helpers in `backend/tests/legacy/` or the removed
+  pre-EN-01 helper paths.
 
 Do not create empty support modules. Add a support file only when it has a real,
 reusable responsibility.
@@ -419,7 +425,8 @@ test suite. Before adding a support module, confirm:
 - the helper name states the test responsibility clearly
 - the helper does not encode expected product behavior without an authoritative
   source
-- the helper does not import from `legacy/`
+- the helper does not import from, read, cite, or derive behavior from
+  `legacy/`
 - the helper does not hide the behavior, assertion, or side effect that makes
   the test meaningful
 
@@ -1014,7 +1021,9 @@ These are current required standards:
 - Trusted production-readiness tests are organized by owning domain, workflow,
   platform, migration, provider-contract, or checker scope when touched.
 - New shared helpers use `support/` with clear responsibility.
-- New or refactored tests do not add imports from legacy helper modules.
+- Production-readiness work does not read, search, list, execute, cite, import,
+  derive from, or use `backend/tests/legacy/` as provenance, requirements,
+  scenarios, assertions, implementation guidance, or evidence.
 - API tests verify important response and database behavior.
 - Successful mutations verify persisted state.
 - Rejected mutations verify every relevant prohibited side effect identified
