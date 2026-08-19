@@ -1,54 +1,54 @@
 # Pickup Lane Production-Readiness Program Context
 
-## 1. Purpose And How To Use This Document
+## 1. Purpose
 
-This is the starting point for continuing Pickup Lane production-readiness
-work in a new ChatGPT/Codex conversation, engineering session, or review.
+This document is the stable program overview and routing index for Pickup Lane
+production-readiness work. It explains the system shape, program structure,
+document locations, evidence model, pass ordering, terminology, and mandatory
+gate inputs.
 
-It provides:
+Startup, authority order, conflict handling, local handoff usage, tracked
+documentation safety, and publication boundaries are owned by
+`docs/production-readiness/00-READ-ME-FIRST.md`.
 
-- the program story;
-- terminology;
-- a document map;
-- required reading order;
-- workflow overview;
-- trusted evidence overview;
-- pass-ordering guidance;
-- mandatory gate document inputs.
+Gate prompts should reference `00-READ-ME-FIRST.md`,
+`01-PROGRAM-CONTEXT.md`, and applicable current pass artifacts instead of
+repeating common document lists. A prompt should name an additional file only
+when that file is pass-specific, a frozen artifact, an explicit exception, or
+needed to resolve an ambiguity not covered by durable routing. Short prompts do
+not reduce Codex's responsibility to follow the routed workflow, standards,
+governance, decisions, source, evidence, and frozen-artifact checks.
 
-This document is orientation and navigation only. It does not override
-`docs/production-readiness/00-READ-ME-FIRST.md`, higher-authority controls or
-decisions, accepted pass plans, or the current accepted repository truth. If
-this document conflicts with authority or current repository truth, follow the
-authority/current truth and report that this context document is stale.
+Optional local current-session orientation is described by
+`00-READ-ME-FIRST.md`.
 
-## 2. Pickup Lane At The Level Needed For This Work
+## 2. Pickup Lane And Production-Readiness Overview
 
-Pickup Lane is a web application for organizing and operating basketball games.
-The production-readiness program does not require a full product specification,
-but a reviewer needs the shape of the system:
+Pickup Lane is a web application for organizing and operating pickup soccer games.
+The production-readiness program spans code, configuration, tests, provider
+settings, runtime proof, operational ownership, and recovery evidence.
+
+System areas relevant to production-readiness planning include:
 
 - Backend: FastAPI application code under `backend/`.
 - Frontend: React/Vite browser application under `frontend/`.
-- Database: PostgreSQL, managed through SQLAlchemy models and Alembic.
+- Database: PostgreSQL, SQLAlchemy models, and Alembic migrations.
 - Authentication: Firebase-backed user identity and admin access behavior.
 - Payments: Stripe-backed payment and checkout flows.
 - External providers: hosting, database provider, Firebase/GCP, Stripe,
-  Cloudflare/R2, DNS/TLS, repository/CI, and future monitoring or backup
-  providers.
+  Cloudflare/R2, DNS/TLS, repository/CI, monitoring, and backup providers.
 - Product workflows: games, bookings, rosters, waitlists, Need-a-Sub, chats,
   notifications, venue images, credits, and payment-related state.
 - Admin and operations: admin workflows, moderation, notices, deployment,
   health, evidence, ownership, incident, recovery, privacy, and provider
   control-plane behavior.
 
-The program exists because production readiness depends on code, configuration,
-tests, provider settings, runtime proof, operational ownership, and recovery
-evidence all agreeing with the same authority.
+Production readiness requires these areas to agree with approved authority and
+trusted evidence, not merely to pass local tests.
 
-## 3. How The Production-Readiness Program Came Together
+## 3. Program Structure
 
-The program follows this chain:
+The program follows this durable chain:
 
 ```text
 Pickup Lane application
@@ -59,212 +59,93 @@ Pickup Lane application
 -> master implementation blueprint
 -> prerequisite EN work
 -> WS implementation passes
--> EN-01 trusted evidence architecture
--> historical pass-recheck program through accepted WS03-03B work
--> forward pass intake and implementation workflow
+-> trusted evidence architecture
+-> implementation or recheck workflow
 -> independent review and Git/PR finalization
 ```
 
-The locked audit set is the group of six audit reports plus the consolidated
-control checklist under `docs/production-readiness/audit-research/`. The
-checklist contains 163 consolidated controls. Those records capture the
-original production-readiness findings and must not be casually reinterpreted
-by later code or tests.
+The locked audit set and consolidated checklist capture the original
+production-readiness findings. Approved owner decisions define policy and
+ownership choices. The final remediation plan turns findings into a
+dependency-aware program. The master blueprint turns that program into ordered
+implementation passes.
 
-Owner decisions are the approved policy and ownership choices under
-`docs/production-readiness/decisions/`. The current decision inventory records
-27 approved decisions and 0 open decisions. These decisions unblock later
-technical work without letting implementation invent policy.
+EN passes establish cross-cutting foundations such as trusted test
+architecture, observability/privacy primitives, secrets/provider controls, and
+safe evidence handling. WS passes implement and revalidate bounded workstream
+slices against current authority and current repository truth.
 
-The final remediation plan turns the audit findings into a dependency-aware
-program. The master blueprint turns that program into ordered implementation
-passes. The early EN passes establish foundations that later WS passes depend
-on:
-
-- EN-01: trusted backend test taxonomy, isolation, requirement metadata, and
-  checker/traceability architecture.
-- EN-02: safe observability/privacy primitives for correlation, events,
-  redaction, public errors, and telemetry labels.
-- EN-03: secrets, provider-control-plane, and safe evidence foundations.
-
-WS passes then implement and revalidate production-readiness workstream slices.
-The historical recheck/revalidation phase through accepted WS03-03B work
-rebuilt trusted evidence for accepted historical slices where implementation had
-evolved, original plans had omissions, current repository truth differed from
-original PRs, or old evidence was not automatically trusted.
-
-Future production-readiness passes usually start from current authority and
-current accepted `develop` as first-time executable implementations. Those
-passes use explicit parent-pass intake and decomposition before Gate A.
-Correction rounds for a current unmerged first-time pass remain under the
-implementation workflow. Recheck is for previously accepted or merged
-implementation that is later revalidated or repaired.
-
-## 4. Authority And Repository Truth
-
-The authority entry point is
-`docs/production-readiness/00-READ-ME-FIRST.md`.
-
-At a high level:
-
-- Authority determines what must be true.
-- The accepted current `develop` branch is current repository truth.
-- Plans must be reconciled against higher authority before implementation.
-- Tests do not define product requirements.
-- Historical PRs and implementation history are provenance, not authority.
-- Current source does not define its own requirements.
-- External facts remain unknown until accepted evidence exists.
-
-Do not duplicate or override the complete authority hierarchy here. Read
-`docs/production-readiness/00-READ-ME-FIRST.md` before doing pass work.
-
-## 5. Production-Readiness Document Map
+## 4. Document Map And Routing Indexes
 
 | Path | Purpose |
 |---|---|
-| `docs/production-readiness/00-READ-ME-FIRST.md` | Authority entry point and bundle rules. |
-| `docs/production-readiness/01-PROGRAM-CONTEXT.md` | This onboarding and navigation document. |
-| `docs/production-readiness/audit-research/` | Locked audit reports, consolidated 163-control checklist, research consolidation, and static inventory crosswalk. |
-| `docs/production-readiness/decisions/` | Approved decision records and final decision inventory. |
+| `docs/production-readiness/00-READ-ME-FIRST.md` | Startup, authority, safety, handoff, and publication boundary entry point. |
+| `docs/production-readiness/01-PROGRAM-CONTEXT.md` | Stable program overview and routing index. |
+| `docs/production-readiness/audit-research/` | Locked audit reports, consolidated checklist, research consolidation, and static inventory crosswalk. |
+| `docs/production-readiness/decisions/pickup-lane-master-decision-inventory-v4.md` | Owner-decision routing inventory. Use it to identify relevant approved decision records. |
+| `docs/production-readiness/decisions/` | Approved decision records. Read only records relevant to the current pass after using the inventory. |
+| `docs/production-readiness/governance/README.md` | Governance routing index. Use it to identify relevant governance records. |
 | `docs/production-readiness/governance/` | Production ownership, environment, provider, secret, evidence, risk, exception, audit-process, and operational governance records. |
 | `docs/production-readiness/planning/program/pickup-lane-production-readiness-remediation-plan-final.md` | Final remediation plan and dependency-aware workstream program. |
 | `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md` | Master implementation blueprint and planned pass register. |
-| `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md` | Stage 0 plus four-gate workflow for implementing first-time executable passes. |
-| `docs/production-readiness/planning/templates/PASS-INTAKE-TEMPLATE.md` | Stage 0 template for parent-pass intake, readiness, and decomposition. |
-| `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` | Current register distinguishing original blueprint parent passes from accepted executable passes. |
-| `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` | Four-gate workflow for rechecking passes already accepted into `develop` or formally revalidating historical implementation that predates the workflow. |
-| `docs/production-readiness/planning/templates/PASS-PLANNING-TEMPLATE.md` | Canonical reusable planning-document structure for production-readiness passes. |
-| `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` | Canonical reusable testing/risk-record structure. |
-| `docs/production-readiness/planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md` | Standard PR description template for production-readiness passes. |
-| `docs/production-readiness/planning/passes/` | Individual canonical pass plans grouped by pass family. |
-| `docs/agent-notes/` | Selectively tracked durable repository engineering/testing standards used by this program. |
+| `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` | Accepted execution-state register for parent and executable passes. |
+| `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md` | First-time pass implementation workflow. |
+| `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` | Historical or accepted-pass recheck workflow. |
+| `docs/production-readiness/planning/templates/` | Intake, planning, testing-record, and PR-description templates. |
+| `docs/production-readiness/planning/passes/` | Canonical pass intakes and plans grouped by pass family. |
+| `docs/agent-notes/` | Durable repository engineering/testing standards used when their scope applies. |
+| `backend/tests/README.md` | Trusted backend test/checker architecture, roots, requirement declarations, testing records, and checker command model. |
 | `backend/tests/support/requirements/` | Machine-readable stable requirement declarations. |
-| `backend/tests/checker/` | EN-01 checker and testing-foundation self-tests and testing record. |
+| `backend/tests/checker/` | Checker and testing-foundation self-tests and evidence. |
 | `backend/tests/compliance/` | Checker implementation modules used by trusted validation. |
-| `backend/tests/platform/` | Trusted platform-scope production-readiness tests and testing records. |
-| `backend/tests/checker/TESTING_RECORD.md` | Human testing/risk record for the EN-01 checker/foundation scope. |
-| `backend/tests/platform/settings/TESTING_RECORD.md` | Human testing/risk record for typed settings/environment evidence. |
-| `backend/tests/platform/runtime/TESTING_RECORD.md` | Human testing/risk record for runtime lifecycle/health evidence. |
-| `backend/tests/platform/http_security/TESTING_RECORD.md` | Human testing/risk record for HTTP security evidence. |
-| `backend/tests/platform/observability/TESTING_RECORD.md` | Human testing/risk record for EN-02 observability/privacy evidence. |
-| `backend/tests/platform/secrets/TESTING_RECORD.md` | Human testing/risk record for EN-03 secret-contract evidence. |
-| `backend/tests/platform/api_errors/TESTING_RECORD.md` | Human testing/risk record for WS02-04A API error-contract evidence. |
+| `backend/tests/platform/`, `backend/tests/domains/`, `backend/tests/workflows/`, `backend/tests/migrations/`, `backend/tests/provider_contract/` | Trusted backend evidence roots when present and relevant. |
 
-The production-readiness planning documents explain what must be true and why.
-Requirement declaration JSON gives tooling stable machine-readable identity.
-`TESTING_RECORD.md` files explain human risk/evidence reasoning. Pytest files
-prove executable behavior where local executable proof is the honest evidence
-layer. The checker validates machine-verifiable structure and traceability; it
-does not replace human adequacy review.
+Use the governance README and decision inventory first, then read only the
+records relevant to the current pass. Route backend evidence discovery through
+`backend/tests/README.md`, trusted test roots, current requirement
+declarations, current `TESTING_RECORD.md` files, and the applicable pass
+artifacts.
 
-## 6. Required Supporting Repository Documents
+## 5. Supporting Engineering/Testing Standards
 
-These supporting engineering and testing standards are tracked durable
-repository standards. After this branch is merged, they are available to a
-GitHub-connected ChatGPT/Codex session from the repository. They support
-implementation and evidence mechanics within their approved scope; they are
-not production-readiness authority and do not override
-`docs/production-readiness/00-READ-ME-FIRST.md` or higher authority.
+Supporting standards are tracked durable repository standards. They support
+implementation and evidence mechanics within their approved scope; they do not
+override `00-READ-ME-FIRST.md` or higher production-readiness authority.
 
-| Document | Why it must be read |
+| Document | Read when |
 |---|---|
-| `docs/agent-notes/global-rules.md` | Repo-wide working rules, secrets hygiene, Git hygiene, and command expectations. |
-| `docs/agent-notes/app-testing-standards.md` | Application-wide risk discovery, scenario classification, safeguard reasoning, and evidence adequacy rules. |
-| `docs/agent-notes/backend-testing.md` | Backend pytest ownership, EN-01 architecture, requirement traceability, test isolation, and coverage expectations. |
-| `backend/tests/README.md` | Current backend checker architecture, trusted roots, requirement declarations, `TESTING_RECORD.md` ownership, and checker command model. |
-| `docs/agent-notes/backend-structure.md` | Backend ownership boundaries, layer responsibilities, import direction, and file placement. |
-| `docs/agent-notes/database.md` | PostgreSQL, Alembic, migration ownership, and test database safety. |
-| `docs/agent-notes/frontend-structure.md` | Required when a pass touches frontend source, frontend configuration, routing, or browser behavior. |
-| `docs/agent-notes/playwright-structure.md` | Required only when a pass explicitly needs Playwright, browser, or end-to-end evidence. |
+| `docs/agent-notes/global-rules.md` | Any repository work, command execution, secrets hygiene, or Git hygiene is in scope. |
+| `docs/agent-notes/app-testing-standards.md` | Application behavior, safeguard review, scenario classification, or evidence adequacy is in scope. |
+| `docs/agent-notes/backend-structure.md` | Backend source, backend ownership boundaries, imports, or file placement are in scope. |
+| `docs/agent-notes/backend-testing.md` | Backend pytest, requirement declarations, testing records, checker, or trusted evidence are in scope. |
+| `backend/tests/README.md` | Backend checker architecture, trusted roots, requirement mapping, testing records, or checker commands are in scope. |
+| `docs/agent-notes/database.md` | PostgreSQL, SQLAlchemy models, Alembic, migrations, transaction behavior, or test database work is in scope. |
+| `docs/agent-notes/frontend-structure.md` | Frontend source, routing, configuration, visual design, interaction behavior, or browser behavior is in scope. |
+| `docs/agent-notes/playwright-structure.md` | Playwright, browser, or end-to-end evidence is explicitly in scope. |
 
-`backend/tests/README.md` remains the current tracked backend test/checker
-guide. Frontend and Playwright standards are required only when their scopes
-apply.
+For provider, runtime, migration, governance, owner-decision, or other
+specialized evidence, use the durable indexes in this document and read only
+the applicable records.
 
-## 7. Forward Implementation And Recheck Workflows
+## 6. Workflow Selection
 
-There are two durable production-readiness workflows.
+Use `PASS-IMPLEMENTATION-WORKFLOW.md` when a pass is being implemented for the
+first time from current authority and current accepted `develop`.
 
-Use
-`docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md`
-when a pass is being implemented for the first time from current authority and
-current accepted `develop`. Forward-pass initialization starts from current
-synchronized `develop`, records the exact accepted baseline, and creates the
-approved local working branch before repository content is edited. The workflow
-begins with Stage 0 intake and decomposition, then uses Gate A through Gate D.
-Corrections to that unmerged first-time pass remain under the implementation
-workflow.
+Use `PASS-RECHECK-WORKFLOW.md` when a pass already accepted into `develop`, or
+historical implementation that predates the current workflow, is being
+revalidated against current repository truth and current evidence standards.
 
-Use
-`docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md`
-when a pass already accepted into `develop`, or historical implementation that
-predates the current workflow, is being revalidated against current repository
-truth, current ownership, and current evidence standards.
+The execution register records accepted execution state. It distinguishes
+original parent blueprint passes, accepted executable children, remaining
+parent obligations, and completed parent scope.
 
-Stage 0 belongs only to forward implementation. It uses
-`docs/production-readiness/planning/templates/PASS-INTAKE-TEMPLATE.md` and
-`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` to
-decide whether a parent blueprint pass should be implemented as one executable
-pass, decomposed into child passes, blocked for a prerequisite, or routed to an
-owner decision.
-Explicit owner direction selects the parent pass or remaining parent scope to
-evaluate; it does not replace Stage 0 intake. Gate A cannot begin merely because
-the owner named a parent pass. Stage 0 does not implement the pass and does not
-select later passes.
+Each executable child receives a fresh Gate A from the current accepted
+baseline after prerequisites merge. Detailed stage/gate mechanics, correction
+handling, validation responsibilities, and Git/PR finalization rules live in
+the workflow files.
 
-Stage 0 completes the intake record, computes its SHA-256, reports the exact
-path and SHA, and only then receives human approval. Human approval applies to
-that exact path and SHA, which freezes the intake record before Gate A. Later
-children consume the already-merged intake record from current `develop`; they
-do not edit it unless parent structure requires an approved Stage 0 revision.
-Historical accepted decompositions remain exempt from retroactive intake
-creation.
-
-Every executable child receives a fresh Gate A. A later child's Gate A starts
-from current `develop` after prerequisite children merge; it does not blindly
-reuse a detailed plan from an older baseline. A parent completes only after all
-approved children complete and every parent obligation is accounted for. If a
-child is found too broad before Gate A freeze, return to Stage 0.
-
-For both workflows, Gate A designs and freezes the executable pass plan after
-human approval. The canonical plan is frozen by SHA after Gate A approval. Gate
-B edits neither the frozen intake record nor the frozen canonical plan; it edits
-only the exact approved Gate B editable file set. Every substantive first-time
-executable pass includes
-`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` in its
-Gate B editable set because merge changes accepted execution state. The exact
-final pass changed-file set is larger than the Gate B editable set only when it
-also contains frozen Stage 0 or Gate A artifacts that Gate B may not edit. Gate
-C is independent semantic read-only review of the complete pass state. Gate C
-approval makes a pass eligible for Gate D; it does not automatically authorize
-staging, committing, pushing, PR creation, or PR updates. Gate D is mechanical
-Git and PR finalization only after explicit owner Gate D authorization. The
-owner merges manually.
-
-If Gate C requires a correction, the correction happens in a separate run.
-After that correction is validated, the corrected final pass must receive a new
-full independent Gate C review of the entire pass before Gate D. Correction-run
-validation may be proportional and targeted, and Gate C may rely on
-already-current green validation unless a concrete concern requires a focused
-reproduction, but final post-correction approval cannot come from a narrowed
-review.
-
-The run that modifies files owns post-change validation. The read-only reviewer
-owns semantic review.
-
-For first-time implementation, source/configuration, required frontend support,
-requirement metadata, testing records, trusted evidence, and necessary
-compatibility updates ship as one coherent executable-pass outcome. Do not
-create testing-only follow-up passes for evidence required to prove the
-behavior being implemented.
-
-For new-pass Gate A, perform a current repository-wide impact scan before
-freezing scope so callers and accepted finite compatibility contracts are
-discovered early.
-
-## 8. Trusted Evidence Model
-
-EN-01 establishes the trusted backend evidence architecture.
+## 7. Trusted Evidence Model
 
 The permanent traceability model is:
 
@@ -276,180 +157,91 @@ PRODUCTION-READINESS PASS
 ```
 
 Stable requirement declarations live under
-`backend/tests/support/requirements/`. These JSON files are not product specs.
-They store the minimum identity the checker needs: requirement ID, owning pass,
-source controls, current state, owning scope when needed, and a reason when a
-requirement is `covered_elsewhere`, `deferred`, `blocked`, or otherwise not
-directly executable in the current pytest scope.
+`backend/tests/support/requirements/`. These JSON files store requirement
+identity, owning pass, source controls, current state, owning scope when
+needed, and reasons for states such as `covered_elsewhere`, `deferred`, or
+`blocked`.
 
 Pytest tests use requirement markers to declare which stable requirement IDs
-they prove. Exact current pytest node IDs are generated from pytest collection
-and checker metadata, so permanent planning documents do not hand-maintain
-node lists that will drift when test files or test names change.
+they prove. Checker-generated metadata maps current pytest collection to
+requirements so planning documents do not hand-maintain drifting node lists.
 
 `TESTING_RECORD.md` files own human reasoning for one coherent trusted scope:
 risks, invariants, scenario groups, proof layers, gaps, deferrals, and adequacy
-conclusions. They explain why the evidence is meaningful; they do not duplicate
-every Python assertion.
+conclusions. They explain why the evidence is meaningful.
 
 Evidence can be executable or non-executable:
 
-- Executable evidence is usually pytest, checker, or other deterministic local
-  validation.
+- Executable evidence is usually pytest, checker, static validation, or other
+  deterministic local proof.
 - Non-executable evidence can be source review, governance records, sanitized
   provider evidence, runtime observations, manual review, or later controlled
   evidence packages.
 
-`covered_elsewhere` means the requirement is intentionally proved by another
-accepted scope or artifact. `deferred` means the requirement remains for a
-later owner or evidence source. Provider/external facts remain unknown until
-sanitized, attributable evidence exists from the correct environment or
-control plane.
-
-Passing tests alone never proves production readiness. Tests must be derived
+Passing tests alone never proves production readiness. Evidence must be derived
 from current authority and accepted current source, mapped to stable
-requirements, reviewed for semantic adequacy, and combined with any required
+requirements, reviewed for semantic adequacy, and combined with required
 repository, runtime, provider, operational, or recovery evidence.
 
-## 9. Excluded-Test Rule
+## 8. Pass Families And Ordering
 
-For production-readiness work, `backend/tests/legacy/` is treated as
-nonexistent.
+Each pass plan stays within the material scope of that pass. A pass may include
+artifacts, requirements, dependencies, integrations, evidence, controls, and
+ownership boundaries only when they materially define, implement, govern,
+constrain, or prove that pass.
 
-It must not be read, searched, executed, listed, cited, used for provenance, or
-used to derive requirements, scenarios, assertions, implementation decisions,
-or evidence.
+Parent blueprint passes may be implemented whole or decomposed into executable
+children through approved intake. The execution register records accepted
+intake/decomposition state and remaining parent obligations, but it does not
+alter the master blueprint, close controls by itself, or choose the next pass.
 
-## 10. Pass Plans, Pass Families, And Ordering
-
-Each pass plan stays within the material scope of that pass. A pass plan may
-include artifacts, requirements, dependencies, integrations, evidence,
-controls, and ownership boundaries only when they materially define,
-implement, govern, constrain, or prove that pass.
-
-Parent or closeout documents are not automatically the next implementation
-target. Large pass families may have ordered child passes. Agents must verify
-the actual intended order before selecting the next pass and must not jump
-ahead based on alphabetical filenames.
-
-The current execution state is tracked in
-`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`.
-
-The master blueprint remains authoritative for the original parent-level
-42-pass register. The execution register records which parent passes have been
-implemented directly, which have accepted executable child passes, and which
-parent passes are not yet selected. It does not alter the blueprint, close
-controls, or choose the next pass.
-
-Before a future first-time pass is designed, use the execution register and
-`docs/production-readiness/planning/templates/PASS-INTAKE-TEMPLATE.md` to
-identify the parent blueprint pass, any accepted children, any remaining parent
-scope, and whether decomposition or a stop condition is required. The next pass
-must come from explicit owner direction, not from alphabetical order, filename
-order, or the last accepted PR.
-
-Future intake records use:
-
-```text
-docs/production-readiness/planning/passes/<family>/<parent-id>-intake.md
-```
+Agents must verify intended order from current authority, the execution
+register, accepted prerequisites, current `develop`, and explicit owner
+direction. Do not choose the next pass from alphabetical filenames, stale
+branch names, or old chat context.
 
 By default, the first substantive child PR carries the approved intake record
-and Gate B prepares the execution-register update that becomes true when that PR
-merges: accepted intake/decomposition reference, accepted first-child state,
-remaining child state, and incomplete parent state unless all children are
-complete. Later children update the register for their own accepted result and
-remaining parent state, the final child marks the parent complete, and a parent
-kept whole records direct parent completion. Routine tracker-only register PRs
-are not the default. Execution-register changes are prepared inside the
-substantive pass, reviewed by Gate C, and published only through Gate D.
+and prepares the execution-register update that becomes true when that PR
+merges. Later children update their accepted result and remaining parent state.
+The final child marks the parent complete when every approved child obligation
+is accounted for.
 
-## 11. Key Terminology
+## 9. Essential Terminology
 
 | Term | Meaning |
 |---|---|
-| Control | A production-readiness control from the locked checklist, such as `API-M12`. |
-| Requirement | A stable pass-owned obligation that states what must be true for that pass. |
-| Pass | A bounded production-readiness work unit with its own plan, evidence, review, and Git/PR finalization. |
 | Parent blueprint pass | One of the original parent-level planned passes in the master blueprint. |
 | Executable pass | A bounded parent or child pass that can be planned, implemented, evidenced, reviewed, and finalized as a coherent PR. |
-| Pass family | A larger workstream slice split into ordered child passes, such as WS02-04. |
 | Intake | Stage 0 parent-pass readiness and decomposition work performed before Gate A for first-time implementation. |
-| Implementation workflow | The Stage 0 plus Gate A-D workflow for first-time executable pass implementation. |
-| Recheck | A zero-trust revalidation of a pass already accepted into `develop`, or historical implementation predating the current workflow, against current authority, source, and evidence standards. |
 | Accepted baseline | The exact accepted `develop` commit used as the starting point for a pass branch. |
-| Frozen intake record | An owner-approved Stage 0 intake artifact identified by exact path and SHA-256. |
+| Frozen intake | An owner-approved Stage 0 intake artifact identified by exact path and SHA-256. |
 | Frozen plan | The approved Gate A canonical plan, requirement set, correction design, evidence design, file sets, and SHA-256. |
 | Gate B editable file set | The exact repository-relative paths Gate B may modify. |
-| Expected final pass changed-file set | The complete exact repository-relative path set expected at Gate D, including frozen artifacts when applicable plus the exact Gate B editable files. |
-| Repository truth | The current accepted source/configuration/documentation state at the trusted baseline and accepted pass commits. |
+| Expected final changed-file set | The complete repository-relative path set expected at Gate D, including frozen artifacts when applicable plus Gate B editable files. |
+| Repository truth | Current accepted source, configuration, documentation, and evidence state at the trusted baseline and accepted pass commits. |
 | Provenance | Historical evidence of what happened, such as PRs, commits, and diffs; provenance does not define requirements. |
 | Trusted evidence | Evidence produced from current authority under the accepted evidence architecture. |
-| Executable evidence | Deterministic local proof such as pytest, checker, or static validation. |
-| Non-executable evidence | Reviewable proof such as governance records, source review, sanitized provider evidence, or runtime observations. |
-| Requirement declaration | A small JSON entry under `backend/tests/support/requirements/` declaring stable machine-readable requirement identity. |
-| `TESTING_RECORD` | A human testing/risk record explaining adequacy for one trusted scope. |
-| Checker | The backend compliance checker that verifies machine-readable structure, markers, scope policy, and traceability. |
-| Traceability | Generated mapping from pass requirements to current collected pytest metadata and declaration state. |
+| Requirement declaration | A JSON entry under `backend/tests/support/requirements/` declaring stable machine-readable requirement identity. |
 | `covered_elsewhere` | A requirement state meaning accepted evidence exists in another scope or artifact. |
-| `deferred` | A requirement state meaning proof or completion belongs to a later owner/evidence source. |
-| Provider/external evidence | Sanitized, attributable proof from a provider, runtime, dashboard, account, or operational environment outside local source. |
-| Gate A | Reconciliation and design. |
-| Gate B | Approved implementation and trusted evidence. |
-| Gate C | Independent semantic read-only review. |
-| Gate D | Mechanical Git and PR finalization. |
+| `deferred` | A requirement state meaning proof or completion belongs to a later owner or evidence source. |
 
-## 12. Mandatory Gate Document Matrix
+## 10. Mandatory Gate Document Matrix
 
 Applicable repository templates and standards are mandatory gate inputs, not
 optional references. A gate instruction is incomplete when an applicable
-repository template or required standard was not reviewed before drafting it.
+template, standard, authority record, source area, or evidence artifact was not
+reviewed before drafting or executing that gate.
 
-| Gate | Mandatory gate inputs |
+| Gate | Mandatory document inputs |
 |---|---|
-| Stage 0 intake | `workflows/PASS-IMPLEMENTATION-WORKFLOW.md`, `templates/PASS-INTAKE-TEMPLATE.md`, `program/PASS-EXECUTION-REGISTER.md`, the master blueprint parent entry, final remediation plan, applicable decisions/governance records, accepted prerequisite pass plans, and applicable engineering/testing standards. |
-| Gate A for first-time implementation | `workflows/PASS-IMPLEMENTATION-WORKFLOW.md`, approved intake record or already accepted historical decomposition where retroactive intake is explicitly not required, `templates/PASS-PLANNING-TEMPLATE.md`, `templates/TESTING-RECORD-TEMPLATE.md`, the current planning file when one exists, and applicable engineering/testing standards. |
-| Gate A for recheck | `workflows/PASS-RECHECK-WORKFLOW.md`, `templates/PASS-PLANNING-TEMPLATE.md`, `templates/TESTING-RECORD-TEMPLATE.md`, the current pass plan, and applicable engineering/testing standards. |
-| Gate B | The applicable workflow, frozen intake record when applicable, the frozen canonical plan, `templates/TESTING-RECORD-TEMPLATE.md`, and applicable engineering/testing standards. |
-| Gate C for first-time implementation | The applicable workflow, approved frozen intake record when one exists, frozen canonical plan, requirement declaration, `TESTING_RECORD.md`, implementation, executable/non-executable evidence, current validation, proposed execution-register content inside Gate B scope, and the exact expected final changed-file set. Use `templates/TESTING-RECORD-TEMPLATE.md` when reviewing testing-record compliance. |
-| Gate C for historical recheck | The recheck workflow, frozen canonical plan, requirement declaration, `TESTING_RECORD.md`, implementation, executable/non-executable evidence, current validation, and the exact expected final changed-file set. Intake is not normally required for historical recheck. Use `templates/TESTING-RECORD-TEMPLATE.md` when reviewing testing-record compliance. |
-| Gate D | The applicable workflow, frozen intake record when applicable, the frozen canonical plan, Gate C approval, explicit owner Gate D instruction, and `templates/PASS-PR-DESCRIPTION-TEMPLATE.md`. |
+| Stage 0 intake | Implementation workflow, intake template, execution register, master blueprint parent entry, final remediation plan, applicable decisions/governance records, accepted prerequisite plans/evidence, and applicable engineering/testing standards. |
+| Gate A for first-time implementation | Implementation workflow, approved intake record when applicable, planning template, testing-record template, current planning file when one exists, applicable authority/source/evidence, and applicable engineering/testing standards. |
+| Gate A for recheck | Recheck workflow, planning template, testing-record template, current pass plan, applicable authority/source/evidence, and applicable engineering/testing standards. |
+| Gate B | Applicable workflow, frozen intake when applicable, frozen canonical plan, testing-record template, applicable authority/source/evidence, and applicable engineering/testing standards. |
+| Gate C for first-time implementation | Applicable workflow, frozen intake when applicable, frozen canonical plan, requirement declaration, testing record, implementation, executable and non-executable evidence, current validation, execution-register proposal when in scope, and expected final changed-file set. |
+| Gate C for historical recheck | Recheck workflow, frozen canonical plan, requirement declaration, testing record, implementation, executable and non-executable evidence, current validation, and expected final changed-file set. |
+| Gate D | Applicable workflow, frozen intake when applicable, frozen canonical plan, Gate C approval, explicit owner Gate D instruction, and PR-description template. |
 
-Gate-specific prompts may require additional authority, source, governance,
-testing, or evidence documents. The matrix is the durable minimum, not a cap.
-
-## 13. New-Agent Bootstrap Reading Order
-
-1. Read `docs/production-readiness/00-READ-ME-FIRST.md` and follow its
-   authority rules.
-2. Read `docs/production-readiness/01-PROGRAM-CONTEXT.md` completely.
-3. Read `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`.
-4. Read the applicable workflow:
-   `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md`
-   for first-time implementation or
-   `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` for
-   accepted or historical pass revalidation.
-5. Verify current Git/repository state and determine the current pass and gate
-   from current repository truth and the current approved instruction.
-6. Read the approved intake when Stage 0 applies, then read the current or
-   frozen canonical pass plan when a pass/gate exists.
-7. Read the applicable gate templates and required engineering/testing
-   standards from the matrix above.
-8. Read only the authority/control/decision material relevant to that pass.
-9. Report that you are caught up.
-10. Do not begin implementation until explicitly instructed.
-
-## 14. Suggested New-Chat Prompt
-
-> We're continuing Pickup Lane production-readiness work. Start from
-> `docs/production-readiness/00-READ-ME-FIRST.md`, then read
-> `docs/production-readiness/01-PROGRAM-CONTEXT.md` and
-> `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`. Then read
-> the applicable workflow for the current task:
-> `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md`
-> for first-time implementation or
-> `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` for
-> revalidation. Verify current repository truth, current pass, and current gate
-> before relying on historical chat, PR, branch, or SHA information. Load the
-> gate-specific templates and required standards for the current task, then
-> tell me when you're caught up. Do not start work yet.
+Gate-specific prompts may require additional pass-specific authority, source,
+governance, testing, or evidence documents. This matrix is the durable minimum,
+not a cap.

@@ -10,7 +10,10 @@ frontend files.
 Also read:
 
 * the relevant feature documentation before changing product behavior
-* `universal-ui-style.md` before changing visual design or interaction patterns
+* applicable product or feature authority before changing visual design or
+  interaction patterns
+* existing shared frontend components and current style/interaction conventions
+  before changing visual design or interaction patterns
 * `global-rules.md` before running commands, tests, or broad repository changes
 
 This document does not define detailed visual styling, feature behavior, test
@@ -302,8 +305,12 @@ Split a stylesheet when it owns separate substantial surfaces or has become
 difficult to navigate.
 
 Detailed visual rules, spacing, colors, typography, controls, modals,
-responsive behavior, and design-system requirements belong in
-`universal-ui-style.md`.
+responsive behavior, and design-system requirements must come from applicable
+product/feature authority, existing shared frontend components, existing
+style/interaction conventions, and applicable frontend structure/testing
+standards. No separate tracked global visual-style authority currently exists
+in this repository. If a change needs a new global UI or design rule, do not
+invent it silently; resolve it through the project process.
 
 ## Files, Folders, And Naming
 
@@ -462,7 +469,9 @@ Before editing frontend code:
 
 1. Read this document.
 2. Read the relevant feature documentation.
-3. Read `universal-ui-style.md` when visual or interaction behavior may change.
+3. For visual or interaction changes, read applicable product/feature authority
+   and inspect existing shared frontend components plus current
+   style/interaction conventions.
 4. Read `global-rules.md` for commands and testing requirements.
 5. Identify the page, feature, or shared system that currently owns the
    behavior.

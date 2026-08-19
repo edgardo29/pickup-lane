@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-04B-R1",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "WS03-04A"
+      ],
+      "state": "required",
+      "scope": "workflows/self_owned_account_notification_financial_authorization",
+      "reason": "The accepted authorization matrix must remain the source of truth for the 11 self-owned account, notification, inbox, saved-card, credit, payment, refund, and host-fee route families and 28 B-owned route keys."
+    },
+    {
+      "id": "WS03-04B-R2",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-017",
+        "WS03-01",
+        "WS03-02",
+        "WS03-03A"
+      ],
+      "state": "required",
+      "scope": "workflows/self_owned_account_notification_financial_authorization",
+      "reason": "Current-account routes must bind reads and mutations to the authenticated local user from the Firebase bearer token, with no caller-selected target user for /auth/me, /users/me, /user-settings/me, /user-stats/me, profile/settings updates, or self-delete."
+    },
+    {
+      "id": "WS03-04B-R3",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "IAM-007",
+        "IAM-012",
+        "IAM-017",
+        "WS03-01",
+        "WS03-02",
+        "WS03-03A"
+      ],
+      "state": "required",
+      "scope": "workflows/self_owned_account_notification_financial_authorization",
+      "reason": "B-owned ordinary behavior must preserve the accepted distinction between authenticated app user, active user, recent-authenticated user, and provider-verified email, without inventing a verified-email requirement for ordinary B-owned self behavior."
+    },
+    {
+      "id": "WS03-04B-R4",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "IAM-013",
+        "IAM-015"
+      ],
+      "state": "required",
+      "scope": "workflows/self_owned_account_notification_financial_authorization",
+      "reason": "Notification and inbox routes must be current-user scoped: notification lists/counts filter to the current user, foreign notifications are concealed without read-state side effects, selected platform notices require a current-user recipient row, and global-seen updates require a valid signed token for the current user."
+    },
+    {
+      "id": "WS03-04B-R5",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "IAM-013",
+        "IAM-017",
+        "WS02-04B2A2B2",
+        "WS03-03A"
+      ],
+      "state": "required",
+      "scope": "workflows/self_owned_account_notification_financial_authorization",
+      "reason": "Saved-card routes must be current-user scoped, provider SetupIntent and payment-method customer IDs must match the current user's stored Stripe customer, and default/detach actions must preserve recent-auth and reject wrong-owner cards before provider mutation."
+    },
+    {
+      "id": "WS03-04B-R6",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "IAM-013",
+        "IAM-015"
+      ],
+      "state": "required",
+      "scope": "workflows/self_owned_account_notification_financial_authorization",
+      "reason": "Ordinary-user financial reads must not be widenable through query filters or object IDs: payments remain scoped to payer, refunds through payment payer, game-credit balance/list to the current user unless admin, and host-publish-fee /me to host_user_id."
+    },
+    {
+      "id": "WS03-04B-R7",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "IAM-012",
+        "IAM-016",
+        "IAM-017"
+      ],
+      "state": "required",
+      "scope": "workflows/self_owned_account_notification_financial_authorization",
+      "reason": "Admin exceptions visible in current B-adjacent services must not be converted into B closure; B proves ordinary users cannot gain admin breadth and leaves final admin/high-risk review to WS03-04D or later named owners."
+    },
+    {
+      "id": "WS03-04B-R8",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "TST-005"
+      ],
+      "state": "required",
+      "scope": "workflows/self_owned_account_notification_financial_authorization",
+      "reason": "Negative proof must cover 401 unauthenticated/invalid-credential behavior, 403 forbidden behavior, 404 concealed foreign-resource behavior, cross-user object and filter denials, wrong signed token/customer/card ownership, stale recent-auth, caller-controlled field attempts, and no prohibited side effects for rejected mutations."
+    },
+    {
+      "id": "WS03-04B-R9",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "GOV-006",
+        "TST-005",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/self_owned_account_notification_financial_authorization",
+      "reason": "The B trusted evidence, requirement declaration, testing record, and execution-register update must remain traceable, current, and scoped to accepted repository source and tests without backend/tests/legacy or deferred-governance false mappings."
+    },
+    {
+      "id": "WS03-04B-R10",
+      "owning_pass": "WS03-04B",
+      "source_controls": [
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "IAM-017",
+        "PAY-005",
+        "PAY-006",
+        "WS03-04C",
+        "WS03-04D",
+        "WS04",
+        "WS05",
+        "WS09",
+        "WS10"
+      ],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "Live or deployed provider proof, Stripe dashboard proof, durable payment/refund reconciliation, genuine database-concurrency closure, admin/high-risk final review, export/unmask/read-audit policy, and WS03-04C relationship authorization are outside WS03-04B and must have zero local pytest mappings in this pass."
+    }
+  ]
+}
