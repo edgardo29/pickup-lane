@@ -5,10 +5,10 @@ Lane. It is required reading before creating, moving, reviewing, or reorganizing
 backend tests.
 
 For compliance checker setup and usage, see `backend/tests/README.md`.
+Checker `PASS` is structural/machine compliance only, not semantic adequacy.
 
 Use this together with:
 
-- `global-rules.md` for local command and agent execution rules.
 - `backend-structure.md` for backend ownership and dependency direction.
 - `database.md` for migrations, test database safety, and reset commands.
 - The relevant finalized feature document.
@@ -61,25 +61,9 @@ implementation guidance, or use as evidence for production-readiness work.
 
 ## Non-Negotiable Completion Gates
 
-Backend test work must not be marked complete until all applicable gates below
-are satisfied:
-
-1. Required specifications and domain rules were reviewed.
-2. Every relevant finalized backend requirement was mapped to tests.
-3. Relevant enum, status, role, privilege, relationship, and lifecycle values
-   were classified from authoritative sources.
-4. Every test was assigned to the correct owning test layer and scope.
-5. Each test has a focused behavioral purpose.
-6. Successful mutations verify persisted state.
-7. Rejected mutations verify every relevant prohibited side effect identified
-   for the route.
-8. Time-sensitive behavior uses one controlled baseline.
-9. Database-constraint tests prove the intended constraint caused the failure.
-10. Remaining gaps and untested behavior are listed explicitly.
-11. Commands run and commands not run are stated clearly.
-
-If a gate cannot be satisfied, report the work as incomplete or blocked. Do not
-say the test work is done.
+Backend test work must not be marked complete until the applicable items in
+`Feature Review Checklist` are satisfied. If a required item cannot be satisfied,
+report the work as incomplete or blocked. Do not say the test work is done.
 
 ## Required Pre-Work Review
 
@@ -119,8 +103,7 @@ PRODUCTION-READINESS PASS
 
 The canonical pass planning document owns the pass-to-requirement list and the
 meaning of each stable requirement. A small machine-readable declaration owns
-only the minimum identity needed by tooling: requirement ID, authoritative
-source/control, owning pass or scope, and current machine-enforced state.
+only the minimum identity needed by tooling.
 
 The concise human testing/risk record for a coherent owned test scope owns
 requirement-to-scenario reasoning. It should describe invariants, meaningful
@@ -136,6 +119,9 @@ legitimately prove multiple requirements.
 Exact current pytest node IDs are generated from pytest collection and metadata.
 They are not manually maintained in permanent planning documents or machine
 registries.
+
+Requirement declaration storage, marker mechanics, generated node IDs, and
+checker behavior are owned by `backend/tests/README.md`.
 
 `covered_elsewhere`, `not_applicable`, `blocked`, and `deferred` decisions
 require a reason. A test expectation without a traceable specification or
@@ -222,55 +208,19 @@ reusable responsibility.
 
 Backend tests live under `backend/tests/`.
 
-The current backend test tree is:
+The trusted backend test tree, reserved roots, checker folders, suite policy,
+requirement declaration storage, generated-node mechanics, and archive mechanics
+are owned by `backend/tests/README.md`.
 
-```text
-backend/tests/
-  README.md
-  check_backend_tests.py
-  conftest.py
-  checker/
-  compliance/
-  platform/
-  support/
-  legacy/
-```
-
-`legacy/` is a historical archive only. For production-readiness work it is
-treated as nonexistent: do not read, search, list, execute, cite, derive from,
-or use it as provenance, requirements, scenarios, assertions, implementation
-guidance, or evidence.
-
-Organize trusted production-readiness tests primarily by ownership. The
-long-term trusted ownership roots are:
-
-```text
-backend/tests/
-  domains/
-  workflows/
-  platform/
-  migrations/
-  provider_contract/
-  checker/
-  support/
-```
-
-Current EN-01, EN-02, and EN-03 executable evidence lives under `checker/` and
-`platform/`. `compliance/` contains checker implementation modules used by
-`check_backend_tests.py`. `support/` contains reusable current test
-infrastructure, requirement declarations, and suite policy.
-
-Create only directories that match reviewed, existing test coverage. Do not add
-placeholder domain, workflow, platform, migration, provider, or checker folders
-for future work.
+Organize tests by behavior ownership, not by whichever endpoint first exposed a
+bug. Create trusted roots only when reviewed, current coverage exists for that
+ownership area. Do not add placeholder domain, workflow, platform, migration,
+provider, or checker folders for future work.
 
 Existing backend application tests are not trusted production-readiness evidence
 until future work derives them from authoritative requirements under the final
-testing system. Historical/out-of-scope tests are excluded from trusted
-discovery and are not inputs to current test design. This exclusion includes
-`backend/tests/legacy/`, which must not be read, searched, listed, executed,
-cited, or used for production-readiness provenance, requirements, scenarios,
-assertions, implementation guidance, or evidence.
+testing system. Historical and out-of-scope tests are not inputs to current test
+design.
 
 ### Placement Rules
 
@@ -278,11 +228,8 @@ assertions, implementation guidance, or evidence.
 - Fixtures used across many backend areas belong in root `conftest.py`.
 - Reusable current infrastructure belongs in `backend/tests/support/` only when
   it has a real cross-scope responsibility.
-- Requirement declarations belong under `backend/tests/support/requirements/`.
-- Suite execution policy belongs in `backend/tests/support/suite_policy.json`.
-- New or refactored tests must not import, read, search, cite, or derive
-  behavior from archived helpers in `backend/tests/legacy/` or the removed
-  pre-EN-01 helper paths.
+- New or refactored tests must follow the current trusted-root and support-file
+  rules owned by `backend/tests/README.md`.
 
 Do not create empty support modules. Add a support file only when it has a real,
 reusable responsibility.
@@ -425,15 +372,11 @@ test suite. Before adding a support module, confirm:
 - the helper name states the test responsibility clearly
 - the helper does not encode expected product behavior without an authoritative
   source
-- the helper does not import from, read, cite, or derive behavior from
-  `legacy/`
 - the helper does not hide the behavior, assertion, or side effect that makes
   the test meaningful
 
 Current support responsibilities include:
 
-- requirement declarations under `backend/tests/support/requirements/`
-- suite policy under `backend/tests/support/suite_policy.json`
 - environment/database/network safety support
 - artifact sanitization and browser-quality policy support
 
@@ -857,6 +800,10 @@ Automated CI runs the required backend suite.
 Agents may inspect code, review tests, edit files, and perform static checks.
 Agents must not run backend API tests, migrations, database-reset commands, or
 application processes unless the user explicitly instructs them to do so.
+An explicitly started production-readiness gate is such an instruction only for
+the validation required by its approved workflow, frozen plan, or current gate
+instruction; it does not authorize unrelated backend tests, migrations, database
+reset commands, or broader suites.
 
 When verification is needed, agents must provide focused commands for the user
 to run and clearly state what remains unverified.
@@ -879,60 +826,22 @@ Not allowed without explicit approval:
 ## Required Agent Completion Report
 
 Before saying backend test work is complete, the agent must provide a concise
-report containing every section below.
+report that communicates:
 
-### Sources Reviewed
+- Sources reviewed, including feature/domain specifications and material source
+  areas inspected.
+- Requirement coverage, including fully covered, partially covered, missing,
+  covered-elsewhere, blocked, or deferred behavior.
+- Matrix and ownership decisions, including authoritative enum/status/role/
+  relationship classifications and why each test belongs in its selected file.
+- Evidence quality, including response assertions, persisted effects for
+  successful mutations, prohibited side effects for rejected mutations,
+  constraint proof, security-sensitive data exposure, and time control.
+- Remaining gaps, unresolved specification conflicts, commands run, commands not
+  run, observed results, and any verification still required from the user or
+  CI.
 
-- Feature specification read.
-- Owning domain specifications read.
-- Models, enums, constraints, routes, and services inspected.
-- Existing related tests inspected.
-
-### Requirement Coverage
-
-- Requirement-to-test mapping.
-- Requirements fully covered.
-- Requirements partially covered.
-- Requirements still missing.
-
-### Enum And State Matrix
-
-- Values reviewed.
-- Covered values.
-- Excluded or not-relevant values with reasons.
-- Missing values or unresolved combinations.
-
-### Ownership Decisions
-
-- Tests added, moved, split, or removed.
-- Destination folder and file for each.
-- Reason each test belongs there.
-
-### Assertion Review
-
-- Successful mutations with persisted-state assertions.
-- Rejected mutations with prohibited-side-effect assertions.
-- Constraint tests tied to the intended constraint.
-- Security-sensitive headers and data-exposure assertions.
-
-### Time Control
-
-- Clock strategy used.
-- Exact boundaries tested.
-- Any boundary behavior left at service level rather than API level.
-
-### Remaining Gaps
-
-- Untested behavior.
-- Known limitations.
-- Specification conflicts or unresolved decisions.
-
-### Verification
-
-- Commands run.
-- Commands not run.
-- Results observed.
-- Verification still required from the user or CI.
+This report is not a substitute for satisfying the `Feature Review Checklist`.
 
 An agent must not replace this report with a generic statement such as “tests
 were added” or “coverage was improved.”
@@ -1008,34 +917,6 @@ Do not:
 - Test only the success path.
 - Claim completion without listing remaining gaps and commands not run.
 
-## Required Baseline Now
-
-These are current required standards:
-
-- The non-negotiable completion gates in this document are followed.
-- Backend tests run in automated CI for backend changes.
-- Automated CI uses an isolated test database.
-- Automated CI applies or validates migrations when required.
-- Tests are deterministic and isolated.
-- Tests use direct, specific assertions.
-- Trusted production-readiness tests are organized by owning domain, workflow,
-  platform, migration, provider-contract, or checker scope when touched.
-- New shared helpers use `support/` with clear responsibility.
-- Production-readiness work does not read, search, list, execute, cite, import,
-  derive from, or use `backend/tests/legacy/` as provenance, requirements,
-  scenarios, assertions, implementation guidance, or evidence.
-- API tests verify important response and database behavior.
-- Successful mutations verify persisted state.
-- Rejected mutations verify every relevant prohibited side effect identified
-  for the route.
-- Constraint tests identify the intended constraint failure.
-- Time-sensitive tests use a controlled baseline.
-- Enum, status, role, relationship, and privilege-dependent behavior uses an
-  explicit matrix from authoritative sources.
-- Authorization, visibility, payments, capacity, expiration, and state
-  transitions receive direct behavioral coverage when affected.
-- Production secrets and production infrastructure are never used for tests.
-
 ## CI Hardening Targets
 
 These are good targets, but not mandatory until repository and automation
@@ -1072,7 +953,8 @@ Rules:
 
 ## Feature Review Checklist
 
-Before a feature is considered fully tested, confirm:
+This is the canonical backend-testing completion checklist. Before a feature is
+considered fully tested, confirm the applicable items below:
 
 ### Source And Ownership
 
@@ -1129,27 +1011,3 @@ Before a feature is considered fully tested, confirm:
 - [ ] Feature tests are included in the normal automated backend suite.
 - [ ] Remaining gaps are listed.
 - [ ] Commands run and commands not run are stated.
-
-## Definition Of Done
-
-Backend testing for a feature is complete only when:
-
-1. Required specifications and domain rules were reviewed.
-2. Finalized requirements were mapped to automated tests.
-3. Relevant enum, status, role, privilege, relationship, and lifecycle values
-   were classified from authoritative sources.
-4. Tests are organized under the correct page, feature, or owning domain.
-5. API contracts, authorization, business rules, database effects, and failure
-   behavior are covered.
-6. Successful mutations verify persisted state.
-7. Rejected mutations verify every relevant prohibited side effect identified
-   for the route.
-8. Important boundary and edge cases use deterministic time and state.
-9. Constraint tests fail for the intended constraint.
-10. Tests are isolated and independent.
-11. Known bugs have regression tests.
-12. Remaining gaps and unresolved conflicts are disclosed.
-13. Commands run and not run are disclosed.
-14. The required backend suite runs in automated CI before merge.
-15. Review confirms the tests would fail for the correct reason if protected
-    behavior regressed.

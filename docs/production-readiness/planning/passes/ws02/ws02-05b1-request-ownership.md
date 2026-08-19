@@ -591,20 +591,20 @@ After correcting `backend/tests/conftest.py`, first run the exact minimal
 reproduction that previously failed:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/api_errors/test_correlation_and_safe_headers_contract.py::test_valid_incoming_request_id_is_accepted_and_mirrored backend/tests/platform/chat_rate_limits/test_chat_rate_limit_error_contract.py::test_real_chat_rate_limit_rejection_uses_safe_429_contract
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/api_errors/test_correlation_and_safe_headers_contract.py::test_valid_incoming_request_id_is_accepted_and_mirrored backend/tests/platform/chat_rate_limits/test_chat_rate_limit_error_contract.py::test_real_chat_rate_limit_rejection_uses_safe_429_contract
 ```
 
 Run the affected platform API-error module and chat-rate-limit module:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/api_errors/test_correlation_and_safe_headers_contract.py
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/chat_rate_limits/test_chat_rate_limit_error_contract.py
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/api_errors/test_correlation_and_safe_headers_contract.py
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/chat_rate_limits/test_chat_rate_limit_error_contract.py
 ```
 
 Run focused B1 tests after creating the evidence artifacts:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/request_ownership
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/request_ownership
 ```
 
 Run structural compliance checks:
@@ -620,7 +620,7 @@ show mappings for R1 through R6 and zero mappings for deferred R7.
 Run the backend regression required by the production-readiness workflow:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests
 ```
 
 Run static whitespace sanity:

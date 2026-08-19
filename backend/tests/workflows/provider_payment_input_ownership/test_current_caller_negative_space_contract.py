@@ -59,11 +59,5 @@ def test_current_frontend_sources_do_not_construct_retired_generic_payment_mutat
 
 
 @pytest.mark.requirement("WS02-04B2A2B2-R7")
-def test_seed_payment_event_guidance_no_longer_authors_generic_provider_payloads() -> None:
-    source = SEED_PAYMENT_EVENT.read_text()
-
-    assert "POST /payment-events body:" not in source
-    assert "provider_event_id" not in source
-    assert "raw_payload" not in source
-    assert "Generic payment-event creation is retired." in source
-    assert "Signed Stripe webhook processing owns provider-event creation." in source
+def test_retired_payment_event_seed_script_is_absent() -> None:
+    assert not SEED_PAYMENT_EVENT.exists()

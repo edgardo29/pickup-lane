@@ -100,9 +100,14 @@ Every stage must:
 
 - start from a clean, understood Git state;
 - apply the authority order from the read-first document;
+- apply the instruction-adherence rule from the read-first document to the
+  current approved instruction before acting;
 - read the current pass intake, current or frozen pass plan, and applicable
   templates before acting;
-- preserve the excluded-test rule from the program context and workflow docs;
+- treat explicit scope, editable files, paths, SHAs, validation requirements,
+  stage or gate boundaries, and stop conditions from the current instruction as
+  binding constraints;
+- follow the excluded legacy-test rule owned by the read-first document;
 - distinguish repository truth, authority, provenance, inference, external
   evidence, and unknown facts;
 - keep provider/runtime/control-plane facts unknown until accepted evidence
@@ -110,7 +115,12 @@ Every stage must:
 - protect secrets, local paths, provider-private evidence, payment data, and
   personal data;
 - stop rather than guess when authority, ownership, evidence layer, or scope is
-  ambiguous.
+  ambiguous, when the current instruction cannot be followed exactly, or when it
+  conflicts with authority, repository truth, or a frozen artifact.
+
+Before any stage or gate reports completion, compare the actual work performed
+against the binding current instruction. Correct any in-scope mismatch before
+handoff, or report the mismatch and stop.
 
 ## 5. Forward-Pass Initialization
 
@@ -136,6 +146,10 @@ prescribe a universal branch-name format.
 Unexpected local work, divergence, worktree conflict, or branch ambiguity causes
 a stop. Do not automatically reset, rebase, merge, stash, restore, clean, or
 delete anything.
+
+If preserved local work such as a stash is later restored or converted into
+commit-eligible pass artifacts, recheck it for prohibited sensitive material
+under the read-first document before continuing.
 
 Stage 0 and Gate A may create or edit only their explicitly authorized planning
 artifacts. Stage 0 and Gate A must not stage, commit, push, create a PR, or
@@ -564,6 +578,7 @@ Gate C must inspect:
 - branch, HEAD, accepted baseline, merge-base with that baseline, staged-file
   status, exact expected final changed-file set, exact actual changed-file set,
   and actual/expected set equality;
+- current approved instruction and authorized execution boundaries;
 - authority and approved intake;
 - approved intake-record path and SHA when applicable;
 - frozen canonical-plan path and SHA;
@@ -579,6 +594,11 @@ Gate C must inspect:
 - exact expected final changed-file set;
 - external and later-pass gaps;
 - the complete local change set and secret/confidentiality safety.
+
+Gate C must verify that the complete tracked pass state contains no prohibited
+literal credentials or sensitive values under the read-first document.
+Gate C approval confirms that the final pass state matches both the frozen
+design and the current approved instruction's execution boundaries.
 
 Gate C must use a new independent read-only reviewer. It must not edit files,
 stage files, commit, push, create or update a PR, merge, rebase, reset, apply a
@@ -624,6 +644,8 @@ Gate D must:
 - read
   `docs/production-readiness/planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md`;
 - inspect the diff for scope and sensitive material;
+- run an explicit final credential/secret scan, or equivalent
+  repository-approved verification, before staging or publication;
 - stage only approved files;
 - inspect the staged diff;
 - create the approved commit or commit structure;

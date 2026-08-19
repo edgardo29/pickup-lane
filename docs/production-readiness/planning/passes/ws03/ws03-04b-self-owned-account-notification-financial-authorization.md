@@ -462,11 +462,11 @@ git status -sb --untracked-files=all
 LC_ALL=C shasum -a 256 docs/production-readiness/planning/passes/ws03/ws03-04-intake.md
 LC_ALL=C shasum -a 256 docs/production-readiness/planning/passes/ws03/ws03-04a-authorization-matrix-foundation.md
 backend/.venv/bin/python -m py_compile backend/tests/workflows/self_owned_account_notification_financial_authorization/test_self_owned_account_notification_financial_authorization_contract.py
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest backend/tests/workflows/self_owned_account_notification_financial_authorization
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest backend/tests/workflows/authorization_matrix_foundation
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest backend/tests/workflows/identity_authority backend/tests/workflows/account_lifecycle_concurrency backend/tests/workflows/recent_auth_step_up backend/tests/workflows/provider_payment_input_ownership backend/tests/workflows/response_minimization
-DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/workflows/self_owned_account_notification_financial_authorization
-DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest backend/tests/workflows/self_owned_account_notification_financial_authorization
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest backend/tests/workflows/authorization_matrix_foundation
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest backend/tests/workflows/identity_authority backend/tests/workflows/account_lifecycle_concurrency backend/tests/workflows/recent_auth_step_up backend/tests/workflows/provider_payment_input_ownership backend/tests/workflows/response_minimization
+DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/workflows/self_owned_account_notification_financial_authorization
+DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite
 git diff --check
 git status --short --untracked-files=all
 git diff --cached --name-only

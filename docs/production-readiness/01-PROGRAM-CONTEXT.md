@@ -114,7 +114,6 @@ override `00-READ-ME-FIRST.md` or higher production-readiness authority.
 
 | Document | Read when |
 |---|---|
-| `docs/agent-notes/global-rules.md` | Any repository work, command execution, secrets hygiene, or Git hygiene is in scope. |
 | `docs/agent-notes/app-testing-standards.md` | Application behavior, safeguard review, scenario classification, or evidence adequacy is in scope. |
 | `docs/agent-notes/backend-structure.md` | Backend source, backend ownership boundaries, imports, or file placement are in scope. |
 | `docs/agent-notes/backend-testing.md` | Backend pytest, requirement declarations, testing records, checker, or trusted evidence are in scope. |

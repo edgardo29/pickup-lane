@@ -597,25 +597,25 @@ set. Historical PR #127 counts are not expected values.
 1. Focused WS03-02 trusted evidence:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/account_lifecycle_concurrency
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/account_lifecycle_concurrency
 ```
 
 2. Accepted dependency regression for WS03-01:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/identity_authority
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/identity_authority
 ```
 
 3. Domain checker:
 
 ```bash
-DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/workflows/account_lifecycle_concurrency
+DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/workflows/account_lifecycle_concurrency
 ```
 
 4. Suite checker:
 
 ```bash
-DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite
+DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite
 ```
 
 5. Generated traceability review:
@@ -626,7 +626,7 @@ DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/p
 6. Full trusted backend regression:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests
 ```
 
 7. Diff integrity:

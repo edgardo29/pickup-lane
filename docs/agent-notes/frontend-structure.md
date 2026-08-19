@@ -14,7 +14,6 @@ Also read:
   interaction patterns
 * existing shared frontend components and current style/interaction conventions
   before changing visual design or interaction patterns
-* `global-rules.md` before running commands, tests, or broad repository changes
 
 This document does not define detailed visual styling, feature behavior, test
 commands, or temporary implementation plans.
@@ -46,6 +45,8 @@ frontend/
 │   ├── App.jsx             Application composition
 │   └── main.jsx            React, router, and provider bootstrap
 └── tests/
+    ├── README.md           Frontend and browser test taxonomy
+    ├── unit/               Node unit tests for non-DOM frontend logic
     └── e2e/                Playwright browser tests
 ```
 
@@ -231,6 +232,11 @@ Infrastructure modules must not import route page components.
 Domain decisions based on API responses belong in the owning page hook or
 feature workflow, not in the low-level client.
 
+`frontend/.env.local` is a real local environment file and must remain ignored
+and uncommitted. Tracked example files such as `frontend/.env.example` are
+allowed only with sanitized placeholder values and must never contain usable
+credentials.
+
 ## Routes
 
 `frontend/src/routes/` owns:
@@ -415,14 +421,21 @@ actual shared owner instead of importing the page module.
 
 ## Tests
 
-The current frontend test setup is Playwright.
+The current frontend test setup includes Node unit tests and Playwright browser
+tests. Exact taxonomy, commands, environment requirements, and execution details
+belong in `frontend/tests/README.md`.
 
 Current locations:
 
+* taxonomy: `frontend/tests/README.md`
+* Node unit tests: `frontend/tests/unit/*.test.js`
 * configuration: `frontend/playwright.config.js`
-* browser tests: `frontend/tests/e2e/*.spec.js`
+* Playwright browser tests: `frontend/tests/e2e/*.spec.js`
 * generated reports: `frontend/playwright-report/`
 * generated test output: `frontend/test-results/`
+
+Node unit tests use Node's built-in test runner for frontend helpers and other
+non-DOM logic where a browser is not required.
 
 Browser-level tests should follow the user-visible workflow or feature being
 tested.
@@ -430,18 +443,15 @@ tested.
 Tests should verify behavior through stable user-facing outcomes rather than
 depending unnecessarily on private component implementation.
 
-There is currently no configured frontend unit or component test runner.
+React component testing is not currently configured. Until a component test
+runner is explicitly introduced:
 
-Until a unit or component test runner is explicitly introduced:
-
-* do not add unexecuted `*.test.js` or `*.test.jsx` files
-* do not invent a unit-test folder convention
-* do not introduce a new test framework as part of an unrelated feature change
+* do not add unexecuted component test files
+* do not invent a component-test folder convention
+* do not introduce Vitest, React Testing Library, or another component-test
+  framework as part of an unrelated feature change
 
 Do not place production modules in the test package.
-
-Exact commands, environment requirements, and test-running rules belong in
-`global-rules.md` or dedicated testing documentation.
 
 ## Scope Discipline
 
@@ -472,7 +482,8 @@ Before editing frontend code:
 3. For visual or interaction changes, read applicable product/feature authority
    and inspect existing shared frontend components plus current
    style/interaction conventions.
-4. Read `global-rules.md` for commands and testing requirements.
+4. Confirm relevant command and testing requirements from dedicated testing
+   documentation or current task instructions.
 5. Identify the page, feature, or shared system that currently owns the
    behavior.
 6. State which files will change.

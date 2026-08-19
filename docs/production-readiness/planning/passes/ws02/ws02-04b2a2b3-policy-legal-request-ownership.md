@@ -438,26 +438,26 @@ hand-maintained in this plan.
 Gate B must run the focused B3 suite:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/policy_legal_request_ownership
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/policy_legal_request_ownership
 ```
 
 Gate B must run adjacent trusted regressions:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/route_lifecycle_cleanup backend/tests/workflows/active_request_schema_bounds backend/tests/platform/request_body_limits
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/route_lifecycle_cleanup backend/tests/workflows/active_request_schema_bounds backend/tests/platform/request_body_limits
 ```
 
 Gate B must run the full current trusted backend regression across executable
 trusted roots that exist:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/checker backend/tests/workflows backend/tests/platform
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/checker backend/tests/workflows backend/tests/platform
 ```
 
 Gate B must run checker/foundation regression:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/checker
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/checker
 ```
 
 Gate B must run domain and suite checker scopes:

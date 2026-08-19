@@ -17,6 +17,11 @@ POLICY_ACCEPTANCE_SEED = REPO_ROOT / "backend" / "scripts" / "seed_policy_accept
 BOOKING_POLICY_ACCEPTANCE_SEED = (
     REPO_ROOT / "backend" / "scripts" / "seed_booking_policy_acceptance_scenario.py"
 )
+RETIRED_POLICY_LEGAL_SEEDS = (
+    POLICY_DOCUMENT_SEED,
+    POLICY_ACCEPTANCE_SEED,
+    BOOKING_POLICY_ACCEPTANCE_SEED,
+)
 SOURCE_SUFFIXES = {".js", ".jsx", ".ts", ".tsx"}
 B3_TOMBSTONE_KEYS = frozenset(
     {
@@ -112,27 +117,8 @@ def test_current_frontend_sources_do_not_construct_retired_policy_legal_writes()
 
 
 @pytest.mark.requirement("WS02-04B2A2B3-R4")
-def test_policy_legal_seed_guidance_uses_internal_setup_not_retired_http_bodies() -> None:
-    policy_document_source = POLICY_DOCUMENT_SEED.read_text()
-    policy_acceptance_source = POLICY_ACCEPTANCE_SEED.read_text()
-    booking_acceptance_source = BOOKING_POLICY_ACCEPTANCE_SEED.read_text()
-    combined_source = "\n".join(
-        [policy_document_source, policy_acceptance_source, booking_acceptance_source]
-    )
-
-    for fragment in (
-        "POST /policy-documents body:",
-        "PATCH /policy-documents",
-        "POST /policy-acceptances body:",
-        "PATCH /policy-acceptances",
-    ):
-        assert fragment not in combined_source
-
-    assert "Generic policy-document API authoring is retired." in policy_document_source
-    assert "Generic policy-acceptance API creation is retired." in policy_acceptance_source
-    assert "Generic booking-policy-acceptance API creation is retired." in booking_acceptance_source
-    assert "This script seeds local scenario data directly through internal setup." in policy_document_source
-    assert "This script seeds local scenario data directly through internal setup." in policy_acceptance_source
+def test_retired_policy_legal_seed_scripts_are_absent() -> None:
+    assert [path for path in RETIRED_POLICY_LEGAL_SEEDS if path.exists()] == []
 
 
 @pytest.mark.requirement("WS02-04B2A2B3-R4", "WS02-04B2A2B3-R5")

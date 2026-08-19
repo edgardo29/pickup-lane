@@ -23,7 +23,7 @@ history as current execution state.
 Before any production-readiness pass work:
 
 1. Read this document.
-2. If `docs/agent/production-readiness/CURRENT-HANDOFF.md` is supplied, read it
+2. If `docs/local/CURRENT-HANDOFF.md` is supplied, read it
    as optional local orientation and verify it against current Git state and
    tracked authority before acting.
 3. Read `01-PROGRAM-CONTEXT.md` for stable program overview and routing.
@@ -53,24 +53,60 @@ inventing a hybrid process.
 
 ## Authority Order
 
-1. Current repository tree at the trusted baseline and later accepted pass
-   commits
-2. The six locked audit reports and 163-control checklist
-3. Final remediation plan
-4. Approved decision records and final decision inventory
-5. Master production-readiness blueprint
-6. Approved pass-specific inspection and implementation instructions
+Current accepted repository source, configuration, tests, and artifacts are
+authoritative for what currently exists and how the implementation currently
+behaves. They are repository truth. Current implementation does not define
+product or production-readiness requirements merely because it exists in the
+repository.
+
+Requirement authority is, in order:
+
+1. The six locked audit reports and 163-control checklist
+2. Final remediation plan
+3. Approved decision records and final decision inventory
+4. Master production-readiness blueprint
+5. Approved pass-specific inspection and implementation instructions
+
+When current implementation conflicts with authoritative requirements, treat
+that as an implementation mismatch to reconcile, not as authority for changing
+the requirement.
 
 Stop when two authoritative records conflict. Do not guess or silently
 reconcile them.
 
 `planning/program/PASS-EXECUTION-REGISTER.md` is accepted-state navigation, not
-product authority. Approved intake constrains child structure and parent
-obligation allocation, but it cannot override audits, decisions, the final
-remediation plan, the master blueprint, or current repository truth.
+product authority. Approved intake and frozen plans constrain gate work, child
+structure, and parent obligation allocation, but they cannot override audits,
+decisions, the final remediation plan, the master blueprint, or repository truth
+about current implementation behavior.
 
 Intake approval does not authorize implementation. The next pass requires
 explicit owner direction.
+
+## Excluded Legacy Tests
+
+For production-readiness work, `backend/tests/legacy/` is treated as
+nonexistent. Do not read, search, list, execute, cite, derive from, or use that
+tree for provenance, requirement discovery, scenario or assertion design,
+implementation reasoning, evidence, or behavioral confirmation.
+
+## Instruction Adherence
+
+Reading an instruction is not sufficient compliance. Before acting, resolve the
+binding requirements of the current approved instruction.
+
+Treat explicit scope, editable files, artifact paths, SHAs, stage or gate
+boundaries, validation requirements, stop conditions, and `must` / `must not`
+instructions as constraints, not suggestions.
+
+If a binding instruction conflicts with authority, a frozen artifact, repository
+truth, or cannot be followed exactly, stop and report the issue. Never silently
+substitute an approximate, broader, narrower, or supposedly equivalent action
+for an explicit instruction.
+
+Before reporting completion, compare the actual work performed against the
+binding instruction. Correct any mismatch that is still in scope; otherwise
+report the mismatch and stop.
 
 ## Frozen Intake And Frozen Plan Rules
 
@@ -83,7 +119,7 @@ to Gate A. Gate B must not edit the frozen intake or frozen canonical plan.
 
 ## Local Current-State Handoff
 
-`docs/agent/production-readiness/CURRENT-HANDOFF.md` is optional local
+`docs/local/CURRENT-HANDOFF.md` is optional local
 orientation. Verify it against current Git state and tracked authority before
 acting.
 

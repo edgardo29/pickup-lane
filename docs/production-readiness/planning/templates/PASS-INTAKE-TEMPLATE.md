@@ -9,6 +9,13 @@ record, or approval to edit source.
 
 If a section is not applicable, write `Not applicable - [reason]`.
 
+Intake records are tracked production-readiness artifacts. Do not include
+literal credentials, credential-bearing URLs, secrets, private keys or tokens,
+private provider values, personal or payment data, raw sensitive logs, local
+machine paths, session state, internal chat material, or other local-only
+sensitive information. When configuration must be referenced, use
+environment-variable references or sanitized placeholders.
+
 Intake records use this storage convention:
 
 ```text
@@ -285,6 +292,11 @@ State one outcome:
 - `REGISTER CORRECTION REQUIRED`
 
 Include the exact next allowed action.
+
+Before reporting any intake for approval, confirm that the completed intake
+contains no literal credentials, credential-bearing URLs, secrets, private keys
+or tokens, private provider values, personal or payment data, raw sensitive
+logs, local/session-only information, or other prohibited sensitive values.
 
 When the outcome is ready for Gate A, report:
 

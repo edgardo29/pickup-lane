@@ -415,12 +415,12 @@ Gate B tests must:
 Gate B validation must include:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/operation_timeouts
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/operation_timeouts backend/tests/platform/observability backend/tests/platform/api_errors backend/tests/platform/settings backend/tests/platform/runtime
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/checker backend/tests/workflows backend/tests/platform
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/checker
-DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/platform/operation_timeouts
-DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/operation_timeouts
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/operation_timeouts backend/tests/platform/observability backend/tests/platform/api_errors backend/tests/platform/settings backend/tests/platform/runtime
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/checker backend/tests/workflows backend/tests/platform
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/checker
+DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/platform/operation_timeouts
+DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite
 backend/.venv/bin/python -m py_compile backend/observability/timeouts.py backend/observability/http_errors.py backend/settings.py backend/database.py backend/firebase_admin_client.py backend/services/stripe_service.py backend/services/r2_storage_service.py backend/tests/platform/operation_timeouts/test_timeout_settings_contract.py backend/tests/platform/operation_timeouts/test_stripe_timeout_contract.py backend/tests/platform/operation_timeouts/test_firebase_timeout_contract.py backend/tests/platform/operation_timeouts/test_r2_metadata_timeout_contract.py backend/tests/platform/operation_timeouts/test_database_timeout_contract.py backend/tests/platform/operation_timeouts/test_public_timeout_contract.py backend/tests/platform/operation_timeouts/test_provider_operation_inventory_contract.py backend/tests/platform/operation_timeouts/test_timeout_side_effect_ordering_contract.py
 git diff --check
 ```
