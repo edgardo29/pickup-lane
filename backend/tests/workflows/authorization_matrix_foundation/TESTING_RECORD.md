@@ -73,7 +73,7 @@ Selected human evidence is this record plus the matrix source registry. Accepted
 
 The initial focused pytest attempt stopped before execution because the ambient local `DATABASE_URL` pointed at `pickup_lane_db_dev`. That stop was the repository's intended backend database safety behavior: the harness requires the dedicated `pickup_lane_test_db` database name before backend tests run.
 
-The successful focused pytest rerun used the legitimate dedicated test database boundary `postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db` and passed 11 tests. No database or test safety mechanism was disabled, weakened, or bypassed.
+The successful focused pytest rerun used the legitimate dedicated test database boundary `DATABASE_URL="$TEST_DATABASE_URL"` and passed 11 tests. No database or test safety mechanism was disabled, weakened, or bypassed.
 
 ## Important Side Effects
 

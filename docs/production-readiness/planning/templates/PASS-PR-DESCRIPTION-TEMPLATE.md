@@ -341,6 +341,9 @@ below is YES:
     without knowing the pass structure?
 13. Can a developer unfamiliar with the production-readiness program understand
     every uncommon term in the complete PR body?
+14. Does the body contain no secrets, credentials, private URLs or identifiers,
+    personal or payment data, local paths or usernames, raw sensitive material,
+    internal chat history, or local session information?
 
 Do not publish a description that fails this check.
 

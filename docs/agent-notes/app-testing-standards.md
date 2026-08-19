@@ -28,16 +28,19 @@ scenario is assigned to an owning layer, follow the relevant repository guide:
 When a scenario is assigned to backend ownership, the EN-01 backend testing
 architecture governs directory ownership, stable requirement IDs, human testing
 records, pytest metadata, checker compliance, and generated traceability.
-Historical backend tests may provide clues only after expected behavior is
-established from authority; they do not define current expected behavior.
+Expected behavior comes from authority. Current trusted backend tests may
+provide evidence of current behavior after expectations are established.
+Production-readiness handling of excluded backend tests is governed by
+`backend-testing.md`; do not use this application-wide standard to bypass that
+rule.
 
 When these sources conflict, do not guess. Report the conflict before encoding
 an uncertain expectation into a test.
 
 This document defines required analysis and coverage. It does not grant an agent
 permission to run test suites, migrations, containers, provider calls, or other
-commands. Command execution remains governed by `global-rules.md` and the
-relevant layer-specific execution policy.
+commands. Command execution remains governed by the relevant layer-specific
+execution policy and current task or workflow instruction.
 
 ## Normative Language
 
@@ -219,30 +222,44 @@ applicable gates below are satisfied:
 
 1. The finalized feature and owning-domain rules were reviewed.
 2. The complete feature path and participating systems were identified.
-3. Existing frontend, backend, database, browser, provider, and infrastructure
+3. Feature-specific invariants were written.
+4. Existing frontend, backend, database, browser, provider, and infrastructure
    coverage was inspected where applicable.
-4. The scenario matrix was completed for every relevant category in this
-   document.
-5. Every relevant scenario was classified as `covered`, `partial`, `missing`,
+5. The scenario matrix and relevant failure transformations were completed for
+   every applicable category in this document.
+6. Every relevant scenario was classified as `covered`, `partial`, `missing`,
    `covered_elsewhere`, `manual`, `not_applicable`, or `blocked`.
-6. `covered_elsewhere`, `manual`, `not_applicable`, and `blocked`
+7. `covered_elsewhere`, `manual`, `not_applicable`, and `blocked`
    classifications include a reason.
-7. Every high-risk rule identifies its required safeguard.
-8. Every required safeguard has a test or an explicitly reported gap.
-9. Each test is assigned to the correct owning layer.
-10. Critical cross-system workflows have appropriate full-stack coverage.
-11. Rejected and failed operations verify prohibited side effects where
+8. Every high-risk rule identifies its required safeguard.
+9. Every required safeguard has a test or an explicitly reported gap.
+10. Each test is assigned to the correct owning layer.
+11. Frontend behavior is tested through user-visible interactions where the
+    frontend owns the behavior.
+12. Backend rules are enforced and tested independently of frontend controls
+    where the backend owns the safeguard.
+13. PostgreSQL-specific integrity is tested against PostgreSQL where
+    applicable.
+14. Critical cross-system workflows have appropriate full-stack coverage.
+15. Provider-backed features have local boundary tests and selected emulator,
+    sandbox, or test-resource integration where applicable.
+16. Rejected and failed operations verify prohibited side effects where
     meaningful.
-12. Retry, duplicate, stale-state, and concurrency behavior was considered for
+17. Retry, duplicate, stale-state, and concurrency behavior was considered for
     every mutation and asynchronous workflow.
-13. Security-sensitive pages classify authentication, authorization, data
+18. Security-sensitive pages classify authentication, authorization, data
     exposure, abuse, and resource-limit scenarios.
-14. Provider-backed features classify timeout, retry, duplicate, late,
+19. Provider-backed features classify timeout, retry, duplicate, late,
     out-of-order, invalid-response, and partial-success scenarios.
-15. Time-sensitive behavior uses a controlled application clock.
-16. Tests use isolated non-production data and credentials.
-17. Remaining gaps, unresolved rules, commands run, and commands not run are
+20. Accessibility combines appropriate automation and manual review where
+    applicable.
+21. Time-sensitive behavior uses a controlled application clock.
+22. Test data, time, credentials, and infrastructure are deterministic,
+    isolated, and non-production.
+23. Remaining gaps, unresolved rules, commands run, and commands not run are
     reported.
+24. Review confirms the tests would fail for the correct reason if protected
+    behavior regressed.
 
 If a gate cannot be satisfied, report the work as incomplete, blocked, or
 partially verified. Do not describe the page as fully tested.
@@ -1404,17 +1421,24 @@ not prove complete coverage.
 ## CI and Suite Classification
 
 Tests must be clearly classifiable by purpose and execution environment.
+Pull-request requirements apply only to currently adopted test layers that are
+applicable to the changed behavior. A PR requirement does not require
+introducing an unconfigured test framework merely to satisfy a category.
 
 Recommended suite classes:
 
 ### Pull-Request Required
 
 - Static validation.
-- Frontend component tests.
+- Current frontend unit tests for frontend helpers, API utilities, and other
+  non-DOM behavior they own.
+- React component tests only after a React component-test layer is explicitly
+  adopted.
 - Backend unit and integration tests.
 - PostgreSQL tests required by changed behavior.
 - API contract tests.
-- Selected reliable full-stack browser tests.
+- Current Playwright browser tests according to their actual suite role, and
+  selected reliable full-stack browser tests when applicable.
 - Migration validation when database behavior changes.
 
 ### Separate Provider Integration
@@ -1629,35 +1653,6 @@ After the application-wide testing review, report every section below.
 
 A generic statement such as “tests were added” or “coverage looks good” is not
 an acceptable completion report.
-
-## Definition of Done
-
-Application-wide testing for a refactored page or feature is complete only when:
-
-1. Finalized feature and domain rules were reviewed.
-2. The complete system path was inspected.
-3. Feature-specific invariants were written.
-4. Relevant scenario categories and failure transformations were classified.
-5. High-risk scenarios identify safeguards.
-6. Required safeguards exist or are reported as gaps.
-7. Each scenario is assigned to the correct test layer.
-8. Frontend behavior is tested through user-visible interactions.
-9. Backend rules are enforced and tested independently of the frontend.
-10. PostgreSQL-specific integrity is tested against PostgreSQL.
-11. Critical client-server workflows have full-stack coverage.
-12. Provider behavior is covered through local boundary tests and selected
-    emulator, sandbox, or test-resource integration.
-13. Duplicate, retry, stale-state, and concurrency behavior was reviewed for
-    every important mutation.
-14. Security boundaries were reviewed at the object, action, and property level.
-15. Accessibility combines appropriate automation and manual review.
-16. Test data, time, credentials, and infrastructure are deterministic and
-    isolated.
-17. Failed and rejected operations verify important prohibited side effects.
-18. Remaining gaps and unresolved conflicts are disclosed.
-19. Commands run and not run are disclosed.
-20. Review confirms the tests would fail for the correct reason if protected
-    behavior regressed.
 
 ## Research Basis
 

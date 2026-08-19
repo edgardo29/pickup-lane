@@ -18,15 +18,11 @@ backend/.mutmut-cache
 *firebase-admin*.json
 *-adminsdk-*.json
 
-# Local dev-only scripts
-backend/scripts/seed_dev_auth_users.py
-
 # Local agent notes
 AGENTS.md
 docs/*
 !docs/agent-notes/
 docs/agent-notes/*
-!docs/agent-notes/global-rules.md
 !docs/agent-notes/app-testing-standards.md
 !docs/agent-notes/backend-testing.md
 !docs/agent-notes/backend-structure.md

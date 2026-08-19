@@ -38,8 +38,6 @@ _ALLOWED_RUNTIME_BOUNDARIES = {
 _ALLOWED_TOOLING = {
     "firebase_admin": {
         "backend/scripts/bootstrap_admin.py",
-        "backend/scripts/seed_dev_auth_users.py",
-        "backend/scripts/seed_manual_test_users.py",
     }
 }
 

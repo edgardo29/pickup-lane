@@ -772,29 +772,29 @@ and abuse evidence external/later.
 Gate B validation must include:
 
 1. The three originally failing cross-pass provider-boundary nodes:
-   `APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/operation_timeouts/test_provider_operation_inventory_contract.py::test_current_provider_network_inventory_has_no_unclassified_production_bypass backend/tests/platform/operation_timeouts/test_provider_operation_inventory_contract.py::test_current_provider_boundaries_are_explicitly_accounted_for backend/tests/platform/retry_reconciliation/test_c2_provider_operation_inventory_contract.py::test_current_runtime_provider_network_boundaries_are_classified`
+   `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/operation_timeouts/test_provider_operation_inventory_contract.py::test_current_provider_network_inventory_has_no_unclassified_production_bypass backend/tests/platform/operation_timeouts/test_provider_operation_inventory_contract.py::test_current_provider_boundaries_are_explicitly_accounted_for backend/tests/platform/retry_reconciliation/test_c2_provider_operation_inventory_contract.py::test_current_runtime_provider_network_boundaries_are_classified`
    These must pass because production Firebase Admin access remains centralized
    in `backend/firebase_admin_client.py`, not because provider inventories were
    weakened.
 2. Complete WS02-04C1 operation-timeout scope:
-   `APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/operation_timeouts`
+   `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/operation_timeouts`
    This must include the extended Firebase App Check timeout evidence for
    `firebase.app_check.verify`.
 3. Complete WS02-04C2 retry/reconciliation scope:
-   `APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/retry_reconciliation`
+   `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/retry_reconciliation`
    This must include the `firebase.app_check.verify` safe-read registry
    classification and no automatic application retry.
 4. The C3B node that exposed the finite inventory drift:
-   `APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/provider_cost_rate_limits/test_provider_cost_inventory_contract.py::test_c2_provider_operation_registry_matches_current_c3b_inventory`
+   `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/provider_cost_rate_limits/test_provider_cost_inventory_contract.py::test_c2_provider_operation_registry_matches_current_c3b_inventory`
    This must pass because C3B inventories the new App Check safe-read C2
    registry entry without approving a provider-cost/action limiter.
 5. Complete WS02-04C3B provider-cost scope:
-   `APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/provider_cost_rate_limits`
+   `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/provider_cost_rate_limits`
    This must preserve C3B R1/R3 inventory truth, exact mutation context sets,
    chat-only source-owned limiter boundaries, and external/provider/runtime
    deferrals.
 6. Focused backend App Check scope:
-   `APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/app_check_provider_security`
+   `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/app_check_provider_security`
    This scope must cover expected App ID binding, wrong verified App ID
    rejection, provider-invalid/missing/provider-unavailable outcomes,
    route-policy precomputation, no dependence on post-routing route metadata,
@@ -802,9 +802,9 @@ Gate B validation must include:
    preflight preservation, observation recorder invocation, safe event-envelope
    shape, no new telemetry labels, and recorder failure safety.
 7. Affected settings/CORS compatibility tests:
-   `APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/platform/settings backend/tests/platform/http_security/test_cors_contract.py backend/tests/platform/http_security/test_host_contract.py backend/tests/platform/http_security/test_response_security_headers_contract.py backend/tests/platform/http_contracts/test_cache_docs_tombstone_contract.py backend/tests/platform/secrets/test_inbox_token_secret_contract.py backend/tests/workflows/identity_authority/test_firebase_project_settings_contract.py`
+   `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/platform/settings backend/tests/platform/http_security/test_cors_contract.py backend/tests/platform/http_security/test_host_contract.py backend/tests/platform/http_security/test_response_security_headers_contract.py backend/tests/platform/http_contracts/test_cache_docs_tombstone_contract.py backend/tests/platform/secrets/test_inbox_token_secret_contract.py backend/tests/workflows/identity_authority/test_firebase_project_settings_contract.py`
 8. Accepted WS03 prerequisite regressions:
-   `APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/identity_authority backend/tests/workflows/account_lifecycle_concurrency backend/tests/workflows/recent_auth_step_up`
+   `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/identity_authority backend/tests/workflows/account_lifecycle_concurrency backend/tests/workflows/recent_auth_step_up`
 9. Frontend unit tests:
    `npm --prefix frontend run test:unit`
 10. Frontend lint/build if Gate B modifies frontend source:
@@ -812,13 +812,13 @@ Gate B validation must include:
    and
    `npm --prefix frontend run build`
 11. Backend checker domain scope:
-   `DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/workflows/app_check_provider_security`
+   `DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/workflows/app_check_provider_security`
 12. Backend checker suite scope:
-   `DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite`
+   `DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite`
 13. Generated traceability counts for `WS03-03B-R1` through `WS03-03B-R10`,
    with `R8`, `R9`, and `R10` exactly zero.
 14. Full trusted backend regression:
-   `APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests`
+   `APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests`
 15. `git diff --check`
 
 Because Correction 4 requires only the C3B inventory-test compatibility

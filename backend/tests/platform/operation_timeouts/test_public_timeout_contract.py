@@ -35,7 +35,7 @@ pytestmark = pytest.mark.no_db_cleanup
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CORRELATION_ID = "123e4567-e89b-42d3-a456-426614174000"
 _SENSITIVE_MARKERS = (
-    "postgresql://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db",
+    "postgresql://private_user:private_pass@example.invalid/db",
     "Bearer synthetic-token",
     "sk_test_secret",
     "pi_private",

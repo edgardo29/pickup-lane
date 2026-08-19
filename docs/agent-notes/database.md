@@ -11,7 +11,7 @@ Also read:
 
 * `backend-structure.md` for model, service, and schema ownership
 * the relevant feature documentation before changing database behavior
-* `global-rules.md` before running tests or broad repository commands
+* `backend-testing.md` when backend tests or validation are in scope
 
 This document does not define feature behavior or maintain a catalog of current
 feature tables. Feature-specific schema contracts belong in their owning
@@ -34,6 +34,11 @@ alembic upgrade head
 
 The application reads `DATABASE_URL` from `backend/.env` unless a command
 explicitly overrides it.
+
+`backend/.env` is a real local environment file and must remain ignored and
+uncommitted. Tracked example files such as `backend/.env.example` are allowed
+only with sanitized placeholder values and must never contain usable
+credentials.
 
 The current local databases are:
 
@@ -348,7 +353,7 @@ unless explicitly approved for commit.
 ## Local Database Rebuilds
 
 The commands below are reference commands. Run destructive database commands
-only when the user explicitly asks and `global-rules.md` permits it.
+only when the user explicitly asks and the current task or workflow permits it.
 
 ### Development Database
 
@@ -362,26 +367,19 @@ The app does not hardcode a development database name. Backend code loads
 `DATABASE_URL` from `backend/.env`; the current local dev setting uses
 `pickup_lane_db_dev`.
 
-Clean rebuild and seed development auth users:
+Clean rebuild:
 
 ```bash
 dropdb -h localhost -U postgres pickup_lane_db_dev
 createdb -h localhost -U postgres -O pickup-lane-user pickup_lane_db_dev
 DATABASE_URL='[LOCAL_DEV_DATABASE_URL]' backend/.venv/bin/alembic upgrade head
-DATABASE_URL='[LOCAL_DEV_DATABASE_URL]' backend/.venv/bin/python -m backend.scripts.seed_dev_auth_users --count 12
 ```
 
-Important:
+Optional browse-demo data seed:
 
-* Run `seed_dev_auth_users` with `-m backend.scripts.seed_dev_auth_users`, not
-  as a file path, so Python can import the `backend` package.
-* This seed script creates Firebase Auth test users and matching database rows.
-* The seeded users are `sub1@test.com` through `sub<count>@test.com` by
-  default.
-* Use only the approved local seed password for generated test users; do not
-  publish real user credentials in this document.
-* Use `--start-index` to create a later range such as `sub13@test.com` through
-  `sub24@test.com`.
+```bash
+DATABASE_URL='[LOCAL_DEV_DATABASE_URL]' backend/.venv/bin/python -m backend.scripts.seed_demo_browse
+```
 
 ### Test Database
 
@@ -399,7 +397,7 @@ Do not point destructive test commands at `pickup_lane_db_dev`.
 If backend tests skip unexpectedly, verify `DATABASE_URL` points at
 `pickup_lane_test_db`.
 
-Exact pytest selections belong in `global-rules.md` or focused testing
+Exact pytest selections belong in `backend-testing.md` or focused testing
 documentation, not in this file.
 
 ## Verification

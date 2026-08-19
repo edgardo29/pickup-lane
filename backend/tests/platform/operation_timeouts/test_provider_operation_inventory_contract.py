@@ -36,8 +36,6 @@ _ALLOWED_REQUEST_BOUNDARY = {
 _ALLOWED_TOOLING = {
     "firebase_admin": {
         "backend/scripts/bootstrap_admin.py",
-        "backend/scripts/seed_dev_auth_users.py",
-        "backend/scripts/seed_manual_test_users.py",
     }
 }
 
@@ -135,8 +133,6 @@ def test_current_provider_boundaries_are_explicitly_accounted_for() -> None:
     assert hits_by_module["firebase_admin"] == {
         "backend/firebase_admin_client.py",
         "backend/scripts/bootstrap_admin.py",
-        "backend/scripts/seed_dev_auth_users.py",
-        "backend/scripts/seed_manual_test_users.py",
     }
     assert hits_by_module["boto3"] == {"backend/services/r2_storage_service.py"}
     assert hits_by_module["botocore"] == {"backend/services/r2_storage_service.py"}

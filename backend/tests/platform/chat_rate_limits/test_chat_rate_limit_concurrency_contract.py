@@ -11,9 +11,9 @@ from sqlalchemy import event, func, select
 
 os.environ.setdefault("APP_ENV", "test")
 if not os.getenv("DATABASE_URL"):
-    os.environ["DATABASE_URL"] = (
-        "postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/"
-        "pickup_lane_test_db"
+    pytest.skip(
+        "DATABASE_URL is required for backend integration tests.",
+        allow_module_level=True,
     )
 
 from backend.models import ChatMessage, Game, GameChat, User, Venue

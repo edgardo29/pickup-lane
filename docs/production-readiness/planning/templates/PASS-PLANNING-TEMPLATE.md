@@ -422,6 +422,15 @@ appropriate `TESTING_RECORD.md` when that record applies.
 Summarize the validation design. Do not require raw command dumps in the
 reusable template.
 
+Pass plans must never contain literal sensitive values, including usernames,
+passwords, credential-bearing database or service URLs, API keys or tokens,
+private keys, webhook/signing/encryption secrets, recovery credentials,
+private provider/account/project/tenant/customer identifiers when the actual
+value is not required to define the contract, or other secret or credential
+material. Validation commands or examples must use environment-variable
+references or sanitized placeholders, such as
+`DATABASE_URL="$TEST_DATABASE_URL"`, instead of literal credential values.
+
 Cover applicable:
 
 - focused scope;
@@ -583,3 +592,5 @@ Also check that:
 - no implementation-history diary language was introduced
 - no requirement, control, or evidence was invented
 - current authoritative terminology is used
+- the completed plan contains no literal credentials, secrets,
+  credential-bearing URLs, or other prohibited sensitive values

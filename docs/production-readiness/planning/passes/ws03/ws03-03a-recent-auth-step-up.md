@@ -954,7 +954,7 @@ counts are not expected values.
 1. Exact WS02-05B1 compatibility node:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/request_ownership/test_game_specialized_mutation_authority_contract.py::test_specialized_mutation_routes_bind_purpose_schemas_and_actor_dependencies
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/request_ownership/test_game_specialized_mutation_authority_contract.py::test_specialized_mutation_routes_bind_purpose_schemas_and_actor_dependencies
 ```
 
 This node must pass by updating stale B1 expected dependencies only for the
@@ -969,7 +969,7 @@ preserved.
 2. Focused WS02-05B1 request-ownership scope as appropriate:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/request_ownership
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/request_ownership
 ```
 
 This focused scope verifies the compatibility correction does not weaken B1's
@@ -979,7 +979,7 @@ evidence.
 3. Focused WS03-03A trusted backend evidence:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/recent_auth_step_up
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/recent_auth_step_up
 ```
 
 This focused suite must include corrected high-risk proof that:
@@ -999,13 +999,13 @@ This focused suite must include corrected high-risk proof that:
 4. Accepted WS03 dependency regressions:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/identity_authority backend/tests/workflows/account_lifecycle_concurrency
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/identity_authority backend/tests/workflows/account_lifecycle_concurrency
 ```
 
 5. Focused route-lifecycle and provider-payment compatibility:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests/workflows/route_lifecycle_cleanup backend/tests/workflows/provider_payment_input_ownership
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests/workflows/route_lifecycle_cleanup backend/tests/workflows/provider_payment_input_ownership
 ```
 
 This focused scope verifies Need-a-Sub and official-game replacement routes
@@ -1038,13 +1038,13 @@ suite. Do not add frontend tests in WS03-03A Gate B.
 8. Domain checker:
 
 ```bash
-DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/workflows/recent_auth_step_up
+DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope domain backend/tests/workflows/recent_auth_step_up
 ```
 
 9. Suite checker:
 
 ```bash
-DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite
+DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python backend/tests/check_backend_tests.py --scope suite
 ```
 
 10. Generated traceability review:
@@ -1056,7 +1056,7 @@ DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/p
 11. Full trusted backend regression:
 
 ```bash
-APP_ENV=test DATABASE_URL='postgresql+psycopg://pickup-lane-user:pickup-lane@localhost:5432/pickup_lane_test_db' backend/.venv/bin/python -m pytest -q backend/tests
+APP_ENV=test DATABASE_URL="$TEST_DATABASE_URL" backend/.venv/bin/python -m pytest -q backend/tests
 ```
 
 The full trusted backend regression must be fully green. Do not accept

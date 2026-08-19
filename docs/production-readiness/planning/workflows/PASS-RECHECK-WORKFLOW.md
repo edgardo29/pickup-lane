@@ -309,17 +309,26 @@ Before drafting, issuing, approving, correcting, or executing any gate instructi
 1. reread this workflow;
 2. verify current repository state, including branch, baseline, staged files,
    local changes, and current approved instruction;
-3. read the current or frozen pass plan for the gate;
-4. identify and read all applicable repository templates and required
+3. apply the instruction-adherence rule from
+   `docs/production-readiness/00-READ-ME-FIRST.md` to the current approved
+   instruction;
+4. read the current or frozen pass plan for the gate;
+5. identify and read all applicable repository templates and required
    engineering/testing standards for the gate;
-5. verify material ownership across authority, current source, prerequisite
+6. verify material ownership across authority, current source, prerequisite
    passes, later-pass handoffs, and external/provider evidence boundaries;
-6. self-review the gate instruction for scope, editable files, validation,
+7. self-review the gate instruction for scope, editable files, validation,
    stop boundary, security/confidentiality, and correction-routing clarity
    before issuing it.
 
 A gate instruction is incomplete when an applicable repository template or
 required standard was not reviewed before the instruction was drafted.
+
+Explicit scope, editable files, paths, SHAs, validation requirements, gate
+boundaries, and stop conditions from the current approved instruction are
+binding constraints. If the instruction cannot be followed exactly or conflicts
+with authority, repository truth, or a frozen artifact, stop and report instead
+of silently substituting another action.
 
 ## 14. Permanent Four-Gate Workflow
 
@@ -327,6 +336,10 @@ Each gate does exactly its assigned job, stops at its approval boundary, and
 does not begin the next gate. The four-gate model groups approvals for speed;
 it does not remove audit depth, evidence design, independent review, security
 review, or Git publication safeguards.
+
+Before any gate reports completion, compare the actual work performed against
+the binding current instruction. Correct any in-scope mismatch before handoff,
+or report the mismatch and stop.
 
 There is no Fast Lane, Full Lane, pre-pass risk score, or risk-classification
 process. Additional gates are allowed only for concrete discovered blockers as
@@ -345,7 +358,10 @@ At the start of each pass recheck:
 7. do not push merely for branch creation.
 
 Unexpected local work, divergence, or conflicting branch state causes a stop,
-not automatic cleanup, rebase, reset, restore, stash, or deletion.
+not automatic cleanup, rebase, reset, restore, stash, or deletion. If preserved
+local work such as a stash is later restored or converted into commit-eligible
+pass artifacts, recheck it for prohibited sensitive material under the
+read-first document before continuing.
 
 ### Gate A - Reconciliation And Design
 
@@ -614,7 +630,8 @@ either review obligation.
 Gate C must verify and report branch, HEAD, accepted baseline, merge-base with
 that baseline, frozen canonical-plan path and SHA, exact expected final
 changed-file set, exact actual changed-file set, actual/expected equality, and
-staged-file state. Review inputs must also include requirement declarations,
+staged-file state, current approved instruction, and authorized execution
+boundaries. Review inputs must also include requirement declarations,
 `TESTING_RECORD.md`, implemented evidence, and current validation. Use
 `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` when
 reviewing testing-record compliance.
@@ -672,8 +689,12 @@ readiness.
 Review the current validation results from the final changed state, inspect the
 complete local pass change set, review actual generated traceability, run
 `git diff --check`, perform a secret/confidential-data review of the complete
-local change set, verify no unexpected files are present, and verify repository
-contents remain unchanged by the read-only review. Gate C does not
+local change set, verify the complete tracked pass state contains no prohibited
+literal credentials or sensitive values under the read-first document, verify no
+unexpected files are present, and verify repository contents remain unchanged by
+the read-only review. Gate C approval confirms that the final pass state matches
+both the frozen plan and the current approved instruction's execution
+boundaries. Gate C does not
 automatically rerun already-current successful validation. Gate C may run only
 the smallest relevant test or check when it has a concrete stated reason, and
 the reason and exact rerun must be reported. Do not require unrelated
@@ -775,7 +796,9 @@ instruction. This gate is mechanical.
 Before staging, fetch remote metadata and verify branch, HEAD, accepted
 baseline, merge-base with that baseline, frozen canonical-plan SHA, current
 `origin/develop`, exact approved change set, no unexpected files, no staged
-contamination, secret/confidential-data safety, and diff integrity.
+contamination, secret/confidential-data safety, and diff integrity. Run an
+explicit final credential/secret scan, or equivalent repository-approved
+verification, before staging or publication.
 
 If `origin/develop` differs from the accepted baseline, stop, report the
 divergence, do not automatically merge, rebase, reset, cherry-pick, or
@@ -904,21 +927,15 @@ mechanics. Permanent proof principles include:
 
 ## 19. Security And Confidentiality
 
-Throughout all gates, do not publish or echo real passwords, API keys, tokens,
-private keys, database credentials, webhook secrets, signed or private URLs,
-recovery codes, personal or private user data, payment data, raw provider
-evidence, provider-private dashboard links, or local secrets.
-
-Synthetic placeholders must be obviously synthetic. If sensitive material is
-discovered, report location and category only, not the value.
+Use `docs/production-readiness/00-READ-ME-FIRST.md` as the canonical global
+sensitive-information policy. If sensitive material is discovered during recheck
+work, report location and category only, not the value.
 
 ## 20. Human Review And Stop Discipline
 
-Each Codex prompt should explicitly state:
-
-```text
-Do only this gate. Do not begin the next gate.
-```
+Each Codex prompt must preserve the one-gate boundary clearly. This workflow
+does not require a fixed sentence; local prompt-authoring guidance owns prompt
+wording.
 
 This prevents mixed audit and implementation work, repeated redesign,
 accidental scope expansion, production changes driven by tests, endless review

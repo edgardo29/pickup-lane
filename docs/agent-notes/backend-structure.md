@@ -12,7 +12,6 @@ Also read:
 * the relevant feature documentation before changing product behavior
 * `database.md` before changing models, migrations, constraints, indexes, or
   database commands
-* `global-rules.md` before running commands or broad repository changes
 
 This document does not own feature behavior, migration history, database rebuild
 commands, or detailed test commands.
@@ -301,6 +300,11 @@ Domain services own decisions based on external responses.
 External clients must not decide application permissions, state transitions,
 audit behavior, notifications, or support outcomes.
 
+Firebase Admin JSON and service-account key files are local secret material.
+They must remain ignored and uncommitted; backend code should load any required
+credential material through the approved configuration path rather than
+hardcoding it in source.
+
 Use existing shared clients and provider initialization. Do not create wrappers
 that merely rename one existing call.
 
@@ -439,8 +443,8 @@ idempotency, auditing, side effects, and partial failures.
 Do not place production helpers in the test package or introduce a new test
 framework as part of an unrelated task.
 
-Exact test commands and execution rules belong in `global-rules.md` or the
-relevant testing documentation.
+Exact test commands and execution rules belong in the relevant testing
+documentation or current task instruction.
 
 ## Scope Discipline
 
@@ -469,7 +473,7 @@ Before editing backend code:
 1. Read this document.
 2. Read the relevant feature documentation.
 3. Read `database.md` when persistent data may change.
-4. Read `global-rules.md` for commands and testing requirements.
+4. Read `backend-testing.md` when backend tests or validation are in scope.
 5. Identify the current owner of the behavior.
 6. State which files will change.
 7. Explain any non-trivial new file, directory, or moved responsibility.

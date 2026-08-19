@@ -33,6 +33,14 @@ completeness, correct product intent, or adequate edge-case discovery by itself.
 If a section is not relevant, write `Not applicable - [reason]`. Do not invent
 filler, provider facts, scenarios, thresholds, or evidence.
 
+Testing records are tracked evidence artifacts. Do not include literal
+credentials, credential-bearing URLs, raw sensitive logs or unredacted error
+output, provider-private values unless a sanitized attributable artifact is
+specifically required, personal or payment data, local machine paths, usernames,
+session state, internal chat material, or other local-only sensitive values. Use
+environment-variable references or sanitized placeholders when configuration
+must be referenced.
+
 ## At A Glance
 
 | Field | Value |
@@ -184,3 +192,8 @@ Include:
 - any open blocker
 - confirmation that checker `PASS` is structural compliance only, not human
   adequacy by itself
+- confirmation that the record contains no literal credentials,
+  credential-bearing URLs, raw sensitive logs or unredacted errors,
+  provider-private values, personal or payment data, local machine paths,
+  usernames, session state, internal chat material, or other prohibited
+  sensitive values
