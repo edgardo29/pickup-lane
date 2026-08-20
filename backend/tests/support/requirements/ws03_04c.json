@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-04C-R1",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "WS03-04A"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "The accepted authorization matrix must remain the source of truth for the 15 game, community, roster, chat, public catalog, and Need-a-Sub relationship route families and 64 C-owned route keys."
+    },
+    {
+      "id": "WS03-04C-R2",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "WS03-01",
+        "WS03-02"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "C-owned routes must preserve the approved dependency and verified-email distinction between public reads, authenticated relationship reads, active-account reads, and verified-user relationship mutations."
+    },
+    {
+      "id": "WS03-04C-R3",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-013",
+        "IAM-015",
+        "WS02-05B2"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "Public game, community-detail, venue, venue-image, game-image, and Need-a-Sub reads must expose only public/listable records and public response fields unless a source-defined relationship permits private visibility."
+    },
+    {
+      "id": "WS03-04C-R4",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-013",
+        "IAM-015"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "Current-user relationship reads for bookings, checkout status, game participants, waitlist entries, My Games, Need-a-Sub owned posts, requests, and history must bind to the authenticated user or source-defined relationship."
+    },
+    {
+      "id": "WS03-04C-R5",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-013",
+        "IAM-017",
+        "PAY-005"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "Game roster, checkout, guest, cancel, and host-edit mutations must enforce current verified-user relationship, host/player role, game state, lifecycle window, capacity, duplicate-state, and saved-card compatibility boundaries."
+    },
+    {
+      "id": "WS03-04C-R6",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-013",
+        "IAM-017",
+        "PAY-005",
+        "PAY-006"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "Community-game publish and community-detail host-edit behavior must bind to the current verified host, current game state, accepted host-payment rules, publish-attempt ownership, and public concealment of hidden payment text or host-only fields."
+    },
+    {
+      "id": "WS03-04C-R7",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-013",
+        "IAM-015"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "Game chat and chat-message routes must prove membership authorization, sender binding, read-state binding, hidden or removed message concealment, nonmember denial, and separation from D-owned admin moderation breadth."
+    },
+    {
+      "id": "WS03-04C-R8",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-013",
+        "IAM-015",
+        "IAM-017"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "Need-a-Sub post, request, status-history, position, and scoped chat routes must enforce post owner, requester, public viewer, confirmed-chat-member, lifecycle-window, sender, and read-state boundaries."
+    },
+    {
+      "id": "WS03-04C-R9",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-017",
+        "WS02-05B1"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "Field and mass-assignment proof must cover every C-owned write surface where caller input could affect identity, ownership, relationship state, payment or provider identity, moderation state, visibility, read-state, or server-controlled fields."
+    },
+    {
+      "id": "WS03-04C-R10",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "TST-005"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "Negative/default-deny proof must cover 401 unauthenticated or invalid credentials, 403 forbidden relationships or states, concealed 404 behavior, wrong IDs, caller-controlled actor substitution, and rejected mutations with no prohibited side effects."
+    },
+    {
+      "id": "WS03-04C-R11",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "GOV-006",
+        "TST-005",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/game_community_roster_chat_need_a_sub_relationship_authorization",
+      "reason": "Requirement declarations, pytest markers, matrix checks, test names, and the testing record must remain traceable to the frozen C plan, the approved intake, accepted A/B artifacts, current source, and accepted predecessor repository evidence."
+    },
+    {
+      "id": "WS03-04C-R12",
+      "owning_pass": "WS03-04C",
+      "source_controls": [
+        "IAM-016",
+        "IAM-017",
+        "PAY-005",
+        "PAY-006",
+        "WS03-04D",
+        "WS04",
+        "WS05",
+        "WS09",
+        "WS10"
+      ],
+      "state": "deferred",
+      "scope": "governance",
+      "reason": "D-owned admin/high-risk route proof, minimum-necessary admin data, sensitive export/unmask/read-audit policy, durable Stripe/webhook/provider reconciliation, real provider/runtime evidence, genuine database-concurrency closure, moderation closeout, and final parent-gap disposition are outside WS03-04C and must have zero local pytest mappings."
+    }
+  ]
+}

@@ -14,15 +14,21 @@ from sqlalchemy import func, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 os.environ.setdefault("APP_ENV", "test")
-if not os.getenv("DATABASE_URL"):
-    pytest.skip(
-        "DATABASE_URL is required for backend integration tests.",
-        allow_module_level=True,
+from backend.tests.support.environment_safety import DEDICATED_TEST_DATABASE_NAME
+
+_DATABASE_URL_CONFIGURED_FOR_RUNTIME = bool(os.getenv("DATABASE_URL"))
+if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
+    os.environ["DATABASE_URL"] = (
+        f"postgresql+psycopg://localhost:5432/{DEDICATED_TEST_DATABASE_NAME}"
     )
 
-from backend.models import ChatMessage, Game, GameChat, User, Venue
-from backend.observability.http_errors import handle_http_exception
-from backend.services.auth_service import require_verified_user
+try:
+    from backend.models import ChatMessage, Game, GameChat, User, Venue
+    from backend.observability.http_errors import handle_http_exception
+    from backend.services.auth_service import require_verified_user
+finally:
+    if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
+        os.environ.pop("DATABASE_URL", None)
 
 pytestmark = pytest.mark.suite_type("ordinary")
 
