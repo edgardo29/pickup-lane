@@ -18,11 +18,43 @@ Write the PR description from the actual diff and reviewer-facing outcome
 outward, not from the pass plan, intake, Gate reports, testing record, execution
 register, or approval workflow inward.
 
+Reviewer-ready language is a correctness requirement. A PR description that is
+technically accurate but requires production-readiness program knowledge to
+understand is not acceptable and must be rewritten before publication.
+Being understandable after interpretation is not enough. If the underlying
+behavior can be stated directly and clearly, state the behavior directly
+instead of naming the internal label for it.
+Across the PR body, internal labels must not carry meaning that can be stated
+as concrete application behavior. Before publication, rewrite any sentence or
+bullet where the main label is an internal category instead of the
+reviewer-facing fact. Internal labels may remain only when the same sentence
+explains the concrete behavior and the label adds useful reviewer context.
+
+Reviewer-ready sentences normally identify the actual actor, resource, action,
+authorization condition, state, failure, safeguard, system behavior, or test
+behavior. Standard engineering and product terms such as PostgreSQL, FastAPI,
+authorization, API, database, transaction, middleware, cache, migration,
+concurrency, Stripe, Firebase, and HTTP are fine when accurate. The problem is
+internal shorthand that merely sounds technical while forcing the reviewer to
+decode what actually happened.
+
+Internal workflow-state terms such as accepted, approved, frozen, current pass
+state, later-owner ownership, and closure state are usually not reviewer
+information for implementation or test PRs. Translate or remove them unless the
+workflow itself is the change. For example, prefer "repairs existing
+chat-rate-limit tests" over "repairs accepted chat-rate-limit tests".
+
 The PR body must be reviewer-complete, not process-complete. A true internal
 fact does not belong in the PR body unless it helps a reviewer understand the
 actual change, risk, validation, or material boundary. Internal planning
 artifacts may be read to verify accuracy, but they are not PR-description
 content unless changing those artifacts is itself the purpose of the PR.
+
+Wording copied or closely paraphrased from pass plans, requirement
+declarations, testing records, execution-register entries, Gate reports, or
+internal validation summaries is not reviewer-ready by default. Extract the
+underlying engineering fact and rewrite it in product, API, database,
+authorization, test, or system language.
 
 A fact being accurate does not automatically make it useful in a
 reviewer-facing PR description.
@@ -30,7 +62,19 @@ reviewer-facing PR description.
 Every section must be understandable to an engineer who has not read the
 production-readiness documents. Internal terms may appear only when they are
 genuinely necessary to review the change and are explained in ordinary
-engineering language.
+engineering language. An internal term is necessary only when it materially
+helps the reviewer understand the actual diff and cannot be replaced by clearer
+concrete engineering language without losing important meaning.
+
+For example, prefer "users can retrieve only their own bookings and roster
+entries" over "current-user booking and roster reads", "actions that hosts and
+players are allowed to perform" over "host/player mutations", and
+"unauthorized requests do not change bookings, roster membership, chat state,
+or request state" over "rejected side effects". These are examples of the
+decision rule, not a fixed glossary. The same rule applies to compressed
+phrases such as "provider-payment input" when the actual protection is that
+client-supplied provider or payment values cannot improperly affect protected
+state.
 
 ## Evidence Language
 
@@ -136,8 +180,32 @@ helps a reviewer judge confidence.
 Every Validation statement must identify what kind of proof actually ran and
 what scope it covered. Clearly distinguish focused pytest tests, affected
 regression tests, full regression suites, static checks, compliance or policy
-checkers, requirement mapping and traceability, and specialized database,
-browser, provider, migration, concurrency, or runtime evidence.
+checkers, checks that map tests to the rules they verify, and specialized
+database, browser, provider, migration, concurrency, or runtime evidence.
+
+Describe validation by the application behavior or system area the reviewer
+cares about before using internal pass, suite, matrix, checker, or test-system
+terminology. Internal labels are supplemental, not substitutes for saying what
+was tested. A bullet such as "Existing authorization-matrix tests: 11 passed"
+normally fails because the reviewer still has to know what the matrix covers;
+state the authorization behavior covered by those tests. A bullet such as
+"WS03-04C authorization tests: 17 passed" normally fails when the same result
+can be described through the game, booking, roster, chat, or Need-a-Sub
+behavior tested. Keep an internal label only when it materially helps the
+reviewer, and put it after the behavior instead of making it carry the meaning.
+
+Validation follows the same reviewer-language rule as the rest of the PR body:
+state the behavior or subsystem actually tested before introducing internal
+suite, pass, checker, or mapping terminology. Internal checker or mapping terms
+belong only when they give the reviewer useful confidence that cannot be stated
+more clearly as the concrete verification performed. A checker name may remain
+when its identity matters, but the bullet must still say what the checker
+verified.
+
+Every Validation bullet must answer: what concrete behavior or system property
+does this result give the reviewer confidence in? If the bullet only identifies
+a suite, matrix, checker, pass, mapping mechanism, or evidence category, it is
+not reviewer-ready.
 
 Validation bullets must report completed proof and its result. Do not add
 bullets about tests that were not run, claims the PR is not making, compliance
@@ -149,11 +217,12 @@ engineering language rather than a defensive disclaimer.
 
 Useful validation includes:
 
-- focused pass pytest result;
-- materially affected regression test result;
+- focused tests described by the product or system behavior they exercise;
+- materially affected regression tests described by the behavior or subsystem;
 - specialized PostgreSQL, browser, migration, provider-contract, concurrency,
   or runtime proof when applicable;
-- consolidated requirement-checker and traceability result when applicable.
+- checks that verify tests are linked to the rules they prove, when that
+  materially helps the reviewer understand confidence in the change.
 
 Compliance or policy checkers are not regression test suites. Do not describe a
 checker as a regression result unless it actually executes regression tests.
@@ -165,7 +234,9 @@ not imply that broad or full regression testing occurred unless it actually ran.
 Do not use vague scope references such as "this workflow", "this scope",
 "relevant tests", "applicable checks", or "broader validation". Name the actual
 behavior, test area, checker, or evidence scope in ordinary engineering
-language.
+language. Translate phrases such as "requirement mapping and traceability" or
+"test-to-rule mapping checks" into what was verified, such as "the tests are
+mapped to the authorization rules they verify."
 
 Do not include compilation checks, Git checks, raw commands, checker node
 counts, requirement-link counts, working-tree checks, publication mechanics, or
@@ -206,6 +277,14 @@ Translate specialized phrases such as export, unmask, read-audit, concealment,
 or negative proof into concrete behavior a new developer can understand, or
 omit them when they are not material to reviewing the diff.
 
+Scope Boundaries must describe missing behavior, not internal closure state. Do
+not rely on phrases such as "authorization behavior is not established here",
+"owned later", "closed elsewhere", or "deferred" when the concrete system
+boundary can be named. Prefer stating the product or system areas not covered,
+such as administrator-only actions, sensitive data access, moderation behavior,
+audit behavior, provider reconciliation, deployed-provider behavior, or
+concurrent database race behavior.
+
 ### Reviewer Focus
 
 This section is optional. Keep it brief and include it only when it helps review.
@@ -234,6 +313,68 @@ Unexplained phrases such as "route family", "behavioral proof",
 "evidence scope", or "parent-gap disposition" must trigger a rewrite. An
 internal term may appear only when it is genuinely necessary to review the
 change and is explained in ordinary engineering language.
+
+### Required Final Rewrite Pass
+
+Before the final rejection check, perform a required rewrite pass:
+
+1. Draft the PR body from the actual diff and validation.
+2. Reread the complete draft specifically for internal, process, or abstract
+   language.
+3. Rewrite each sentence or bullet that can be stated as concrete product,
+   API, database, authorization, test, or system behavior.
+4. Only then apply the final publication/rejection check.
+
+A useful sentence shape is:
+
+```text
+actual system noun + actual action + allowed/rejected/changed/preserved effect + why it matters to review
+```
+
+The PR body is a translation of the engineering work for a reviewer, not a
+summary of the pass plan's vocabulary. Keep technical precision, but prefer the
+product or system behavior over the internal label.
+
+For each material sentence or bullet, ask:
+
+- Does this identify a real product or system concept, actor, resource, action,
+  or effect?
+- Can an engineer who knows the application but not the production-readiness
+  program understand it immediately?
+- Am I naming the behavior, or am I naming our internal label for the behavior?
+- Could this sentence be made clearer by replacing an abstract noun phrase with
+  who does what to which resource and what happens?
+- Does this primarily describe production-readiness process, test architecture,
+  evidence bookkeeping, or internal state when the reviewer needs the
+  underlying engineering behavior?
+- Is an internal noun phrase being used where the actual behavior could be said
+  directly?
+- Is a pass ID, requirement ID, testing-system term, or planning term carrying
+  meaning that should instead be expressed in normal engineering language?
+- If an internal label remains, would removing it make the reviewer lose
+  important technical information?
+
+If the answer exposes avoidable internal language, rewrite before publication.
+Prefer behavior such as:
+
+- Instead of "source-derived lifecycle and state drift protection", prefer
+  "tests fail when a new status is added without an explicit authorization
+  rule".
+- Instead of "default-deny lifecycle behavior", prefer "stale, invalid, and
+  unauthorized states are rejected".
+- Instead of "requirement traceability", prefer "the tests are mapped to the
+  authorization rules they verify".
+- Instead of "payment-input ownership", prefer "users cannot supply payment
+  information that belongs to another user".
+- Instead of "response-minimization", prefer "API responses do not expose
+  protected fields".
+- Instead of "test-to-rule mapping checks", prefer "checks confirm each test is
+  linked to the authorization rule it verifies".
+- Instead of "relationship-sensitive APIs", prefer "APIs where access depends
+  on whether the user owns, hosts, has joined, or has requested access to the
+  resource".
+- Instead of "current-user relationship scoping", prefer "users cannot retrieve
+  another user's bookings, roster entries, waitlist entries, or requests".
 
 ## Prohibited Content
 
@@ -344,6 +485,27 @@ below is YES:
 14. Does the body contain no secrets, credentials, private URLs or identifiers,
     personal or payment data, local paths or usernames, raw sensitive material,
     internal chat history, or local session information?
+15. Does every material sentence or bullet identify a concrete product or system
+    concept, actor, resource, action, or effect?
+16. Have internal pass IDs, requirement IDs, or production-readiness terms been
+    removed or translated wherever they are not needed to preserve technical
+    meaning?
+17. Does every Validation bullet identify the behavior or subsystem tested
+    before any internal suite, pass, matrix, checker, or requirement-mapping
+    label?
+18. Has every abstract noun phrase carrying behavior been replaced with the
+    actor, resource, action, condition, or effect when that would be clearer?
+19. Can the reviewer understand each protection or change without mentally
+    translating an internal label into the underlying behavior?
+20. Have pass IDs and internal test-system labels been removed wherever they
+    can be removed without losing useful reviewer information?
+21. Has every sentence that primarily described production-readiness process,
+    test architecture, evidence bookkeeping, or internal state been rewritten
+    when the reviewer actually needs the underlying engineering behavior?
+22. For every internal label that remains, would removing that label make the
+    reviewer lose important technical information?
+23. Does every internal label that remains appear with concrete behavior that
+    makes its reviewer value clear?
 
 Do not publish a description that fails this check.
 
@@ -372,12 +534,16 @@ changed.]
 
 ## Validation
 
-- Focused pytest: [what ran and what scope it covered] - [result]
-- Regression tests: [affected or full suite that actually ran] - [result]
-- Static, compliance, or policy checker: [checker and scope] - [result]
-- Requirement mapping and traceability: [scope] - PASS
-- Specialized proof: [database, browser, provider, migration, concurrency, or
-  runtime proof actually collected] - [result]
+- [Concrete behavior or system property verified, before any internal suite
+  label]:
+  [result]
+- [Affected existing behavior or subsystem tested]: [result]
+- [Compliance or static check and what it verified, when reviewer-relevant]:
+  [result]
+- [What the mapping check verified, when reviewer-relevant]:
+  [result]
+- [Specialized database, browser, provider, concurrency, migration, or runtime
+  proof, when applicable]: [result]
 
 ## Scope Boundaries
 
