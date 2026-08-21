@@ -14,10 +14,10 @@ scope.
 | Field | Value |
 |---|---|
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes. |
-| Current reconciliation point | Proposed accepted `develop` state after the substantive `WS03-04C` PR merges. |
-| Current accepted develop SHA at reconciliation | Merge SHA to be established by the substantive `WS03-04C` PR; accepted baseline before this pass was `ffdfc6d744f88879b86d0a91bab83770d7540062`. |
+| Current reconciliation point | Proposed accepted `develop` state after the substantive `WS03-04D` PR merges. |
+| Current accepted develop SHA at reconciliation | Merge SHA to be established by the substantive `WS03-04D` PR; accepted baseline before this pass was `55ff02d04ec8804afd4454f4aa1942fc03e050d2`. |
 | Original blueprint register | 42 parent-level planned passes in `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md`. |
-| Accepted executable requirement declarations through this point | 28 files under `backend/tests/support/requirements/` once the substantive `WS03-04C` PR merges. |
+| Accepted executable requirement declarations through this point | 29 files under `backend/tests/support/requirements/` once the substantive `WS03-04D` PR merges. |
 | Next pass selected by this register? | No. The owner must explicitly select the next intake or pass. |
 
 The recorded accepted `develop` SHA is a historical reconciliation basis for
@@ -30,10 +30,10 @@ current-session source of truth. Current execution always comes from current
 | Metric | Count | Meaning |
 |---|---:|---|
 | Original blueprint parent-level entries | 42 | Parent-level entries mirrored from the master blueprint. |
-| Accepted/completed parent-level entries | 13 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through `WS03-03`. |
-| Remaining parent-level entries | 29 | Parent-level entries not yet selected or completed in this register. |
-| Accepted executable passes with requirement declarations | 28 | Current accepted executable declaration files under `backend/tests/support/requirements/` once the substantive `WS03-04C` PR merges. |
-| Remaining actual executable-pass count | Unknown | Future executable-unit count depends on owner selection, accepted decomposition, and remaining `WS03-04D` execution. |
+| Accepted/completed parent-level entries | 14 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through `WS03-04`. |
+| Remaining parent-level entries | 28 | Parent-level entries not yet selected or completed in this register. |
+| Accepted executable passes with requirement declarations | 29 | Current accepted executable declaration files under `backend/tests/support/requirements/` once the substantive `WS03-04D` PR merges. |
+| Remaining actual executable-pass count | Unknown | Future executable-unit count depends on owner selection and accepted decomposition. |
 
 Count magnitude is not completion proof or control-closure proof. Controls
 close only through accepted evidence and reassessment.
@@ -70,7 +70,7 @@ navigation. It does not replace the master blueprint.
 | `WS03-01` | Identity authority and verifier-controlled field protection | Accepted executable pass. |
 | `WS03-02` | Provisioning, account-state lifecycle, and concurrent first login | Accepted executable pass. |
 | `WS03-03` | High-risk authentication and Firebase control verification | Decomposed into accepted executable child passes `WS03-03A` and `WS03-03B`. |
-| `WS03-04` | Complete authorization matrix and negative proof | Decomposed into `WS03-04A`, `WS03-04B`, `WS03-04C`, and `WS03-04D`; `WS03-04A`, `WS03-04B`, and `WS03-04C` accepted once the substantive C PR merges; parent incomplete with D remaining. |
+| `WS03-04` | Complete authorization matrix and negative proof | Decomposed into accepted executable child passes `WS03-04A`, `WS03-04B`, `WS03-04C`, and `WS03-04D`; WS03-04 parent complete after the substantive D PR merges, with the Stripe webhook lifecycle gap explicitly covered elsewhere by `WS05`. |
 | `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | Not yet selected in this register. Requires intake before implementation. |
 | `WS04-01` | Database engine/session lifecycle, connection budget, and least-privilege roles | Not yet selected in this register. Requires intake before implementation. |
 | `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Not yet selected in this register. Requires intake before implementation. |
@@ -137,6 +137,7 @@ Every path in the Plan column is relative to
 | `WS03-04A` | `WS03-04` | `passes/ws03/ws03-04a-authorization-matrix-foundation.md` | `ws03_04a.json` | 9 | 8 | 0 | 1 | `workflows/authorization_matrix_foundation` plus governance |
 | `WS03-04B` | `WS03-04` | `passes/ws03/ws03-04b-self-owned-account-notification-financial-authorization.md` | `ws03_04b.json` | 10 | 9 | 0 | 1 | `workflows/self_owned_account_notification_financial_authorization` plus governance |
 | `WS03-04C` | `WS03-04` | `passes/ws03/ws03-04c-game-community-roster-chat-need-a-sub-relationship-authorization.md` | `ws03_04c.json` | 12 | 11 | 0 | 1 | `workflows/game_community_roster_chat_need_a_sub_relationship_authorization` plus governance |
+| `WS03-04D` | `WS03-04` | `passes/ws03/ws03-04d-admin-route-list-high-risk-function-authorization.md` | `ws03_04d.json` | 12 | 12 | 0 | 0 | `workflows/admin_route_list_high_risk_function_authorization` plus governance |
 
 ## 6. Accepted Stage 0 Intake Records
 
@@ -245,14 +246,18 @@ authorization closure.
 payment, refund, and host-fee surfaces.
 
 `WS03-04C` owns games, community games, checkout, bookings, participants,
-waitlists, chats/messages, My Games, and Need-a-Sub relationship surfaces once
-the substantive C PR merges.
+waitlists, chats/messages, My Games, and Need-a-Sub relationship surfaces.
 
-`WS03-04D` remains for admin/high-risk route proof and final parent-gap
-disposition after both B and C complete.
+`WS03-04D` owns admin/high-risk route proof and final parent-gap disposition.
+Its canonical plan path is
+`docs/production-readiness/planning/passes/ws03/ws03-04d-admin-route-list-high-risk-function-authorization.md`.
 
-Parent `WS03-04` remains incomplete after C. `WS03-04D` follows completion of
-both B and C.
+After the substantive `WS03-04D` PR merges, WS03-04 parent complete: A/B/C/D
+accepted evidence accounts for the parent authorization-matrix obligations.
+The accepted `WS03-04A-G001` Stripe webhook lifecycle gap remains
+`covered_elsewhere` by `WS05` and does not block WS03-04 completion because the
+provider callback payment lifecycle belongs to later WS05 payment/webhook
+evidence.
 
 ## 8. Remaining Parent Passes
 
