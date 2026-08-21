@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-04D-R1",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "WS03-04A"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "The accepted authorization matrix must remain the source of truth for the 40 admin/high-risk route families and 187 D-owned route keys."
+    },
+    {
+      "id": "WS03-04D-R2",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-016",
+        "WS03-01",
+        "WS03-02"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Every D-owned route must require the current verified active admin user before admin data or privileged behavior is reachable."
+    },
+    {
+      "id": "WS03-04D-R3",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-017",
+        "WS03-03A"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Every D-owned route currently marked as recent-admin protected must reject stale admin authentication before high-risk behavior can run."
+    },
+    {
+      "id": "WS03-04D-R4",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "WS02-05B2"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Admin list, search, lookup, aggregate, and read routes must remain active-admin-only and preserve current source filtering, object binding, response, and concealment boundaries."
+    },
+    {
+      "id": "WS03-04D-R5",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-016",
+        "IAM-017",
+        "ADM-007",
+        "ADM-013"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Admin user, account, and role actions must preserve active-admin gating, recent-authentication where current source requires it, final-admin/self protections, and rejected-side-effect boundaries."
+    },
+    {
+      "id": "WS03-04D-R6",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-013",
+        "IAM-016",
+        "IAM-017",
+        "ADM-015"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Admin game, community-game, roster, venue, image, chat-moderation, and Need-a-Sub routes must preserve privileged object/list scope, action-state checks, recent-authentication where source requires it, and rejected-side-effect boundaries."
+    },
+    {
+      "id": "WS03-04D-R7",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-016",
+        "IAM-017",
+        "PAY-005",
+        "PAY-006"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Admin money, credit, payment, refund, host-fee, payment-event, and financial-outcome routes must preserve active-admin gating, recent-authentication on high-risk repair or ledger actions, object/list scope, and rejected financial side effects."
+    },
+    {
+      "id": "WS03-04D-R8",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-016",
+        "IAM-017",
+        "ADM-015"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Admin notification, platform-notice, policy, support-flag, review-case, rejected-attempt, chat-moderation, and admin-action surfaces must preserve admin-only access, current source state checks, and rejected notice/review/moderation side effects."
+    },
+    {
+      "id": "WS03-04D-R9",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-017",
+        "WS02-05B1"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Field and mass-assignment proof must cover D-owned write surfaces where caller input could affect identity, role, account state, admin actor, game or venue state, financial/provider identity, notification recipient, moderation state, audit/action state, or other server-controlled fields."
+    },
+    {
+      "id": "WS03-04D-R10",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "TST-005"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Negative/default-deny proof must cover required 401, 403, 404, 410, ordinary-user denial, stale-role denial, stale recent-auth denial, cross-object denial, and rejected mutations with named no-side-effect assertions."
+    },
+    {
+      "id": "WS03-04D-R11",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "GOV-006",
+        "TST-005",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Requirement declarations, pytest markers, matrix checks, test names, and the testing record must remain traceable to the frozen D plan, approved intake, accepted A/B/C artifacts, current source, and accepted predecessor repository evidence."
+    },
+    {
+      "id": "WS03-04D-R12",
+      "owning_pass": "WS03-04D",
+      "source_controls": [
+        "IAM-012",
+        "IAM-013",
+        "IAM-015",
+        "IAM-016",
+        "IAM-017",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Final WS03-04 parent-gap disposition must account for all A/B/C/D-owned obligations and record every remaining provider/runtime, audit-governance, named-permission, dual-control, export/unmask/read-audit, or minimum-necessary admin-data boundary with an explicit downstream owner or blocker."
+    }
+  ]
+}
