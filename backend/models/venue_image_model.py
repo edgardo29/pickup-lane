@@ -15,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.database import Base
+from backend.database_metadata import Base
 
 
 # Venue images store reusable official venue media in Cloudflare R2.

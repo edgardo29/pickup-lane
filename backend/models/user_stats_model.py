@@ -5,7 +5,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.database import Base
+from backend.database_metadata import Base
 
 
 # User stats stores cached profile/accountability counts for fast profile display.

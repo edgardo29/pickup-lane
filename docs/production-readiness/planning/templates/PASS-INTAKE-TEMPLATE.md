@@ -1,329 +1,582 @@
 # Production-Readiness Pass Intake Template
 
-Use this template during Stage 0 of
-`docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md`.
+Use this template to decide what executable engineering work should happen next
+for a production-readiness parent pass.
 
-The intake record decides what executable pass should be designed next from a
-parent blueprint pass. It is not a pass plan, implementation prompt, testing
-record, or approval to edit source.
+An intake has one job:
 
-If a section is not applicable, write `Not applicable - [reason]`.
+```text
+Decide the correct executable engineering shape of the parent work.
+```
+
+The intake must determine whether the parent:
+
+- should execute as one pass;
+- should be split into multiple executable passes;
+- is blocked by a technical prerequisite;
+- is blocked by an owner or authority decision.
+
+The intake is not an implementation plan.
+
+It does not design the implementation, define detailed tests, prescribe exact
+code changes, or narrate the production-readiness workflow.
+
+Write the reader-facing parts for a competent developer who needs to understand:
+
+- what parent engineering work is being evaluated;
+- which facts affect how that work should be executed;
+- what execution shape was chosen;
+- why that shape is technically correct;
+- where every major part of the parent scope belongs;
+- what engineering work can proceed next.
+
+Authority controls technical meaning, approved scope, dependencies, identifiers,
+and accepted decisions. Authority wording does not need to be copied verbatim.
+Preserve the meaning and express it in normal technical language.
+
+Internal production-readiness bookkeeping belongs only in `Internal Record`
+unless an exact process term is genuinely necessary to understand the
+engineering decision.
 
 Intake records are tracked production-readiness artifacts. Do not include
 literal credentials, credential-bearing URLs, secrets, private keys or tokens,
 private provider values, personal or payment data, raw sensitive logs, local
 machine paths, session state, internal chat material, or other local-only
-sensitive information. When configuration must be referenced, use
-environment-variable references or sanitized placeholders.
+sensitive information.
 
-Intake records use this storage convention:
+Use environment-variable names or sanitized descriptions when configuration
+must be referenced.
+
+Store intake records at:
 
 ```text
 docs/production-readiness/planning/passes/<family>/<parent-id>-intake.md
 ```
 
-## At A Glance
+If a section is not applicable, write:
 
-| Field | Value |
-|---|---|
-| Intake date | `[YYYY-MM-DD]` |
-| Intake record path | `docs/production-readiness/planning/passes/<family>/<parent-id>-intake.md` |
-| Parent blueprint pass | `[PASS-ID and title]` |
-| Proposed executable pass | `[PASS-ID and title]` |
-| Track | `[WSxx / PROGRAM / GOVERNANCE / other canonical track]` |
-| Intake outcome | `[implement parent / decompose child / stop for prerequisite / stop for owner decision]` |
-| Current develop basis | `[origin/develop SHA or current accepted baseline]` |
-| Intake sources | `[Blueprint, remediation plan, decisions, accepted prerequisites, current source]` |
-| Proposed planning document | `[path or Not applicable]` |
-| Proposed requirement declaration | `[path or Not applicable]` |
-| Proposed trusted evidence scope | `[path or Not applicable]` |
+```text
+Not applicable - [reason]
+```
 
-## 1. Purpose
+---
 
-Explain why this intake exists and what parent pass or parent-pass remainder it
-is evaluating.
+# Universal Intake Rules
 
-State explicitly that this intake does not implement the pass and does not
-select a later pass beyond the proposed executable scope.
+## Orient The Reader Before Presenting Information
 
-## 2. Authority Read
+Every reader-facing section must begin with a short explanation of:
 
-List the authority and context reviewed.
+1. what the section tells the reader;
+2. why that information matters to the execution decision;
+3. how the information that follows should be interpreted.
 
-| Source | Relevant meaning for this intake |
-|---|---|
-| `00-READ-ME-FIRST.md` | `[Authority rule or stop condition]` |
-| `01-PROGRAM-CONTEXT.md` | `[Program navigation or pass-family rule]` |
-| `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` | `[Current parent/executable-pass status]` |
-| Master blueprint parent entry | `[Original parent-level intent]` |
-| Final remediation plan | `[Workstream/control relationship]` |
-| Approved decisions / governance | `[Policy or ownership input]` |
-| Accepted prerequisite pass plans | `[Dependency contracts]` |
-| Current accepted repository truth | `[Current source/config/evidence state]` |
+Do not jump directly from a heading into a table, dependency list, split, or
+technical fact without explaining why the reader is looking at it.
 
-Do not use superseded prompts, old branch names, old PR descriptions, or
-historical implementation as authority.
+Write the explanation specifically for the parent work being evaluated.
 
-## 3. Parent Blueprint Pass
+Do not use generic filler merely to satisfy this rule.
 
-| Field | Value |
-|---|---|
-| Parent pass | `[PASS-ID]` |
-| Parent title | `[Title]` |
-| Parent track | `[Track]` |
-| Parent type | `[Type]` |
-| Primary controls | `[Controls]` |
-| Blueprint dependencies | `[Dependencies]` |
-| Blueprint maximum scope | `[Summary]` |
+Sections 1 through 5 are reader-facing engineering sections.
 
-Explain the parent pass in plain language.
+`Internal Record` is the only section intended primarily for workflow
+bookkeeping.
 
-## 4. Current Execution Register State
+---
 
-Describe how the parent pass currently appears in
-`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`.
+## Keep Reader-Facing Sections About Engineering
 
-| Register item | State |
-|---|---|
-| Parent pass status | `[not started / partially decomposed / decomposed / accepted / closed out]` |
-| Accepted child passes | `[List or None]` |
-| Known closeout records | `[List or None]` |
-| Remaining parent scope | `[Summary]` |
-| Register ambiguity | `[None or issue]` |
+Sections 1 through 5 should be understandable without knowledge of the
+production-readiness framework.
 
-If the register needs a minor correction discovered during intake, that
-correction may be included in the same first-child substantive PR when it does
-not change higher authority. A material authority or structure conflict stops
-intake. Do not require a separate tracker-only PR by default.
+Do not fill them with terminology such as:
 
-## 5. Current Repository Truth
+- Gate A;
+- Gate B;
+- Stage 0 mechanics;
+- execution-register transitions;
+- evidence classifications;
+- publication mechanics;
+- approval workflow;
+- trusted-evidence terminology;
+- artifact-state terminology.
 
-Summarize current accepted source, configuration, documentation, requirement
-declarations, testing records, and evidence that materially affect this parent
-or child pass.
+If the engineering decision can be explained without a framework term, use
+normal engineering language.
 
-Classify facts as:
+Exact workflow terminology may remain in `Internal Record`.
 
-- repository truth;
-- authoritative requirement;
-- accepted external evidence;
-- inference;
-- unknown.
+---
 
-Do not claim provider, runtime, dashboard, account, deployment, backup, or
-operational facts from repository source alone.
+## Do Not Design The Implementation Here
 
-## 6. Executable-Pass Cohesion Assessment
+The intake decides **how the parent work should be divided for execution**.
 
-Assess the parent or proposed child against the implementation workflow's
-seven-question cohesion test.
+It does not decide detailed implementation.
 
-| Cohesion question | Verdict | Evidence/reason | Split implication |
-|---|---|---|---|
-| One primary outcome |  |  |  |
-| One requirement/invariant family |  |  |  |
-| One prerequisite state |  |  |  |
-| One safe merge/rollback or forward-fix unit |  |  |  |
-| One coherent evidence model |  |  |  |
-| One semantic review model |  |  |  |
-| Safe/useful intermediate state |  |  |  |
+Do not define here:
 
-Split the parent or candidate child when either one prerequisite state or one
-safe merge/rollback or forward-fix unit is false. Normally recommend a split
-when two or more other cohesion questions fail.
+- detailed APIs;
+- exact implementation algorithms;
+- exact configuration values unless already approved and necessary to the split;
+- detailed formulas;
+- detailed failure handling;
+- detailed permission models;
+- test cases;
+- assertion inventories;
+- file-by-file implementation instructions;
+- migration steps;
+- detailed validation strategy.
 
-Warning signals such as file count, changed-line count, requirement count,
-test count, frontend plus backend, or prompt length are not automatic split
-rules.
+Those belong in the engineering plan for the selected executable pass.
 
-## 7. Decomposition Decision
+Include a technical detail only when it materially affects the execution
+decision.
 
-Choose one:
+---
 
-| Decision | Applies? | Reason |
+## Create Only Real Executable Work
+
+Do not create a child whose purpose is merely to:
+
+- document rules;
+- prepare another plan;
+- restate requirements;
+- collect information that belongs inside another executable pass;
+- create a handoff;
+- perform planning that the engineering-plan stage already exists to perform.
+
+A child must represent either:
+
+1. a meaningful executable engineering result; or
+2. a genuinely independent verification result.
+
+Each child must leave the system, repository, or verified production state in a
+coherent condition that can be accepted independently.
+
+If two pieces only become correct, safe, usable, or meaningful when completed
+together, keep them together.
+
+Do not split work merely because it can be described as separate tasks.
+
+---
+
+## Split For Engineering Reasons
+
+A split should exist because the work has genuinely different:
+
+- prerequisites;
+- implementation boundaries;
+- verification environments;
+- technical ownership;
+- dependency order;
+- source-versus-external evidence needs;
+- independently acceptable outcomes.
+
+Do not split merely to make individual passes smaller.
+
+Do not create artificial sequencing where one child is only preparation for the
+next.
+
+---
+
+## Do Not Guess Missing Facts
+
+Unknown information does not automatically block the parent.
+
+For each material unknown, determine whether the current executable work
+actually requires it.
+
+If a child can be implemented correctly without the unknown fact, that fact
+should not block the child.
+
+If correct implementation or verification genuinely depends on the unknown
+fact, treat it as a real prerequisite or blocker.
+
+Do not replace unknown information with:
+
+- guesses;
+- placeholder decisions;
+- development values;
+- test values;
+- examples;
+- library defaults;
+- assumed provider behavior.
+
+---
+
+## Preserve The Entire Parent Scope
+
+The intake must account for the complete parent engineering scope.
+
+Every parent-level work area must have exactly one clear destination unless an
+intentional shared dependency is explicitly explained.
+
+Do not:
+
+- lose work during the split;
+- assign the same implementation responsibility to multiple children;
+- quietly move parent work into an unrelated future area;
+- call blocked work complete.
+
+The intake should prove that the parent has been divided without hidden gaps or
+accidental overlap.
+
+---
+
+# 1. What Needs To Be Decided
+
+Begin by explaining what decision this intake is making and why the parent work
+requires that decision before implementation proceeds.
+
+Then identify:
+
+- the parent engineering work being evaluated;
+- the reason its execution shape must be decided.
+
+Keep this section short.
+
+The reader should finish this section understanding:
+
+```text
+What are we deciding about this parent, and why does that decision matter?
+```
+
+Do not include:
+
+- drafting history;
+- previous rejected structures;
+- correction history;
+- workflow narration;
+- implementation design.
+
+---
+
+# 2. What We Know
+
+Begin by explaining that this section contains only the technical facts,
+dependencies, decisions, and unknowns that materially affect whether the parent
+should execute as one pass, be split, or be blocked.
+
+Then include only information that changes the execution decision.
+
+Relevant information may include:
+
+- current system or source behavior;
+- parent scope;
+- approved technical decisions;
+- completed prerequisites;
+- technical dependencies;
+- external dependencies;
+- meaningful implementation boundaries;
+- material unknowns;
+- real blockers;
+- facts that require a different verification environment.
+
+Do not produce a general architecture summary.
+
+Do not include information simply because it is related to the parent.
+
+Every fact should answer:
+
+```text
+Why does this affect how the parent should be executed?
+```
+
+A compact table may be used when it improves clarity:
+
+| Topic | Current fact or constraint | Why it affects execution |
 |---|---|---|
-| Implement parent as one executable pass | `[yes/no]` | `[Reason]` |
-| Decompose into child passes | `[yes/no]` | `[Reason]` |
-| Stop for prerequisite | `[yes/no]` | `[Reason]` |
-| Stop for owner decision | `[yes/no]` | `[Reason]` |
+| `[Relevant area]` | `[Current fact, decision, dependency, or unknown]` | `[Effect on whether/how the work can execute]` |
 
-When decomposing, provide the proposed child-pass map:
+Do not claim external production, provider, runtime, account, deployment,
+backup, access, or operational facts from repository source alone.
 
-| Order | Child ID | Title | One primary outcome | Allocated controls/requirement areas | Prerequisites | Produced capability | Handoff to later child | Safe merged intermediate state | Evidence profile | Explicit non-goals |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `1` | `[PASS-ID]` | `[Title]` | `[Outcome]` | `[Controls/areas]` | `[Dependencies]` | `[Capability]` | `[Handoff]` | `[Safe state]` | `[Evidence]` | `[Boundaries]` |
+Exact authority citations and workflow references belong in `Internal Record`
+unless the reader needs them to understand the engineering decision.
 
-The child-pass map must be mutually exclusive enough that later implementation
-does not hide unresolved work in overlapping scopes.
+---
 
-Do not split one coherent outcome merely into backend, frontend, tests, or
-documentation. Required frontend behavior, production behavior, requirement
-metadata, testing record, trusted evidence, and compatibility updates travel
-with the contract they establish.
+# 3. Execution Decision
 
-## 8. Parent Obligation Allocation
+Begin by explaining that this section states the chosen execution shape for the
+parent and the technical reason that shape is appropriate.
 
-Every parent obligation must appear in this no-gap/no-overlap matrix.
+Choose exactly one outcome:
 
-| Parent obligation/control | Primary child/owner | Supporting child/evidence | Overlap reason, if any | Final disposition |
-|---|---|---|---|---|
-| `[Obligation/control]` | `[Child or owner]` | `[Support or None]` | `[Shared prerequisite / compatibility / cross-cutting evidence / None]` | `[Implemented / governance / deferred / blocked / covered elsewhere]` |
+- execute the parent as one pass;
+- split the parent;
+- blocked on a technical prerequisite;
+- blocked on an owner or authority decision.
 
-The union of child ownership must equal complete parent ownership. Child
-ownership may overlap only for explicitly documented shared prerequisites,
-compatibility regression responsibility, or cross-cutting evidence.
+State the outcome directly.
 
-## 9. Ordering, Shared Responsibility, And Completion
+Then explain the technical reason.
 
-Describe:
+If the parent is split, provide only the executable order:
 
-- child ordering/dependency graph;
-- shared prerequisites;
-- compatibility responsibilities;
-- parent completion rule;
-- execution-register update plan.
+| Order | Work | Depends on |
+|---|---|---|
+| `1` | `[CHILD-ID - clear engineering title]` | `[Technical dependency or None]` |
 
-A decomposed parent is complete only when all approved children are complete
-and every parent obligation is accounted for.
+The `Work` column must describe a coherent engineering or independent
+verification result.
 
-## 10. Proposed Executable Pass
+Do not turn this table into a miniature plan.
 
-| Field | Value |
+Do not include:
+
+- implementation steps;
+- detailed requirements;
+- test plans;
+- file lists;
+- detailed settings;
+- detailed failure behavior;
+- evidence inventories.
+
+After the table, explain only what is necessary to understand why the children
+are separate and why the dependency order is correct.
+
+For every proposed child, verify:
+
+```text
+Does this child leave behind a coherent result that can be accepted on its own?
+```
+
+If the answer is no, the split is probably artificial.
+
+If two pieces must be completed together for either one to be correct, safe, or
+useful, combine them.
+
+---
+
+# 4. Where The Parent Work Goes
+
+Begin by explaining that this section accounts for the complete parent scope.
+
+Its purpose is to show that every major parent responsibility has a destination
+and that the split contains no hidden gaps or accidental overlap.
+
+This is scope allocation, not implementation design.
+
+Use:
+
+| Parent work | Goes to | Remaining boundary |
+|---|---|---|
+| `[Parent-level engineering responsibility]` | `[Executable pass or named owner]` | `[What is fully covered here or intentionally outside this responsibility]` |
+
+Keep rows at the parent-work level.
+
+Do not decompose the parent into individual implementation details.
+
+Good rows describe meaningful engineering responsibilities.
+
+Avoid rows for individual:
+
+- configuration values;
+- functions;
+- API fields;
+- test cases;
+- failure branches;
+- formulas;
+- implementation files.
+
+Those belong in the executable pass plan.
+
+`Remaining boundary` should explain only what is not included in that allocation
+when clarification is necessary.
+
+Do not use this column to narrate future implementation.
+
+Blocked work remains blocked until its prerequisite is satisfied.
+
+---
+
+# 5. What Happens Next
+
+Begin by explaining that this section identifies the next executable engineering
+work and why it is ready to begin.
+
+State:
+
+- the exact next executable pass or parent work;
+- why its technical prerequisites are satisfied;
+- any real prerequisite or blocker that still prevents it from starting.
+
+Keep this section about engineering readiness.
+
+Do not describe the internal workflow sequence.
+
+For example, prefer:
+
+> `[PASS-ID] is the next executable work because its required source,
+> decisions, and technical prerequisites are available.`
+
+instead of:
+
+> `[PASS-ID] can now proceed to Gate A.`
+
+Exact workflow actions belong in `Internal Record`.
+
+Do not include:
+
+- preliminary requirement catalogs;
+- test matrices;
+- evidence matrices;
+- artifact catalogs;
+- detailed implementation design;
+- repeated stop conditions already defined elsewhere.
+
+The reader should finish this section knowing:
+
+```text
+What engineering work happens next, and is anything actually preventing it?
+```
+
+---
+
+# 6. Internal Record
+
+This section contains the production-readiness bookkeeping required to preserve
+the intake decision and route the workflow correctly.
+
+Unlike sections 1 through 5, exact framework terminology is allowed here.
+
+Keep bookkeeping here rather than leaking it into the engineering narrative.
+
+Include only metadata the workflow actually needs, such as:
+
+- parent ID;
+- intake outcome;
+- accepted baseline;
+- intake path;
+- authority references;
+- execution-register state;
+- approved prerequisite or decision references;
+- child IDs and order;
+- proposed canonical plan path;
+- proposed requirement artifact location;
+- proposed test or verification location;
+- blockers;
+- exact next workflow action.
+
+Use a table when exact values are easier to review:
+
+| Detail | Value |
 |---|---|
-| Pass ID | `[PASS-ID]` |
-| Title | `[Plain-English title]` |
-| Parent pass | `[PASS-ID]` |
-| Primary controls | `[Controls]` |
-| Supporting controls / decisions | `[Controls or decisions]` |
-| Dependencies | `[Accepted prerequisites]` |
-| Expected pass type | `[Domain / API / Provider / Frontend / CI / Operations / other]` |
+| Parent pass | `[PASS-ID - title]` |
+| Intake outcome | `[execute parent / split / blocked on prerequisite / blocked on owner-authority decision]` |
+| Accepted baseline | `[Accepted baseline SHA or equivalent]` |
+| Intake path | `docs/production-readiness/planning/passes/<family>/<parent-id>-intake.md` |
+| Authority sources | `[Relevant authoritative sources]` |
+| Execution-register state | `[Current accepted state relevant to the parent]` |
+| Approved decisions and prerequisites | `[Relevant decisions and completed prerequisites / None]` |
+| Child order | `[PASS-A -> PASS-B -> PASS-C / Not applicable]` |
+| Proposed canonical plan path | `[Path for next executable work / Not applicable]` |
+| Proposed requirement declaration | `[Path / Not applicable]` |
+| Proposed trusted test or verification location | `[Path / Not applicable]` |
+| Blockers | `[Actual blockers / None]` |
+| Exact next allowed action | `[Exact workflow action]` |
 
-Explain why this proposed pass is a coherent implementation and review unit.
+Do not duplicate the engineering explanation from sections 1 through 5 here.
 
-## 11. Preliminary Requirement Shape
+This section records the decision; it does not redesign it.
 
-List draft requirement areas. Final requirement IDs and wording belong in Gate
-A, but intake should identify the material obligation groups.
+---
 
-| Requirement area | Source | Expected evidence class |
-|---|---|---|
-| `[Area]` | `[Control/decision/source]` | `[pytest/provider/runtime/governance/manual/deferred]` |
+# Final Author Check
 
-Do not invent final requirements during intake merely to fill the table.
+This section is for the intake author.
 
-## 12. Evidence And Testing Expectations
+Do not copy it into the completed intake.
 
-Classify expected proof layers.
+Before reporting the intake ready, reread the entire document.
 
-| Evidence class | Needed? | Reason |
-|---|---|---|
-| Backend pytest | `[yes/no/tbd]` | `[Reason]` |
-| Frontend unit/component | `[yes/no/tbd]` | `[Reason]` |
-| Browser / Playwright | `[yes/no/tbd]` | `[Reason]` |
-| PostgreSQL / concurrency | `[yes/no/tbd]` | `[Reason]` |
-| Migration rehearsal | `[yes/no/tbd]` | `[Reason]` |
-| Provider evidence | `[yes/no/tbd]` | `[Reason]` |
-| Runtime/staging evidence | `[yes/no/tbd]` | `[Reason]` |
-| Governance/manual review | `[yes/no/tbd]` | `[Reason]` |
+## Reader Understanding
 
-Gate A must refine this into requirement-by-requirement evidence design.
+Verify that:
 
-## 13. Expected Artifacts
+- sections 1 through 5 are understandable without prior chat history;
+- sections 1 through 5 are understandable without production-readiness
+  framework knowledge;
+- every reader-facing section explains what information it contains;
+- every reader-facing section explains why that information matters;
+- tables are introduced before the reader encounters them;
+- the reader never has to infer why a section or table exists;
+- internal workflow terminology is confined to `Internal Record` unless
+  technically unavoidable.
 
-Describe likely artifacts without authorizing file edits.
+## Execution Decision
 
-| Artifact type | Expected? | Candidate owner/path |
-|---|---|---|
-| Canonical pass plan | `[yes/no]` | `[path]` |
-| Requirement declaration | `[yes/no]` | `[path]` |
-| `TESTING_RECORD.md` | `[yes/no]` | `[path]` |
-| Source/configuration | `[yes/no]` | `[area]` |
-| Documentation/governance | `[yes/no]` | `[area]` |
-| Provider/runtime evidence | `[yes/no]` | `[external owner/evidence package]` |
-| Execution-register update | `yes for every substantive first-time executable pass` | `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` |
+Verify that:
 
-The execution register is a mandatory cross-cutting program artifact for
-substantive first-time passes. Its presence does not mean the parent pass
-improperly owns the program register. Gate A must include its exact path in Gate
-B scope, Gate B prepares only the pass-specific accepted-state update, Gate C
-reviews it, and Gate D never authors it.
+- the intake clearly answers what executable engineering work should happen;
+- the chosen outcome is one of the four allowed outcomes;
+- the technical reason for the decision is explicit;
+- a split exists only for genuine engineering reasons;
+- dependency order is technically justified.
 
-Unexpected artifacts outside the parent outcome require scope resolution before
-Gate A. Explicitly mandated cross-cutting artifacts such as the execution
-register, requirement metadata, testing records, and approved compatibility
-evidence do not create a scope violation when the workflow requires them. Do not
-weaken this stop rule for genuinely unrelated artifacts.
+## Child Quality
 
-## 14. Non-Goals And Boundaries
+For every child, verify that:
 
-List explicit non-goals.
+- it represents executable engineering or genuinely independent verification;
+- it is not merely another planning layer;
+- it is not merely preparatory documentation;
+- it leaves behind a coherent independently acceptable result;
+- work that must be correct together has not been split artificially.
 
-- `[Boundary]`
-- `[External evidence not claimed]`
-- `[Later pass or owner]`
+## Parent Coverage
 
-Include provider/runtime/migration/governance boundaries where they matter.
+Verify that:
 
-## 15. Dependencies And Readiness
+- every major parent responsibility has a destination;
+- no parent responsibility disappeared during the split;
+- implementation ownership does not accidentally overlap;
+- intentional shared dependencies are clearly explained;
+- blocked work is not represented as complete;
+- allocation remains at parent-scope level rather than becoming implementation
+  design.
 
-| Dependency | Required state | Current state | Intake verdict |
-|---|---|---|---|
-| `[PASS/decision/provider/source]` | `[Needed]` | `[Current]` | `[ready/blocked/unknown]` |
+## Relevance
 
-If any dependency is blocked or unknown in a way that prevents honest Gate A
-design, stop.
+Verify that every fact in sections 1 through 5 materially helps the reader
+understand:
 
-## 16. Stop Conditions For Gate A
+- the execution decision;
+- the child boundaries;
+- the dependency order;
+- the parent allocation;
+- the readiness or blocker for the next work.
 
-List concrete conditions that should stop Gate A or route the work back to
-intake/owner decision.
+Remove information that does not affect one of those things.
 
-- `[Condition]`
-- `[Condition]`
+## Engineering Discipline
 
-## 17. Human Approval And Intake Outcome
+Verify that:
 
-State one outcome:
+- unknown facts were not guessed;
+- absent source behavior was not automatically converted into a separate child;
+- detailed implementation design was not performed during intake;
+- another planning-only child was not created;
+- framework mechanics did not replace engineering reasoning.
 
-- `READY FOR GATE A: [proposed executable pass]`
-- `DECOMPOSITION REQUIRED BEFORE GATE A`
-- `BLOCKED: PREREQUISITE REQUIRED`
-- `BLOCKED: OWNER DECISION REQUIRED`
-- `REGISTER CORRECTION REQUIRED`
+## Safety And Sensitive Information
 
-Include the exact next allowed action.
+Verify that the intake contains no:
 
-Before reporting any intake for approval, confirm that the completed intake
-contains no literal credentials, credential-bearing URLs, secrets, private keys
-or tokens, private provider values, personal or payment data, raw sensitive
-logs, local/session-only information, or other prohibited sensitive values.
+- credentials;
+- credential-bearing URLs;
+- secrets;
+- private keys or tokens;
+- prohibited private provider values;
+- personal or payment data;
+- raw sensitive logs;
+- local machine paths;
+- session-only state;
+- internal chat material;
+- other sensitive information that should not be committed.
 
-When the outcome is ready for Gate A, report:
-
-- final intake-record path;
-- intake-record SHA-256;
-- exact approved parent/child structure;
-- exact next executable child authorized for Gate A.
-
-Compute the SHA-256 after completing the intake record and before human
-approval. Human approval applies to the exact reported path and SHA. Do not
-embed the SHA as mutable status inside the intake document; the SHA belongs in
-Stage 0 reports and approved instructions.
-
-Human intake approval authorizes:
-
-- child structure;
-- ordering;
-- obligation allocation;
-- the next executable child's Gate A.
-
-It does not authorize implementation, Gate B, or later-child Gate A work.
-
-After human approval of the exact path and SHA, the approved intake record is
-frozen. It is read-only during Gate A and Gate B, and a content change produces
-a new SHA and requires a Stage 0 revision plus new human approval. When a new
-intake record is created, it belongs in the first substantive child pass's
-expected final changed-file set but is not a Gate B-editable file. If the parent
-is implemented whole, the same rule applies to the approved intake record. Later
-children consume the accepted intake record from current `develop` and do not
-edit it unless the parent structure itself requires a Stage 0 revision.
+After approval, freeze the intake according to the production-readiness
+workflow.

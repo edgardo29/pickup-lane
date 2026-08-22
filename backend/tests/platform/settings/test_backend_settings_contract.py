@@ -45,6 +45,8 @@ def _settings_env(app_env: str | None = "production", **overrides: str | None) -
         "CORS_ALLOWED_ORIGINS": "https://app.example.invalid",
         "ENABLE_API_DOCS": "false",
         "ENABLE_DB_HEALTH": "false",
+        "DB_POOL_SIZE": "5",
+        "DB_MAX_OVERFLOW": "2",
         "FIREBASE_ADMIN_CREDENTIALS_JSON": _FIREBASE_ADMIN_JSON,
         "FIREBASE_PROJECT_ID": "pickup-lane-synthetic",
         "FIREBASE_APP_CHECK_MODE": "disabled",

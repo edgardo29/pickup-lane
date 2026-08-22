@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.database import Base
+from backend.database_metadata import Base
 
 
 # This table stores venue records that can be reviewed, approved, and reused

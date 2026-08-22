@@ -15,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.database import Base
+from backend.database_metadata import Base
 
 
 # Game images store Browse card images and Game Details gallery images.

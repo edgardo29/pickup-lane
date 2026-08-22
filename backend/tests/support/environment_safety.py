@@ -147,7 +147,7 @@ def registered_sqlalchemy_table_names(
     # Import every model module before reading metadata so unexported model
     # files cannot silently avoid cleanup-inventory validation.
     import_model_modules(model_package, excluded_files=excluded_model_files)
-    from backend.database import Base
+    from backend.database_metadata import Base
 
     return set(Base.metadata.tables)
 

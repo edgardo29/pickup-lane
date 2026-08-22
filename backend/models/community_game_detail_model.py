@@ -14,7 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.database import Base
+from backend.database_metadata import Base
 
 
 # Community game details store the per-game host payment snapshot that players

@@ -5,7 +5,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Tex
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.database import Base
+from backend.database_metadata import Base
 
 
 class AdminReviewSignal(Base):

@@ -1,25 +1,33 @@
 from typing import Generator
 
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
-from backend.settings import get_database_timeout_settings, get_database_url
+from backend.database_metadata import Base
+from backend.settings import (
+    get_database_pool_settings,
+    get_database_timeout_settings,
+    get_database_url,
+)
 
 DATABASE_URL = get_database_url()
 DATABASE_TIMEOUT_SETTINGS = get_database_timeout_settings()
+DATABASE_POOL_SETTINGS = get_database_pool_settings()
 
 
-# Base is the shared declarative parent for all SQLAlchemy models in the app.
-class Base(DeclarativeBase):
-    pass
+def _database_engine_kwargs() -> dict[str, object]:
+    kwargs: dict[str, object] = {
+        "pool_timeout": DATABASE_TIMEOUT_SETTINGS.pool_wait_timeout_seconds,
+    }
+    if DATABASE_POOL_SETTINGS.pool_size is not None:
+        kwargs["pool_size"] = DATABASE_POOL_SETTINGS.pool_size
+    if DATABASE_POOL_SETTINGS.max_overflow is not None:
+        kwargs["max_overflow"] = DATABASE_POOL_SETTINGS.max_overflow
+    return kwargs
 
 
-# The shared engine is used by the app and by migration tooling to connect to
-# the same PostgreSQL database.
-engine = create_engine(
-    DATABASE_URL,
-    pool_timeout=DATABASE_TIMEOUT_SETTINGS.pool_wait_timeout_seconds,
-)
+# The shared engine is used by normal application traffic only.
+engine = create_engine(DATABASE_URL, **_database_engine_kwargs())
 
 
 @event.listens_for(engine, "checkout")

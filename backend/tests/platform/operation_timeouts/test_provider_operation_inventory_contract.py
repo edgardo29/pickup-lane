@@ -157,6 +157,6 @@ def test_database_timeout_owner_files_are_current_inventory_members() -> None:
     assert "DB_POOL_WAIT_TIMEOUT_SECONDS" in settings_source
     assert "DB_STATEMENT_TIMEOUT_MILLISECONDS" in settings_source
     assert "DB_LOCK_TIMEOUT_MILLISECONDS" in settings_source
-    assert "pool_timeout=DATABASE_TIMEOUT_SETTINGS.pool_wait_timeout_seconds" in database_source
+    assert '"pool_timeout": DATABASE_TIMEOUT_SETTINGS.pool_wait_timeout_seconds' in database_source
     assert "SET statement_timeout" in database_source
     assert "SET lock_timeout" in database_source
