@@ -5,7 +5,7 @@ from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, t
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.database import Base
+from backend.database_metadata import Base
 
 
 # This table stores per-user app preferences that extend the core users table

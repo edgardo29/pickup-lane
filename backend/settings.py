@@ -56,6 +56,9 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
     {
         "APP_ENV",
         "DATABASE_URL",
+        "MIGRATION_DATABASE_URL",
+        "DB_POOL_SIZE",
+        "DB_MAX_OVERFLOW",
         "INBOX_TOKEN_SECRET",
         "FIREBASE_ADMIN_CREDENTIALS_JSON",
         "FIREBASE_ADMIN_CREDENTIALS",
@@ -126,6 +129,7 @@ DOCUMENTED_PLACEHOLDER_VALUES = frozenset(
     {
         "replace-with-independent-secret",
         "replace-with-postgresql-url",
+        "replace-with-migration-postgresql-url",
         "replace-with-api-hosts",
         "replace-with-firebase-admin-json",
         "replace-with-firebase-project-id",
@@ -183,6 +187,12 @@ class DatabaseTimeoutSettings:
     lock_timeout_milliseconds: int
 
 
+@dataclass(frozen=True)
+class DatabasePoolSettings:
+    pool_size: int | None
+    max_overflow: int | None
+
+
 class BackendSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -236,6 +246,8 @@ class BackendSettings(BaseModel):
     db_pool_wait_timeout_seconds: int = DEFAULT_DB_POOL_WAIT_TIMEOUT_SECONDS
     db_statement_timeout_milliseconds: int = DEFAULT_DB_STATEMENT_TIMEOUT_MILLISECONDS
     db_lock_timeout_milliseconds: int = DEFAULT_DB_LOCK_TIMEOUT_MILLISECONDS
+    db_pool_size: int | None = None
+    db_max_overflow: int | None = None
 
     @property
     def is_production_like(self) -> bool:
@@ -322,10 +334,37 @@ def _cached_database_timeout_settings() -> DatabaseTimeoutSettings:
     )
 
 
+def get_database_pool_settings() -> DatabasePoolSettings:
+    return _cached_database_pool_settings()
+
+
+@lru_cache(maxsize=1)
+def _cached_database_pool_settings() -> DatabasePoolSettings:
+    settings = build_settings(load_dotenv_file=True, validate_full=False)
+    return DatabasePoolSettings(
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+    )
+
+
+def get_migration_database_url() -> str:
+    return _cached_migration_database_url()
+
+
+@lru_cache(maxsize=1)
+def _cached_migration_database_url() -> str:
+    env, loaded_dotenv = _environment_mapping(None, load_dotenv_file=True)
+    app_env = _parse_app_env(env)
+    _validate_runtime_environment_source(env, loaded_dotenv, app_env)
+    return _parse_migration_database_url(env, app_env)
+
+
 def reset_settings_cache() -> None:
     _cached_settings.cache_clear()
     _cached_database_url.cache_clear()
     _cached_database_timeout_settings.cache_clear()
+    _cached_database_pool_settings.cache_clear()
+    _cached_migration_database_url.cache_clear()
 
 
 def get_inbox_token_secret(settings: BackendSettings | None = None) -> str:
@@ -345,10 +384,7 @@ def build_settings(
     env, loaded_dotenv = _environment_mapping(environ, load_dotenv_file=load_dotenv_file)
     app_env = _parse_app_env(env)
 
-    if loaded_dotenv and app_env.is_production_like:
-        _fail("APP_ENV", "production-like environments must be supplied by deployed environment injection")
-    if _has_deployment_marker(env) and not app_env.is_production_like:
-        _fail("APP_ENV", "deployed runtimes must set preview, staging, or production explicitly")
+    _validate_runtime_environment_source(env, loaded_dotenv, app_env)
 
     database_url = _parse_database_url(env, app_env)
     release_identity = _parse_release_identity(env)
@@ -380,6 +416,7 @@ def build_settings(
         default=DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES,
     )
     timeout_values = _parse_timeout_settings(env)
+    database_pool_values = _parse_database_pool_settings(env, app_env)
 
     if app_env is AppEnvironment.PRODUCTION and enable_api_docs:
         _fail("ENABLE_API_DOCS", "must be disabled in production")
@@ -413,6 +450,7 @@ def build_settings(
         platform_notice_request_body_limit_bytes=platform_notice_request_body_limit_bytes,
         stripe_webhook_request_body_limit_bytes=stripe_webhook_request_body_limit_bytes,
         **timeout_values,
+        **database_pool_values,
         **stripe_values,
         **firebase_values,
         **app_check_values,
@@ -461,6 +499,17 @@ def _parse_app_env(env: Mapping[str, str]) -> AppEnvironment:
         _fail("APP_ENV", "must be one of ci, local, preview, production, staging, or test")
 
 
+def _validate_runtime_environment_source(
+    env: Mapping[str, str],
+    loaded_dotenv: bool,
+    app_env: AppEnvironment,
+) -> None:
+    if loaded_dotenv and app_env.is_production_like:
+        _fail("APP_ENV", "production-like environments must be supplied by deployed environment injection")
+    if _has_deployment_marker(env) and not app_env.is_production_like:
+        _fail("APP_ENV", "deployed runtimes must set preview, staging, or production explicitly")
+
+
 def _parse_optional_ci(env: Mapping[str, str]) -> bool:
     raw_value = env.get("CI")
     if raw_value is None:
@@ -468,42 +517,74 @@ def _parse_optional_ci(env: Mapping[str, str]) -> bool:
     return raw_value.strip().lower() not in FALSE_ENV_VALUES
 
 
-def _parse_database_url(env: Mapping[str, str], app_env: AppEnvironment) -> str:
-    database_url = _required_text(env, "DATABASE_URL")
+def _parse_database_url(
+    env: Mapping[str, str],
+    app_env: AppEnvironment,
+    *,
+    name: str = "DATABASE_URL",
+) -> str:
+    database_url = _required_text(env, name)
+    return _parse_database_url_value(name, database_url, app_env)
+
+
+def _parse_database_url_value(
+    name: str,
+    database_url: str,
+    app_env: AppEnvironment,
+) -> str:
     if _is_documented_placeholder(database_url):
-        _fail("DATABASE_URL", "must not use a documented placeholder value")
+        _fail(name, "must not use a documented placeholder value")
 
     try:
         parsed = make_url(database_url)
     except ArgumentError:
-        _fail("DATABASE_URL", "must be a valid SQLAlchemy database URL")
+        _fail(name, "must be a valid SQLAlchemy database URL")
 
     driver = parsed.drivername.lower()
     if driver not in {"postgresql", "postgresql+psycopg", "postgresql+psycopg2"}:
-        _fail("DATABASE_URL", "must use a PostgreSQL SQLAlchemy driver")
+        _fail(name, "must use a PostgreSQL SQLAlchemy driver")
     if not parsed.database:
-        _fail("DATABASE_URL", "must include a database name")
+        _fail(name, "must include a database name")
     if not parsed.host:
-        _fail("DATABASE_URL", "must include a host")
+        _fail(name, "must include a host")
 
     database_name = str(parsed.database)
     if app_env in {AppEnvironment.TEST, AppEnvironment.CI}:
         if database_name != DEDICATED_TEST_DATABASE_NAME:
-            _fail("DATABASE_URL", f"must use database {DEDICATED_TEST_DATABASE_NAME} in test and ci")
+            _fail(name, f"must use database {DEDICATED_TEST_DATABASE_NAME} in test and ci")
     elif app_env.is_production_like:
         if _is_local_host(parsed.host):
-            _fail("DATABASE_URL", "must not use localhost in production-like environments")
+            _fail(name, "must not use localhost in production-like environments")
         lowered_name = database_name.lower()
         if any(
             part in lowered_name for part in _UNSAFE_PRODUCTION_LIKE_DB_NAME_PARTS
         ):
-            _fail("DATABASE_URL", "must not use a development, local, or test database name")
+            _fail(name, "must not use a development, local, or test database name")
         if app_env is AppEnvironment.PRODUCTION and any(
             part in lowered_name for part in _UNSAFE_PRODUCTION_DB_NAME_PARTS
         ):
-            _fail("DATABASE_URL", "must not use a staging or preview database name")
+            _fail(name, "must not use a staging or preview database name")
 
     return database_url
+
+
+def _parse_migration_database_url(
+    env: Mapping[str, str],
+    app_env: AppEnvironment,
+) -> str:
+    migration_database_url = _optional_text(env, "MIGRATION_DATABASE_URL")
+    if migration_database_url is None:
+        if app_env.is_production_like:
+            _fail(
+                "MIGRATION_DATABASE_URL",
+                "is required for migrations in production-like environments",
+            )
+        return _parse_database_url(env, app_env)
+    return _parse_database_url_value(
+        "MIGRATION_DATABASE_URL",
+        migration_database_url,
+        app_env,
+    )
 
 
 def _parse_release_identity(env: Mapping[str, str]) -> str:
@@ -888,6 +969,35 @@ def _parse_timeout_settings(env: Mapping[str, str]) -> dict[str, int]:
     }
 
 
+def _parse_database_pool_settings(
+    env: Mapping[str, str],
+    app_env: AppEnvironment,
+) -> dict[str, int | None]:
+    raw_pool_size = _optional_text(env, "DB_POOL_SIZE")
+    raw_max_overflow = _optional_text(env, "DB_MAX_OVERFLOW")
+
+    if raw_pool_size is None and raw_max_overflow is None:
+        if app_env.is_production_like:
+            _fail(
+                "DB_POOL_SIZE",
+                "and DB_MAX_OVERFLOW are required in production-like environments",
+            )
+        return {"db_pool_size": None, "db_max_overflow": None}
+
+    if raw_pool_size is None:
+        _fail("DB_POOL_SIZE", "is required when DB_MAX_OVERFLOW is set")
+    if raw_max_overflow is None:
+        _fail("DB_MAX_OVERFLOW", "is required when DB_POOL_SIZE is set")
+
+    return {
+        "db_pool_size": _parse_positive_int_value("DB_POOL_SIZE", raw_pool_size),
+        "db_max_overflow": _parse_non_negative_int_value(
+            "DB_MAX_OVERFLOW",
+            raw_max_overflow,
+        ),
+    }
+
+
 def _parse_inbox_token_secret(
     env: Mapping[str, str],
     app_env: AppEnvironment,
@@ -956,12 +1066,26 @@ def _parse_positive_int(env: Mapping[str, str], name: str, *, default: int) -> i
     raw_value = _optional_text(env, name)
     if raw_value is None:
         return default
+    return _parse_positive_int_value(name, raw_value)
+
+
+def _parse_positive_int_value(name: str, raw_value: str) -> int:
     try:
         parsed_value = int(raw_value)
     except ValueError:
         _fail(name, "must be an integer")
     if parsed_value <= 0:
         _fail(name, "must be greater than zero")
+    return parsed_value
+
+
+def _parse_non_negative_int_value(name: str, raw_value: str) -> int:
+    try:
+        parsed_value = int(raw_value)
+    except ValueError:
+        _fail(name, "must be an integer")
+    if parsed_value < 0:
+        _fail(name, "must be greater than or equal to zero")
     return parsed_value
 
 

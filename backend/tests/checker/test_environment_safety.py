@@ -78,7 +78,7 @@ def _fake_allowed_network():
 
 
 def _remove_registered_table(table_name: str) -> None:
-    from backend.database import Base
+    from backend.database_metadata import Base
 
     table = Base.metadata.tables.get(table_name)
     if table is not None:
@@ -103,7 +103,7 @@ def _write_temp_model_package(
     (package_dir / "__init__.py").write_text("# temporary model package\n")
     (package_dir / f"{module_name}.py").write_text(
         "from sqlalchemy import Column, Integer\n"
-        "from backend.database import Base\n\n"
+        "from backend.database_metadata import Base\n\n"
         "class TemporaryUnimportedModel(Base):\n"
         f"    __tablename__ = {table_name!r}\n"
         "    id = Column(Integer, primary_key=True)\n"

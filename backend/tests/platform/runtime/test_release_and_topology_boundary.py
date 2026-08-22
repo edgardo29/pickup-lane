@@ -51,8 +51,6 @@ _POOL_BUDGET_ENV_NAMES = frozenset(
     {
         "DATABASE_MAX_OVERFLOW",
         "DATABASE_POOL_SIZE",
-        "DB_MAX_OVERFLOW",
-        "DB_POOL_SIZE",
         "SQLALCHEMY_MAX_OVERFLOW",
         "SQLALCHEMY_POOL_SIZE",
     }
@@ -359,7 +357,6 @@ def _python_source_findings(relative_path: str, source: str) -> dict[str, list[s
         "pool_budget_values": [],
     }
     tree = ast.parse(source)
-    direct_create_engine_names, sqlalchemy_module_names = _imported_create_engine_aliases(tree)
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             call_name = _call_name(node.func)
@@ -371,16 +368,6 @@ def _python_source_findings(relative_path: str, source: str) -> dict[str, list[s
             if terminal_name == "run" and call_name.split(".")[0] in {"uvicorn", "gunicorn"}:
                 if any(keyword.arg == "workers" for keyword in node.keywords):
                     findings["topology_values"].append(f"{relative_path}:workers keyword")
-            if _is_create_engine_call(
-                node,
-                direct_names=direct_create_engine_names,
-                module_names=sqlalchemy_module_names,
-            ):
-                for keyword in node.keywords:
-                    if keyword.arg in {"pool_size", "max_overflow"}:
-                        findings["pool_budget_values"].append(
-                            f"{relative_path}:create_engine.{keyword.arg}"
-                        )
     findings["pool_budget_values"].extend(
         f"{relative_path}:{name}"
         for name in sorted(_POOL_BUDGET_ENV_NAMES)
@@ -688,7 +675,7 @@ def test_runtime_classifier_detects_worker_scheduler_and_runtime_env_config() ->
 
 
 @pytest.mark.requirement("WS02-02-R8")
-def test_pool_budget_detector_recognizes_create_engine_aliases_and_settings() -> None:
+def test_pool_budget_detector_ignores_application_pool_settings() -> None:
     sources = {
         "backend/database.py": textwrap.dedent(
             """
@@ -705,10 +692,7 @@ def test_pool_budget_detector_recognizes_create_engine_aliases_and_settings() ->
     findings = _runtime_topology_findings_from_sources(sources)
 
     assert findings["pool_budget_values"] == [
-        "backend/database.py:create_engine.max_overflow",
-        "backend/database.py:create_engine.pool_size",
         "backend/settings.py:DATABASE_MAX_OVERFLOW",
-        "backend/settings.py:DB_POOL_SIZE",
     ]
 
 

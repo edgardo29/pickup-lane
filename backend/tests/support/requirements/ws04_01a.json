@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS04-01A-R1",
+      "owning_pass": "WS04-01A",
+      "source_controls": [
+        "DB-001",
+        "DB-002",
+        "DB-015",
+        "FDN-04",
+        "WS02-01"
+      ],
+      "state": "required",
+      "scope": "workflows/application_database_lifecycle_pool_settings_role_credential_boundaries",
+      "reason": "Application database URL, environment, pool-size, maximum-overflow, timeout, and safe-error parsing must remain explicit and safe."
+    },
+    {
+      "id": "WS04-01A-R2",
+      "owning_pass": "WS04-01A",
+      "source_controls": [
+        "DB-002",
+        "DB-015",
+        "WS02-02",
+        "WS02-04C1"
+      ],
+      "state": "required",
+      "scope": "workflows/application_database_lifecycle_pool_settings_role_credential_boundaries",
+      "reason": "The SQLAlchemy application engine must apply the configured per-process pool size, maximum overflow, and pool-wait timeout without claiming deployment-wide provider capacity."
+    },
+    {
+      "id": "WS04-01A-R3",
+      "owning_pass": "WS04-01A",
+      "source_controls": [
+        "DB-001",
+        "DB-003",
+        "WS02-04C1"
+      ],
+      "state": "required",
+      "scope": "workflows/application_database_lifecycle_pool_settings_role_credential_boundaries",
+      "reason": "Request database sessions must remain per use, close after success, roll back ordinary exceptions, and let cancellation propagate after cleanup."
+    },
+    {
+      "id": "WS04-01A-R4",
+      "owning_pass": "WS04-01A",
+      "source_controls": [
+        "DB-001",
+        "DB-003",
+        "WS02-02",
+        "WS02-04C1"
+      ],
+      "state": "required",
+      "scope": "workflows/application_database_lifecycle_pool_settings_role_credential_boundaries",
+      "reason": "Application import, health, shutdown, and checkout timeout behavior must remain predictable and must not expose database internals."
+    },
+    {
+      "id": "WS04-01A-R5",
+      "owning_pass": "WS04-01A",
+      "source_controls": [
+        "DB-001",
+        "DB-002",
+        "DB-015",
+        "GOV-006"
+      ],
+      "state": "required",
+      "scope": "workflows/application_database_lifecycle_pool_settings_role_credential_boundaries",
+      "reason": "Alembic must resolve migration database access separately from normal application runtime while keeping local/test/CI fallback behavior explicit."
+    },
+    {
+      "id": "WS04-01A-R6",
+      "owning_pass": "WS04-01A",
+      "source_controls": [
+        "DB-001",
+        "DB-003",
+        "GOV-006"
+      ],
+      "state": "required",
+      "scope": "workflows/application_database_lifecycle_pool_settings_role_credential_boundaries",
+      "reason": "Complete SQLAlchemy metadata must load from a side-effect-free path without constructing or reusing the application engine."
+    },
+    {
+      "id": "WS04-01A-R7",
+      "owning_pass": "WS04-01A",
+      "source_controls": [
+        "DB-001",
+        "DB-002",
+        "DB-015",
+        "GOV-006",
+        "WS02-01"
+      ],
+      "state": "required",
+      "scope": "workflows/application_database_lifecycle_pool_settings_role_credential_boundaries",
+      "reason": "Database URL, pool, timeout, and migration configuration must remain backend-only and must not introduce literal credentials or public exposure."
+    }
+  ]
+}

@@ -5,13 +5,15 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from backend.database import DATABASE_URL, Base
+from backend.database_metadata import Base
+from backend.settings import get_migration_database_url
 # Import models so their tables are registered on Base.metadata before Alembic
 # reads the metadata for migrations.
-from backend.models import User  # noqa: F401
+import backend.models  # noqa: F401
 
 config = context.config
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+MIGRATION_DATABASE_URL = get_migration_database_url()
+config.set_main_option("sqlalchemy.url", MIGRATION_DATABASE_URL)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -23,7 +25,7 @@ target_metadata = Base.metadata
 def run_migrations_offline() -> None:
     # Offline mode generates SQL without opening a live DB connection.
     context.configure(
-        url=DATABASE_URL,
+        url=MIGRATION_DATABASE_URL,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
