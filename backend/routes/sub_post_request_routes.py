@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -20,6 +20,10 @@ from backend.services.need_a_sub_request_service import (
     owner_decline_request,
     owner_report_no_show,
     requester_cancel_request,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/need-a-sub", tags=["need_a_sub_requests"])
@@ -46,10 +50,18 @@ def request_need_a_sub_spot(
 )
 def list_need_a_sub_post_requests(
     sub_post_id: uuid.UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> list[dict]:
-    return list_owner_sub_post_requests(db, sub_post_id, current_user)
+    return list_owner_sub_post_requests(
+        db,
+        sub_post_id,
+        current_user,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
@@ -58,10 +70,17 @@ def list_need_a_sub_post_requests(
     status_code=status.HTTP_200_OK,
 )
 def list_my_need_a_sub_requests(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> list[dict]:
-    return list_requester_sub_post_requests(db, current_user)
+    return list_requester_sub_post_requests(
+        db,
+        current_user,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.patch(

@@ -14,6 +14,12 @@ from backend.schemas.venue_approval_request_schema import (
     VenueApprovalRequestCreate,
     VenueApprovalRequestUpdate,
 )
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 VALID_REQUEST_STATUSES = {
     "pending_review",
@@ -256,6 +262,8 @@ def list_venue_approval_request_records(
     venue_id: uuid.UUID | None = None,
     reviewed_by_user_id: uuid.UUID | None = None,
     request_status: str | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[VenueApprovalRequest]:
     statement = select(VenueApprovalRequest)
 
@@ -281,7 +289,17 @@ def list_venue_approval_request_records(
         statement = statement.where(VenueApprovalRequest.request_status == request_status)
 
     venue_approval_requests = db.scalars(
-        statement.order_by(VenueApprovalRequest.created_at.desc())
+        statement.order_by(
+            VenueApprovalRequest.created_at.desc(),
+            VenueApprovalRequest.id.desc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(venue_approval_requests)
 

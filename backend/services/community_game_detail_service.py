@@ -19,6 +19,12 @@ from backend.services.game_rules import (
 )
 from backend.services.game_service import user_can_view_hidden_game
 from backend.services.moderation_surfacing_service import surface_community_game_text
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 
 def build_community_game_detail_conflict_detail(exc: IntegrityError) -> str:
@@ -170,6 +176,8 @@ def list_public_community_game_details(
     *,
     game_id: uuid.UUID | None = None,
     current_user: User | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[CommunityGameDetailPublicRead]:
     statement = (
         select(CommunityGameDetail)
@@ -196,7 +204,12 @@ def list_public_community_game_details(
         statement = statement.where(Game.public_visibility_status == "visible")
 
     community_game_details = db.scalars(
-        statement.order_by(CommunityGameDetail.created_at.desc())
+        statement.order_by(
+            CommunityGameDetail.created_at.desc(),
+            CommunityGameDetail.id.desc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     ).all()
     return [
         serialize_public_community_game_detail(detail)

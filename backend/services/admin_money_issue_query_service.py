@@ -451,6 +451,14 @@ def list_admin_money_issues_page(
 ) -> AdminMoneyIssueListResponseRead:
     normalized_status = normalize_issue_status(issue_status)
     normalized_issue_type = normalize_issue_type(issue_type)
+    normalized_query = " ".join((query_text or "").strip().split())
+    cursor_context = {
+        "issue_status": normalized_status,
+        "issue_type": normalized_issue_type,
+        "kind": "admin_money_issues",
+        "query": normalized_query,
+        "user_id": str(user_id) if user_id is not None else None,
+    }
 
     statement = apply_money_issue_filters(
         select(MoneyIssue),
@@ -458,7 +466,7 @@ def list_admin_money_issues_page(
         issue_type=normalized_issue_type,
         user_id=user_id,
     )
-    statement = apply_money_issue_query_filter(db, statement, query_text)
+    statement = apply_money_issue_query_filter(db, statement, normalized_query)
 
     if normalized_status == "open":
         statement = apply_asc_cursor(
@@ -466,10 +474,14 @@ def list_admin_money_issues_page(
             MoneyIssue,
             MoneyIssue.first_detected_at,
             cursor,
+            context=cursor_context,
         )
         rows = list(
             db.scalars(
-                statement.order_by(MoneyIssue.first_detected_at.asc(), MoneyIssue.id.asc())
+                statement.order_by(
+                    MoneyIssue.first_detected_at.asc(),
+                    MoneyIssue.id.asc(),
+                )
                 .limit(limit + 1)
             ).all()
         )
@@ -480,6 +492,7 @@ def list_admin_money_issues_page(
                 rows,
                 limit=limit,
                 sort_attr="first_detected_at",
+                context=cursor_context,
             ),
         )
 
@@ -494,6 +507,7 @@ def list_admin_money_issues_page(
         MoneyIssue,
         sort_column,
         cursor,
+        context=cursor_context,
     )
     rows = list(
         db.scalars(
@@ -508,6 +522,7 @@ def list_admin_money_issues_page(
             rows,
             limit=limit,
             sort_attr=sort_attr,
+            context=cursor_context,
         ),
     )
 

@@ -18,6 +18,12 @@ from backend.services.booking_rules import (
     validate_booking_payment_status,
     validate_booking_status,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 
 def get_active_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
@@ -94,12 +100,20 @@ def get_booking_for_user_or_404(
     return db_booking
 
 
-def list_current_user_bookings(db: Session, current_user: User) -> list[Booking]:
+def list_current_user_bookings(
+    db: Session,
+    current_user: User,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
+) -> list[Booking]:
     return list(
         db.scalars(
             select(Booking)
             .where(Booking.buyer_user_id == current_user.id)
-            .order_by(Booking.created_at.desc())
+            .order_by(Booking.created_at.desc(), Booking.id.desc())
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 
@@ -112,6 +126,8 @@ def list_bookings(
     game_id: uuid.UUID | None = None,
     booking_status: str | None = None,
     payment_status: str | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[Booking]:
     statement = select(Booking)
     can_read_all_bookings = user_is_active_admin(current_user)
@@ -137,7 +153,11 @@ def list_bookings(
         validate_booking_payment_status(payment_status)
         statement = statement.where(Booking.payment_status == payment_status)
 
-    bookings = db.scalars(statement.order_by(Booking.created_at.desc())).all()
+    bookings = db.scalars(
+        statement.order_by(Booking.created_at.desc(), Booking.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
+    ).all()
     return list(bookings)
 
 

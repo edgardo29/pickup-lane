@@ -43,6 +43,12 @@ from backend.services.notification_event_service import (
     reopen_aggregated_notification,
     resolve_aggregated_notification,
 )
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +240,8 @@ def list_game_chat_records(
     *,
     game_id: uuid.UUID | None = None,
     chat_status: str | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[GameChat]:
     statement = select(GameChat)
 
@@ -248,7 +256,16 @@ def list_game_chat_records(
             )
         statement = statement.where(GameChat.chat_status == chat_status)
 
-    game_chats = db.scalars(statement.order_by(GameChat.created_at.desc())).all()
+    game_chats = db.scalars(
+        statement.order_by(GameChat.created_at.desc(), GameChat.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
+    ).all()
     return list(game_chats)
 
 

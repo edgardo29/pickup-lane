@@ -3,9 +3,9 @@
 import uuid
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from backend.models import SubPost, SubPostRequest, User
 from backend.services.need_a_sub_lifecycle_service import (
@@ -36,6 +36,12 @@ from backend.services.need_a_sub_rules import (
     require_before_post_start,
     require_live_sub_post,
     require_publicly_visible_sub_post,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
 )
 from backend.services.sub_post_chat_service import (
     resolve_sub_chat_notifications_for_user as resolve_sub_chat_notification_for_user,
@@ -108,8 +114,11 @@ def serialize_sub_post_request(
     db: Session,
     sub_request: SubPostRequest,
     include_waitlist_ahead: bool = False,
+    *,
+    requester: User | None = None,
+    waitlist_ahead_count: int | None = None,
 ) -> dict:
-    requester = db.get(User, sub_request.requester_user_id)
+    requester = requester if requester is not None else db.get(User, sub_request.requester_user_id)
     requester_display_name, requester_initials = build_requester_display(requester)
 
     return {
@@ -127,17 +136,108 @@ def serialize_sub_post_request(
         "expired_at": sub_request.expired_at,
         "no_show_reported_at": sub_request.no_show_reported_at,
         "waitlist_ahead_count": (
-            count_waitlist_ahead(db, sub_request) if include_waitlist_ahead else None
+            waitlist_ahead_count
+            if waitlist_ahead_count is not None
+            else count_waitlist_ahead(db, sub_request)
+            if include_waitlist_ahead
+            else None
         ),
         "created_at": sub_request.created_at,
         "updated_at": sub_request.updated_at,
     }
 
 
+def load_requester_users(
+    db: Session,
+    requests: list[SubPostRequest],
+) -> dict[uuid.UUID, User]:
+    requester_ids = {sub_request.requester_user_id for sub_request in requests}
+    if not requester_ids:
+        return {}
+
+    return dict(db.execute(select(User.id, User).where(User.id.in_(requester_ids))).all())
+
+
+def load_waitlist_ahead_counts(
+    db: Session,
+    requests: list[SubPostRequest],
+) -> dict[uuid.UUID, int]:
+    waitlist_page_ids = {
+        sub_request.id
+        for sub_request in requests
+        if sub_request.request_status == "sub_waitlist"
+    }
+    position_ids = {
+        sub_request.sub_post_position_id
+        for sub_request in requests
+        if sub_request.id in waitlist_page_ids
+    }
+    if not waitlist_page_ids or not position_ids:
+        return {}
+
+    page_request = aliased(SubPostRequest)
+    earlier_request = aliased(SubPostRequest)
+    rows = db.execute(
+        select(
+            page_request.id,
+            func.count(earlier_request.id),
+        )
+        .select_from(page_request)
+        .outerjoin(
+            earlier_request,
+            and_(
+                earlier_request.sub_post_position_id
+                == page_request.sub_post_position_id,
+                earlier_request.request_status == "sub_waitlist",
+                or_(
+                    earlier_request.created_at < page_request.created_at,
+                    and_(
+                        earlier_request.created_at == page_request.created_at,
+                        earlier_request.id < page_request.id,
+                    ),
+                ),
+            ),
+        )
+        .where(
+            page_request.id.in_(waitlist_page_ids),
+            page_request.sub_post_position_id.in_(position_ids),
+            page_request.request_status == "sub_waitlist",
+        )
+        .group_by(page_request.id)
+    ).all()
+
+    return {request_id: int(waitlist_count) for request_id, waitlist_count in rows}
+
+
+def serialize_sub_post_request_page(
+    db: Session,
+    requests: list[SubPostRequest],
+    *,
+    include_waitlist_ahead: bool,
+) -> list[dict]:
+    requesters_by_id = load_requester_users(db, requests)
+    waitlist_ahead_counts = (
+        load_waitlist_ahead_counts(db, requests) if include_waitlist_ahead else {}
+    )
+    return [
+        serialize_sub_post_request(
+            db,
+            sub_request,
+            include_waitlist_ahead=include_waitlist_ahead,
+            requester=requesters_by_id.get(sub_request.requester_user_id),
+            waitlist_ahead_count=waitlist_ahead_counts.get(sub_request.id),
+        )
+        for sub_request in requests
+    ]
+
+
 def list_owner_sub_post_requests(
     db: Session,
     sub_post_id: uuid.UUID,
     owner: User,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[dict]:
     expire_due_posts_and_requests(db)
     sub_post = get_sub_post_or_404(db, sub_post_id)
@@ -147,31 +247,40 @@ def list_owner_sub_post_requests(
         db.scalars(
             select(SubPostRequest)
             .where(SubPostRequest.sub_post_id == sub_post_id)
-            .order_by(SubPostRequest.created_at.asc())
+            .order_by(SubPostRequest.created_at.asc(), SubPostRequest.id.asc())
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
-    return [
-        serialize_sub_post_request(db, sub_request, include_waitlist_ahead=True)
-        for sub_request in requests
-    ]
+    return serialize_sub_post_request_page(
+        db,
+        requests,
+        include_waitlist_ahead=True,
+    )
 
 
 def list_requester_sub_post_requests(
     db: Session,
     requester: User,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[dict]:
     expire_due_posts_and_requests(db)
     requests = list(
         db.scalars(
             select(SubPostRequest)
             .where(SubPostRequest.requester_user_id == requester.id)
-            .order_by(SubPostRequest.created_at.desc())
+            .order_by(SubPostRequest.created_at.desc(), SubPostRequest.id.desc())
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
-    return [
-        serialize_sub_post_request(db, sub_request, include_waitlist_ahead=True)
-        for sub_request in requests
-    ]
+    return serialize_sub_post_request_page(
+        db,
+        requests,
+        include_waitlist_ahead=True,
+    )
 
 
 def count_queued_slots(db: Session, sub_post_position_id: uuid.UUID) -> int:

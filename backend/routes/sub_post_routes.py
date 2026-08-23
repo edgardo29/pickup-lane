@@ -35,6 +35,10 @@ from backend.services.need_a_sub_post_service import (
     list_visible_sub_posts,
     update_sub_post_workflow,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+)
 from backend.services.sub_post_chat_service import (
     create_sub_post_chat_message_workflow,
     ensure_sub_post_chat_workflow,
@@ -67,6 +71,8 @@ def list_need_a_sub_posts(
     format_label: str | None = None,
     environment_type: str | None = None,
     sport_type: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     return list_visible_sub_posts(
@@ -80,6 +86,8 @@ def list_need_a_sub_posts(
         format_label=format_label,
         environment_type=environment_type,
         sport_type=sport_type,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -108,10 +116,12 @@ def list_need_a_sub_post_cards(
 
 @router.get("/mine", response_model=list[SubPostRead], status_code=status.HTTP_200_OK)
 def list_my_need_a_sub_posts(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> list[dict]:
-    return list_owner_sub_posts(db, current_user)
+    return list_owner_sub_posts(db, current_user, limit=limit, offset=offset)
 
 
 @router.post(
@@ -175,8 +185,8 @@ def mark_need_a_sub_chat_read(
 )
 def list_need_a_sub_chat_messages(
     sub_post_id: uuid.UUID,
-    before_created_at: datetime | None = None,
-    limit: int = 50,
+    before_created_at: datetime | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active_user),
 ) -> list[dict]:

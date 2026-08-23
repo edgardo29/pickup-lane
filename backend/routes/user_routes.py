@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -14,6 +14,10 @@ from backend.services.user_service import (
     reject_generic_user_mutation,
     update_current_user_profile,
 )
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -21,10 +25,16 @@ router = APIRouter(prefix="/users", tags=["users"])
 # This route returns all user profiles currently stored in the app database.
 @router.get("", response_model=list[AdminUserRead], status_code=status.HTTP_200_OK)
 def list_users(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[User]:
-    return list_user_profiles(db)
+    return list_user_profiles(db, limit=limit, offset=offset)
 
 
 # Generic user mutations are intentionally disabled. Account creation, profile

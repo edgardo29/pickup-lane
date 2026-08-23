@@ -14,10 +14,10 @@ scope.
 | Field | Value |
 |---|---|
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes. |
-| Current reconciliation point | Proposed accepted `develop` state after the substantive `WS04-01A` PR merges. |
-| Current accepted develop SHA at reconciliation | Merge SHA to be established by the substantive `WS04-01A` PR; accepted baseline before this pass was `08ce291e8322461ca8a32c4ce3cdc07ba97b4172`. |
+| Current reconciliation point | Proposed accepted `develop` state after the substantive `WS04-01B` PR merges. |
+| Current accepted develop SHA at reconciliation | Merge SHA to be established by the substantive `WS04-01B` PR; accepted baseline before this pass was `f7545db6d7451e8cee5ddd53f74c175a8126ebff`. |
 | Original blueprint register | 42 parent-level planned passes in `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md`. |
-| Accepted executable requirement declarations through this point | 30 files under `backend/tests/support/requirements/` once the substantive `WS04-01A` PR merges. |
+| Accepted executable requirement declarations through this point | 31 files under `backend/tests/support/requirements/` once the substantive `WS04-01B` PR merges. |
 | Next pass selected by this register? | No. The owner must explicitly select the next intake or pass. |
 
 The recorded accepted `develop` SHA is a historical reconciliation basis for
@@ -32,7 +32,7 @@ current-session source of truth. Current execution always comes from current
 | Original blueprint parent-level entries | 42 | Parent-level entries mirrored from the master blueprint. |
 | Accepted/completed parent-level entries | 14 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through `WS03-04`. |
 | Remaining parent-level entries | 28 | Parent-level entries not yet completed in this register; includes decomposed in-progress `WS04-01`. |
-| Accepted executable passes with requirement declarations | 30 | Current accepted executable declaration files under `backend/tests/support/requirements/` once the substantive `WS04-01A` PR merges. |
+| Accepted executable passes with requirement declarations | 31 | Current accepted executable declaration files under `backend/tests/support/requirements/` once the substantive `WS04-01B` PR merges. |
 | Remaining actual executable-pass count | Unknown | Future executable-unit count depends on owner selection and accepted decomposition. |
 
 Count magnitude is not completion proof or control-closure proof. Controls
@@ -72,7 +72,7 @@ navigation. It does not replace the master blueprint.
 | `WS03-03` | High-risk authentication and Firebase control verification | Decomposed into accepted executable child passes `WS03-03A` and `WS03-03B`. |
 | `WS03-04` | Complete authorization matrix and negative proof | Decomposed into accepted executable child passes `WS03-04A`, `WS03-04B`, `WS03-04C`, and `WS03-04D`; WS03-04 parent complete, with the Stripe webhook lifecycle gap explicitly covered elsewhere by `WS05`. |
 | `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | Not yet selected in this register. Requires intake before implementation. |
-| `WS04-01` | Database engine/session lifecycle, connection budget, and least-privilege roles | Decomposed by accepted Stage 0 intake into `WS04-01A`, `WS04-01B`, and `WS04-01C`; `WS04-01A` accepted after the substantive A PR merges; parent remains incomplete until B and C are accepted. |
+| `WS04-01` | Database engine/session lifecycle, connection budget, and least-privilege roles | Decomposed by accepted Stage 0 intake into `WS04-01A`, `WS04-01B`, and `WS04-01C`; `WS04-01A` is accepted and `WS04-01B` is accepted after the substantive B PR merges; parent remains incomplete until C is accepted. |
 | `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Not yet selected in this register. Requires intake before implementation. |
 | `WS04-03` | Migration policy, compatibility, interruption, and production-like rehearsal | Not yet selected in this register. Requires intake before implementation. |
 | `WS05-01` | Durable job model, claim/lease lifecycle, and worker deployment | Not yet selected in this register. Requires intake before implementation. |
@@ -139,13 +139,14 @@ Every path in the Plan column is relative to
 | `WS03-04C` | `WS03-04` | `passes/ws03/ws03-04c-game-community-roster-chat-need-a-sub-relationship-authorization.md` | `ws03_04c.json` | 12 | 11 | 0 | 1 | `workflows/game_community_roster_chat_need_a_sub_relationship_authorization` plus governance |
 | `WS03-04D` | `WS03-04` | `passes/ws03/ws03-04d-admin-route-list-high-risk-function-authorization.md` | `ws03_04d.json` | 12 | 12 | 0 | 0 | `workflows/admin_route_list_high_risk_function_authorization` plus governance |
 | `WS04-01A` | `WS04-01` | `passes/ws04/ws04-01a-application-database-lifecycle-pool-settings-role-credential-boundaries.md` | `ws04_01a.json` | 7 | 7 | 0 | 0 | `workflows/application_database_lifecycle_pool_settings_role_credential_boundaries` |
+| `WS04-01B` | `WS04-01` | `passes/ws04/ws04-01b-query-cursor-database-access-behavior.md` | `ws04_01b.json` | 7 | 7 | 0 | 0 | `workflows/query_cursor_database_access_behavior` |
 
 ## 6. Accepted Stage 0 Intake Records
 
 | Parent pass | Intake record | SHA-256 | Accepted by executable pass | Accepted state |
 |---|---|---|---|---|
 | `WS03-04` | `docs/production-readiness/planning/passes/ws03/ws03-04-intake.md` | `e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4` | `WS03-04A` | Accepted in `develop` through `WS03-04A`; reused by the remaining `WS03-04` children. |
-| `WS04-01` | `docs/production-readiness/planning/passes/ws04/ws04-01-intake.md` | `39a43297ccabb2019987780e232aab384cb2f1e15b2d805daaa2da6a9ae2e2de` | `WS04-01A` | Accepted once the substantive `WS04-01A` PR merges; reused by `WS04-01B` and `WS04-01C`. |
+| `WS04-01` | `docs/production-readiness/planning/passes/ws04/ws04-01-intake.md` | `39a43297ccabb2019987780e232aab384cb2f1e15b2d805daaa2da6a9ae2e2de` | `WS04-01A` | Accepted through `WS04-01A`; reused by `WS04-01B` and `WS04-01C`. |
 
 Historical WS02-04, WS02-05, and WS03-03 decompositions remain accepted. Do
 not fabricate retroactive intake records for them.
@@ -293,17 +294,17 @@ budget, provider limits, pooler/proxy mode, deployed process/instance facts,
 rolling overlap, migration/monitoring allowance, reserve, and concrete
 production database role and grant verification.
 
-After the substantive `WS04-01A` PR merges, WS04-01 remains incomplete. The
-accepted A evidence is a prerequisite for final production database verification
-but does not close the parent connection-budget or least-privilege-role
-obligations by itself.
+After the substantive `WS04-01B` PR merges, WS04-01 remains incomplete. The
+accepted A and B evidence is a prerequisite for final production database
+verification but does not close the parent connection-budget or
+least-privilege-role obligations by itself.
 
 ## 8. Remaining Parent Passes
 
 Every parent pass marked "not yet selected" requires explicit owner direction
 and Stage 0 intake before Gate A according to blueprint dependencies.
 
-This register does not decide whether the next work should be `WS04-01B`,
+This register does not decide whether the next work should be `WS04-01C`,
 another parent intake, a correction, or a documentation task. The exact
 remaining executable-unit count is intentionally unknown.
 
@@ -332,10 +333,12 @@ Update this register when:
 Register updates normally travel with the substantive pass PR that makes the
 new state true.
 
-Every substantive first-time executable pass must include this register in the
-exact Gate B editable file set because merge changes accepted execution state.
-Program/documentation maintenance and historical rechecks remain outside this
-automatic first-time-pass rule unless their explicit scope says otherwise.
+Every substantive first-time executable pass must update this register when
+the pass merge changes accepted execution state. That register update is
+justified by the frozen pass scope and reviewed as part of the actual
+changed-file set. Program/documentation maintenance and historical rechecks
+remain outside this automatic first-time-pass rule unless their explicit scope
+says otherwise.
 
 For a first child PR, include the frozen intake/decomposition reference,
 accepted first-child state, remaining child state, and incomplete parent state

@@ -14,6 +14,12 @@ from backend.schemas.booking_policy_acceptance_schema import (
     BookingPolicyAcceptanceCreate,
     BookingPolicyAcceptanceUpdate,
 )
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 
 def build_booking_policy_acceptance_conflict_detail(exc: IntegrityError) -> str:
@@ -166,6 +172,8 @@ def list_booking_policy_acceptance_records(
     *,
     booking_id: uuid.UUID | None = None,
     policy_document_id: uuid.UUID | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[BookingPolicyAcceptance]:
     statement = select(BookingPolicyAcceptance)
 
@@ -178,7 +186,17 @@ def list_booking_policy_acceptance_records(
         )
 
     booking_policy_acceptances = db.scalars(
-        statement.order_by(BookingPolicyAcceptance.accepted_at.desc())
+        statement.order_by(
+            BookingPolicyAcceptance.accepted_at.desc(),
+            BookingPolicyAcceptance.id.desc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(booking_policy_acceptances)
 

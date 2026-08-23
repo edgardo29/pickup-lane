@@ -10,7 +10,6 @@ from backend.observability.http_contracts import route_is_tombstone
 from backend.observability.pagination_contracts import (
     PAGINATION_CONTRACTS,
     PAGINATION_HANDOFFS,
-    PaginationHandoff,
     pagination_contract_keys,
     pagination_handoff_keys,
 )
@@ -93,6 +92,7 @@ def _is_inventory_relevant_collection_route(
 
 
 @pytest.mark.requirement("WS02-05A-R7")
+@pytest.mark.requirement("WS04-01B-R1")
 def test_pagination_contract_and_handoff_counts_are_current_live_and_disjoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -101,16 +101,17 @@ def test_pagination_contract_and_handoff_counts_are_current_live_and_disjoint(
     contract_keys = pagination_contract_keys()
     handoff_keys = pagination_handoff_keys()
 
-    assert len(PAGINATION_CONTRACTS) == 34
-    assert len(PAGINATION_HANDOFFS) == 43
-    assert len(contract_keys) == 34
-    assert len(handoff_keys) == 43
+    assert len(PAGINATION_CONTRACTS) == 77
+    assert len(PAGINATION_HANDOFFS) == 0
+    assert len(contract_keys) == 77
+    assert len(handoff_keys) == 0
     assert contract_keys.isdisjoint(handoff_keys)
     assert contract_keys <= live_keys
     assert handoff_keys <= live_keys
 
 
 @pytest.mark.requirement("WS02-05A-R7")
+@pytest.mark.requirement("WS04-01B-R1")
 def test_every_relevant_current_collection_route_is_accounted_for(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -128,22 +129,8 @@ def test_every_relevant_current_collection_route_is_accounted_for(
 
 
 @pytest.mark.requirement("WS02-05A-R7")
-def test_unresolved_pagination_handoffs_use_api_owner_without_new_limits() -> None:
-    assert {handoff.recommended_owner for handoff in PAGINATION_HANDOFFS} == {
-        "API owner"
-    }
-    assert all(isinstance(handoff, PaginationHandoff) for handoff in PAGINATION_HANDOFFS)
-    assert all(handoff.concern for handoff in PAGINATION_HANDOFFS)
-    assert all(not hasattr(handoff, "limit_default") for handoff in PAGINATION_HANDOFFS)
-    assert all(not hasattr(handoff, "limit_max") for handoff in PAGINATION_HANDOFFS)
-
-    source = (_REPO_ROOT / "backend/observability/pagination_contracts.py").read_text()
-    assert '"API owner"' in source
-    assert '"WS02-05B"' not in source
-
-
-@pytest.mark.requirement("WS02-05A-R7")
-def test_approved_contract_entries_keep_only_preexisting_numeric_metadata() -> None:
+@pytest.mark.requirement("WS04-01B-R1")
+def test_approved_contract_entries_cover_current_collection_routes() -> None:
     assert all(contract.method == "GET" for contract in PAGINATION_CONTRACTS)
     assert all(contract.style for contract in PAGINATION_CONTRACTS)
     assert all(
@@ -154,3 +141,7 @@ def test_approved_contract_entries_keep_only_preexisting_numeric_metadata() -> N
     assert any(contract.limit_default is None for contract in PAGINATION_CONTRACTS)
     assert any(contract.limit_max is None for contract in PAGINATION_CONTRACTS)
     assert pagination_contract_keys().isdisjoint(pagination_handoff_keys())
+
+    source = (_REPO_ROOT / "backend/observability/pagination_contracts.py").read_text()
+    assert '"API owner"' not in source
+    assert '"WS02-05B"' not in source

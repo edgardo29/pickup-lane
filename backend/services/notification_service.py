@@ -26,7 +26,10 @@ from backend.models import (
 from backend.schemas.notification_schema import NotificationCreate, NotificationUpdate
 from backend.services.admin_action_service import record_admin_action
 from backend.services.auth_service import require_active_admin_user, user_is_active_admin
-from backend.services.notification_display_service import serialize_notification
+from backend.services.notification_display_service import (
+    serialize_notification,
+    serialize_notifications_for_list,
+)
 from backend.services.notification_event_service import (
     ensure_aware_utc,
     source_type_for_game,
@@ -43,6 +46,12 @@ from backend.services.notification_policy import (
     VALID_NOTIFICATION_TYPES,
     VALID_SOURCE_TYPES,
     notification_source_domain_matches,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
 )
 
 
@@ -780,6 +789,8 @@ def query_notifications(
     related_sub_post_chat_message_id: uuid.UUID | None = None,
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[Notification]:
     statement = select(Notification).where(Notification.user_id == user_id)
 
@@ -871,7 +882,11 @@ def query_notifications(
             Notification.related_sub_post_position_id == related_sub_post_position_id
         )
 
-    notifications = db.scalars(statement.order_by(Notification.event_at.desc())).all()
+    notifications = db.scalars(
+        statement.order_by(Notification.event_at.desc(), Notification.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
+    ).all()
     return list(notifications)
 
 
@@ -942,6 +957,8 @@ def list_user_notifications_workflow(
     related_sub_post_chat_message_id: uuid.UUID | None = None,
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[dict[str, object]]:
     notifications = query_notifications(
         db,
@@ -962,11 +979,10 @@ def list_user_notifications_workflow(
         related_sub_post_chat_message_id=related_sub_post_chat_message_id,
         related_sub_post_request_id=related_sub_post_request_id,
         related_sub_post_position_id=related_sub_post_position_id,
+        limit=limit,
+        offset=offset,
     )
-    return [
-        serialize_notification(db, notification)
-        for notification in notifications
-    ]
+    return serialize_notifications_for_list(db, notifications)
 
 
 def list_notifications_workflow(
@@ -990,6 +1006,8 @@ def list_notifications_workflow(
     related_sub_post_chat_message_id: uuid.UUID | None = None,
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[dict[str, object]]:
     require_active_admin_user(current_user)
     effective_user_id = current_user.id
@@ -1015,6 +1033,8 @@ def list_notifications_workflow(
         related_sub_post_chat_message_id=related_sub_post_chat_message_id,
         related_sub_post_request_id=related_sub_post_request_id,
         related_sub_post_position_id=related_sub_post_position_id,
+        limit=limit,
+        offset=offset,
     )
 
 

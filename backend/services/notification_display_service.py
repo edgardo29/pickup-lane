@@ -1,6 +1,8 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from backend.models import Game, Notification, SubPost, SubPostRequest
@@ -17,6 +19,7 @@ from backend.services.notification_policy import (
 )
 
 SUB_CHAT_MESSAGE_ACTION_GRACE_HOURS = 24
+_MISSING = object()
 
 
 def ensure_aware_utc(value: datetime) -> datetime:
@@ -89,6 +92,8 @@ def build_sub_chat_message_action(
     db: Session,
     notification: Notification,
     sub_post: SubPost,
+    *,
+    has_chat_access: bool | None = None,
 ) -> dict[str, object] | None:
     action_key = notification.action_key
     if action_key != "view_sub_post":
@@ -118,7 +123,10 @@ def build_sub_chat_message_action(
             "This Need a Sub chat is closed.",
         )
 
-    if not user_has_current_sub_chat_access(db, notification, sub_post):
+    if has_chat_access is None:
+        has_chat_access = user_has_current_sub_chat_access(db, notification, sub_post)
+
+    if not has_chat_access:
         return build_disabled_action_payload(
             action_key,
             "You no longer have access to this chat.",
@@ -133,6 +141,10 @@ def build_sub_chat_message_action(
 def build_notification_action(
     db: Session,
     notification: Notification,
+    *,
+    related_game: Game | None | object = _MISSING,
+    related_sub_post: SubPost | None | object = _MISSING,
+    sub_chat_access: bool | None = None,
 ) -> dict[str, object] | None:
     action_key = notification.action_key
 
@@ -143,7 +155,11 @@ def build_notification_action(
         if notification.related_game_id is None:
             return None
 
-        game = db.get(Game, notification.related_game_id)
+        game = (
+            db.get(Game, notification.related_game_id)
+            if related_game is _MISSING
+            else related_game
+        )
         if (
             game is None
             or game.deleted_at is not None
@@ -158,12 +174,21 @@ def build_notification_action(
         if notification.related_sub_post_id is None:
             return None
 
-        sub_post = db.get(SubPost, notification.related_sub_post_id)
+        sub_post = (
+            db.get(SubPost, notification.related_sub_post_id)
+            if related_sub_post is _MISSING
+            else related_sub_post
+        )
         if sub_post is None:
             return None
 
         if notification.notification_type == "sub_chat_message":
-            return build_sub_chat_message_action(db, notification, sub_post)
+            return build_sub_chat_message_action(
+                db,
+                notification,
+                sub_post,
+                has_chat_access=sub_chat_access,
+            )
 
         starts_at = ensure_aware_utc(sub_post.starts_at)
         if (
@@ -235,6 +260,10 @@ def policy_path_for_notification(notification: Notification) -> str:
 def serialize_notification(
     db: Session,
     notification: Notification,
+    *,
+    related_game: Game | None | object = _MISSING,
+    related_sub_post: SubPost | None | object = _MISSING,
+    sub_chat_access: bool | None = None,
 ) -> dict[str, object]:
     return {
         "id": notification.id,
@@ -253,7 +282,13 @@ def serialize_notification(
         "summary": notification.summary,
         "body": notification.body,
         "action_key": notification.action_key,
-        "action": build_notification_action(db, notification),
+        "action": build_notification_action(
+            db,
+            notification,
+            related_game=related_game,
+            related_sub_post=related_sub_post,
+            sub_chat_access=sub_chat_access,
+        ),
         "icon": ICON_BY_NOTIFICATION_TYPE.get(notification.notification_type, "Bell"),
         "severity": SEVERITY_BY_NOTIFICATION_TYPE.get(
             notification.notification_type,
@@ -282,3 +317,134 @@ def serialize_notification(
         "created_at": notification.created_at,
         "updated_at": notification.updated_at,
     }
+
+
+def load_notification_games(
+    db: Session,
+    notifications: list[Notification],
+) -> dict[uuid.UUID, Game]:
+    game_ids = {
+        notification.related_game_id
+        for notification in notifications
+        if notification.action_key == "view_game"
+        and notification.related_game_id is not None
+    }
+    if not game_ids:
+        return {}
+
+    return dict(db.execute(select(Game.id, Game).where(Game.id.in_(game_ids))).all())
+
+
+def load_notification_sub_posts(
+    db: Session,
+    notifications: list[Notification],
+) -> dict[uuid.UUID, SubPost]:
+    sub_post_ids = {
+        notification.related_sub_post_id
+        for notification in notifications
+        if notification.action_key == "view_sub_post"
+        and notification.related_sub_post_id is not None
+    }
+    if not sub_post_ids:
+        return {}
+
+    return dict(
+        db.execute(select(SubPost.id, SubPost).where(SubPost.id.in_(sub_post_ids))).all()
+    )
+
+
+def load_sub_chat_access_by_notification_id(
+    db: Session,
+    notifications: list[Notification],
+    sub_posts_by_id: dict[uuid.UUID, SubPost],
+) -> dict[uuid.UUID, bool]:
+    access_by_notification_id: dict[uuid.UUID, bool] = {}
+    requester_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
+
+    for notification in notifications:
+        if (
+            notification.action_key != "view_sub_post"
+            or notification.notification_type != "sub_chat_message"
+            or notification.related_sub_post_id is None
+        ):
+            continue
+
+        sub_post = sub_posts_by_id.get(notification.related_sub_post_id)
+        if sub_post is None:
+            access_by_notification_id[notification.id] = False
+            continue
+
+        if notification.user_id == sub_post.owner_user_id:
+            access_by_notification_id[notification.id] = True
+            continue
+
+        requester_pairs.add((sub_post.id, notification.user_id))
+
+    if requester_pairs:
+        conditions = [
+            and_(
+                SubPostRequest.sub_post_id == sub_post_id,
+                SubPostRequest.requester_user_id == user_id,
+            )
+            for sub_post_id, user_id in requester_pairs
+        ]
+        confirmed_pairs = set(
+            db.execute(
+                select(
+                    SubPostRequest.sub_post_id,
+                    SubPostRequest.requester_user_id,
+                ).where(
+                    SubPostRequest.request_status == "confirmed",
+                    or_(*conditions),
+                )
+            ).all()
+        )
+    else:
+        confirmed_pairs = set()
+
+    for notification in notifications:
+        if notification.id in access_by_notification_id:
+            continue
+        if (
+            notification.action_key == "view_sub_post"
+            and notification.notification_type == "sub_chat_message"
+            and notification.related_sub_post_id is not None
+        ):
+            access_by_notification_id[notification.id] = (
+                notification.related_sub_post_id,
+                notification.user_id,
+            ) in confirmed_pairs
+
+    return access_by_notification_id
+
+
+def serialize_notifications_for_list(
+    db: Session,
+    notifications: list[Notification],
+) -> list[dict[str, object]]:
+    games_by_id = load_notification_games(db, notifications)
+    sub_posts_by_id = load_notification_sub_posts(db, notifications)
+    sub_chat_access_by_notification_id = load_sub_chat_access_by_notification_id(
+        db,
+        notifications,
+        sub_posts_by_id,
+    )
+
+    return [
+        serialize_notification(
+            db,
+            notification,
+            related_game=(
+                games_by_id.get(notification.related_game_id)
+                if notification.related_game_id is not None
+                else None
+            ),
+            related_sub_post=(
+                sub_posts_by_id.get(notification.related_sub_post_id)
+                if notification.related_sub_post_id is not None
+                else None
+            ),
+            sub_chat_access=sub_chat_access_by_notification_id.get(notification.id),
+        )
+        for notification in notifications
+    ]

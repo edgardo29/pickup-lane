@@ -14,6 +14,12 @@ from backend.schemas.policy_acceptance_schema import (
     PolicyAcceptanceCreate,
     PolicyAcceptanceUpdate,
 )
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 
 def build_policy_acceptance_conflict_detail(exc: IntegrityError) -> str:
@@ -163,6 +169,8 @@ def list_policy_acceptance_records(
     *,
     user_id: uuid.UUID | None = None,
     policy_document_id: uuid.UUID | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[PolicyAcceptance]:
     statement = select(PolicyAcceptance)
 
@@ -175,7 +183,14 @@ def list_policy_acceptance_records(
         )
 
     policy_acceptances = db.scalars(
-        statement.order_by(PolicyAcceptance.accepted_at.desc())
+        statement.order_by(PolicyAcceptance.accepted_at.desc(), PolicyAcceptance.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(policy_acceptances)
 

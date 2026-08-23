@@ -12,6 +12,12 @@ from sqlalchemy.orm import Session
 from backend.models import Payment, PaymentEvent
 from backend.schemas.payment_event_schema import PaymentEventCreate, PaymentEventUpdate
 from backend.services.payment_rules import VALID_PROVIDERS
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 VALID_PROCESSING_STATUSES = {
     "pending",
@@ -199,6 +205,8 @@ def list_payment_event_records(
     provider_event_id: str | None = None,
     event_type: str | None = None,
     processing_status: str | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[PaymentEvent]:
     statement = select(PaymentEvent)
 
@@ -223,7 +231,14 @@ def list_payment_event_records(
         statement = statement.where(PaymentEvent.processing_status == processing_status)
 
     payment_events = db.scalars(
-        statement.order_by(PaymentEvent.created_at.desc())
+        statement.order_by(PaymentEvent.created_at.desc(), PaymentEvent.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(payment_events)
 

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -22,6 +22,10 @@ from backend.services.game_chat_service import (
     list_game_chat_records,
     mark_game_chat_read_workflow,
     ensure_game_chat_for_game_workflow,
+)
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/game-chats", tags=["game_chats"])
@@ -106,6 +110,12 @@ def mark_game_chat_read(
 def list_game_chats(
     game_id: uuid.UUID | None = None,
     chat_status: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     current_staff: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> list[GameChat]:
@@ -114,6 +124,8 @@ def list_game_chats(
         db,
         game_id=game_id,
         chat_status=chat_status,
+        limit=limit,
+        offset=offset,
     )
 
 

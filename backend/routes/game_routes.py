@@ -37,6 +37,10 @@ from backend.services.game_roster_service import (
     leave_game_roster_workflow,
     remove_game_guests_workflow,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+)
 from backend.schemas import (
     GameCancelCreate,
     GameBookingGuestAddCreate,
@@ -159,9 +163,11 @@ def cancel_game(
     status_code=status.HTTP_200_OK,
 )
 def list_game_participant_counts(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
 ) -> list[dict[str, object]]:
-    return list_public_game_participant_counts(db)
+    return list_public_game_participant_counts(db, limit=limit, offset=offset)
 
 
 @router.get(
@@ -191,10 +197,18 @@ def list_browse_games(
 def list_game_roster_participants(
     game_id: uuid.UUID,
     response: Response,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_current_app_user),
 ) -> list[GameParticipant]:
-    participants = list_public_game_participants(db, game_id, current_user)
+    participants = list_public_game_participants(
+        db,
+        game_id,
+        current_user,
+        limit=limit,
+        offset=offset,
+    )
     game = db.get(Game, game_id)
     if game is not None and game.public_visibility_status == "hidden":
         response.headers["Cache-Control"] = "private, no-store"
@@ -217,8 +231,15 @@ def get_game(
 
 # This route returns game records currently stored in the app database.
 @router.get("", response_model=list[GameDetailRead], status_code=status.HTTP_200_OK)
-def list_games(db: Session = Depends(get_db)) -> list[GameDetailRead]:
-    return [build_game_detail_read(game) for game in list_games_workflow(db)]
+def list_games(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
+    db: Session = Depends(get_db),
+) -> list[GameDetailRead]:
+    return [
+        build_game_detail_read(game)
+        for game in list_games_workflow(db, limit=limit, offset=offset)
+    ]
 
 
 # This route applies partial updates to an existing game record.

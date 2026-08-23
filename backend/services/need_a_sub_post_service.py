@@ -70,6 +70,12 @@ from backend.services.need_a_sub_rules import (
     require_before_post_start,
     sub_post_is_publicly_visible,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 from backend.services.sub_post_chat_service import (
     close_sub_post_chat_for_post,
     resolve_sub_chat_notifications_for_post,
@@ -425,7 +431,11 @@ def list_positions(db: Session, sub_post_id: uuid.UUID) -> list[SubPostPosition]
         db.scalars(
             select(SubPostPosition)
             .where(SubPostPosition.sub_post_id == sub_post_id)
-            .order_by(SubPostPosition.sort_order.asc(), SubPostPosition.created_at.asc())
+            .order_by(
+                SubPostPosition.sort_order.asc(),
+                SubPostPosition.created_at.asc(),
+                SubPostPosition.id.asc(),
+            )
         ).all()
     )
 
@@ -818,6 +828,8 @@ def query_visible_posts(
     format_label: str | None = None,
     environment_type: str | None = None,
     sport_type: str | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[SubPost]:
     statement = select(SubPost).where(
         SubPost.post_status.in_(ACTIVE_VISIBLE_POST_STATUSES),
@@ -844,10 +856,26 @@ def query_visible_posts(
     if sport_type:
         statement = statement.where(SubPost.sport_type == sport_type)
 
-    return list(db.scalars(statement.order_by(SubPost.starts_at.asc())).all())
+    return list(
+        db.scalars(
+            statement.order_by(
+                SubPost.starts_at.asc(),
+                SubPost.created_at.asc(),
+                SubPost.id.asc(),
+            )
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
+        ).all()
+    )
 
 
-def query_owner_posts(db: Session, owner: User) -> list[SubPost]:
+def query_owner_posts(
+    db: Session,
+    owner: User,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
+) -> list[SubPost]:
     current_time = now_utc()
 
     return list(
@@ -858,7 +886,13 @@ def query_owner_posts(db: Session, owner: User) -> list[SubPost]:
                 SubPost.post_status.in_(ACTIVE_VISIBLE_POST_STATUSES),
                 SubPost.starts_at >= current_time,
             )
-            .order_by(SubPost.starts_at.desc(), SubPost.created_at.desc())
+            .order_by(
+                SubPost.starts_at.desc(),
+                SubPost.created_at.desc(),
+                SubPost.id.desc(),
+            )
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 
@@ -1099,7 +1133,7 @@ def load_my_need_a_sub_user_requests(
                 SubPostRequest.sub_post_id.in_(post_ids),
                 SubPostRequest.requester_user_id == current_user.id,
             )
-            .order_by(SubPostRequest.created_at.desc())
+            .order_by(SubPostRequest.created_at.desc(), SubPostRequest.id.desc())
         ).all()
     )
     requests.sort(key=get_my_need_a_sub_request_priority)
@@ -1387,12 +1421,12 @@ def parse_sub_post_card_cursor_uuid(cursor_payload: dict[str, object]) -> uuid.U
         ) from exc
 
 
-def serialize_public_sub_posts_for_list(
+def _load_sub_post_list_related_data(
     db: Session,
     posts: list[SubPost],
-) -> list[dict]:
+) -> tuple[dict[uuid.UUID, dict[str, int]], dict[uuid.UUID, list[dict]]]:
     if not posts:
-        return []
+        return {}, {}
 
     post_ids = [post.id for post in posts]
     request_counts_by_post: dict[uuid.UUID, dict[str, int]] = {}
@@ -1458,6 +1492,18 @@ def serialize_public_sub_posts_for_list(
             }
         )
 
+    return request_counts_by_post, positions_by_post
+
+
+def serialize_public_sub_posts_for_list(
+    db: Session,
+    posts: list[SubPost],
+) -> list[dict]:
+    request_counts_by_post, positions_by_post = _load_sub_post_list_related_data(
+        db,
+        posts,
+    )
+
     serialized_posts = []
     for post in posts:
         counts = request_counts_by_post.get(post.id, {})
@@ -1499,6 +1545,70 @@ def serialize_public_sub_posts_for_list(
     return serialized_posts
 
 
+def serialize_sub_posts_for_list(
+    db: Session,
+    posts: list[SubPost],
+) -> list[dict]:
+    request_counts_by_post, positions_by_post = _load_sub_post_list_related_data(
+        db,
+        posts,
+    )
+
+    serialized_posts = []
+    for post in posts:
+        counts = request_counts_by_post.get(post.id, {})
+        serialized_posts.append(
+            {
+                **{
+                    field: getattr(post, field)
+                    for field in (
+                        "id",
+                        "owner_user_id",
+                        "post_status",
+                        "public_visibility_status",
+                        "sport_type",
+                        "format_label",
+                        "environment_type",
+                        "skill_level",
+                        "game_player_group",
+                        "team_name",
+                        "starts_at",
+                        "ends_at",
+                        "timezone",
+                        "location_name",
+                        "address_line_1",
+                        "city",
+                        "state",
+                        "postal_code",
+                        "country_code",
+                        "neighborhood",
+                        "subs_needed",
+                        "price_due_at_venue_cents",
+                        "currency",
+                        "payment_note",
+                        "notes",
+                        "expires_at",
+                        "filled_at",
+                        "canceled_at",
+                        "canceled_by_user_id",
+                        "cancel_reason",
+                        "removed_at",
+                        "removed_by_user_id",
+                        "remove_reason",
+                        "created_at",
+                        "updated_at",
+                    )
+                },
+                "positions": positions_by_post.get(post.id, []),
+                "pending_count": counts.get("pending", 0),
+                "confirmed_count": counts.get("confirmed", 0),
+                "sub_waitlist_count": counts.get("sub_waitlist", 0),
+            }
+        )
+
+    return serialized_posts
+
+
 def create_sub_post_workflow(
     db: Session,
     owner: User,
@@ -1519,6 +1629,8 @@ def list_visible_sub_posts(
     format_label: str | None = None,
     environment_type: str | None = None,
     sport_type: str | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[dict]:
     expire_due_posts_and_requests(db)
     posts = query_visible_posts(
@@ -1532,14 +1644,22 @@ def list_visible_sub_posts(
         format_label=format_label,
         environment_type=environment_type,
         sport_type=sport_type,
+        limit=limit,
+        offset=offset,
     )
-    return [serialize_public_sub_post(db, post) for post in posts]
+    return serialize_public_sub_posts_for_list(db, posts)
 
 
-def list_owner_sub_posts(db: Session, owner: User) -> list[dict]:
+def list_owner_sub_posts(
+    db: Session,
+    owner: User,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
+) -> list[dict]:
     expire_due_posts_and_requests(db)
-    posts = query_owner_posts(db, owner)
-    return [serialize_sub_post(db, post) for post in posts]
+    posts = query_owner_posts(db, owner, limit=limit, offset=offset)
+    return serialize_sub_posts_for_list(db, posts)
 
 
 def get_visible_sub_post_detail(
@@ -1980,7 +2100,13 @@ def remove_sub_post_workflow(
     )
 
 
-def list_public_sub_post_positions(db: Session, sub_post_id: uuid.UUID) -> list[dict]:
+def list_public_sub_post_positions(
+    db: Session,
+    sub_post_id: uuid.UUID,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
+) -> list[dict]:
     expire_due_posts_and_requests(db)
     sub_post = get_sub_post_or_404(db, sub_post_id)
 
@@ -1997,5 +2123,8 @@ def list_public_sub_post_positions(db: Session, sub_post_id: uuid.UUID) -> list[
 
     return [
         serialize_sub_post_position(db, position)
-        for position in list_positions(db, sub_post_id)
+        for position in list_positions(db, sub_post_id)[
+            bounded_collection_offset(offset) : bounded_collection_offset(offset)
+            + bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT)
+        ]
     ]

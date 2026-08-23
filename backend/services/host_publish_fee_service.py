@@ -13,6 +13,14 @@ from backend.schemas.host_publish_fee_schema import (
     HostPublishFeeCreate,
     HostPublishFeeUpdate,
 )
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 VALID_FEE_STATUSES = {"pending", "paid", "waived", "failed", "refunded"}
 VALID_WAIVER_REASONS = {"none", "first_game_free", "admin_comp"}
@@ -243,11 +251,15 @@ def list_current_host_publish_fee_records(
     db: Session,
     *,
     current_user: User,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[HostPublishFee]:
     host_publish_fees = db.scalars(
         select(HostPublishFee)
         .where(HostPublishFee.host_user_id == current_user.id)
-        .order_by(HostPublishFee.created_at.desc())
+        .order_by(HostPublishFee.created_at.desc(), HostPublishFee.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     ).all()
     return list(host_publish_fees)
 
@@ -265,6 +277,8 @@ def list_host_publish_fee_records(
     game_id: uuid.UUID | None = None,
     host_user_id: uuid.UUID | None = None,
     fee_status: str | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[HostPublishFee]:
     statement = select(HostPublishFee)
 
@@ -283,7 +297,14 @@ def list_host_publish_fee_records(
         statement = statement.where(HostPublishFee.fee_status == fee_status)
 
     host_publish_fees = db.scalars(
-        statement.order_by(HostPublishFee.created_at.desc())
+        statement.order_by(HostPublishFee.created_at.desc(), HostPublishFee.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(host_publish_fees)
 

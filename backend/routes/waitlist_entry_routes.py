@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -15,6 +15,12 @@ from backend.services.waitlist_entry_service import (
     get_waitlist_entry_for_user_or_404,
     list_current_user_waitlist_entries,
     list_waitlist_entries as list_waitlist_entries_workflow,
+)
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/waitlist-entries", tags=["waitlist_entries"])
@@ -41,10 +47,17 @@ def create_waitlist_entry(
     status_code=status.HTTP_200_OK,
 )
 def list_my_waitlist_entries(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> list[WaitlistEntry]:
-    return list_current_user_waitlist_entries(db, current_user)
+    return list_current_user_waitlist_entries(
+        db,
+        current_user,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # Fetches a single waitlist entry visible to the current user or roster admins.
@@ -67,6 +80,12 @@ def list_waitlist_entries(
     game_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
     waitlist_status: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
 ) -> list[WaitlistEntry]:
@@ -75,6 +94,8 @@ def list_waitlist_entries(
         game_id=game_id,
         user_id=user_id,
         waitlist_status=waitlist_status,
+        limit=limit,
+        offset=offset,
     )
 
 

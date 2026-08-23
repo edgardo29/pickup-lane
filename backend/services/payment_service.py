@@ -21,6 +21,12 @@ from backend.services.payment_rules import (
     VALID_PAYMENT_TYPES,
     VALID_PROVIDERS,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 
 def build_payment_conflict_detail(exc: IntegrityError) -> str:
@@ -339,6 +345,8 @@ def list_payments(
     game_id: uuid.UUID | None = None,
     payment_type: str | None = None,
     payment_status: str | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[Payment]:
     can_read_all_money = user_is_active_admin(current_user)
     statement = select(Payment)
@@ -367,7 +375,11 @@ def list_payments(
         validate_payment_status(payment_status)
         statement = statement.where(Payment.payment_status == payment_status)
 
-    payments = db.scalars(statement.order_by(Payment.created_at.desc())).all()
+    payments = db.scalars(
+        statement.order_by(Payment.created_at.desc(), Payment.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
+    ).all()
     return list(payments)
 
 

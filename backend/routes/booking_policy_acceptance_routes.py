@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -13,6 +13,10 @@ from backend.services.auth_service import require_active_admin
 from backend.services.booking_policy_acceptance_service import (
     get_booking_policy_acceptance_record,
     list_booking_policy_acceptance_records,
+)
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
 )
 
 router = APIRouter(
@@ -60,6 +64,12 @@ def get_booking_policy_acceptance(
 def list_booking_policy_acceptances(
     booking_id: uuid.UUID | None = None,
     policy_document_id: uuid.UUID | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[BookingPolicyAcceptance]:
@@ -68,6 +78,8 @@ def list_booking_policy_acceptances(
         db,
         booking_id=booking_id,
         policy_document_id=policy_document_id,
+        limit=limit,
+        offset=offset,
     )
 
 

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -16,6 +16,12 @@ from backend.services.game_participant_service import (
     list_game_participants as list_game_participants_workflow,
 )
 from backend.services.game_service import list_current_user_game_participants
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+)
 
 router = APIRouter(prefix="/game-participants", tags=["game_participants"])
 
@@ -44,10 +50,17 @@ def create_game_participant(
     status_code=status.HTTP_200_OK,
 )
 def list_my_game_participants(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> list[GameParticipant]:
-    return list_current_user_game_participants(db, current_user)
+    return list_current_user_game_participants(
+        db,
+        current_user,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # Fetches a single participant visible to the current user or roster admins.
@@ -72,6 +85,12 @@ def list_game_participants(
     user_id: uuid.UUID | None = None,
     participant_status: str | None = None,
     attendance_status: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
 ) -> list[GameParticipant]:
@@ -82,6 +101,8 @@ def list_game_participants(
         user_id=user_id,
         participant_status=participant_status,
         attendance_status=attendance_status,
+        limit=limit,
+        offset=offset,
     )
 
 

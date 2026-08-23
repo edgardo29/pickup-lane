@@ -21,6 +21,14 @@ from backend.services.waitlist_rules import (
     validate_waitlist_entry_business_rules,
     validate_waitlist_status,
 )
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 
 def get_active_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
@@ -120,6 +128,9 @@ def create_waitlist_entry_workflow(
 def list_current_user_waitlist_entries(
     db: Session,
     current_user: User,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[WaitlistEntry]:
     return list(
         db.scalars(
@@ -128,7 +139,10 @@ def list_current_user_waitlist_entries(
             .order_by(
                 WaitlistEntry.created_at.desc(),
                 WaitlistEntry.joined_at.desc(),
+                WaitlistEntry.id.desc(),
             )
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 
@@ -158,6 +172,8 @@ def list_waitlist_entries(
     game_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
     waitlist_status: str | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[WaitlistEntry]:
     statement = select(WaitlistEntry)
 
@@ -175,6 +191,15 @@ def list_waitlist_entries(
         statement.order_by(
             WaitlistEntry.position.asc(),
             WaitlistEntry.joined_at.asc(),
+            WaitlistEntry.created_at.asc(),
+            WaitlistEntry.id.asc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
         )
     ).all()
     return list(waitlist_entries)

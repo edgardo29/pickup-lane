@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -13,6 +13,10 @@ from backend.services.auth_service import require_active_admin
 from backend.services.policy_document_service import (
     get_public_policy_document_record,
     list_public_policy_document_records,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/policy-documents", tags=["policy_documents"])
@@ -52,12 +56,16 @@ def get_policy_document(
 def list_policy_documents(
     policy_type: str | None = None,
     is_active: bool | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
 ) -> list[PolicyDocument]:
     return list_public_policy_document_records(
         db,
         policy_type=policy_type,
         is_active=is_active,
+        limit=limit,
+        offset=offset,
     )
 
 

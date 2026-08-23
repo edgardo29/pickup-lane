@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -12,6 +12,10 @@ from backend.services.venue_service import (
     delete_venue_record,
     get_public_venue_or_404,
     list_public_venue_records,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/venues", tags=["venues"])
@@ -39,9 +43,16 @@ def get_venue(venue_id: uuid.UUID, db: Session = Depends(get_db)) -> Venue:
 @router.get("", response_model=list[VenueRead], status_code=status.HTTP_200_OK)
 def list_venues(
     include_inactive: bool = False,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
 ) -> list[Venue]:
-    return list_public_venue_records(db, include_inactive=include_inactive)
+    return list_public_venue_records(
+        db,
+        include_inactive=include_inactive,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.patch("/{venue_id}", status_code=status.HTTP_410_GONE)

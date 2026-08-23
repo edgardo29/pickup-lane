@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -23,6 +23,10 @@ from backend.services.game_credit_service import (
     get_game_credit_balance_for_user,
     list_game_credits_for_user,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+)
 
 router = APIRouter(prefix="/game-credits", tags=["game_credits"])
 admin_router = APIRouter(prefix="/admin/game-credits", tags=["admin_game_credits"])
@@ -44,10 +48,22 @@ def get_game_credit_balance(
 @router.get("", response_model=list[GameCreditRead], status_code=status.HTTP_200_OK)
 def list_game_credits(
     user_id: uuid.UUID | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_COLLECTION_LIMIT,
+    ),
     current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> list[GameCredit]:
-    return list_game_credits_for_user(db, current_user, user_id=user_id)
+    return list_game_credits_for_user(
+        db,
+        current_user,
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @admin_router.post(

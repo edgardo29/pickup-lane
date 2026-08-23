@@ -111,6 +111,13 @@ def list_admin_money_payments(
         query = query.where(Payment.payment_type == payment_type)
 
     normalized_query = " ".join((query_text or "").strip().split())
+    cursor_context = {
+        "kind": "admin_money_payments",
+        "payment_status": payment_status,
+        "payment_type": payment_type,
+        "query": normalized_query,
+        "user_id": str(user_id) if user_id is not None else None,
+    }
     if normalized_query:
         query_uuid = maybe_uuid(normalized_query)
         query_filters = []
@@ -164,7 +171,13 @@ def list_admin_money_payments(
                     )
                 )
         query = query.where(or_(*query_filters))
-    query = apply_desc_cursor(query, Payment, Payment.created_at, cursor)
+    query = apply_desc_cursor(
+        query,
+        Payment,
+        Payment.created_at,
+        cursor,
+        context=cursor_context,
+    )
 
     payments = list(
         db.scalars(
@@ -178,6 +191,7 @@ def list_admin_money_payments(
             payments,
             limit=limit,
             sort_attr="created_at",
+            context=cursor_context,
         ),
     )
 

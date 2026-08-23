@@ -324,12 +324,12 @@ produces a new SHA and requires a Stage 0 revision plus new human approval. Do
 not embed a mutable SHA inside the intake document; the SHA belongs in Stage 0
 reports and approved instructions.
 
-When a new intake record is created, it is included in the first substantive
-child pass's expected final changed-file set, but it is not a Gate B-editable
-file. Later child passes consume the already-accepted intake record from current
-`develop` and do not edit it unless the parent structure itself requires a
-Stage 0 revision. If a parent is implemented whole, treat its approved intake
-record the same way as a first-child intake artifact.
+When a new intake record is created, it is published with the first substantive
+child pass, but it is not Gate B-editable. Later child passes consume the
+already-accepted intake record from current `develop` and do not edit it unless
+the parent structure itself requires a Stage 0 revision. If a parent is
+implemented whole, treat its approved intake record the same way as a
+first-child intake artifact.
 
 Historical decompositions do not require retroactive intake records.
 
@@ -391,12 +391,12 @@ Gate A must:
 - decide the lowest reliable proof layer for each requirement;
 - design requirement declarations and testing records where applicable;
 - design executable and non-executable evidence;
-- define exact Gate B editable files;
-- define the exact expected final pass changed-file set;
-- include `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`
-  in the exact Gate B editable file set for every substantive first-time
-  executable pass, and design the exact register change that will become true
-  upon merge;
+- define the Gate B implementation scope and changed-file justification rule;
+- require Gate B to modify only files genuinely necessary to implement and
+  prove the frozen engineering design;
+- require every substantive first-time executable pass to update
+  `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`, and
+  design the exact register change that will become true upon merge;
 - identify all external, deferred, blocked, and covered-elsewhere facts;
 - stop on conflicts, missing owner decisions, missing proof layers, or scope
   that cannot fit the approved executable pass.
@@ -405,32 +405,34 @@ The final Gate A plan must distinguish:
 
 | Scope item | Required meaning |
 |---|---|
-| Frozen Stage 0 intake artifact | Included when a new intake record was created; not Gate B-editable. |
-| Frozen Gate A canonical plan | Included in the final pass; not Gate B-editable. |
-| Exact Gate B editable file set | Only repository files Gate B may modify. |
-| Exact expected final pass changed-file set | Frozen intake when newly created, frozen plan, exact Gate B editable files, and no additional repository file. |
+| Frozen Stage 0 intake artifact | Included when a new intake record was created; published with the pass when applicable; not Gate B-editable. |
+| Frozen Gate A canonical plan | Published with the pass; not Gate B-editable. |
+| Gate B implementation scope | Gate B may modify any repository file genuinely necessary to implement and prove the frozen engineering design. |
+| Changed-file scope review | Gate C and Gate D review actual changed files for justification against the frozen scope and design rather than equality with a predicted filename list. |
 
-For a first substantive child, the expected final changed-file set is the frozen
-Stage 0 intake record, frozen Gate A canonical plan, exact Gate B editable files
-which include
-`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`, and no
-additional repository file.
+For a first substantive child, the published change set includes the frozen
+Stage 0 intake record, frozen Gate A canonical plan, every implementation and
+evidence file genuinely needed by the frozen design, and
+`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`.
 
-For later children, the expected final changed-file set is the frozen Gate A
-canonical plan, exact Gate B editable files which include the execution
-register, and no additional repository file. The accepted intake record already
+For later children, the published change set includes the frozen Gate A
+canonical plan, every implementation and evidence file genuinely needed by the
+frozen design, and the execution register. The accepted intake record already
 exists in `develop` and normally does not appear in the later-child diff.
 
-For a parent kept whole, the expected final changed-file set is the frozen
-Stage 0 intake record, frozen Gate A canonical plan, exact Gate B editable files
-which include the execution register, and no additional repository file.
+For a parent kept whole, the published change set includes the frozen Stage 0
+intake record, frozen Gate A canonical plan, every implementation and evidence
+file genuinely needed by the frozen design, and the execution register.
 
-The final set is larger than the Gate B editable set only because it may also
-contain frozen Stage 0 and Gate A artifacts that Gate B is forbidden to edit.
+This is not a predicted filename allowlist. Discovering another necessary file
+for the same approved engineering outcome does not itself require Gate A
+correction, but every changed file must be justified by the frozen pass scope
+and design.
 
 ### 7.2 Repository-Wide Impact And Compatibility Scan
 
-Before freezing the file set, Gate A must inspect every applicable:
+Before freezing the engineering design and proof strategy, Gate A must inspect
+every applicable:
 
 - backend caller;
 - frontend caller;
@@ -463,14 +465,13 @@ Gate A returns:
 - the exact canonical-plan path and SHA-256;
 - requirement reconciliation;
 - exact implementation and evidence design;
-- exact Gate B editable file set;
-- exact expected final pass changed-file set;
+- implementation scope boundaries and changed-file justification rule;
 - validation plan;
 - explicit non-goals and external evidence boundaries;
 - blockers.
 
 The plan, canonical-plan SHA, requirements, correction/design decisions,
-evidence design, Gate B file set, and expected final changed-file set become
+evidence design, implementation scope boundaries, and validation strategy become
 frozen only after human approval.
 
 Before Gate A reports the canonical plan ready for human approval, it must
@@ -520,11 +521,12 @@ Gate B must:
 - before editing, verify current branch, current HEAD, accepted baseline,
   merge-base with the accepted baseline, worktree status, staged-file status,
   approved intake-record path and SHA when applicable, frozen canonical-plan
-  path and SHA, exact Gate B editable file set, and exact expected final
-  changed-file set;
+  path and SHA, frozen engineering design, implementation scope boundaries, and
+  validation strategy;
 - verify the approved intake-record SHA when applicable and the frozen
   canonical-plan SHA before implementation;
-- edit only the approved Gate B file set;
+- modify only files genuinely necessary to implement and prove the frozen
+  engineering design;
 - not edit the frozen intake record or frozen canonical plan;
 - preserve pass boundaries and prerequisite contracts;
 - use `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md`
@@ -535,9 +537,13 @@ Gate B must:
   time, provider, browser, migration, or recovery behavior where the frozen
   plan requires it;
 - run the frozen applicable validation layers and report commands not run;
+- continue within Gate B when another file is genuinely necessary for the same
+  approved requirements, engineering design, proof strategy, and pass scope;
 - stop and return to Gate A if correct completion needs a new requirement,
-  new proof layer, broader file set, provider mutation, migration, owner
-  decision, or broader scope.
+  changed engineering design, changed proof strategy, provider mutation,
+  a migration not already approved by the frozen design, owner decision, or
+  broader pass scope;
+- stop and return to Stage 0 if the executable-pass boundary itself is wrong.
 
 The branch HEAD and merge-base must still reflect the approved baseline.
 Unexpected commits, divergence, staged content, unrelated local changes, or
@@ -546,8 +552,8 @@ cherry-pick, stash, restore, clean, or delete.
 
 Before handoff, Gate B must reverify current branch, accepted baseline,
 merge-base with that baseline, approved intake-record SHA when applicable,
-frozen canonical-plan SHA, exact actual changed-file equality with the expected
-final changed-file set, and nothing staged.
+frozen canonical-plan SHA, that every actual changed file is justified by the
+frozen pass scope and design, and nothing staged.
 
 Gate B ends with a validated local change set. It does not stage, commit, push,
 create a PR, or begin Gate C.
@@ -576,8 +582,8 @@ Green commands are not semantic approval.
 Gate C must inspect:
 
 - branch, HEAD, accepted baseline, merge-base with that baseline, staged-file
-  status, exact expected final changed-file set, exact actual changed-file set,
-  and actual/expected set equality;
+  status, complete actual changed-file set, and file-by-file scope
+  justification;
 - current approved instruction and authorized execution boundaries;
 - authority and approved intake;
 - approved intake-record path and SHA when applicable;
@@ -591,7 +597,7 @@ Gate C must inspect:
 - security and publication safety;
 - validation results;
 - proposed execution-register update;
-- exact expected final changed-file set;
+- actual changed-file scope justification;
 - external and later-pass gaps;
 - the complete local change set and secret/confidentiality safety.
 
@@ -638,7 +644,7 @@ Gate D must:
 - before staging, fetch remote metadata safely;
 - verify current branch, current HEAD, accepted baseline, merge-base with that
   baseline, local/remote branch state, approved intake SHA when applicable,
-  frozen canonical-plan SHA, exact approved changed-file set, and nothing
+  frozen canonical-plan SHA, Gate C-approved changed-file set, and nothing
   unexpectedly staged;
 - verify whether current `origin/develop` still equals the accepted baseline;
 - read
@@ -674,7 +680,8 @@ Gate D can resume. Do not publish stale-baseline work silently.
 | Gate A identifies another file for same coherent outcome | Include before Gate A freeze |
 | Gate A identifies a separate outcome | Stage 0 revision |
 | Gate B finds an implementation defect inside frozen scope | Fix and validate in Gate B |
-| Gate B needs another file for the same approved outcome | Gate A correction |
+| Gate B needs another file for the same approved outcome | Continue Gate B and justify the file against the frozen design |
+| Gate B needs changed requirements, engineering design, proof strategy, or pass scope | Gate A correction |
 | Gate B discovers a separate feature or child dependency | Stage 0 revision |
 | Gate C finds implementation/evidence defect inside approved scope | Separate Gate B correction, validation, new full Gate C |
 | Gate C finds pass-design defect without changing child structure | Gate A correction |
@@ -687,11 +694,11 @@ Register updates normally travel with the substantive pass PR that makes the
 new state true.
 
 Every substantive first-time executable pass changes accepted execution state
-when merged, so Gate A must include
-`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` in the
-exact Gate B editable file set and design the exact register update. Program or
-documentation maintenance and historical rechecks remain outside this automatic
-first-time-pass rule unless their explicit scope says otherwise.
+when merged, so Gate A must design and Gate B must implement the exact
+`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` update
+that will become true upon merge. Program or documentation maintenance and
+historical rechecks remain outside this automatic first-time-pass rule unless
+their explicit scope says otherwise.
 
 Default behavior:
 

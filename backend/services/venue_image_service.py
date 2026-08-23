@@ -30,6 +30,14 @@ from backend.services.r2_storage_service import (
     get_r2_storage_config,
 )
 from backend.services.image_rules import VALID_IMAGE_ROLES
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 VALID_IMAGE_STATUSES = {"pending_upload", "active", "hidden", "removed"}
 PUBLIC_IMAGE_STATUSES = {"active"}
@@ -287,6 +295,9 @@ def list_venue_images_statement(
     venue_id: uuid.UUID | None,
     image_status: str | None,
     public_only: bool,
+    limit: int,
+    offset: int,
+    max_limit: int,
 ):
     statement = select(VenueImage).where(VenueImage.deleted_at.is_(None))
 
@@ -303,6 +314,11 @@ def list_venue_images_statement(
         VenueImage.is_primary.desc(),
         VenueImage.sort_order.asc(),
         VenueImage.created_at.asc(),
+        VenueImage.id.asc(),
+    ).offset(
+        bounded_collection_offset(offset)
+    ).limit(
+        bounded_collection_limit(limit, max_limit=max_limit)
     )
 
 
@@ -310,12 +326,17 @@ def list_public_venue_images(
     db: Session,
     *,
     venue_id: uuid.UUID | None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[VenueImagePublicRead]:
     venue_images = db.scalars(
         list_venue_images_statement(
             venue_id=venue_id,
             image_status="active",
             public_only=True,
+            limit=limit,
+            offset=offset,
+            max_limit=MAX_COLLECTION_LIMIT,
         )
     ).all()
     return [build_public_venue_image_read(venue_image) for venue_image in venue_images]
@@ -339,6 +360,8 @@ def list_admin_venue_images(
     *,
     venue_id: uuid.UUID,
     image_status: str | None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[VenueImageAdminRead]:
     get_active_venue_or_404(db, venue_id)
     venue_images = db.scalars(
@@ -346,6 +369,9 @@ def list_admin_venue_images(
             venue_id=venue_id,
             image_status=image_status,
             public_only=False,
+            limit=limit,
+            offset=offset,
+            max_limit=MAX_ADMIN_COLLECTION_LIMIT,
         )
     ).all()
     return [build_admin_venue_image_read(venue_image) for venue_image in venue_images]
