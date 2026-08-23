@@ -701,7 +701,7 @@ Inspect only the narrow subsystem. Produce:
 
 - current files and behavior
 - stale audit assumptions, if any
-- proposed allowed files
+- proposed implementation scope
 - prohibited files and unrelated areas
 - schema/migration impact
 - exact tests and evidence
@@ -717,7 +717,7 @@ The assistant prepares the prompt only after reviewing the inspection. The promp
 2. exact audit control IDs
 3. objective and approved decision inputs
 4. current-tree findings
-5. allowed files or subsystem
+5. implementation scope or subsystem
 6. explicitly prohibited scope
 7. required implementation behavior
 8. required current tests
@@ -731,7 +731,7 @@ The assistant prepares the prompt only after reviewing the inspection. The promp
 Codex performs only the approved pass. It must stop rather than guess when it discovers:
 
 - an unmade or conflicting decision
-- a required file outside allowed scope
+- a required change to approved requirements, design, proof strategy, or pass scope
 - a destructive migration not covered by the pass
 - a production credential or personal-data requirement
 - an ambiguous source of truth

@@ -8,6 +8,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import User
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 GENERIC_USER_MUTATION_DISABLED_DETAIL = (
     "Generic user mutations are disabled. Use dedicated account support workflows."
@@ -75,13 +81,26 @@ def get_user_profile_or_404(db: Session, user_id) -> User:
     return db_user
 
 
-def list_user_profiles(db: Session) -> list[User]:
+def list_user_profiles(
+    db: Session,
+    *,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
+) -> list[User]:
     users = db.scalars(
         select(User)
         .where(User.deleted_at.is_(None))
-        .order_by(User.created_at.asc())
+        .order_by(User.created_at.asc(), User.id.asc())
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(users)
+
 
 def update_current_user_profile(
     db: Session,

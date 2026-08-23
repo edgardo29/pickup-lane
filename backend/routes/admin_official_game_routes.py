@@ -61,6 +61,10 @@ from backend.services.official_game_service import (
     get_official_game_or_404,
     update_official_game,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+)
 from backend.services.chat_moderation_admin_service import (
     get_admin_game_chat_summary,
     list_admin_game_chat_messages,
@@ -228,11 +232,18 @@ def restore_admin_official_game_chat_message_route(
 )
 def list_admin_official_game_participants(
     game_id: uuid.UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[AdminOfficialGameParticipantRead]:
     del current_admin
-    participants = list_official_game_participants(db, game_id)
+    participants = list_official_game_participants(
+        db,
+        game_id,
+        limit=limit,
+        offset=offset,
+    )
     user_ids = {
         participant.user_id
         for participant in participants
@@ -261,11 +272,13 @@ def list_admin_official_game_participants(
 )
 def list_admin_official_game_bookings(
     game_id: uuid.UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[Booking]:
     del current_admin
-    return list_official_game_bookings(db, game_id)
+    return list_official_game_bookings(db, game_id, limit=limit, offset=offset)
 
 
 @router.get(
@@ -274,11 +287,18 @@ def list_admin_official_game_bookings(
 )
 def list_admin_official_game_waitlist(
     game_id: uuid.UUID,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[WaitlistEntry]:
     del current_admin
-    return list_official_game_waitlist_entries(db, game_id)
+    return list_official_game_waitlist_entries(
+        db,
+        game_id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(

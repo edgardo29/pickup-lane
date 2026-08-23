@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -13,6 +13,10 @@ from backend.services.auth_service import require_active_admin
 from backend.services.venue_approval_request_service import (
     get_venue_approval_request_record,
     list_venue_approval_request_records,
+)
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
 )
 
 router = APIRouter(
@@ -62,6 +66,12 @@ def list_venue_approval_requests(
     venue_id: uuid.UUID | None = None,
     reviewed_by_user_id: uuid.UUID | None = None,
     request_status: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[VenueApprovalRequest]:
@@ -72,6 +82,8 @@ def list_venue_approval_requests(
         venue_id=venue_id,
         reviewed_by_user_id=reviewed_by_user_id,
         request_status=request_status,
+        limit=limit,
+        offset=offset,
     )
 
 

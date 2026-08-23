@@ -310,6 +310,13 @@ def list_admin_money_refunds(
         query = query.where(Refund.payment_id == payment_id)
 
     normalized_query = " ".join((query_text or "").strip().split())
+    cursor_context = {
+        "kind": "admin_money_refunds",
+        "payment_id": str(payment_id) if payment_id is not None else None,
+        "query": normalized_query,
+        "refund_status": refund_status,
+        "user_id": str(user_id) if user_id is not None else None,
+    }
     if normalized_query:
         query_uuid = parse_refund_query_uuid(normalized_query)
         text_filters = []
@@ -353,7 +360,13 @@ def list_admin_money_refunds(
                 )
         query = query.where(or_(*text_filters))
 
-    query = apply_desc_cursor(query, Refund, Refund.created_at, cursor)
+    query = apply_desc_cursor(
+        query,
+        Refund,
+        Refund.created_at,
+        cursor,
+        context=cursor_context,
+    )
 
     refunds = list(
         db.scalars(
@@ -371,6 +384,7 @@ def list_admin_money_refunds(
             refunds,
             limit=limit,
             sort_attr="created_at",
+            context=cursor_context,
         ),
     )
 
@@ -394,7 +408,19 @@ def list_refund_events(
         statement = statement.where(RefundEvent.event_type == event_type)
     if event_source is not None:
         statement = statement.where(RefundEvent.event_source == event_source)
-    statement = apply_desc_cursor(statement, RefundEvent, RefundEvent.occurred_at, cursor)
+    cursor_context = {
+        "event_source": event_source,
+        "event_type": event_type,
+        "kind": "admin_money_refund_events",
+        "refund_id": str(refund_id),
+    }
+    statement = apply_desc_cursor(
+        statement,
+        RefundEvent,
+        RefundEvent.occurred_at,
+        cursor,
+        context=cursor_context,
+    )
     rows = list(
         db.scalars(
             statement
@@ -409,6 +435,7 @@ def list_refund_events(
             rows,
             limit=limit,
             sort_attr="occurred_at",
+            context=cursor_context,
         ),
     )
 

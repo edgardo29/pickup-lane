@@ -14,6 +14,12 @@ from backend.schemas.policy_document_schema import (
     PolicyDocumentCreate,
     PolicyDocumentUpdate,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 VALID_POLICY_TYPES = {
     "terms_of_service",
@@ -186,6 +192,8 @@ def list_public_policy_document_records(
     *,
     policy_type: str | None = None,
     is_active: bool | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[PolicyDocument]:
     if is_active is False:
         raise HTTPException(
@@ -200,7 +208,9 @@ def list_public_policy_document_records(
         statement = statement.where(PolicyDocument.policy_type == policy_type)
 
     policy_documents = db.scalars(
-        statement.order_by(PolicyDocument.effective_at.desc())
+        statement.order_by(PolicyDocument.effective_at.desc(), PolicyDocument.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     ).all()
     return list(policy_documents)
 

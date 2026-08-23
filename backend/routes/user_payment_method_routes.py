@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -20,6 +20,10 @@ from backend.services.payment_method_service import (
     set_default_saved_payment_method,
     sync_saved_payment_method,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+)
 
 router = APIRouter(prefix="/user-payment-methods", tags=["user-payment-methods"])
 
@@ -31,6 +35,12 @@ router = APIRouter(prefix="/user-payment-methods", tags=["user-payment-methods"]
 )
 def list_current_user_payment_methods(
     include_inactive: bool = False,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_COLLECTION_LIMIT,
+    ),
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ) -> list[UserPaymentMethod]:
@@ -38,6 +48,8 @@ def list_current_user_payment_methods(
         db,
         current_user,
         include_inactive=include_inactive,
+        limit=limit,
+        offset=offset,
     )
 
 

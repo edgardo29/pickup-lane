@@ -12,6 +12,14 @@ from sqlalchemy.orm import Session
 from backend.models import Game, GameImage, User
 from backend.schemas.game_image_schema import GameImageCreate, GameImageUpdate
 from backend.services.image_rules import VALID_IMAGE_ROLES
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 VALID_IMAGE_STATUSES = {
     "active",
@@ -242,6 +250,8 @@ def list_public_game_image_records(
     uploaded_by_user_id: uuid.UUID | None = None,
     image_status: str | None = None,
     is_primary: bool | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[GameImage]:
     reject_public_game_image_admin_filters(
         uploaded_by_user_id=uploaded_by_user_id,
@@ -259,7 +269,13 @@ def list_public_game_image_records(
         statement = statement.where(GameImage.is_primary == is_primary)
 
     game_images = db.scalars(
-        statement.order_by(GameImage.sort_order.asc(), GameImage.created_at.asc())
+        statement.order_by(
+            GameImage.sort_order.asc(),
+            GameImage.created_at.asc(),
+            GameImage.id.asc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     ).all()
     return list(game_images)
 
@@ -271,6 +287,8 @@ def list_admin_game_image_records(
     uploaded_by_user_id: uuid.UUID | None = None,
     image_status: str | None = None,
     is_primary: bool | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[GameImage]:
     statement = select(GameImage).where(GameImage.deleted_at.is_(None))
 
@@ -294,7 +312,18 @@ def list_admin_game_image_records(
         statement = statement.where(GameImage.is_primary == is_primary)
 
     game_images = db.scalars(
-        statement.order_by(GameImage.sort_order.asc(), GameImage.created_at.asc())
+        statement.order_by(
+            GameImage.sort_order.asc(),
+            GameImage.created_at.asc(),
+            GameImage.id.asc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(game_images)
 

@@ -1646,7 +1646,7 @@ Every unresolved control has exactly one primary workstream. Secondary mappings 
 | Runtime-verification pass | One scenario family in a production-equivalent environment. | Merged implementation, current tests, provider config, synthetic data, rollback/abort criteria. | Sanitized observations, pass/fail by control, defects and follow-up dependencies. | Environment attribution, reproducibility, no production personal data, operational monitoring. | Stop on unsafe behavior, unexpected production impact, or missing rollback path. |
 | Recovery/exercise pass | One tabletop, restore, or technical recovery scenario. | Approved runbook/objectives, isolated environment, backups/access, observers, control IDs. | Exercise report, measured observations, gaps, owners, actions, and retest requirement. | Integrity, startup, mappings, reconciliation, privacy/deletion replay, communication. | Stop if isolation, credentials, data safety, or recovery prerequisites are not proven. |
 
-Every later Codex implementation prompt must name the exact audit control IDs, workstream, entry criteria, allowed files or subsystem, required tests, migration implications, prohibited scope expansion, and stop condition. Future prompts are intentionally not generated in this planning pass.
+Every later Codex implementation prompt must name the exact audit control IDs, workstream, entry criteria, implementation scope or subsystem, required tests, migration implications, prohibited scope expansion, and stop condition. Future prompts are intentionally not generated in this planning pass.
 
 ## 16. Final readiness closure sequence
 

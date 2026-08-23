@@ -21,6 +21,12 @@ from backend.schemas.refund_schema import RefundCreate, RefundUpdate
 from backend.services.admin_action_service import record_admin_action
 from backend.services.auth_service import require_active_admin_user, user_is_active_admin
 from backend.services.payment_rules import COLLECTED_PAYMENT_STATUSES
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 from backend.services.refund_event_service import record_refund_event
 
 VALID_REFUND_REASONS = {
@@ -596,6 +602,8 @@ def list_refunds(
     refund_reason: str | None = None,
     requested_by_user_id: uuid.UUID | None = None,
     approved_by_user_id: uuid.UUID | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[Refund]:
     can_read_all_money = user_is_active_admin(current_user)
     statement = select(Refund).join(Payment, Refund.payment_id == Payment.id)
@@ -629,7 +637,11 @@ def list_refunds(
     if approved_by_user_id is not None:
         statement = statement.where(Refund.approved_by_user_id == approved_by_user_id)
 
-    refunds = db.scalars(statement.order_by(Refund.created_at.desc())).all()
+    refunds = db.scalars(
+        statement.order_by(Refund.created_at.desc(), Refund.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
+    ).all()
     return list(refunds)
 
 

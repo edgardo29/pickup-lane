@@ -31,6 +31,12 @@ from backend.services.r2_storage_service import (
 )
 from backend.services.game_participant_rules import ACTIVE_ROSTER_PARTICIPANT_STATUSES
 from backend.services.official_game_service import get_official_game_or_404
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 OFFICIAL_GAME_LIST_DEFAULT_LIMIT = 24
 OFFICIAL_GAME_LIST_MAX_LIMIT = 100
@@ -466,6 +472,9 @@ def build_primary_venue_image_url(storage_object_key: str | None) -> str | None:
 def list_official_game_participants(
     db: Session,
     game_id: uuid.UUID,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[GameParticipant]:
     get_official_game_or_404(db, game_id)
     return list(
@@ -475,7 +484,10 @@ def list_official_game_participants(
             .order_by(
                 GameParticipant.roster_order.asc().nulls_last(),
                 GameParticipant.created_at.asc(),
+                GameParticipant.id.asc(),
             )
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 
@@ -483,13 +495,18 @@ def list_official_game_participants(
 def list_official_game_bookings(
     db: Session,
     game_id: uuid.UUID,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[Booking]:
     get_official_game_or_404(db, game_id)
     return list(
         db.scalars(
             select(Booking)
             .where(Booking.game_id == game_id)
-            .order_by(Booking.created_at.desc())
+            .order_by(Booking.created_at.desc(), Booking.id.desc())
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 
@@ -497,6 +514,9 @@ def list_official_game_bookings(
 def list_official_game_waitlist_entries(
     db: Session,
     game_id: uuid.UUID,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[WaitlistEntry]:
     get_official_game_or_404(db, game_id)
     return list(
@@ -507,7 +527,10 @@ def list_official_game_waitlist_entries(
                 WaitlistEntry.position.asc(),
                 WaitlistEntry.joined_at.asc(),
                 WaitlistEntry.created_at.asc(),
+                WaitlistEntry.id.asc(),
             )
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 

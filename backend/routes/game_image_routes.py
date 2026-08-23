@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -13,6 +13,12 @@ from backend.services.game_image_service import (
     get_public_game_image_record,
     list_admin_game_image_records,
     list_public_game_image_records,
+)
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/game-images", tags=["game_images"])
@@ -55,6 +61,8 @@ def list_game_images(
     uploaded_by_user_id: uuid.UUID | None = None,
     image_status: str | None = None,
     is_primary: bool | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
 ) -> list[GameImage]:
     return list_public_game_image_records(
@@ -63,6 +71,8 @@ def list_game_images(
         uploaded_by_user_id=uploaded_by_user_id,
         image_status=image_status,
         is_primary=is_primary,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -108,6 +118,12 @@ def list_admin_game_images(
     uploaded_by_user_id: uuid.UUID | None = None,
     image_status: str | None = None,
     is_primary: bool | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[GameImage]:
@@ -118,4 +134,6 @@ def list_admin_game_images(
         uploaded_by_user_id=uploaded_by_user_id,
         image_status=image_status,
         is_primary=is_primary,
+        limit=limit,
+        offset=offset,
     )

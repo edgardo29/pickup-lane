@@ -10,6 +10,12 @@ from sqlalchemy.orm import Session
 
 from backend.models import User, Venue
 from backend.schemas.venue_schema import VenueCreate, VenueUpdate
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 APPROVED_VENUE_STATUS = "approved"
 
@@ -61,7 +67,7 @@ def find_matching_active_venue(
             func.lower(func.trim(func.coalesce(Venue.neighborhood, "")))
             == neighborhood_key,
         )
-        .order_by(Venue.created_at.asc())
+        .order_by(Venue.created_at.asc(), Venue.id.asc())
         .limit(1)
     )
     return db.scalars(statement).first()
@@ -188,7 +194,13 @@ def create_venue_record(db: Session, venue: VenueCreate) -> Venue:
     return new_venue
 
 
-def list_public_venue_records(db: Session, *, include_inactive: bool) -> list[Venue]:
+def list_public_venue_records(
+    db: Session,
+    *,
+    include_inactive: bool,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
+) -> list[Venue]:
     if include_inactive:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -201,7 +213,9 @@ def list_public_venue_records(db: Session, *, include_inactive: bool) -> list[Ve
             Venue.deleted_at.is_(None),
             Venue.is_active.is_(True),
         )
-        .order_by(Venue.created_at.asc())
+        .order_by(Venue.created_at.asc(), Venue.id.asc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     )
     venues = db.scalars(statement).all()
     return list(venues)

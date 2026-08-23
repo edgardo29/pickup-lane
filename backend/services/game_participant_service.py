@@ -21,6 +21,12 @@ from backend.services.game_participant_rules import (
     validate_game_participant_business_rules,
     validate_game_participant_status,
 )
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 
 def get_active_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
@@ -186,6 +192,8 @@ def list_game_participants(
     user_id: uuid.UUID | None = None,
     participant_status: str | None = None,
     attendance_status: str | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[GameParticipant]:
     statement = select(GameParticipant)
 
@@ -212,6 +220,14 @@ def list_game_participants(
         statement.order_by(
             GameParticipant.roster_order.asc().nulls_last(),
             GameParticipant.created_at.asc(),
+            GameParticipant.id.asc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
         )
     ).all()
     return list(participants)

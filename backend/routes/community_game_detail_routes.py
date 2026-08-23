@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -26,6 +26,10 @@ from backend.services.community_game_detail_service import (
     list_public_community_game_details,
     update_community_game_detail_workflow,
     upsert_host_community_game_detail_workflow,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/community-game-details", tags=["community_game_details"])
@@ -100,6 +104,8 @@ def get_community_game_detail(
 def list_community_game_details(
     response: Response,
     game_id: uuid.UUID | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_optional_current_app_user),
 ) -> list[CommunityGameDetailPublicRead]:
@@ -107,6 +113,8 @@ def list_community_game_details(
         db,
         game_id=game_id,
         current_user=current_user,
+        limit=limit,
+        offset=offset,
     )
     game = db.get(Game, game_id) if game_id is not None else None
     if game is not None and game.public_visibility_status == "hidden":

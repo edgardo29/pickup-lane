@@ -290,6 +290,19 @@ def list_admin_money_credits(
         query = query.where(GameCredit.source_payment_id == source_payment_id)
 
     normalized_query = " ".join((query_text or "").strip().split())
+    cursor_context = {
+        "credit_status": credit_status,
+        "kind": "admin_money_credits",
+        "query": normalized_query,
+        "source_booking_id": (
+            str(source_booking_id) if source_booking_id is not None else None
+        ),
+        "source_game_id": str(source_game_id) if source_game_id is not None else None,
+        "source_payment_id": (
+            str(source_payment_id) if source_payment_id is not None else None
+        ),
+        "user_id": str(user_id) if user_id is not None else None,
+    }
     if normalized_query:
         query_uuid = maybe_uuid(normalized_query)
         query_filters = []
@@ -322,7 +335,13 @@ def list_admin_money_credits(
                 ]
             )
         query = query.where(or_(*query_filters))
-    query = apply_desc_cursor(query, GameCredit, GameCredit.created_at, cursor)
+    query = apply_desc_cursor(
+        query,
+        GameCredit,
+        GameCredit.created_at,
+        cursor,
+        context=cursor_context,
+    )
 
     credits = list(
         db.scalars(
@@ -339,6 +358,7 @@ def list_admin_money_credits(
             credits,
             limit=limit,
             sort_attr="created_at",
+            context=cursor_context,
         ),
     )
 

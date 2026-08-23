@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -12,6 +12,10 @@ from backend.services.notification_service import (
     get_notification_workflow,
     list_user_notifications_workflow,
     mark_notification_read_workflow,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -54,6 +58,8 @@ def list_my_notifications(
     related_sub_post_chat_message_id: uuid.UUID | None = None,
     related_sub_post_request_id: uuid.UUID | None = None,
     related_sub_post_position_id: uuid.UUID | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> list[dict[str, object]]:
@@ -76,6 +82,8 @@ def list_my_notifications(
         related_sub_post_chat_message_id=related_sub_post_chat_message_id,
         related_sub_post_request_id=related_sub_post_request_id,
         related_sub_post_position_id=related_sub_post_position_id,
+        limit=limit,
+        offset=offset,
     )
 
 

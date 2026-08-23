@@ -10,6 +10,12 @@ from sqlalchemy.orm import Session
 
 from backend.models import User, UserStats
 from backend.schemas.user_stats_schema import UserStatsCreate, UserStatsUpdate
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 from backend.services.user_service import get_current_user_profile
 
 COUNT_FIELDS = {
@@ -149,6 +155,8 @@ def list_user_stats(
     db: Session,
     *,
     user_id: uuid.UUID | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[UserStats]:
     statement = select(UserStats).join(User, UserStats.user_id == User.id).where(
         User.deleted_at.is_(None)
@@ -158,7 +166,14 @@ def list_user_stats(
         statement = statement.where(UserStats.user_id == user_id)
 
     user_stats_rows = db.scalars(
-        statement.order_by(UserStats.last_calculated_at.desc())
+        statement.order_by(UserStats.last_calculated_at.desc(), UserStats.user_id.asc())
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(user_stats_rows)
 

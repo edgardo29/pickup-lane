@@ -214,9 +214,9 @@ is accounted for.
 | Intake | Stage 0 parent-pass readiness and decomposition work performed before Gate A for first-time implementation. |
 | Accepted baseline | The exact accepted `develop` commit used as the starting point for a pass branch. |
 | Frozen intake | An owner-approved Stage 0 intake artifact identified by exact path and SHA-256. |
-| Frozen plan | The approved Gate A canonical plan, requirement set, correction design, evidence design, file sets, and SHA-256. |
-| Gate B editable file set | The exact repository-relative paths Gate B may modify. |
-| Expected final changed-file set | The complete repository-relative path set expected at Gate D, including frozen artifacts when applicable plus Gate B editable files. |
+| Frozen plan | The approved Gate A canonical plan, requirement set, engineering design, proof strategy, scope boundaries, validation strategy, completion criteria, and SHA-256. |
+| Gate B implementation scope | The approved engineering scope and design that govern which repository files Gate B may modify. Gate B may change any file genuinely necessary to implement and prove the frozen design. |
+| Changed-file scope justification | Gate C and Gate D review the actual changed files for justification against the frozen pass scope and design rather than equality with a predicted filename list. |
 | Repository truth | Current accepted source, configuration, documentation, and evidence state at the trusted baseline and accepted pass commits. |
 | Provenance | Historical evidence of what happened, such as PRs, commits, and diffs; provenance does not define requirements. |
 | Trusted evidence | Evidence produced from current authority under the accepted evidence architecture. |
@@ -237,8 +237,8 @@ reviewed before drafting or executing that gate.
 | Gate A for first-time implementation | Implementation workflow, approved intake record when applicable, planning template, testing-record template, current planning file when one exists, applicable authority/source/evidence, and applicable engineering/testing standards. |
 | Gate A for recheck | Recheck workflow, planning template, testing-record template, current pass plan, applicable authority/source/evidence, and applicable engineering/testing standards. |
 | Gate B | Applicable workflow, frozen intake when applicable, frozen canonical plan, testing-record template, applicable authority/source/evidence, and applicable engineering/testing standards. |
-| Gate C for first-time implementation | Applicable workflow, frozen intake when applicable, frozen canonical plan, requirement declaration, testing record, implementation, executable and non-executable evidence, current validation, execution-register proposal when in scope, and expected final changed-file set. |
-| Gate C for historical recheck | Recheck workflow, frozen canonical plan, requirement declaration, testing record, implementation, executable and non-executable evidence, current validation, and expected final changed-file set. |
+| Gate C for first-time implementation | Applicable workflow, frozen intake when applicable, frozen canonical plan, requirement declaration, testing record, implementation, executable and non-executable evidence, current validation, execution-register proposal when in scope, and actual changed-file scope justification. |
+| Gate C for historical recheck | Recheck workflow, frozen canonical plan, requirement declaration, testing record, implementation, executable and non-executable evidence, current validation, and actual changed-file scope justification. |
 | Gate D | Applicable workflow, frozen intake when applicable, frozen canonical plan, Gate C approval, explicit owner Gate D instruction, and PR-description template. |
 
 Gate-specific prompts may require additional pass-specific authority, source,

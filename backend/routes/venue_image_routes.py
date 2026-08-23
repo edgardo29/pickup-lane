@@ -22,6 +22,12 @@ from backend.services.venue_image_service import (
     list_public_venue_images,
     update_venue_image,
 )
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+)
 
 public_router = APIRouter(prefix="/venue-images", tags=["venue_images"])
 admin_router = APIRouter(tags=["admin_venue_images"])
@@ -30,9 +36,16 @@ admin_router = APIRouter(tags=["admin_venue_images"])
 @public_router.get("", response_model=list[VenueImagePublicRead])
 def list_venue_images(
     venue_id: uuid.UUID | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     db: Session = Depends(get_db),
 ) -> list[VenueImagePublicRead]:
-    return list_public_venue_images(db, venue_id=venue_id)
+    return list_public_venue_images(
+        db,
+        venue_id=venue_id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @admin_router.get("/admin/venue-images/upload-readiness")
@@ -51,6 +64,12 @@ def check_admin_venue_image_upload_readiness(
 def list_admin_venue_images(
     venue_id: uuid.UUID,
     image_status: str | None = Query(default=None),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[VenueImageAdminRead]:
@@ -59,6 +78,8 @@ def list_admin_venue_images(
         db,
         venue_id=venue_id,
         image_status=image_status,
+        limit=limit,
+        offset=offset,
     )
 
 

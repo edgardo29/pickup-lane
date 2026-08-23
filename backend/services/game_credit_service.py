@@ -8,6 +8,12 @@ from sqlalchemy.orm import Session
 from backend.models import GameCredit, GameCreditUsage, User
 from backend.schemas.game_credit_schema import GameCreditBalanceRead
 from backend.services.auth_service import require_active_admin_user
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 REDEEM_USAGE_TYPE = "redeem"
 REVERSE_USAGE_TYPE = "reverse"
@@ -145,6 +151,8 @@ def list_game_credits_for_user(
     current_user: User,
     *,
     user_id: uuid.UUID | None = None,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[GameCredit]:
     effective_user_id = user_id or current_user.id
 
@@ -155,6 +163,8 @@ def list_game_credits_for_user(
         select(GameCredit)
         .where(GameCredit.user_id == effective_user_id)
         .order_by(GameCredit.created_at.desc(), GameCredit.id.desc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     )
     return list(db.scalars(statement).all())
 

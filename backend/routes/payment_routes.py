@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -15,6 +15,10 @@ from backend.services.auth_service import (
 from backend.services.payment_service import (
     get_payment_for_user_or_404,
     list_payments as list_payments_workflow,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -57,6 +61,12 @@ def list_payments(
     game_id: uuid.UUID | None = None,
     payment_type: str | None = None,
     payment_status: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
 ) -> list[Payment]:
@@ -69,6 +79,8 @@ def list_payments(
         game_id=game_id,
         payment_type=payment_type,
         payment_status=payment_status,
+        limit=limit,
+        offset=offset,
     )
 
 

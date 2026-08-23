@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -12,6 +12,10 @@ from backend.services.user_stats_service import (
     get_current_user_stats,
     get_user_stats_record,
     list_user_stats as list_user_stats_workflow,
+)
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/user-stats", tags=["user_stats"])
@@ -54,10 +58,21 @@ def get_user_stats(
 @router.get("", response_model=list[UserStatsRead], status_code=status.HTTP_200_OK)
 def list_user_stats(
     user_id: uuid.UUID | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     _current_admin: User = Depends(require_active_admin),
 ) -> list[UserStats]:
-    return list_user_stats_workflow(db, user_id=user_id)
+    return list_user_stats_workflow(
+        db,
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # Retired public/admin scaffold. Stats remain internally service-owned.

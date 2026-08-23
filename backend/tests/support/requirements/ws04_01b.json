@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS04-01B-R1",
+      "owning_pass": "WS04-01B",
+      "source_controls": [
+        "DB-012",
+        "DB-013",
+        "WS04-01"
+      ],
+      "state": "required",
+      "scope": "workflows/query_cursor_database_access_behavior",
+      "reason": "Every current collection route must be deliberately bounded, parent-scoped, or removed from the live API instead of remaining an unresolved unbounded database read."
+    },
+    {
+      "id": "WS04-01B-R2",
+      "owning_pass": "WS04-01B",
+      "source_controls": [
+        "DB-012",
+        "DB-013",
+        "WS04-01"
+      ],
+      "state": "required",
+      "scope": "workflows/query_cursor_database_access_behavior",
+      "reason": "Pagination and offset pages must use stable ordering with tie-breakers so page boundaries remain deterministic."
+    },
+    {
+      "id": "WS04-01B-R3",
+      "owning_pass": "WS04-01B",
+      "source_controls": [
+        "DB-012",
+        "DB-013",
+        "WS04-01"
+      ],
+      "state": "required",
+      "scope": "workflows/query_cursor_database_access_behavior",
+      "reason": "Cursor routes must reject malformed cursors and cursors from a different query context without exposing raw database errors or widening scope."
+    },
+    {
+      "id": "WS04-01B-R4",
+      "owning_pass": "WS04-01B",
+      "source_controls": [
+        "DB-012",
+        "DB-013",
+        "WS04-01"
+      ],
+      "state": "required",
+      "scope": "workflows/query_cursor_database_access_behavior",
+      "reason": "List filters, user scope, admin scope, and parent-object binding must stay inside the database query before rows are returned."
+    },
+    {
+      "id": "WS04-01B-R5",
+      "owning_pass": "WS04-01B",
+      "source_controls": [
+        "DB-012",
+        "DB-013",
+        "WS04-01"
+      ],
+      "state": "required",
+      "scope": "workflows/query_cursor_database_access_behavior",
+      "reason": "Current query shapes must be reconciled with current model and migration indexes without speculative production workload assumptions."
+    },
+    {
+      "id": "WS04-01B-R6",
+      "owning_pass": "WS04-01B",
+      "source_controls": [
+        "DB-012",
+        "DB-013",
+        "WS04-01"
+      ],
+      "state": "required",
+      "scope": "workflows/query_cursor_database_access_behavior",
+      "reason": "List serialization must avoid obvious page-level N+1 database reads where current responses include related records."
+    },
+    {
+      "id": "WS04-01B-R7",
+      "owning_pass": "WS04-01B",
+      "source_controls": [
+        "DB-012",
+        "DB-013",
+        "WS04-01"
+      ],
+      "state": "required",
+      "scope": "workflows/query_cursor_database_access_behavior",
+      "reason": "Evidence must stay limited to repository-proven query, cursor, index, and serialization behavior and must not claim production query-plan or provider performance proof."
+    }
+  ]
+}

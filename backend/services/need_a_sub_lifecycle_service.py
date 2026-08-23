@@ -28,6 +28,12 @@ from backend.services.need_a_sub_rules import (
     ensure_aware,
     now_utc,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 
 def add_post_status_history(
@@ -205,6 +211,9 @@ def list_sub_post_status_history(
     db: Session,
     sub_post_id: uuid.UUID,
     current_user: User,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[SubPostStatusHistory]:
     sub_post = get_sub_post_for_history_or_404(db, sub_post_id)
 
@@ -221,7 +230,9 @@ def list_sub_post_status_history(
         db.scalars(
             select(SubPostStatusHistory)
             .where(SubPostStatusHistory.sub_post_id == sub_post_id)
-            .order_by(SubPostStatusHistory.created_at.asc())
+            .order_by(SubPostStatusHistory.created_at.asc(), SubPostStatusHistory.id.asc())
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 
@@ -230,6 +241,9 @@ def list_sub_post_request_status_history(
     db: Session,
     request_id: uuid.UUID,
     current_user: User,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[SubPostRequestStatusHistory]:
     sub_request = get_sub_post_request_for_history_or_404(db, request_id)
     sub_post = get_sub_post_for_history_or_404(db, sub_request.sub_post_id)
@@ -249,7 +263,12 @@ def list_sub_post_request_status_history(
         db.scalars(
             select(SubPostRequestStatusHistory)
             .where(SubPostRequestStatusHistory.sub_post_request_id == request_id)
-            .order_by(SubPostRequestStatusHistory.created_at.asc())
+            .order_by(
+                SubPostRequestStatusHistory.created_at.asc(),
+                SubPostRequestStatusHistory.id.asc(),
+            )
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 

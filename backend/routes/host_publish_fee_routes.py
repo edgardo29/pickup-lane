@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -14,6 +14,12 @@ from backend.services.host_publish_fee_service import (
     get_host_publish_fee_record,
     list_current_host_publish_fee_records,
     list_host_publish_fee_records,
+)
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/host-publish-fees", tags=["host_publish_fees"])
@@ -42,10 +48,17 @@ def create_host_publish_fee(
     status_code=status.HTTP_200_OK,
 )
 def list_my_host_publish_fees(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_COLLECTION_LIMIT, ge=1, le=MAX_COLLECTION_LIMIT),
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ) -> list[HostPublishFee]:
-    return list_current_host_publish_fee_records(db, current_user=current_user)
+    return list_current_host_publish_fee_records(
+        db,
+        current_user=current_user,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
@@ -71,6 +84,12 @@ def list_host_publish_fees(
     game_id: uuid.UUID | None = None,
     host_user_id: uuid.UUID | None = None,
     fee_status: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[HostPublishFee]:
@@ -80,6 +99,8 @@ def list_host_publish_fees(
         game_id=game_id,
         host_user_id=host_user_id,
         fee_status=fee_status,
+        limit=limit,
+        offset=offset,
     )
 
 

@@ -450,7 +450,7 @@ Using the reconciled plan, design:
 - executable versus non-executable evidence;
 - covered-elsewhere evidence;
 - external or later-pass gaps;
-- exact Gate B file set.
+- implementation scope boundaries and changed-file justification rules.
 
 When designing a `TESTING_RECORD.md`, use
 `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` and
@@ -507,7 +507,7 @@ repository machinery. At minimum confirm:
 - required proof layers actually exist;
 - PostgreSQL, provider/network, browser, migration, concurrency, and
   controlled-time needs are explicitly decided;
-- the exact Gate B file set is feasible;
+- the implementation scope and proof strategy are feasible;
 - no hidden prerequisite or owner decision remains.
 
 This is analysis and validation only. Do not create the proposed implementation
@@ -516,9 +516,9 @@ artifacts during Gate A.
 #### Gate A Human Approval
 
 Gate A returns material findings, a requirement reconciliation matrix, the
-updated canonical plan, exact correction design, exact evidence design, exact
-Gate B file set, exact expected final pass changed-file set, exact validation
-strategy, and blockers.
+updated canonical plan, exact correction design, exact evidence design,
+implementation scope boundaries, changed-file justification rules, exact
+validation strategy, and blockers.
 
 At the end of Gate A, complete the corrected canonical plan, compute its
 SHA-256, and report the exact plan path and SHA. Human approval freezes that
@@ -528,13 +528,13 @@ in Gate A reports and approved instructions.
 Gate A freezes these as distinct artifacts:
 
 - frozen canonical plan artifact;
-- exact Gate B editable file set using repository-relative paths;
-- exact expected final pass changed-file set using repository-relative paths;
+- frozen requirements, correction design, evidence design, implementation scope
+  boundaries, and changed-file justification rules;
 - exact validation strategy.
 
 The canonical plan, canonical-plan SHA, requirements, correction design,
-evidence design, Gate B file set, expected final pass changed-file set, and
-validation strategy become frozen only after human approval.
+evidence design, implementation scope boundaries, changed-file justification
+rules, and validation strategy become frozen only after human approval.
 
 #### Gate A Review Completion Rule
 
@@ -542,8 +542,8 @@ Before approving Gate A or issuing a Gate A correction instruction, the
 reviewer must complete review of the full Gate A report and the complete
 canonical plan, including canonical-plan SHA, authority alignment,
 numeric-value authority, cross-pass ownership, current repository truth,
-requirements, correction design, evidence design, completion criteria, exact
-Gate B editable file set, exact expected final pass changed-file set, exact
+requirements, correction design, evidence design, completion criteria,
+implementation scope boundaries, changed-file justification rules, exact
 validation strategy, and blockers.
 
 Return all material findings together. After corrections, review the complete
@@ -556,11 +556,12 @@ pass-owned correction and trusted test/evidence implementation
 responsibilities.
 
 Before editing, Gate B must verify branch, HEAD, accepted baseline, merge-base
-with that baseline, frozen canonical-plan path and SHA, exact Gate B editable
-file set, exact expected final changed-file set, and worktree/index state. Gate
-B must not edit the frozen canonical plan. Before handoff, Gate B must reverify
-baseline and merge-base, frozen canonical-plan SHA, actual/expected
-changed-file equality, and nothing staged.
+with that baseline, frozen canonical-plan path and SHA, implementation scope
+boundaries, changed-file justification rules, validation strategy, and
+worktree/index state. Gate B must not edit the frozen canonical plan. Before
+handoff, Gate B must reverify baseline and merge-base, frozen canonical-plan
+SHA, that every actual changed file is justified by the frozen scope and
+design, and nothing staged.
 
 #### B1. Pass-Owned Corrections And Artifacts
 
@@ -607,11 +608,15 @@ Implement the approved proof architecture rather than quietly redesigning it.
 Do not change production code merely to make a test pass. If current production
 contradicts the approved plan, stop and return to Gate A.
 
-If Gate B unexpectedly needs another production file, another requirement,
-another proof layer, provider access, PostgreSQL, browser evidence, migration
-evidence, concurrency evidence, controlled-time evidence, or broader scope,
-stop and return to Gate A. Gate B must not silently expand or redesign the
-pass. Tests must not redefine behavior or cause requirements to be weakened.
+If Gate B needs another repository file for the same approved requirements,
+engineering design, proof strategy, and pass scope, Gate B may modify it and
+must justify it against the frozen design. If Gate B needs another requirement,
+changed design, changed proof strategy, provider access, or a PostgreSQL,
+browser, migration, concurrency, or controlled-time proof layer not already
+approved by the frozen proof strategy, or broader pass scope, stop and return
+to Gate A. If the executable-pass boundary itself is wrong, return to Stage 0. Gate B must not silently expand or
+redesign the pass. Tests must not redefine behavior or cause requirements to be
+weakened.
 
 Validate focused tests, relevant prerequisite regressions, checker
 file/domain/suite scopes as appropriate, generated traceability,
@@ -628,10 +633,10 @@ evidence adequacy and whole-pass local review responsibilities without removing
 either review obligation.
 
 Gate C must verify and report branch, HEAD, accepted baseline, merge-base with
-that baseline, frozen canonical-plan path and SHA, exact expected final
-changed-file set, exact actual changed-file set, actual/expected equality, and
-staged-file state, current approved instruction, and authorized execution
-boundaries. Review inputs must also include requirement declarations,
+that baseline, frozen canonical-plan path and SHA, complete actual
+changed-file set, file-by-file scope justification, staged-file state, current
+approved instruction, and authorized execution boundaries. Review inputs must
+also include requirement declarations,
 `TESTING_RECORD.md`, implemented evidence, and current validation. Use
 `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md` when
 reviewing testing-record compliance.
@@ -753,17 +758,18 @@ review of the complete pass before approval or Gate D.
 
 An implementation mistake inside the already-approved frozen design may use a
 separate scoped correction run only when the authoritative contract, canonical
-plan, requirement set, proof layer, approved file set, and pass scope remain
-unchanged. The correction run fixes only that approved mistake, runs affected
-targeted validation, runs the full relevant regression, checker, and
-traceability validation required for the corrected final pass state, corrects
-any in-scope failures before handoff, and is followed by a new full
+plan, requirement set, proof layer, implementation scope boundaries, and pass
+scope remain unchanged. The correction run fixes only that approved mistake,
+runs affected targeted validation, runs the full relevant regression, checker,
+and traceability validation required for the corrected final pass state,
+corrects any in-scope failures before handoff, and is followed by a new full
 independent, semantic, read-only Gate C review of the complete corrected pass.
 
 Return to Gate A when a finding requires a new requirement, changed
-requirement, new owner decision, new proof layer, expanded file set, broader
-pass scope, or material plan revision. No post-Gate C correction run may make
-these changes under Gate C authorization.
+requirement, new owner decision, new proof layer, changed engineering design,
+broader pass scope, or material plan revision. Return to Stage 0 when the
+executable-pass boundary itself is wrong. No post-Gate C correction run may
+make these changes under Gate C authorization.
 
 Do not impose an artificial maximum number of correction rounds. Every
 correction round that changes repository content must be followed by a new full
@@ -849,10 +855,11 @@ speculative process merely because a pass sounds high risk.
 ## 16. Freeze Rule
 
 After Gate A approval, the canonical plan, canonical-plan SHA, requirements,
-correction design, evidence design, authorized Gate B file set, expected final
-pass changed-file set, and validation strategy are frozen unless concrete
-contradictory evidence requires returning to Gate A. Any plan content change
-returns to recheck Gate A, produces a new SHA, and requires new human approval.
+correction design, evidence design, implementation scope boundaries,
+changed-file justification rules, and validation strategy are frozen unless
+concrete contradictory evidence requires returning to Gate A. Any plan content
+change returns to recheck Gate A, produces a new SHA, and requires new human
+approval.
 
 After Gate C approval, no semantic changes are permitted in Gate D.
 

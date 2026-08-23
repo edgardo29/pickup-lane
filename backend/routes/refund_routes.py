@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -15,6 +15,10 @@ from backend.services.auth_service import (
 from backend.services.refund_service import (
     get_refund_for_user_or_404,
     list_refunds as list_refunds_workflow,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/refunds", tags=["refunds"])
@@ -60,6 +64,12 @@ def list_refunds(
     refund_reason: str | None = None,
     requested_by_user_id: uuid.UUID | None = None,
     approved_by_user_id: uuid.UUID | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
 ) -> list[Refund]:
@@ -75,6 +85,8 @@ def list_refunds(
         refund_reason=refund_reason,
         requested_by_user_id=requested_by_user_id,
         approved_by_user_id=approved_by_user_id,
+        limit=limit,
+        offset=offset,
     )
 
 

@@ -22,6 +22,12 @@ from backend.services.stripe_service import (
     stripe_payments_enabled,
 )
 from backend.services.user_service import build_user_conflict_detail
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 ACTIVE_PAYMENT_METHOD_STATUS = "active"
 DETACHED_PAYMENT_METHOD_STATUS = "detached"
@@ -227,6 +233,8 @@ def list_current_user_payment_methods(
     current_user: User,
     *,
     include_inactive: bool = False,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[UserPaymentMethod]:
     statement = select(UserPaymentMethod).where(
         UserPaymentMethod.user_id == current_user.id
@@ -242,6 +250,8 @@ def list_current_user_payment_methods(
             UserPaymentMethod.created_at.asc(),
             UserPaymentMethod.id.asc(),
         )
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     ).all()
     return list(payment_methods)
 

@@ -36,6 +36,12 @@ from backend.services.game_participant_rules import (
     VALID_PARTICIPANT_STATUSES,
 )
 from backend.services.game_rules import VALID_GAME_STATUSES, VALID_PUBLISH_STATUSES
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 VALID_CHANGE_SOURCES = {
     "user",
@@ -417,6 +423,8 @@ def list_game_status_history_records(
     game_id: uuid.UUID | None = None,
     changed_by_user_id: uuid.UUID | None = None,
     change_source: str | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[GameStatusHistory]:
     statement = select(GameStatusHistory)
 
@@ -433,7 +441,14 @@ def list_game_status_history_records(
         statement = statement.where(GameStatusHistory.change_source == change_source)
 
     history_rows = db.scalars(
-        statement.order_by(GameStatusHistory.created_at.asc())
+        statement.order_by(GameStatusHistory.created_at.asc(), GameStatusHistory.id.asc())
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(history_rows)
 
@@ -582,6 +597,8 @@ def list_booking_status_history_records(
     booking_id: uuid.UUID | None = None,
     changed_by_user_id: uuid.UUID | None = None,
     change_source: str | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[BookingStatusHistory]:
     statement = select(BookingStatusHistory)
 
@@ -598,7 +615,17 @@ def list_booking_status_history_records(
         statement = statement.where(BookingStatusHistory.change_source == change_source)
 
     history_rows = db.scalars(
-        statement.order_by(BookingStatusHistory.created_at.asc())
+        statement.order_by(
+            BookingStatusHistory.created_at.asc(),
+            BookingStatusHistory.id.asc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(history_rows)
 
@@ -771,6 +798,8 @@ def list_participant_status_history_records(
     participant_id: uuid.UUID | None = None,
     changed_by_user_id: uuid.UUID | None = None,
     change_source: str | None = None,
+    limit: int = DEFAULT_ADMIN_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[ParticipantStatusHistory]:
     statement = select(ParticipantStatusHistory)
 
@@ -791,7 +820,17 @@ def list_participant_status_history_records(
         )
 
     history_rows = db.scalars(
-        statement.order_by(ParticipantStatusHistory.created_at.asc())
+        statement.order_by(
+            ParticipantStatusHistory.created_at.asc(),
+            ParticipantStatusHistory.id.asc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(
+            bounded_collection_limit(
+                limit,
+                max_limit=MAX_ADMIN_COLLECTION_LIMIT,
+            )
+        )
     ).all()
     return list(history_rows)
 

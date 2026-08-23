@@ -67,6 +67,12 @@ from backend.services.game_rules import (
     require_game_not_started,
     validate_game_business_rules,
 )
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 
 BROWSE_GAME_CARD_DEFAULT_LIMIT = 40
 BROWSE_GAME_CARD_MAX_LIMIT = 100
@@ -404,14 +410,21 @@ def user_is_active_waitlist_member(
     return waitlist_entry_id is not None
 
 
-def list_games(db: Session) -> list[Game]:
+def list_games(
+    db: Session,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
+) -> list[Game]:
     games = db.scalars(
         select(Game)
         .where(
             Game.deleted_at.is_(None),
             Game.public_visibility_status == "visible",
         )
-        .order_by(Game.starts_at.asc(), Game.created_at.asc())
+        .order_by(Game.starts_at.asc(), Game.created_at.asc(), Game.id.asc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     ).all()
     return list(games)
 
@@ -1589,6 +1602,9 @@ def list_public_game_participants(
     db: Session,
     game_id: uuid.UUID,
     current_user: User | None = None,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[GameParticipant]:
     db_game = db.get(Game, game_id)
 
@@ -1617,12 +1633,20 @@ def list_public_game_participants(
             .order_by(
                 GameParticipant.roster_order.asc().nulls_last(),
                 GameParticipant.created_at.asc(),
+                GameParticipant.id.asc(),
             )
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 
 
-def list_public_game_participant_counts(db: Session) -> list[dict[str, object]]:
+def list_public_game_participant_counts(
+    db: Session,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
+) -> list[dict[str, object]]:
     now = datetime.now(timezone.utc)
     rows = db.execute(
         select(
@@ -1637,6 +1661,9 @@ def list_public_game_participant_counts(db: Session) -> list[dict[str, object]]:
             Game.public_visibility_status == "visible",
         )
         .group_by(GameParticipant.game_id)
+        .order_by(GameParticipant.game_id.asc())
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     ).all()
 
     return [
@@ -1648,6 +1675,9 @@ def list_public_game_participant_counts(db: Session) -> list[dict[str, object]]:
 def list_current_user_game_participants(
     db: Session,
     current_user: User,
+    *,
+    limit: int = DEFAULT_COLLECTION_LIMIT,
+    offset: int = 0,
 ) -> list[GameParticipant]:
     return list(
         db.scalars(
@@ -1656,7 +1686,10 @@ def list_current_user_game_participants(
             .order_by(
                 GameParticipant.joined_at.desc(),
                 GameParticipant.created_at.desc(),
+                GameParticipant.id.desc(),
             )
+            .offset(bounded_collection_offset(offset))
+            .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
         ).all()
     )
 

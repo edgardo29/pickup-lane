@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -13,6 +13,10 @@ from backend.services.auth_service import require_active_admin
 from backend.services.status_history_service import (
     get_booking_status_history_record,
     list_booking_status_history_records,
+)
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/booking-status-history", tags=["booking_status_history"])
@@ -58,6 +62,12 @@ def list_booking_status_history(
     booking_id: uuid.UUID | None = None,
     changed_by_user_id: uuid.UUID | None = None,
     change_source: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_ADMIN_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[BookingStatusHistory]:
@@ -67,6 +77,8 @@ def list_booking_status_history(
         booking_id=booking_id,
         changed_by_user_id=changed_by_user_id,
         change_source=change_source,
+        limit=limit,
+        offset=offset,
     )
 
 

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -12,6 +12,10 @@ from backend.services.booking_service import (
     get_booking_for_user_or_404,
     list_bookings as list_bookings_workflow,
     list_current_user_bookings,
+)
+from backend.services.query_pagination import (
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
 )
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -34,10 +38,21 @@ def create_booking(
 
 @router.get("/me", response_model=list[BookingRead], status_code=status.HTTP_200_OK)
 def list_my_bookings(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_COLLECTION_LIMIT,
+    ),
     current_user: User = Depends(get_current_app_user),
     db: Session = Depends(get_db),
 ) -> list[Booking]:
-    return list_current_user_bookings(db, current_user)
+    return list_current_user_bookings(
+        db,
+        current_user,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # Fetches a booking visible to the current buyer or money admins.
@@ -57,6 +72,12 @@ def list_bookings(
     game_id: uuid.UUID | None = None,
     booking_status: str | None = None,
     payment_status: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(
+        default=DEFAULT_COLLECTION_LIMIT,
+        ge=1,
+        le=MAX_COLLECTION_LIMIT,
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user),
 ) -> list[Booking]:
@@ -67,6 +88,8 @@ def list_bookings(
         game_id=game_id,
         booking_status=booking_status,
         payment_status=payment_status,
+        limit=limit,
+        offset=offset,
     )
 
 
