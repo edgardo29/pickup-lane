@@ -166,6 +166,30 @@ def get_active_user_or_404(db: Session, user_id: uuid.UUID, detail: str) -> User
     return db_user
 
 
+def get_locked_game_or_404(
+    db: Session,
+    game_id: uuid.UUID,
+    *,
+    detail: str = "Game not found.",
+) -> Game:
+    db_game = db.scalar(
+        select(Game)
+        .where(
+            Game.id == game_id,
+            Game.deleted_at.is_(None),
+        )
+        .with_for_update()
+    )
+
+    if db_game is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
+
+    return db_game
+
+
 def build_game_address_snapshot(venue: Venue) -> str:
     return venue.address_line_1
 

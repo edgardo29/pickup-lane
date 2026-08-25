@@ -886,9 +886,9 @@ infrastructure timing, and completion expectations, then route execution through
 ```text
 Stage 0
 -> Gate A planning
--> independent Gate A review
+-> Gate A review
 -> Gate B
--> independent Gate C review
+-> Gate C review
 -> Gate D
 -> open PR for manual merge
 ```
@@ -1021,9 +1021,8 @@ For current work, determine execution state from current accepted repository
 truth, `00-READ-ME-FIRST.md`, `PASS-EXECUTION-REGISTER.md`, and the current run
 instruction. Then use the applicable workflow:
 
-- first-time implementation routes through Stage 0, Gate A planning,
-  independent Gate A review, Gate B, independent Gate C review, Gate D, and an
-  open PR for manual merge;
+- first-time implementation routes through Stage 0, Gate A planning/review, Gate
+  B, Gate C review, Gate D, and an open PR for manual merge;
 - accepted or historical implementation rechecks route through the recheck
   workflow;
 - mutable current state, branches, SHAs, PRs, and resume position belong in the

@@ -85,7 +85,7 @@ production telemetry.
 
 The selected evidence is adequate for WS04-01C when the focused production
 database verification tests, requirement checker for the focused domain,
-applicable compatibility scopes, diff checks, and final independent Gate C
+applicable compatibility scopes, diff checks, and final Gate C
 review pass.
 
 Checker `PASS` is structural compliance evidence only. Gate C review must still

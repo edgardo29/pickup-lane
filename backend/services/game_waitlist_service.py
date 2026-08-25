@@ -26,8 +26,8 @@ from backend.services.game_rules import (
 )
 from backend.services.game_service import (
     count_roster_players,
-    get_booking_participants,
     get_existing_active_participant,
+    get_locked_game_or_404,
     get_next_roster_order,
     get_next_waitlist_position,
     sync_game_capacity_status,
@@ -53,6 +53,9 @@ WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL = (
     "Stripe created or updated this waitlist payment, but Pickup Lane could not "
     "save the matching local promotion state. Support must verify the payment "
     "before retrying."
+)
+WAITLIST_AUTO_PROMOTION_STATE_MISSING_DETAIL = (
+    "Waitlist promotion state changed before the payment result could be recorded."
 )
 
 
@@ -272,6 +275,65 @@ def mark_paid_waitlist_auto_promotion_processing(
         db.add(booking_participant)
 
 
+def get_locked_paid_waitlist_auto_promotion_state(
+    db: Session,
+    *,
+    game_id: uuid.UUID,
+    waitlist_entry_id: uuid.UUID,
+    booking_id: uuid.UUID,
+    payment_id: uuid.UUID,
+) -> tuple[Game, WaitlistEntry, Booking, list[GameParticipant], Payment]:
+    db_game = get_locked_game_or_404(db, game_id)
+    booking = db.scalar(
+        select(Booking)
+        .where(
+            Booking.id == booking_id,
+            Booking.game_id == game_id,
+        )
+        .with_for_update()
+    )
+    waitlist_entry = db.scalar(
+        select(WaitlistEntry)
+        .where(
+            WaitlistEntry.id == waitlist_entry_id,
+            WaitlistEntry.game_id == game_id,
+        )
+        .with_for_update()
+    )
+    booking_participants = list(
+        db.scalars(
+            select(GameParticipant)
+            .where(
+                GameParticipant.game_id == game_id,
+                GameParticipant.booking_id == booking_id,
+            )
+            .order_by(GameParticipant.id.asc())
+            .with_for_update()
+        ).all()
+    )
+    payment = db.scalar(
+        select(Payment)
+        .where(
+            Payment.id == payment_id,
+            Payment.booking_id == booking_id,
+        )
+        .with_for_update()
+    )
+
+    if (
+        booking is None
+        or waitlist_entry is None
+        or not booking_participants
+        or payment is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=WAITLIST_AUTO_PROMOTION_STATE_MISSING_DETAIL,
+        )
+
+    return db_game, waitlist_entry, booking, booking_participants, payment
+
+
 def mark_paid_waitlist_auto_promotion_failed(
     db: Session,
     db_game: Game,
@@ -457,6 +519,19 @@ def attempt_paid_waitlist_auto_promotion(
             },
             customer_id=buyer_user.stripe_customer_id if buyer_user is not None else None,
         )
+        (
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+        ) = get_locked_paid_waitlist_auto_promotion_state(
+            db,
+            game_id=game_id,
+            waitlist_entry_id=waitlist_entry_id,
+            booking_id=booking_id,
+            payment_id=payment_id,
+        )
         payment.provider_payment_intent_id = payment_intent.id
         payment.payment_status = "processing"
         payment.updated_at = now
@@ -471,6 +546,19 @@ def attempt_paid_waitlist_auto_promotion(
             payment_method_id=authorized_payment_method_id,
             off_session=True,
         )
+        (
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+        ) = get_locked_paid_waitlist_auto_promotion_state(
+            db,
+            game_id=game_id,
+            waitlist_entry_id=waitlist_entry_id,
+            booking_id=booking_id,
+            payment_id=payment_id,
+        )
         payment.provider_payment_intent_id = payment_intent.id
         payment.provider_charge_id = payment_intent.latest_charge_id
         payment.updated_at = now
@@ -478,6 +566,19 @@ def attempt_paid_waitlist_auto_promotion(
     except HTTPException:
         raise
     except StripeConfigError as exc:
+        (
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+        ) = get_locked_paid_waitlist_auto_promotion_state(
+            db,
+            game_id=game_id,
+            waitlist_entry_id=waitlist_entry_id,
+            booking_id=booking_id,
+            payment_id=payment_id,
+        )
         mark_paid_waitlist_auto_promotion_failed(
             db,
             db_game,
@@ -496,6 +597,19 @@ def attempt_paid_waitlist_auto_promotion(
         )
         return "failed", 0
     except DependencyMutationTimeoutUnknownError:
+        (
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+        ) = get_locked_paid_waitlist_auto_promotion_state(
+            db,
+            game_id=game_id,
+            waitlist_entry_id=waitlist_entry_id,
+            booking_id=booking_id,
+            payment_id=payment_id,
+        )
         payment.payment_status = "processing"
         payment.failure_code = None
         payment.failure_message = None
@@ -507,6 +621,19 @@ def attempt_paid_waitlist_auto_promotion(
         )
         return "processing", held_spots
     except Exception as exc:
+        (
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+        ) = get_locked_paid_waitlist_auto_promotion_state(
+            db,
+            game_id=game_id,
+            waitlist_entry_id=waitlist_entry_id,
+            booking_id=booking_id,
+            payment_id=payment_id,
+        )
         mark_paid_waitlist_auto_promotion_failed(
             db,
             db_game,
@@ -544,6 +671,19 @@ def attempt_paid_waitlist_auto_promotion(
         return "succeeded", held_spots
 
     if payment_status == "processing":
+        (
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+        ) = get_locked_paid_waitlist_auto_promotion_state(
+            db,
+            game_id=game_id,
+            waitlist_entry_id=waitlist_entry_id,
+            booking_id=booking_id,
+            payment_id=payment_id,
+        )
         payment.payment_status = "processing"
         payment.updated_at = now
         db.add(payment)
@@ -553,6 +693,19 @@ def attempt_paid_waitlist_auto_promotion(
         )
         return "processing", held_spots
 
+    (
+        db_game,
+        waitlist_entry,
+        booking,
+        booking_participants,
+        payment,
+    ) = get_locked_paid_waitlist_auto_promotion_state(
+        db,
+        game_id=game_id,
+        waitlist_entry_id=waitlist_entry_id,
+        booking_id=booking_id,
+        payment_id=payment_id,
+    )
     mark_paid_waitlist_auto_promotion_failed(
         db,
         db_game,
@@ -573,109 +726,152 @@ def attempt_paid_waitlist_auto_promotion(
 
 
 def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
-    if not db_game.waitlist_enabled:
-        sync_game_capacity_status(db, db_game)
-        return
+    game_id = db_game.id
+    while True:
+        db_game = get_locked_game_or_404(db, game_id)
+        if not db_game.waitlist_enabled:
+            sync_game_capacity_status(db, db_game)
+            return
 
-    if is_roster_locked(db_game, now):
-        sync_game_capacity_status(db, db_game)
-        return
+        if is_roster_locked(db_game, now):
+            sync_game_capacity_status(db, db_game)
+            return
 
-    available_spots = max(
-        db_game.total_spots - count_roster_players(db, db_game.id, now=now),
-        0,
-    )
-    if available_spots <= 0:
-        sync_game_capacity_status(db, db_game)
-        return
-    app_payment_required = game_requires_app_player_payment(db_game)
+        available_spots = max(
+            db_game.total_spots - count_roster_players(db, db_game.id, now=now),
+            0,
+        )
+        if available_spots <= 0:
+            sync_game_capacity_status(db, db_game)
+            return
+        app_payment_required = game_requires_app_player_payment(db_game)
+        restart_after_paid_boundary = False
 
-    waitlist_entries = list(
-        db.scalars(
-            select(WaitlistEntry)
-            .where(
-                WaitlistEntry.game_id == db_game.id,
-                WaitlistEntry.waitlist_status.in_(WAITLIST_PROMOTION_CANDIDATE_STATUSES),
+        waitlist_entries = list(
+            db.scalars(
+                select(WaitlistEntry)
+                .where(
+                    WaitlistEntry.game_id == db_game.id,
+                    WaitlistEntry.waitlist_status.in_(
+                        WAITLIST_PROMOTION_CANDIDATE_STATUSES
+                    ),
+                )
+                .order_by(WaitlistEntry.position.asc(), WaitlistEntry.joined_at.asc())
+            ).all()
+        )
+
+        for waitlist_entry in waitlist_entries:
+            if waitlist_entry.party_size > available_spots:
+                continue
+
+            participant = get_existing_active_participant(
+                db, db_game.id, waitlist_entry.user_id
             )
-            .order_by(WaitlistEntry.position.asc(), WaitlistEntry.joined_at.asc())
-        ).all()
-    )
+            if participant is None or participant.participant_status != "waitlisted":
+                waitlist_entry = db.scalar(
+                    select(WaitlistEntry)
+                    .where(WaitlistEntry.id == waitlist_entry.id)
+                    .with_for_update()
+                )
+                if waitlist_entry is None:
+                    continue
+                waitlist_entry.waitlist_status = "removed"
+                waitlist_entry.updated_at = now
+                db.add(waitlist_entry)
+                continue
 
-    for waitlist_entry in waitlist_entries:
-        if waitlist_entry.party_size > available_spots:
-            continue
+            booking = (
+                db.scalar(
+                    select(Booking)
+                    .where(Booking.id == participant.booking_id)
+                    .with_for_update()
+                )
+                if participant.booking_id
+                else None
+            )
+            waitlist_entry = db.scalar(
+                select(WaitlistEntry)
+                .where(
+                    WaitlistEntry.id == waitlist_entry.id,
+                    WaitlistEntry.waitlist_status.in_(
+                        WAITLIST_PROMOTION_CANDIDATE_STATUSES
+                    ),
+                )
+                .with_for_update()
+            )
+            if waitlist_entry is None:
+                continue
+            if booking is None:
+                waitlist_entry.waitlist_status = "removed"
+                waitlist_entry.updated_at = now
+                db.add(waitlist_entry)
+                continue
 
-        participant = get_existing_active_participant(
-            db, db_game.id, waitlist_entry.user_id
-        )
-        if participant is None or participant.participant_status != "waitlisted":
-            waitlist_entry.waitlist_status = "removed"
+            booking_participants = list(
+                db.scalars(
+                    select(GameParticipant)
+                    .where(
+                        GameParticipant.game_id == db_game.id,
+                        GameParticipant.booking_id == booking.id,
+                        GameParticipant.participant_status == "waitlisted",
+                    )
+                    .order_by(GameParticipant.id.asc())
+                    .with_for_update()
+                ).all()
+            )
+            if len(booking_participants) != waitlist_entry.party_size:
+                waitlist_entry.party_size = len(booking_participants)
+
+            if not booking_participants or len(booking_participants) > available_spots:
+                db.add(waitlist_entry)
+                continue
+
+            if app_payment_required:
+                attempt_paid_waitlist_auto_promotion(
+                    db,
+                    db_game,
+                    waitlist_entry,
+                    booking,
+                    booking_participants,
+                    now,
+                )
+                restart_after_paid_boundary = True
+                break
+
+            next_roster_order = get_next_roster_order(db, db_game.id)
+            for index, booking_participant in enumerate(booking_participants):
+                booking_participant.participant_status = "confirmed"
+                booking_participant.attendance_status = "unknown"
+                booking_participant.confirmed_at = now
+                booking_participant.roster_order = next_roster_order + index
+                booking_participant.updated_at = now
+                db.add(booking_participant)
+
+            booking.booking_status = "confirmed"
+            booking.payment_status = "not_required"
+            booking.booked_at = now
+            booking.updated_at = now
+            db.add(booking)
+
+            waitlist_entry.waitlist_status = "accepted"
+            waitlist_entry.promoted_booking_id = booking.id
+            waitlist_entry.promoted_at = now
             waitlist_entry.updated_at = now
             db.add(waitlist_entry)
-            continue
-
-        booking = db.get(Booking, participant.booking_id) if participant.booking_id else None
-        if booking is None:
-            waitlist_entry.waitlist_status = "removed"
-            waitlist_entry.updated_at = now
-            db.add(waitlist_entry)
-            continue
-
-        booking_participants = get_booking_participants(
-            db, db_game.id, booking.id, {"waitlisted"}
-        )
-        if len(booking_participants) != waitlist_entry.party_size:
-            waitlist_entry.party_size = len(booking_participants)
-
-        if not booking_participants or len(booking_participants) > available_spots:
-            db.add(waitlist_entry)
-            continue
-
-        if app_payment_required:
-            promotion_status, held_spots = attempt_paid_waitlist_auto_promotion(
+            create_waitlist_promotion_notification(
                 db,
                 db_game,
                 waitlist_entry,
-                booking,
-                booking_participants,
+                participant,
                 now,
             )
-            if promotion_status in {"succeeded", "processing"}:
-                available_spots -= held_spots
-                if available_spots <= 0:
-                    break
-            continue
 
-        next_roster_order = get_next_roster_order(db, db_game.id)
-        for index, booking_participant in enumerate(booking_participants):
-            booking_participant.participant_status = "confirmed"
-            booking_participant.attendance_status = "unknown"
-            booking_participant.confirmed_at = now
-            booking_participant.roster_order = next_roster_order + index
-            booking_participant.updated_at = now
-            db.add(booking_participant)
+            available_spots -= len(booking_participants)
+            if available_spots <= 0:
+                break
 
-        booking.booking_status = "confirmed"
-        booking.payment_status = "not_required"
-        booking.booked_at = now
-        booking.updated_at = now
-        db.add(booking)
-
-        waitlist_entry.waitlist_status = "accepted"
-        waitlist_entry.promoted_booking_id = booking.id
-        waitlist_entry.promoted_at = now
-        waitlist_entry.updated_at = now
-        db.add(waitlist_entry)
-        create_waitlist_promotion_notification(
-            db,
-            db_game,
-            waitlist_entry,
-            participant,
-            now,
-        )
-
-        available_spots -= len(booking_participants)
-        if available_spots <= 0:
-            break
-
-    sync_game_capacity_status(db, db_game)
+        if restart_after_paid_boundary:
+            db_game = get_locked_game_or_404(db, game_id)
+        sync_game_capacity_status(db, db_game)
+        if not restart_after_paid_boundary:
+            return

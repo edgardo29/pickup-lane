@@ -465,15 +465,13 @@ stop for owner selection instead of inventing priority.
 ## 7. GATE A: Executable-Pass Design
 
 Gate A converts the accepted Stage 0 boundary into a frozen executable pass
-plan. It includes planning followed by a fresh independent read-only review of
-the complete plan. A clean independent review freezes the exact reviewed
-canonical-plan SHA and advances automatically to Gate B. Gate A is read-only
-with respect to production source, tests,
+plan. It includes planning followed by a read-only review of the complete plan.
+A clean review freezes the exact reviewed canonical-plan SHA and advances
+automatically to Gate B. Gate A is read-only with respect to production source, tests,
 requirement declarations, testing records, provider settings, migrations, and
 runtime configuration except for the canonical pass plan itself when the prompt
-authorizes that edit. The independent reviewer never edits the plan; any plan
-correction is performed by the main Codex session as separate Gate A correction
-work.
+authorizes that edit. Any plan correction is performed by the main Codex session
+as separate Gate A correction work.
 
 ### 7.1 Gate A Responsibilities
 
@@ -582,10 +580,10 @@ Gate A returns:
 
 The plan, canonical-plan SHA, requirements, correction/design decisions,
 evidence design, implementation scope boundaries, and validation strategy become
-frozen when a clean independent Gate A plan review approves the exact current
-canonical-plan SHA.
+frozen when a clean Gate A plan review approves the exact current canonical-plan
+SHA.
 
-Before Gate A begins independent plan review, it must reverify that the frozen
+Before Gate A begins plan review, it must reverify that the frozen
 intake-record SHA remains unchanged when an intake record applies. If the intake
 SHA changed, stop the current Gate A, return to Stage 0, and compute a new intake
 SHA before restarting Gate A under the corrected Stage 0 boundary.
@@ -595,28 +593,26 @@ baseline, no staged content, and that only the explicitly authorized Gate A
 planning artifact changed during Gate A.
 
 When the main Codex session finishes the current Gate A plan draft or
-correction, compute the canonical-plan SHA-256 and report it with the exact plan path. The
-independent Gate A reviewer reviews that exact current SHA. A clean review
-freezes that exact SHA and automatically authorizes Gate B. If plan content
-changes after the clean review, the review is no longer current and the changed
-plan must receive a new full independent Gate A review before it can govern
-Gate B. Do not embed a mutable SHA in the canonical planning document itself;
-the SHA belongs in gate reports and run instructions.
+correction, compute the canonical-plan SHA-256 and report it with the exact plan
+path. Gate A review covers that exact current SHA. A clean review freezes that
+exact SHA and automatically authorizes Gate B. If plan content changes after the
+clean review, the review is no longer current and the changed plan must receive a
+new full Gate A review before it can govern Gate B. Do not embed a mutable SHA in
+the canonical planning document itself; the SHA belongs in gate reports and run
+instructions.
 
 Gate B must verify the frozen canonical-plan SHA before implementation and again
 at completion. Gate C must verify it before semantic review. Gate D must verify
 it before staging and committing. Gate B must not edit the frozen canonical
 plan. Any required canonical-plan content change returns to Gate A, produces a
-new SHA, and requires a new clean independent Gate A plan review before Gate B
-resumes.
+new SHA, and requires a new clean Gate A plan review before Gate B resumes.
 
-### 7.4 Independent Gate A Plan Review
+### 7.4 Gate A Plan Review
 
-Before Gate B, the complete current canonical plan must receive a fresh
-independent read-only review. The main Codex session that authored or corrected
-the plan must not serve as its independent reviewer.
+Before Gate B, the complete current canonical plan must receive a read-only
+review.
 
-The reviewer must inspect the complete plan against:
+The review must inspect the complete plan against:
 
 - current authority and accepted intake when applicable;
 - current repository truth and accepted prerequisites;
@@ -651,7 +647,7 @@ The review has these semantic outcomes:
 - plan approved (`gate_a_plan_approved`);
 - corrections required (`gate_a_corrections_required`).
 
-A preflight condition that prevents the independent review is
+A preflight condition that prevents the review is
 `blocked_before_review`; it is not semantic approval or a correction finding.
 
 When corrections are required, each finding must route to one of:
@@ -665,27 +661,26 @@ When corrections are required, each finding must route to one of:
   required evidence/proof capability, unsafe Git state, sensitive-data handling,
   or another durable stop condition.
 
-The independent reviewer never edits or self-fixes. Eligible Gate A corrections
-are performed by the main Codex session as separate correction work, after which
-the entire corrected plan receives a new full independent review.
+Eligible Gate A corrections are performed by the main Codex session as separate
+correction work, after which the entire corrected plan receives a new full
+review.
 
 For automated execution, one Gate A plan-review cycle may contain at most three
-full independent reviews and at most two automatic plan-correction rounds:
+full reviews and at most two automatic plan-correction rounds:
 
-1. Plan Review 1 performs a full independent review. If it returns eligible Gate
+1. Plan Review 1 performs a full review. If it returns eligible Gate
    A corrections, Plan Correction Round 1 may run, produce a new plan SHA, and
-   hand off to a fresh reviewer.
-2. Plan Review 2 performs another full independent review of the entire corrected
+   continue to the next full review.
+2. Plan Review 2 performs another full review of the entire corrected
    plan. If it returns eligible Gate A corrections, Plan Correction Round 2 may
-   run, produce a new plan SHA, and hand off to a fresh reviewer.
-3. Plan Review 3 performs a final full independent review of the entire corrected
+   run, produce a new plan SHA, and continue to the next full review.
+3. Plan Review 3 performs a final full review of the entire corrected
    plan. If it still returns material corrections required, stop for owner
    direction. Do not perform an automatic Plan Correction Round 3.
 
-Every review attempt must use a fresh independent read-only reviewer. Review
-count does not reset merely because a new reviewer, main session, or correction
-run starts. A finding that routes to Stage 0 or a blocker/owner decision exits
-the automatic plan-review cycle immediately and follows that routing instead.
+Review count does not reset merely because a correction run starts. A finding
+that routes to Stage 0 or a blocker/owner decision exits the automatic
+plan-review cycle immediately and follows that routing instead.
 
 When Review 2 or Review 3 discovers a material issue that was already present
 and reasonably discoverable in the immediately preceding reviewed plan state,
@@ -695,12 +690,12 @@ quality visible; it does not make the issue non-material.
 
 `gate_a_plan_approved` freezes the exact reviewed canonical-plan SHA for the
 current automated run. The main Codex session then begins Gate B subject to the
-normal Gate B preflight. The reviewer itself never performs Gate B.
+normal Gate B preflight.
 
 ## 8. GATE B: Implementation And Trusted Evidence
 
-Gate B implements exactly the frozen Gate A design that passed independent
-Gate A review. It must not redesign the pass while implementing it.
+Gate B implements exactly the frozen Gate A design that passed Gate A review. It
+must not redesign the pass while implementing it.
 
 ### 8.1 Requirement-Group Implementation Order
 
@@ -780,10 +775,10 @@ may include:
 - security/publication scan;
 - exact scope/status verification.
 
-## 9. GATE C: Independent Semantic Review
+## 9. GATE C: Semantic Review
 
-Gate C is a new independent read-only review of the entire final pass state.
-Green commands are not semantic approval.
+Gate C is a read-only review of the entire final pass state. Green commands are
+not semantic approval.
 
 Gate C must inspect:
 
@@ -815,11 +810,10 @@ literal credentials or sensitive values under the read-first document.
 Gate C approval confirms that the final pass state matches both the frozen
 design and the current run instruction's execution boundaries.
 
-Gate C must use a new independent read-only reviewer. It must not edit files,
-stage files, commit, push, create or update a PR, merge, rebase, reset, apply a
-stash, or self-fix. Gate C must review the complete diff from the accepted
-baseline, not merely inspect currently modified files without confirming the
-baseline.
+Gate C must not edit files, stage files, commit, push, create or update a PR,
+merge, rebase, reset, apply a stash, or self-fix. Gate C must review the complete
+diff from the accepted baseline, not merely inspect currently modified files
+without confirming the baseline.
 
 Gate C has exactly two outcomes:
 
@@ -840,37 +834,35 @@ identify it as a prior-review miss. The classification does not make the issue
 non-material or remove the need for correct routing.
 
 For automated execution, one Gate C review/correction cycle may contain at most
-three full independent Gate C reviews and at most two automatic correction
-rounds:
+three full Gate C reviews and at most two automatic correction rounds:
 
-1. Review 1 performs a full independent review. If it returns corrections
+1. Review 1 performs a full review. If it returns corrections
    required and the findings are eligible for scoped correction under the frozen
-   design, Correction Round 1 may run, validate the corrected state, and hand off
-   to a new reviewer.
-2. Review 2 performs another full independent review of the entire corrected
+   design, Correction Round 1 may run, validate the corrected state, and continue
+   to the next full review.
+2. Review 2 performs another full review of the entire corrected
    pass. If it returns corrections required and the findings are still eligible
    for scoped correction under the frozen design, Correction Round 2 may run,
-   validate the corrected state, and hand off to a new reviewer.
-3. Review 3 performs a final full independent review of the entire corrected
+   validate the corrected state, and continue to the next full review.
+3. Review 3 performs a final full review of the entire corrected
    pass. If Review 3 returns corrections required, stop for owner direction. Do
    not perform an automatic Correction Round 3. If any review is clean,
    automatically proceed to Gate D.
 
-Each review in the cycle must use a fresh independent read-only reviewer. The
-review count is cumulative for the automatic cycle and does not reset merely
-because a new reviewer, main session, or correction step starts. A finding that
-routes to Gate A, Stage 0, an owner decision, or another approval boundary exits
-the automatic correction cycle immediately and follows that routing instead.
-Gate C itself still stops after each review and never performs corrections.
+The review count is cumulative for the automatic cycle and does not reset merely
+because a correction step starts. A finding that routes to Gate A, Stage 0, an
+owner decision, or another approval boundary exits the automatic correction cycle
+immediately and follows that routing instead. Gate C itself still stops after
+each review and never performs corrections.
 
 Gate C does not automatically rerun already-current successful suites. When a
 concrete concern exists, run only the smallest focused reproduction needed and
 report the exact reason and reproduction.
 
 If a correction changes repository content, the corrected final pass must
-receive correction validation and a new full independent Gate C review of the
-entire corrected pass before Gate D. Targeted-only final approval is forbidden.
-The automatic correction/review cycle remains subject to the three-review,
+receive correction validation and a new full Gate C review of the entire
+corrected pass before Gate D. Targeted-only final approval is forbidden. The
+automatic correction/review cycle remains subject to the three-review,
 two-correction-round limit above.
 
 At the end of Gate C, verify repository contents and staged state remained
@@ -878,8 +870,8 @@ unchanged by the review.
 
 ## 10. GATE D: Git And PR Finalization
 
-A clean independent Gate C review automatically authorizes Gate D for the
-current automated pass run.
+A clean Gate C review automatically authorizes Gate D for the current automated
+pass run.
 
 Gate D is mechanical and begins immediately after Gate C approval.
 
@@ -922,10 +914,10 @@ Do not publish stale-baseline work silently.
 | Proposed child remains too broad before Gate A freeze | Stage 0 revision |
 | Gate A identifies another file for same coherent outcome | Include before Gate A freeze |
 | Gate A identifies a separate outcome | Stage 0 revision |
-| Independent Gate A review finds a plan defect inside the approved executable boundary and existing authority | Separate Gate A correction by the main Codex session, then new full independent Gate A review |
-| Independent Gate A review finds the executable-pass boundary, parent/child allocation, or final-infrastructure deferral allocation wrong | Stage 0 revision |
+| Gate A review finds a plan defect inside the approved executable boundary and existing authority | Separate Gate A correction by the main Codex session, then new full Gate A review |
+| Gate A review finds the executable-pass boundary, parent/child allocation, or final-infrastructure deferral allocation wrong | Stage 0 revision |
 | Gate A or Gate B discovers intentionally unselected final infrastructure is required by the current pass but no valid deferred owner/trigger exists | Stage 0 revision |
-| Independent Gate A Review 3 still finds material plan corrections | Stop for owner direction; no automatic Plan Correction Round 3 |
+| Gate A Review 3 still finds material plan corrections | Stop for owner direction; no automatic Plan Correction Round 3 |
 | Gate B finds an implementation defect inside frozen scope | Fix and validate in Gate B |
 | Gate B needs another file for the same frozen outcome | Continue Gate B and justify the file against the frozen design |
 | Gate B needs changed requirements, engineering design, proof strategy, or pass scope | Gate A correction |
@@ -1013,7 +1005,7 @@ Stop and report instead of continuing when:
 - the third automatic Gate C review still returns corrections required;
 - a child allocation creates a gap, unapproved overlap, or unsafe partial
   state;
-- independent Gate A Plan Review 3 still requires material plan correction;
+- Gate A Plan Review 3 still requires material plan correction;
 - sensitive material would enter Git or a PR.
 
 ## 14. Completion Meaning And Post-Merge Progression

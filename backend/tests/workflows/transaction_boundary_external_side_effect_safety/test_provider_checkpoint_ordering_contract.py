@@ -475,8 +475,20 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
         provider_confirm_calls.append(payment_intent_id)
         raise AssertionError("waitlist must not confirm after create timeout")
 
+    def get_locked_paid_waitlist_auto_promotion_state(db_arg, **kwargs):
+        del kwargs
+        staged_payment = next(
+            value for value in db_arg.added if isinstance(value, Payment)
+        )
+        return db_game, waitlist_entry, booking, [booking_participant], staged_payment
+
     monkeypatch.setattr(waitlist_service, "create_payment_intent", create_payment_intent)
     monkeypatch.setattr(waitlist_service, "confirm_payment_intent", confirm_payment_intent)
+    monkeypatch.setattr(
+        waitlist_service,
+        "get_locked_paid_waitlist_auto_promotion_state",
+        get_locked_paid_waitlist_auto_promotion_state,
+    )
 
     status_value, held_spots = waitlist_service.attempt_paid_waitlist_auto_promotion(
         db,
@@ -548,8 +560,20 @@ def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
         provider_confirm_calls.append(payment_intent_id)
         raise AssertionError("waitlist must not confirm before provider result records")
 
+    def get_locked_paid_waitlist_auto_promotion_state(db_arg, **kwargs):
+        del kwargs
+        staged_payment = next(
+            value for value in db_arg.added if isinstance(value, Payment)
+        )
+        return db_game, waitlist_entry, booking, [booking_participant], staged_payment
+
     monkeypatch.setattr(waitlist_service, "create_payment_intent", create_payment_intent)
     monkeypatch.setattr(waitlist_service, "confirm_payment_intent", confirm_payment_intent)
+    monkeypatch.setattr(
+        waitlist_service,
+        "get_locked_paid_waitlist_auto_promotion_state",
+        get_locked_paid_waitlist_auto_promotion_state,
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         waitlist_service.attempt_paid_waitlist_auto_promotion(

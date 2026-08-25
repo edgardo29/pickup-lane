@@ -195,8 +195,8 @@ decisions, the final remediation plan, the master blueprint, or repository truth
 about current implementation behavior.
 
 A valid Stage 0 result defines the executable structure for the current
-automated run. A clean independent Gate A review freezes the exact reviewed
-canonical-plan SHA for Gate B. Neither transition overrides higher authority.
+automated run. A clean Gate A review freezes the exact reviewed canonical-plan
+SHA for Gate B. Neither transition overrides higher authority.
 
 ## Excluded Legacy Tests
 
@@ -225,18 +225,17 @@ report the mismatch and stop.
 
 ## Frozen Intake And Frozen Plan Rules
 
-An accepted Stage 0 intake and a canonical plan that has passed independent
-Gate A review are frozen gate artifacts for the current automated run. Gate
-instructions identify their SHA-256 values. Gate B, Gate C, and Gate D verify
-the applicable frozen values.
+An accepted Stage 0 intake and a canonical plan that has passed Gate A review
+are frozen gate artifacts for the current automated run. Gate instructions
+identify their SHA-256 values. Gate B, Gate C, and Gate D verify the applicable
+frozen values.
 
 For a later child, an intake already accepted in current `develop` remains the
 frozen parent decomposition unless a structural Stage 0 revision is required.
 
 Intake content changes return to Stage 0. Canonical-plan content changes return
-to Gate A and require a new full independent Gate A review before the changed
-plan can govern Gate B. Gate B must not edit the frozen intake or frozen
-canonical plan.
+to Gate A and require a new full Gate A review before the changed plan can govern
+Gate B. Gate B must not edit the frozen intake or frozen canonical plan.
 
 ## Local Current-State Handoff
 
@@ -331,10 +330,10 @@ subject to the durable stop conditions and review limits.
 Within that authorized run:
 
 - a valid Stage 0 result may advance automatically to Gate A;
-- a clean independent Gate A review may freeze the exact reviewed plan SHA and
-  advance automatically to Gate B;
+- a clean Gate A review may freeze the exact reviewed plan SHA and advance
+  automatically to Gate B;
 - a completed/validated Gate B may advance automatically to Gate C;
-- a clean independent Gate C review may advance automatically to Gate D;
+- a clean Gate C review may advance automatically to Gate D;
 - Gate D may stage, commit, push, and create or update the intended PR.
 
 Gate D does not merge the PR. PR merge remains manual.
