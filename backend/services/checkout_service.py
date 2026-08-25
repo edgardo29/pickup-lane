@@ -68,6 +68,14 @@ from backend.services.user_service import get_user_display_name
 
 CHECKOUT_HOLD_MINUTES = 2
 MINIMUM_USD_PAYMENT_INTENT_AMOUNT_CENTS = 50
+CHECKOUT_PROVIDER_RESULT_RECORDING_FAILED_DETAIL = (
+    "Stripe created this payment intent, but checkout state could not be recorded. "
+    "Check checkout status before retrying."
+)
+CHECKOUT_PROVIDER_STATUS_RECORDING_FAILED_DETAIL = (
+    "Stripe returned this payment intent status, but checkout state could not be "
+    "recorded. Check checkout status before retrying."
+)
 STRIPE_PAYMENTS_DISABLED_DETAIL = "Stripe payments are disabled for this demo."
 CHECKOUT_RETURN_URL_INVALID_DETAIL = "Checkout return URL is not supported."
 
@@ -629,13 +637,20 @@ def resume_pending_checkout_with_locked_game(
 
     payment_status = keep_payment_pending_until_webhook(stripe_status)
 
-    payment.payment_status = payment_status
-    payment.provider_charge_id = payment_intent.latest_charge_id
-    payment.updated_at = now
-    db.add(payment)
-    db.commit()
-    db.refresh(payment)
-    db.refresh(booking)
+    try:
+        payment.payment_status = payment_status
+        payment.provider_charge_id = payment_intent.latest_charge_id
+        payment.updated_at = now
+        db.add(payment)
+        db.commit()
+        db.refresh(payment)
+        db.refresh(booking)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=CHECKOUT_PROVIDER_STATUS_RECORDING_FAILED_DETAIL,
+        ) from exc
     return build_checkout_response(
         db,
         booking,
@@ -677,6 +692,7 @@ def create_game_checkout_payment_intent_workflow(
     checkout_request: GameCheckoutPaymentIntentCreate,
     current_user: User,
 ) -> GameCheckoutPaymentIntentRead:
+    checkpoint_committed = False
     return_url = validate_checkout_return_url(
         checkout_request.return_url,
         game_id=game_id,
@@ -846,15 +862,26 @@ def create_game_checkout_payment_intent_workflow(
                 detail="Checkout payment state could not be prepared.",
             )
 
+        payment_id = payment.id
+        booking_id = booking.id
+        payment_amount_cents = payment.amount_cents
+        payment_currency = payment.currency
+        payment_idempotency_key = payment.idempotency_key
+        current_user_id = current_user.id
+        locked_game_id = db_game.id
+        customer_id = current_user.stripe_customer_id
+        db.commit()
+        checkpoint_committed = True
+
         payment_intent = create_payment_intent(
-            amount_cents=payment.amount_cents,
-            currency=payment.currency,
-            idempotency_key=payment.idempotency_key,
+            amount_cents=payment_amount_cents,
+            currency=payment_currency,
+            idempotency_key=payment_idempotency_key,
             metadata={
-                "user_id": str(current_user.id),
-                "game_id": str(db_game.id),
-                "booking_id": str(booking.id),
-                "payment_id": str(payment.id),
+                "user_id": str(current_user_id),
+                "game_id": str(locked_game_id),
+                "booking_id": str(booking_id),
+                "payment_id": str(payment_id),
                 "checkout_total_cents": str(checkout_total_cents),
                 "credit_applied_cents": str(
                     credit_application.credit_applied_cents
@@ -864,17 +891,27 @@ def create_game_checkout_payment_intent_workflow(
                 ),
                 "stripe_amount_cents": str(credit_application.stripe_amount_cents),
             },
-            customer_id=current_user.stripe_customer_id,
+            customer_id=customer_id,
         )
         stripe_status = payment_intent.status
-        payment.provider_payment_intent_id = payment_intent.id
-        payment.provider_charge_id = payment_intent.latest_charge_id
-        payment.payment_status = keep_payment_pending_until_webhook(stripe_status)
-        payment.updated_at = now
-        db.add(payment)
-        db.commit()
-        db.refresh(booking)
-        db.refresh(payment)
+
+        try:
+            payment = db.scalars(
+                select(Payment).where(Payment.id == payment_id).with_for_update()
+            ).one()
+            payment.provider_payment_intent_id = payment_intent.id
+            payment.provider_charge_id = payment_intent.latest_charge_id
+            payment.payment_status = keep_payment_pending_until_webhook(stripe_status)
+            payment.updated_at = datetime.now(timezone.utc)
+            db.add(payment)
+            db.commit()
+            db.refresh(payment)
+        except Exception as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=CHECKOUT_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+            ) from exc
 
         resumed_checkout = resume_serialized_pending_checkout(
             db,
@@ -893,7 +930,8 @@ def create_game_checkout_payment_intent_workflow(
             )
         return resumed_checkout
     except StripeConfigError as exc:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
@@ -914,13 +952,16 @@ def create_game_checkout_payment_intent_workflow(
             detail=str(exc),
         ) from exc
     except PublicTimeoutError:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise
     except HTTPException:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise
     except Exception as exc:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Stripe could not create this payment intent.",

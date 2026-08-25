@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,26 @@ def _by_context() -> dict[str, retry_policy.ProviderOperationRetryPolicy]:
     }
 
 
+def _resolve_dotted_object(dotted_path: str) -> object:
+    parts = dotted_path.split(".")
+    import_errors: list[ModuleNotFoundError] = []
+    for module_end in range(len(parts) - 1, 0, -1):
+        module_name = ".".join(parts[:module_end])
+        try:
+            current = importlib.import_module(module_name)
+        except ModuleNotFoundError as exc:
+            if exc.name != module_name:
+                raise
+            import_errors.append(exc)
+            continue
+
+        for attr_name in parts[module_end:]:
+            current = getattr(current, attr_name)
+        return current
+
+    raise import_errors[-1] if import_errors else ModuleNotFoundError(dotted_path)
+
+
 @pytest.mark.requirement("WS02-04C2-R1")
 def test_retry_classes_and_registry_shape_are_source_owned_and_declarative() -> None:
     source = (_REPO_ROOT / "backend/services/provider_retry_policy.py").read_text()
@@ -45,6 +66,21 @@ def test_retry_classes_and_registry_shape_are_source_owned_and_declarative() -> 
 
 
 @pytest.mark.requirement("WS02-04C2-R1", "WS02-04C2-R5", "WS02-04C2-R6")
+def test_retry_policy_material_callers_resolve_to_current_source_symbols() -> None:
+    unresolved_callers: list[str] = []
+    for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES:
+        for caller in policy.material_callers:
+            try:
+                _resolve_dotted_object(caller)
+            except (AttributeError, ModuleNotFoundError):
+                unresolved_callers.append(
+                    f"{policy.workflow_context}: {caller}"
+                )
+
+    assert unresolved_callers == []
+
+
+@pytest.mark.requirement("WS02-04C2-R1", "WS02-04C2-R5", "WS02-04C2-R6")
 def test_workflow_specific_stripe_mutation_entries_are_truthful() -> None:
     policies = _by_context()
 
@@ -54,10 +90,10 @@ def test_workflow_specific_stripe_mutation_entries_are_truthful() -> None:
     assert policies["checkout_initial_create_before_provider_result"].safety_class == (
         retry_policy.RetrySafetyClass.NO_AUTOMATIC_RETRY
     )
-    assert not policies[
+    assert policies[
         "checkout_initial_create_before_provider_result"
     ].identity_survives_replay
-    assert "rolls back" in policies[
+    assert "pending checkout checkpoint is committed" in policies[
         "checkout_initial_create_before_provider_result"
     ].current_recovery
 
@@ -83,6 +119,15 @@ def test_workflow_specific_stripe_mutation_entries_are_truthful() -> None:
         retry_policy.RetrySafetyClass.NO_AUTOMATIC_RETRY
     )
     assert not policies["saved_card_setup_intent_creation"].client_retry_stable_idempotency
+
+    assert policies["community_publish_fee_initial_create"].material_callers == (
+        "backend.services.community_game_publish_service.create_paid_publish_attempt",
+    )
+    assert policies[
+        "community_publish_fee_confirm_after_checkpoint"
+    ].material_callers == (
+        "backend.services.community_game_publish_service.create_paid_publish_attempt",
+    )
 
 
 @pytest.mark.requirement("WS02-04C2-R1", "WS02-04C2-R5")

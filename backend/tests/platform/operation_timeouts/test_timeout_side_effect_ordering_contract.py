@@ -100,7 +100,7 @@ def _saved_payment_method(user, index: int):
 
 @pytest.mark.requirement("WS02-04C1-R8")
 @pytest.mark.no_db_cleanup
-def test_checkout_payment_timeout_rolls_back_and_propagates_unknown_provider_outcome(
+def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_provider_outcome(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.models import Payment
@@ -205,8 +205,8 @@ def test_checkout_payment_timeout_rolls_back_and_propagates_unknown_provider_out
     assert len(provider_create_calls) == 1
     assert provider_confirm_calls == []
     assert db.flush_calls == 1
-    assert db.commit_calls == 0
-    assert db.rollback_calls == 1
+    assert db.commit_calls == 1
+    assert db.rollback_calls == 0
     assert len(staged_payments) == 1
     assert staged_payments[0].payment_status == "requires_payment_method"
     assert staged_payments[0].provider_payment_intent_id is None

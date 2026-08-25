@@ -847,6 +847,12 @@ def test_need_a_sub_request_list_response_batches_related_database_reads() -> No
         ]
         db.add_all(requests)
         db.commit()
+        expected_request_ids = [request.id for request in requests[5:7]]
+        expected_requester_ids = [requester.id for requester in requesters[5:7]]
+        expected_requester_display_names = [
+            f"{requester.first_name} {requester.last_name}"
+            for requester in requesters[5:7]
+        ]
 
         event.listen(engine, "before_cursor_execute", before_cursor_execute)
         try:
@@ -861,14 +867,11 @@ def test_need_a_sub_request_list_response_batches_related_database_reads() -> No
             event.remove(engine, "before_cursor_execute", before_cursor_execute)
 
     assert len(response) == 2
-    assert [item["id"] for item in response] == [request.id for request in requests[5:7]]
-    assert [item["requester_user_id"] for item in response] == [
-        requester.id for requester in requesters[5:7]
-    ]
-    assert [item["requester_display_name"] for item in response] == [
-        f"{requester.first_name} {requester.last_name}"
-        for requester in requesters[5:7]
-    ]
+    assert [item["id"] for item in response] == expected_request_ids
+    assert [item["requester_user_id"] for item in response] == expected_requester_ids
+    assert [item["requester_display_name"] for item in response] == (
+        expected_requester_display_names
+    )
     assert [item["waitlist_ahead_count"] for item in response] == [5, 6]
 
     requester_batch_queries = [

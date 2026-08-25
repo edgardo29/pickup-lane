@@ -267,11 +267,14 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
         safety_class=RetrySafetyClass.NO_AUTOMATIC_RETRY,
         provider_idempotency_key_used=True,
         idempotency_identity_source=(
-            "payment-row key exists before call, but create-timeout rolls back before a provider ID checkpoint"
+            "committed pending Booking and Payment rows with payment idempotency key"
         ),
         client_retry_stable_idempotency=False,
-        identity_survives_replay=False,
-        current_recovery="Create-timeout propagates unknown outcome and rolls back local checkout rows.",
+        identity_survives_replay=True,
+        current_recovery=(
+            "Create-timeout propagates unknown outcome after the pending checkout "
+            "checkpoint is committed; ordinary app replay is not approved."
+        ),
         durable_follow_up="WS05 owns post-expiry provider reconciliation if a provider object later appears.",
     ),
     _stripe_mutation_policy(
@@ -312,21 +315,24 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
         operation="stripe.payment_intent.create",
         workflow_context="community_publish_fee_initial_create",
         material_callers=(
-            "backend.services.community_game_publish_service.create_community_publish_payment_intent_workflow",
+            "backend.services.community_game_publish_service.create_paid_publish_attempt",
         ),
         safety_class=RetrySafetyClass.NO_AUTOMATIC_RETRY,
         provider_idempotency_key_used=True,
-        idempotency_identity_source="attempt/payment IDs created before provider call and rolled back on create-timeout",
+        idempotency_identity_source="committed CommunityPublishAttempt and Payment rows",
         client_retry_stable_idempotency=False,
-        identity_survives_replay=False,
-        current_recovery="Create-timeout remains unknown and rolls back current local publish attempt.",
+        identity_survives_replay=True,
+        current_recovery=(
+            "Create-timeout remains unknown after the local publish-fee attempt "
+            "checkpoint is committed; ordinary app retry is not approved."
+        ),
         durable_follow_up="Later repair/reconciliation is required before app-owned retry.",
     ),
     _stripe_mutation_policy(
         operation="stripe.payment_intent.confirm",
         workflow_context="community_publish_fee_confirm_after_checkpoint",
         material_callers=(
-            "backend.services.community_game_publish_service.create_community_publish_payment_intent_workflow",
+            "backend.services.community_game_publish_service.create_paid_publish_attempt",
         ),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
         provider_idempotency_key_used=False,
@@ -339,7 +345,10 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
     _stripe_mutation_policy(
         operation="stripe.payment_intent.create",
         workflow_context="waitlist_auto_promotion_create",
-        material_callers=("backend.services.game_waitlist_service.process_waitlist_promotions",),
+        material_callers=(
+            "backend.services.game_waitlist_service.promote_waitlist_entries",
+            "backend.services.game_waitlist_service.attempt_paid_waitlist_auto_promotion",
+        ),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
         provider_idempotency_key_used=True,
         idempotency_identity_source="promotion payment-row idempotency key inside locked waitlist workflow",
@@ -351,7 +360,10 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
     _stripe_mutation_policy(
         operation="stripe.payment_intent.confirm",
         workflow_context="waitlist_auto_promotion_confirm",
-        material_callers=("backend.services.game_waitlist_service.process_waitlist_promotions",),
+        material_callers=(
+            "backend.services.game_waitlist_service.promote_waitlist_entries",
+            "backend.services.game_waitlist_service.attempt_paid_waitlist_auto_promotion",
+        ),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
         provider_idempotency_key_used=False,
         idempotency_identity_source="promotion payment with provider PaymentIntent ID",
@@ -535,7 +547,8 @@ OTHER_PROVIDER_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...
         workflow_context="account_deletion_auth_cleanup",
         material_callers=(
             "backend.services.account_deletion_service.delete_account_workflow",
-            "backend.services.admin_user_delete_service.delete_user_workflow",
+            "backend.services.admin_user_delete_service.delete_admin_user",
+            "backend.services.auth_account_service.cleanup_unfinished_account_workflow",
         ),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
         read_operation=False,
@@ -554,7 +567,7 @@ OTHER_PROVIDER_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...
         operation="r2.metadata.head",
         provider="r2",
         workflow_context="venue_image_metadata_verification",
-        material_callers=("backend.services.r2_storage_service.validate_uploaded_object_metadata",),
+        material_callers=("backend.services.r2_storage_service.get_object_properties",),
         current_recovery="Metadata verification fails with dependency-read semantics.",
     ),
     ProviderOperationRetryPolicy(
@@ -621,7 +634,7 @@ APPLICATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
         operation="admin_money.credit.retry",
         provider="application",
         workflow_context="admin_credit_repair_state_gate",
-        material_callers=("backend.services.admin_money_issue_service.resolve_money_issue",),
+        material_callers=("backend.services.admin_money_issue_service.retry_admin_money_issue_credit",),
         safety_class=RetrySafetyClass.MANUAL_REPAIR,
         read_operation=False,
         provider_mutation=False,

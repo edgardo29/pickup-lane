@@ -383,11 +383,15 @@ def test_registry_distinguishes_idempotency_identity_sources() -> None:
     assert "request-local" in contexts[
         "saved_card_setup_intent_creation"
     ].idempotency_identity_source
-    assert "rolls back" in contexts[
+    assert "committed pending Booking" in contexts[
         "checkout_initial_create_before_provider_result"
     ].idempotency_identity_source
-    assert "rolled back" in contexts[
+    assert "committed CommunityPublishAttempt" in contexts[
         "community_publish_fee_initial_create"
     ].idempotency_identity_source
+    assert contexts[
+        "checkout_initial_create_before_provider_result"
+    ].identity_survives_replay
+    assert contexts["community_publish_fee_initial_create"].identity_survives_replay
     assert contexts["admin_refund_retry"].identity_survives_replay
     assert contexts["waitlist_auto_promotion_create"].identity_survives_replay
