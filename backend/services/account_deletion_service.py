@@ -353,6 +353,132 @@ def active_future_buyer_bookings_for_user_deletion(
                 Game.game_status.in_(OPEN_GAME_STATUSES),
                 Game.deleted_at.is_(None),
             )
+            .order_by(Booking.game_id.asc(), Booking.id.asc())
+            .with_for_update()
+        ).all()
+    )
+
+
+def future_roster_booking_keys_for_user_deletion(
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+    now: datetime,
+) -> set[tuple[uuid.UUID, uuid.UUID]]:
+    buyer_booking_keys = {
+        (game_id, booking_id)
+        for game_id, booking_id in db.execute(
+            select(Booking.game_id, Booking.id)
+            .join(Game, Booking.game_id == Game.id)
+            .where(
+                Booking.buyer_user_id == user_id,
+                Booking.booking_status.in_(ACTIVE_BOOKING_STATUSES),
+                Game.starts_at > now,
+                Game.game_status.in_(OPEN_GAME_STATUSES),
+                Game.deleted_at.is_(None),
+            )
+        ).all()
+    }
+    participant_booking_keys = {
+        (game_id, booking_id)
+        for game_id, booking_id in db.execute(
+            select(GameParticipant.game_id, GameParticipant.booking_id)
+            .join(Game, GameParticipant.game_id == Game.id)
+            .where(
+                or_(
+                    GameParticipant.user_id == user_id,
+                    GameParticipant.guest_of_user_id == user_id,
+                ),
+                Game.starts_at > now,
+                Game.game_status.in_(OPEN_GAME_STATUSES),
+                Game.deleted_at.is_(None),
+                GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
+                GameParticipant.booking_id.is_not(None),
+            )
+        ).all()
+    }
+    return buyer_booking_keys | participant_booking_keys
+
+
+def future_roster_game_ids_for_user_deletion(
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+    now: datetime,
+) -> list[uuid.UUID]:
+    game_ids = {
+        game_id
+        for game_id in db.scalars(
+            select(Booking.game_id)
+            .join(Game, Booking.game_id == Game.id)
+            .where(
+                Booking.buyer_user_id == user_id,
+                Booking.booking_status.in_(ACTIVE_BOOKING_STATUSES),
+                Game.starts_at > now,
+                Game.game_status.in_(OPEN_GAME_STATUSES),
+                Game.deleted_at.is_(None),
+            )
+        ).all()
+    }
+    game_ids.update(
+        game_id
+        for game_id in db.scalars(
+            select(GameParticipant.game_id)
+            .join(Game, GameParticipant.game_id == Game.id)
+            .where(
+                or_(
+                    GameParticipant.user_id == user_id,
+                    GameParticipant.guest_of_user_id == user_id,
+                ),
+                Game.starts_at > now,
+                Game.game_status.in_(OPEN_GAME_STATUSES),
+                Game.deleted_at.is_(None),
+                GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
+            )
+        ).all()
+    )
+    return sorted(game_ids, key=lambda game_id: game_id.int)
+
+
+def lock_future_roster_games_for_account_deletion(
+    db: Session,
+    *,
+    game_ids: list[uuid.UUID],
+    now: datetime,
+) -> list[Game]:
+    if not game_ids:
+        return []
+
+    games = list(
+        db.scalars(
+            select(Game)
+            .where(
+                Game.id.in_(game_ids),
+                Game.starts_at > now,
+                Game.game_status.in_(OPEN_GAME_STATUSES),
+                Game.deleted_at.is_(None),
+            )
+            .order_by(Game.id.asc())
+            .with_for_update()
+        ).all()
+    )
+    return sorted(games, key=lambda game: game.id.int)
+
+
+def lock_future_roster_bookings_for_account_deletion(
+    db: Session,
+    *,
+    booking_keys: set[tuple[uuid.UUID, uuid.UUID]],
+) -> None:
+    if not booking_keys:
+        return
+
+    booking_ids = [booking_id for _, booking_id in sorted(booking_keys)]
+    list(
+        db.scalars(
+            select(Booking)
+            .where(Booking.id.in_(booking_ids))
+            .order_by(Booking.game_id.asc(), Booking.id.asc())
             .with_for_update()
         ).all()
     )
@@ -365,31 +491,9 @@ def active_booking_participants_for_user_deletion(
     now: datetime,
     booking_keys: set[tuple[uuid.UUID, uuid.UUID]],
 ) -> list[GameParticipant]:
-    participants = list(
-        db.scalars(
-            select(GameParticipant)
-            .join(Game, GameParticipant.game_id == Game.id)
-            .where(
-                or_(
-                    GameParticipant.user_id == user_id,
-                    GameParticipant.guest_of_user_id == user_id,
-                ),
-                Game.starts_at > now,
-                Game.game_status.in_(OPEN_GAME_STATUSES),
-                Game.deleted_at.is_(None),
-                GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
-            )
-            .with_for_update()
-        ).all()
-    )
-    participants_by_id = {participant.id: participant for participant in participants}
+    participants_by_id: dict[uuid.UUID, GameParticipant] = {}
 
-    booking_keys.update(
-        (participant.game_id, participant.booking_id)
-        for participant in participants
-        if participant.booking_id is not None
-    )
-    for game_id, booking_id in booking_keys:
+    for game_id, booking_id in sorted(booking_keys):
         booking_participants = db.scalars(
             select(GameParticipant)
             .where(
@@ -397,12 +501,35 @@ def active_booking_participants_for_user_deletion(
                 GameParticipant.booking_id == booking_id,
                 GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
             )
+            .order_by(GameParticipant.game_id.asc(), GameParticipant.id.asc())
             .with_for_update()
         ).all()
         for participant in booking_participants:
             participants_by_id[participant.id] = participant
 
-    return list(participants_by_id.values())
+    directly_affected_participants = db.scalars(
+        select(GameParticipant)
+        .join(Game, GameParticipant.game_id == Game.id)
+        .where(
+            or_(
+                GameParticipant.user_id == user_id,
+                GameParticipant.guest_of_user_id == user_id,
+            ),
+            Game.starts_at > now,
+            Game.game_status.in_(OPEN_GAME_STATUSES),
+            Game.deleted_at.is_(None),
+            GameParticipant.participant_status.in_(ACTIVE_JOIN_STATUSES),
+        )
+        .order_by(GameParticipant.game_id.asc(), GameParticipant.id.asc())
+        .with_for_update()
+    ).all()
+    for participant in directly_affected_participants:
+        participants_by_id[participant.id] = participant
+
+    return sorted(
+        participants_by_id.values(),
+        key=lambda participant: (participant.game_id.int, participant.id.int),
+    )
 
 
 def cancel_participant_for_account_deletion(
@@ -512,25 +639,39 @@ def cancel_future_roster_activity(
     from backend.services.game_service import sync_game_capacity_status
     from backend.services.game_waitlist_service import promote_waitlist_entries
 
-    buyer_bookings = active_future_buyer_bookings_for_user_deletion(
+    affected_game_ids = future_roster_game_ids_for_user_deletion(
         db,
         user_id=user_id,
         now=now,
     )
+    locked_games = lock_future_roster_games_for_account_deletion(
+        db,
+        game_ids=affected_game_ids,
+        now=now,
+    )
+    if not locked_games:
+        return
+
+    locked_game_ids = {game.id for game in locked_games}
     booking_keys = {
-        (booking.game_id, booking.id)
-        for booking in buyer_bookings
+        (game_id, booking_id)
+        for game_id, booking_id in future_roster_booking_keys_for_user_deletion(
+            db,
+            user_id=user_id,
+            now=now,
+        )
+        if game_id in locked_game_ids
     }
+    lock_future_roster_bookings_for_account_deletion(
+        db,
+        booking_keys=booking_keys,
+    )
     participants = active_booking_participants_for_user_deletion(
         db,
         user_id=user_id,
         now=now,
         booking_keys=booking_keys,
     )
-    affected_game_ids = {
-        *(participant.game_id for participant in participants),
-        *(booking.game_id for booking in buyer_bookings),
-    }
 
     for participant in participants:
         cancel_participant_for_account_deletion(
@@ -542,7 +683,7 @@ def cancel_future_roster_activity(
         )
 
     db.flush()
-    for game_id, booking_id in booking_keys:
+    for game_id, booking_id in sorted(booking_keys):
         reconcile_booking_after_account_deletion(
             db,
             booking_id=booking_id,
@@ -553,18 +694,11 @@ def cancel_future_roster_activity(
         )
 
     db.flush()
-    for game_id in affected_game_ids:
-        game = db.get(Game, game_id)
-        if (
-            game is not None
-            and game.deleted_at is None
-            and game.starts_at > now
-            and game.game_status in OPEN_GAME_STATUSES
-        ):
-            promote_waitlist_entries(db, game, now)
-            sync_game_capacity_status(db, game)
-            game.updated_at = now
-            db.add(game)
+    for game in locked_games:
+        promote_waitlist_entries(db, game, now)
+        sync_game_capacity_status(db, game)
+        game.updated_at = now
+        db.add(game)
 
 
 def anonymize_participant_snapshots(

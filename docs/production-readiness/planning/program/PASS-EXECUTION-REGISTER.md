@@ -17,10 +17,10 @@ when durable authority leaves multiple equally valid choices.
 | Field | Value |
 |---|---|
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes and record accepted progression state. |
-| Current reconciliation point | Accepted `develop` at the `WS04-02A` implementation baseline; this revision records the `WS04-02` decomposition and `WS04-02A` acceptance state that becomes true when the substantive `WS04-02A` PR merges. |
-| Current accepted develop SHA at reconciliation | `ec7332c5b4090f67963a7be7754d585626bb600e`. |
+| Current reconciliation point | Accepted `develop` at the `WS04-02B` implementation baseline; this revision records the `WS04-02B` acceptance state that becomes true when the substantive `WS04-02B` PR merges. |
+| Current accepted develop SHA at reconciliation | `ae0f53f39625f90dadf7072e425d40dd27eeb4d9`. |
 | Original blueprint register | 42 parent-level planned passes in `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md`. |
-| Accepted executable requirement declarations through this point | 33 files under `backend/tests/support/requirements/`. |
+| Accepted executable requirement declarations through this point | 34 files under `backend/tests/support/requirements/`. |
 | Next pass selected by this register? | Not by itself. Automated progression uses this register together with the master blueprint, remediation plan, accepted intake/dependencies, prerequisites, and current `develop`; owner selection is required only when durable authority does not determine one safe next unit. |
 
 The recorded accepted `develop` SHA is a historical reconciliation basis for
@@ -36,7 +36,7 @@ production-readiness run instruction.
 | Original blueprint parent-level entries | 42 | Parent-level entries mirrored from the master blueprint. |
 | Accepted/completed parent-level entries | 14 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through `WS03-04`. |
 | Remaining parent-level entries | 28 | Parent-level entries not yet completed in this register; includes decomposed in-progress `WS04-01`. |
-| Accepted executable passes with requirement declarations | 33 | Current accepted executable declaration files under `backend/tests/support/requirements/` after `WS04-02A` merges. |
+| Accepted executable passes with requirement declarations | 34 | Current accepted executable declaration files under `backend/tests/support/requirements/` after `WS04-02B` merges. |
 | Remaining actual executable-pass count | Unknown | Future executable-unit count depends on Stage 0 decomposition of remaining parent scope. |
 
 Count magnitude is not completion proof or control-closure proof. Controls
@@ -96,7 +96,7 @@ navigation. It does not replace the master blueprint.
 | `WS03-04` | Complete authorization matrix and negative proof | Decomposed into accepted executable child passes `WS03-04A`, `WS03-04B`, `WS03-04C`, and `WS03-04D`; WS03-04 parent complete, with the Stripe webhook lifecycle gap explicitly covered elsewhere by `WS05`. |
 | `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
 | `WS04-01` | Database engine/session lifecycle, connection budget, and least-privilege roles | Structurally revised after accepted `WS04-01A` and `WS04-01B`: revised `WS04-01C` accepted the provider-independent production-verification framework; final production topology/budget/role proof is preserved for mandatory later `WS04-01D` after final infrastructure is selected. |
-| `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Decomposed into current executable children `WS04-02A`, `WS04-02B`, and `WS04-02C`; this revision records `WS04-02A` acceptance when its substantive PR merges, with `WS04-02B` then `WS04-02C` remaining. |
+| `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Decomposed into current executable children `WS04-02A`, `WS04-02B`, and `WS04-02C`; this revision records `WS04-02A` and `WS04-02B` acceptance when their substantive PRs merge, with `WS04-02C` remaining next. |
 | `WS04-03` | Migration policy, compatibility, interruption, and production-like rehearsal | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
 | `WS05-01` | Durable job model, claim/lease lifecycle, and worker deployment | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
 | `WS05-02` | Payment and booking state machines with webhook authority | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
@@ -165,6 +165,7 @@ Every path in the Plan column is relative to
 | `WS04-01B` | `WS04-01` | `passes/ws04/ws04-01b-query-cursor-database-access-behavior.md` | `ws04_01b.json` | 7 | 7 | 0 | 0 | `workflows/query_cursor_database_access_behavior` |
 | `WS04-01C` | `WS04-01` | `passes/ws04/ws04-01c-production-postgresql-topology-connection-budget-role-verification.md` | `ws04_01c.json` | 8 | 8 | 0 | 0 | `platform/production_database_verification` |
 | `WS04-02A` | `WS04-02` | `passes/ws04/ws04-02a-transaction-boundary-external-side-effect-safety.md` | `ws04_02a.json` | 8 | 8 | 0 | 0 | `workflows/transaction_boundary_external_side_effect_safety` |
+| `WS04-02B` | `WS04-02` | `passes/ws04/ws04-02b-database-enforced-invariants-locks-deterministic-concurrency.md` | `ws04_02b.json` | 9 | 9 | 0 | 0 | `workflows/database_invariants_locks_deterministic_concurrency` |
 
 ## 6. Accepted Stage 0 Intake Records
 
@@ -172,7 +173,7 @@ Every path in the Plan column is relative to
 |---|---|---|---|---|
 | `WS03-04` | `docs/production-readiness/planning/passes/ws03/ws03-04-intake.md` | `e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4` | `WS03-04A` | Accepted in `develop` through `WS03-04A`; reused by the remaining `WS03-04` children. |
 | `WS04-01` | `docs/production-readiness/planning/passes/ws04/ws04-01-intake.md` | `cb26606f6bca7dbc304a07e172771eeeebcece5312f73627fe8c67738a960ced` | `WS04-01A`, `WS04-01B`, `WS04-01C` | Accepted A/B/C structure preserved; mandatory later `WS04-01D` remains deferred until final production infrastructure is selected. |
-| `WS04-02` | `docs/production-readiness/planning/passes/ws04/ws04-02-intake.md` | `bbcea141dec04890be5c0812131996548f86f82f6bc80ad66ce7f700e6ba3701` | `WS04-02A` | Accepted three-child structure: `WS04-02A -> WS04-02B -> WS04-02C`; this revision records `WS04-02A` acceptance when its substantive PR merges. |
+| `WS04-02` | `docs/production-readiness/planning/passes/ws04/ws04-02-intake.md` | `bbcea141dec04890be5c0812131996548f86f82f6bc80ad66ce7f700e6ba3701` | `WS04-02A`, `WS04-02B` | Accepted three-child structure: `WS04-02A -> WS04-02B -> WS04-02C`; this revision records `WS04-02B` acceptance when its substantive PR merges, with `WS04-02C` remaining next. |
 
 Historical WS02-04, WS02-05, and WS03-03 decompositions remain accepted. Do
 not fabricate retroactive intake records for them.
@@ -415,15 +416,25 @@ compatibility, SQL/logging safety, durable worker execution, Stripe sandbox
 lifecycle proof, final provider/runtime proof, migration compatibility,
 dashboards, alerts, or final production infrastructure evidence.
 
-Remaining current children after `WS04-02A`:
+`WS04-02B` owns the current database-enforced invariant policy; game, roster,
+waitlist, and credit financial dispositions; deterministic game-first locking
+proof; independent-session PostgreSQL contention evidence; account-deletion
+multi-game roster cleanup ordering; and the current source testing record for
+database-enforced invariants.
 
-1. `WS04-02B`
-2. `WS04-02C`
+`WS04-02B` does not close database value/default compatibility, SQL/logging
+safety, durable worker execution, Stripe sandbox lifecycle proof, final
+provider/runtime proof, migration compatibility, dashboards, alerts, or final
+production infrastructure evidence.
 
-`WS04-02` parent remains incomplete until `WS04-02B` and `WS04-02C` are
-accepted, and until any later-owned obligations explicitly allocated to `WS05`,
-`WS04-03`, `WS09`, `WS10`, or `WS04-01D` remain truthfully preserved outside
-this parent rather than being claimed as closed by `WS04-02A`.
+Remaining current children after `WS04-02B`:
+
+1. `WS04-02C`
+
+`WS04-02` parent remains incomplete until `WS04-02C` is accepted, and until any
+later-owned obligations explicitly allocated to `WS05`, `WS04-03`, `WS09`,
+`WS10`, or `WS04-01D` remain truthfully preserved outside this parent rather
+than being claimed as closed by `WS04-02A` or `WS04-02B`.
 
 ## 8. Remaining Parent Passes And Progression
 

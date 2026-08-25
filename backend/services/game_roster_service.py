@@ -38,6 +38,7 @@ from backend.services.game_service import (
     get_booking_participants,
     get_existing_active_participant,
     get_existing_active_waitlist_entry,
+    get_locked_game_or_404,
     get_next_roster_order,
     sync_game_capacity_status,
 )
@@ -224,13 +225,7 @@ def join_game_roster_workflow(
     join_request: GameJoinCreate,
     joining_user: User,
 ) -> GameJoinRead:
-    db_game = db.get(Game, game_id)
-
-    if db_game is None or db_game.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Game not found.",
-        )
+    db_game = get_locked_game_or_404(db, game_id)
 
     if db_game.public_visibility_status != "visible":
         raise HTTPException(
@@ -386,13 +381,7 @@ def leave_game_roster_workflow(
     game_id: uuid.UUID,
     leaving_user: User,
 ) -> GameLeaveRead:
-    db_game = db.get(Game, game_id)
-
-    if db_game is None or db_game.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Game not found.",
-        )
+    db_game = get_locked_game_or_404(db, game_id)
 
     if db_game.host_user_id == leaving_user.id:
         raise HTTPException(
@@ -506,13 +495,7 @@ def add_booking_game_guests_workflow(
     guest_request: GameGuestAddCreate,
     acting_user: User,
 ) -> GameGuestAddRead:
-    db_game = db.get(Game, game_id)
-
-    if db_game is None or db_game.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Game not found.",
-        )
+    db_game = get_locked_game_or_404(db, game_id)
 
     if db_game.publish_status != "published" or db_game.game_status not in JOINABLE_GAME_STATUSES:
         raise HTTPException(
@@ -637,13 +620,7 @@ def add_host_game_guests_workflow(
     guest_request: GameGuestAddCreate,
     acting_user: User,
 ) -> GameGuestAddRead:
-    db_game = db.get(Game, game_id)
-
-    if db_game is None or db_game.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Game not found.",
-        )
+    db_game = get_locked_game_or_404(db, game_id)
 
     if db_game.host_user_id != acting_user.id:
         raise HTTPException(
@@ -737,13 +714,7 @@ def remove_game_guests_workflow(
     guest_request: GameGuestRemoveCreate,
     acting_user: User,
 ) -> GameGuestRemoveRead:
-    db_game = db.get(Game, game_id)
-
-    if db_game is None or db_game.deleted_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Game not found.",
-        )
+    db_game = get_locked_game_or_404(db, game_id)
 
     if guest_request.remove_count <= 0:
         raise HTTPException(

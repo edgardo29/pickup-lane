@@ -118,7 +118,7 @@ Pickup Lane application
 -> WS implementation passes
 -> trusted evidence architecture
 -> implementation or recheck workflow
--> independent review and Git/PR finalization
+-> semantic review and Git/PR finalization
 ```
 
 The locked audit set and consolidated checklist capture the original
@@ -133,10 +133,10 @@ safe evidence handling. WS passes implement and revalidate bounded workstream
 slices against current authority and current repository truth.
 
 For automated first-time implementation, Stage 0 establishes the executable
-parent/child structure. Each executable pass then moves through Gate A planning,
-independent Gate A review, Gate B implementation/validation, independent Gate C
-review, and Gate D publication. After manual PR merge, progression resumes from
-current accepted `develop`.
+parent/child structure. Each executable pass then moves through Gate A
+planning/review, Gate B implementation/validation, Gate C semantic review, and
+Gate D publication. After manual PR merge, progression resumes from current
+accepted `develop`.
 
 ## 5. Document Map And Routing Indexes
 
@@ -320,7 +320,7 @@ follow-up itself is accepted.
 | Intake | Stage 0 parent-pass readiness and decomposition work performed before Gate A for first-time implementation. |
 | Accepted baseline | The exact accepted `develop` commit used as the starting point for a pass branch. |
 | Frozen intake | The exact Stage 0 intake artifact/path/SHA accepted for the current automated run or already accepted in current `develop`. |
-| Frozen plan | The exact Gate A canonical plan SHA that passed the required independent Gate A review and therefore governs Gate B. |
+| Frozen plan | The exact Gate A canonical plan SHA that passed Gate A review and therefore governs Gate B. |
 | Gate B implementation scope | The frozen engineering scope and design that govern which repository files Gate B may modify. Gate B may change any file genuinely necessary to implement and prove the frozen design. |
 | Changed-file scope justification | Gate C and Gate D review the actual changed files for justification against the frozen pass scope and design rather than equality with a predicted filename list. |
 | Repository truth | Current accepted source, configuration, documentation, and evidence state at the trusted baseline and accepted pass commits. |
@@ -344,7 +344,7 @@ reviewed before drafting or executing that gate.
 |---|---|
 | Stage 0 intake | Implementation workflow, intake template, execution register, master blueprint parent entry including any late-bound infrastructure marker, final remediation plan, applicable decisions/governance records, accepted prerequisite plans/evidence, final-infrastructure timing rule, and applicable engineering/testing standards. |
 | Gate A for first-time implementation | Implementation workflow, accepted intake record when applicable, planning template, testing-record template, current planning file when one exists, applicable authority/source/evidence, any deferred handoff/trigger owned by the intake, and applicable engineering/testing standards. |
-| Independent Gate A review | Applicable workflow, accepted intake when applicable, complete current canonical plan and SHA, planning/testing-record templates, applicable authority/source/evidence, current repository truth, prerequisites/handoffs, and applicable engineering/testing standards. |
+| Gate A review | Applicable workflow, accepted intake when applicable, complete current canonical plan and SHA, planning/testing-record templates, applicable authority/source/evidence, current repository truth, prerequisites/handoffs, and applicable engineering/testing standards. |
 | Gate A for recheck | Recheck workflow, planning template, testing-record template, current pass plan, applicable authority/source/evidence, and applicable engineering/testing standards. |
 | Gate B | Applicable workflow, frozen intake when applicable, frozen canonical plan, testing-record template, applicable authority/source/evidence, and applicable engineering/testing standards. |
 | Gate C for first-time implementation | Applicable workflow, frozen intake when applicable, frozen canonical plan, requirement declaration, testing record, implementation, executable and non-executable evidence, current validation, execution-register proposal when in scope, and actual changed-file scope justification. |

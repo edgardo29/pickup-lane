@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS04-02B-R1",
+      "owning_pass": "WS04-02B",
+      "source_controls": [
+        "DB-007",
+        "DB-008",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_invariants_locks_deterministic_concurrency",
+      "reason": "Current roster, capacity, waitlist, provider-adjacent, credit, refund, and financial database invariants must be cataloged with one authoritative disposition per invariant."
+    },
+    {
+      "id": "WS04-02B-R2",
+      "owning_pass": "WS04-02B",
+      "source_controls": [
+        "DB-007",
+        "DB-008",
+        "DB-009",
+        "WS04-02A"
+      ],
+      "state": "required",
+      "scope": "workflows/database_invariants_locks_deterministic_concurrency",
+      "reason": "Community capacity decisions must serialize on the owning PostgreSQL game row before reading and deciding roster, waitlist, relationship, or capacity state."
+    },
+    {
+      "id": "WS04-02B-R3",
+      "owning_pass": "WS04-02B",
+      "source_controls": [
+        "DB-007",
+        "DB-008",
+        "WS04-02",
+        "WS04-02A"
+      ],
+      "state": "required",
+      "scope": "workflows/database_invariants_locks_deterministic_concurrency",
+      "reason": "Waitlist promotion must preserve full-party capacity, waitlist order, pending-payment holds, and fresh capacity recomputation after committed provider boundaries."
+    },
+    {
+      "id": "WS04-02B-R4",
+      "owning_pass": "WS04-02B",
+      "source_controls": [
+        "DB-007",
+        "DB-008",
+        "DB-010",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_invariants_locks_deterministic_concurrency",
+      "reason": "Capacity-mutating workflows, including multi-game account-deletion roster cleanup, must follow deterministic game-first lock order."
+    },
+    {
+      "id": "WS04-02B-R5",
+      "owning_pass": "WS04-02B",
+      "source_controls": [
+        "DB-007",
+        "DB-009",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_invariants_locks_deterministic_concurrency",
+      "reason": "Active participant, waitlist, provider, and idempotency duplicates must be database-enforced with bounded conflict outcomes."
+    },
+    {
+      "id": "WS04-02B-R6",
+      "owning_pass": "WS04-02B",
+      "source_controls": [
+        "DB-005",
+        "DB-007",
+        "DB-008",
+        "DB-009",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_invariants_locks_deterministic_concurrency",
+      "reason": "Current financial invariants must retain their frozen dispositions without broad payment/provider lifecycle redesign."
+    },
+    {
+      "id": "WS04-02B-R7",
+      "owning_pass": "WS04-02B",
+      "source_controls": [
+        "DB-007",
+        "DB-008",
+        "DB-009",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_invariants_locks_deterministic_concurrency",
+      "reason": "Game-credit concurrency must prevent overdrawing, double restoration, double reversal, and lost ledger rows."
+    },
+    {
+      "id": "WS04-02B-R8",
+      "owning_pass": "WS04-02B",
+      "source_controls": [
+        "DB-004",
+        "DB-008",
+        "DB-010",
+        "WS04-02A"
+      ],
+      "state": "required",
+      "scope": "workflows/database_invariants_locks_deterministic_concurrency",
+      "reason": "Contention, integrity, lock timeout, deadlock, serialization, and unknown database outcomes must remain bounded without process-local locks or blind replay."
+    },
+    {
+      "id": "WS04-02B-R9",
+      "owning_pass": "WS04-02B",
+      "source_controls": [
+        "DB-001",
+        "DB-002",
+        "DB-003",
+        "DB-006",
+        "DB-012",
+        "DB-013",
+        "DB-014",
+        "DB-015",
+        "WS04-01A",
+        "WS04-01B",
+        "WS04-01C",
+        "WS04-02A"
+      ],
+      "state": "required",
+      "scope": "workflows/database_invariants_locks_deterministic_concurrency",
+      "reason": "Accepted database foundations and WS04-02A transaction-boundary contracts must remain intact without final production infrastructure assumptions."
+    }
+  ]
+}

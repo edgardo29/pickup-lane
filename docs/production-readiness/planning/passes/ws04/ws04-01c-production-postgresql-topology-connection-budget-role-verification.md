@@ -544,8 +544,8 @@ The expected C implementation artifacts are:
 - the execution register update needed to record C completion and keep
   `WS04-01D` mandatory.
 
-The existing local workflow, Skill, custom-agent, governance, blueprint, intake,
-and handoff-upload changes that predate this WS04-01C implementation are
+The existing local workflow, governance, blueprint, intake, and handoff-upload
+changes that predate this WS04-01C implementation are
 approved carryover baseline for this branch. Gate B must preserve them and may
 publish them at the same PR boundary, but must not count them as newly invented
 WS04-01C implementation scope or use them to prove C-only requirements unless a
