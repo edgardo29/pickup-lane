@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS04-02C-R1",
+      "owning_pass": "WS04-02C",
+      "source_controls": [
+        "DB-003",
+        "DB-005",
+        "DB-006",
+        "DB-012",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_value_default_sql_safety_compatibility",
+      "reason": "The current repository-owned database value, default, and SQL-safety surface must be cataloged in one deterministic source-owned contract."
+    },
+    {
+      "id": "WS04-02C-R2",
+      "owning_pass": "WS04-02C",
+      "source_controls": [
+        "DB-003",
+        "DB-006",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_value_default_sql_safety_compatibility",
+      "reason": "Persisted timestamps and deliberate update timestamps must remain timezone-aware without naive Python datetime or implicit ORM onupdate behavior."
+    },
+    {
+      "id": "WS04-02C-R3",
+      "owning_pass": "WS04-02C",
+      "source_controls": [
+        "DB-005",
+        "DB-007",
+        "WS04-02A",
+        "WS04-02B"
+      ],
+      "state": "required",
+      "scope": "workflows/database_value_default_sql_safety_compatibility",
+      "reason": "Money-bearing fields and provider-facing values must stay exact integer cents with explicit current USD-only handling."
+    },
+    {
+      "id": "WS04-02C-R4",
+      "owning_pass": "WS04-02C",
+      "source_controls": [
+        "DB-006",
+        "DB-007",
+        "DB-009",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_value_default_sql_safety_compatibility",
+      "reason": "Database-created status defaults and service-persisted status values must remain compatible with current model constraints and schemas."
+    },
+    {
+      "id": "WS04-02C-R5",
+      "owning_pass": "WS04-02C",
+      "source_controls": [
+        "DB-006",
+        "DB-012",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_value_default_sql_safety_compatibility",
+      "reason": "JSON and JSONB defaults and payload shapes must avoid shared mutable defaults and round-trip safely through PostgreSQL."
+    },
+    {
+      "id": "WS04-02C-R6",
+      "owning_pass": "WS04-02C",
+      "source_controls": [
+        "DB-004",
+        "DB-006",
+        "DB-012",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/database_value_default_sql_safety_compatibility",
+      "reason": "Current production raw SQL and migration SQL expressions in this pass's scope must remain fixed, parameterized, or explicitly allowlisted."
+    },
+    {
+      "id": "WS04-02C-R7",
+      "owning_pass": "WS04-02C",
+      "source_controls": [
+        "DB-004",
+        "DB-012",
+        "WS09",
+        "WS10"
+      ],
+      "state": "required",
+      "scope": "workflows/database_value_default_sql_safety_compatibility",
+      "reason": "Repository-owned application logging must not intentionally expose raw SQL values, provider payloads, credentials, payment details, personal data, or sensitive database values."
+    },
+    {
+      "id": "WS04-02C-R8",
+      "owning_pass": "WS04-02C",
+      "source_controls": [
+        "WS04-01A",
+        "WS04-01B",
+        "WS04-01C",
+        "WS04-02A",
+        "WS04-02B",
+        "WS04-03",
+        "WS05",
+        "WS09",
+        "WS10"
+      ],
+      "state": "required",
+      "scope": "workflows/database_value_default_sql_safety_compatibility",
+      "reason": "Accepted database, transaction, and invariant contracts must remain intact while later-owned infrastructure, migration, payment, and deployed observability evidence stays outside WS04-02C."
+    }
+  ]
+}

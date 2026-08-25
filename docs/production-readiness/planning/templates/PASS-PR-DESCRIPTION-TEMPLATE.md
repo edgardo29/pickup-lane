@@ -28,7 +28,7 @@ Before writing, identify only:
 
 1. the concrete problem, risk, limitation, or missing behavior that made the change necessary, and the practical result after the change;
 2. the material changes in the actual diff;
-3. the meaningful behavior or system properties that were validated.
+3. the meaningful behavior, failure cases, compatibility boundaries, or system properties that were actually validated.
 
 Exclude supporting process information unless that process document, template, or mechanism is itself a material change being reviewed.
 
@@ -217,42 +217,169 @@ Do not include preserved or unchanged behavior merely to demonstrate completenes
 
 Validation has one job:
 
-**Tell the reviewer what meaningful behavior or system property was checked and the result.**
+**Explain what important behavior, failure mode, compatibility boundary, or system property was actually proven after the change.**
 
-Each bullet must make clear:
+Write validation for the reviewer, not as a log of commands that ran.
 
-* what was checked;
-* the type of test or verification when useful;
-* the result.
+Each bullet should describe one distinct validation result and make clear:
+
+* what behavior, risk, failure case, or regression boundary was checked;
+* the scenario or type of verification when that helps explain the proof;
+* what the system did correctly;
+* whether the verification passed.
 
 Use the behavior or system property as the subject of the bullet.
 
-Do not use internal test names, architecture labels, policy names, checker names, configuration terms, or abstract internal concepts when the verified behavior can be stated directly.
+Prefer:
 
-Test counts may be included when useful, but they are supporting information. The bullet must still explain what the tests established.
+`Overlapping roster requests were tested against PostgreSQL and could not commit more players than the game had available spots.`
 
-Regression validation is appropriate when it confirms that important existing behavior still works after the change.
+Instead of:
 
-Do not create separate bullets that substantially repeat the same validation. Combine overlapping results when they describe the same test set or the same behavior.
+`17 tests passed.`
+
+Prefer:
+
+`Existing booking, roster, and account-deletion behavior continued to pass after the locking changes.`
+
+Instead of:
+
+`Compatibility suite: 54 passed.`
+
+### Validation source of truth
+
+Do not derive Validation claims from `Changes`, from the implementation alone, or from what the code appears intended to do.
+
+Before writing `Validation`, inspect the actual validation evidence for the PR.
+
+Use, as applicable:
+
+1. the current testing record or equivalent validation/evidence record, especially its scenario, proof-layer, and validation-result sections;
+2. the actual tests or verification artifacts when needed to understand exactly what scenario was exercised;
+3. the recorded results from validation that actually ran;
+4. the approved validation plan only to understand intended scope, never as proof that validation passed.
+
+Every Validation bullet must be supported by validation that actually ran or by another explicitly identified proof layer.
+
+Do not claim that behavior was tested merely because:
+
+* the implementation appears to provide it;
+* the plan required it;
+* a test file exists;
+* a related suite passed;
+* a requirement says the behavior should exist.
+
+If the available evidence does not establish a claimed behavior, omit the claim rather than infer it.
+
+When a broader regression or compatibility suite is used, identify the behavior or system area that made that suite relevant instead of reporting only its name or test count.
+
+### Relevant validation only
+
+Include validation that helps establish that the change works correctly, such as:
+
+* direct behavior changed by the PR;
+* meaningful edge and failure cases;
+* concurrency or ordering behavior;
+* rollback, retry, duplicate, or invalid-state handling;
+* security or authorization behavior;
+* database, API, provider, migration, browser, or integration behavior when materially affected;
+* existing behavior that could realistically regress because of the change.
+
+The relevant validation scope should come from:
+
+* the actual behavior changed;
+* the risks introduced or addressed by that change;
+* affected callers and integrations;
+* compatibility boundaries identified for the change;
+* the actual validation evidence that was executed.
+
+Do not add unrelated validation merely to increase the amount of reported testing.
+
+### Test counts and commands
+
+Test counts are optional supporting information.
+
+If a count is included, identify what those tests covered and why that scope was relevant.
+
+Do not use a bare count as a validation result.
+
+Bad:
+
+* `17 passed`
+* `69 tests passed`
+
+Acceptable:
+
+* `Seventeen PostgreSQL concurrency tests passed covering contested roster capacity, waitlist promotion, account-deletion cleanup, and game-credit operations.`
+
+Commands are normally unnecessary.
+
+Include a command only when the exact command materially helps a reviewer reproduce or understand the verification.
+
+Do not turn Validation into a transcript of the validation run.
+
+### Avoid repeating Changes
+
+Validation may cover the same system areas described in `Changes`, but it must not merely restate the implementation.
+
+A `Changes` bullet explains what the PR changed.
+
+A `Validation` bullet explains what behavior, failure case, compatibility boundary, or system property was exercised and what the result proved.
+
+Do not repeat implementation details in `Validation` unless they are necessary to explain the scenario being verified.
+
+If a Validation bullet could be moved into `Changes` without changing its meaning, rewrite or remove it.
+
+Example:
+
+`Changes`
+
+- Serializes roster capacity decisions so competing requests cannot decide from the same stale capacity state.
+
+`Validation`
+
+- Concurrent join and guest-add scenarios confirmed that overlapping requests cannot commit more players than the game has available spots.
+
+### Regression validation
+
+Regression validation belongs in the PR description when the change could realistically affect existing behavior and that behavior was actually rechecked.
+
+Describe the affected behavior, not merely the suite that ran.
+
+Prefer:
+
+`Existing transaction handling, account deletion, roster operations, and credit behavior continued to pass after the database-locking changes.`
+
+Instead of:
+
+`Regression tests: 124 passed.`
+
+If a regression suite covers many unrelated areas, report only the relevant validated behavior rather than advertising the total suite size.
+
+### Exclude process-only checks
 
 Do not include validation merely because a check ran.
 
-Do not include validation whose real purpose is to report:
+Unless that mechanism is itself materially changed by the PR, omit validation whose only purpose is:
 
 * test placement;
 * test-to-requirement mapping;
-* coverage or traceability mapping;
-* requirement linkage;
+* requirement traceability;
+* checker compliance;
 * suite organization;
-* policy or checker compliance;
-* repository-process compliance;
-* evidence completeness;
-* execution-record consistency;
-* routine Git or finalization state.
+* testing-record completeness;
+* execution-register consistency;
+* `git diff --check`;
+* Git status or staged-file state;
+* PR or Git finalization;
+* CI bookkeeping;
+* artifact hashes;
+* approval or Gate state;
+* other workflow or evidence bookkeeping.
 
 Rewording process bookkeeping does not make it reviewer-relevant.
 
-State what the validation establishes. Do not add statements about what it does not prove merely for completeness.
+Do not create multiple bullets that substantially prove the same thing. Combine overlapping results or keep the strongest, clearest statement.
 
 Do not make claims stronger than the performed validation supports.
 
@@ -268,6 +395,9 @@ For each one:
 4. **Remove duplication:** If the same engineering fact or validation result appears elsewhere, keep the clearest version only.
 5. **Preserve substance:** Do not remove meaningful behavior, failure consequences, boundaries, compatibility information, or engineering consequences merely to make the description shorter.
 6. **Check Summary comprehension:** Read the Summary as if the reviewer has never seen the project's production-readiness documents. The reviewer should understand why the change was necessary and what practical result it produced without having to infer either one.
+7. **Ground Validation:** Confirm every Validation claim is supported by validation that actually ran or another explicit proof layer. Do not infer Validation from the implementation or plan.
+8. **Check Validation relevance:** Every Validation bullet must prove a distinct behavior, failure case, regression boundary, or system property that matters to the PR. Remove command-log entries, bare test counts, and process checks.
+9. **Check Changes/Validation separation:** If a Validation bullet merely repeats what was implemented, rewrite it around the scenario exercised and result proved, or remove it.
 
 Do not produce the PR description until this rewrite pass is complete.
 
@@ -296,9 +426,13 @@ Before producing the final PR description, confirm:
 2. Does the Summary clearly state what the system does differently after the change?
 3. Would a reviewer understand why the change matters rather than only knowing what technical category it belongs to?
 4. Does every `Changes` bullet describe a real change in the diff in language that does not require translating internal terminology?
-5. Does every `Validation` bullet state meaningful behavior that was checked and the result without duplication or process bookkeeping?
-6. Is anything unnecessary, repetitive, vague, unsupported, process-heavy, needlessly technical, or sensitive?
-7. Could an engineer unfamiliar with this project explain both the problem and the result after reading the Summary once?
+5. Does every `Validation` bullet come from validation that actually ran or another explicit proof layer?
+6. Does every `Validation` bullet explain a distinct behavior, failure case, regression boundary, or system property that was actually proven?
+7. Are test counts and commands used only as supporting detail rather than as the validation result itself?
+8. Does `Validation` avoid repeating implementation details already explained in `Changes`?
+9. Is process-only validation such as requirement mapping, checker compliance, Git checks, and workflow bookkeeping omitted unless it is itself part of the PR's material change?
+10. Is anything unnecessary, repetitive, vague, unsupported, process-heavy, needlessly technical, or sensitive?
+11. Could an engineer unfamiliar with this project explain both the problem and the result after reading the Summary once?
 
 If any answer reveals a problem, correct it before producing the final output.
 
@@ -316,6 +450,6 @@ If any answer reveals a problem, correct it before producing the final output.
 
 ## Validation
 
-- [Behavior or system area]&#58; [test or verification and result].
-- [Behavior or system area]&#58; [test or verification and result].
+- [Distinct behavior, failure case, regression boundary, or system property]&#58; [what was actually exercised and what the result proved].
+- [Distinct behavior, failure case, regression boundary, or system property]&#58; [what was actually exercised and what the result proved].
 ```
