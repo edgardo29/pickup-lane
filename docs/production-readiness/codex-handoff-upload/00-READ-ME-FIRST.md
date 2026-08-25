@@ -324,9 +324,9 @@ handoff files.
 Reading this bundle by itself does not authorize implementation or publication.
 
 A user instruction to start, run, continue, or resume production-readiness work
-authorizes the coordinator to execute the normal automated Stage 0 through Gate
-D workflow for the selected/deterministically progressing work, subject to the
-durable stop conditions and review limits.
+authorizes the main Codex session to execute the normal automated Stage 0
+through Gate D workflow for the selected/deterministically progressing work,
+subject to the durable stop conditions and review limits.
 
 Within that authorized run:
 
