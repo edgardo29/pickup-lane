@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS04-01C-R1",
+      "owning_pass": "WS04-01C",
+      "source_controls": [
+        "DB-002",
+        "DB-015",
+        "WS04-01",
+        "WS04-01A",
+        "WS04-01B",
+        "WS04-01D"
+      ],
+      "state": "required",
+      "scope": "platform/production_database_verification",
+      "reason": "The provider-independent WS04-01C boundary must remain distinct from final infrastructure, provider, deployment, and production role proof owned by WS04-01D."
+    },
+    {
+      "id": "WS04-01C-R2",
+      "owning_pass": "WS04-01C",
+      "source_controls": [
+        "OPS-025",
+        "EN-03",
+        "WS04-01"
+      ],
+      "state": "required",
+      "scope": "platform/production_database_verification",
+      "reason": "The future database evidence contract must preserve sanitized EN-03 metadata, provenance, open gaps, and evidence hygiene without committing raw provider material."
+    },
+    {
+      "id": "WS04-01C-R3",
+      "owning_pass": "WS04-01C",
+      "source_controls": [
+        "DB-002",
+        "WS04-01A",
+        "WS04-01"
+      ],
+      "state": "required",
+      "scope": "platform/production_database_verification",
+      "reason": "The connection-budget formula and consumer inventory must be deterministic, complete, and unable to hide unknown consumers as zero."
+    },
+    {
+      "id": "WS04-01C-R4",
+      "owning_pass": "WS04-01C",
+      "source_controls": [
+        "DB-002",
+        "GOV-006",
+        "FDN-04",
+        "WS04-01D"
+      ],
+      "state": "required",
+      "scope": "platform/production_database_verification",
+      "reason": "Future final budget values must carry the full evidence-based limits basis, telemetry boundary, boundary tests, and safe adjustment or rollback requirements."
+    },
+    {
+      "id": "WS04-01C-R5",
+      "owning_pass": "WS04-01C",
+      "source_controls": [
+        "DB-001",
+        "DB-002",
+        "WS02-02",
+        "WS04-01A",
+        "WS04-01D"
+      ],
+      "state": "required",
+      "scope": "platform/production_database_verification",
+      "reason": "The final topology contract must require provider capacity, direct/pooler/proxy mode, runtime process topology, autoscaling, rolling overlap, and startup/shutdown compatibility evidence."
+    },
+    {
+      "id": "WS04-01C-R6",
+      "owning_pass": "WS04-01C",
+      "source_controls": [
+        "DB-015",
+        "GOV-006",
+        "WS04-01A",
+        "WS04-01D"
+      ],
+      "state": "required",
+      "scope": "platform/production_database_verification",
+      "reason": "The future role/grant contract must require application, migration, support, reporting, backup, human, and owner-role verification with least-privilege checks."
+    },
+    {
+      "id": "WS04-01C-R7",
+      "owning_pass": "WS04-01C",
+      "source_controls": [
+        "WS04-01A",
+        "WS04-01B",
+        "EN-01"
+      ],
+      "state": "required",
+      "scope": "platform/production_database_verification",
+      "reason": "WS04-01C must preserve accepted A/B behavior and must not add production source, migrations, provider settings, deployment configuration, credentials, or real production database state."
+    },
+    {
+      "id": "WS04-01C-R8",
+      "owning_pass": "WS04-01C",
+      "source_controls": [
+        "DB-002",
+        "DB-015",
+        "CLOSE-01",
+        "CLOSE-02",
+        "WS04-01D"
+      ],
+      "state": "required",
+      "scope": "platform/production_database_verification",
+      "reason": "WS04-01D must remain mandatory before final closeout and C must not mark final provider topology, connection budget, headroom, or production roles/grants as proved."
+    }
+  ]
+}

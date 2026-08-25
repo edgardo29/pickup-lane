@@ -1,0 +1,972 @@
+{
+  "schema_version": 1,
+  "owning_pass": "WS04-01C",
+  "future_population_owner": "WS04-01D",
+  "contract_state": "provider_independent_template",
+  "temporary_infrastructure_notice": {
+    "state": "verified",
+    "value": "Current Vercel, Render, and Neon usage is prototype/demo infrastructure only and is not final production topology evidence.",
+    "disallowed_final_sources": [
+      "temporary Neon values",
+      "temporary Render values",
+      "temporary Vercel values",
+      "README examples",
+      "local development settings",
+      "free-tier limits"
+    ]
+  },
+  "metadata": {
+    "provider_or_control_plane": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "safe_alias": "final_postgresql_provider",
+      "reason": "Final PostgreSQL provider/control plane has not been selected."
+    },
+    "environment": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final production environment binding belongs to WS04-01D."
+    },
+    "date_collected": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "No final provider evidence is collected in WS04-01C."
+    },
+    "reviewer": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final evidence reviewer is recorded when WS04-01D collects evidence."
+    },
+    "purpose": {
+      "state": "verified",
+      "value": "Final production PostgreSQL topology, connection budget, and role verification."
+    },
+    "supported_controls": {
+      "state": "verified",
+      "value": [
+        "DB-002",
+        "DB-015",
+        "GOV-006",
+        "OPS-025"
+      ]
+    },
+    "supported_passes": {
+      "state": "verified",
+      "value": [
+        "WS04-01C",
+        "WS04-01D"
+      ]
+    },
+    "source_type": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final source type depends on the selected provider/runtime evidence."
+    },
+    "sanitized_evidence_reference": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "WS04-01D records a repository-safe sanitized evidence reference."
+    },
+    "raw_evidence_location_reference": {
+      "state": "not_applicable",
+      "value": null,
+      "reason": "WS04-01C contains no raw provider evidence; any WS04-01D raw evidence remains outside Git."
+    },
+    "open_gaps": {
+      "state": "verified",
+      "value": [
+        "final production PostgreSQL provider",
+        "final API hosting/deployment topology",
+        "usable provider connection capacity",
+        "deployed pool settings",
+        "concrete production role and grant evidence"
+      ]
+    }
+  },
+  "topology_contract": {
+    "provider_capacity_source": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final provider capacity source is unavailable until provider selection."
+    },
+    "connection_mode": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "allowed_values": [
+        "direct",
+        "provider_pooler",
+        "proxy"
+      ],
+      "reason": "Direct, pooler, or proxy mode must be proven against the final provider."
+    },
+    "pooler_client_connection_ceiling": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Required only when the selected topology uses a pooler or proxy."
+    },
+    "pooler_server_connection_ceiling": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Required only when the selected topology uses a pooler or proxy."
+    },
+    "api_instance_ceiling": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final hosting/deployment topology is not selected."
+    },
+    "api_processes_per_instance": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final process model is not selected."
+    },
+    "autoscaling_ceiling_or_disabled_evidence": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final autoscaling behavior belongs to WS04-01D."
+    },
+    "additional_rolling_overlap": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final rolling-deploy overlap must be proven by runtime/provider evidence."
+    },
+    "deployed_pool_values": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Deployed DB_POOL_SIZE, DB_MAX_OVERFLOW, and pool wait belong to WS04-01D."
+    },
+    "migration_credential_separation": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Concrete final application and migration credentials are not selected."
+    },
+    "independent_engine_per_process": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final runtime proof belongs to WS04-01D."
+    },
+    "shutdown_pool_release": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final runtime shutdown proof belongs to WS04-01D."
+    },
+    "startup_connection_behavior": {
+      "state": "deferred_to_ws04_01d",
+      "value": null,
+      "reason": "Final startup/runtime observation belongs to WS04-01D."
+    }
+  },
+  "budget_model": {
+    "formula_version": 1,
+    "inputs": {
+      "DB_POOL_SIZE": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "DB_MAX_OVERFLOW": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "max_api_instances": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "api_processes_per_instance": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "additional_rolling_overlap_api_instances": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "api_processes_per_additional_overlap_instance": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "background_worker_connections": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "scheduler_or_job_runner_connections": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "migration_connections": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "monitoring_connections": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "reporting_or_support_connections": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "routine_human_access_connections": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "operational_reserve_connections": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      },
+      "usable_provider_connection_capacity": {
+        "value": null,
+        "evidence_state": "deferred_to_ws04_01d",
+        "zero_requires_absence_reason": true
+      }
+    },
+    "reported_calculations": {
+      "per_process_application_connections": null,
+      "api_steady_state_connections": null,
+      "api_incremental_rolling_overlap_connections": null,
+      "total_budgeted_peak_connections": null,
+      "remaining_headroom": null
+    },
+    "limit_basis": {
+      "protected_resource_or_failure_mode": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records the final protected resource and failure mode."
+      },
+      "enforcing_layers": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records source, runtime, provider, pooler/proxy, and operational enforcement layers."
+      },
+      "accountable_owner": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records the accountable database/platform owner."
+      },
+      "provider_platform_constraints": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records selected provider and hosting constraints."
+      },
+      "expected_workload_and_abuse_risk": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records launch workload and abuse-risk basis."
+      },
+      "failure_cost_and_recovery_behavior": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records failure impact and recovery behavior."
+      },
+      "configurability": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records which values are configurable and how changes are controlled."
+      },
+      "boundary_and_multi_instance_test_evidence": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records provider/runtime boundary and multi-instance evidence."
+      },
+      "telemetry": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records the telemetry binding; WS09 owns dashboards and alert thresholds."
+      },
+      "rollback_or_safe_adjustment": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records rollback, abort, or safe adjustment behavior."
+      },
+      "reassessment_triggers": {
+        "state": "deferred_to_ws04_01d",
+        "value": null,
+        "reason": "D records triggers that stale or supersede final values."
+      }
+    },
+    "mutable_capacity_inputs": {
+      "DB_POOL_SIZE": {
+        "accountable_owner": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records owner."
+        },
+        "protected_resource_or_failure_mode": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure mode."
+        },
+        "enforcing_layers": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records enforcing layers."
+        },
+        "provider_platform_constraints": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records constraints."
+        },
+        "expected_workload_and_abuse_risk": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records workload and abuse risk."
+        },
+        "failure_cost_and_recovery_behavior": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure cost and recovery."
+        },
+        "configurability": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records configurability."
+        },
+        "reassessment_trigger": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records trigger."
+        },
+        "boundary_and_multi_instance_evidence": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records evidence."
+        },
+        "safe_adjustment_or_forward_fix": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records adjustment path."
+        },
+        "rollback_or_abort_condition": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records rollback or abort."
+        },
+        "post_change_reverification": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records re-verification evidence."
+        }
+      },
+      "DB_MAX_OVERFLOW": {
+        "accountable_owner": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records owner."
+        },
+        "protected_resource_or_failure_mode": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure mode."
+        },
+        "enforcing_layers": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records enforcing layers."
+        },
+        "provider_platform_constraints": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records constraints."
+        },
+        "expected_workload_and_abuse_risk": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records workload and abuse risk."
+        },
+        "failure_cost_and_recovery_behavior": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure cost and recovery."
+        },
+        "configurability": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records configurability."
+        },
+        "reassessment_trigger": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records trigger."
+        },
+        "boundary_and_multi_instance_evidence": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records evidence."
+        },
+        "safe_adjustment_or_forward_fix": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records adjustment path."
+        },
+        "rollback_or_abort_condition": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records rollback or abort."
+        },
+        "post_change_reverification": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records re-verification evidence."
+        }
+      },
+      "max_api_instances": {
+        "accountable_owner": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records owner."
+        },
+        "protected_resource_or_failure_mode": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure mode."
+        },
+        "enforcing_layers": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records enforcing layers."
+        },
+        "provider_platform_constraints": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records constraints."
+        },
+        "expected_workload_and_abuse_risk": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records workload and abuse risk."
+        },
+        "failure_cost_and_recovery_behavior": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure cost and recovery."
+        },
+        "configurability": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records configurability."
+        },
+        "reassessment_trigger": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records trigger."
+        },
+        "boundary_and_multi_instance_evidence": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records evidence."
+        },
+        "safe_adjustment_or_forward_fix": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records adjustment path."
+        },
+        "rollback_or_abort_condition": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records rollback or abort."
+        },
+        "post_change_reverification": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records re-verification evidence."
+        }
+      },
+      "api_processes_per_instance": {
+        "accountable_owner": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records owner."
+        },
+        "protected_resource_or_failure_mode": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure mode."
+        },
+        "enforcing_layers": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records enforcing layers."
+        },
+        "provider_platform_constraints": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records constraints."
+        },
+        "expected_workload_and_abuse_risk": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records workload and abuse risk."
+        },
+        "failure_cost_and_recovery_behavior": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure cost and recovery."
+        },
+        "configurability": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records configurability."
+        },
+        "reassessment_trigger": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records trigger."
+        },
+        "boundary_and_multi_instance_evidence": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records evidence."
+        },
+        "safe_adjustment_or_forward_fix": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records adjustment path."
+        },
+        "rollback_or_abort_condition": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records rollback or abort."
+        },
+        "post_change_reverification": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records re-verification evidence."
+        }
+      },
+      "additional_rolling_overlap_api_instances": {
+        "accountable_owner": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records owner."
+        },
+        "protected_resource_or_failure_mode": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure mode."
+        },
+        "enforcing_layers": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records enforcing layers."
+        },
+        "provider_platform_constraints": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records constraints."
+        },
+        "expected_workload_and_abuse_risk": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records workload and abuse risk."
+        },
+        "failure_cost_and_recovery_behavior": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure cost and recovery."
+        },
+        "configurability": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records configurability."
+        },
+        "reassessment_trigger": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records trigger."
+        },
+        "boundary_and_multi_instance_evidence": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records evidence."
+        },
+        "safe_adjustment_or_forward_fix": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records adjustment path."
+        },
+        "rollback_or_abort_condition": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records rollback or abort."
+        },
+        "post_change_reverification": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records re-verification evidence."
+        }
+      },
+      "api_processes_per_additional_overlap_instance": {
+        "accountable_owner": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records owner."
+        },
+        "protected_resource_or_failure_mode": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure mode."
+        },
+        "enforcing_layers": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records enforcing layers."
+        },
+        "provider_platform_constraints": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records constraints."
+        },
+        "expected_workload_and_abuse_risk": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records workload and abuse risk."
+        },
+        "failure_cost_and_recovery_behavior": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure cost and recovery."
+        },
+        "configurability": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records configurability."
+        },
+        "reassessment_trigger": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records trigger."
+        },
+        "boundary_and_multi_instance_evidence": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records evidence."
+        },
+        "safe_adjustment_or_forward_fix": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records adjustment path."
+        },
+        "rollback_or_abort_condition": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records rollback or abort."
+        },
+        "post_change_reverification": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records re-verification evidence."
+        }
+      },
+      "autoscaling_ceiling_or_disabled_evidence": {
+        "accountable_owner": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records owner."
+        },
+        "protected_resource_or_failure_mode": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure mode."
+        },
+        "enforcing_layers": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records enforcing layers."
+        },
+        "provider_platform_constraints": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records constraints."
+        },
+        "expected_workload_and_abuse_risk": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records workload and abuse risk."
+        },
+        "failure_cost_and_recovery_behavior": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure cost and recovery."
+        },
+        "configurability": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records configurability."
+        },
+        "reassessment_trigger": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records trigger."
+        },
+        "boundary_and_multi_instance_evidence": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records evidence."
+        },
+        "safe_adjustment_or_forward_fix": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records adjustment path."
+        },
+        "rollback_or_abort_condition": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records rollback or abort."
+        },
+        "post_change_reverification": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records re-verification evidence."
+        }
+      },
+      "pooler_or_proxy_mode": {
+        "accountable_owner": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records owner."
+        },
+        "protected_resource_or_failure_mode": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure mode."
+        },
+        "enforcing_layers": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records enforcing layers."
+        },
+        "provider_platform_constraints": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records constraints."
+        },
+        "expected_workload_and_abuse_risk": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records workload and abuse risk."
+        },
+        "failure_cost_and_recovery_behavior": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure cost and recovery."
+        },
+        "configurability": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records configurability."
+        },
+        "reassessment_trigger": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records trigger."
+        },
+        "boundary_and_multi_instance_evidence": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records evidence."
+        },
+        "safe_adjustment_or_forward_fix": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records adjustment path."
+        },
+        "rollback_or_abort_condition": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records rollback or abort."
+        },
+        "post_change_reverification": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records re-verification evidence."
+        }
+      },
+      "usable_provider_connection_capacity": {
+        "accountable_owner": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records owner."
+        },
+        "protected_resource_or_failure_mode": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure mode."
+        },
+        "enforcing_layers": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records enforcing layers."
+        },
+        "provider_platform_constraints": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records constraints."
+        },
+        "expected_workload_and_abuse_risk": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records workload and abuse risk."
+        },
+        "failure_cost_and_recovery_behavior": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records failure cost and recovery."
+        },
+        "configurability": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records configurability."
+        },
+        "reassessment_trigger": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records trigger."
+        },
+        "boundary_and_multi_instance_evidence": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records evidence."
+        },
+        "safe_adjustment_or_forward_fix": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records adjustment path."
+        },
+        "rollback_or_abort_condition": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records rollback or abort."
+        },
+        "post_change_reverification": {
+          "state": "deferred_to_ws04_01d",
+          "value": null,
+          "reason": "D records re-verification evidence."
+        }
+      }
+    },
+    "telemetry_plan": {
+      "state": "deferred_to_ws04_01d",
+      "required_signals": [
+        "pool utilization",
+        "connection errors",
+        "database outcome class",
+        "API correlation",
+        "job correlation when jobs exist"
+      ],
+      "dashboard_alert_owner": "WS09",
+      "reason": "C defines signal requirements; D binds final budget evidence and WS09 owns dashboards/alerts."
+    }
+  },
+  "role_grant_contract": {
+    "role_classes": {
+      "application_runtime": {
+        "required": true,
+        "state": "deferred_to_ws04_01d"
+      },
+      "migration_execution": {
+        "required": true,
+        "state": "deferred_to_ws04_01d"
+      },
+      "background_worker_or_scheduler": {
+        "required": true,
+        "state": "deferred_to_ws04_01d"
+      },
+      "read_only_reporting_or_support": {
+        "required": true,
+        "state": "deferred_to_ws04_01d"
+      },
+      "backup_or_restore_database_access": {
+        "required": true,
+        "state": "deferred_to_ws04_01d"
+      },
+      "routine_human_access": {
+        "required": true,
+        "state": "deferred_to_ws04_01d"
+      },
+      "schema_or_object_owner": {
+        "required": true,
+        "state": "deferred_to_ws04_01d"
+      }
+    },
+    "required_checks": [
+      "superuser",
+      "database_ownership",
+      "schema_ownership",
+      "createdb",
+      "createrole",
+      "replication",
+      "bypassrls",
+      "schema_usage_create_privileges",
+      "table_privileges",
+      "sequence_privileges",
+      "function_privileges",
+      "default_privileges",
+      "search_path",
+      "effective_application_role",
+      "effective_migration_role",
+      "support_reporting_human_access"
+    ],
+    "application_runtime_prohibited_capabilities": [
+      "superuser",
+      "database_owner",
+      "schema_owner",
+      "migration_owner",
+      "role_admin",
+      "createdb",
+      "createrole",
+      "replication",
+      "bypassrls",
+      "broad_provider_admin",
+      "routine_ddl_capable"
+    ],
+    "migration_role_separation_required": true
+  },
+  "handoff": {
+    "mandatory_follow_up": "WS04-01D",
+    "required_before": [
+      "CLOSE-01",
+      "CLOSE-02"
+    ],
+    "trigger_conditions": [
+      "final production database provider/topology selected",
+      "final hosting/deployment topology selected enough to bound API instances, processes, autoscaling, and rolling overlap",
+      "launch database consumers bounded",
+      "safe sanitized provider/runtime evidence available"
+    ],
+    "d_owned_facts": [
+      "actual provider usable connection capacity",
+      "pooler/proxy/direct mode",
+      "actual API instance/process/autoscaling/rolling-overlap topology",
+      "deployed application pool values and connection wait behavior",
+      "migration, worker/job, monitoring, reporting/support, human, and reserve connection demand",
+      "final deployment-wide peak and headroom",
+      "concrete production role identities through safe aliases",
+      "real grants, ownership, search path, default privileges, and operational database access"
+    ]
+  },
+  "repository_safety": {
+    "prohibited_content": [
+      "database URLs",
+      "passwords",
+      "tokens",
+      "private keys",
+      "private dashboard URLs",
+      "private provider identifiers",
+      "raw screenshots",
+      "raw exports",
+      "raw logs",
+      "IP addresses or private hostnames",
+      "personal data",
+      "payment data"
+    ]
+  }
+}
