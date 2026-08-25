@@ -35,11 +35,12 @@ def _apply_database_timeout_settings(dbapi_connection, connection_record, connec
     del connection_record, connection_proxy
     with dbapi_connection.cursor() as cursor:
         cursor.execute(
-            "SET statement_timeout = "
-            f"{DATABASE_TIMEOUT_SETTINGS.statement_timeout_milliseconds}",
+            "SELECT set_config('statement_timeout', %s, false)",
+            (str(DATABASE_TIMEOUT_SETTINGS.statement_timeout_milliseconds),),
         )
         cursor.execute(
-            f"SET lock_timeout = {DATABASE_TIMEOUT_SETTINGS.lock_timeout_milliseconds}",
+            "SELECT set_config('lock_timeout', %s, false)",
+            (str(DATABASE_TIMEOUT_SETTINGS.lock_timeout_milliseconds),),
         )
 
 # SessionLocal creates database sessions for individual FastAPI requests so

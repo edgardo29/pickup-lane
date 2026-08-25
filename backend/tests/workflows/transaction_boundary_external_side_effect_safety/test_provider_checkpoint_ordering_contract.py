@@ -93,11 +93,11 @@ def _stripe_timeout(operation: str) -> DependencyMutationTimeoutUnknownError:
 def test_checkout_create_timeout_leaves_committed_local_checkpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import Payment
     from backend.schemas.checkout_schema import GameCheckoutPaymentIntentCreate
     import backend.services.checkout_service as checkout_service
     from backend.services.game_credit_service import GameCreditApplication
 
+    Payment = checkout_service.Payment
     game_id = uuid.uuid4()
     current_user = SimpleNamespace(
         id=uuid.uuid4(),
@@ -195,11 +195,11 @@ def test_checkout_create_timeout_leaves_committed_local_checkpoint(
 def test_checkout_provider_success_then_local_recording_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import Payment
     from backend.schemas.checkout_schema import GameCheckoutPaymentIntentCreate
     import backend.services.checkout_service as checkout_service
     from backend.services.game_credit_service import GameCreditApplication
 
+    Payment = checkout_service.Payment
     game_id = uuid.uuid4()
     current_user = SimpleNamespace(
         id=uuid.uuid4(),
@@ -305,9 +305,10 @@ def test_checkout_provider_success_then_local_recording_failure_is_honest(
 def test_community_publish_create_timeout_keeps_attempt_checkpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import CommunityPublishAttempt, Payment
     import backend.services.community_game_publish_service as publish_service
 
+    CommunityPublishAttempt = publish_service.CommunityPublishAttempt
+    Payment = publish_service.Payment
     payment_method_id = uuid.uuid4()
     host = SimpleNamespace(
         id=uuid.uuid4(),
@@ -365,9 +366,10 @@ def test_community_publish_create_timeout_keeps_attempt_checkpoint(
 def test_community_publish_provider_success_then_local_recording_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import CommunityPublishAttempt, Payment
     import backend.services.community_game_publish_service as publish_service
 
+    CommunityPublishAttempt = publish_service.CommunityPublishAttempt
+    Payment = publish_service.Payment
     payment_method_id = uuid.uuid4()
     host = SimpleNamespace(
         id=uuid.uuid4(),
@@ -440,9 +442,9 @@ def test_community_publish_provider_success_then_local_recording_failure_is_hone
 def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import Payment
     import backend.services.game_waitlist_service as waitlist_service
 
+    Payment = waitlist_service.Payment
     now = datetime.now(timezone.utc)
     buyer_user_id = uuid.uuid4()
     db = _RecordingSession(added=[], added_many=[])
@@ -521,9 +523,9 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
 def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import Payment
     import backend.services.game_waitlist_service as waitlist_service
 
+    Payment = waitlist_service.Payment
     now = datetime.now(timezone.utc)
     buyer_user_id = uuid.uuid4()
     db = _RecordingSession(added=[], added_many=[], commit_failures={2})
