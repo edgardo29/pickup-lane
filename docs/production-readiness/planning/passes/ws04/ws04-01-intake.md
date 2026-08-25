@@ -2,144 +2,187 @@
 
 ## 1. What Needs To Be Decided
 
-This intake decides how to execute the database-foundation work in `WS04-01`.
-That decision matters because the parent combines application source behavior
-that can be inspected and improved now with production database facts that are
-not present in the repository.
+This intake records the structural correction for the remaining `WS04-01`
+database-foundation work after `WS04-01A` and `WS04-01B` were accepted.
 
-`WS04-01` covers the way Pickup Lane opens and closes PostgreSQL connections,
-manages SQLAlchemy sessions, bounds connection waiting and pool growth, accounts
-for the deployment-wide connection budget, and verifies least-privilege database
-roles. It also includes the database-access review work assigned to the parent
-for query and cursor behavior.
+The original split correctly separated application-owned database behavior,
+query/database-access behavior, and production provider verification, but it did
+not operationalize the program's infrastructure-timing rule correctly for the
+remaining child. Current durable authority now makes that rule explicit:
 
-The execution shape must separate work that can be completed from current
-source from work that requires sanitized production-provider and deployment
-evidence. It must also avoid creating dependencies between source-owned work
-areas that do not technically depend on each other.
+- final production hosting and database infrastructure is intentionally
+  late-bound until the permanent infrastructure is selected;
+- current Vercel, Render, and Neon usage is temporary development/demo
+  infrastructure, not permanent production architecture;
+- temporary provider facts, free-tier limits, README examples, local/CI values,
+  and demo deployment settings must not be promoted into final production
+  assumptions or evidence;
+- coherent provider-independent work should be completed now where possible;
+- final provider-specific configuration, numeric values, topology, roles/grants,
+  and runtime/provider proof must be preserved as mandatory deferred work with a
+  named owner, trigger, dependencies, and latest completion boundary;
+- final infrastructure must not be selected prematurely only to satisfy this
+  pass.
+
+This is therefore a correction to the executable structure, not a new exception
+for `WS04-01`. The same durable timing rule applies program-wide.
+
+The structural question is therefore whether the remaining work should stay as
+one `WS04-01C` pass or be separated into work that can be completed now and
+work that can only be completed after final infrastructure exists.
+
+The revised structure must preserve every original `WS04-01` obligation without
+reopening or weakening the accepted `WS04-01A` and `WS04-01B` results.
 
 ## 2. What We Know
 
-This section contains only the current facts, decisions, dependencies, and
-unknowns that affect how `WS04-01` should be executed. Each item explains why it
-changes the execution decision.
-
 | Topic | Current fact or constraint | Why it affects execution |
 |---|---|---|
-| Approved budget direction | `DBP-01 / DB-002` approves one deployment-wide PostgreSQL connection budget with reserve. Exact values still depend on provider limits and deployment topology. | The budget method is decided, but the final numeric budget cannot be honestly selected from repository source alone. |
-| Current application database source | `backend/database.py` has one imported SQLAlchemy engine, per-request `SessionLocal`, rollback on request failure, session close in all cases, a database health probe, checkout-applied statement and lock timeouts, and shutdown disposal through `backend/main.py`. | Application lifecycle and session behavior are source-owned and can be reviewed without production provider facts. |
-| Current database settings | `backend/settings.py` validates `DATABASE_URL`, enforces the dedicated test database name in test and CI, rejects unsafe production-like database URLs, and exposes database wait, statement, and lock timeout settings. Current source does not contain approved pool-size or overflow values. | Source configuration can define and test application-owned database boundaries without selecting unverified production capacity values. |
-| Alembic connection behavior | `backend/alembic/env.py` uses the configured database URL and `NullPool` for online migrations. Repository source does not prove which production credential or role will run migrations. | Application and migration credential boundaries can be handled in source, while concrete production roles and grants require external evidence. |
-| Accepted prerequisite evidence | Accepted WS02 runtime and timeout work already covers application startup/shutdown shape, health behavior, environment validation, database pool wait timeout, statement timeout, and lock timeout at the source level. | `WS04-01A` can build on that accepted behavior instead of reopening it. |
-| Production PostgreSQL and deployment facts | Governance records identify Neon/PostgreSQL as the intended durable database provider, but provider connection limits, pooler/proxy mode, deployed instance count, process count, rolling overlap, monitoring consumption, role grants, and human access are not yet evidenced. | Final connection-budget and least-privilege production verification requires a separate evidence-backed result. |
-| Query and cursor obligations | The parent owns database-access work for current query, pagination, and cursor behavior, including the `DB-012` and `DB-013` concerns. | This work has its own source surface and can be reviewed independently of application engine/session changes and production provider verification. |
-| Neighboring work | `WS04-02` owns transaction invariants, locks, and deterministic concurrency. `WS04-03` owns migration policy and production-like migration rehearsal. `WS05` owns durable worker/job behavior. `WS09` owns durable telemetry and alerting. `WS10` owns broad provider-access, rotation, revocation, and offboarding evidence. | `WS04-01` must preserve these boundaries instead of absorbing adjacent database, worker, observability, or provider-access work. |
+| Accepted source foundation | `WS04-01A` is accepted. It established application database lifecycle, explicit pool size/overflow inputs, bounded pool wait and PostgreSQL timeouts, session cleanup, shutdown disposal, and application-versus-migration credential boundaries. | This work is complete and must not be reopened merely because final provider facts remain unknown. |
+| Accepted database-access foundation | `WS04-01B` is accepted. It established current query, pagination, cursor-context, query/index-alignment, parent-binding, and page-bounded serialization behavior. | This work is complete and does not depend on final hosting or database-provider selection. |
+| Approved budget direction | `DBP-01 / DB-002` requires one deployment-wide PostgreSQL connection budget with reserve. | The method is settled, but final numeric values still require actual provider capacity and deployment topology. |
+| Durable infrastructure-timing rule | `00-READ-ME-FIRST.md`, `01-PROGRAM-CONTEXT.md`, the implementation workflow, and the master blueprint require final-infrastructure-dependent facts to remain late-bound and require Stage 0 to split/defer them when coherent provider-independent work can proceed. | This is the governing program rule for the remaining `WS04-01` structure, not a pass-specific workaround. |
+| Final infrastructure status | Final production hosting and PostgreSQL provider/topology are intentionally undecided. Vercel, Render, and Neon are temporary development/demo infrastructure. | No pass may use current temporary provider facts as final production evidence or force an early infrastructure decision. |
+| Superseded frozen `WS04-01C` boundary | The previous frozen `WS04-01C` plan combined provider-independent verification machinery with final provider/runtime evidence and therefore stopped when final provider facts were unavailable. | Its executable boundary conflicts with the durable infrastructure-timing rule and must be replaced before Gate B. |
+| Provider-independent work | The remaining design already defines a reusable budget formula, evidence-safety rules, required connection-consumer categories, role/grant verification areas, telemetry-plan requirements, and safe-adjustment requirements. | These can be made into a coherent, testable verification framework now without inventing provider values. |
+| Provider-dependent work | Actual provider capacity, pooler/proxy mode, deployed process counts, autoscaling/rolling overlap, deployed pool values, concrete production roles/grants, and runtime observations require the final deployment. | These must remain a later evidence-backed verification result. |
+| Downstream database work | `WS04-02` and `WS04-03` need the accepted source/database foundation, while later provider/operations work needs final production evidence. `WS05` may add future database consumers that the final budget must account for. | The program must be able to continue source/domain work without pretending final production topology is already verified. |
+| Closeout | `CLOSE-01` requires current provider/runtime evidence and all required workstream evidence to be reconciled. | Final production database verification cannot remain outstanding at closeout. |
 
-## 3. Execution Decision
+## 3. Revised Execution Decision
 
-This section defines the executable shape of `WS04-01` and explains why the
-parent should be divided this way.
+Outcome: structurally revise the remaining `WS04-01` work.
 
-The chosen execution shape is a split parent.
+Accepted `WS04-01A` and `WS04-01B` remain unchanged. The old `WS04-01C`
+production-verification boundary is split into:
 
-The parent contains three coherent results:
+1. a provider-independent verification framework that can be completed now; and
+2. a mandatory later final-production verification pass that becomes executable
+   only after final infrastructure is selected.
 
-1. application database lifecycle and configuration behavior;
-2. query, cursor, and database-access behavior;
-3. production database topology, connection-budget, and role verification.
-
-The first two are independent source-owned work areas. Neither requires the
-other to be completed first. The production verification work depends on both
-source-owned areas being settled and on sanitized production-provider and
-deployment evidence.
+### Current executable children
 
 | Order | Work | Depends on |
 |---|---|---|
-| `1` | `WS04-01A - Application database lifecycle, pool settings, and role-credential boundaries` | Accepted WS02 runtime and timeout foundation |
-| `1` | `WS04-01B - Query, cursor, and database-access behavior` | Current source and applicable accepted database-access decisions |
-| `2` | `WS04-01C - Production PostgreSQL topology, connection budget, and role verification` | Accepted `WS04-01A`, accepted `WS04-01B`, and sanitized production-provider and deployment evidence |
+| accepted | `WS04-01A - Application database lifecycle, pool settings, and role-credential boundaries` | Accepted WS02 runtime and timeout foundation |
+| accepted | `WS04-01B - Query, cursor, and database-access behavior` | Current source and applicable accepted database-access decisions |
+| next | `WS04-01C - Production PostgreSQL verification framework and evidence contract` | Accepted `WS04-01A` and accepted `WS04-01B` |
 
-`WS04-01A` leaves a coherent application-side result: the repository defines
-the application database lifecycle, bounded pool configuration, session
-behavior, and application-versus-migration credential boundaries without
-claiming production facts the source cannot establish.
+Current dependency graph:
 
-`WS04-01B` leaves a coherent database-access result: current query, pagination,
-cursor, and related database-access behavior is reviewed and corrected against
-its own source and requirements.
+```text
+WS04-01A + WS04-01B -> WS04-01C
+```
 
-Neither result requires the other in order to be correct and independently
-accepted.
+### Mandatory deferred follow-up
 
-`WS04-01C` combines the accepted source behavior with real production facts to
-establish the deployment-wide connection budget and verify the concrete
-production role and privilege model.
+`WS04-01D - Final production PostgreSQL topology, connection budget, and role
+verification` is the mandatory deferred verification unit for the remaining
+final-infrastructure-dependent `WS04-01` obligations. It remains visible under
+`WS04-01`, but it is not part of immediate executable child progression while
+its final-infrastructure trigger is false. Deferred status is not proof and does
+not close the affected `DB-002` or `DB-015` obligations.
 
-Keeping all three in one executable pass would mix source implementation and
-review with external production verification that has different prerequisites.
-Splitting them preserves those boundaries without creating an artificial
-dependency between the two source-owned children.
+`WS04-01D` becomes executable when all of the following are true:
+
+- the final production database provider/topology is selected;
+- the final hosting/deployment topology is selected sufficiently to bound API
+  instances, processes, autoscaling, and rolling overlap;
+- the current launch database consumers can be enumerated, including migrations,
+  workers/jobs if present, monitoring/reporting/support access, and routine human
+  access if any;
+- sanitized provider/runtime/role evidence can be collected safely.
+
+`WS04-01D` must run as soon as its trigger is satisfied and no later than the
+earliest downstream pass that genuinely requires a D-owned fact or `CLOSE-01`,
+whichever comes first. If a later pass requires one of its still-unverified
+production facts earlier, that pass must stop on that specific prerequisite
+rather than inventing or substituting temporary infrastructure values.
 
 ## 4. Where The Parent Work Goes
 
-This section accounts for the complete `WS04-01` scope. It shows where each
-major responsibility belongs so the split does not lose work or assign the same
-engineering responsibility to multiple children.
-
-| Parent work | Goes to | Remaining boundary |
+| Parent work | Primary owner | Remaining boundary / disposition |
 |---|---|---|
-| SQLAlchemy engine lifecycle, request session scope, rollback/close behavior, shutdown disposal, and database health-query boundaries | `WS04-01A` | Production process topology and provider-side connection limits are outside this source-owned work. |
-| Source-owned database settings for connection waiting, pool sizing/overflow, and safe environment use | `WS04-01A` | Concrete production values are outside this source-owned work. Accepted WS02 timeout behavior remains a prerequisite. |
-| Application and migration credential boundaries | `WS04-01A` | Concrete production roles, grants, schema ownership, and operational access are outside this source-owned work; broader provider-account access lifecycle remains with `WS10`. |
-| Current query, pagination, cursor, and database-access behavior assigned to `DB-012` and `DB-013` | `WS04-01B` | Production telemetry and long-term observability remain with `WS09` where they are not required by this parent. |
-| Deployment-wide PostgreSQL connection budget and reserve calculation | `WS04-01C` | The calculation must use actual provider and deployment facts rather than local defaults or examples. |
-| PostgreSQL/Neon provider limits, pooler/proxy mode, deployed instance and process counts, rolling overlap, migration allowance, monitoring allowance, and operational reserve | `WS04-01C` | These are production facts and require sanitized provider or runtime evidence. |
-| Production application, migration, support, reporting, and human-access database roles and grants | `WS04-01C` | Provider-user MFA, recovery, rotation, revocation, offboarding, and broader account-access lifecycle remain with `WS10`. |
-| Transaction invariants, explicit locking, deterministic concurrency, and external-side-effect transaction boundaries | `WS04-02` | Session lifecycle owned by `WS04-01A` does not absorb business invariants or concurrency design. |
-| Migration compatibility policy, interruption/rehearsal behavior, online-index strategy, and production-like migration execution | `WS04-03` | `WS04-01A` owns only the database connection and credential boundary relevant to application-versus-migration access. |
-| Durable worker/job design | `WS05` | Any worker database consumption that exists in the actual production deployment is included when `WS04-01C` calculates the real connection budget. |
+| SQLAlchemy engine lifecycle, request session scope, rollback/close behavior, shutdown disposal, and database health-query boundaries | `WS04-01A` | Accepted. Do not reopen in C except compatibility verification. |
+| Source-owned database settings for connection waiting, pool sizing/overflow, and safe environment use | `WS04-01A` | Accepted. Final deployed numeric values remain for `WS04-01D`. |
+| Application and migration credential boundaries | `WS04-01A` | Accepted source boundary. Concrete production role identities and grants remain for `WS04-01D`. |
+| Current query, pagination, cursor, and database-access behavior assigned to `DB-012` and `DB-013` | `WS04-01B` | Accepted. Production performance/observability remains later-owned. |
+| Canonical deployment-wide connection-budget formula and required consumer categories | `WS04-01C` | Define and test the calculation contract now. Populate with final production values only in `WS04-01D`. |
+| Sanitized evidence schema and evidence-safety validation for topology/budget/role proof | `WS04-01C` | Define and test the artifact contract now. Collect real provider/runtime evidence in `WS04-01D`. |
+| Pooler/direct-connection compatibility evidence requirements | `WS04-01C` | Define the required evidence and acceptance rules now. Verify the selected production mode in `WS04-01D`. |
+| Runtime topology evidence requirements for instances, processes, autoscaling, rolling overlap, startup/shutdown, and migration execution | `WS04-01C` | Define the verification contract now. Observe and verify the final deployment in `WS04-01D`. |
+| Role/grant/search-path/default-privilege verification inventory | `WS04-01C` | Define the least-privilege checks and safe inspection contract now. Verify concrete production roles/grants in `WS04-01D`. |
+| Budget telemetry-plan fields, reassessment triggers, and safe-adjustment/rollback contract | `WS04-01C` | Define required signals and adjustment evidence now. Bind them to the real deployment in `WS04-01D`; dashboards/alert thresholds remain with `WS09`. |
+| Actual production PostgreSQL provider identity, usable connection capacity, pooler/proxy/direct mode, and provider-reserved capacity | `WS04-01D` | Deferred until final infrastructure is selected. Temporary Neon/Render facts are not acceptable substitutes. |
+| Actual deployed API/process/autoscaling/rolling-overlap topology and deployed pool values | `WS04-01D` | Deferred until final deployment topology exists. |
+| Final numeric connection budget, reserve, peak, and headroom | `WS04-01D` | Must use real provider/deployment evidence and the framework accepted in `WS04-01C`. |
+| Concrete production application/migration/support/reporting/human roles, grants, ownership, search path, and default privileges | `WS04-01D` | Deferred until final provider role model exists. Broader provider-account MFA/rotation/revocation/offboarding remains `WS10`. |
+| Transaction invariants, explicit locking, deterministic concurrency, and external-side-effect transaction boundaries | `WS04-02` | Not owned by `WS04-01C` or `WS04-01D`. |
+| Migration compatibility policy, interruption/rehearsal behavior, and online-index strategy | `WS04-03` | Not owned by `WS04-01C` or `WS04-01D`; final migration connection facts may be consumed by D. |
+| Durable worker/job design | `WS05` | Worker design remains WS05. Any worker connection demand that exists at final verification time must be included by `WS04-01D`. |
+| Production dashboards, alerts, capacity trends, and long-term observability | `WS09` | C defines only the database-budget telemetry contract. D verifies the real database budget against the selected deployment. |
+| Provider account lifecycle, backup/PITR/restore, recovery, rotation, revocation, and offboarding | `WS10` | Remains outside WS04-01 except for database role/grant facts directly required by D. |
 
-## 5. What Happens Next
+No `WS04-01` obligation is dropped. Provider-specific proof is explicitly
+preserved for `WS04-01D` rather than being guessed, silently closed, or replaced
+with temporary infrastructure evidence.
 
-This section identifies which engineering work is ready to begin and whether any
-technical prerequisite prevents it.
+## 5. Progression And Completion Meaning
 
-`WS04-01A` and `WS04-01B` are both technically ready for their engineering-plan
-stage.
+`WS04-01C` is the next executable work.
 
-`WS04-01A` has the current application database source, accepted WS02 runtime
-and timeout behavior, and approved connection-budget direction required to
-design its application-owned database work.
+It must leave a useful provider-independent result that downstream source/domain
+work can consume without knowing the final provider. It must not claim a final
+production connection budget or final production least-privilege verification.
 
-`WS04-01B` has the current query, pagination, cursor, and database-access source
-plus the applicable accepted requirements required to design its work. It does
-not depend on `WS04-01A` being completed first.
+After `WS04-01C` is accepted:
 
-`WS04-01C` is not yet executable because it requires accepted results from both
-source-owned children and sanitized production-provider and deployment evidence.
+- the current provider-independent `WS04-01` database foundation is complete for
+  purposes of continuing downstream engineering whose prerequisites are only
+  source/database contracts;
+- final `DB-002` connection-budget evidence and final `DB-015` production
+  role/grant evidence remain explicitly deferred to `WS04-01D`;
+- the broader controls and the parent are not represented as fully production
+  verified merely because C is accepted;
+- the mandatory deferred D unit remains visible in the execution register while
+  its trigger is false;
+- downstream Stage 0/Gate A work may proceed only when its own prerequisites do
+  not require a D-owned production fact;
+- if downstream work does require such a fact, it stops on that specific
+  prerequisite;
+- `WS04-01D` runs when its trigger is satisfied and remains mandatory no later
+  than the first true consumer of its facts or `CLOSE-01`.
 
-For the current execution sequence, `WS04-01A` is the next selected child.
-Nothing in the known technical state blocks its engineering-plan work.
+This distinction allows the program to continue without either forcing an early
+infrastructure choice or falsely claiming production verification.
 
-## 6. Internal Record
+## 6. Current Next Action
 
-This section preserves the production-readiness routing and bookkeeping needed
-to freeze the intake decision. It records the exact process state without
-mixing that information into the engineering explanation above.
+The previous frozen `WS04-01C` plan no longer matches the revised executable
+boundary and must not resume Gate B.
+
+The next action is a fresh Gate A for:
+
+`WS04-01C - Production PostgreSQL verification framework and evidence contract`
+
+That Gate A plan must preserve accepted A/B behavior, define only work that can
+be completed without final provider facts, and make the `WS04-01D` handoff
+explicit.
+
+## 7. Internal Record
 
 | Detail | Value |
 |---|---|
 | Parent pass | `WS04-01 - Database engine/session lifecycle, connection budget, and least-privilege roles` |
-| Intake outcome | Split parent into three executable children |
-| Accepted baseline | `08ce291e8322461ca8a32c4ce3cdc07ba97b4172` |
+| Intake outcome | Structural revision of remaining scope after accepted `WS04-01A` and `WS04-01B` |
+| Current accepted develop basis for revision | `4200850354a5fd7db0dc0bdd2a7cfb8394cfa54f` |
 | Intake path | `docs/production-readiness/planning/passes/ws04/ws04-01-intake.md` |
-| Authority sources | `00-READ-ME-FIRST.md`; `01-PROGRAM-CONTEXT.md`; `PASS-IMPLEMENTATION-WORKFLOW.md`; `PASS-INTAKE-TEMPLATE.md`; `PASS-EXECUTION-REGISTER.md`; master blueprint; final remediation plan; `DBP-01 / DB-002`; `FDN-04 / GOV-006`; provider, ownership, evidence, and limits governance records; current `backend/database.py`, `backend/settings.py`, `backend/main.py`, and `backend/alembic/env.py` |
-| Execution-register state | `WS04-01` is not yet selected in the accepted register and requires intake before implementation |
-| Approved decisions and prerequisites | `DBP-01 / DB-002` budget direction approved; `FDN-04 / GOV-006` evidence-based limits method approved; accepted WS02 runtime and timeout foundation available |
-| Child dependency shape | `WS04-01A + WS04-01B -> WS04-01C` |
-| Current selected child | `WS04-01A` |
-| Proposed canonical plan path | `docs/production-readiness/planning/passes/ws04/ws04-01a-application-database-lifecycle-pool-settings-role-credential-boundaries.md` |
-| Proposed requirement declaration | `backend/tests/support/requirements/ws04_01a.json` |
-| Proposed trusted test or verification location | `backend/tests/workflows/application_database_lifecycle_pool_settings_role_credential_boundaries` |
-| Blockers | None for `WS04-01A` or `WS04-01B`; `WS04-01C` requires accepted `WS04-01A`, accepted `WS04-01B`, and sanitized production-provider and deployment evidence |
-| Exact next allowed action | Human review and approval of this intake path and SHA, then Gate A for `WS04-01A` only |
+| Authority sources | `00-READ-ME-FIRST.md` final-infrastructure timing/provider-neutrality rule; `01-PROGRAM-CONTEXT.md` late-bound production-evidence rule; current implementation workflow Stage 0 infrastructure-timing classification; execution register; master blueprint Sections 3.1 and 8.1 plus `WS04-01`; final remediation plan; `DBP-01 / DB-002`; `FDN-04 / GOV-006`; accepted `WS04-01A`; accepted `WS04-01B`; current source |
+| Preserved accepted children | `WS04-01A`; `WS04-01B` |
+| Current dependency shape | `WS04-01A + WS04-01B -> WS04-01C` |
+| Current selected child | `WS04-01C - Production PostgreSQL verification framework and evidence contract` |
+| Deferred follow-up | `WS04-01D - Final production PostgreSQL topology, connection budget, and role verification` |
+| `WS04-01D` trigger | Final production provider and deployment topology selected; launch database consumers bounded; sanitized evidence collectable |
+| Temporary infrastructure rule | Vercel/Render/Neon development/demo facts, free-tier limits, examples, and local/CI values must not be used as final production architecture, configuration values, or evidence |
+| Previous C plan state | Superseded for execution by this structural correction; do not resume its Gate B |
+| Exact next action | Fresh Gate A for revised `WS04-01C`; do not rerun accepted A/B |

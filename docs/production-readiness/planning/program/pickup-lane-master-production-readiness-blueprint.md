@@ -1,32 +1,47 @@
 # Pickup Lane Master Production-Readiness Blueprint
 
-**Status:** Proposed execution blueprint for owner review
+**Status:** Durable master execution blueprint
 
-**Planning date:** August 3, 2026
+**Original planning date:** August 3, 2026
 
 **Implementation authorization:** None. This document plans the work. It does not authorize code, Git, provider, deployment, migration, database, worker, storage, monitoring, backup, restore, or CI changes.
 
-## 1. Current program status
+## 1. Program status routing
 
-- The locked audit contains **163 controls**, including **117 unresolved P0 controls** and **29 confirmed P0 failures**.
-- The finalized remediation plan organizes the work into **WS01 through WS10** and requires phased implementation, current tests, provider evidence, runtime verification, and recovery evidence.
-- All **27 owner decisions are approved**. There are **0 open owner decisions**.
-- WS01 governance documents and decision records have been prepared and reviewed outside the repository.
-- The user is finishing the merge of intended previous application work into `main`. The new production-readiness documents are intentionally excluded from that old-work merge.
-- No production-readiness application implementation has started.
-- The previously generated WS02 Codex prompt and package are withdrawn and must not be used.
+This blueprint is durable program authority for planned parent-pass scope, ordering,
+dependencies, infrastructure timing, and completion expectations. It does not maintain
+mutable branch, SHA, PR, or current-pass state.
+
+Determine current execution state from current accepted repository truth and
+`docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md`, using the
+startup and authority rules in `docs/production-readiness/00-READ-ME-FIRST.md`. Do not
+use the original August 3 planning snapshot, historical branch/merge notes, or old
+prompts as current execution state.
+
+The durable planning baseline remains:
+
+- the locked audit contains **163 controls**, including **117 unresolved P0 controls**
+  and **29 confirmed P0 failures** at the time of the original audit;
+- the finalized remediation plan organizes the work into **WS01 through WS10** and
+  requires phased implementation, current tests, provider evidence, runtime
+  verification, and recovery evidence;
+- all **27 owner decisions are approved**, with **0 open owner decisions**;
+- implementation progress is tracked outside this section and may advance without
+  rewriting the blueprint's historical planning counts.
 
 ## 2. Authority order
 
 When two artifacts disagree, stop and apply this order:
 
-1. The current repository tree after the user finishes and verifies the merge into `main`.
+1. Current accepted repository truth and the trusted baseline identified by
+   `00-READ-ME-FIRST.md`, the execution register, and the applicable workflow.
 2. The six locked audit reports and the 163-control manifest.
 3. The finalized production-readiness remediation plan.
 4. The approved foundation and Decision Packets 2 through 4.
 5. This master blueprint.
-6. The approved pass-specific inspection record.
-7. The pass-specific Codex prompt.
+6. The accepted Stage 0 intake and frozen Gate A plan for the current executable
+   pass when they apply.
+7. The current run instruction within its authorized scope.
 
 A lower item cannot silently override a higher item. A discovered conflict produces a documented blueprint correction or a superseding owner decision before implementation continues.
 
@@ -34,67 +49,156 @@ A lower item cannot silently override a higher item. A discovered conflict produ
 
 The architectural and product direction is settled. The following items remain later **technical design or evidence-based values**, not reopened owner decisions:
 
-| Area | Approved direction | Still selected later from evidence | First blocking pass |
+| Area | Approved direction | Still selected later from evidence | First pass that must account for it |
 |---|---|---|---|
 | Security headers | Ownership split by response class and layer | Exact header values, CSP directives, HSTS behavior, staging/production differences | WS02-03 |
+| Hosting/runtime topology | Keep application lifecycle and deployment contracts portable until final hosting is chosen | Final hosting provider, instance/process topology, autoscaling ceiling, rolling overlap, platform-specific hardening, provider runtime settings | WS02-02 |
+| Edge/origin/TLS topology | Keep app-owned proxy, host, CORS, and response-class rules portable | Final public domains, direct-origin exposure, proxy/CDN behavior, TLS/HSTS/redirect settings, provider edge configuration | WS02-03 |
 | Limits and timeouts | Use documented evidence and boundary tests | Request/header/body limits, timeouts, rate values, pagination limits | WS02-04 |
-| PostgreSQL connections | One deployment-wide budget with reserve | Provider limit, instances, workers, pool, overflow, wait timeout | WS04-01 |
+| PostgreSQL connections | One deployment-wide budget with reserve | Provider limit, instances, workers, pool, overflow, wait timeout, pooler/proxy mode, concrete production role/grant evidence | WS04-01 |
 | Payment model | Separate payment, booking, refund, and compensation states | Exact enums, transitions, reservation duration, repair rules | WS05-02 |
 | Venue images | Admin-only uploads; initials for users; sanitize before publication | Formats, bytes, pixels, derivative sizes, processing limits | WS06-02 |
-| R2 lifecycle | Controlled deletion, recovery, reconciliation, and fallback | Cache TTL, recovery window, cleanup interval, provider settings | WS06-03 |
+| R2 lifecycle | Controlled deletion, recovery, reconciliation, and fallback | Cache TTL, recovery window, cleanup interval, production bucket/account/CORS/token/cache/provider settings | WS06-03 |
+| Frontend hosting/public binding | Keep the production build and public-configuration contract portable | Final hosting project, domain, environment bindings, edge behavior, and source-map delivery/access settings | WS07-01 |
 | Browser/performance | Modern browser policy and measured budgets | Exact device/browser matrix and measured performance thresholds | WS07-05 |
 | Test artifacts | Sanitized, attributable, risk-based | Storage system and retention duration | WS08-03 |
+| Observability infrastructure | Keep telemetry schemas, correlation, redaction, and signal requirements provider-neutral | Final logging/metrics provider, ingestion/delivery configuration, retention/access settings, dashboards, alert routing, provider capacity/cost values | WS09-01 / WS09-03 |
 | Service objectives | Measure critical availability, correctness, payments, jobs, and freshness | Numeric objectives, launch thresholds, error budgets | WS09-03 |
 | Privacy/retention | Purpose-based and table-by-table lifecycle | Exact durations and legally reviewed exceptions | WS10-01 |
 | Recovery | Tiered protection and tested restore | RPO, RTO, PITR window, backup retention, recurring exercise schedule | WS10-04 |
 
-No exact value may be invented merely to complete a prompt.
+No exact value may be invented merely to complete a pass.
+
+
+### 3.1 Final infrastructure timing and provider-neutrality rule
+
+Final production hosting and database-hosting infrastructure is intentionally
+late-bound. The current Vercel, Render, and Neon setup is prototype/demo
+infrastructure and is not a permanent production-architecture decision.
+Temporary free-tier, preview, local, demo, or example settings must never be
+promoted into final production assumptions merely because a pass needs a value.
+
+This rule applies to any final production fact that materially depends on the
+selected hosting, database host, edge/network topology, worker platform,
+observability platform, backup platform, provider account, provider plan, or
+provider-side configuration. Examples include:
+
+- provider/project/account selection;
+- public domains, origins, edge/proxy/CDN/TLS topology, and direct-origin exposure;
+- instance/process counts, autoscaling, rolling overlap, runtime resource limits,
+  and platform-specific hardening;
+- database provider capacity, pooler/proxy mode, final pool/overflow values,
+  production database roles/grants, and provider-side backup/PITR settings;
+- final provider URLs/endpoints, environment bindings, secret-injection locations,
+  production CORS/allowlists, bucket/account settings, and control-plane values;
+- final logging/metrics provider configuration, dashboards, alert delivery,
+  provider capacity/cost limits, and recovery/runtime evidence.
+
+Before final infrastructure is selected, passes may still implement and verify
+provider-independent work: interfaces, configuration names and validation,
+source-owned security behavior, formulas, evidence schemas, portability
+contracts, deterministic local/synthetic tests, and provider-neutral failure
+handling. A value that is genuinely application-owned and can be justified from
+provider-independent evidence does not need to wait merely because it is numeric.
+The late-bound rule applies when the value or proof materially depends on final
+production infrastructure.
+
+When a parent pass contains both kinds of work, Stage 0 must not force an early
+provider choice and must not block the entire parent solely because the final
+infrastructure trigger is false. Stage 0 must separate:
+
+1. the coherent provider-independent work that is executable now; and
+2. a mandatory deferred verification unit for the final provider-specific
+   configuration, values, topology, and runtime/provider evidence.
+
+Every deferred unit must record its owning pass, exact obligation set,
+prerequisites, activation trigger, and latest required completion boundary.
+Temporary provider values are not substitutes. Deferred evidence is not proof and
+does not close the underlying control.
+
+Final-infrastructure-dependent verification must run after the relevant permanent
+provider/topology is selected and the launch deployment shape is sufficiently
+stable to produce honest evidence. It may run as soon as that trigger is true,
+but every mandatory deferred infrastructure unit must be complete before
+`CLOSE-01`. If an earlier pass genuinely requires one of those final facts, that
+earlier pass waits only on the specific missing fact rather than causing unrelated
+provider-independent work to stop.
+
+This timing rule does not undo provider choices that higher authority has actually
+locked as product architecture, such as an approved external service integration.
+Even for a selected service, however, concrete production accounts, plans,
+regions, quotas, domains, credentials, roles, provider settings, and runtime
+observations remain unproven until the appropriate late-bound evidence exists.
 
 ## 4. Repository baseline and Git workflow
 
-### 4.1 Hard baseline gate
+This section records durable repository-safety expectations and historical setup
+structure. It does not maintain current branch, SHA, PR, worktree, or pass
+state. Current execution-state verification is owned by
+`00-READ-ME-FIRST.md`, `PASS-EXECUTION-REGISTER.md`, and the applicable workflow.
 
-Implementation starts only after the user confirms the intended previous work is merged into `main`. The first execution step is `BASE-00`, a read-only repository inspection.
+### 4.1 Baseline verification
 
-The baseline inspection must establish:
+Before an authorized pass mutates files, use the applicable workflow to verify
+the current accepted baseline, branch, worktree/index state, remote relationship,
+and changed-file scope. Historical `BASE-00` records remain program provenance;
+they are not instructions to restart the current program from an old `main`
+merge state.
 
-- the current branch and exact `main` commit
+The baseline verification must establish:
+
+- the current branch and exact accepted baseline
 - a clean or explicitly understood working tree
 - all worktrees and their owners
 - all stashes and whether they contain intended work
 - recent branch/merge history
-- remote tracking and whether local `main` is current
-- that the approved production-readiness documents were not accidentally included in the old-work merge
+- remote tracking and whether local `develop` is current when the workflow
+  requires it
+- that production-readiness documents are included only when the current pass or
+  correction scope authorizes them
 
-No exact branch-creation or worktree-creation command is prescribed until that inspection is reviewed.
+No exact branch-creation or worktree-creation command is prescribed by this
+blueprint. Use the current workflow and run instruction.
 
 ### 4.2 Intended isolation model
 
-The preferred model, subject to the baseline inspection, is:
+The historical preferred model, subject to baseline verification, was:
 
 ```text
 pickup-lane/                         trusted current development checkout
 pickup-lane-production-readiness/    isolated remediation worktree
 ```
 
-The remediation worktree uses a dedicated integration branch. Each pass is completed as one narrow reviewable change set. A separate child branch or pull request may be used per pass where practical; otherwise each accepted pass must still remain an independently revertible commit.
+Current workflows may use the active checkout or a separate worktree, but every
+pass still uses an explicit branch and one narrow reviewable change set. A
+separate child branch or pull request may be used per pass where practical;
+otherwise each accepted pass must still remain an independently revertible
+commit.
 
 ### 4.3 Git rules
 
-1. Start every pass from a clean accepted commit.
+1. Start every pass from the accepted baseline required by the applicable
+   workflow.
 2. Do not mix unrelated feature work with production-readiness remediation.
 3. Include the pass ID in the branch, commit, pull request, evidence record, and review notes.
 4. One pass may be split after inspection; it may not be broadened or silently combined with another pass.
 5. Do not begin the next pass until the current pass is accepted, corrected, or reverted.
 6. Database migrations, provider changes, and destructive operations require explicit rollback or forward-fix plans before execution.
 7. Sensitive provider evidence is not committed to normal source control. The repository stores only sanitized records or references approved by the evidence policy.
-8. Codex never decides the next pass, owner policy, architecture, or exception.
+8. Codex never invents the next pass, owner policy, architecture, or exception.
+   Automated progression may select the next unit only when durable authority
+   determines exactly one valid route.
 
 ## 5. Program gates
 
+The table below records durable high-level program gates and historical setup
+state. It is not the current per-pass execution workflow. Current production-
+readiness work routes through `PASS-IMPLEMENTATION-WORKFLOW.md` or
+`PASS-RECHECK-WORKFLOW.md`.
+
 | Gate | Required result | Work allowed after gate |
 |---|---|---|
-| G0: Main ready | Intended previous work merged; user confirms merge complete | Read-only baseline inspection |
+| G0: Historical baseline ready | Historical intended work merged and baseline understood | Historical BASE-00 provenance; current sessions use workflow preflight |
 | G1: Baseline trusted | Exact commit, clean state, worktrees/stashes understood, isolation approved | Governance import only |
 | G2: Governance versioned | Approved WS01 package in remediation branch; 27 decisions reconciled | Early test, telemetry, and control-plane enablers |
 | G3: Foundation enablers | Current-test taxonomy, correlation/redaction contract, safe evidence process | WS02 production foundation |
@@ -157,12 +261,12 @@ The phase order is dependency-based, not a simple WS02, WS03, WS04 sequence:
 
 ## 8. Planned implementation-pass register
 
-This blueprint contains **42 planned passes**. Pass IDs define order and scope, not calendar estimates.
+This blueprint contains the original **42 parent-level planned passes**. Stage 0 may decompose them into additional executable children or mandatory deferred follow-ups. Pass IDs define order and scope, not calendar estimates.
 
 | Pass | Track | Type | Title | Primary control count | Dependencies |
 |---|---|---|---|---:|---|
-| BASE-00 | PROGRAM | Repository inspection | Repository baseline and isolation gate | 0 | User finishes merging intended previous work into main |
-| GOV-01 | WS01 | Decision and governance | Import and reconcile the approved governance package | 5 | BASE-00 |
+| BASE-00 | PROGRAM | Repository inspection | Repository baseline and isolation gate | 0 | Historical setup predecessor; not a current restart instruction |
+| GOV-01 | WS01 | Decision and governance | Import and reconcile the approved governance package | 5 | Historical BASE-00 setup |
 | EN-01 | WS08 | Test infrastructure | Early current-test taxonomy and isolation baseline | 5 | GOV-01 |
 | EN-02 | WS09 | Architecture contract | Early correlation, event-envelope, and redaction contract | 2 | GOV-01 |
 | EN-03 | WS10 | Operational/provider foundation | Early secrets, control-plane access, and evidence-handling foundation | 4 | GOV-01 |
@@ -176,10 +280,10 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 | WS03-03 | WS03 | Provider/security implementation | High-risk authentication and Firebase control verification | 3 | WS03-01; EN-03; IDB-04 |
 | WS03-04 | WS03 | Domain implementation and current tests | Complete authorization matrix and negative proof | 5 | WS03-01, WS03-02; stable resource and state models |
 | WS03-05 | WS03 | Schema/domain/privacy implementation | Moderation states, safe notices, and minimum-necessary admin data | 7 | WS03-04; WS04-02; WS05 durable notice path design; OPP-03; WS09-02 audit contract |
-| WS04-01 | WS04 | Database foundation | Database engine/session lifecycle, connection budget, and least-privilege roles | 6 | WS02-02; DBP-01; actual PostgreSQL provider/topology |
-| WS04-02 | WS04 | Database/domain/concurrency | Transactions, invariants, locks, and deterministic concurrency | 8 | WS04-01; approved identity/payment/job/storage invariant inputs |
-| WS04-03 | WS04 | Schema and migration | Migration policy, compatibility, interruption, and production-like rehearsal | 3 | WS04-01, WS04-02; stable required schema capabilities |
-| WS05-01 | WS05 | Schema, worker, and deployment | Durable job model, claim/lease lifecycle, and worker deployment | 8 | WS02-02; WS04-01 through WS04-03; EN-02 |
+| WS04-01 | WS04 | Database foundation | Database engine/session lifecycle, connection budget, and least-privilege roles | 6 | WS02-02; DBP-01; actual PostgreSQL provider/topology only for the mandatory late-bound final verification portion |
+| WS04-02 | WS04 | Database/domain/concurrency | Transactions, invariants, locks, and deterministic concurrency | 8 | Accepted provider-independent WS04-01 foundation; approved identity/payment/job/storage invariant inputs. WS04-01D is required only if this work genuinely consumes a D-owned final-production fact. |
+| WS04-03 | WS04 | Schema and migration | Migration policy, compatibility, interruption, and production-like rehearsal | 3 | Accepted provider-independent WS04-01 foundation; WS04-02; stable required schema capabilities. Final provider/runtime rehearsal facts remain late-bound. |
+| WS05-01 | WS05 | Schema, worker, and deployment | Durable job model, claim/lease lifecycle, and worker deployment | 8 | WS02-02; accepted provider-independent WS04-01 foundation; WS04-02 and WS04-03 source/schema contracts; EN-02. WS04-01D is not a blanket prerequisite and later final DB verification must account for the worker consumers that actually exist. |
 | WS05-02 | WS05 | Financial domain implementation | Payment and booking state machines with webhook authority | 8 | WS05-01; WS04-02; DBP-02; WS03-04 |
 | WS05-03 | WS05 | Durable financial/notification workflows | Refunds, credits, notices, moderation delivery, and reconciliation | 7 | WS05-01, WS05-02; WS03-05 |
 | WS05-04 | WS05 | Concurrency/failure/provider/runtime verification | Deterministic failure, replay, sandbox, and deployed-worker verification | 23 | WS05-01 through WS05-03; Stripe sandbox; staging worker |
@@ -204,15 +308,59 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 | CLOSE-01 | PROGRAM | Audit preparation | Cross-workstream evidence completeness and discrepancy sweep | 0 | All workstream exit gates |
 | CLOSE-02 | PROGRAM | Independent reassessment | Fresh 163-control reassessment and production-readiness decision | 0 | CLOSE-01; all correction/retest passes complete |
 
+### 8.1 Final-infrastructure timing map
+
+The pass register above states parent-level ownership and dependency intent. It
+must be read together with the final-infrastructure timing rule in Section 3.1.
+A prerequisite that names actual provider/topology/runtime evidence blocks only
+the portion that genuinely needs that evidence. It does not force permanent
+provider selection early when a coherent provider-independent slice can proceed.
+
+The following passes are known in advance to contain infrastructure-dependent
+work that Stage 0 must classify, split, or defer when the final production
+configuration is not yet available:
+
+| Pass | Provider-independent work that may proceed before final infrastructure | Late-bound production work | Latest required boundary |
+|---|---|---|---|
+| `WS02-01` | Typed setting names, environment classes, validation, unsafe-default rejection, public/private configuration boundaries | Exact production provider bindings, production URLs/domains, provider secret-injection locations, provider-derived configuration values | Before the final deployed configuration is relied on for production evidence |
+| `WS02-02` | Application lifecycle, readiness/liveness, graceful shutdown, release identity, portable runtime contract | Final host/platform, instance/process topology, autoscaling, rolling overlap, provider runtime settings, platform-specific hardening and rollback evidence | Before final runtime/topology proof and any later pass that consumes those facts |
+| `WS02-03` | App-owned trusted-proxy/CORS/header ownership contract and provider-neutral tests | Final edge/origin topology, domains, direct-origin exposure, TLS/HSTS/redirect behavior, provider edge/proxy configuration | Before final browser/edge verification and `CLOSE-01` |
+| `WS02-05` | HTTP/schema/media/cache/docs/compatibility contracts | Full deployed edge-to-origin chain and final host/runtime observations | Before final release/full-chain evidence and `CLOSE-01` |
+| `WS03-03` | Source-owned step-up/recent-auth behavior, provider-failure contract, portable App Check/service-identity expectations | Concrete production Firebase/GCP project/account/IAM/workload-identity/App Check enforcement and provider evidence | Before final provider-access verification and `CLOSE-01` |
+| `WS04-01` | Application DB lifecycle, query/access behavior, connection-budget formula/framework, role/grant verification contract | Final PostgreSQL provider/topology, provider capacity, pooler/proxy mode, deployed pool values, final numeric budget/headroom, concrete production roles/grants and runtime proof | Mandatory deferred final DB verification before `CLOSE-01`; earlier only when its trigger is satisfied |
+| `WS04-03` | Migration policy, compatibility rules, graph/drift checks, local/controlled rehearsal design | Final provider/runtime-specific migration ceilings, production-like topology evidence, and provider-specific rehearsal facts | Before production migration sign-off and `CLOSE-01` |
+| `WS05-01` | Durable job model, claim/lease/heartbeat/retry/crash semantics, worker command contract | Final worker hosting/platform, service topology, scaling/resource settings, provider deployment configuration and runtime proof | Before deployed-worker verification in `WS05-04` |
+| `WS05-04` | Deterministic local/sandbox race, replay, crash, timeout and repair proof | Final staging/deployed-worker topology and provider/runtime evidence when that environment depends on the final platform | Before WS05 workstream exit evidence and `CLOSE-01` |
+| `WS06-03` | Storage lifecycle/reconciliation state machine, repair behavior, provider-neutral cache/recovery contract | Final production R2 account/bucket/CORS/token/cache/provider settings and provider/runtime recovery evidence | Before final storage/recovery evidence and `CLOSE-01` |
+| `WS07-01` | Portable production build, public-configuration interface, artifact/release identity, source-map packaging policy | Final frontend host project/domain/environment bindings, delivery behavior, provider access and source-map exposure proof | Before final release evidence and `CLOSE-01` |
+| `WS07-04` | Third-party inventory, CSP/SRI policy, browser-provider failure isolation | Final production domain allowlists, edge/header/CSP bindings and deployed browser/provider evidence | Before final browser-security verification and `CLOSE-01` |
+| `WS08-02` | Deterministic unit/service/API/PostgreSQL/browser suites and provider-neutral fixtures | Provider, restore, and full-environment suites that require selected final sandboxes or recovery environments | Before the affected workstream evidence is treated as complete |
+| `WS08-03` | Reproducible CI, scans, SBOM/provenance and release-manifest contracts | Final deployment linkage and provider/release evidence that depends on the selected production delivery path | Before final release evidence and `CLOSE-01` |
+| `WS09-01` | Structured logging/correlation/redaction code and signal catalog | Final log/observability provider, aggregation/injection/delivery configuration, access/retention settings and provider evidence | Before `WS09-03` final observability evidence |
+| `WS09-03` | Metric/SLI definitions, telemetry hooks, provider-neutral capacity model structure | Final dashboards/alerts, delivery routing, exact SLO/launch values that require measurement, provider/storage/database capacity and cost values | After final infrastructure is stable; before `WS10-03` final runbooks and `CLOSE-01` |
+| `WS10-02` | Only preparatory inventories/procedures that do not claim live provider state | Actual production provider accounts/topology, MFA/recovery, managed secret injection, rotation/revocation/offboarding and access evidence | Late operational phase; before `WS10-03`, `WS10-04` where consumed, and `CLOSE-01` |
+| `WS10-03` | Generic incident roles/severity/process framework where useful | Provider-specific outage procedures, deployed-architecture runbooks and realistic tabletop evidence | After stable deployed architecture; before `CLOSE-01` |
+| `WS10-04` | Recovery requirements, evidence schema and rehearsal design where useful | Actual backup/PITR/provider settings, isolated restore, measured RPO/RTO evidence and recovery exercises | Final operational phase; before `CLOSE-01` |
+| `CLOSE-01` | None of the required late-bound evidence may be substituted with temporary/demo facts | Reconcile and require completion of every mandatory deferred infrastructure verification unit | Must not begin final evidence completeness with required deferred units still open |
+
+For provider-backed product integrations that are already selected by higher
+authority, such as Firebase, Stripe, or R2, this map does not remove the selected
+integration. It separates source/application contracts from concrete production
+account, plan, role, region, quota, domain, credential, control-plane, and runtime
+settings that still require later evidence.
+
 ## 9. Detailed pass specifications
 
-### BASE-00: Repository baseline and isolation gate
+### BASE-00: Historical repository baseline and isolation gate
 
 - **Track:** PROGRAM
 - **Pass type:** Repository inspection
 - **Primary controls:** Program gate; no primary control reassessment
-- **Prerequisites:** User finishes merging intended previous work into main
-- **Maximum scope:** Read-only inspection of branch, status, worktrees, stashes, recent history, remotes, and the exact main commit. Decide the isolated remediation branch/worktree only after inspection.
+- **Prerequisites:** Historical setup predecessor; current execution-state
+  preflight is owned by the read-first document and applicable workflow.
+- **Maximum scope:** Historical read-only inspection of branch, status,
+  worktrees, stashes, recent history, remotes, and the exact trusted baseline.
+  Decide the isolated remediation branch/worktree only after inspection.
 - **Required output:** Recorded baseline commit, clean-tree confirmation, protected unrelated work, chosen isolation strategy, and rollback anchor.
 - **Proof before acceptance:** Read-only Git output reviewed; no repository mutation before approval.
 - **Stop condition:** Stop on a dirty or ambiguous baseline, missing intended merge, unresolved stash/worktree ownership, or uncertainty about the correct source branch.
@@ -222,7 +370,7 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 - **Track:** WS01
 - **Pass type:** Decision and governance
 - **Primary controls:** GOV-001, GOV-004, GOV-005, GOV-006, GOV-007
-- **Prerequisites:** BASE-00
+- **Prerequisites:** Historical BASE-00 setup result
 - **Maximum scope:** Add only the approved WS01 governance documents and root README linkage to the isolated remediation branch. Reconcile the 27 approved decisions and 0 open decisions without changing locked audit findings.
 - **Required output:** Versioned governance package, decision registers, ownership, limits method, audit process, risk/exception process, and source links.
 - **Proof before acceptance:** Document review, control-ID reconciliation, no code/config/provider changes.
@@ -263,6 +411,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS02-01: Typed settings and environment isolation
 
+- **Infrastructure timing:** Provider-neutral setting names, validation, environment classes, and safety boundaries may be completed before final hosting is selected. Exact production provider bindings, URLs/domains, secret-injection locations, and provider-derived values remain late-bound.
+
 - **Track:** WS02
 - **Pass type:** Domain implementation
 - **Primary controls:** GOV-002, API-M01, API-M02
@@ -274,25 +424,29 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS02-02: Runtime process, lifecycle, health, and deployability
 
+- **Infrastructure timing:** Application lifecycle, health, shutdown, release-identity, and portable runtime contracts may proceed without a permanent host. Final provider choice, process/instance topology, autoscaling, rolling overlap, platform-specific hardening, and provider runtime settings are late-bound and must be split/deferred when unavailable.
+
 - **Track:** WS02
 - **Pass type:** Deployment foundation
 - **Primary controls:** API-M03, API-M17, OPS-001, OPS-002, OPS-003, OPS-004
-- **Prerequisites:** WS02-01; DBP-01 policy; preliminary provider topology
+- **Prerequisites:** WS02-01; DBP-01 policy. Preliminary/final provider topology is required only for the topology-specific verification portion; it does not block a coherent provider-independent child.
 - **Maximum scope:** Define runtime command, supervision, worker/instance topology, container/platform hardening, startup/readiness/liveness, graceful shutdown, release identity, rolling overlap, rollback and forward-fix behavior.
 - **Required output:** Versioned deployment/runtime configuration, health contract, shutdown handling, deployment tests, and release/rollback record template.
 - **Proof before acceptance:** Local or staging-safe lifecycle tests; readiness gates traffic only after dependencies are ready; shutdown releases resources.
-- **Stop condition:** Stop if connection budget cannot be calculated, runtime provider is undecided, or a release change cannot be rolled back or forward-fixed.
+- **Stop condition:** Stop if a provider-specific runtime value would be guessed, temporary hosting would be treated as permanent, or a release change cannot be rolled back or forward-fixed. An undecided final runtime provider routes the provider-specific portion to deferred verification rather than blocking portable lifecycle work.
 
 ### WS02-03: Proxy, host, TLS, CORS, and response-class security headers
+
+- **Infrastructure timing:** App-owned proxy/CORS/header contracts may proceed provider-independently. Final public domains, edge/origin topology, TLS/HSTS/redirect behavior, direct-origin exposure, and provider edge settings are late-bound.
 
 - **Track:** WS02
 - **Pass type:** Configuration and provider verification
 - **Primary controls:** API-M04, API-M05, API-M06, API-M07, API-M08
-- **Prerequisites:** WS02-01, WS02-02; FDN-02; actual edge/origin topology
+- **Prerequisites:** WS02-01, WS02-02; FDN-02. Actual edge/origin topology is required only for late-bound edge/provider verification.
 - **Maximum scope:** Assign edge versus app ownership and implement trusted-proxy, canonical host, TLS redirect/HSTS, CORS, framing, content-sniffing, cache, and response-class header behavior.
 - **Required output:** Edge ownership matrix, app/edge configuration, unit/integration tests, and provider-evidence checklist.
 - **Proof before acceptance:** Staging header captures, redirect traces, direct-origin behavior, disallowed-origin tests, and proxy-spoof tests.
-- **Stop condition:** Stop on unknown direct-origin exposure, conflicting duplicated headers, redirect loops, or provider settings that cannot be safely verified.
+- **Stop condition:** Stop on conflicting duplicated headers or redirect loops. If direct-origin exposure or provider settings are unknown because final hosting is not selected, keep those facts deferred; do not invent them or treat temporary hosting as final verification.
 
 ### WS02-04: Request limits, timeouts, rate controls, and stable errors
 
@@ -306,6 +460,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 - **Stop condition:** Stop if a numeric value lacks evidence, retries could repeat non-idempotent work, or limits conflict across edge and app.
 
 ### WS02-05: HTTP contracts, schemas, docs, cache, and end-to-end chain
+
+- **Infrastructure timing:** Source-owned HTTP/schema/cache/docs behavior may proceed before permanent hosting is selected. Full deployed edge-to-origin verification and host-specific observations are late-bound.
 
 - **Track:** WS02
 - **Pass type:** Domain implementation and runtime verification
@@ -340,6 +496,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS03-03: High-risk authentication and Firebase control verification
 
+- **Infrastructure timing:** Source-owned authentication and provider-failure contracts may proceed before concrete production provider settings are available. Final production project/account/IAM/workload-identity/App Check settings and provider evidence are late-bound even when the service integration itself is already selected.
+
 - **Track:** WS03
 - **Pass type:** Provider/security implementation
 - **Primary controls:** IAM-008, IAM-010, IAM-011
@@ -373,21 +531,24 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS04-01: Database engine/session lifecycle, connection budget, and least-privilege roles
 
+- **Infrastructure timing:** Provider-independent database lifecycle, access behavior, budget methodology, and role/grant verification framework may proceed before final database hosting is selected. Final PostgreSQL provider/topology, capacity, pooler/proxy mode, deployed pool values, numeric budget/headroom, concrete production roles/grants, and runtime proof are mandatory late-bound verification. Temporary Neon/Render facts are not substitutes.
+
 - **Track:** WS04
 - **Pass type:** Database foundation
 - **Primary controls:** DB-001, DB-002, DB-003, DB-012, DB-013, DB-015
-- **Prerequisites:** WS02-02; DBP-01; actual PostgreSQL provider/topology
+- **Prerequisites:** WS02-02; DBP-01. Actual PostgreSQL provider/topology is required only for the mandatory late-bound final verification portion.
 - **Maximum scope:** Inspect and define engine/session lifecycle, transaction defaults, deployment-wide pool/overflow/wait budget, worker/migration reserve, provider roles/grants, and operational access.
-- **Required output:** Configuration/code, connection-budget record, role/grant plan, current PostgreSQL tests, and provider-evidence checklist.
-- **Proof before acceptance:** Multi-process maximum stays within provider budget; waits/timeouts are bounded; application/migration/support roles are least privilege.
-- **Stop condition:** Stop if provider limits or process counts are unknown, routine superuser access is required, or pool changes precede topology evidence.
+- **Required output:** Provider-independent configuration/code and database-access contracts, connection-budget methodology/framework, role/grant verification plan, current PostgreSQL tests, and provider-evidence contract/checklist; plus the mandatory late-bound final verification unit when its trigger becomes true.
+- **Proof before provider-independent acceptance:** Repository-owned lifecycle/access behavior, bounded waits/timeouts, deterministic budget arithmetic with synthetic inputs, and the least-privilege verification contract are proven without inventing final provider values.
+- **Proof before full parent verification:** `WS04-01D` proves the actual deployment-wide maximum against final provider capacity/headroom and verifies concrete application/migration/support roles and grants using accepted sanitized provider/runtime evidence.
+- **Stop condition:** Do not invent provider limits/process counts or change final pool/provider settings without topology evidence. If final infrastructure is still unselected, Stage 0 must split/defer the provider-specific verification rather than blocking coherent provider-independent work. Stop on routine superuser requirements or any attempt to treat temporary/demo infrastructure as final evidence.
 
 ### WS04-02: Transactions, invariants, locks, and deterministic concurrency
 
 - **Track:** WS04
 - **Pass type:** Database/domain/concurrency
 - **Primary controls:** DB-004, DB-005, DB-006, DB-007, DB-008, DB-009, DB-010, DB-014
-- **Prerequisites:** WS04-01; approved identity/payment/job/storage invariant inputs
+- **Prerequisites:** Accepted provider-independent `WS04-01` foundation; approved identity/payment/job/storage invariant inputs. `WS04-01D` is not a blanket prerequisite. If this pass genuinely requires a D-owned final-production fact, stop on that specific prerequisite until D's trigger is satisfied.
 - **Maximum scope:** Define transaction and external-side-effect boundaries; add database constraints or deliberate serialization; handle duplicate, winner/loser, retry, deadlock, timeout, and unknown-outcome cases.
 - **Required output:** Narrow models/constraints/services, deterministic independent-session tests, and invariant catalog.
 - **Proof before acceptance:** Barrier-driven concurrency tests assert final database and external-intent states, cleanup, and retry behavior.
@@ -395,10 +556,12 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS04-03: Migration policy, compatibility, interruption, and production-like rehearsal
 
+- **Infrastructure timing:** Migration policy, compatibility rules, graph/drift checks, and controlled rehearsal design may proceed provider-independently. Final provider/runtime-specific migration ceilings and production-like topology evidence are late-bound.
+
 - **Track:** WS04
 - **Pass type:** Schema and migration
 - **Primary controls:** DB-016, DB-017, DB-018
-- **Prerequisites:** WS04-01, WS04-02; stable required schema capabilities
+- **Prerequisites:** Accepted provider-independent `WS04-01` foundation; `WS04-02`; stable required schema capabilities. Final provider/runtime-specific rehearsal facts remain late-bound and must not block provider-independent migration policy, compatibility, graph/drift, or controlled-rehearsal work.
 - **Maximum scope:** Establish expand-and-contract rules, graph/drift checks, empty/prior-schema upgrades, online-index strategy, timeouts, interruption/resume, old/new compatibility, rollback versus forward-fix, and production-like rehearsal.
 - **Required output:** Migration changes and tests, compatibility window, rehearsal plan/results, and forward-fix notes.
 - **Proof before acceptance:** Empty and prior-schema upgrades pass; lock/duration/interruption behavior is measured on representative volume.
@@ -406,10 +569,12 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS05-01: Durable job model, claim/lease lifecycle, and worker deployment
 
+- **Infrastructure timing:** Durable job semantics and a portable worker command/runtime contract may proceed before final worker hosting is selected. Final worker platform, deployment topology, scaling/resource settings, provider configuration, and runtime proof are late-bound and must be complete before deployed-worker verification.
+
 - **Track:** WS05
 - **Pass type:** Schema, worker, and deployment
 - **Primary controls:** JOB-M01, JOB-M02, JOB-M03, JOB-M04, JOB-M05, JOB-M06, JOB-M07, JOB-M08
-- **Prerequisites:** WS02-02; WS04-01 through WS04-03; EN-02
+- **Prerequisites:** `WS02-02`; accepted provider-independent `WS04-01` foundation; `WS04-02` and `WS04-03` source/schema contracts; `EN-02`. `WS04-01D` is not a blanket prerequisite for durable-job source/schema work; later final database verification must include the worker connection demand that exists at that time.
 - **Maximum scope:** Implement durable job state, transactional handoff/outbox where required, claim/lease/heartbeat, bounded retry, crash recovery, exhaustion/dead-letter/repair, version compatibility, graceful shutdown, worker command, and job observability.
 - **Required output:** Models/migration, worker/service implementation, operator interfaces, deployment config, current tests, and runbook draft.
 - **Proof before acceptance:** Crash/restart, stale lease, duplicate delivery, multi-worker claim, unsupported version, shutdown, and backlog behavior are deterministic.
@@ -438,6 +603,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 - **Stop condition:** Stop if a financial repair can double-spend/credit/refund, provider truth is overwritten, or manual repair lacks guardrails and audit.
 
 ### WS05-04: Deterministic failure, replay, sandbox, and deployed-worker verification
+
+- **Infrastructure timing:** Deterministic local/sandbox proof may proceed when safe. Any deployed-worker or staging evidence that depends on the final worker platform is late-bound until that environment exists.
 
 - **Track:** WS05
 - **Pass type:** Concurrency/failure/provider/runtime verification
@@ -472,6 +639,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS06-03: R2 lifecycle, deletion, cache behavior, reconciliation, and recovery
 
+- **Infrastructure timing:** Storage lifecycle/reconciliation behavior may proceed from the selected storage contract without assuming final production settings. Concrete production account/bucket/CORS/token/cache/provider values and runtime/recovery evidence are late-bound.
+
 - **Track:** WS06
 - **Pass type:** Storage lifecycle/provider/runtime
 - **Primary controls:** STO-008, STO-009
@@ -482,6 +651,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 - **Stop condition:** Stop if automatic deletion is not safely bounded, provider token scope/public access is unknown, or database/object authority is ambiguous.
 
 ### WS07-01: Production frontend build, public configuration, artifact identity, and source maps
+
+- **Infrastructure timing:** Build inputs, public-configuration boundaries, artifact identity, and source-map packaging rules may proceed provider-independently. Final hosting project/domain/environment bindings, provider delivery behavior, access, and source-map exposure evidence are late-bound.
 
 - **Track:** WS07
 - **Pass type:** Frontend/build/release
@@ -516,6 +687,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS07-04: Third-party browser code, CSP/SRI posture, headers, and provider failure isolation
 
+- **Infrastructure timing:** Third-party inventory, CSP/SRI policy, and failure-isolation behavior may proceed before final hosting/edge selection. Final production domain allowlists, edge/header bindings, and deployed provider/browser evidence are late-bound.
+
 - **Track:** WS07
 - **Pass type:** Frontend security/provider
 - **Primary controls:** FE-M08, FE-M09
@@ -549,6 +722,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS08-02: Critical workflow, deterministic concurrency, migration, provider, privacy, and recovery suites
 
+- **Infrastructure timing:** Repository/local/sandbox suites may proceed when their environments are honest substitutes for the behavior under test. Provider/restore/full-environment suites that require final selected infrastructure remain late-bound and must not be replaced with temporary demo-provider evidence.
+
 - **Track:** WS08
 - **Pass type:** Current tests
 - **Primary controls:** TST-005, TST-006, TST-007, TST-008, TST-009
@@ -560,6 +735,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS08-03: Reproducible CI, scans, branch protection, SBOM, provenance, and release evidence
 
+- **Infrastructure timing:** CI, scan, SBOM, provenance, and release-manifest contracts may proceed before final hosting selection. Deployment linkage and release/provider evidence that depends on the final delivery path is late-bound.
+
 - **Track:** WS08
 - **Pass type:** CI/supply chain/provider
 - **Primary controls:** TST-012, TST-013, TST-014, TST-015, TST-016, TST-017
@@ -570,6 +747,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 - **Stop condition:** Stop if CI needs production credentials, gates can be skipped without visibility, artifacts leak data, or release identity cannot be tied to source/deployment.
 
 ### WS09-01: Structured request/event logging, correlation, redaction, and log aggregation
+
+- **Infrastructure timing:** Logging schemas, correlation, redaction, and signal contracts may proceed provider-independently. Final central logging/observability provider selection, ingestion/delivery configuration, access/retention settings, and provider evidence are late-bound.
 
 - **Track:** WS09
 - **Pass type:** Observability implementation
@@ -593,6 +772,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS09-03: Metrics, service objectives, dashboards, alerts, capacity, and cost evidence
 
+- **Infrastructure timing:** Signal definitions and provider-neutral capacity-model structure may proceed earlier. Final dashboards/alerts, delivery routing, exact measured objectives, provider/storage/database capacity, cost values, and provider-limit evidence require the final deployment and are late-bound.
+
 - **Track:** WS09
 - **Pass type:** Observability/operations
 - **Primary controls:** OPS-009, OPS-011, OPS-012, OPS-016
@@ -615,6 +796,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS10-02: Secrets, provider control-plane access, MFA, rotation, revocation, and offboarding
 
+- **Infrastructure timing:** This is intentionally a late operational/provider pass. It must use the actual selected production providers/accounts/topology and must not treat prototype Vercel/Render/Neon or other temporary environments as final evidence.
+
 - **Track:** WS10
 - **Pass type:** Operational/provider
 - **Primary controls:** OPS-005, OPS-006, OPS-007, OPS-025
@@ -626,6 +809,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 
 ### WS10-03: Incident response, provider-outage handling, and operational runbooks
 
+- **Infrastructure timing:** Generic incident roles/process may be prepared earlier, but final provider-outage runbooks and tabletop evidence must match the stable deployed production architecture and are therefore late-bound.
+
 - **Track:** WS10
 - **Pass type:** Operational process/exercise
 - **Primary controls:** OPS-013, OPS-014, OPS-015
@@ -636,6 +821,8 @@ This blueprint contains **42 planned passes**. Pass IDs define order and scope, 
 - **Stop condition:** Stop if runbooks do not match deployed architecture, emergency steps bypass financial/data safeguards, or on-call/decision authority is undefined.
 
 ### WS10-04: Backup/PITR evidence, isolated restore, recovery validation, and exercises
+
+- **Infrastructure timing:** Recovery requirements and rehearsal design may be prepared earlier, but actual backup/PITR configuration, restore proof, measured recovery results, and provider-specific exercises are late-bound until final production infrastructure exists.
 
 - **Track:** WS10
 - **Pass type:** Recovery/provider/runtime
@@ -689,85 +876,50 @@ The planned pass decomposition was mechanically checked against the finalized wo
 
 This does not close any control. It only verifies blueprint coverage.
 
-## 11. Mandatory lifecycle for every implementation pass
+## 11. Current pass workflow routing
 
-### Step 1: Entry-gate check
+Current pass execution is owned by the durable workflow documents, not by the
+historical inspection-to-prompt lifecycle that produced the original blueprint.
+Use this blueprint for parent-pass scope, sequencing, dependencies,
+infrastructure timing, and completion expectations, then route execution through:
 
-Confirm dependencies, approved decisions, clean Git state, provider access, test environment, rollback/abort criteria, and exact control IDs.
+```text
+Stage 0
+-> Gate A planning
+-> independent Gate A review
+-> Gate B
+-> independent Gate C review
+-> Gate D
+-> open PR for manual merge
+```
 
-### Step 2: Read-only repository inspection
+Use `PASS-IMPLEMENTATION-WORKFLOW.md` for first-time implementation and
+`PASS-RECHECK-WORKFLOW.md` for accepted or historical-pass rechecks. Do not
+duplicate the full gate mechanics here.
 
-Inspect only the narrow subsystem. Produce:
+The durable engineering requirements from the historical lifecycle remain
+binding through those workflows:
 
-- current files and behavior
-- stale audit assumptions, if any
-- proposed implementation scope
-- prohibited files and unrelated areas
-- schema/migration impact
-- exact tests and evidence
-- unresolved blockers
-
-No edits occur during inspection.
-
-### Step 3: Pass-specific Codex prompt
-
-The assistant prepares the prompt only after reviewing the inspection. The prompt must include:
-
-1. pass ID and workstream
-2. exact audit control IDs
-3. objective and approved decision inputs
-4. current-tree findings
-5. implementation scope or subsystem
-6. explicitly prohibited scope
-7. required implementation behavior
-8. required current tests
-9. database and migration implications
-10. provider/runtime evidence that is not part of Codex's repository task
-11. required output format
-12. stop conditions
-
-### Step 4: Codex execution
-
-Codex performs only the approved pass. It must stop rather than guess when it discovers:
-
-- an unmade or conflicting decision
-- a required change to approved requirements, design, proof strategy, or pass scope
-- a destructive migration not covered by the pass
-- a production credential or personal-data requirement
-- an ambiguous source of truth
-- a need to redesign another workstream
-
-### Step 5: Actual review
-
-Review the actual diff and relevant full files, not only Codex's summary. Verify:
-
-- scope discipline
-- correctness against approved decisions
-- security and privacy boundaries
-- migrations and compatibility
-- current non-legacy tests
-- failure and concurrency behavior
-- documentation and evidence updates
-- no unrelated cleanup
-
-### Step 6: Accept, correct, or reject
-
-- **Accept:** all entry, implementation, test, and evidence requirements pass.
-- **Correct:** issue a narrowly scoped correction prompt for the same pass.
-- **Reject:** revert the pass or discard the branch when its approach is unsafe or outside the blueprint.
-
-### Step 7: Commit and evidence
-
-Commit the accepted pass independently and update the pass record with:
-
-- source commit
-- changed files
-- tests executed and results
-- migration head where applicable
-- provider/runtime evidence still outstanding
-- known limitations
-- rollback or forward-fix instructions
-- control status remains unresolved until formal reassessment
+- verify dependencies, accepted decisions, Git state, evidence availability,
+  rollback/abort criteria, exact control IDs, and the infrastructure-timing
+  classification from Sections 3.1 and 8.1 before implementation;
+- inspect current repository truth and affected files before editing;
+- keep the scope narrow to the selected parent/child pass and its frozen Gate A
+  design;
+- identify provider-independent work, final-infrastructure-dependent work, and
+  any mandatory deferred follow-up with owner, trigger, preserved obligations,
+  dependencies, and latest completion boundary;
+- stop rather than guess on unresolved authority, unsafe provider/runtime/data
+  actions, sensitive evidence, destructive migrations, ambiguous source of
+  truth, or any attempt to choose final infrastructure prematurely;
+- review the actual diff and relevant full files against authority, privacy,
+  security, evidence, migration, compatibility, and no-unrelated-cleanup
+  requirements;
+- record commits, changed files, validation, migration head where applicable,
+  provider/runtime evidence still outstanding, known limitations, and
+  rollback/forward-fix instructions only through the workflow stage that owns
+  publication;
+- remember that control status remains unresolved until formal reassessment.
 
 ## 12. Commit, merge, and rollback protocol
 
@@ -788,6 +940,8 @@ Commit the accepted pass independently and update the pass record with:
 ### Provider changes
 
 - Separate repository implementation from provider mutation and provider evidence.
+- Do not make permanent provider-specific configuration changes until the relevant final provider/topology is selected and the late-bound trigger is satisfied. Temporary Vercel/Render/Neon or other demo infrastructure does not satisfy that trigger.
+- A provider integration already selected by higher authority may keep its source/application contract, but concrete production account, plan, region, quota, domain, credential, role, and control-plane settings remain evidence-bound.
 - Record prior setting, intended setting, owner, environment, validation, and reversal procedure.
 - Never place secrets or unrestricted provider screenshots in the repository.
 
@@ -821,7 +975,8 @@ Evidence must never contain raw tokens, passwords, private keys, recovery codes,
 
 Stop the program or current pass when any of these occurs:
 
-1. `main` is not the trusted intended baseline.
+1. The current accepted baseline cannot be verified or the active source branch
+   is not the trusted intended baseline required by the workflow.
 2. The working tree contains unrelated or unexplained changes.
 3. The pass requires an unapproved architecture or product decision.
 4. Current repository behavior contradicts the locked audit and the conflict has not been reviewed.
@@ -836,30 +991,41 @@ Stop the program or current pass when any of these occurs:
 13. Required tests fail or were not executed.
 14. Codex reports success but the actual diff or files cannot be reviewed.
 15. A later pass is being used to hide an unresolved earlier-pass defect.
+16. A pass attempts to select final production infrastructure merely to satisfy its own completion criteria.
+17. Temporary/demo/free-tier/local/example provider values are being treated as final production configuration or evidence.
+18. A final-infrastructure-dependent obligation has no named deferred owner, activation trigger, or latest required completion boundary.
 
 ## 15. Final closure sequence
 
-1. Complete controlled repository, database, migration, configuration, and operational-document passes.
-2. Execute applicable current non-legacy unit, service, API, PostgreSQL, concurrency, browser, provider, migration, failure, privacy, and recovery tests.
-3. Enforce reproducible CI, scans, required checks, artifacts, and supply-chain gates.
-4. Collect redacted provider and repository-protection evidence.
-5. Perform staged runtime verification.
-6. Rehearse migrations and deterministic concurrency.
-7. Prove backup/PITR access and isolated restore.
-8. Complete incident and recovery exercises.
-9. Reassess all 163 controls from fresh evidence.
-10. Issue production-readiness sign-off only when every applicable P0 is closed or governed by an approved time-bound exception and all launch conditions are satisfied.
+1. Complete provider-independent repository, database, migration, configuration, and operational-document work.
+2. Select and freeze the final production hosting/database/edge/worker/observability/recovery topology when the application and launch architecture are stable enough to make that decision honestly.
+3. Activate and complete every mandatory deferred infrastructure/provider verification unit, including final production settings, numeric values, roles/grants, provider evidence, and runtime observations.
+4. Execute applicable current non-legacy unit, service, API, PostgreSQL, concurrency, browser, provider, migration, failure, privacy, and recovery tests against the correct evidence layers.
+5. Enforce reproducible CI, scans, required checks, artifacts, and supply-chain gates.
+6. Collect redacted provider and repository-protection evidence.
+7. Perform staged runtime verification against the final selected topology.
+8. Rehearse migrations and deterministic concurrency.
+9. Prove backup/PITR access and isolated restore.
+10. Complete incident and recovery exercises.
+11. Run `CLOSE-01` only after the mandatory deferred-infrastructure sweep confirms no required late-bound unit remains open.
+12. Reassess all 163 controls from fresh evidence.
+13. Issue production-readiness sign-off only when every applicable P0 is closed or governed by an approved time-bound exception and all launch conditions are satisfied.
 
-## 16. Immediate execution point
+## 16. Current execution entry
 
-While the user finishes the old-work merge, this blueprint is the active planning artifact.
+Do not restart the current program from historical `BASE-00` or `GOV-01`
+instructions in this blueprint. Those entries remain provenance and parent-pass
+structure.
 
-After the user confirms the merge is complete:
+For current work, determine execution state from current accepted repository
+truth, `00-READ-ME-FIRST.md`, `PASS-EXECUTION-REGISTER.md`, and the current run
+instruction. Then use the applicable workflow:
 
-1. Run `BASE-00` only.
-2. Review the read-only Git baseline.
-3. Approve the exact remediation branch/worktree setup.
-4. Run `GOV-01` to place the already approved governance package into the isolated remediation branch.
-5. Do not begin WS02 code before `EN-01`, `EN-02`, and `EN-03` satisfy their entry gates.
-
-No previously generated WS02 prompt is valid under this blueprint.
+- first-time implementation routes through Stage 0, Gate A planning,
+  independent Gate A review, Gate B, independent Gate C review, Gate D, and an
+  open PR for manual merge;
+- accepted or historical implementation rechecks route through the recheck
+  workflow;
+- mutable current state, branches, SHAs, PRs, and resume position belong in the
+  execution register, frozen pass artifacts, local handoff when used, and
+  current workflow state, not in this blueprint.
