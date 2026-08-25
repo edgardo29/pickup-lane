@@ -26,7 +26,7 @@ Do not add sections merely for completeness.
 
 Before writing, identify only:
 
-1. why the change was needed and its high-level result;
+1. the concrete problem, risk, limitation, or missing behavior that made the change necessary, and the practical result after the change;
 2. the material changes in the actual diff;
 3. the meaningful behavior or system properties that were validated.
 
@@ -69,15 +69,58 @@ Do not simplify precise engineering facts into vague phrases. Simplify the wordi
 
 Summary has one job:
 
-**Explain why the change exists and the high-level result.**
+**Explain the concrete reason the change was needed and the practical high-level result.**
 
-Keep it short.
+Keep it short. Usually one compact paragraph is enough.
 
 A reviewer should understand the purpose without reading planning documents, testing records, execution records, requirement records, Gate reports, or other supporting material.
 
 The Summary must be understandable without knowing the repository's internal architecture, infrastructure terminology, or production-readiness terminology.
 
-**Describe the practical engineering result first.**
+The Summary must communicate both sides of the change:
+
+1. **Before:** what concrete problem, risk, limitation, missing capability, or incorrect behavior existed.
+2. **After:** what the system now does differently at a high level.
+
+When the old behavior could cause a meaningful incorrect state or failure, say what that consequence was. Do not make the reviewer infer why the change mattered.
+
+### Summary Acceptance Test
+
+A Summary is acceptable only if a reviewer can answer these after reading it once:
+
+1. What changed?
+2. What problem, risk, limitation, or missing behavior made the change necessary?
+3. What does the system do differently after this PR?
+4. Why does the change matter in this PR's own context?
+
+If any answer is unclear, rewrite the Summary before continuing.
+
+Do not use broad labels as the main explanation. Phrases such as `adds safeguards`, `handles concurrency`, `improves reliability`, `strengthens validation`, `database-backed`, `production-readiness`, or `race conditions` are not enough unless the same sentence explains the concrete problem and practical result.
+
+For example, do not stop at:
+
+`This adds database safeguards for concurrency issues.`
+
+Prefer the actual engineering meaning:
+
+`Concurrent requests could make decisions from the same stale database state and consume the same limited capacity more than once. The change serializes conflicting database operations so each request makes its decision against the state left by the request that won first.`
+
+The example illustrates the required level of concreteness, not a required sentence structure. For an additive capability, refactor, configuration change, migration, or other kind of PR, describe its real motivation and result naturally.
+
+**Describe the practical engineering result, not merely the category of work.**
+
+A Summary is too vague if it mainly says the PR:
+
+* adds safeguards;
+* improves reliability;
+* handles concurrency;
+* strengthens validation;
+* hardens behavior;
+* improves safety;
+* makes something more robust;
+* improves production readiness;
+
+without explaining what could actually go wrong, what was missing, or what the system now does differently.
 
 Do not use an internal, infrastructure, or process term in the Summary when a short description of what it actually means would be clearer.
 
@@ -111,10 +154,11 @@ Examples:
 
 The Summary should answer these questions directly:
 
-1. What problem did this PR solve?
-2. What is the high-level result of the change?
+1. What concrete problem, limitation, risk, or missing capability made this PR necessary?
+2. What did that mean for the system before this change?
+3. What does the system now do differently?
 
-If a sentence sounds like the title of an internal design document instead of an explanation to another engineer, rewrite it.
+If a sentence sounds like the title of an internal design document, a feature label, or a generic statement that something was improved instead of an explanation to another engineer, rewrite it.
 
 Do not use the Summary for:
 
@@ -218,11 +262,12 @@ After drafting the PR description, review every sentence and bullet before produ
 
 For each one:
 
-1. **Translate terminology:** If an implementation, configuration, framework, architecture, infrastructure, planning, testing, or internal term can be replaced by a short description of what it actually does, replace it.
-2. **Remove process language:** If the sentence mainly describes tracking, evidence, mapping, policy, approval, or production-readiness machinery rather than the reviewed change, remove it.
-3. **Remove duplication:** If the same engineering fact or validation result appears elsewhere, keep the clearest version only.
-4. **Preserve substance:** Do not remove meaningful behavior, boundaries, compatibility information, or engineering consequences merely to make the description shorter.
-5. **Check Summary comprehension:** Read the Summary as if the reviewer has never seen the project's production-readiness documents. If the reviewer would need to ask what a noun or phrase means before understanding the change, replace that term with what it actually means.
+1. **Strengthen the Summary:** Verify that it passes the Summary Acceptance Test, explains a concrete reason the change was needed, and states what the system now does differently. If a reviewer could reasonably ask "what does that mean?", or if it only names a category of work or says something was improved, strengthened, hardened, safeguarded, or made more reliable, rewrite it.
+2. **Translate terminology:** If an implementation, configuration, framework, architecture, infrastructure, planning, testing, or internal term can be replaced by a short description of what it actually does, replace it.
+3. **Remove process language:** If the sentence mainly describes tracking, evidence, mapping, policy, approval, or production-readiness machinery rather than the reviewed change, remove it.
+4. **Remove duplication:** If the same engineering fact or validation result appears elsewhere, keep the clearest version only.
+5. **Preserve substance:** Do not remove meaningful behavior, failure consequences, boundaries, compatibility information, or engineering consequences merely to make the description shorter.
+6. **Check Summary comprehension:** Read the Summary as if the reviewer has never seen the project's production-readiness documents. The reviewer should understand why the change was necessary and what practical result it produced without having to infer either one.
 
 Do not produce the PR description until this rewrite pass is complete.
 
@@ -231,6 +276,8 @@ Do not produce the PR description until this rewrite pass is complete.
 * Explain the actual change, not the process used to produce it.
 * Use normal product and engineering language.
 * Prefer concrete behavior over names, labels, and shorthand.
+* Explain the real problem or missing behavior instead of merely naming the category of work.
+* Explain the resulting system behavior instead of merely saying something was improved, hardened, safeguarded, or made more reliable.
 * Preserve important engineering detail.
 * Use exact technical names only when their exact identity helps the reviewer understand the diff.
 * Do not copy wording from planning, testing, requirement, Gate, traceability, or other process documents when the underlying engineering fact can be stated directly.
@@ -245,11 +292,13 @@ Do not produce the PR description until this rewrite pass is complete.
 
 Before producing the final PR description, confirm:
 
-1. Is it immediately clear why the PR exists and what materially changed?
-2. Does every `Changes` bullet describe a real change in the diff in language that does not require translating internal terminology?
-3. Does every `Validation` bullet state meaningful behavior that was checked and the result without duplication or process bookkeeping?
-4. Is anything unnecessary, repetitive, vague, unsupported, process-heavy, needlessly technical, or sensitive?
-5. Could an engineer unfamiliar with this project explain the Summary back in ordinary words after reading it once?
+1. Does the Summary clearly state the concrete reason the PR was needed?
+2. Does the Summary clearly state what the system does differently after the change?
+3. Would a reviewer understand why the change matters rather than only knowing what technical category it belongs to?
+4. Does every `Changes` bullet describe a real change in the diff in language that does not require translating internal terminology?
+5. Does every `Validation` bullet state meaningful behavior that was checked and the result without duplication or process bookkeeping?
+6. Is anything unnecessary, repetitive, vague, unsupported, process-heavy, needlessly technical, or sensitive?
+7. Could an engineer unfamiliar with this project explain both the problem and the result after reading the Summary once?
 
 If any answer reveals a problem, correct it before producing the final output.
 
@@ -258,7 +307,7 @@ If any answer reveals a problem, correct it before producing the final output.
 ```markdown
 ## Summary
 
-[Briefly explain why the change was needed and the high-level result in plain language.]
+[Briefly explain the concrete problem, risk, limitation, or missing behavior that made the change necessary, followed by what the system now does differently at a high level.]
 
 ## Changes
 
@@ -269,3 +318,4 @@ If any answer reveals a problem, correct it before producing the final output.
 
 - [Behavior or system area]&#58; [test or verification and result].
 - [Behavior or system area]&#58; [test or verification and result].
+```
