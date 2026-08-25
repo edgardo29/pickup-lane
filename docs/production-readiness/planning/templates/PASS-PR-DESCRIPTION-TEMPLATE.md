@@ -49,7 +49,8 @@ Do not make the reviewer decode:
 * planning terminology;
 * testing terminology;
 * production-readiness terminology;
-* other internal shorthand.
+* infrastructure shorthand;
+* other internal terminology.
 
 If a term can be replaced with a short, accurate description of the behavior without losing important meaning, replace it.
 
@@ -73,6 +74,47 @@ Summary has one job:
 Keep it short.
 
 A reviewer should understand the purpose without reading planning documents, testing records, execution records, requirement records, Gate reports, or other supporting material.
+
+The Summary must be understandable without knowing the repository's internal architecture, infrastructure terminology, or production-readiness terminology.
+
+**Describe the practical engineering result first.**
+
+Do not use an internal, infrastructure, or process term in the Summary when a short description of what it actually means would be clearer.
+
+In particular, avoid terms such as these unless the exact term is genuinely necessary to understand the change:
+
+* provider-independent;
+* topology;
+* connection budget;
+* role/grant;
+* evidence contract;
+* verification framework;
+* production-readiness;
+* control;
+* deferred verification;
+* provider/runtime evidence;
+* infrastructure timing;
+* execution boundary;
+* traceability;
+* requirement mapping.
+
+Translate them into what they mean.
+
+Examples:
+
+* Instead of `provider-independent`, say `without depending on a specific hosting provider`.
+* Instead of `database topology`, say `how the application and database are deployed and connected`.
+* Instead of `connection budget`, say `how many database connections the production system can safely use`.
+* Instead of `role/grant verification`, say `checking that database accounts have only the permissions they need`.
+* Instead of `verification framework`, describe the checks or rules that were added.
+* Instead of `deferred production evidence`, explain that the actual production values will be checked after the final hosting setup is selected.
+
+The Summary should answer these questions directly:
+
+1. What problem did this PR solve?
+2. What is the high-level result of the change?
+
+If a sentence sounds like the title of an internal design document instead of an explanation to another engineer, rewrite it.
 
 Do not use the Summary for:
 
@@ -176,10 +218,11 @@ After drafting the PR description, review every sentence and bullet before produ
 
 For each one:
 
-1. **Translate terminology:** If an implementation, configuration, framework, architecture, planning, testing, or internal term can be replaced by a short description of what it actually does, replace it.
+1. **Translate terminology:** If an implementation, configuration, framework, architecture, infrastructure, planning, testing, or internal term can be replaced by a short description of what it actually does, replace it.
 2. **Remove process language:** If the sentence mainly describes tracking, evidence, mapping, policy, approval, or production-readiness machinery rather than the reviewed change, remove it.
 3. **Remove duplication:** If the same engineering fact or validation result appears elsewhere, keep the clearest version only.
 4. **Preserve substance:** Do not remove meaningful behavior, boundaries, compatibility information, or engineering consequences merely to make the description shorter.
+5. **Check Summary comprehension:** Read the Summary as if the reviewer has never seen the project's production-readiness documents. If the reviewer would need to ask what a noun or phrase means before understanding the change, replace that term with what it actually means.
 
 Do not produce the PR description until this rewrite pass is complete.
 
@@ -206,6 +249,7 @@ Before producing the final PR description, confirm:
 2. Does every `Changes` bullet describe a real change in the diff in language that does not require translating internal terminology?
 3. Does every `Validation` bullet state meaningful behavior that was checked and the result without duplication or process bookkeeping?
 4. Is anything unnecessary, repetitive, vague, unsupported, process-heavy, needlessly technical, or sensitive?
+5. Could an engineer unfamiliar with this project explain the Summary back in ordinary words after reading it once?
 
 If any answer reveals a problem, correct it before producing the final output.
 
@@ -214,7 +258,7 @@ If any answer reveals a problem, correct it before producing the final output.
 ```markdown
 ## Summary
 
-[Briefly explain why the change was needed and the high-level result.]
+[Briefly explain why the change was needed and the high-level result in plain language.]
 
 ## Changes
 
@@ -225,4 +269,3 @@ If any answer reveals a problem, correct it before producing the final output.
 
 - [Behavior or system area]&#58; [test or verification and result].
 - [Behavior or system area]&#58; [test or verification and result].
-```

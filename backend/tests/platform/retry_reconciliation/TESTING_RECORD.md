@@ -127,13 +127,16 @@ dashboards, alerts, or runtime load evidence.
   wrapper boundaries; no live provider is called.
 - Database-constraint proof is used for provider-event uniqueness where the
   database exposes reliable identifying evidence.
+- Registry tests resolve every declared material caller to a current source
+  symbol so provider-backed retry policy metadata cannot drift to stale dotted
+  paths.
 
 ## 7. Important Side Effects
 
 | Operation / Scenario | Required Successful Effects | Prohibited Effects On Rejection / Failure | Rollback / Idempotency Expectation |
 |---|---|---|---|
 | Checkout PaymentIntent create succeeds | Pending Booking/participants, Payment idempotency key, provider PaymentIntent ID, capacity hold, reserved credits, and decremented available credit are committed before confirmation. | Confirmation must not begin before the checkpoint exists or from an unlocked stale checkout view. | Initial request and active-hold re-entry both reacquire game serialization, reload persisted state, and re-read provider state before confirmation. |
-| Checkout PaymentIntent create times out | No post-create checkpoint exists. | No confirmation, no committed Payment/Booking/credit reservation, no claimed provider ID. | Existing C1 rollback behavior remains. |
+| Checkout PaymentIntent create times out | Pending Booking/participants, Payment idempotency key, and reserved credit checkpoint remain committed. | No confirmation, no ordinary success response, and no claimed provider ID. | Durable local identity survives for status/reconciliation; app-owned blind replay remains prohibited. |
 | Checkout confirmation times out | Durable checkpoint survives with non-terminal local state, active hold, provider ID, reserved credits. | No definite success/failure, no second confirm in same request, no erased provider identity. | Re-entry retrieves provider state first. |
 | Active-hold re-entry | Same Booking/Payment/provider PI is found; provider read occurs before confirm decision while game serialization is owned. | No second PaymentIntent create, no second credit reservation, and no stale duplicate confirmation decision. | Idempotency is the persisted local checkout identity. |
 | Stale checkout expiration | Local booking/participant/payment state may expire, capacity releases, reserved credits release. | Payment row and provider PaymentIntent ID are not erased; no provider cancellation is claimed. | WS05 owns durable post-expiry provider reconciliation. |

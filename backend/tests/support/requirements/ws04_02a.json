@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS04-02A-R1",
+      "owning_pass": "WS04-02A",
+      "source_controls": [
+        "DB-004",
+        "DB-005",
+        "DB-006",
+        "WS04-02"
+      ],
+      "state": "required",
+      "scope": "workflows/transaction_boundary_external_side_effect_safety",
+      "reason": "Every material current side-effecting workflow must be inventoried with its local unit of work, external effect, checkpoint, timeout behavior, and downstream owner."
+    },
+    {
+      "id": "WS04-02A-R2",
+      "owning_pass": "WS04-02A",
+      "source_controls": [
+        "DB-004",
+        "DB-005",
+        "DB-006",
+        "PAY-002"
+      ],
+      "state": "required",
+      "scope": "workflows/transaction_boundary_external_side_effect_safety",
+      "reason": "Provider mutations that need local recovery must use a committed checkpoint or already durable idempotency identity before the provider call."
+    },
+    {
+      "id": "WS04-02A-R3",
+      "owning_pass": "WS04-02A",
+      "source_controls": [
+        "DB-004",
+        "DB-006",
+        "DB-008",
+        "WS02-04C2"
+      ],
+      "state": "required",
+      "scope": "workflows/transaction_boundary_external_side_effect_safety",
+      "reason": "Checkout provider creation, re-entry, and confirmation must preserve accepted checkout/game serialization and prevent duplicate create or confirm decisions."
+    },
+    {
+      "id": "WS04-02A-R4",
+      "owning_pass": "WS04-02A",
+      "source_controls": [
+        "DB-004",
+        "DB-006",
+        "WS02-04C2",
+        "WS05"
+      ],
+      "state": "required",
+      "scope": "workflows/transaction_boundary_external_side_effect_safety",
+      "reason": "Timeout or unknown provider outcomes must not produce blind automatic replay or ordinary success without durable local state."
+    },
+    {
+      "id": "WS04-02A-R5",
+      "owning_pass": "WS04-02A",
+      "source_controls": [
+        "DB-004",
+        "DB-006",
+        "PAY-009",
+        "PAY-010",
+        "PAY-012",
+        "ADM-011",
+        "ADM-016"
+      ],
+      "state": "required",
+      "scope": "workflows/transaction_boundary_external_side_effect_safety",
+      "reason": "Provider success, failure, timeout, and post-provider persistence failures must be recorded or surfaced through honest recoverable states."
+    },
+    {
+      "id": "WS04-02A-R6",
+      "owning_pass": "WS04-02A",
+      "source_controls": [
+        "DB-004",
+        "DB-005",
+        "EN-02",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/transaction_boundary_external_side_effect_safety",
+      "reason": "Current user-visible, admin-visible, notification, platform-notice, and support effects must be tied to committed local state."
+    },
+    {
+      "id": "WS04-02A-R7",
+      "owning_pass": "WS04-02A",
+      "source_controls": [
+        "DB-005",
+        "DB-006",
+        "WS02-04C2",
+        "WS05"
+      ],
+      "state": "required",
+      "scope": "workflows/transaction_boundary_external_side_effect_safety",
+      "reason": "Provider retry classifications and durable-work handoffs must remain consistent with the transaction-boundary policy."
+    },
+    {
+      "id": "WS04-02A-R8",
+      "owning_pass": "WS04-02A",
+      "source_controls": [
+        "DB-001",
+        "DB-002",
+        "DB-003",
+        "DB-012",
+        "DB-013",
+        "DB-015",
+        "WS04-01A",
+        "WS04-01B",
+        "WS04-01C"
+      ],
+      "state": "required",
+      "scope": "workflows/transaction_boundary_external_side_effect_safety",
+      "reason": "Accepted database lifecycle, timeout, rollback, pool, role, and query-access foundations must remain intact."
+    }
+  ]
+}

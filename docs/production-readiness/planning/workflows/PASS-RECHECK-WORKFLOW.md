@@ -11,7 +11,7 @@ Use `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.m
 for first-time executable pass implementation and for correction rounds on the
 same unmerged first-time pass. Normal recheck does not run Stage 0. When
 recheck discovers that an accepted parent/child decomposition is materially
-wrong, route that structural problem to coordinator-owned Stage 0 or program
+wrong, route that structural problem to main-Codex-owned Stage 0 or program
 structural correction outside this recheck. Stop only for a real unresolved
 blocker or owner decision required by durable authority. Do not silently
 restructure pass families inside recheck Gate A.
@@ -334,9 +334,10 @@ of silently substituting another action.
 ## 14. Permanent Four-Gate Workflow
 
 Each gate does exactly its assigned job and does not perform the next gate's
-work itself. The coordinator owns automatic transitions between successfully
-completed gates. The four-gate model does not remove audit depth, evidence
-design, independent review, security review, or Git publication safeguards.
+work itself. The main Codex session owns automatic transitions between
+successfully completed gates. The four-gate model does not remove audit depth,
+evidence design, independent review, security review, or Git publication
+safeguards.
 
 Before any gate reports completion, compare the actual work performed against
 the binding current instruction. Correct any in-scope mismatch before handoff,
@@ -368,8 +369,9 @@ read-first document before continuing.
 
 Gate A contains planning/reconciliation followed by a fresh independent
 read-only review of the complete current canonical plan before Gate B.
-The planner that authors or corrects the plan must not serve as the independent
-reviewer. Any plan correction is performed in a separate Gate A planner run.
+The main Codex session that authors or corrects the plan must not serve as the
+independent reviewer. Any plan correction is performed by the main Codex session
+as separate Gate A correction work.
 
 #### A1. Zero-Trust Recheck
 
@@ -522,9 +524,9 @@ updated canonical plan, exact correction design, exact evidence design,
 implementation scope boundaries, changed-file justification rules, exact
 validation strategy, and blockers.
 
-When the planner completes the corrected canonical plan, compute its SHA-256
-and report the exact plan path and SHA. The independent Gate A reviewer reviews
-that exact SHA. A clean independent review freezes that exact SHA for Gate B.
+When the main Codex session completes the corrected canonical plan, compute its
+SHA-256 and report the exact plan path and SHA. The independent Gate A reviewer
+reviews that exact SHA. A clean independent review freezes that exact SHA for Gate B.
 Do not embed a mutable SHA inside the canonical plan; the SHA belongs in Gate A
 reports and run instructions.
 
@@ -543,8 +545,8 @@ plan review approves the exact current canonical-plan SHA.
 #### Independent Gate A Plan Review
 
 Before Gate B, the complete current canonical plan must receive a fresh
-independent read-only review. The planner that authored or corrected the plan
-must not serve as its independent reviewer.
+independent read-only review. The main Codex session that authored or corrected
+the plan must not serve as its independent reviewer.
 
 The reviewer must inspect the complete Gate A state, including:
 
@@ -583,8 +585,8 @@ A preflight condition that prevents the independent review is
 
 When corrections are required, each finding must route to one of:
 
-- Gate A correction when the executable boundary remains valid and the planner
-  can correct the plan within existing authority;
+- Gate A correction when the executable boundary remains valid and the main
+  Codex session can correct the plan within existing authority;
 - Stage 0/program structural correction when the accepted parent/child
   decomposition or executable-pass boundary is materially wrong;
 - blocker/owner direction when correct planning requires unresolved authority,
@@ -593,8 +595,8 @@ When corrections are required, each finding must route to one of:
   or another durable stop condition.
 
 The independent reviewer never edits or self-fixes. Eligible Gate A corrections
-are performed by a separate planner run, after which the entire corrected plan
-receives a new full independent review.
+are performed by the main Codex session as separate correction work, after which
+the entire corrected plan receives a new full independent review.
 
 For automated execution, one Gate A plan-review cycle may contain at most three
 full independent reviews and at most two automatic plan-correction rounds:
@@ -610,8 +612,8 @@ full independent reviews and at most two automatic plan-correction rounds:
    direction. Do not perform an automatic Plan Correction Round 3.
 
 Every review attempt must use a fresh independent read-only reviewer. Review
-count does not reset merely because a new reviewer, planner, session, or
-correction run starts. A finding that routes to Stage 0/program correction or a
+count does not reset merely because a new reviewer, main session, or correction
+run starts. A finding that routes to Stage 0/program correction or a
 blocker/owner decision exits the automatic plan-review cycle immediately and
 follows that routing instead.
 
@@ -621,16 +623,16 @@ and that issue was not introduced or newly exposed by the intervening
 correction, identify it as a prior-review miss. The classification makes review
 quality visible; it does not make the issue non-material.
 
-When the planner finishes the current Gate A plan draft or correction, compute
-the canonical-plan SHA-256 and report the exact path and SHA. The independent
-reviewer reviews that exact current SHA. A clean review freezes that exact
-reviewed SHA for Gate B. If plan content changes after the clean review, the
-review is no longer current and the changed plan must receive a new full
-independent Gate A review before it can govern Gate B.
+When the main Codex session finishes the current Gate A plan draft or
+correction, compute the canonical-plan SHA-256 and report the exact path and
+SHA. The independent reviewer reviews that exact current SHA. A clean review
+freezes that exact reviewed SHA for Gate B. If plan content changes after the
+clean review, the review is no longer current and the changed plan must receive
+a new full independent Gate A review before it can govern Gate B.
 
 `gate_a_plan_approved` freezes the exact reviewed canonical-plan SHA for the
-current automated run. The coordinator then advances automatically to Gate B.
-The reviewer itself never performs Gate B.
+current automated run. The main Codex session then advances automatically to
+Gate B. The reviewer itself never performs Gate B.
 
 ### Gate B - Frozen-Plan Implementation
 
@@ -707,8 +709,9 @@ syntax/compile, environment/database/network/provider safety, and
 `git diff --check`.
 
 Gate B ends with an implementation and validation report. When Gate B is valid
-and complete, the coordinator advances automatically to Gate C. Gate B itself
-does not commit, push, stage files, create a PR, update a PR, or perform Gate C.
+and complete, the main Codex session advances automatically to Gate C. Gate B
+itself does not commit, push, stage files, create a PR, update a PR, or perform
+Gate C.
 
 ### Gate C - Independent Final Review
 
@@ -857,10 +860,10 @@ make these changes under Gate C authorization.
 
 Independent Gate A plan-review findings follow the same ownership principle:
 correct plan defects inside the existing executable boundary through a separate
-Gate A planner correction, route a materially wrong executable boundary to
-Stage 0/program correction, and stop for owner direction when existing authority
-cannot resolve the issue. Plan Review 3 never authorizes an automatic Plan
-Correction Round 3.
+Gate A correction by the main Codex session, route a materially wrong executable
+boundary to Stage 0/program correction, and stop for owner direction when
+existing authority cannot resolve the issue. Plan Review 3 never authorizes an
+automatic Plan Correction Round 3.
 
 For automated execution, one Gate C review/correction cycle may contain at most
 three full independent Gate C reviews and at most two automatic correction
@@ -881,9 +884,9 @@ rounds:
 Every Gate C review in the cycle must use a fresh independent read-only reviewer
 and review the complete current pass. The review and correction counts are
 cumulative for that automatic cycle and do not reset merely because work moves
-to a new reviewer, correction agent, or session. A finding that routes to Gate A,
-Stage 0, an owner decision, or another approval boundary exits the automatic
-correction cycle immediately and follows that routing instead.
+to a new reviewer, main session, or correction step. A finding that routes to
+Gate A, Stage 0, an owner decision, or another approval boundary exits the
+automatic correction cycle immediately and follows that routing instead.
 
 Any owner-approved continuation after Review 3 must preserve the existing review
 and correction history. It does not silently reset the completed automatic cycle
@@ -895,8 +898,8 @@ End with exactly one semantic outcome:
 - approved for Git finalization;
 - corrections required.
 
-A clean `approved for Git finalization` result authorizes the coordinator to
-advance automatically to Gate D for the exact reviewed pass state.
+A clean `approved for Git finalization` result authorizes the main Codex session
+to advance automatically to Gate D for the exact reviewed pass state.
 
 When the outcome is `corrections required`, report the material finding, the
 affected requirement or contract, the exact authorized correction scope, and the
@@ -961,12 +964,12 @@ When the workflow resumes after merge:
 4. verify local `develop == origin/develop`;
 5. record the new accepted baseline;
 6. treat the rechecked executable pass as accepted in current repository truth;
-7. return progression control to the production-readiness coordinator.
+7. return progression control to the main Codex production-readiness session.
 
-The coordinator then determines the next first-time child/parent or recheck work
-from the master blueprint, remediation plan, execution register, accepted
-dependencies, and current repository truth. Recheck itself does not invent a
-new parent/child decomposition.
+The main Codex production-readiness session then determines the next first-time
+child/parent or recheck work from the master blueprint, remediation plan,
+execution register, accepted dependencies, and current repository truth. Recheck
+itself does not invent a new parent/child decomposition.
 
 ## 15. Additional Intermediate Gates
 
@@ -1075,10 +1078,10 @@ work, report location and category only, not the value.
 
 ## 20. Automated Review And Stop Discipline
 
-Each delegated agent assignment must preserve the one-stage/gate boundary
-clearly. The coordinator owns automatic transitions between clean states and
-must stop only at durable blockers, Gate A/Gate C hard review limits, unsafe
-state, or the manual PR-merge boundary.
+The main Codex session must preserve the one-stage/gate boundary clearly. It
+owns automatic transitions between clean states and must stop only at durable
+blockers, Gate A/Gate C hard review limits, unsafe state, or the manual
+PR-merge boundary.
 
 This prevents mixed audit and implementation work, repeated redesign,
 accidental scope expansion, production changes driven by tests, endless Gate A

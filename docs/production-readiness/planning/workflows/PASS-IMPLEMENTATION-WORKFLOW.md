@@ -472,7 +472,8 @@ with respect to production source, tests,
 requirement declarations, testing records, provider settings, migrations, and
 runtime configuration except for the canonical pass plan itself when the prompt
 authorizes that edit. The independent reviewer never edits the plan; any plan
-correction is a separate Gate A planner run.
+correction is performed by the main Codex session as separate Gate A correction
+work.
 
 ### 7.1 Gate A Responsibilities
 
@@ -593,8 +594,8 @@ Gate A must also verify current branch, accepted baseline, merge-base with that
 baseline, no staged content, and that only the explicitly authorized Gate A
 planning artifact changed during Gate A.
 
-When the planner finishes the current Gate A plan draft or correction, compute
-the canonical-plan SHA-256 and report it with the exact plan path. The
+When the main Codex session finishes the current Gate A plan draft or
+correction, compute the canonical-plan SHA-256 and report it with the exact plan path. The
 independent Gate A reviewer reviews that exact current SHA. A clean review
 freezes that exact SHA and automatically authorizes Gate B. If plan content
 changes after the clean review, the review is no longer current and the changed
@@ -612,8 +613,8 @@ resumes.
 ### 7.4 Independent Gate A Plan Review
 
 Before Gate B, the complete current canonical plan must receive a fresh
-independent read-only review. The planner that authored or corrected the plan
-must not serve as its independent reviewer.
+independent read-only review. The main Codex session that authored or corrected
+the plan must not serve as its independent reviewer.
 
 The reviewer must inspect the complete plan against:
 
@@ -655,8 +656,8 @@ A preflight condition that prevents the independent review is
 
 When corrections are required, each finding must route to one of:
 
-- Gate A correction when the executable boundary remains valid and the planner
-  can correct the plan within existing authority;
+- Gate A correction when the executable boundary remains valid and the main
+  Codex session can correct the plan within existing authority;
 - Stage 0 when the executable-pass boundary, parent/child allocation,
   decomposition, separate outcome, or dependency allocation is wrong;
 - blocker/owner direction when correct planning requires unresolved authority,
@@ -665,8 +666,8 @@ When corrections are required, each finding must route to one of:
   or another durable stop condition.
 
 The independent reviewer never edits or self-fixes. Eligible Gate A corrections
-are performed by a separate planner run, after which the entire corrected plan
-receives a new full independent review.
+are performed by the main Codex session as separate correction work, after which
+the entire corrected plan receives a new full independent review.
 
 For automated execution, one Gate A plan-review cycle may contain at most three
 full independent reviews and at most two automatic plan-correction rounds:
@@ -682,10 +683,9 @@ full independent reviews and at most two automatic plan-correction rounds:
    direction. Do not perform an automatic Plan Correction Round 3.
 
 Every review attempt must use a fresh independent read-only reviewer. Review
-count does not reset merely because a new reviewer, planner, session, or
-correction run starts. A finding that routes to Stage 0 or a blocker/owner
-decision exits the automatic plan-review cycle immediately and follows that
-routing instead.
+count does not reset merely because a new reviewer, main session, or correction
+run starts. A finding that routes to Stage 0 or a blocker/owner decision exits
+the automatic plan-review cycle immediately and follows that routing instead.
 
 When Review 2 or Review 3 discovers a material issue that was already present
 and reasonably discoverable in the immediately preceding reviewed plan state,
@@ -694,8 +694,8 @@ correction, identify it as a prior-review miss. The classification makes review
 quality visible; it does not make the issue non-material.
 
 `gate_a_plan_approved` freezes the exact reviewed canonical-plan SHA for the
-current automated run. The coordinator then begins Gate B subject to the normal
-Gate B preflight. The reviewer itself never performs Gate B.
+current automated run. The main Codex session then begins Gate B subject to the
+normal Gate B preflight. The reviewer itself never performs Gate B.
 
 ## 8. GATE B: Implementation And Trusted Evidence
 
@@ -858,7 +858,7 @@ rounds:
 
 Each review in the cycle must use a fresh independent read-only reviewer. The
 review count is cumulative for the automatic cycle and does not reset merely
-because a new reviewer, correction agent, or session starts. A finding that
+because a new reviewer, main session, or correction step starts. A finding that
 routes to Gate A, Stage 0, an owner decision, or another approval boundary exits
 the automatic correction cycle immediately and follows that routing instead.
 Gate C itself still stops after each review and never performs corrections.
@@ -922,7 +922,7 @@ Do not publish stale-baseline work silently.
 | Proposed child remains too broad before Gate A freeze | Stage 0 revision |
 | Gate A identifies another file for same coherent outcome | Include before Gate A freeze |
 | Gate A identifies a separate outcome | Stage 0 revision |
-| Independent Gate A review finds a plan defect inside the approved executable boundary and existing authority | Separate Gate A planner correction, then new full independent Gate A review |
+| Independent Gate A review finds a plan defect inside the approved executable boundary and existing authority | Separate Gate A correction by the main Codex session, then new full independent Gate A review |
 | Independent Gate A review finds the executable-pass boundary, parent/child allocation, or final-infrastructure deferral allocation wrong | Stage 0 revision |
 | Gate A or Gate B discovers intentionally unselected final infrastructure is required by the current pass but no valid deferred owner/trigger exists | Stage 0 revision |
 | Independent Gate A Review 3 still finds material plan corrections | Stop for owner direction; no automatic Plan Correction Round 3 |

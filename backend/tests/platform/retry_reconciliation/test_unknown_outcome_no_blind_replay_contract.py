@@ -190,7 +190,7 @@ def _install_common_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.requirement("WS02-04C2-R4", "WS02-04C2-R5", "WS02-04C2-R6")
-def test_create_timeout_rolls_back_without_confirmation_or_checkpoint(
+def test_create_timeout_preserves_checkpoint_without_confirmation_or_blind_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.models import Booking, GameCredit, GameCreditUsage, Payment, User
@@ -223,16 +223,22 @@ def test_create_timeout_rolls_back_without_confirmation_or_checkpoint(
                 _request(state),
                 current_user,
             )
-        db.rollback()
-
         credit = db.get(GameCredit, state.credit_id)
+        payment = db.scalars(select(Payment)).one()
+        booking = db.get(Booking, payment.booking_id)
+        usage = db.scalars(select(GameCreditUsage)).one()
         assert exc_info.value.operation == "stripe.payment_intent.create"
         assert len(create_calls) == 1
         assert confirm_calls == []
-        assert _count(db, Booking) == 0
-        assert _count(db, Payment) == 0
-        assert _count(db, GameCreditUsage) == 0
-        assert credit.available_cents == 700
+        assert _count(db, Booking) == 1
+        assert _count(db, Payment) == 1
+        assert _count(db, GameCreditUsage) == 1
+        assert booking.booking_status == "pending_payment"
+        assert booking.payment_status == "processing"
+        assert payment.provider_payment_intent_id is None
+        assert payment.payment_status == "requires_payment_method"
+        assert usage.usage_status == "reserved"
+        assert credit.available_cents == 0
 
 
 @pytest.mark.requirement("WS02-04C2-R5", "WS02-04C2-R6")

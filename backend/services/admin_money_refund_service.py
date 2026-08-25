@@ -66,6 +66,11 @@ from backend.services.stripe_service import (
     retrieve_refund as retrieve_stripe_refund,
 )
 
+ADMIN_REFUND_RETRY_PROVIDER_RESULT_RECORDING_FAILED_DETAIL = (
+    "Stripe returned a refund result, but local refund state could not be fully "
+    "recorded. Use refund reconciliation before retrying."
+)
+
 
 def normalize_retry_reason(value: str) -> str:
     reason = normalize_optional_text(value, "reason")
@@ -452,11 +457,19 @@ def apply_refund_retry_result(
         summary="Admin refund retry provider result recorded.",
         occurred_at=now,
     )
-    admin_action.metadata_ = refund_audit_metadata(
-        refund,
-        source="admin_money_refund_retry",
-        before=before_snapshot,
-    )
+    admin_action.metadata_ = {
+        **refund_audit_metadata(
+            refund,
+            source="admin_money_refund_retry",
+            before=before_snapshot,
+        ),
+        "provider_result": {
+            "provider": refund.provider,
+            "provider_refund_id": provider_refund_id,
+            "provider_status": refund_status,
+            "recorded_at": now.isoformat(),
+        },
+    }
     db.add(admin_action)
 
     if refund_status == "succeeded":
@@ -554,6 +567,35 @@ def call_stripe_refund_retry(
     )
 
 
+def record_admin_refund_retry_provider_result_checkpoint(
+    db: Session,
+    *,
+    admin_action_id: uuid.UUID,
+    provider_refund_id: str | None,
+    refund_status: str,
+    now: datetime,
+) -> None:
+    admin_action = db.get(AdminAction, admin_action_id)
+    if admin_action is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ADMIN_REFUND_RETRY_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+        )
+
+    admin_action.metadata_ = {
+        **(admin_action.metadata_ or {}),
+        "provider_result": {
+            "provider": "stripe",
+            "provider_refund_id": provider_refund_id,
+            "provider_status": refund_status,
+            "recorded_at": now.isoformat(),
+            "recording_state": "pending_local_refund_state",
+        },
+    }
+    db.add(admin_action)
+    db.commit()
+
+
 def retry_admin_money_refund(
     db: Session,
     *,
@@ -561,6 +603,7 @@ def retry_admin_money_refund(
     refund_id: uuid.UUID,
     payload: AdminMoneyRefundRetryCreate,
 ) -> AdminMoneyRefundDetailRead:
+    checkpoint_committed = False
     reason = normalize_retry_reason(payload.reason)
     idempotency_key = normalize_retry_idempotency_key(payload.idempotency_key)
 
@@ -607,6 +650,11 @@ def retry_admin_money_refund(
         host_publish_fee=host_publish_fee,
     )
     before_snapshot = refund_audit_snapshot(refund)
+    payment_provider_charge_id = payment.provider_charge_id
+    payment_id = payment.id
+    refund_amount_cents = refund.amount_cents
+    refund_currency = refund.currency
+    admin_user_id = admin_user.id
     try:
         admin_action = record_admin_action(
             db,
@@ -626,6 +674,9 @@ def retry_admin_money_refund(
             ),
         )
         db.flush()
+        admin_action_id = admin_action.id
+        db.commit()
+        checkpoint_committed = True
     except IntegrityError as exc:
         db.rollback()
         existing_retry_action = get_existing_retry_action(
@@ -646,25 +697,36 @@ def retry_admin_money_refund(
         ) from exc
 
     try:
-        provider_refund = call_stripe_refund_retry(
-            refund=refund,
-            payment=payment,
-            admin_user=admin_user,
+        if payment_provider_charge_id is None:
+            raise AssertionError("validated payment is missing provider_charge_id")
+        provider_refund = create_stripe_refund(
+            charge_id=payment_provider_charge_id,
+            amount_cents=refund_amount_cents,
+            currency=refund_currency,
             idempotency_key=idempotency_key,
+            metadata={
+                "source": "admin_money_refund_retry",
+                "payment_id": str(payment_id),
+                "refund_id": str(refund_id),
+                "admin_user_id": str(admin_user_id),
+            },
         )
         provider_refund_id = provider_refund.id
         refund_status = map_admin_money_retry_refund_status(provider_refund.status)
     except StripeConfigError as exc:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Stripe refunds are not configured.",
         ) from exc
     except PublicTimeoutError:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise
     except Exception as exc:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Stripe refund retry could not be completed.",
@@ -672,6 +734,36 @@ def retry_admin_money_refund(
 
     now = datetime.now(timezone.utc)
     try:
+        record_admin_refund_retry_provider_result_checkpoint(
+            db,
+            admin_action_id=admin_action_id,
+            provider_refund_id=provider_refund_id,
+            refund_status=refund_status,
+            now=now,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ADMIN_REFUND_RETRY_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+        ) from exc
+
+    try:
+        refund = get_refund_for_retry_or_404(db, refund_id)
+        payment = get_payment_for_retry_or_404(db, refund.payment_id)
+        booking = get_booking_for_retry(db, refund.booking_id or payment.booking_id)
+        host_publish_fee = get_host_publish_fee_for_retry(
+            db,
+            refund.host_publish_fee_id,
+        )
+        admin_action = db.get(AdminAction, admin_action_id)
+        if admin_action is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Refund retry checkpoint was not found.",
+            )
         apply_refund_retry_result(
             db,
             refund=refund,
@@ -691,7 +783,13 @@ def retry_admin_money_refund(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_refund_conflict_detail(exc),
+            detail=ADMIN_REFUND_RETRY_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+        ) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ADMIN_REFUND_RETRY_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
         ) from exc
 
     return get_admin_money_refund_detail(

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.observability.timeouts import PublicTimeoutError
@@ -33,6 +33,21 @@ ACTIVE_PAYMENT_METHOD_STATUS = "active"
 DETACHED_PAYMENT_METHOD_STATUS = "detached"
 MAX_ACTIVE_PAYMENT_METHODS = 5
 STRIPE_PAYMENTS_DISABLED_DETAIL = "Stripe payments are disabled for this demo."
+SAVED_CARD_SYNC_RECORDING_FAILED_DETAIL = (
+    "Stripe saved this payment method, but Pickup Lane could not save the "
+    "matching local card state. Refresh saved cards or contact support before "
+    "retrying."
+)
+SAVED_CARD_DEFAULT_RECORDING_FAILED_DETAIL = (
+    "Stripe updated the default payment method, but Pickup Lane could not save "
+    "the matching local card state. Refresh saved cards or contact support "
+    "before retrying."
+)
+SAVED_CARD_DETACH_RECORDING_FAILED_DETAIL = (
+    "Stripe detached this payment method, but Pickup Lane could not save the "
+    "matching local card state. Refresh saved cards or contact support before "
+    "retrying."
+)
 
 
 def build_user_payment_method_conflict_detail(exc: IntegrityError) -> str:
@@ -362,12 +377,14 @@ def sync_saved_payment_method(
         )
 
     should_default = active_payment_method_count == 0 or set_as_default
+    provider_default_updated = False
     if should_default:
         try:
             set_customer_default_payment_method(
                 customer_id=current_user.stripe_customer_id,
                 payment_method_id=stripe_payment_method.id,
             )
+            provider_default_updated = True
         except StripeConfigError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -380,8 +397,15 @@ def sync_saved_payment_method(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Stripe could not set this default payment method.",
             ) from exc
-        unset_other_active_defaults(db, current_user.id)
-        db.flush()
+        try:
+            unset_other_active_defaults(db, current_user.id)
+            db.flush()
+        except SQLAlchemyError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=SAVED_CARD_DEFAULT_RECORDING_FAILED_DETAIL,
+            ) from exc
 
     if existing_card is None:
         payment_method = UserPaymentMethod(
@@ -418,9 +442,25 @@ def sync_saved_payment_method(
         db.refresh(payment_method)
     except IntegrityError as exc:
         db.rollback()
+        detail = (
+            SAVED_CARD_DEFAULT_RECORDING_FAILED_DETAIL
+            if provider_default_updated
+            else build_user_payment_method_conflict_detail(exc)
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_payment_method_conflict_detail(exc),
+            detail=detail,
+        ) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        detail = (
+            SAVED_CARD_DEFAULT_RECORDING_FAILED_DETAIL
+            if provider_default_updated
+            else SAVED_CARD_SYNC_RECORDING_FAILED_DETAIL
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail,
         ) from exc
 
     return payment_method
@@ -446,11 +486,13 @@ def set_default_saved_payment_method(
             detail="This user does not have a Stripe customer.",
         )
 
+    provider_default_updated = False
     try:
         set_customer_default_payment_method(
             customer_id=current_user.stripe_customer_id,
             payment_method_id=payment_method.stripe_payment_method_id,
         )
+        provider_default_updated = True
     except StripeConfigError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -464,8 +506,15 @@ def set_default_saved_payment_method(
             detail="Stripe could not set this default payment method.",
         ) from exc
 
-    unset_other_active_defaults(db, current_user.id)
-    db.flush()
+    try:
+        unset_other_active_defaults(db, current_user.id)
+        db.flush()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=SAVED_CARD_DEFAULT_RECORDING_FAILED_DETAIL,
+        ) from exc
 
     payment_method.is_default = True
     payment_method.updated_at = datetime.now(timezone.utc)
@@ -476,9 +525,20 @@ def set_default_saved_payment_method(
         db.refresh(payment_method)
     except IntegrityError as exc:
         db.rollback()
+        detail = (
+            SAVED_CARD_DEFAULT_RECORDING_FAILED_DETAIL
+            if provider_default_updated
+            else build_user_payment_method_conflict_detail(exc)
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_payment_method_conflict_detail(exc),
+            detail=detail,
+        ) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=SAVED_CARD_DEFAULT_RECORDING_FAILED_DETAIL,
         ) from exc
 
     return payment_method
@@ -495,8 +555,10 @@ def detach_saved_payment_method(
     if payment_method.method_status == DETACHED_PAYMENT_METHOD_STATUS:
         return payment_method
 
+    provider_detached = False
     try:
         detach_payment_method(payment_method.stripe_payment_method_id)
+        provider_detached = True
     except StripeConfigError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -517,7 +579,14 @@ def detach_saved_payment_method(
     payment_method.detached_at = now
     payment_method.updated_at = now
     db.add(payment_method)
-    db.flush()
+    try:
+        db.flush()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=SAVED_CARD_DETACH_RECORDING_FAILED_DETAIL,
+        ) from exc
     next_default_payment_method: UserPaymentMethod | None = None
 
     if was_default:
@@ -544,6 +613,12 @@ def detach_saved_payment_method(
                     customer_id=stripe_customer_id,
                 )
         except StripeConfigError as exc:
+            if provider_detached:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=SAVED_CARD_DETACH_RECORDING_FAILED_DETAIL,
+                ) from exc
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
@@ -551,6 +626,12 @@ def detach_saved_payment_method(
         except PublicTimeoutError:
             raise
         except Exception as exc:
+            if provider_detached:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=SAVED_CARD_DETACH_RECORDING_FAILED_DETAIL,
+                ) from exc
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Stripe could not update the default payment method.",
@@ -567,9 +648,20 @@ def detach_saved_payment_method(
         db.refresh(payment_method)
     except IntegrityError as exc:
         db.rollback()
+        detail = (
+            SAVED_CARD_DETACH_RECORDING_FAILED_DETAIL
+            if provider_detached
+            else build_user_payment_method_conflict_detail(exc)
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_payment_method_conflict_detail(exc),
+            detail=detail,
+        ) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=SAVED_CARD_DETACH_RECORDING_FAILED_DETAIL,
         ) from exc
 
     return payment_method

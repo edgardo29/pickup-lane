@@ -7,15 +7,15 @@ description: Orchestrate Pickup Lane production-readiness work from Stage 0 thro
 
 ## Role
 
-Coordinate the Pickup Lane production-readiness program across specialized Codex
-agents.
+The active main Codex session is the production-readiness coordinator and owns
+all mutable workflow work.
 
 Durable repository documents define the engineering process. This Skill defines
-how Codex operates that process automatically across stages, gates, review
-cycles, publication, and post-merge progression.
+how the main Codex session operates that process automatically across stages,
+gates, independent review cycles, publication, and post-merge progression.
 
-The coordinator does not replace the durable workflows and does not perform the
-independent reviews itself.
+The main Codex session does not replace the durable workflows and must not
+perform the independent reviews itself. Only independent review is delegated.
 
 ## Durable Entry Points
 
@@ -36,42 +36,49 @@ Follow the templates, authority, engineering/testing standards, pass artifacts,
 source, evidence, decisions, governance, and prerequisite records routed by
 those documents.
 
-## Custom Agents
+## Execution Architecture
 
-Use these project-scoped custom agents:
+The main Codex session directly owns:
 
-- `production_readiness_planner`
-  - Stage 0 intake/decomposition.
-  - Gate A planning.
-  - Gate A plan-correction runs.
-- `production_readiness_plan_reviewer`
-  - Independent Gate A plan review only.
-  - Read-only.
-  - A fresh reviewer thread for every Gate A review attempt.
-- `production_readiness_implementer`
-  - Gate B implementation and validation.
-  - Scoped Gate C correction runs routed to Gate B.
+- workflow coordination;
+- startup and resume reconstruction;
+- post-merge progression;
+- Stage 0 and Stage 0 corrections;
+- Gate A plan creation and Gate A plan corrections;
+- Gate B implementation, debugging, validation, and post-Gate-C corrections;
+- review-attempt counters and correction-round counters;
+- deferred-follow-up tracking;
+- Gate D staging, commit, push, PR creation/update, and PR verification;
+- final workflow-state reporting.
+
+Do not delegate mutable workflow work to custom worker agents. The main Codex
+session retains the workflow state throughout the pass and performs corrections
+and routing after review findings return.
+
+Use exactly one project-scoped production-readiness custom subagent
+configuration:
+
 - `production_readiness_reviewer`
-  - Independent Gate C semantic review only.
-  - Read-only.
-  - A fresh reviewer thread for every Gate C review attempt.
-- `production_readiness_publisher`
-  - Gate D Git/PR finalization only.
-  - Never merges the PR.
+  - read-only;
+  - supports `review_type = gate_a` and `review_type = gate_c`;
+  - performs exactly one independent review attempt per invocation;
+  - returns all material findings together;
+  - never edits, fixes, stages, commits, pushes, publishes, merges, or advances
+    workflow state;
+  - never spawns other agents;
+  - never invokes this Skill recursively.
 
-If a required custom agent is missing, cannot be loaded, or cannot honor its
-sandbox/gate boundary, stop and report the configuration problem. Do not
-substitute a generic agent for either independent reviewer.
-
-Specialized agents must not recursively invoke this Skill or spawn their own
-subagents.
+If the required reviewer configuration is missing, cannot be loaded, cannot use
+a read-only sandbox, or cannot honor its review boundary, stop and report the
+configuration problem. Do not substitute the main Codex session or a generic
+agent for independent review.
 
 ## Automation Authority
 
 A user instruction to run, start, continue, or resume production-readiness work
-authorizes the coordinator to operate the selected production-readiness workflow
-through Stage 0, Gate A, Gate B, Gate C, and Gate D without routine human
-approval between those stages.
+authorizes the main Codex session to operate the selected production-readiness
+workflow through Stage 0, Gate A, Gate B, Gate C, and Gate D without routine
+human approval between those stages.
 
 That authorization includes, when the durable workflow reaches Gate D:
 
@@ -94,9 +101,9 @@ Do not stop merely to ask the user to approve:
 Stop only when a durable blocker, review-limit stop, unsafe state, unresolved
 decision, or manual PR merge boundary requires it.
 
-## Coordinator Must Not
+## Main Codex Must Not
 
-The coordinator must not:
+The main Codex session must not:
 
 - invent product, security, policy, operational, provider, or ownership
   decisions that authority does not resolve;
@@ -199,97 +206,53 @@ a bounded independent-review loop.
 Never store secrets, private provider values, personal/payment data, raw
 sensitive logs, or other prohibited material in the handoff.
 
-## Delegation Contract
+## Reviewer Assignment Contract
 
-Every subagent invocation performs exactly one stage, gate, review, or scoped
-correction assignment.
+Every independent review invocation uses the reusable
+`production_readiness_reviewer` configuration and performs exactly one review
+attempt in a fresh reviewer thread/context.
 
-Each assignment must provide the run-specific facts necessary for that
-assignment, such as:
+The main Codex session must provide:
 
+- `review_type`: exactly `gate_a` or `gate_c`;
 - pass ID;
-- parent/child identity;
-- workflow;
+- parent pass when applicable;
+- workflow type;
 - branch;
 - accepted baseline;
-- intake path/SHA when applicable;
-- canonical-plan path/SHA when applicable;
-- review attempt;
-- prior findings;
-- correction scope;
-- validation state;
+- review attempt number;
+- frozen/accepted intake path and SHA when applicable;
+- canonical plan path and SHA;
+- prior findings and correction history when applicable;
+- current validation state when applicable;
+- exact review boundary;
 - exact stop boundary.
 
-Do not paste durable workflow prose into every assignment. Reference the durable
-entry points and applicable workflow.
+The reviewer must reject unknown review types instead of guessing.
 
-After every subagent returns, verify that its result matches the assigned
-boundary before dispatching the next state.
+Use a brand-new reviewer thread/context for:
+
+- Gate A Review 1;
+- Gate A Review 2;
+- Gate A Review 3;
+- Gate C Review 1;
+- Gate C Review 2;
+- Gate C Review 3;
+- any newly authorized post-limit independent review.
+
+Never reuse a reviewer conversation between attempts.
+
+After every reviewer return, the main Codex session verifies that the outcome
+matches the assigned review type, review attempt, and repository state before
+routing the next workflow action.
 
 ## Machine Outcome Dispatch
 
 Machine tokens control transitions. Do not infer a transition from vague prose.
 
-### Planner
+### Gate A Review Outcomes
 
-Expected outcomes:
-
-- `stage_0_ready`
-- `gate_a_plan_ready`
-- `route_to_stage_0`
-- `blocked`
-
-Dispatch:
-
-#### `stage_0_ready`
-
-Valid only for a Stage 0 assignment.
-
-1. Verify the completed intake artifact and SHA when an intake artifact applies.
-2. Treat that exact Stage 0 result as the accepted/frozen intake for the current
-   automated workflow run.
-3. Verify that the structural outcome is one of:
-   - parent remains one executable pass;
-   - parent decomposes into ordered executable children;
-   - executable-now work is separated from a mandatory deferred follow-up whose
-     external/final-infrastructure trigger is currently false.
-4. When a mandatory deferred follow-up exists, verify that Stage 0 records its
-   owner/pass, preserved obligations, exact trigger, prerequisites/downstream
-   consumers, latest completion boundary, execution-register visibility, and an
-   explicit statement that deferred status is not proof or control closure.
-5. Record the parent/current-child structure, any deferred follow-up state, and
-   first executable pass.
-6. Update the handoff.
-7. Automatically begin Gate A for the first executable pass.
-8. Do not stop for routine human intake approval.
-
-If Stage 0 reports a real unresolved authority, prerequisite, structural, or
-owner-decision blocker instead of a valid executable structure, it must return
-`blocked`.
-
-#### `gate_a_plan_ready`
-
-Valid only for initial Gate A planning or a Gate A plan-correction run.
-
-1. Verify the canonical-plan path/SHA and applicable intake SHA.
-2. Determine whether this begins a new Gate A review cycle or continues the
-   current pre-review correction cycle.
-3. Spawn a fresh `production_readiness_plan_reviewer`.
-4. Do not treat planner completion as plan approval.
-
-#### `route_to_stage_0`
-
-Exit the current Gate A/Gate B/Gate C path and run Stage 0 for the affected
-parent boundary. If Stage 0 produces a valid corrected structure, automatically
-continue to the correct first executable child's Gate A.
-
-#### `blocked`
-
-Stop and report the real blocker and exact required owner/external action.
-
-### Gate A Plan Reviewer
-
-Expected outcomes:
+Expected outcomes for `review_type = gate_a`:
 
 - `gate_a_plan_approved`
 - `gate_a_corrections_required`
@@ -315,43 +278,9 @@ Do not count semantic approval or a correction round. Stop on the reported
 preflight blocker. Resume the same review attempt only after the blocker is
 resolved and state is reverified.
 
-### Implementer
+### Gate C Review Outcomes
 
-Expected outcomes:
-
-- `ready_for_gate_c`
-- `route_to_gate_a`
-- `route_to_stage_0`
-- `blocked`
-
-#### `ready_for_gate_c`
-
-Verify Gate B postconditions, frozen artifacts, changed-file justification, and
-current validation. Then automatically spawn a fresh
-`production_readiness_reviewer` for Gate C Attempt 1, or the next Gate C attempt
-after a scoped correction.
-
-#### `route_to_gate_a`
-
-1. Exit Gate B.
-2. Spawn `production_readiness_planner` for the required Gate A correction.
-3. When the corrected plan is ready, start a **new** Gate A review cycle at
-   Review Attempt 1.
-4. If that cycle becomes clean, automatically freeze the newly reviewed plan and
-   return through Gate B before any Gate C/Gate D continuation.
-
-#### `route_to_stage_0`
-
-Exit Gate B and run Stage 0 structural correction. After a valid Stage 0 result,
-automatically begin the correct executable pass at Gate A.
-
-#### `blocked`
-
-Stop on the reported real blocker.
-
-### Gate C Reviewer
-
-Expected outcomes:
+Expected outcomes for `review_type = gate_c`:
 
 - `approved_for_git_finalization`
 - `corrections_required`
@@ -362,7 +291,7 @@ Expected outcomes:
 1. Verify this was the required fresh full-pass read-only review.
 2. Record Gate C approval for the exact current pass state.
 3. Update the handoff.
-4. Automatically begin Gate D with `production_readiness_publisher`.
+4. Automatically begin Gate D.
 5. Do not stop for separate publication authorization.
 
 #### `corrections_required`
@@ -375,9 +304,9 @@ Do not count semantic approval or a correction round. Stop on the reported
 preflight blocker. Resume the same Gate C attempt only after the blocker is
 resolved and state is reverified.
 
-### Publisher
+### Gate D Outcomes
 
-Expected outcomes:
+Gate D is performed by the main Codex session. Report exactly one of:
 
 - `pr_ready_for_owner_merge`
 - `baseline_advanced`
@@ -414,12 +343,13 @@ Route exactly as reported:
 
 Stop and report the exact failed publication step and blocker.
 
-Unknown tokens or tokens returned from the wrong agent/state are coordinator
+Unknown tokens or tokens returned from the wrong review type/state are workflow
 errors. Stop instead of guessing.
 
 ## Stage 0
 
-Stage 0 runs at the parent-pass boundary.
+Stage 0 runs at the parent-pass boundary and is performed directly by the main
+Codex session.
 
 It determines whether the parent:
 
@@ -455,12 +385,12 @@ structural, authority, prerequisite, evidence, owner-decision, or safety blocker
 
 ## Gate A Planning And Independent Review
 
-The planner authors the Gate A plan. The planner never independently approves
-its own plan.
+The main Codex session authors and corrects the Gate A plan. The main Codex
+session never independently approves its own plan.
 
-Every independent review attempt uses a fresh
-`production_readiness_plan_reviewer` thread and reviews the complete current
-plan.
+Every independent Gate A review attempt uses a fresh
+`production_readiness_reviewer` thread with `review_type = gate_a` and reviews
+the complete current plan.
 
 The automatic Gate A cycle is exactly:
 
@@ -490,9 +420,9 @@ Rules:
 
 After Review 1 or Review 2 returns `gate_a_corrections_required`:
 
-- if every material finding routes to `gate_a_correction`, send the complete
-  finding set to one planner correction run and then launch the next fresh full
-  review;
+- if every material finding routes to `gate_a_correction`, the main Codex
+  session applies the complete finding set in one Gate A correction step and
+  then launches the next fresh full review;
 - if any finding routes to Stage 0, exit the cycle and route to Stage 0;
 - if any finding routes to a real blocker, stop;
 - if routing is internally incompatible or ambiguous, stop rather than silently
@@ -505,7 +435,7 @@ plan correction/review.
 ### Gate A Re-entry
 
 Any route back to Gate A from Gate B, Gate C, or Gate D starts a **new Gate A
-review cycle at Review 1** after the planner corrects the plan.
+review cycle at Review 1** after the main Codex session corrects the plan.
 
 The prior plan is no longer the current frozen design once a material Gate A
 change is required.
@@ -515,10 +445,9 @@ insert a routine human approval stop.
 
 ## Gate B
 
-Gate B implements and validates the exact current frozen Gate A design.
-
-The implementer owns ordinary in-scope implementation/debugging iterations
-needed to reach the frozen completion and validation criteria.
+Gate B implements and validates the exact current frozen Gate A design. The main
+Codex session owns ordinary in-scope implementation/debugging iterations needed
+to reach the frozen completion and validation criteria.
 
 Gate B has **no arbitrary numeric retry limit**.
 
@@ -537,8 +466,8 @@ When Gate B is valid and complete, automatically begin Gate C.
 
 ## Gate C Independent Review
 
-Every Gate C attempt uses a fresh `production_readiness_reviewer` and reviews
-the complete current pass.
+Every Gate C attempt uses a fresh `production_readiness_reviewer` thread with
+`review_type = gate_c` and reviews the complete current pass.
 
 The automatic Gate C cycle is exactly:
 
@@ -569,9 +498,10 @@ Rules:
 
 After Review 1 or Review 2 returns `corrections_required`:
 
-- if every material finding routes to `gate_b_correction`, send the complete
-  finding set to one implementer correction run, require validation, then launch
-  the next fresh full Gate C review;
+- if every material finding routes to `gate_b_correction`, the main Codex
+  session applies the complete finding set in one Gate B correction step,
+  validates the corrected state, and then launches the next fresh full Gate C
+  review;
 - if any finding routes to Gate A, exit the Gate C cycle and run the Gate A
   re-entry path;
 - if any finding routes to Stage 0, exit the cycle and route to Stage 0;
@@ -587,7 +517,7 @@ correction/review.
 A clean Gate C automatically authorizes Gate D for the current automated pass
 run.
 
-Spawn `production_readiness_publisher` immediately after
+The main Codex session performs Gate D immediately after
 `approved_for_git_finalization`.
 
 Gate D:
@@ -719,14 +649,14 @@ Also stop for real durable blockers such as:
 - sensitive-data risk;
 - irreconcilable scope/decomposition ambiguity;
 - baseline drift at publication;
-- missing/broken required custom-agent configuration;
+- missing/broken required reviewer configuration;
 - unreconstructable resume state.
 
 ## Reporting
 
-Do not make the user relay routine subagent outputs.
+Do not make the user relay routine reviewer outputs.
 
-The coordinator should report only when:
+The main Codex session should report only when:
 
 - a hard review-limit stop is reached;
 - a real blocker requires owner/external action;
@@ -745,6 +675,7 @@ At an owner stop, report:
 ## Invariants
 
 - Durable authority and current repository truth outrank remembered chat state.
+- The main Codex session owns all mutable workflow work and state.
 - Stage 0 determines parent/child executable structure and any mandatory
   deferred follow-up.
 - Every executable child receives a fresh Gate A from current accepted
@@ -755,6 +686,8 @@ At an owner stop, report:
 - Gate A and Gate C each allow at most 3 reviews and 2 automatic correction
   rounds.
 - Reviewers never fix their own findings.
+- The same reviewer configuration is reused, but every review attempt gets a
+  fresh thread/context.
 - Clean Gate A automatically advances to Gate B.
 - Clean Gate C automatically advances to Gate D.
 - Gate D automatically creates/verifies the PR.

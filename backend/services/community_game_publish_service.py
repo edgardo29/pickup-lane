@@ -54,6 +54,14 @@ COMMUNITY_PUBLISH_FEE_CENTS = 499
 FIRST_FREE_WAIVER_REASON = "first_game_free"
 ADMIN_COMP_WAIVER_REASON = "admin_comp"
 COMMUNITY_PUBLISH_ATTEMPT_EXPIRATION_MINUTES = 30
+PUBLISH_FEE_PROVIDER_RESULT_RECORDING_FAILED_DETAIL = (
+    "Stripe created this publish fee payment intent, but publish fee state could "
+    "not be recorded. Check publish attempt status before retrying."
+)
+PUBLISH_FEE_CONFIRMATION_RECORDING_FAILED_DETAIL = (
+    "Stripe returned this publish fee confirmation outcome, but publish state "
+    "could not be recorded. Check publish attempt status before retrying."
+)
 ACTIVE_PUBLISH_ATTEMPT_STATUSES = {
     "requires_payment_method",
     "requires_action",
@@ -631,6 +639,7 @@ def create_paid_publish_attempt(
     starts_on_local,
     now: datetime,
 ) -> CommunityGamePublishRead:
+    checkpoint_committed = False
     if publish_request.payment_method_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -703,6 +712,8 @@ def create_paid_publish_attempt(
             "payment_method_id": str(saved_payment_method.id),
         },
     )
+    host_id = host.id
+    customer_id = host.stripe_customer_id
 
     try:
         db.add(attempt)
@@ -712,28 +723,48 @@ def create_paid_publish_attempt(
         db.add(attempt)
         db.flush()
 
+        db.commit()
+        checkpoint_committed = True
+
         payment_intent = create_payment_intent(
-            amount_cents=payment.amount_cents,
-            currency=payment.currency,
-            idempotency_key=payment.idempotency_key,
+            amount_cents=COMMUNITY_PUBLISH_FEE_CENTS,
+            currency=currency,
+            idempotency_key=f"community-publish-fee:{attempt_id}:{payment_id}",
             metadata={
                 "source": "community_publish_fee",
-                "host_user_id": str(host.id),
-                "community_publish_attempt_id": str(attempt.id),
-                "payment_id": str(payment.id),
-                "amount_cents": str(payment.amount_cents),
+                "host_user_id": str(host_id),
+                "community_publish_attempt_id": str(attempt_id),
+                "payment_id": str(payment_id),
+                "amount_cents": str(COMMUNITY_PUBLISH_FEE_CENTS),
             },
-            customer_id=host.stripe_customer_id,
+            customer_id=customer_id,
         )
-        payment.provider_payment_intent_id = payment_intent.id
-        payment.provider_charge_id = payment_intent.latest_charge_id
-        payment.updated_at = now
-        db.add(payment)
-        db.commit()
-        db.refresh(attempt)
-        db.refresh(payment)
+
+        try:
+            attempt = db.scalars(
+                select(CommunityPublishAttempt)
+                .where(CommunityPublishAttempt.id == attempt_id)
+                .with_for_update()
+            ).one()
+            payment = db.scalars(
+                select(Payment).where(Payment.id == payment_id).with_for_update()
+            ).one()
+            payment.provider_payment_intent_id = payment_intent.id
+            payment.provider_charge_id = payment_intent.latest_charge_id
+            payment.updated_at = now
+            db.add(payment)
+            db.commit()
+            db.refresh(attempt)
+            db.refresh(payment)
+        except Exception as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=PUBLISH_FEE_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+            ) from exc
     except StripeConfigError as exc:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
@@ -745,13 +776,16 @@ def create_paid_publish_attempt(
             detail=build_publish_conflict_detail(exc),
         ) from exc
     except PublicTimeoutError:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise
     except HTTPException:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise
     except Exception as exc:
-        db.rollback()
+        if not checkpoint_committed:
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Stripe could not create this publish fee payment.",
@@ -808,39 +842,46 @@ def create_paid_publish_attempt(
     response_status, attempt_status, payment_status = (
         map_paid_publish_confirmation_status(stripe_status)
     )
-    locked_attempt = db.scalars(
-        select(CommunityPublishAttempt)
-        .where(CommunityPublishAttempt.id == attempt.id)
-        .with_for_update()
-    ).one()
-    locked_payment = db.scalars(
-        select(Payment).where(Payment.id == payment.id).with_for_update()
-    ).one()
-    if locked_attempt.attempt_status != "succeeded":
-        locked_attempt.attempt_status = attempt_status
-        if attempt_status == "failed":
-            failure_code = "publish_fee_payment_failed"
-            failure_message = (
-                "This saved card could not be charged. Choose another card."
-            )
-        elif attempt_status == "cancelled":
-            failure_code = "publish_fee_payment_canceled"
-            failure_message = "This publish fee payment was canceled."
-        else:
-            failure_code = None
-            failure_message = None
+    try:
+        locked_attempt = db.scalars(
+            select(CommunityPublishAttempt)
+            .where(CommunityPublishAttempt.id == attempt.id)
+            .with_for_update()
+        ).one()
+        locked_payment = db.scalars(
+            select(Payment).where(Payment.id == payment.id).with_for_update()
+        ).one()
+        if locked_attempt.attempt_status != "succeeded":
+            locked_attempt.attempt_status = attempt_status
+            if attempt_status == "failed":
+                failure_code = "publish_fee_payment_failed"
+                failure_message = (
+                    "This saved card could not be charged. Choose another card."
+                )
+            elif attempt_status == "cancelled":
+                failure_code = "publish_fee_payment_canceled"
+                failure_message = "This publish fee payment was canceled."
+            else:
+                failure_code = None
+                failure_message = None
 
-        locked_attempt.failure_code = failure_code
-        locked_attempt.failure_message = failure_message
-        locked_attempt.updated_at = datetime.now(timezone.utc)
-        locked_payment.payment_status = payment_status
-        locked_payment.provider_charge_id = confirmed_intent.latest_charge_id
-        locked_payment.failure_code = failure_code
-        locked_payment.failure_message = failure_message
-        locked_payment.updated_at = locked_attempt.updated_at
-        db.add(locked_attempt)
-        db.add(locked_payment)
-    db.commit()
+            locked_attempt.failure_code = failure_code
+            locked_attempt.failure_message = failure_message
+            locked_attempt.updated_at = datetime.now(timezone.utc)
+            locked_payment.payment_status = payment_status
+            locked_payment.provider_charge_id = confirmed_intent.latest_charge_id
+            locked_payment.failure_code = failure_code
+            locked_payment.failure_message = failure_message
+            locked_payment.updated_at = locked_attempt.updated_at
+            db.add(locked_attempt)
+            db.add(locked_payment)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=PUBLISH_FEE_CONFIRMATION_RECORDING_FAILED_DETAIL,
+        ) from exc
 
     db.refresh(attempt)
     db.refresh(payment)
