@@ -114,6 +114,7 @@ DEFAULT_CORS_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
 DEFAULT_ALLOWED_HOSTS = ("localhost", "127.0.0.1", "testserver")
 DEFAULT_R2_ALLOWED_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 DEDICATED_TEST_DATABASE_NAME = "pickup_lane_test_db"
+DEDICATED_MIGRATION_TEST_DATABASE_NAME = "pickup_lane_migration_test_db"
 SUPPORTED_STRIPE_CURRENCY = "USD"
 DEFAULT_STRIPE_READ_TIMEOUT_SECONDS = 6
 DEFAULT_STRIPE_MUTATION_TIMEOUT_SECONDS = 15
@@ -522,15 +523,23 @@ def _parse_database_url(
     app_env: AppEnvironment,
     *,
     name: str = "DATABASE_URL",
+    test_database_name: str = DEDICATED_TEST_DATABASE_NAME,
 ) -> str:
     database_url = _required_text(env, name)
-    return _parse_database_url_value(name, database_url, app_env)
+    return _parse_database_url_value(
+        name,
+        database_url,
+        app_env,
+        test_database_name=test_database_name,
+    )
 
 
 def _parse_database_url_value(
     name: str,
     database_url: str,
     app_env: AppEnvironment,
+    *,
+    test_database_name: str = DEDICATED_TEST_DATABASE_NAME,
 ) -> str:
     if _is_documented_placeholder(database_url):
         _fail(name, "must not use a documented placeholder value")
@@ -550,8 +559,8 @@ def _parse_database_url_value(
 
     database_name = str(parsed.database)
     if app_env in {AppEnvironment.TEST, AppEnvironment.CI}:
-        if database_name != DEDICATED_TEST_DATABASE_NAME:
-            _fail(name, f"must use database {DEDICATED_TEST_DATABASE_NAME} in test and ci")
+        if database_name != test_database_name:
+            _fail(name, f"must use database {test_database_name} in test and ci")
     elif app_env.is_production_like:
         if _is_local_host(parsed.host):
             _fail(name, "must not use localhost in production-like environments")
@@ -584,6 +593,7 @@ def _parse_migration_database_url(
         "MIGRATION_DATABASE_URL",
         migration_database_url,
         app_env,
+        test_database_name=DEDICATED_MIGRATION_TEST_DATABASE_NAME,
     )
 
 

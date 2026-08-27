@@ -1,455 +1,493 @@
 # PR Description Template
 
-Use this template to write a PR description that lets a reviewer quickly understand:
+Use this template to produce the final pull-request description from the completed diff and the validation that actually ran.
 
-* why the PR exists;
-* what materially changed;
-* what meaningful behavior was validated.
+The description must let a software engineer who is unfamiliar with this repository understand:
 
-The PR description must explain the change itself, not the process used to plan, track, document, verify, or approve it.
+- the concrete reason the PR was needed;
+- what the system now does differently;
+- which material behaviors changed;
+- what important behavior was actually proven.
 
-Preserve important engineering information. Remove process noise, repetition, unnecessary completeness language, and terminology that makes the reviewer translate the description before understanding it.
+The PR description explains the engineering change. It does not reproduce planning, approval, tracking, or evidence-management processes.
 
-## Default structure
+## Required output
 
-Use only these three sections by default:
+Every PR description must contain exactly these three sections:
 
 1. `Summary`
 2. `Changes`
 3. `Validation`
 
-Add another section only when the specific PR genuinely requires it to understand or evaluate the change.
+Do not add another section unless the owner explicitly requests one for that PR.
 
-Do not add sections merely for completeness.
+The PR description is invalid and must not be returned until it passes every mandatory check in this template.
 
-## Content selection
+## Source of truth
 
-Before writing, identify only:
+Use the following sources:
 
-1. the concrete problem, risk, limitation, or missing behavior that made the change necessary, and the practical result after the change;
-2. the material changes in the actual diff;
-3. the meaningful behavior, failure cases, compatibility boundaries, or system properties that were actually validated.
+- the final diff for `Summary` and `Changes`;
+- the actual testing record, tests, and recorded execution results for `Validation`;
+- current repository behavior when needed to understand the effect of the diff.
 
-Exclude supporting process information unless that process document, template, or mechanism is itself a material change being reviewed.
+Do not derive claims from:
 
-A file, test, record, artifact, requirement, checker result, or process document does not deserve a PR bullet merely because it changed.
+- the pass title;
+- planning-document wording;
+- requirement names;
+- test-directory names;
+- workflow reports;
+- what the implementation merely appears intended to do.
 
-## Plain-language rule
+A plan describes intended work. It is not proof that the final implementation or validation achieved it.
 
-Write for a software engineer who understands normal engineering concepts but does not know the internal terminology of this work.
+## Required authoring process
 
-**Prefer what something does over what it is called.**
+Complete these steps before returning the PR description.
 
-Do not make the reviewer decode:
+### 1. Extract the engineering facts
 
-* configuration names;
-* framework-specific labels;
-* internal architecture names;
-* abbreviations;
-* planning terminology;
-* testing terminology;
-* production-readiness terminology;
-* infrastructure shorthand;
-* other internal terminology.
+Privately identify:
 
-If a term can be replaced with a short, accurate description of the behavior without losing important meaning, replace it.
+- **Before:** the concrete problem, risk, limitation, or missing behavior;
+- **Consequence:** what could fail, become incorrect, remain unverified, or become difficult because of that problem;
+- **After:** what the system now does differently;
+- **Material changes:** the meaningful behaviors changed by the diff;
+- **Validation results:** the scenarios actually exercised and the observable results.
 
-Do not keep terminology merely because it:
+Do not output this private fact list.
 
-* appears in the code;
-* appears in supporting documents;
-* is technically correct;
-* is commonly used by engineers.
+### 2. Translate terminology into behavior
 
-Use an exact technical name only when its exact identity materially helps the reviewer understand the change. When an exact name is necessary, make what it does clear from the same sentence.
+Before drafting, privately create a translation for every candidate phrase that may require implementation, repository, testing, infrastructure, or specialist context.
 
-Do not simplify precise engineering facts into vague phrases. Simplify the wording, not the substance.
+Use:
+
+```text
+candidate term
+-> what it actually means in this PR
+-> plain wording for the reviewer
+```
+
+Do not output this translation list.
+
+Use the plain wording in the final PR description.
+
+### 3. Draft the three sections
+
+Draft `Summary`, `Changes`, and `Validation` from the extracted facts and translated wording.
+
+### 4. Run the mandatory rejection checks
+
+Review every sentence and bullet against the rejection checks in this template.
+
+Do not return the first draft when any check fails. Rewrite it until every check passes.
+
+## Plain-language output gate
+
+A phrase is not acceptable merely because it is technically correct, common in the codebase, or familiar to specialists.
+
+For every technical noun or shorthand phrase, ask:
+
+> Could a competent software engineer who has never worked in this repository explain the actual behavior from this sentence alone?
+
+If the answer is no, replace the term with what it actually means.
+
+A term that names a category but hides the relevant behavior must be translated.
+
+### Translation examples
+
+These examples establish the expected transformation. They are not an exhaustive prohibited-word list.
+
+| Do not stop at | Explain the behavior |
+|---|---|
+| `drift check` | checks that migrations create the tables, columns, indexes, and constraints expected by the application models |
+| `migration graph check` | checks that migration revisions have no missing, duplicate, or conflicting dependencies |
+| `migration rehearsal` | runs the real migrations against a controlled PostgreSQL database |
+| `schema-history reset` | returns the migration database to an empty state or an earlier migration version |
+| `fail closed` | rejects an unrecognized risky operation instead of accepting it |
+| `advisory-lock serialization` | prevents two migration runs from changing the migration database at the same time |
+| `interruption recovery` | checks what remains when a migration stops partway through and whether a later run can safely complete |
+| `provider-independent` | does not depend on a specific hosting or database provider |
+| `connection budget` | how many database connections the deployed system can safely use |
+| `role/grant verification` | checks that database accounts have only the permissions they need |
+| `boundary` | state exactly what is allowed, required, separated, or prevented |
+| `contract` | state the actual behavior or rule being enforced |
+| `lifecycle` | describe the relevant states or operations |
+| `hardening` | describe the specific failure or unsafe behavior now prevented |
+
+Standard technology and product names such as PostgreSQL, Alembic, FastAPI, Stripe, or Firebase may remain when their identity helps explain the change.
+
+An exact technical name must never substitute for explaining its behavior.
 
 ## Summary
 
-Summary has one job:
+The Summary has one job:
 
-**Explain the concrete reason the change was needed and the practical high-level result.**
+**Explain the concrete reason the PR was necessary and the practical high-level result.**
 
-Keep it short. Usually one compact paragraph is enough.
+Use one compact paragraph of no more than two sentences.
 
-A reviewer should understand the purpose without reading planning documents, testing records, execution records, requirement records, Gate reports, or other supporting material.
+The normal structure is:
 
-The Summary must be understandable without knowing the repository's internal architecture, infrastructure terminology, or production-readiness terminology.
+1. what was missing, incorrect, unsafe, or unverified and what consequence that created;
+2. what the system now does differently.
 
-The Summary must communicate both sides of the change:
+The Summary must be understandable without reading:
 
-1. **Before:** what concrete problem, risk, limitation, missing capability, or incorrect behavior existed.
-2. **After:** what the system now does differently at a high level.
+- the plan;
+- the testing record;
+- requirement declarations;
+- Gate reports;
+- the execution register;
+- internal documentation.
 
-When the old behavior could cause a meaningful incorrect state or failure, say what that consequence was. Do not make the reviewer infer why the change mattered.
+### Summary rules
 
-### Summary Acceptance Test
+The Summary must:
 
-A Summary is acceptable only if a reviewer can answer these after reading it once:
+- state a concrete previous problem or missing capability;
+- state the meaningful consequence of that problem when one exists;
+- state the practical result after the PR;
+- use behavior rather than internal labels;
+- remain understandable to an engineer outside the repository.
 
-1. What changed?
-2. What problem, risk, limitation, or missing behavior made the change necessary?
-3. What does the system do differently after this PR?
-4. Why does the change matter in this PR's own context?
+The Summary must not include:
 
-If any answer is unclear, rewrite the Summary before continuing.
+- test counts;
+- test-suite names;
+- commands;
+- CI bookkeeping;
+- validation details;
+- pass IDs;
+- Gate names;
+- requirement IDs;
+- execution or acceptance state;
+- future work;
+- deferred work;
+- rollout disclaimers;
+- things not changed;
+- things not proven;
+- configuration identifiers unless the exact identifier is essential to understand the result.
 
-Do not use broad labels as the main explanation. Phrases such as `adds safeguards`, `handles concurrency`, `improves reliability`, `strengthens validation`, `database-backed`, `production-readiness`, or `race conditions` are not enough unless the same sentence explains the concrete problem and practical result.
+Do not write:
 
-For example, do not stop at:
+- improves reliability;
+- strengthens validation;
+- adds safeguards;
+- hardens migrations;
+- makes behavior safer;
+- handles edge cases;
+- improves production readiness;
 
-`This adds database safeguards for concurrency issues.`
+unless the same sentence states the concrete problem and resulting behavior.
 
-Prefer the actual engineering meaning:
+### Summary acceptance test
 
-`Concurrent requests could make decisions from the same stale database state and consume the same limited capacity more than once. The change serializes conflicting database operations so each request makes its decision against the state left by the request that won first.`
+Do not return the Summary unless a reviewer can answer all four questions after reading it once:
 
-The example illustrates the required level of concreteness, not a required sentence structure. For an additive capability, refactor, configuration change, migration, or other kind of PR, describe its real motivation and result naturally.
-
-**Describe the practical engineering result, not merely the category of work.**
-
-A Summary is too vague if it mainly says the PR:
-
-* adds safeguards;
-* improves reliability;
-* handles concurrency;
-* strengthens validation;
-* hardens behavior;
-* improves safety;
-* makes something more robust;
-* improves production readiness;
-
-without explaining what could actually go wrong, what was missing, or what the system now does differently.
-
-Do not use an internal, infrastructure, or process term in the Summary when a short description of what it actually means would be clearer.
-
-In particular, avoid terms such as these unless the exact term is genuinely necessary to understand the change:
-
-* provider-independent;
-* topology;
-* connection budget;
-* role/grant;
-* evidence contract;
-* verification framework;
-* production-readiness;
-* control;
-* deferred verification;
-* provider/runtime evidence;
-* infrastructure timing;
-* execution boundary;
-* traceability;
-* requirement mapping.
-
-Translate them into what they mean.
-
-Examples:
-
-* Instead of `provider-independent`, say `without depending on a specific hosting provider`.
-* Instead of `database topology`, say `how the application and database are deployed and connected`.
-* Instead of `connection budget`, say `how many database connections the production system can safely use`.
-* Instead of `role/grant verification`, say `checking that database accounts have only the permissions they need`.
-* Instead of `verification framework`, describe the checks or rules that were added.
-* Instead of `deferred production evidence`, explain that the actual production values will be checked after the final hosting setup is selected.
-
-The Summary should answer these questions directly:
-
-1. What concrete problem, limitation, risk, or missing capability made this PR necessary?
-2. What did that mean for the system before this change?
+1. What concrete problem or missing behavior existed?
+2. What could that problem cause or prevent?
 3. What does the system now do differently?
+4. Why does this PR matter?
 
-If a sentence sounds like the title of an internal design document, a feature label, or a generic statement that something was improved instead of an explanation to another engineer, rewrite it.
-
-Do not use the Summary for:
-
-* process or review benefits;
-* testing or evidence details;
-* internal planning language;
-* unrelated background;
-* unchanged behavior included only for completeness;
-* future work;
-* limitations or disclaimers;
-* things not changed or not proven.
+If any answer requires interpreting jargon or opening another document, rewrite the Summary.
 
 ## Changes
 
-Changes has one job:
+The Changes section has one job:
 
-**Describe the material changes in the actual diff.**
+**Describe the material engineering changes in the final diff.**
 
-Each bullet must describe a meaningful reviewer-facing change.
+Use three to seven bullets unless the actual diff genuinely requires fewer or more.
 
-Describe what the system now does, requires, allows, prevents, limits, separates, configures, or handles differently.
+Each bullet must:
 
-Preserve important:
+- describe one distinct material change;
+- begin with what the system now does, requires, prevents, separates, records, or verifies;
+- explain the behavior or engineering consequence;
+- use an exact identifier only when its identity helps the reviewer.
 
-* behavior changes;
-* configuration differences;
-* environment differences;
-* compatibility boundaries;
-* architectural consequences;
-* security behavior;
-* API behavior;
-* data or migration behavior;
-* infrastructure or operational behavior;
-* material documentation or template changes.
+### Changes rules
 
-Describe the behavior or engineering result rather than inventorying files.
+Describe:
 
-Tests normally belong in `Validation`.
+- behavior changes;
+- configuration behavior;
+- database or migration behavior;
+- security behavior;
+- API behavior;
+- failure handling;
+- compatibility behavior;
+- architectural separation;
+- materially changed test or CI infrastructure when that infrastructure is itself part of the engineering change.
 
-Do not create `Changes` bullets merely for:
+Do not merely inventory:
 
-* tests;
-* evidence;
-* requirements or controls;
-* testing records;
-* execution records;
-* coverage or traceability records;
-* approval or Gate records;
-* supporting process files.
-
-A documentation or template change may receive a bullet when that change itself is material and part of the diff being reviewed. Describe what the document now communicates, requires, or enables in clear language rather than repeating internal process terminology.
-
-Do not include preserved or unchanged behavior merely to demonstrate completeness. If preserving an existing behavior was meaningfully verified after the change, describe that result in `Validation`.
-
-## Validation
-
-Validation has one job:
-
-**Explain what important behavior, failure mode, compatibility boundary, or system property was actually proven after the change.**
-
-Write validation for the reviewer, not as a log of commands that ran.
-
-Each bullet should describe one distinct validation result and make clear:
-
-* what behavior, risk, failure case, or regression boundary was checked;
-* the scenario or type of verification when that helps explain the proof;
-* what the system did correctly;
-* whether the verification passed.
-
-Use the behavior or system property as the subject of the bullet.
-
-Prefer:
-
-`Overlapping roster requests were tested against PostgreSQL and could not commit more players than the game had available spots.`
-
-Instead of:
-
-`17 tests passed.`
-
-Prefer:
-
-`Existing booking, roster, and account-deletion behavior continued to pass after the locking changes.`
-
-Instead of:
-
-`Compatibility suite: 54 passed.`
-
-### Validation source of truth
-
-Do not derive Validation claims from `Changes`, from the implementation alone, or from what the code appears intended to do.
-
-Before writing `Validation`, inspect the actual validation evidence for the PR.
-
-Use, as applicable:
-
-1. the current testing record or equivalent validation/evidence record, especially its scenario, proof-layer, and validation-result sections;
-2. the actual tests or verification artifacts when needed to understand exactly what scenario was exercised;
-3. the recorded results from validation that actually ran;
-4. the approved validation plan only to understand intended scope, never as proof that validation passed.
-
-Every Validation bullet must be supported by validation that actually ran or by another explicitly identified proof layer.
-
-Do not claim that behavior was tested merely because:
-
-* the implementation appears to provide it;
-* the plan required it;
-* a test file exists;
-* a related suite passed;
-* a requirement says the behavior should exist.
-
-If the available evidence does not establish a claimed behavior, omit the claim rather than infer it.
-
-When a broader regression or compatibility suite is used, identify the behavior or system area that made that suite relevant instead of reporting only its name or test count.
-
-### Relevant validation only
-
-Include validation that helps establish that the change works correctly, such as:
-
-* direct behavior changed by the PR;
-* meaningful edge and failure cases;
-* concurrency or ordering behavior;
-* rollback, retry, duplicate, or invalid-state handling;
-* security or authorization behavior;
-* database, API, provider, migration, browser, or integration behavior when materially affected;
-* existing behavior that could realistically regress because of the change.
-
-The relevant validation scope should come from:
-
-* the actual behavior changed;
-* the risks introduced or addressed by that change;
-* affected callers and integrations;
-* compatibility boundaries identified for the change;
-* the actual validation evidence that was executed.
-
-Do not add unrelated validation merely to increase the amount of reported testing.
-
-### Test counts and commands
-
-Test counts are optional supporting information.
-
-If a count is included, identify what those tests covered and why that scope was relevant.
-
-Do not use a bare count as a validation result.
+- files;
+- classes;
+- functions;
+- tests;
+- records;
+- documentation artifacts.
 
 Bad:
 
-* `17 passed`
-* `69 tests passed`
+```text
+Updates migration_test_database.py and the CI workflow.
+```
+
+Better:
+
+```text
+Uses a separate PostgreSQL database for migration tests so they can rebuild schema history without modifying the database used by ordinary backend tests.
+```
+
+### Exact identifiers
+
+An exact name may appear when it materially helps the reviewer, but explain its purpose in the same bullet.
 
 Acceptable:
 
-* `Seventeen PostgreSQL concurrency tests passed covering contested roster capacity, waitlist promotion, account-deletion cleanup, and game-credit operations.`
+```text
+Requires migration tests to use the separate `pickup_lane_migration_test_db` database through `MIGRATION_DATABASE_URL`, preventing them from falling back to the ordinary backend test database.
+```
+
+Not acceptable:
+
+```text
+Adds `MIGRATION_DATABASE_URL` boundary validation.
+```
+
+### Exclude process bookkeeping
+
+Do not create Changes bullets for:
+
+- pass decomposition;
+- pass acceptance;
+- execution-register state;
+- Gate state;
+- requirement mapping;
+- traceability;
+- checker compliance;
+- evidence records;
+- artifact hashes;
+- staging or Git state;
+- future owners;
+- deferred follow-ups;
+
+unless that process mechanism is itself the material subject of the PR.
+
+Do not include tests as Changes bullets merely because tests were added. Describe the tested behavior in `Validation`.
+
+A testing or CI mechanism belongs in Changes only when the mechanism itself materially changes how the system is verified or isolated.
+
+## Validation
+
+The Validation section has one job:
+
+**Explain what important behavior, failure case, compatibility boundary, or system property was actually proven.**
+
+Use two to five bullets unless the validation genuinely requires a different number.
+
+Every bullet must identify:
+
+1. the scenario or property checked;
+2. the observable result;
+3. that the verification passed.
+
+Use this structure:
+
+```text
+[Scenario or system property]: [what was exercised and what the observed result proved].
+```
+
+### Validation source of truth
+
+Before writing Validation, inspect:
+
+- the current testing record;
+- the actual tests when needed to understand the scenario;
+- the recorded results from validation that actually ran.
+
+Do not infer a validation claim from:
+
+- the implementation;
+- the plan;
+- a test filename;
+- a requirement;
+- a related suite passing;
+- the intended behavior.
+
+When the evidence does not establish a claim, omit it.
+
+### Validation rules
+
+Validation should describe:
+
+- direct changed behavior;
+- meaningful failure cases;
+- retry or recovery behavior;
+- concurrency or ordering behavior;
+- invalid-state rejection;
+- compatibility behavior that could realistically regress;
+- database, API, provider, browser, migration, or integration behavior materially affected by the PR.
+
+Validation must not merely repeat Changes.
+
+`Changes` explains what was implemented.
+
+`Validation` explains what scenario was exercised and what result was observed.
+
+Bad:
+
+```text
+Added a lock to serialize migration tests.
+```
+
+Better:
+
+```text
+Two overlapping migration test sessions were started, and the second could not change the migration database until the first released control.
+```
+
+### Counts and commands
+
+Test counts are optional supporting details.
+
+Never use a bare count as the validation result.
+
+Bad:
+
+```text
+26 tests passed.
+```
+
+Acceptable:
+
+```text
+Twenty-six migration tests passed covering fresh-database upgrades, upgrades from an earlier version, interrupted-run recovery, unsafe SQL rejection, and overlapping migration execution.
+```
 
 Commands are normally unnecessary.
 
-Include a command only when the exact command materially helps a reviewer reproduce or understand the verification.
-
-Do not turn Validation into a transcript of the validation run.
-
-### Avoid repeating Changes
-
-Validation may cover the same system areas described in `Changes`, but it must not merely restate the implementation.
-
-A `Changes` bullet explains what the PR changed.
-
-A `Validation` bullet explains what behavior, failure case, compatibility boundary, or system property was exercised and what the result proved.
-
-Do not repeat implementation details in `Validation` unless they are necessary to explain the scenario being verified.
-
-If a Validation bullet could be moved into `Changes` without changing its meaning, rewrite or remove it.
-
-Example:
-
-`Changes`
-
-- Serializes roster capacity decisions so competing requests cannot decide from the same stale capacity state.
-
-`Validation`
-
-- Concurrent join and guest-add scenarios confirmed that overlapping requests cannot commit more players than the game has available spots.
-
-### Regression validation
-
-Regression validation belongs in the PR description when the change could realistically affect existing behavior and that behavior was actually rechecked.
-
-Describe the affected behavior, not merely the suite that ran.
-
-Prefer:
-
-`Existing transaction handling, account deletion, roster operations, and credit behavior continued to pass after the database-locking changes.`
-
-Instead of:
-
-`Regression tests: 124 passed.`
-
-If a regression suite covers many unrelated areas, report only the relevant validated behavior rather than advertising the total suite size.
+Include a command only when the exact command materially helps a reviewer reproduce a non-obvious validation scenario.
 
 ### Exclude process-only checks
 
-Do not include validation merely because a check ran.
+Do not include:
 
-Unless that mechanism is itself materially changed by the PR, omit validation whose only purpose is:
+- checker PASS;
+- requirement mapping;
+- generated traceability;
+- testing-record completeness;
+- `git diff --check`;
+- Git status;
+- staged-file state;
+- Gate approval;
+- artifact hashes;
+- execution-register consistency;
+- CI bookkeeping;
+- PR finalization.
 
-* test placement;
-* test-to-requirement mapping;
-* requirement traceability;
-* checker compliance;
-* suite organization;
-* testing-record completeness;
-* execution-register consistency;
-* `git diff --check`;
-* Git status or staged-file state;
-* PR or Git finalization;
-* CI bookkeeping;
-* artifact hashes;
-* approval or Gate state;
-* other workflow or evidence bookkeeping.
+These are not reviewer-facing validation results unless the PR materially changes that mechanism.
 
-Rewording process bookkeeping does not make it reviewer-relevant.
+## Hard rejection conditions
 
-Do not create multiple bullets that substantially prove the same thing. Combine overlapping results or keep the strongest, clearest statement.
+The PR description is invalid and must be rewritten when any of the following is true:
 
-Do not make claims stronger than the performed validation supports.
+1. A technical phrase names a concept without explaining its concrete behavior.
+2. The Summary contains terminology that requires the plan or implementation to decode.
+3. The Summary contains tests, CI, future work, limitations, or deferred-work language.
+4. A Changes bullet inventories a file or artifact instead of explaining behavior.
+5. A Changes bullet describes pass, Gate, requirement, traceability, evidence, or execution bookkeeping.
+6. A Validation bullet is only a test count, command, suite name, checker result, or Git check.
+7. A Validation bullet merely repeats a Changes bullet.
+8. A claim is stronger than the implementation or executed validation supports.
+9. Two bullets substantially communicate the same fact.
+10. A vague improvement word replaces the actual engineering behavior.
+11. A local path, workstation detail, credential, secret, private provider value, personal data, payment data, or sensitive log content appears.
+12. A reviewer would reasonably need to ask, “What does that term mean?” before understanding the sentence.
 
-## Mandatory final rewrite pass
+Do not return the PR description while any rejection condition remains.
 
-After drafting the PR description, review every sentence and bullet before producing the final output.
+## Mandatory final rewrite
 
-For each one:
+Run this review after drafting and before returning the body.
 
-1. **Strengthen the Summary:** Verify that it passes the Summary Acceptance Test, explains a concrete reason the change was needed, and states what the system now does differently. If a reviewer could reasonably ask "what does that mean?", or if it only names a category of work or says something was improved, strengthened, hardened, safeguarded, or made more reliable, rewrite it.
-2. **Translate terminology:** If an implementation, configuration, framework, architecture, infrastructure, planning, testing, or internal term can be replaced by a short description of what it actually does, replace it.
-3. **Remove process language:** If the sentence mainly describes tracking, evidence, mapping, policy, approval, or production-readiness machinery rather than the reviewed change, remove it.
-4. **Remove duplication:** If the same engineering fact or validation result appears elsewhere, keep the clearest version only.
-5. **Preserve substance:** Do not remove meaningful behavior, failure consequences, boundaries, compatibility information, or engineering consequences merely to make the description shorter.
-6. **Check Summary comprehension:** Read the Summary as if the reviewer has never seen the project's production-readiness documents. The reviewer should understand why the change was necessary and what practical result it produced without having to infer either one.
-7. **Ground Validation:** Confirm every Validation claim is supported by validation that actually ran or another explicit proof layer. Do not infer Validation from the implementation or plan.
-8. **Check Validation relevance:** Every Validation bullet must prove a distinct behavior, failure case, regression boundary, or system property that matters to the PR. Remove command-log entries, bare test counts, and process checks.
-9. **Check Changes/Validation separation:** If a Validation bullet merely repeats what was implemented, rewrite it around the scenario exercised and result proved, or remove it.
+### 1. Review every noun phrase
 
-Do not produce the PR description until this rewrite pass is complete.
+For every technical or abstract noun phrase, ask what it means in concrete behavior.
 
-## Writing standard
+Replace the phrase when its behavior is not already clear.
 
-* Explain the actual change, not the process used to produce it.
-* Use normal product and engineering language.
-* Prefer concrete behavior over names, labels, and shorthand.
-* Explain the real problem or missing behavior instead of merely naming the category of work.
-* Explain the resulting system behavior instead of merely saying something was improved, hardened, safeguarded, or made more reliable.
-* Preserve important engineering detail.
-* Use exact technical names only when their exact identity helps the reviewer understand the diff.
-* Do not copy wording from planning, testing, requirement, Gate, traceability, or other process documents when the underlying engineering fact can be stated directly.
-* Include only information that helps the reviewer understand or evaluate the diff.
-* Do not repeat the same fact in multiple sections.
-* Do not add background, future work, limitations, disclaimers, unchanged behavior, or things not proven merely for completeness.
-* Do not include process history, approval state, requirement or control bookkeeping, execution state, evidence bookkeeping, artifact hashes, Git bookkeeping, or similar information unless it is itself the material change being reviewed.
-* Do not make claims stronger than the implementation or validation supports.
-* Do not include secrets, credentials, private identifiers, personal or payment data, local paths, workstation details, or internal chat history.
+### 2. Review the Summary independently
+
+Read only the Summary.
+
+Confirm that it communicates the problem, consequence, result, and importance without relying on the title, Changes, or internal documents.
+
+### 3. Separate Changes from Validation
+
+Confirm that:
+
+- every Changes bullet states something materially changed;
+- every Validation bullet states something actually exercised and observed;
+- no bullet can move between the two sections without changing its meaning.
+
+### 4. Remove process language
+
+Remove planning, requirements, evidence, traceability, approval, Gate, acceptance, Git, and execution terminology unless that mechanism is itself the reviewed change.
+
+### 5. Ground every validation claim
+
+Confirm that every Validation bullet is supported by validation that actually ran.
+
+### 6. Remove repetition
+
+Keep one primary statement for each material change and validation result.
+
+### 7. Run the unfamiliar-reviewer test
+
+Read the complete body as an engineer who has never seen this repository.
+
+Rewrite every sentence that requires repository-specific knowledge before its practical meaning becomes clear.
 
 ## Final author check
 
-Before producing the final PR description, confirm:
+Do not return the body unless every answer is yes:
 
-1. Does the Summary clearly state the concrete reason the PR was needed?
-2. Does the Summary clearly state what the system does differently after the change?
-3. Would a reviewer understand why the change matters rather than only knowing what technical category it belongs to?
-4. Does every `Changes` bullet describe a real change in the diff in language that does not require translating internal terminology?
-5. Does every `Validation` bullet come from validation that actually ran or another explicit proof layer?
-6. Does every `Validation` bullet explain a distinct behavior, failure case, regression boundary, or system property that was actually proven?
-7. Are test counts and commands used only as supporting detail rather than as the validation result itself?
-8. Does `Validation` avoid repeating implementation details already explained in `Changes`?
-9. Is process-only validation such as requirement mapping, checker compliance, Git checks, and workflow bookkeeping omitted unless it is itself part of the PR's material change?
-10. Is anything unnecessary, repetitive, vague, unsupported, process-heavy, needlessly technical, or sensitive?
-11. Could an engineer unfamiliar with this project explain both the problem and the result after reading the Summary once?
+1. Does the Summary state a concrete previous problem?
+2. Does it state the meaningful consequence of that problem?
+3. Does it state what the system now does differently?
+4. Can an engineer unfamiliar with the repository understand every phrase in the Summary?
+5. Does every Changes bullet describe a material behavior rather than a file or process artifact?
+6. Is every exact technical identifier accompanied by an explanation of what it does?
+7. Does every Validation bullet describe an actually executed scenario and observable result?
+8. Does Validation avoid repeating Changes?
+9. Are bare counts, commands, checker results, Git checks, Gate state, and process bookkeeping excluded?
+10. Are future work and deferred-work disclaimers excluded?
+11. Are duplicate, vague, unsupported, or unnecessarily technical claims removed?
+12. Does the body contain no sensitive information or local workstation details?
 
-If any answer reveals a problem, correct it before producing the final output.
+If any answer is no, rewrite the body before returning it.
 
 ## Copyable body
 
 ```markdown
 ## Summary
 
-[Briefly explain the concrete problem, risk, limitation, or missing behavior that made the change necessary, followed by what the system now does differently at a high level.]
+[One or two sentences explaining the concrete previous problem and consequence, followed by what the system now does differently.]
 
 ## Changes
 
-- [Material change]
-- [Material change]
+- [Material behavior changed.]
+- [Material behavior changed.]
+- [Material behavior changed.]
 
 ## Validation
 
-- [Distinct behavior, failure case, regression boundary, or system property]&#58; [what was actually exercised and what the result proved].
-- [Distinct behavior, failure case, regression boundary, or system property]&#58; [what was actually exercised and what the result proved].
+- [Scenario or system property]&#58; [what was exercised and what the result proved].
+- [Scenario or system property]&#58; [what was exercised and what the result proved].
 ```

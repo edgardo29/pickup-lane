@@ -18,7 +18,9 @@ from .targeting import Target
 
 
 DEFAULT_SUITE_POLICY_PATH = Path(__file__).resolve().parents[1] / "support" / "suite_policy.json"
-REQUIRED_MARKERS = frozenset({"requirement", "suite_type", "no_db_cleanup"})
+REQUIRED_MARKERS = frozenset(
+    {"requirement", "suite_type", "no_db_cleanup", "migration_lifecycle"}
+)
 NETWORK_CALL_PREFIXES = (
     "requests.get",
     "requests.post",

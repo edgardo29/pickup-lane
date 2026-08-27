@@ -91,6 +91,7 @@ def _marker_config(*, strict: bool = True) -> str:
         "[tool:pytest]\n"
         f"{addopts}"
         "markers =\n"
+        "    migration_lifecycle: migration database lifecycle\n"
         "    no_db_cleanup: no database cleanup\n"
         "    requirement(*ids): stable requirement metadata\n"
         "    suite_type(name): execution suite type\n"

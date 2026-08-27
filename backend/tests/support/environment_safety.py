@@ -11,6 +11,7 @@ from sqlalchemy.engine import make_url
 
 
 DEDICATED_TEST_DATABASE_NAME = "pickup_lane_test_db"
+DEDICATED_MIGRATION_TEST_DATABASE_NAME = "pickup_lane_migration_test_db"
 MODEL_MODULE_FILE_EXCLUSIONS = {
     "__init__.py": "Package initializer and export surface; not a model module.",
 }
@@ -40,26 +41,32 @@ class AllowedDatabaseNetwork:
     allowed_hosts: frozenset[str]
 
 
-def parse_database_url(database_url: str) -> ParsedDatabaseUrl:
+@dataclass(frozen=True)
+class MigrationTestDatabaseTargets:
+    application_database: ParsedDatabaseUrl
+    migration_database: ParsedDatabaseUrl
+
+
+def parse_database_url(database_url: str, *, name: str = "DATABASE_URL") -> ParsedDatabaseUrl:
     try:
         parsed = make_url(database_url)
     except Exception as exc:  # noqa: BLE001 - SQLAlchemy wraps URL parsing details.
-        raise EnvironmentSafetyError("DATABASE_URL is not a valid SQLAlchemy URL.") from exc
+        raise EnvironmentSafetyError(f"{name} is not a valid SQLAlchemy URL.") from exc
 
     drivername = parsed.drivername.lower()
     if drivername != "postgresql" and not drivername.startswith("postgresql+"):
         raise EnvironmentSafetyError(
-            "DATABASE_URL must use a PostgreSQL SQLAlchemy driver."
+            f"{name} must use a PostgreSQL SQLAlchemy driver."
         )
 
     database_name = parsed.database or ""
     if not database_name:
-        raise EnvironmentSafetyError("DATABASE_URL must include a database name.")
+        raise EnvironmentSafetyError(f"{name} must include a database name.")
 
     host = parsed.host or ""
     if not host:
         raise EnvironmentSafetyError(
-            "DATABASE_URL must include a PostgreSQL host so the EN-01 network "
+            f"{name} must include a PostgreSQL host so the EN-01 network "
             "guard can enforce the configured host-and-port boundary."
         )
 
@@ -72,7 +79,7 @@ def parse_database_url(database_url: str) -> ParsedDatabaseUrl:
 
 
 def validate_dedicated_test_database_url(database_url: str) -> ParsedDatabaseUrl:
-    parsed = parse_database_url(database_url)
+    parsed = parse_database_url(database_url, name="DATABASE_URL")
     if parsed.database_name != DEDICATED_TEST_DATABASE_NAME:
         raise EnvironmentSafetyError(
             "Backend tests may only run against the dedicated PostgreSQL test "
@@ -80,6 +87,52 @@ def validate_dedicated_test_database_url(database_url: str) -> ParsedDatabaseUrl
             f"{parsed.database_name!r}."
         )
     return parsed
+
+
+def validate_dedicated_migration_test_database_url(
+    migration_database_url: str,
+) -> ParsedDatabaseUrl:
+    parsed = parse_database_url(
+        migration_database_url,
+        name="MIGRATION_DATABASE_URL",
+    )
+    if parsed.database_name != DEDICATED_MIGRATION_TEST_DATABASE_NAME:
+        raise EnvironmentSafetyError(
+            "Migration lifecycle tests may only run against the dedicated "
+            "PostgreSQL migration test database named "
+            f"{DEDICATED_MIGRATION_TEST_DATABASE_NAME!r}; got "
+            f"{parsed.database_name!r}."
+        )
+    return parsed
+
+
+def validate_migration_test_database_urls(
+    database_url: str,
+    migration_database_url: str,
+) -> MigrationTestDatabaseTargets:
+    application_database = validate_dedicated_test_database_url(database_url)
+    migration_database = validate_dedicated_migration_test_database_url(
+        migration_database_url
+    )
+
+    if application_database.database_name == migration_database.database_name:
+        raise EnvironmentSafetyError(
+            "Migration lifecycle tests must use a database separate from the "
+            "ordinary backend test database."
+        )
+    if (
+        application_database.host != migration_database.host
+        or application_database.port != migration_database.port
+    ):
+        raise EnvironmentSafetyError(
+            "Migration lifecycle tests must use the same approved PostgreSQL "
+            "test host and port as the ordinary backend test database."
+        )
+
+    return MigrationTestDatabaseTargets(
+        application_database=application_database,
+        migration_database=migration_database,
+    )
 
 
 def _validated_file_exclusions(

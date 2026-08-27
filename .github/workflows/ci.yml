@@ -128,6 +128,11 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
 
+      - name: Provision migration test database
+        env:
+          PGPASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+        run: createdb -h localhost -U postgres pickup_lane_migration_test_db
+
       - name: Compile backend Python files
         run: >
           python -m compileall
@@ -141,6 +146,19 @@ jobs:
 
       - name: Apply database migrations
         run: python -m alembic upgrade head
+
+      - name: Run migration safety checker
+        run: >
+          python backend/tests/check_backend_tests.py
+          --scope domain
+          backend/tests/migrations/migration_policy_compatibility_rehearsal
+
+      - name: Run migration safety tests
+        env:
+          MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/pickup_lane_migration_test_db
+        run: >
+          python -m pytest
+          backend/tests/migrations/migration_policy_compatibility_rehearsal
 
 
   required:

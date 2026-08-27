@@ -8,6 +8,7 @@ import pytest
 import backend.settings as settings_module
 from backend.settings import (
     AppEnvironment,
+    DEDICATED_MIGRATION_TEST_DATABASE_NAME,
     DEDICATED_TEST_DATABASE_NAME,
     DEFAULT_ALLOWED_HOSTS,
     DEFAULT_CORS_ORIGINS,
@@ -27,6 +28,10 @@ _PRODUCTION_DATABASE_URL = (
 )
 _TEST_DATABASE_URL = (
     f"postgresql+psycopg://db.example.invalid:5432/{DEDICATED_TEST_DATABASE_NAME}"
+)
+_MIGRATION_TEST_DATABASE_URL = (
+    "postgresql+psycopg://db.example.invalid:5432/"
+    f"{DEDICATED_MIGRATION_TEST_DATABASE_NAME}"
 )
 _FIREBASE_ADMIN_JSON = '{"type":"service_account","project_id":"pickup-lane-synthetic"}'
 _INBOX_SECRET = "synthetic-independent-inbox-token-secret"
@@ -250,6 +255,32 @@ def test_test_and_ci_reject_non_dedicated_database_names(app_env: str) -> None:
         _settings_env(app_env, DATABASE_URL="postgresql+psycopg://db.example.invalid:5432/pickup_lane_dev"),
         mentions=("DATABASE_URL", DEDICATED_TEST_DATABASE_NAME),
     )
+
+
+@pytest.mark.requirement("WS02-01-R4", "WS04-03A-R4", "WS04-03A-R8")
+@pytest.mark.parametrize("app_env", ["test", "ci"])
+def test_test_and_ci_accept_separate_migration_database_identity(app_env: str) -> None:
+    parsed = settings_module._parse_migration_database_url(
+        _settings_env(app_env, MIGRATION_DATABASE_URL=_MIGRATION_TEST_DATABASE_URL),
+        AppEnvironment(app_env),
+    )
+
+    assert parsed.endswith(f"/{DEDICATED_MIGRATION_TEST_DATABASE_NAME}")
+
+
+@pytest.mark.requirement("WS02-01-R4", "WS04-03A-R4", "WS04-03A-R8")
+@pytest.mark.parametrize("app_env", ["test", "ci"])
+def test_test_and_ci_reject_application_database_as_explicit_migration_database(
+    app_env: str,
+) -> None:
+    env = _settings_env(app_env, MIGRATION_DATABASE_URL=_TEST_DATABASE_URL)
+
+    with pytest.raises(SettingsError) as exc_info:
+        settings_module._parse_migration_database_url(env, AppEnvironment(app_env))
+
+    message = str(exc_info.value)
+    assert "MIGRATION_DATABASE_URL" in message
+    assert DEDICATED_MIGRATION_TEST_DATABASE_NAME in message
 
 
 @pytest.mark.requirement("WS02-01-R4")
