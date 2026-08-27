@@ -45,9 +45,16 @@ The current local databases are:
 * `pickup_lane_db_dev`: local development, browser testing, manual QA, and
   development rebuilds
 * `pickup_lane_test_db`: backend and API tests that should behave like CI
+* `pickup_lane_migration_test_db`: migration lifecycle and schema-history tests
+  that intentionally reset Alembic-created schema state through
+  `MIGRATION_DATABASE_URL`
 
 Do not use the test database for manual QA. Do not run destructive test setup
 against the development database.
+
+Do not run migration lifecycle tests against `pickup_lane_test_db`. Those tests
+own only `pickup_lane_migration_test_db` and must validate the exact database
+identity before any destructive reset.
 
 ## Pre-Production Migration Policy
 
@@ -396,6 +403,23 @@ Do not point destructive test commands at `pickup_lane_db_dev`.
 
 If backend tests skip unexpectedly, verify `DATABASE_URL` points at
 `pickup_lane_test_db`.
+
+If migration lifecycle tests fail before setup, verify `MIGRATION_DATABASE_URL`
+points at `pickup_lane_migration_test_db` on the same approved PostgreSQL host
+and port as `DATABASE_URL`.
+
+Create the local migration lifecycle database explicitly before running those
+tests:
+
+```bash
+createdb -h localhost -U postgres -O pickup-lane-user pickup_lane_migration_test_db
+```
+
+Use the same PostgreSQL host and port as `TEST_DATABASE_URL`:
+
+```bash
+MIGRATION_DATABASE_URL='postgresql+psycopg://pickup-lane-user:[PASSWORD]@localhost:5432/pickup_lane_migration_test_db'
+```
 
 Exact pytest selections belong in `backend-testing.md` or focused testing
 documentation, not in this file.

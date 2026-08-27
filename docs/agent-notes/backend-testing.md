@@ -938,6 +938,7 @@ Use a small registered marker set only when it supports real workflow needs.
 Current registered markers:
 
 ```text
+migration_lifecycle
 no_db_cleanup
 requirement
 suite_type
