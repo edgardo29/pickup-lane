@@ -51,6 +51,7 @@ _SETTINGS_SIDE_EFFECTFUL_SQLALCHEMY_IMPORT_NAMES = frozenset(
 _BACKEND_PRIVATE_ENV_NAMES = frozenset(
     {
         "DATABASE_URL",
+        "MIGRATION_DATABASE_URL",
         "INBOX_TOKEN_SECRET",
         "FIREBASE_ADMIN_CREDENTIALS_JSON",
         "FIREBASE_ADMIN_CREDENTIALS",
@@ -234,6 +235,8 @@ def test_environment_vocabulary_matches_settings_plan_matrix_and_ci_artifacts() 
         / "docs"
         / "production-readiness"
         / "planning"
+        / "passes"
+        / "ws02"
         / "ws02-01-typed-settings-environment-isolation.md"
     ).read_text()
     matrix_text = (

@@ -9,6 +9,7 @@ import pytest
 import backend.tests.conftest as backend_conftest
 from backend.settings import reset_settings_cache
 from backend.tests.support.environment_safety import (
+    DEDICATED_MIGRATION_TEST_DATABASE_NAME,
     DEDICATED_TEST_DATABASE_NAME,
     MODEL_MODULE_FILE_EXCLUSIONS,
     NETWORK_BLOCKED_MESSAGE,
@@ -23,6 +24,7 @@ from backend.tests.support.environment_safety import (
     registered_sqlalchemy_table_names,
     socket_address_allowed,
     validate_dedicated_test_database_url,
+    validate_migration_test_database_urls,
 )
 
 
@@ -33,6 +35,14 @@ SAFE_DATABASE_URL = (
 SAFE_DATABASE_HOST_URL = (
     "postgresql+psycopg://postgres:postgres@test-db.local:5544/"
     f"{DEDICATED_TEST_DATABASE_NAME}"
+)
+SAFE_MIGRATION_DATABASE_URL = (
+    "postgresql+psycopg://postgres:postgres@localhost:5432/"
+    f"{DEDICATED_MIGRATION_TEST_DATABASE_NAME}"
+)
+SAFE_MIGRATION_DATABASE_HOST_URL = (
+    "postgresql+psycopg://postgres:postgres@test-db.local:5544/"
+    f"{DEDICATED_MIGRATION_TEST_DATABASE_NAME}"
 )
 
 
@@ -158,6 +168,46 @@ def test_accepts_repository_dedicated_postgresql_database_url_forms(database_url
 def test_rejects_unsafe_ambiguous_or_non_postgresql_database_urls(database_url: str):
     with pytest.raises(EnvironmentSafetyError):
         validate_dedicated_test_database_url(database_url)
+
+
+def test_accepts_separate_migration_lifecycle_database_on_same_test_endpoint():
+    targets = validate_migration_test_database_urls(
+        SAFE_DATABASE_URL,
+        SAFE_MIGRATION_DATABASE_URL,
+    )
+
+    assert targets.application_database.database_name == DEDICATED_TEST_DATABASE_NAME
+    assert (
+        targets.migration_database.database_name
+        == DEDICATED_MIGRATION_TEST_DATABASE_NAME
+    )
+    assert targets.application_database.host == targets.migration_database.host
+    assert targets.application_database.port == targets.migration_database.port
+
+
+@pytest.mark.parametrize(
+    "migration_database_url",
+    [
+        SAFE_DATABASE_URL,
+        (
+            "postgresql+psycopg://postgres:postgres@localhost:5432/"
+            "pickup_lane_migration_test_db_backup"
+        ),
+        SAFE_MIGRATION_DATABASE_HOST_URL,
+        (
+            "postgresql+psycopg://postgres:postgres@localhost:5544/"
+            f"{DEDICATED_MIGRATION_TEST_DATABASE_NAME}"
+        ),
+    ],
+)
+def test_rejects_unsafe_or_cross_endpoint_migration_lifecycle_database(
+    migration_database_url: str,
+):
+    with pytest.raises(EnvironmentSafetyError):
+        validate_migration_test_database_urls(
+            SAFE_DATABASE_URL,
+            migration_database_url,
+        )
 
 
 def test_session_validation_rejects_unsafe_database_before_cleanup(monkeypatch):

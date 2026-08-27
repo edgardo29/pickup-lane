@@ -151,6 +151,28 @@ The exact dedicated PostgreSQL test database name is:
 pickup_lane_test_db
 ```
 
+Migration lifecycle tests have their own exact-purpose PostgreSQL database:
+
+```text
+pickup_lane_migration_test_db
+```
+
+Those tests use `MIGRATION_DATABASE_URL` and may reset only that migration test
+database after validating that the ordinary `DATABASE_URL` still points at
+`pickup_lane_test_db` on the same approved PostgreSQL test host and port.
+
+Local setup must provision the migration database explicitly:
+
+```bash
+createdb -h localhost -U postgres -O pickup-lane-user pickup_lane_migration_test_db
+```
+
+Use a sanitized URL with the same host and port as the ordinary test database:
+
+```bash
+MIGRATION_DATABASE_URL='postgresql+psycopg://pickup-lane-user:[PASSWORD]@localhost:5432/pickup_lane_migration_test_db'
+```
+
 Unsafe database configuration fails before cleanup. Ordinary backend tests block
 uncontrolled external network access and may use only explicitly allowed local
 or test infrastructure for their suite. Provider-contract tests are separate

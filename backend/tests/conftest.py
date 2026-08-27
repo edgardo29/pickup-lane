@@ -198,6 +198,8 @@ def pytest_sessionfinish(session, exitstatus) -> None:
 def _test_uses_database(request: pytest.FixtureRequest) -> bool:
     if request.node.get_closest_marker("no_db_cleanup"):
         return False
+    if request.node.get_closest_marker("migration_lifecycle"):
+        return False
     path = Path(str(request.node.fspath))
     return path.name not in NON_DATABASE_TEST_FILES
 

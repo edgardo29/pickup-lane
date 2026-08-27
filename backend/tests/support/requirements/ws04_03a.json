@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS04-03A-R1",
+      "owning_pass": "WS04-03A",
+      "source_controls": [
+        "DB-017",
+        "WS04-03"
+      ],
+      "state": "required",
+      "scope": "migrations/migration_policy_compatibility_rehearsal",
+      "reason": "Repository-owned migration policy, expand/contract, compatibility windows, recovery posture, and later-owner boundaries must be explicit and enforceable before production migration sign-off."
+    },
+    {
+      "id": "WS04-03A-R2",
+      "owning_pass": "WS04-03A",
+      "source_controls": [
+        "DB-016",
+        "DB-017",
+        "DB-018"
+      ],
+      "state": "required",
+      "scope": "migrations/migration_policy_compatibility_rehearsal",
+      "reason": "Current and future Alembic operations must be classified so destructive, data-affecting, dynamic-SQL, and special transaction patterns fail closed when unreviewed."
+    },
+    {
+      "id": "WS04-03A-R3",
+      "owning_pass": "WS04-03A",
+      "source_controls": [
+        "DB-016",
+        "TST-009"
+      ],
+      "state": "required",
+      "scope": "migrations/migration_policy_compatibility_rehearsal",
+      "reason": "Alembic graph, dependency, multiple-head, and drift verification must be trusted test evidence rather than CI intent or manual inspection."
+    },
+    {
+      "id": "WS04-03A-R4",
+      "owning_pass": "WS04-03A",
+      "source_controls": [
+        "DB-016",
+        "DB-018",
+        "TST-009"
+      ],
+      "state": "required",
+      "scope": "migrations/migration_policy_compatibility_rehearsal",
+      "reason": "Empty-database and controlled prior-schema upgrade paths must run against a dedicated migration test database without weakening ordinary backend test database safety."
+    },
+    {
+      "id": "WS04-03A-R5",
+      "owning_pass": "WS04-03A",
+      "source_controls": [
+        "DB-017",
+        "DB-018"
+      ],
+      "state": "required",
+      "scope": "migrations/migration_policy_compatibility_rehearsal",
+      "reason": "Old/new application compatibility rules must reject unsafe one-step schema changes and require expand/contract sequencing before incompatible changes merge."
+    },
+    {
+      "id": "WS04-03A-R6",
+      "owning_pass": "WS04-03A",
+      "source_controls": [
+        "DB-017",
+        "DB-018"
+      ],
+      "state": "required",
+      "scope": "migrations/migration_policy_compatibility_rehearsal",
+      "reason": "Provider-independent timeout, lock, interruption, resume, rollback, and forward-fix behavior must be covered without claiming final provider/runtime facts."
+    },
+    {
+      "id": "WS04-03A-R7",
+      "owning_pass": "WS04-03A",
+      "source_controls": [
+        "DB-016",
+        "DB-017",
+        "DB-018",
+        "TST-009"
+      ],
+      "state": "required",
+      "scope": "migrations/migration_policy_compatibility_rehearsal",
+      "reason": "Controlled PostgreSQL migration rehearsal must produce repository-owned evidence for current-chain upgrade, prior-schema upgrade, rerun, interruption, cleanup, graph, drift, and policy behavior."
+    },
+    {
+      "id": "WS04-03A-R8",
+      "owning_pass": "WS04-03A",
+      "source_controls": [
+        "WS04-01A",
+        "WS04-01B",
+        "WS04-01C",
+        "WS04-02A",
+        "WS04-02B",
+        "WS04-02C",
+        "WS04-01D",
+        "WS04-03B",
+        "WS05",
+        "WS09",
+        "WS10"
+      ],
+      "state": "required",
+      "scope": "migrations/migration_policy_compatibility_rehearsal",
+      "reason": "Accepted database contracts must remain intact while final infrastructure, provider/runtime rehearsal, durable jobs, deployed observability, and recovery evidence stay with their owning later passes."
+    }
+  ]
+}
