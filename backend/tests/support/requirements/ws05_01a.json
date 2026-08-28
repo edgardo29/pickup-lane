@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS05-01A-R1",
+      "owning_pass": "WS05-01A",
+      "source_controls": ["JOB-M01", "JOB-M02", "JOB-M03"],
+      "state": "required",
+      "scope": "platform/durable_jobs",
+      "reason": "Pickup Lane needs PostgreSQL-backed durable job state with enforceable lifecycle, identity, lease, attempt, and safe metadata invariants before later WS05 consumers can use background work."
+    },
+    {
+      "id": "WS05-01A-R2",
+      "owning_pass": "WS05-01A",
+      "source_controls": ["JOB-M01", "JOB-M02", "JOB-M04"],
+      "state": "required",
+      "scope": "platform/durable_jobs",
+      "reason": "Durable work must be created transactionally and idempotently from local state without starting workers, providers, or duplicate side effects."
+    },
+    {
+      "id": "WS05-01A-R3",
+      "owning_pass": "WS05-01A",
+      "source_controls": ["JOB-M03", "JOB-M04", "JOB-M07"],
+      "state": "required",
+      "scope": "platform/durable_jobs",
+      "reason": "Independent PostgreSQL sessions must prove atomic claim, SKIP LOCKED behavior, current lease-token ownership, heartbeat renewal, expired-lease recovery, and stale-token rejection."
+    },
+    {
+      "id": "WS05-01A-R4",
+      "owning_pass": "WS05-01A",
+      "source_controls": ["JOB-M02", "JOB-M04"],
+      "state": "required",
+      "scope": "platform/durable_jobs",
+      "reason": "Worker dispatch must fail closed for unsupported type/version or malformed payload and must preserve safe overlap between old and new worker versions."
+    },
+    {
+      "id": "WS05-01A-R5",
+      "owning_pass": "WS05-01A",
+      "source_controls": ["JOB-M03", "JOB-M05", "JOB-M06"],
+      "state": "required",
+      "scope": "platform/durable_jobs",
+      "reason": "Retry, final-attempt exhaustion, dead-letter, repair, and backlog fairness must be bounded by explicit job definitions without inventing payment/provider retry policy."
+    },
+    {
+      "id": "WS05-01A-R6",
+      "owning_pass": "WS05-01A",
+      "source_controls": ["JOB-M04", "JOB-M07"],
+      "state": "required",
+      "scope": "platform/durable_jobs",
+      "reason": "A portable worker command must run deterministically without starting on app import or defining final worker hosting, autoscaling, process counts, or provider runtime topology."
+    },
+    {
+      "id": "WS05-01A-R7",
+      "owning_pass": "WS05-01A",
+      "source_controls": ["JOB-M06", "JOB-M08", "EN-02"],
+      "state": "required",
+      "scope": "platform/durable_jobs",
+      "reason": "Operators need source-owned backlog, lease, exhausted-work, worker heartbeat, unsupported-version, and safe event visibility without leaking payloads, identifiers, secrets, or high-cardinality diagnostics."
+    },
+    {
+      "id": "WS05-01A-R8",
+      "owning_pass": "WS05-01A",
+      "source_controls": ["WS02-02", "WS04-01A", "WS04-01B", "WS04-01C", "WS04-02A", "WS04-02B", "WS04-02C", "WS04-03A"],
+      "state": "required",
+      "scope": "platform/durable_jobs",
+      "reason": "The durable job foundation must preserve accepted runtime, database, migration, transaction, invariant, SQL-safety, and correlation contracts."
+    },
+    {
+      "id": "WS05-01A-R9",
+      "owning_pass": "WS05-01A",
+      "source_controls": ["WS05-01", "WS05-02", "WS05-03", "WS05-04", "WS04-01D", "WS09", "WS10"],
+      "state": "deferred",
+      "scope": "planning",
+      "reason": "Final worker hosting, provider deployment topology, production worker connection budget, payment/refund/credit/notice handlers, deployed dashboards, alerts, and operational evidence remain later-owned and cannot be closed by provider-independent source tests."
+    }
+  ]
+}

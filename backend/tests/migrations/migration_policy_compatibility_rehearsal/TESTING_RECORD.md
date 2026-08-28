@@ -84,7 +84,7 @@ observability, dashboards, alerts, or incident-response evidence.
 | Requirement(s) | Scenario Group | Proof Layer | Current Evidence | Why This Is Enough / Not Enough |
 |---|---|---|---|---|
 | `WS04-03A-R1`, `R8` | Policy and boundary contract | pytest/static | `test_migration_safety_policy_contract.py` | Proves one side-effect-free policy covers all requirement families and preserves later owners. |
-| `WS04-03A-R2`, `R3`, `R5`, `R6`, `R7` | Current migration inventory and graph | pytest/static/Alembic | `test_migration_inventory_graph_contract.py` | Proves the current 59-revision chain is linear and risky upgrade-side patterns fail closed. |
+| `WS04-03A-R2`, `R3`, `R5`, `R6`, `R7` | Current migration inventory and graph | pytest/static/Alembic | `test_migration_inventory_graph_contract.py` | Proves the current 62-revision chain is linear and risky upgrade-side patterns fail closed. |
 | `WS04-03A-R4`, `R7`, `R8` | Exact-purpose migration DB safety | pytest/static | `test_migration_database_safety_contract.py` | Proves migration tests require `pickup_lane_migration_test_db` and cannot fall back to `pickup_lane_test_db`. |
 | `WS04-03A-R3`, `R4`, `R6`, `R7`, `R8` | Empty/prior upgrade, rerun, drift, reset, interruption | pytest/PostgreSQL/Alembic | `test_migration_lifecycle_rehearsal.py` | Proves provider-independent runtime behavior on the dedicated migration database; not final provider/runtime evidence. |
 | `WS04-03A-R8` | Accepted compatibility boundaries | pytest | WS04-01A/B/C and WS04-02A/B/C compatibility scopes | Proves this pass did not weaken accepted database, transaction, invariant, or value/SQL contracts. |

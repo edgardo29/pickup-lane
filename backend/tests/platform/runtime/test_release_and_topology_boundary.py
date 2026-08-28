@@ -585,6 +585,20 @@ def test_backend_source_has_no_worker_or_scheduler_runtime_configuration() -> No
 
 
 @pytest.mark.requirement("WS02-02-R8")
+def test_ws05_01a_portable_worker_command_is_not_final_runtime_topology() -> None:
+    command_path = _REPO_ROOT / "backend" / "scripts" / "durable_worker.py"
+    source = command_path.read_text()
+
+    assert "def main(" in source
+    assert "python -m backend.scripts.durable_worker" in source
+    assert "Celery" not in source
+    assert "rq worker" not in source
+    assert "Redis" not in source
+    assert "--workers" not in source
+    assert "autoscaling" not in source.lower()
+
+
+@pytest.mark.requirement("WS02-02-R8")
 def test_no_approved_numeric_runtime_topology_or_pool_budget_is_tracked() -> None:
     findings = _runtime_topology_findings()
 

@@ -17,6 +17,9 @@ from backend.models.booking_status_history_model import BookingStatusHistory
 from backend.models.chat_message_model import ChatMessage
 from backend.models.community_game_detail_model import CommunityGameDetail
 from backend.models.community_publish_attempt_model import CommunityPublishAttempt
+from backend.models.durable_job_event_model import DurableJobEvent
+from backend.models.durable_job_model import DurableJob
+from backend.models.durable_worker_heartbeat_model import DurableWorkerHeartbeat
 from backend.models.game_chat_model import GameChat
 from backend.models.game_chat_message_detection_model import GameChatMessageDetection
 from backend.models.game_chat_read_model import GameChatRead
@@ -78,6 +81,9 @@ __all__ = [
     "Game",
     "CommunityGameDetail",
     "CommunityPublishAttempt",
+    "DurableJob",
+    "DurableJobEvent",
+    "DurableWorkerHeartbeat",
     "GameImage",
     "GameChat",
     "GameChatMessageDetection",
