@@ -98,7 +98,7 @@ navigation. It does not replace the master blueprint.
 | `WS04-01` | Database engine/session lifecycle, connection budget, and least-privilege roles | Structurally revised after accepted `WS04-01A` and `WS04-01B`: revised `WS04-01C` accepted the provider-independent production-verification framework; final production topology/budget/role proof is preserved for mandatory later `WS04-01D` after final infrastructure is selected. |
 | `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Decomposed into accepted executable children `WS04-02A`, `WS04-02B`, and `WS04-02C`; this revision records the current executable child set complete when the substantive `WS04-02C` PR merges, with later-owned migration, payment, observability, operations, and final-infrastructure evidence preserved outside `WS04-02`. |
 | `WS04-03` | Migration policy, compatibility, interruption, and production-like rehearsal | Decomposed into current executable child `WS04-03A` plus mandatory deferred follow-up `WS04-03B`; this revision records `WS04-03A` as accepted on merge while final provider/runtime migration rehearsal remains open. |
-| `WS05-01` | Durable job model, claim/lease lifecycle, and worker deployment | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
+| `WS05-01` | Durable job model, claim/lease lifecycle, and worker deployment | Decomposed into current executable child `WS05-01A` plus mandatory deferred follow-up `WS05-01B`; this revision records `WS05-01A` as accepted on merge while final worker hosting/runtime proof remains open. |
 | `WS05-02` | Payment and booking state machines with webhook authority | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
 | `WS05-03` | Refunds, credits, notices, moderation delivery, and reconciliation | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
 | `WS05-04` | Deterministic failure, replay, sandbox, and deployed-worker verification | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
@@ -168,6 +168,7 @@ Every path in the Plan column is relative to
 | `WS04-02B` | `WS04-02` | `passes/ws04/ws04-02b-database-enforced-invariants-locks-deterministic-concurrency.md` | `ws04_02b.json` | 9 | 9 | 0 | 0 | `workflows/database_invariants_locks_deterministic_concurrency` |
 | `WS04-02C` | `WS04-02` | `passes/ws04/ws04-02c-database-value-default-and-sql-safety-compatibility.md` | `ws04_02c.json` | 8 | 8 | 0 | 0 | `workflows/database_value_default_sql_safety_compatibility` |
 | `WS04-03A` | `WS04-03` | `passes/ws04/ws04-03a-provider-independent-migration-policy-compatibility-graph-drift-controlled-rehearsal.md` | `ws04_03a.json` | 8 | 8 | 0 | 0 | `migrations/migration_policy_compatibility_rehearsal` |
+| `WS05-01A` | `WS05-01` | `passes/ws05/ws05-01a-provider-independent-durable-job-model-claim-lease-lifecycle-portable-worker-runtime.md` | `ws05_01a.json` | 9 | 8 | 0 | 1 | `platform/durable_jobs` plus runtime/migration/SQL-safety/retry compatibility |
 
 ## 6. Accepted Stage 0 Intake Records
 
@@ -177,6 +178,7 @@ Every path in the Plan column is relative to
 | `WS04-01` | `docs/production-readiness/planning/passes/ws04/ws04-01-intake.md` | `cb26606f6bca7dbc304a07e172771eeeebcece5312f73627fe8c67738a960ced` | `WS04-01A`, `WS04-01B`, `WS04-01C` | Accepted A/B/C structure preserved; mandatory later `WS04-01D` remains deferred until final production infrastructure is selected. |
 | `WS04-02` | `docs/production-readiness/planning/passes/ws04/ws04-02-intake.md` | `bbcea141dec04890be5c0812131996548f86f82f6bc80ad66ce7f700e6ba3701` | `WS04-02A`, `WS04-02B`, `WS04-02C` | Accepted three-child structure: `WS04-02A -> WS04-02B -> WS04-02C`; this revision records the current child set complete when the substantive `WS04-02C` PR merges. |
 | `WS04-03` | `docs/production-readiness/planning/passes/ws04/ws04-03-intake.md` | `ffc3e81d2d55ce9cca60d6ae40390d8ae9df2d8f8d3995b4b9c8464c101cfb48` | `WS04-03A` | Accepted split: `WS04-03A` is the current provider-independent migration-policy/rehearsal child; mandatory `WS04-03B` remains deferred until final production database provider, deployment topology, migration runner, and production-equivalent rehearsal inputs are selected and evidenced. |
+| `WS05-01` | `docs/production-readiness/planning/passes/ws05/ws05-01-intake.md` | `1cfa5be5898cf0e53730c7841e5c5c89d9a824c8e10b644b0fcb835e50890720` | `WS05-01A` | Accepted split: `WS05-01A` is the current provider-independent durable-job foundation child; mandatory `WS05-01B` remains deferred until final worker platform, service topology, process/instance model, scaling/resource settings, provider deployment path, and runtime verification environment are selected and evidenced. |
 
 Historical WS02-04, WS02-05, and WS03-03 decompositions remain accepted. Do
 not fabricate retroactive intake records for them.
@@ -478,6 +480,46 @@ provider, deployment topology, migration runner, and production-equivalent
 rehearsal inputs are selected and evidenced enough to measure provider/runtime
 migration behavior safely. `WS04-03` remains incomplete until `WS04-03B` is
 accepted or otherwise truthfully resolved under durable authority.
+
+### WS05-01
+
+Original parent: `WS05-01 - Durable job model, claim/lease lifecycle, and
+worker deployment`.
+
+Accepted Stage 0 intake:
+`docs/production-readiness/planning/passes/ws05/ws05-01-intake.md`
+
+Frozen intake SHA-256:
+`1cfa5be5898cf0e53730c7841e5c5c89d9a824c8e10b644b0fcb835e50890720`
+
+Accepted executable and deferred children:
+
+1. `WS05-01A - Provider-independent durable job model, claim/lease lifecycle, and portable worker runtime`
+2. `WS05-01B - Final worker hosting topology, deployment configuration, and runtime proof`
+
+Accepted dependency graph:
+`WS05-01A -> WS05-01B`
+
+`WS05-01A` owns the repository-owned PostgreSQL durable job schema, append-only
+job event history, portable worker heartbeat state, idempotent transactional
+enqueue, atomic claim/lease/heartbeat mechanics, expired-lease recovery,
+bounded retry/exhaustion/repair framework, version-compatible handler registry,
+portable worker command, safe source-level operator summaries, and trusted
+provider-independent PostgreSQL evidence under `backend/tests/platform/durable_jobs/`.
+
+`WS05-01A` does not close final worker hosting, provider deployment topology,
+autoscaling/resource settings, final worker process or instance counts,
+production worker runtime proof, final worker database connection budget,
+payment/refund/credit/notice/moderation/storage consumer handlers, Stripe
+sandbox evidence, deployed dashboards, alerts, incidents, or backup/recovery
+operations.
+
+`WS05-01B` remains mandatory and deferred until final worker platform, service
+topology, process/instance model, scaling/resource settings, provider
+deployment configuration path, and safe runtime verification environment are
+selected and evidenced enough to verify deployed worker behavior honestly.
+`WS05-01` remains incomplete until `WS05-01B` is accepted or otherwise
+truthfully resolved under durable authority.
 
 ## 8. Remaining Parent Passes And Progression
 
