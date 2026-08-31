@@ -2,7 +2,6 @@ import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
@@ -64,12 +63,14 @@ from backend.services.payment_rules import (
     COLLECTED_PAYMENT_STATUSES,
     SUCCEEDED_PAYMENT_STATUSES,
 )
+from backend.services.refund_event_service import record_refund_event
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
 )
-from backend.services.refund_event_service import record_refund_event
 from backend.services.stripe_service import (
     StripeConfigError,
+)
+from backend.services.stripe_service import (
     create_refund as create_stripe_refund,
 )
 
@@ -374,13 +375,13 @@ def preview_official_game_player_removal(
             for usage in credit_usages
             if usage.usage_status == usage_status
         )
-        for usage_status in {
+        for usage_status in (
             "reserved",
             "redeemed",
             "released",
             "restored",
             "reversed",
-        }
+        )
     }
     credit_restorable_cents = max(
         credit_totals["redeemed"] - credit_totals["restored"],
@@ -795,7 +796,7 @@ def execute_admin_removal_refunds(
                 reason_code="stripe_refund_timeout_unknown",
             )
             refund_status = "processing"
-        except Exception:
+        except Exception:  # noqa: BLE001 - refund failure must create support record
             refund, money_issue_id = create_admin_removal_refund_record(
                 db,
                 admin_user=admin_user,
@@ -1030,6 +1031,12 @@ def execute_official_game_player_removal(
         usage.amount_cents for usage in restored_credit_usages
     )
     booking.booking_status = "cancelled"
+    booking.reservation_status = (
+        "not_required"
+        if booking.reservation_status == "not_required"
+        else "released"
+    )
+    booking.expires_at = None
     if execute_request.outcome == "release_pending_hold_and_remove_party":
         booking.payment_status = "failed"
     elif refunds and refund_statuses == {"succeeded"}:
@@ -1079,7 +1086,7 @@ def execute_official_game_player_removal(
     refund_follow_up_required = any(
         refund.refund_status != "succeeded" for refund in refunds
     )
-    audit_action = record_admin_action(
+    record_admin_action(
         db,
         admin_user_id=admin_user.id,
         action_type="admin_remove_player",

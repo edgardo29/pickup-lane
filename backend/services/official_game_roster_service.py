@@ -26,6 +26,11 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameUserSearchResultRead,
 )
 from backend.services.admin_action_service import record_admin_action
+from backend.services.game_credit_service import release_reserved_game_credits
+from backend.services.game_participant_rules import (
+    ACTIVE_ROSTER_PARTICIPANT_STATUSES,
+    OFFICIAL_ROSTER_PARTICIPANT_TYPES,
+)
 from backend.services.game_rules import (
     ACTIVE_JOIN_STATUSES,
     OPEN_GAME_STATUSES,
@@ -33,16 +38,11 @@ from backend.services.game_rules import (
     ensure_timezone,
     require_game_not_started,
 )
-from backend.services.game_participant_rules import (
-    ACTIVE_ROSTER_PARTICIPANT_STATUSES,
-    OFFICIAL_ROSTER_PARTICIPANT_TYPES,
-)
 from backend.services.game_service import (
     count_roster_players,
     get_next_roster_order,
     sync_game_capacity_status,
 )
-from backend.services.game_credit_service import release_reserved_game_credits
 from backend.services.official_game_notification_service import (
     create_official_game_host_assigned_notification,
     create_official_game_host_removed_notification,
@@ -378,6 +378,7 @@ def add_official_game_player(
         buyer_user_id=player.id,
         booking_status="confirmed",
         payment_status="not_required",
+        reservation_status="confirmed",
         participant_count=1,
         subtotal_cents=game.price_per_player_cents,
         platform_fee_cents=0,
@@ -669,6 +670,8 @@ def remove_official_game_player(
 
         if remaining_participants:
             booking.booking_status = "partially_cancelled"
+            booking.reservation_status = "confirmed"
+            booking.expires_at = None
             booking.participant_count = len(remaining_participants)
             booking.subtotal_cents = (
                 booking.price_per_player_snapshot_cents * len(remaining_participants)
@@ -686,6 +689,12 @@ def remove_official_game_player(
             )
         else:
             booking.booking_status = "cancelled"
+            booking.reservation_status = (
+                "not_required"
+                if booking.reservation_status == "not_required"
+                else "released"
+            )
+            booking.expires_at = None
             booking.cancelled_at = booking.cancelled_at or now
             booking.cancelled_by_user_id = admin_user.id
             booking.cancel_reason = (
@@ -978,7 +987,7 @@ def cancel_pending_booking_payments_for_admin_removal(
     ).all()
 
     for payment in pending_payments:
-        payment.payment_status = "canceled"
+        payment.payment_status = "failed"
         payment.failure_code = "admin_player_removed"
         payment.failure_message = (
             "Checkout invalidated after an admin removed the pending player."

@@ -1,6 +1,7 @@
+# ruff: noqa: B008
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Query, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -11,14 +12,19 @@ from backend.schemas import (
     UserPaymentMethodSetupIntentRead,
     UserPaymentMethodSyncCreate,
 )
-from backend.services.auth_service import require_active_user, require_recent_active_user
+from backend.services.auth_service import (
+    require_active_user,
+    require_recent_active_user,
+)
 from backend.services.payment_method_service import (
     create_saved_payment_method_setup_intent,
     detach_saved_payment_method,
     get_owned_payment_method_or_404,
-    list_current_user_payment_methods as list_current_user_payment_methods_workflow,
     set_default_saved_payment_method,
     sync_saved_payment_method,
+)
+from backend.services.payment_method_service import (
+    list_current_user_payment_methods as list_current_user_payment_methods_workflow,
 )
 from backend.services.query_pagination import (
     DEFAULT_COLLECTION_LIMIT,
@@ -60,6 +66,7 @@ def list_current_user_payment_methods(
 )
 def create_current_user_payment_method_setup_intent(
     setup_request: UserPaymentMethodSetupIntentCreate,
+    idempotency_key: uuid.UUID = Header(alias="Idempotency-Key"),
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ) -> UserPaymentMethodSetupIntentRead:
@@ -67,6 +74,7 @@ def create_current_user_payment_method_setup_intent(
         db,
         current_user,
         set_as_default=setup_request.set_as_default,
+        idempotency_key=idempotency_key,
     )
     return UserPaymentMethodSetupIntentRead(client_secret=client_secret)
 
@@ -78,6 +86,7 @@ def create_current_user_payment_method_setup_intent(
 )
 def sync_current_user_payment_method(
     sync_request: UserPaymentMethodSyncCreate,
+    idempotency_key: uuid.UUID = Header(alias="Idempotency-Key"),
     current_user: User = Depends(require_active_user),
     db: Session = Depends(get_db),
 ) -> UserPaymentMethod:
@@ -86,6 +95,7 @@ def sync_current_user_payment_method(
         current_user,
         setup_intent_id=sync_request.setup_intent_id,
         set_as_default=sync_request.set_as_default,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -109,10 +119,16 @@ def get_current_user_payment_method(
 )
 def set_current_user_default_payment_method(
     payment_method_id: uuid.UUID,
+    idempotency_key: uuid.UUID = Header(alias="Idempotency-Key"),
     current_user: User = Depends(require_recent_active_user),
     db: Session = Depends(get_db),
 ) -> UserPaymentMethod:
-    return set_default_saved_payment_method(db, current_user, payment_method_id)
+    return set_default_saved_payment_method(
+        db,
+        current_user,
+        payment_method_id,
+        idempotency_key=idempotency_key,
+    )
 
 
 @router.delete(
@@ -122,7 +138,13 @@ def set_current_user_default_payment_method(
 )
 def detach_current_user_payment_method(
     payment_method_id: uuid.UUID,
+    idempotency_key: uuid.UUID = Header(alias="Idempotency-Key"),
     current_user: User = Depends(require_recent_active_user),
     db: Session = Depends(get_db),
 ) -> UserPaymentMethod:
-    return detach_saved_payment_method(db, current_user, payment_method_id)
+    return detach_saved_payment_method(
+        db,
+        current_user,
+        payment_method_id,
+        idempotency_key=idempotency_key,
+    )

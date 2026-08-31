@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS05-02-R1",
+      "owning_pass": "WS05-02",
+      "source_controls": [
+        "PAY-002",
+        "PAY-007",
+        "DB-004",
+        "DB-005",
+        "DB-006"
+      ],
+      "state": "required",
+      "scope": "workflows/payment_booking_state_machines_webhook_authority",
+      "reason": "Checkout must derive owner, amount, currency, credit, reservation, PaymentIntent creation, and confirmation identity from locked server state, commit durable checkpoints before Stripe mutations, and release database locks before provider calls."
+    },
+    {
+      "id": "WS05-02-R2",
+      "owning_pass": "WS05-02",
+      "source_controls": [
+        "PAY-007",
+        "PAY-009",
+        "DB-007",
+        "DB-013"
+      ],
+      "state": "required",
+      "scope": "workflows/payment_booking_state_machines_webhook_authority",
+      "reason": "Payment, provider, booking, reservation, participant, credit, and history state must remain separate, constrained, and updated through one explicit lifecycle matrix."
+    },
+    {
+      "id": "WS05-02-R3",
+      "owning_pass": "WS05-02",
+      "source_controls": [
+        "PAY-009",
+        "PAY-010",
+        "ADM-011"
+      ],
+      "state": "required",
+      "scope": "workflows/payment_booking_state_machines_webhook_authority",
+      "reason": "Late successful payments and capacity conflicts must preserve succeeded payment truth, deny entitlement, and create or reuse one active compensation requirement without executing ad hoc refunds in webhook state application."
+    },
+    {
+      "id": "WS05-02-R4",
+      "owning_pass": "WS05-02",
+      "source_controls": [
+        "PAY-002",
+        "PAY-012",
+        "WS05-01A",
+        "EN-02"
+      ],
+      "state": "required",
+      "scope": "workflows/payment_booking_state_machines_webhook_authority",
+      "reason": "Signed Stripe webhooks must be persisted as bounded event envelopes, enqueued atomically into durable jobs, acknowledged only after commit, and processed idempotently from payloads containing only internal event identifiers."
+    },
+    {
+      "id": "WS05-02-R5",
+      "owning_pass": "WS05-02",
+      "source_controls": [
+        "PAY-002",
+        "PAY-009",
+        "WS02-04C2",
+        "WS05-01A"
+      ],
+      "state": "required",
+      "scope": "workflows/payment_booking_state_machines_webhook_authority",
+      "reason": "Duplicate, delayed, missing, out-of-order, nonterminal, unknown, failed, canceled, and succeeded PaymentIntent observations must pass through the same canonical transition rules for webhook and targeted reconciliation."
+    },
+    {
+      "id": "WS05-02-R6",
+      "owning_pass": "WS05-02",
+      "source_controls": [
+        "PAY-002",
+        "PAY-007",
+        "WS02-04B2A2B2",
+        "WS02-04C2",
+        "WS03-04"
+      ],
+      "state": "required",
+      "scope": "workflows/payment_booking_state_machines_webhook_authority",
+      "reason": "Saved payment methods must be user-owned, provider-verified, idempotent, durable across unknown outcomes, limited to safe metadata, and distinct from paid-waitlist off-session authorization."
+    },
+    {
+      "id": "WS05-02-R7",
+      "owning_pass": "WS05-02",
+      "source_controls": [
+        "WS02-04B2A2B2",
+        "WS02-04C2",
+        "WS04-02A",
+        "WS04-02B",
+        "WS04-02C",
+        "WS04-03A",
+        "WS05-01A"
+      ],
+      "state": "required",
+      "scope": "workflows/payment_booking_state_machines_webhook_authority",
+      "reason": "This pass must preserve accepted provider-input, transaction-boundary, invariant, SQL/value, migration, authorization, response-minimization, durable-job, community-publish, waitlist, credit, and full-credit checkout compatibility contracts."
+    },
+    {
+      "id": "WS05-02-R8",
+      "owning_pass": "WS05-02",
+      "source_controls": [
+        "WS05-01B",
+        "WS05-03",
+        "WS05-04",
+        "WS09",
+        "WS10"
+      ],
+      "state": "deferred",
+      "scope": "planning",
+      "reason": "Final worker hosting, Stripe sandbox and dashboard evidence, deployed webhook delivery observations, broad scheduled reconciliation, refund and credit-restoration execution, disputes, deployed alerts, and operational runbooks remain later-owned and are not proven by this source-owned pass."
+    }
+  ]
+}

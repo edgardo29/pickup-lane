@@ -15,8 +15,8 @@ from backend.models import (
     AdminAction,
     Booking,
     Game,
-    GameCredit,
     GameChat,
+    GameCredit,
     GameCreditUsage,
     GameParticipant,
     MoneyIssue,
@@ -47,6 +47,15 @@ from backend.services.admin_review_service import (
     close_open_content_moderation_case_for_game_lifecycle,
 )
 from backend.services.auth_service import user_is_active_admin
+from backend.services.game_credit_service import (
+    GameCreditLedgerError,
+    release_reserved_game_credits,
+    restore_redeemed_game_credits,
+)
+from backend.services.game_notification_service import (
+    create_or_reopen_booking_refunded_notification,
+    game_updated_aggregation_key,
+)
 from backend.services.game_rules import (
     ACTIVE_BOOKING_STATUSES,
     ACTIVE_JOIN_STATUSES,
@@ -61,26 +70,19 @@ from backend.services.game_rules import (
     game_requires_app_player_payment,
     require_game_not_started,
 )
-from backend.services.game_notification_service import (
-    create_or_reopen_booking_refunded_notification,
-    game_updated_aggregation_key,
-)
-from backend.services.game_credit_service import (
-    GameCreditLedgerError,
-    release_reserved_game_credits,
-    restore_redeemed_game_credits,
-)
 from backend.services.notification_event_service import (
     build_game_notification_fields,
     resolve_aggregated_notification,
 )
+from backend.services.refund_event_service import record_refund_event
 from backend.services.status_history_service import (
     add_game_status_history_if_changed,
     add_participant_status_history_if_changed,
 )
-from backend.services.refund_event_service import record_refund_event
 from backend.services.stripe_service import (
     StripeConfigError,
+)
+from backend.services.stripe_service import (
     create_refund as create_stripe_refund,
 )
 
@@ -816,7 +818,7 @@ def cancel_game_bookings(
                         payment.payment_status
                         in CANCELLATION_UNCHARGED_PENDING_PAYMENT_STATUSES
                     ):
-                        payment.payment_status = "canceled"
+                        payment.payment_status = "failed"
                         payment.failure_code = "game_cancelled"
                         payment.failure_message = (
                             "Game was cancelled before payment completed."
@@ -940,7 +942,7 @@ def create_official_cancellation_refunds(
             )
             summary["refund_processing_count"] += 1
             continue
-        except Exception:
+        except Exception:  # noqa: BLE001 - refund failure must create support record
             create_cancellation_refund_record(
                 db,
                 payment,
@@ -1119,6 +1121,12 @@ def mark_booking_cancelled_for_game_cancellation(
     cancellation_type: str,
 ) -> None:
     booking.booking_status = "cancelled"
+    booking.reservation_status = (
+        "not_required"
+        if booking.reservation_status == "not_required"
+        else "released"
+    )
+    booking.expires_at = None
     booking.cancelled_at = now
     booking.cancelled_by_user_id = current_user.id
     booking.cancel_reason = cancellation_type

@@ -214,7 +214,12 @@ def _persist_money_repair_fixture(
             provider="stripe",
             provider_event_id=f"evt_ws03d_{uuid.uuid4().hex}",
             event_type="payment_intent.succeeded",
-            raw_payload={"fixture": "ws03d-payment-event"},
+            event_envelope={
+                "id": "evt_ws03d_payment_event",
+                "type": "payment_intent.succeeded",
+                "data": {"object": {"id": payment.provider_payment_intent_id}},
+            },
+            provider_created_at=now,
             processing_status="pending",
         )
         db.add_all([resolve_issue, retry_issue, payment_event])
@@ -347,9 +352,10 @@ def _payment_event_state(payment_event_id: uuid.UUID) -> dict[str, object]:
             "provider": event.provider,
             "provider_event_id": event.provider_event_id,
             "event_type": event.event_type,
-            "raw_payload": event.raw_payload,
+            "event_envelope": event.event_envelope,
+            "provider_created_at": event.provider_created_at,
             "processing_status": event.processing_status,
-            "processing_error": event.processing_error,
+            "processing_error_code": event.processing_error_code,
             "processed_at": event.processed_at,
         }
 
@@ -666,8 +672,7 @@ def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
         f"/payment-events/{payment_event_id}",
         json={
             "payment_id": str(fixture["payment_id"]),
-            "processing_status": "failed",
-            "processing_error": "Stale admin must not repair payment events.",
+            "reprocess": True,
         },
         headers=_auth_headers("stale-admin-token"),
     )
@@ -679,19 +684,19 @@ def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
         f"/payment-events/{payment_event_id}",
         json={
             "payment_id": str(fixture["payment_id"]),
-            "processing_status": "failed",
-            "processing_error": "Local test event repair recorded.",
+            "reprocess": True,
         },
         headers=_auth_headers("admin-token"),
     )
     assert repair_event.status_code == 200
     repaired_event = _payment_event_state(payment_event_id)
     assert repaired_event["payment_id"] == fixture["payment_id"]
-    assert repaired_event["processing_status"] == "failed"
-    assert repaired_event["processing_error"] == "Local test event repair recorded."
+    assert repaired_event["processing_status"] == "pending"
+    assert repaired_event["processing_error_code"] is None
     assert repaired_event["provider_event_id"] == before_event["provider_event_id"]
     assert repaired_event["event_type"] == before_event["event_type"]
-    assert repaired_event["raw_payload"] == before_event["raw_payload"]
+    assert repaired_event["event_envelope"] == before_event["event_envelope"]
+    assert repaired_event["provider_created_at"] == before_event["provider_created_at"]
 
 
 @pytest.mark.requirement("WS03-04D-R7", "WS03-04D-R10")

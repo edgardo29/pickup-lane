@@ -1,6 +1,6 @@
 import { Elements } from '@stripe/react-stripe-js'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BrowseAppNav from '../../components/BrowseAppNav.jsx'
 import {
   PaymentMethodSetupDialog,
@@ -18,7 +18,10 @@ import { buildGameCheckoutViewModel } from './gameCheckoutViewModel.js'
 import { useGameCheckoutActions } from './useGameCheckoutActions.js'
 import { useGameCheckoutData } from './useGameCheckoutData.js'
 import { useAuth } from '../../hooks/useAuth.js'
-import { createPaymentMethodSetupIntent } from '../../lib/paymentMethodsApi.js'
+import {
+  createPaymentMethodOperationId,
+  createPaymentMethodSetupIntent,
+} from '../../lib/paymentMethodsApi.js'
 import {
   getPreferredPaymentMethod,
   getUsablePaymentMethods,
@@ -60,6 +63,8 @@ function GameCheckoutPage() {
   const [activeLegalPolicyId, setActiveLegalPolicyId] = useState('')
   const [checkoutActionError, setCheckoutActionError] = useState('')
   const [nowMs, setNowMs] = useState(null)
+  const [setupSyncOperationId, setSetupSyncOperationId] = useState('')
+  const setupCreateOperationIdRef = useRef('')
 
   useEffect(() => {
     function updateNow() {
@@ -112,12 +117,26 @@ function GameCheckoutPage() {
     resetStripeCheckout()
   }, [appUser?.id, gameId, isAddGuestsCheckout, resetStripeCheckout, resetSubmitError])
 
+  function resetSetupOperationIds() {
+    setupCreateOperationIdRef.current = ''
+    setSetupSyncOperationId('')
+  }
+
+  function prepareSetupOperationIds() {
+    setupCreateOperationIdRef.current = createPaymentMethodOperationId()
+    setSetupSyncOperationId(createPaymentMethodOperationId())
+  }
+
   async function createFreshSetupIntent(setAsDefault) {
     if (!firebaseUser) {
       return null
     }
 
-    return createPaymentMethodSetupIntent(firebaseUser, setAsDefault)
+    return createPaymentMethodSetupIntent(
+      firebaseUser,
+      setAsDefault,
+      setupCreateOperationIdRef.current,
+    )
   }
 
   async function handleStartAddCard() {
@@ -141,6 +160,7 @@ function GameCheckoutPage() {
     setUseNewCardAsDefault(false)
 
     try {
+      prepareSetupOperationIds()
       const setupIntent = await createFreshSetupIntent(shouldSetDefault)
       if (!setupIntent) {
         throw new Error('Sign in to add a card.')
@@ -162,6 +182,7 @@ function GameCheckoutPage() {
     setSetupError(errorMessage)
 
     try {
+      prepareSetupOperationIds()
       const setupIntent = await createFreshSetupIntent(shouldSetDefault)
       if (!setupIntent) {
         throw new Error('Sign in to add a card.')
@@ -186,6 +207,7 @@ function GameCheckoutPage() {
     setSetupError('')
     setSetupStatus('idle')
     setUseNewCardAsDefault(false)
+    resetSetupOperationIds()
   }
 
   async function handleCardSaved(paymentMethod) {
@@ -193,6 +215,7 @@ function GameCheckoutPage() {
     setSetupError('')
     setSetupStatus('idle')
     setUseNewCardAsDefault(false)
+    resetSetupOperationIds()
     setIsPaymentSelectorOpen(false)
     setCheckoutActionError('')
 
@@ -429,6 +452,7 @@ function GameCheckoutPage() {
               onSyncRejected={handleSetupRejectedAfterStripeSuccess}
               primaryButtonClassName="checkout-modal-button checkout-modal-button--primary"
               setAsDefault={checkoutData.paymentMethods.length === 0 || useNewCardAsDefault}
+              syncOperationId={setupSyncOperationId}
               setupClientSecret={setupClientSecret}
               setSetupError={setSetupError}
               setSetupStatus={setSetupStatus}

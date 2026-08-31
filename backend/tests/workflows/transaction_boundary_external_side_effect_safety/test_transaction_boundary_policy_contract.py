@@ -54,7 +54,7 @@ def test_current_side_effecting_workflows_are_declared_with_complete_boundaries(
         "community_publish_fee.payment_intent.confirm",
         "community_publish.finalize_success",
         "stripe.webhook.payment_event_ingest",
-        "late_checkout_payment.refund",
+        "late_checkout_payment.compensation",
         "admin_money.refund.retry",
         "admin_money.refund.reconcile",
         "admin_money.credit.retry",
@@ -111,7 +111,6 @@ def test_provider_backed_boundary_contexts_match_retry_policy_registry() -> None
         "community_publish_fee_initial_create",
         "community_publish_fee_confirm_after_checkpoint",
         "stripe_webhook_provider_redelivery",
-        "late_checkout_payment_refund",
         "admin_refund_retry",
         "admin_refund_retry_state_gate",
         "admin_refund_reconciliation",
@@ -185,9 +184,7 @@ def test_plan_named_waitlist_late_refund_and_unfinished_cleanup_paths_are_reconc
         "waitlist_auto_promotion_create",
         "waitlist_auto_promotion_confirm",
     )
-    assert policies["late_checkout_payment.refund"].provider_retry_contexts == (
-        "late_checkout_payment_refund",
-    )
+    assert policies["late_checkout_payment.compensation"].provider_retry_contexts == ()
     assert policies["unfinished_account.firebase_cleanup"].provider_retry_contexts == (
         "account_deletion_auth_cleanup",
     )

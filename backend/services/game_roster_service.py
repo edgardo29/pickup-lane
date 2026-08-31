@@ -26,8 +26,8 @@ from backend.services.game_rules import (
     build_game_conflict_detail,
     ensure_timezone,
     game_requires_app_player_payment,
-    require_join_ready_user,
     require_community_game_joining_open,
+    require_join_ready_user,
     require_minimum_age,
     require_roster_window_open,
     validate_guest_count,
@@ -42,11 +42,11 @@ from backend.services.game_service import (
     get_next_roster_order,
     sync_game_capacity_status,
 )
-from backend.services.user_service import get_user_display_name
 from backend.services.game_waitlist_service import (
     build_waitlist_entry_for_join,
     promote_waitlist_entries,
 )
+from backend.services.user_service import get_user_display_name
 
 
 def build_booking(
@@ -73,6 +73,7 @@ def build_booking(
         buyer_user_id=joining_user_id,
         booking_status=booking_status,
         payment_status=payment_status,
+        reservation_status="confirmed" if is_confirmed else "not_required",
         participant_count=party_size,
         subtotal_cents=subtotal_cents,
         platform_fee_cents=0,
@@ -103,6 +104,8 @@ def create_booking_payment(
         provider_payment_intent_id=f"pi_demo_booking_{booking.id}",
         provider_charge_id=f"ch_demo_booking_{booking.id}",
         idempotency_key=f"booking:{booking.id}:succeeded",
+        creation_fingerprint=f"demo-booking-{booking.id.hex}"[:64],
+        provider_status="succeeded",
         amount_cents=booking.total_cents,
         currency=booking.currency,
         payment_status="succeeded",
@@ -133,6 +136,8 @@ def create_booking_guest_add_payment(
         provider_payment_intent_id=f"pi_demo_booking_add_guests_{payment_id}",
         provider_charge_id=f"ch_demo_booking_add_guests_{payment_id}",
         idempotency_key=f"booking:{booking.id}:add_guests:{payment_id}:succeeded",
+        creation_fingerprint=f"demo-guest-{payment_id.hex}"[:64],
+        provider_status="succeeded",
         amount_cents=db_game.price_per_player_cents * added_count,
         currency=booking.currency,
         payment_status="succeeded",
@@ -437,6 +442,8 @@ def leave_game_roster_workflow(
 
     if booking is not None:
         booking.booking_status = "cancelled"
+        booking.reservation_status = "not_required" if was_waitlisted else "released"
+        booking.expires_at = None
         booking.payment_status = (
             "refunded"
             if app_refund_eligible and not was_waitlisted
@@ -575,6 +582,8 @@ def add_booking_game_guests_workflow(
     booking.subtotal_cents = db_game.price_per_player_cents * booking.participant_count
     booking.total_cents = booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
     booking.booking_status = "confirmed"
+    booking.reservation_status = "confirmed"
+    booking.expires_at = None
     booking.payment_status = (
         "paid" if game_requires_app_player_payment(db_game) else "not_required"
     )
@@ -798,11 +807,15 @@ def remove_game_guests_workflow(
         booking.total_cents = booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
         if was_waitlisted:
             booking.booking_status = "waitlisted"
+            booking.reservation_status = "not_required"
+            booking.expires_at = None
             booking.payment_status = (
                 "unpaid" if app_payment_required else "not_required"
             )
         else:
             booking.booking_status = "partially_cancelled"
+            booking.reservation_status = "confirmed"
+            booking.expires_at = None
             if refundable and app_payment_required:
                 booking.payment_status = "partially_refunded"
         booking.updated_at = now

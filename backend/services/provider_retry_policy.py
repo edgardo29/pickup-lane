@@ -250,13 +250,18 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
         material_callers=(
             "backend.services.payment_method_service.create_saved_payment_method_setup_intent",
         ),
-        safety_class=RetrySafetyClass.NO_AUTOMATIC_RETRY,
+        safety_class=RetrySafetyClass.IDEMPOTENT_MUTATION,
         provider_idempotency_key_used=True,
-        idempotency_identity_source="request-local generated setup-intent key",
-        client_retry_stable_idempotency=False,
-        identity_survives_replay=False,
-        current_recovery="Returned SetupIntent can be synced; create-timeout has no durable setup identity.",
-        durable_follow_up="Durable setup-intent request identity is required before app retry.",
+        idempotency_identity_source=(
+            "persisted payment-method operation provider_idempotency_key"
+        ),
+        client_retry_stable_idempotency=True,
+        identity_survives_replay=True,
+        current_recovery=(
+            "Payment-method operation row commits before SetupIntent create; "
+            "unknown outcome enqueues stripe_payment_method_operation_reconcile, "
+            "and durable replay uses the same provider_idempotency_key."
+        ),
     ),
     _stripe_mutation_policy(
         operation="stripe.payment_intent.create",
@@ -284,13 +289,16 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
             "backend.services.checkout_service.create_game_checkout_payment_intent_workflow",
         ),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
-        provider_idempotency_key_used=False,
-        idempotency_identity_source="persisted checkout Payment row with provider PaymentIntent ID",
-        client_retry_stable_idempotency=False,
+        provider_idempotency_key_used=True,
+        idempotency_identity_source=(
+            "persisted PaymentConfirmationAttempt confirmation_idempotency_key"
+        ),
+        client_retry_stable_idempotency=True,
         identity_survives_replay=True,
         current_recovery=(
             "After checkpoint commit, checkout reacquires game serialization and "
-            "re-reads the persisted PaymentIntent before any confirmation decision."
+            "re-reads the persisted PaymentIntent and confirmation attempt before "
+            "any confirmation decision."
         ),
         durable_follow_up="WS05 owns durable post-expiry checkout provider reconciliation.",
     ),
@@ -301,13 +309,15 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
             "backend.services.checkout_service.create_game_checkout_payment_intent_workflow",
         ),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
-        provider_idempotency_key_used=False,
-        idempotency_identity_source="existing pending Payment row with persisted provider PaymentIntent ID",
-        client_retry_stable_idempotency=False,
+        provider_idempotency_key_used=True,
+        idempotency_identity_source=(
+            "persisted PaymentConfirmationAttempt confirmation_idempotency_key"
+        ),
+        client_retry_stable_idempotency=True,
         identity_survives_replay=True,
         current_recovery=(
             "Active-hold re-entry acquires game serialization and retrieves provider "
-            "PaymentIntent state before another confirmation decision."
+            "PaymentIntent state before recording a durable confirmation attempt."
         ),
         durable_follow_up="WS05 owns durable post-expiry checkout provider reconciliation.",
     ),
@@ -365,11 +375,16 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
             "backend.services.game_waitlist_service.attempt_paid_waitlist_auto_promotion",
         ),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
-        provider_idempotency_key_used=False,
-        idempotency_identity_source="promotion payment with provider PaymentIntent ID",
-        client_retry_stable_idempotency=False,
+        provider_idempotency_key_used=True,
+        idempotency_identity_source=(
+            "persisted waitlist PaymentConfirmationAttempt confirmation_idempotency_key"
+        ),
+        client_retry_stable_idempotency=True,
         identity_survives_replay=True,
-        current_recovery="Promotion processing/local state gates recovery before another mutation.",
+        current_recovery=(
+            "Promotion processing/local state and confirmation attempt identity "
+            "gate recovery before another mutation."
+        ),
         durable_follow_up="WS05 durable payment reconciliation.",
     ),
     _stripe_mutation_policy(
@@ -413,20 +428,6 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
     ),
     _stripe_mutation_policy(
         operation="stripe.refund.create",
-        workflow_context="late_checkout_payment_refund",
-        material_callers=(
-            "backend.services.stripe_webhook_service.create_late_payment_refund_if_needed",
-        ),
-        safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
-        provider_idempotency_key_used=True,
-        idempotency_identity_source="deterministic booking/payment late-refund key plus refund record",
-        client_retry_stable_idempotency=True,
-        identity_survives_replay=True,
-        current_recovery="Late payment refund record gates later recovery.",
-        durable_follow_up="WS05 durable financial reconciliation.",
-    ),
-    _stripe_mutation_policy(
-        operation="stripe.refund.create",
         workflow_context="community_publish_financial_outcome_refund",
         material_callers=(
             "backend.services.admin_financial_outcome_service.apply_refund_outcome",
@@ -444,11 +445,17 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
         workflow_context="user_visible_saved_card_detach",
         material_callers=("backend.services.payment_method_service.detach_saved_payment_method",),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
-        provider_idempotency_key_used=False,
-        idempotency_identity_source="persisted saved-card row and provider PaymentMethod ID",
-        client_retry_stable_idempotency=False,
+        provider_idempotency_key_used=True,
+        idempotency_identity_source=(
+            "persisted payment-method operation provider_idempotency_key"
+        ),
+        client_retry_stable_idempotency=True,
         identity_survives_replay=True,
-        current_recovery="Saved-card state must be re-read or support-repaired before another detach.",
+        current_recovery=(
+            "Saved-card operation and provider ownership are re-read before "
+            "detach; provider-unknown blocks user replay until repair."
+        ),
+        durable_follow_up="WS05 durable payment-method operation reconciliation.",
     ),
     _stripe_mutation_policy(
         operation="stripe.payment_method.detach",
@@ -486,22 +493,34 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
             "backend.services.payment_method_service.detach_saved_payment_method",
         ),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
-        provider_idempotency_key_used=False,
-        idempotency_identity_source="persisted saved-card/default-card state",
-        client_retry_stable_idempotency=False,
+        provider_idempotency_key_used=True,
+        idempotency_identity_source=(
+            "persisted payment-method operation provider_idempotency_key"
+        ),
+        client_retry_stable_idempotency=True,
         identity_survives_replay=True,
-        current_recovery="Re-read/sync/support-repair; do not blindly set twice.",
+        current_recovery=(
+            "Saved-card operation and provider ownership are re-read before "
+            "default mutation; provider-unknown blocks user replay until repair."
+        ),
+        durable_follow_up="WS05 durable payment-method operation reconciliation.",
     ),
     _stripe_mutation_policy(
         operation="stripe.customer.default_payment_method.clear",
         workflow_context="saved_card_default_clear",
         material_callers=("backend.services.payment_method_service.detach_saved_payment_method",),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
-        provider_idempotency_key_used=False,
-        idempotency_identity_source="persisted saved-card/default-card state",
-        client_retry_stable_idempotency=False,
+        provider_idempotency_key_used=True,
+        idempotency_identity_source=(
+            "persisted payment-method operation provider_idempotency_key"
+        ),
+        client_retry_stable_idempotency=True,
         identity_survives_replay=True,
-        current_recovery="Re-read/sync/support-repair; do not blindly clear twice.",
+        current_recovery=(
+            "Dedicated clear-default operation gates provider mutation and "
+            "provider-unknown blocks user replay until repair."
+        ),
+        durable_follow_up="WS05 durable payment-method operation reconciliation.",
     ),
 )
 
@@ -731,12 +750,16 @@ FANOUT_EXECUTION_POLICIES: tuple[FanoutExecutionPolicy, ...] = (
         durable_follow_up="Durable financial reconciliation belongs to WS05.",
     ),
     FanoutExecutionPolicy(
-        workflow="late_checkout_payment.refund",
-        execution_model="single_webhook_repair_helper",
-        current_bound="One late payment context.",
-        provider_calls_per_item="one possible Stripe refund.",
+        workflow="late_checkout_payment.compensation",
+        execution_model="single_webhook_compensation_checkpoint",
+        current_bound="One late payment no-entitlement context.",
+        provider_calls_per_item=(
+            "none; webhook records the compensation obligation only."
+        ),
         new_concurrency_allowed=False,
-        durable_follow_up="Durable financial reconciliation belongs to WS05.",
+        durable_follow_up=(
+            "Refund execution and financial reconciliation belong to WS05-03."
+        ),
     ),
 )
 

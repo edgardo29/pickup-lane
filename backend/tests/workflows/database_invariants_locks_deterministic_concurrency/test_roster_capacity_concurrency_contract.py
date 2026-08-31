@@ -614,9 +614,12 @@ def test_account_deletion_multi_game_cleanup_promotes_waitlists_in_game_order(
 def test_paid_waitlist_promotion_commits_capacity_hold_before_provider_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.services import game_waitlist_service
+    from backend.services import game_waitlist_service, stripe_webhook_service
     from backend.services.game_service import count_roster_players
-    from backend.services.stripe_service import StripePaymentIntentResult
+    from backend.services.stripe_service import (
+        StripePaymentIntentResult,
+        StripePaymentMethodCardResult,
+    )
 
     with _session() as db:
         admin = _user(0, role="admin")
@@ -663,11 +666,22 @@ def test_paid_waitlist_promotion_commits_capacity_hold_before_provider_call(
         db.add(_participant(waitlisted_user, game, booking=waitlist_booking, status="waitlisted"))
         db.commit()
         game_id = game.id
+        waitlist_booking_id = waitlist_booking.id
         competing_user_id = competing_user.id
         competing_payment_method_id = competing_payment_method.id
+        waitlisted_provider_payment_method_id = (
+            waitlisted_payment_method.stripe_payment_method_id
+        )
+        waitlisted_provider_customer_id = waitlisted_payment_method.stripe_customer_id
+        waitlisted_card_fingerprint = waitlisted_payment_method.card_fingerprint
+        waitlisted_card_brand = waitlisted_payment_method.card_brand
+        waitlisted_card_last4 = waitlisted_payment_method.card_last4
+        waitlisted_card_exp_month = waitlisted_payment_method.exp_month
+        waitlisted_card_exp_year = waitlisted_payment_method.exp_year
 
     provider_observed_counts: list[int] = []
     competing_join_statuses: list[str] = []
+    authoritative_outcomes: list[str] = []
 
     def fake_create_payment_intent(**kwargs) -> StripePaymentIntentResult:
         del kwargs
@@ -701,8 +715,36 @@ def test_paid_waitlist_promotion_commits_capacity_hold_before_provider_call(
             latest_charge_id=None,
         )
 
+    def fake_retrieve_payment_method(payment_method_id: str) -> StripePaymentMethodCardResult:
+        assert payment_method_id == waitlisted_provider_payment_method_id
+        return StripePaymentMethodCardResult(
+            id=payment_method_id,
+            customer_id=waitlisted_provider_customer_id,
+            card_fingerprint=waitlisted_card_fingerprint,
+            card_brand=waitlisted_card_brand,
+            card_last4=waitlisted_card_last4,
+            exp_month=waitlisted_card_exp_month,
+            exp_year=waitlisted_card_exp_year,
+        )
+
+    monkeypatch.setattr(game_waitlist_service, "retrieve_payment_method", fake_retrieve_payment_method)
     monkeypatch.setattr(game_waitlist_service, "create_payment_intent", fake_create_payment_intent)
     monkeypatch.setattr(game_waitlist_service, "confirm_payment_intent", fake_confirm_payment_intent)
+
+    real_apply_observation = (
+        stripe_webhook_service.apply_authoritative_payment_intent_observation
+    )
+
+    def record_authoritative_outcome(*args, **kwargs):
+        outcome = real_apply_observation(*args, **kwargs)
+        authoritative_outcomes.append(outcome)
+        return outcome
+
+    monkeypatch.setattr(
+        stripe_webhook_service,
+        "apply_authoritative_payment_intent_observation",
+        record_authoritative_outcome,
+    )
 
     with _session() as db:
         game = db.get(Game, game_id)
@@ -712,6 +754,13 @@ def test_paid_waitlist_promotion_commits_capacity_hold_before_provider_call(
 
     with _session() as db:
         payment = db.scalar(select(Payment).where(Payment.idempotency_key.like("waitlist:%")))
+        assert payment is not None
+        persisted_booking = db.get(Booking, waitlist_booking_id)
+        persisted_participant = db.scalar(
+            select(GameParticipant).where(
+                GameParticipant.booking_id == waitlist_booking_id
+            )
+        )
         held_count = count_roster_players(db, game_id, now=_BASE_TIME)
         processing_entry_count = int(
             db.scalar(
@@ -738,10 +787,19 @@ def test_paid_waitlist_promotion_commits_capacity_hold_before_provider_call(
 
     assert provider_observed_counts == [1]
     assert competing_join_statuses == ["waitlisted"]
+    assert authoritative_outcomes == ["processed"]
+    assert persisted_booking is not None
+    assert persisted_booking.booking_status == "pending_payment"
+    assert persisted_booking.payment_status == "processing"
+    assert persisted_booking.reservation_status == "held"
+    assert persisted_booking.expires_at == _BASE_TIME + timedelta(
+        minutes=game_waitlist_service.PAYMENT_PROCESSING_HOLD_MINUTES
+    )
+    assert persisted_participant is not None
+    assert persisted_participant.participant_status == "pending_payment"
     assert held_count == 1
     assert processing_entry_count == 1
     assert active_waitlist_count == 1
-    assert payment is not None
     assert payment.payment_status == "processing"
 
 

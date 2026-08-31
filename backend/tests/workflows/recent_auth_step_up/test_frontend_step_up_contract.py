@@ -20,8 +20,8 @@ CURRENT_STEP_UP_CALLERS = {
     ),
     "frontend/src/pages/profile/PaymentMethodsPage.jsx": (
         "runWithStepUp(",
-        "setDefaultPaymentMethod(firebaseUser, paymentMethodId)",
-        "removePaymentMethod(firebaseUser, removeCandidate.id)",
+        "setDefaultPaymentMethod(firebaseUser, paymentMethodId, operationId)",
+        "removePaymentMethod(firebaseUser, removeCandidate.id, operationId)",
     ),
     "frontend/src/pages/admin/users/AdminUserDeletePreviewModal.jsx": (
         "runWithStepUp(",

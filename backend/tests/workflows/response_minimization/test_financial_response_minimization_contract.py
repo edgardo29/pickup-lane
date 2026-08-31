@@ -69,7 +69,7 @@ SAVED_CARD_PROVIDER_FIELDS = {
     "card_fingerprint",
     "client_secret",
 }
-PAYMENT_EVENT_RAW_FIELDS = {"raw_payload", "payload"}
+PAYMENT_EVENT_RAW_FIELDS = {"event_envelope", "raw_payload", "payload"}
 CHECKOUT_PAYMENT_INTENT_ALLOWED_FIELDS = {
     "client_secret",
     "booking_id",
@@ -88,14 +88,20 @@ CHECKOUT_PAYMENT_INTENT_ALLOWED_FIELDS = {
     "payment_required",
     "booking_status",
     "booking_payment_status",
+    "reservation_status",
     "payment_status",
+    "provider_status",
+    "compensation_status",
 }
 CHECKOUT_STATUS_ALLOWED_FIELDS = {
     "booking_id",
     "booking_status",
     "booking_payment_status",
+    "reservation_status",
     "payment_id",
     "payment_status",
+    "provider_status",
+    "compensation_status",
     "amount_cents",
     "currency",
     "subtotal_cents",
@@ -392,7 +398,12 @@ def _create_financial_rows(db: Session, *, payer, admin):
         provider="stripe",
         provider_event_id=f"evt_{uuid.uuid4().hex}",
         event_type="payment_intent.succeeded",
-        raw_payload={"unsafe": "raw provider event"},
+        event_envelope={
+            "id": "evt_safe_envelope",
+            "type": "payment_intent.succeeded",
+            "data": {"object": {"id": payment.provider_payment_intent_id}},
+        },
+        provider_created_at=now,
         processing_status="processed",
         processed_at=now,
     )
@@ -518,8 +529,7 @@ def test_checkout_payment_intent_and_status_responses_are_product_projections(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.checkout_service as checkout_service
-    import backend.services.payment_method_service as payment_method_service
+    from backend.services import checkout_service, payment_method_service
     from backend.services.stripe_service import (
         StripePaymentIntentResult,
         StripePaymentMethodCardResult,
@@ -538,13 +548,6 @@ def test_checkout_payment_intent_and_status_responses_are_product_projections(
         card_fingerprint = card.card_fingerprint
         _commit_and_detach(db, payer)
 
-    payment_intent = StripePaymentIntentResult(
-        id="pi_b2_checkout_synthetic",
-        client_secret="pi_b2_checkout_synthetic_secret",
-        status="requires_action",
-        latest_charge_id=None,
-    )
-
     def fake_retrieve_payment_method(payment_method_id: str):
         assert payment_method_id == card_payment_method_id
         return StripePaymentMethodCardResult(
@@ -557,17 +560,35 @@ def test_checkout_payment_intent_and_status_responses_are_product_projections(
             exp_year=2035,
         )
 
+    def fake_create_payment_intent(**kwargs):
+        return StripePaymentIntentResult(
+            id="pi_b2_checkout_synthetic",
+            client_secret="pi_b2_checkout_synthetic_secret",
+            status="requires_action",
+            latest_charge_id=None,
+            amount_cents=kwargs["amount_cents"],
+            amount_received_cents=None,
+            currency=kwargs["currency"],
+            customer_id=kwargs["customer_id"],
+            metadata=dict(kwargs["metadata"]),
+        )
+
     monkeypatch.setattr(checkout_service, "stripe_payments_enabled", lambda: True)
     monkeypatch.setattr(checkout_service, "get_stripe_currency", lambda: "USD")
     monkeypatch.setattr(
         checkout_service,
         "create_payment_intent",
-        lambda **_kwargs: payment_intent,
+        fake_create_payment_intent,
     )
     monkeypatch.setattr(
         checkout_service,
         "retrieve_payment_intent",
-        lambda _payment_intent_id: payment_intent,
+        lambda _payment_intent_id: fake_create_payment_intent(
+            amount_cents=1800,
+            currency="USD",
+            customer_id=customer_id,
+            metadata={},
+        ),
     )
     monkeypatch.setattr(
         payment_method_service,
@@ -590,7 +611,7 @@ def test_checkout_payment_intent_and_status_responses_are_product_projections(
     assert payment_intent_data["checkout_total_cents"] == 1800
     assert payment_intent_data["payment_required"] is True
     assert payment_intent_data["booking_status"] == "pending_payment"
-    assert payment_intent_data["booking_payment_status"] == "processing"
+    assert payment_intent_data["booking_payment_status"] == "requires_action"
     assert payment_intent_data["payment_status"] == "requires_action"
     assert payment_intent_data["stripe_status"] == "requires_action"
 
@@ -608,6 +629,8 @@ def test_checkout_payment_intent_and_status_responses_are_product_projections(
     assert status_data["payment_id"] == payment_intent_data["payment_id"]
     assert status_data["payment_required"] is True
     assert status_data["amount_cents"] == 1800
+    assert status_data["booking_payment_status"] == "requires_action"
+    assert status_data["payment_status"] == "requires_action"
 
 
 @pytest.mark.requirement("WS02-05B2-R4")
@@ -615,7 +638,7 @@ def test_saved_payment_method_action_responses_are_narrow_contracts(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.payment_method_service as payment_method_service
+    from backend.services import payment_method_service
     from backend.services.stripe_service import (
         StripePaymentMethodCardResult,
         StripeSetupIntentResult,
@@ -678,7 +701,7 @@ def test_saved_payment_method_action_responses_are_narrow_contracts(
     monkeypatch.setattr(
         payment_method_service,
         "detach_payment_method",
-        lambda _payment_method_id: None,
+        lambda _payment_method_id, **_kwargs: None,
     )
     monkeypatch.setattr(
         payment_method_service,
@@ -689,6 +712,7 @@ def test_saved_payment_method_action_responses_are_narrow_contracts(
     _install_active_user_override(payer)
     setup_response = client.post(
         "/user-payment-methods/setup-intent",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
         json={"set_as_default": True},
     )
     assert setup_response.status_code == 201
@@ -705,6 +729,7 @@ def test_saved_payment_method_action_responses_are_narrow_contracts(
 
     sync_response = client.post(
         "/user-payment-methods/sync",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
         json={"setup_intent_id": "seti_b2_succeeded", "set_as_default": False},
     )
     assert sync_response.status_code == 201
@@ -718,7 +743,8 @@ def test_saved_payment_method_action_responses_are_narrow_contracts(
 
     _install_recent_active_user_override(payer)
     default_response = client.patch(
-        f"/user-payment-methods/{sync_data['id']}/default"
+        f"/user-payment-methods/{sync_data['id']}/default",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
     )
     assert default_response.status_code == 200
     default_data = default_response.json()
@@ -727,7 +753,10 @@ def test_saved_payment_method_action_responses_are_narrow_contracts(
     assert default_data["id"] == sync_data["id"]
     assert default_data["is_default"] is True
 
-    detach_response = client.delete(f"/user-payment-methods/{sync_data['id']}")
+    detach_response = client.delete(
+        f"/user-payment-methods/{sync_data['id']}",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+    )
     assert detach_response.status_code == 200
     detach_data = detach_response.json()
     assert set(detach_data) == SAVED_CARD_ALLOWED_FIELDS
@@ -760,9 +789,10 @@ def test_payment_event_http_reads_exclude_raw_provider_payload(
         "provider",
         "provider_event_id",
         "event_type",
+        "provider_created_at",
         "processing_status",
         "processed_at",
-        "processing_error",
+        "processing_error_code",
         "created_at",
     } == set(event_data)
 

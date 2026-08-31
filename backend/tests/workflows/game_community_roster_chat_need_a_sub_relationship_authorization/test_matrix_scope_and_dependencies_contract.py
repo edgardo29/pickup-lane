@@ -306,12 +306,23 @@ def _booking(
     from backend.models import Booking
 
     now = datetime.now(timezone.utc)
+    reservation_status = {
+        "pending_payment": "held",
+        "confirmed": "confirmed",
+        "waitlisted": "not_required",
+        "partially_cancelled": "confirmed",
+        "cancelled": "released",
+        "expired": "released",
+        "failed": "released",
+        "capacity_conflict": "capacity_conflict",
+    }[booking_status]
     return Booking(
         id=uuid.uuid4(),
         game_id=game_id,
         buyer_user_id=user_id,
         booking_status=booking_status,
         payment_status=payment_status,
+        reservation_status=reservation_status,
         participant_count=participant_count,
         subtotal_cents=0,
         platform_fee_cents=0,
@@ -321,7 +332,12 @@ def _booking(
         price_per_player_snapshot_cents=0,
         platform_fee_snapshot_cents=0,
         booked_at=now if booking_status == "confirmed" else None,
-        expires_at=now + timedelta(minutes=30),
+        cancelled_at=now if booking_status == "cancelled" else None,
+        expires_at=(
+            now + timedelta(minutes=30)
+            if booking_status == "pending_payment"
+            else None
+        ),
         cancel_reason=f"ws03c-{label}" if booking_status == "cancelled" else None,
     )
 
@@ -557,7 +573,9 @@ def _sub_chat_message(
 
 def _callable_identity(callable_obj: Any) -> str:
     if isinstance(callable_obj, partial):
-        raise AssertionError(f"Unrepresentable partial dependency: {callable_obj!r}")
+        raise AssertionError(  # noqa: TRY004
+            f"Unrepresentable partial dependency: {callable_obj!r}"
+        )
     if not (isfunction(callable_obj) or ismethod(callable_obj)):
         raise AssertionError(f"Unrepresentable callable dependency: {callable_obj!r}")
 
@@ -872,7 +890,7 @@ def test_frozen_finite_state_classification_covers_c_lifecycle_values() -> None:
             },
         ),
         "provider.email_verified": (
-            {f"email_verified={value}" for value in {True, False}},
+            {f"email_verified={value}" for value in (True, False)},
             {
                 "allowed": {"email_verified=True"},
                 "relationship_only": {"email_verified=False"},
@@ -957,7 +975,7 @@ def test_frozen_finite_state_classification_covers_c_lifecycle_values() -> None:
                     "waitlisted",
                     "partially_cancelled",
                 },
-                "denied": {"cancelled", "expired", "failed"},
+                "denied": {"cancelled", "expired", "failed", "capacity_conflict"},
             },
         ),
         "booking.payment_status": (
@@ -1172,8 +1190,8 @@ def test_frozen_finite_state_classification_covers_c_lifecycle_values() -> None:
         "venue.active_deleted_state": (
             {
                 f"is_active={is_active};deleted_at={deleted_at}"
-                for is_active in {True, False}
-                for deleted_at in {"null", "present"}
+                for is_active in (True, False)
+                for deleted_at in ("null", "present")
             },
             {
                 "public_only": {"is_active=True;deleted_at=null"},

@@ -17,8 +17,8 @@ when durable authority leaves multiple equally valid choices.
 | Field | Value |
 |---|---|
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes and record accepted progression state. |
-| Current reconciliation point | Accepted `develop` at the `WS04-03A` implementation baseline; this revision records the `WS04-03A` acceptance state that becomes true when the substantive `WS04-03A` PR merges. |
-| Current accepted develop SHA at reconciliation | `7e3308591a7f3789adad04623978da3304b481d1`. |
+| Current reconciliation point | Accepted `develop` at the `WS05-02` implementation baseline; this revision records the `WS05-02` acceptance state that becomes true when the substantive `WS05-02` PR merges. |
+| Current accepted develop SHA at reconciliation | `fff8d65f11e4137cb2210e22855d5b8ee9ac6faf`. |
 | Original blueprint register | 42 parent-level planned passes in `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md`. |
 | Accepted executable requirement declarations through this point | 36 files under `backend/tests/support/requirements/`. |
 | Next pass selected by this register? | Not by itself. Automated progression uses this register together with the master blueprint, remediation plan, accepted intake/dependencies, prerequisites, and current `develop`; owner selection is required only when durable authority does not determine one safe next unit. |
@@ -34,9 +34,9 @@ production-readiness run instruction.
 | Metric | Count | Meaning |
 |---|---:|---|
 | Original blueprint parent-level entries | 42 | Parent-level entries mirrored from the master blueprint. |
-| Accepted/completed parent-level entries | 15 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through `WS04-02`. |
-| Remaining parent-level entries | 27 | Parent-level entries not yet completed in this register; includes decomposed in-progress `WS04-01` and `WS04-03`. |
-| Accepted executable passes with requirement declarations | 36 | Current accepted executable declaration files under `backend/tests/support/requirements/` after `WS04-03A` merges. |
+| Accepted/completed parent-level entries | 16 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through direct `WS05-02`. |
+| Remaining parent-level entries | 26 | Parent-level entries not yet completed in this register; includes decomposed in-progress `WS04-01`, `WS04-03`, and `WS05-01`. |
+| Accepted executable passes with requirement declarations | 37 | Current accepted executable declaration files under `backend/tests/support/requirements/` after `WS05-02` merges. |
 | Remaining actual executable-pass count | Unknown | Future executable-unit count depends on Stage 0 decomposition of remaining parent scope. |
 
 Count magnitude is not completion proof or control-closure proof. Controls
@@ -99,7 +99,7 @@ navigation. It does not replace the master blueprint.
 | `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Decomposed into accepted executable children `WS04-02A`, `WS04-02B`, and `WS04-02C`; this revision records the current executable child set complete when the substantive `WS04-02C` PR merges, with later-owned migration, payment, observability, operations, and final-infrastructure evidence preserved outside `WS04-02`. |
 | `WS04-03` | Migration policy, compatibility, interruption, and production-like rehearsal | Decomposed into current executable child `WS04-03A` plus mandatory deferred follow-up `WS04-03B`; this revision records `WS04-03A` as accepted on merge while final provider/runtime migration rehearsal remains open. |
 | `WS05-01` | Durable job model, claim/lease lifecycle, and worker deployment | Decomposed into current executable child `WS05-01A` plus mandatory deferred follow-up `WS05-01B`; this revision records `WS05-01A` as accepted on merge while final worker hosting/runtime proof remains open. |
-| `WS05-02` | Payment and booking state machines with webhook authority | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
+| `WS05-02` | Payment and booking state machines with webhook authority | Accepted direct executable pass on merge; source-owned payment/booking/webhook state-machine obligations are implemented while final worker hosting, provider/runtime proof, refund execution, observability, and operations evidence remain preserved for later owners. |
 | `WS05-03` | Refunds, credits, notices, moderation delivery, and reconciliation | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
 | `WS05-04` | Deterministic failure, replay, sandbox, and deployed-worker verification | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
 | `WS06-01` | Admin-only venue-image authority and upload initiation | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
@@ -169,6 +169,7 @@ Every path in the Plan column is relative to
 | `WS04-02C` | `WS04-02` | `passes/ws04/ws04-02c-database-value-default-and-sql-safety-compatibility.md` | `ws04_02c.json` | 8 | 8 | 0 | 0 | `workflows/database_value_default_sql_safety_compatibility` |
 | `WS04-03A` | `WS04-03` | `passes/ws04/ws04-03a-provider-independent-migration-policy-compatibility-graph-drift-controlled-rehearsal.md` | `ws04_03a.json` | 8 | 8 | 0 | 0 | `migrations/migration_policy_compatibility_rehearsal` |
 | `WS05-01A` | `WS05-01` | `passes/ws05/ws05-01a-provider-independent-durable-job-model-claim-lease-lifecycle-portable-worker-runtime.md` | `ws05_01a.json` | 9 | 8 | 0 | 1 | `platform/durable_jobs` plus runtime/migration/SQL-safety/retry compatibility |
+| `WS05-02` | `WS05-02` | `passes/ws05/ws05-02-payment-booking-state-machines-webhook-authority.md` | `ws05_02.json` | 8 | 7 | 0 | 1 | `workflows/payment_booking_state_machines_webhook_authority` plus planning |
 
 ## 6. Accepted Stage 0 Intake Records
 
@@ -179,6 +180,7 @@ Every path in the Plan column is relative to
 | `WS04-02` | `docs/production-readiness/planning/passes/ws04/ws04-02-intake.md` | `bbcea141dec04890be5c0812131996548f86f82f6bc80ad66ce7f700e6ba3701` | `WS04-02A`, `WS04-02B`, `WS04-02C` | Accepted three-child structure: `WS04-02A -> WS04-02B -> WS04-02C`; this revision records the current child set complete when the substantive `WS04-02C` PR merges. |
 | `WS04-03` | `docs/production-readiness/planning/passes/ws04/ws04-03-intake.md` | `ffc3e81d2d55ce9cca60d6ae40390d8ae9df2d8f8d3995b4b9c8464c101cfb48` | `WS04-03A` | Accepted split: `WS04-03A` is the current provider-independent migration-policy/rehearsal child; mandatory `WS04-03B` remains deferred until final production database provider, deployment topology, migration runner, and production-equivalent rehearsal inputs are selected and evidenced. |
 | `WS05-01` | `docs/production-readiness/planning/passes/ws05/ws05-01-intake.md` | `1cfa5be5898cf0e53730c7841e5c5c89d9a824c8e10b644b0fcb835e50890720` | `WS05-01A` | Accepted split: `WS05-01A` is the current provider-independent durable-job foundation child; mandatory `WS05-01B` remains deferred until final worker platform, service topology, process/instance model, scaling/resource settings, provider deployment path, and runtime verification environment are selected and evidenced. |
+| `WS05-02` | `docs/production-readiness/planning/passes/ws05/ws05-02-intake.md` | `4450d47c4bd44678b7f9ccd07a229740aad5fdec443153a0d8677dd3491f8ab1` | `WS05-02` | Accepted direct executable pass: source-owned payment/booking/webhook authority scope is complete on merge; final worker hosting, Stripe sandbox/deployed webhook proof, refund/credit execution, observability, and operations evidence remain deferred to the later owners named by `WS05-02-R8`. |
 
 Historical WS02-04, WS02-05, and WS03-03 decompositions remain accepted. Do
 not fabricate retroactive intake records for them.
@@ -520,6 +522,42 @@ deployment configuration path, and safe runtime verification environment are
 selected and evidenced enough to verify deployed worker behavior honestly.
 `WS05-01` remains incomplete until `WS05-01B` is accepted or otherwise
 truthfully resolved under durable authority.
+
+### WS05-02
+
+Original parent: `WS05-02 - Payment and booking state machines with webhook
+authority`.
+
+Accepted Stage 0 intake:
+`docs/production-readiness/planning/passes/ws05/ws05-02-intake.md`
+
+Frozen intake SHA-256:
+`4450d47c4bd44678b7f9ccd07a229740aad5fdec443153a0d8677dd3491f8ab1`
+
+Accepted executable pass:
+
+1. `WS05-02 - Payment and booking state machines with webhook authority`
+
+Canonical plan:
+`docs/production-readiness/planning/passes/ws05/ws05-02-payment-booking-state-machines-webhook-authority.md`
+
+Frozen canonical-plan SHA-256:
+`12f3a3c10a87a5558872e59a74d1d1d9c8bcb9ec139e2a199553ae844defe0ea`
+
+`WS05-02` is a direct executable parent pass. It owns the source-owned payment,
+booking, reservation, participant, saved-card, webhook-event, durable
+payment-job, and compensation-obligation transitions required by the frozen
+canonical plan. It preserves provider authority, bounded webhook/event/job
+payloads, game-first lock ordering for capacity-sensitive transitions,
+database-time reservation expiry, late-success compensation handoff, and
+saved-payment-method operation reconciliation.
+
+`WS05-02` does not close final worker hosting, Stripe sandbox/dashboard or
+deployed webhook observations, broad scheduled reconciliation, actual refund or
+credit-restoration execution, dispute handling, production observability,
+alerts, runbooks, or other final infrastructure evidence. Those obligations
+remain deferred exactly as declared by `WS05-02-R8` to `WS05-01B`, `WS05-03`,
+`WS05-04`, `WS09`, and `WS10`.
 
 ## 8. Remaining Parent Passes And Progression
 

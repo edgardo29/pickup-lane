@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from fastapi import HTTPException
@@ -63,7 +64,11 @@ def _payment_event():
         provider="stripe",
         provider_event_id=f"evt_ws02_04b2a2b2_{uuid.uuid4()}",
         event_type="payment_intent.payment_failed",
-        raw_payload={"id": "evt_original", "data": {"object": {"id": "pi_original"}}},
+        event_envelope={
+            "id": "evt_original",
+            "data": {"object": {"id": "pi_original"}},
+        },
+        provider_created_at=datetime.now(timezone.utc),
         processing_status="pending",
     )
 
@@ -72,8 +77,7 @@ def _payment_event():
 def test_payment_event_repair_schema_allows_only_repair_fields() -> None:
     payment_id = uuid.uuid4()
     assert PaymentEventUpdate(payment_id=payment_id).payment_id == payment_id
-    assert PaymentEventUpdate(processing_error="  needs review  ").processing_error == "needs review"
-    assert PaymentEventUpdate(processing_error="x" * 1000).processing_error == "x" * 1000
+    assert PaymentEventUpdate(reprocess=True).reprocess is True
 
     with pytest.raises(ValidationError):
         PaymentEventUpdate(provider="stripe")
@@ -82,9 +86,9 @@ def test_payment_event_repair_schema_allows_only_repair_fields() -> None:
     with pytest.raises(ValidationError):
         PaymentEventUpdate(event_type="payment_intent.succeeded")
     with pytest.raises(ValidationError):
-        PaymentEventUpdate(raw_payload={"id": "evt_changed"})
+        PaymentEventUpdate(event_envelope={"id": "evt_changed"})
     with pytest.raises(ValidationError):
-        PaymentEventUpdate(processing_error="x" * 1001)
+        PaymentEventUpdate(processing_status="failed")
 
 
 @pytest.mark.requirement("WS02-04B2A2B2-R5")
@@ -107,26 +111,30 @@ def test_payment_event_repair_persists_allowed_fields_without_mutating_provider_
             event.id,
             PaymentEventUpdate(
                 payment_id=payment.id,
-                processing_status="failed",
-                processing_error="  provider lookup failed  ",
             ),
         )
 
         assert result.payment_id == payment.id
-        assert result.processing_status == "failed"
-        assert result.processing_error == "provider lookup failed"
+        assert result.processing_status == "pending"
+        assert result.processing_error_code is None
         assert result.processed_at is None
         assert result.provider == "stripe"
         assert result.provider_event_id == event.provider_event_id
         assert result.event_type == "payment_intent.payment_failed"
-        assert result.raw_payload == {"id": "evt_original", "data": {"object": {"id": "pi_original"}}}
+        assert result.event_envelope == {
+            "id": "evt_original",
+            "data": {"object": {"id": "pi_original"}},
+        }
         persisted = db.get(PaymentEvent, event.id)
         assert persisted.payment_id == payment.id
-        assert persisted.processing_status == "failed"
+        assert persisted.processing_status == "pending"
         assert persisted.provider == "stripe"
         assert persisted.provider_event_id == event.provider_event_id
         assert persisted.event_type == "payment_intent.payment_failed"
-        assert persisted.raw_payload == {"id": "evt_original", "data": {"object": {"id": "pi_original"}}}
+        assert persisted.event_envelope == {
+            "id": "evt_original",
+            "data": {"object": {"id": "pi_original"}},
+        }
 
 
 @pytest.mark.requirement("WS02-04B2A2B2-R5")
@@ -143,12 +151,15 @@ def test_rejected_payment_event_repair_does_not_change_persisted_state() -> None
             update_payment_event_record(
                 db,
                 event.id,
-                PaymentEventUpdate(processing_status="unsupported"),
+                PaymentEventUpdate(payment_id=uuid.uuid4()),
             )
         db.rollback()
 
         persisted = db.get(PaymentEvent, event.id)
         assert persisted.processing_status == "pending"
-        assert persisted.processing_error is None
+        assert persisted.processing_error_code is None
         assert persisted.provider_event_id == event.provider_event_id
-        assert persisted.raw_payload == {"id": "evt_original", "data": {"object": {"id": "pi_original"}}}
+        assert persisted.event_envelope == {
+            "id": "evt_original",
+            "data": {"object": {"id": "pi_original"}},
+        }

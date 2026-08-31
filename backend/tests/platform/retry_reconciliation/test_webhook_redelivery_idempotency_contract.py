@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ def _event_payload(provider_event_id: str) -> dict[str, object]:
     return {
         "id": provider_event_id,
         "type": "charge.dispute.created",
+        "created": 1_700_000_000,
         "data": {"object": {"id": "du_synthetic"}},
     }
 
@@ -36,7 +38,8 @@ def _payment_event(provider_event_id: str):
         provider="stripe",
         provider_event_id=provider_event_id,
         event_type="charge.dispute.created",
-        raw_payload=_event_payload(provider_event_id),
+        event_envelope=_event_payload(provider_event_id),
+        provider_created_at=datetime.fromtimestamp(1_700_000_000, tz=timezone.utc),
         processing_status="ignored",
     )
 
@@ -56,7 +59,9 @@ def test_signed_webhook_route_uses_construction_seam_before_processing() -> None
 @pytest.mark.requirement("WS02-04C2-R7")
 def test_webhook_requires_provider_event_id_before_local_event_creation() -> None:
     from backend.models import PaymentEvent
-    from backend.services.stripe_webhook_service import record_and_process_stripe_webhook_event
+    from backend.services.stripe_webhook_service import (
+        record_and_process_stripe_webhook_event,
+    )
 
     with _session() as db:
         with pytest.raises(HTTPException) as exc_info:
@@ -73,7 +78,9 @@ def test_webhook_requires_provider_event_id_before_local_event_creation() -> Non
 @pytest.mark.requirement("WS02-04C2-R7")
 def test_existing_provider_event_duplicate_is_idempotent_without_reprocessing() -> None:
     from backend.models import PaymentEvent
-    from backend.services.stripe_webhook_service import record_and_process_stripe_webhook_event
+    from backend.services.stripe_webhook_service import (
+        record_and_process_stripe_webhook_event,
+    )
 
     with _session() as db:
         existing = _payment_event("evt_ws02_04c2_duplicate")
@@ -99,31 +106,35 @@ def test_existing_provider_event_duplicate_is_idempotent_without_reprocessing() 
 def test_provider_event_uniqueness_and_integrity_error_path_are_idempotent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import PaymentEvent
     import backend.services.stripe_webhook_service as webhook_service
+    from backend.models import PaymentEvent
 
-    def create_conflicting_event(db, event, event_payload, now):
-        del event, event_payload, now
-        db.add(_payment_event("evt_ws02_04c2_race_duplicate"))
+    active_db = {}
+    original_normalize = webhook_service.normalize_stripe_event_envelope
+
+    def create_conflicting_envelope(event_payload):
+        db = active_db["db"]
+        db.add(_payment_event(str(event_payload["id"])))
         db.flush()
+        return original_normalize(event_payload)
 
     monkeypatch.setattr(
         webhook_service,
-        "process_stripe_event",
-        create_conflicting_event,
+        "normalize_stripe_event_envelope",
+        create_conflicting_envelope,
     )
 
-    with _session() as db:
-        with pytest.raises(IntegrityError):
-            db.add_all(
-                [
-                    _payment_event("evt_ws02_04c2_unique"),
-                    _payment_event("evt_ws02_04c2_unique"),
-                ]
-            )
-            db.commit()
+    with _session() as db, pytest.raises(IntegrityError):
+        db.add_all(
+            [
+                _payment_event("evt_ws02_04c2_unique"),
+                _payment_event("evt_ws02_04c2_unique"),
+            ]
+        )
+        db.commit()
 
     with _session() as db:
+        active_db["db"] = db
         result = webhook_service.record_and_process_stripe_webhook_event(
             db,
             _event_payload("evt_ws02_04c2_race_duplicate"),

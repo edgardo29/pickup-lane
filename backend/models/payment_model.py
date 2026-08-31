@@ -39,11 +39,18 @@ class Payment(Base):
         CheckConstraint(
             (
                 "payment_status IN ("
-                "'requires_payment_method', 'processing', 'requires_action', "
-                "'succeeded', 'failed', 'canceled'"
+                "'requires_payment_method', 'requires_confirmation', "
+                "'requires_action', 'processing', 'requires_capture', "
+                "'succeeded', 'failed', 'canceled', 'unknown'"
                 ")"
             ),
             name="ck_payments_payment_status",
+        ),
+        CheckConstraint(
+            (
+                "provider_status IS NULL OR char_length(btrim(provider_status)) > 0"
+            ),
+            name="ck_payments_provider_status",
         ),
         CheckConstraint(
             "currency = 'USD'",
@@ -121,8 +128,15 @@ class Payment(Base):
         String(255), nullable=True
     )
     provider_charge_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_status: Mapped[str | None] = mapped_column(String(100), nullable=True)
     idempotency_key: Mapped[str] = mapped_column(
         String(255), nullable=False
+    )
+    creation_fingerprint: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default=lambda: uuid.uuid4().hex + uuid.uuid4().hex,
     )
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(

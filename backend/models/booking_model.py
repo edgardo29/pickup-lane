@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    event,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -29,7 +30,7 @@ class Booking(Base):
             (
                 "booking_status IN ("
                 "'pending_payment', 'confirmed', 'waitlisted', 'partially_cancelled', "
-                "'cancelled', 'expired', 'failed'"
+                "'cancelled', 'expired', 'failed', 'capacity_conflict'"
                 ")"
             ),
             name="ck_bookings_booking_status",
@@ -89,8 +90,37 @@ class Booking(Base):
             name="ck_bookings_cancelled_requires_cancelled_at",
         ),
         CheckConstraint(
-            "(booking_status <> 'pending_payment' OR expires_at IS NOT NULL)",
-            name="ck_bookings_pending_payment_requires_expires_at",
+            (
+                "reservation_status IN ("
+                "'not_required', 'held', 'confirmed', 'released', "
+                "'capacity_conflict'"
+                ")"
+            ),
+            name="ck_bookings_reservation_status",
+        ),
+        CheckConstraint(
+            (
+                "(booking_status = 'pending_payment' AND "
+                "reservation_status = 'held' AND expires_at IS NOT NULL) OR "
+                "(booking_status IN ('confirmed', 'partially_cancelled') AND "
+                "reservation_status = 'confirmed' AND expires_at IS NULL) OR "
+                "(booking_status = 'waitlisted' AND "
+                "reservation_status = 'not_required' AND expires_at IS NULL) OR "
+                "(booking_status IN ('expired', 'failed') AND "
+                "reservation_status = 'released' AND expires_at IS NULL) OR "
+                "(booking_status = 'capacity_conflict' AND "
+                "reservation_status = 'capacity_conflict' AND expires_at IS NULL) OR "
+                "(booking_status = 'cancelled' AND reservation_status IN "
+                "('released', 'not_required') AND expires_at IS NULL)"
+            ),
+            name="ck_bookings_reservation_lifecycle",
+        ),
+        CheckConstraint(
+            (
+                "reservation_status <> 'held' OR payment_status NOT IN "
+                "('partially_refunded', 'refunded', 'credit_restored')"
+            ),
+            name="ck_bookings_held_financial_summary",
         ),
         # These indexes support the buyer, game, and operational views that
         # will be needed before participant and refund tables exist.
@@ -134,6 +164,9 @@ class Booking(Base):
     payment_status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'unpaid'")
     )
+    reservation_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default=text("'held'")
+    )
     participant_count: Mapped[int] = mapped_column(Integer, nullable=False)
     subtotal_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     platform_fee_cents: Mapped[int] = mapped_column(
@@ -173,3 +206,21 @@ class Booking(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
+
+
+@event.listens_for(Booking, "before_insert")
+def populate_missing_reservation_state(mapper, connection, booking: Booking) -> None:
+    del mapper, connection
+    if booking.reservation_status is not None:
+        return
+    booking_status = booking.booking_status or "pending_payment"
+    booking.reservation_status = {
+        "pending_payment": "held",
+        "confirmed": "confirmed",
+        "partially_cancelled": "confirmed",
+        "waitlisted": "not_required",
+        "expired": "released",
+        "failed": "released",
+        "capacity_conflict": "capacity_conflict",
+        "cancelled": "released",
+    }[booking_status]

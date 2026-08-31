@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -44,15 +45,29 @@ def test_setup_intent_id_remains_opaque_and_provider_validation_is_delegated(
 
     monkeypatch.setattr(payment_method_service, "stripe_payments_enabled", lambda: True)
     monkeypatch.setattr(payment_method_service, "retrieve_setup_intent", retrieve_setup_intent)
+    operation = SimpleNamespace(status="pending")
+    monkeypatch.setattr(
+        payment_method_service,
+        "begin_payment_method_operation",
+        lambda *args, **kwargs: operation,
+    )
+    monkeypatch.setattr(
+        payment_method_service,
+        "mark_payment_method_operation_failed",
+        lambda *args, **kwargs: None,
+    )
 
-    with SessionLocal() as db:
-        with pytest.raises(HTTPException) as exc_info:
-            payment_method_service.sync_saved_payment_method(
-                db,
-                SimpleNamespace(stripe_customer_id="cus_b2a2b2"),
-                setup_intent_id="opaque-provider-owned-id",
-                set_as_default=False,
-            )
+    with SessionLocal() as db, pytest.raises(HTTPException) as exc_info:
+        payment_method_service.sync_saved_payment_method(
+            db,
+            SimpleNamespace(
+                id=uuid.uuid4(),
+                stripe_customer_id="cus_b2a2b2",
+            ),
+            setup_intent_id="opaque-provider-owned-id",
+            set_as_default=False,
+            idempotency_key=uuid.uuid4(),
+        )
 
     assert exc_info.value.status_code == 502
     assert retrieved == ["opaque-provider-owned-id"]

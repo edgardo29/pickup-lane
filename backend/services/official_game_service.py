@@ -21,6 +21,7 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameVenuePayload,
 )
 from backend.services.admin_action_service import record_admin_action
+from backend.services.game_credit_service import release_reserved_game_credits
 from backend.services.game_rules import (
     OFFICIAL_FORCED_FIELDS,
     OPEN_GAME_STATUSES,
@@ -30,7 +31,6 @@ from backend.services.game_rules import (
     validate_game_business_rules,
 )
 from backend.services.game_service import sync_game_capacity_status
-from backend.services.game_credit_service import release_reserved_game_credits
 from backend.services.payment_rules import PENDING_PAYMENT_STATUSES
 from backend.services.status_history_service import (
     add_participant_status_history_if_changed,
@@ -545,6 +545,8 @@ def expire_pending_checkouts_for_admin_edit(
         )
         booking.booking_status = "expired"
         booking.payment_status = "failed"
+        booking.reservation_status = "released"
+        booking.expires_at = None
         booking.cancel_reason = reason or "Official game details changed by admin."
         booking.updated_at = now
         db.add(booking)
@@ -568,7 +570,7 @@ def expire_pending_checkouts_for_admin_edit(
         )
 
     for payment in pending_payments:
-        payment.payment_status = "canceled"
+        payment.payment_status = "failed"
         payment.failure_code = "admin_game_updated"
         payment.failure_message = "Checkout invalidated after official game details changed."
         payment.updated_at = now

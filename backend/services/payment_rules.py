@@ -8,17 +8,23 @@ VALID_PAYMENT_TYPES = {
 VALID_PROVIDERS = {"stripe"}
 VALID_PAYMENT_STATUSES = {
     "requires_payment_method",
-    "processing",
+    "requires_confirmation",
     "requires_action",
+    "processing",
+    "requires_capture",
     "succeeded",
     "failed",
     "canceled",
+    "unknown",
 }
 VALID_CURRENCY = "USD"
 PENDING_PAYMENT_STATUSES = {
     "requires_payment_method",
+    "requires_confirmation",
     "requires_action",
     "processing",
+    "requires_capture",
+    "unknown",
 }
 COLLECTED_PAYMENT_STATUSES = {
     "succeeded",

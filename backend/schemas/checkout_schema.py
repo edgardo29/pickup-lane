@@ -31,15 +31,21 @@ class GameCheckoutPaymentIntentRead(BaseModel):
     payment_required: bool
     booking_status: str
     booking_payment_status: str
+    reservation_status: str
     payment_status: str | None = None
+    provider_status: str | None = None
+    compensation_status: str | None = None
 
 
 class GameCheckoutStatusRead(BaseModel):
     booking_id: UUID
     booking_status: str
     booking_payment_status: str
+    reservation_status: str
     payment_id: UUID | None = None
     payment_status: str | None = None
+    provider_status: str | None = None
+    compensation_status: str | None = None
     amount_cents: int
     currency: str
     subtotal_cents: int

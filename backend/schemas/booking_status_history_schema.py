@@ -16,6 +16,8 @@ class BookingStatusHistoryCreate(BaseModel):
     new_booking_status: str
     old_payment_status: str | None = None
     new_payment_status: str | None = None
+    old_reservation_status: str | None = None
+    new_reservation_status: str | None = None
     changed_by_user_id: UUID | None = None
     change_source: str = "system"
     change_reason: str | None = None
@@ -32,6 +34,8 @@ class BookingStatusHistoryRead(BaseModel):
     new_booking_status: str
     old_payment_status: str | None
     new_payment_status: str | None
+    old_reservation_status: str | None
+    new_reservation_status: str
     changed_by_user_id: UUID | None
     change_source: str
     change_reason: str | None
@@ -48,6 +52,8 @@ class BookingStatusHistoryUpdate(BaseModel):
     new_booking_status: str | None = None
     old_payment_status: str | None = None
     new_payment_status: str | None = None
+    old_reservation_status: str | None = None
+    new_reservation_status: str | None = None
     changed_by_user_id: UUID | None = None
     change_source: str | None = None
     change_reason: str | None = None

@@ -169,12 +169,20 @@ def _install_checkout_boundary_fakes(
     confirm_calls: list[str],
     confirm_status: str = "requires_action",
 ) -> None:
-    import backend.services.checkout_service as checkout_service
+    from backend.services import checkout_service
 
     monkeypatch.setattr(checkout_service, "require_stripe_payments_enabled", lambda: None)
     monkeypatch.setattr(checkout_service, "get_stripe_currency", lambda: "USD")
 
-    def saved_payment_method(db, payment_method_id, current_user, *, now):
+    def saved_payment_method(
+        db,
+        payment_method_id,
+        current_user,
+        *,
+        now,
+        verify_provider=True,
+    ):
+        del verify_provider
         del current_user, now
         from backend.models import UserPaymentMethod
 
@@ -222,8 +230,15 @@ def _install_checkout_boundary_fakes(
 def test_checkout_commits_durable_checkpoint_with_credit_before_confirmation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import Booking, GameCredit, GameCreditUsage, GameParticipant, Payment, User
-    import backend.services.checkout_service as checkout_service
+    from backend.models import (
+        Booking,
+        GameCredit,
+        GameCreditUsage,
+        GameParticipant,
+        Payment,
+        User,
+    )
+    from backend.services import checkout_service
 
     create_calls: list[str] = []
     retrieve_calls: list[str] = []
@@ -317,7 +332,7 @@ def test_active_hold_reentry_reuses_provider_identity_and_credit_reservation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.models import GameCredit, GameCreditUsage, Payment, User
-    import backend.services.checkout_service as checkout_service
+    from backend.services import checkout_service
 
     create_calls: list[str] = []
     retrieve_calls: list[str] = []
@@ -380,9 +395,12 @@ def test_registry_distinguishes_idempotency_identity_sources() -> None:
     assert contexts["saved_card_customer_creation"].idempotency_identity_source == (
         "deterministic user-scoped key user:{user.id}:stripe_customer"
     )
-    assert "request-local" in contexts[
+    assert contexts[
         "saved_card_setup_intent_creation"
-    ].idempotency_identity_source
+    ].idempotency_identity_source == (
+        "persisted payment-method operation provider_idempotency_key"
+    )
+    assert contexts["saved_card_setup_intent_creation"].identity_survives_replay
     assert "committed pending Booking" in contexts[
         "checkout_initial_create_before_provider_result"
     ].idempotency_identity_source

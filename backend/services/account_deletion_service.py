@@ -253,7 +253,7 @@ def detach_account_saved_payment_methods(
                     error_type="stripe_detach_outcome_unknown",
                 )
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - cleanup must continue after provider failure
             failures.append(
                 SavedPaymentMethodCleanupFailure(
                     payment_method_id=payment_method.id,
@@ -598,6 +598,8 @@ def reconcile_booking_after_account_deletion(
 
     if remaining_participants:
         booking.booking_status = "partially_cancelled"
+        booking.reservation_status = "confirmed"
+        booking.expires_at = None
         booking.participant_count = len(remaining_participants)
         booking.subtotal_cents = (
             booking.price_per_player_snapshot_cents * len(remaining_participants)
@@ -610,6 +612,12 @@ def reconcile_booking_after_account_deletion(
         )
     else:
         booking.booking_status = "cancelled"
+        booking.reservation_status = (
+            "not_required"
+            if booking.reservation_status == "not_required"
+            else "released"
+        )
+        booking.expires_at = None
 
     booking.cancelled_at = booking.cancelled_at or now
     booking.cancelled_by_user_id = (
@@ -757,12 +765,12 @@ def cancel_future_community_hosted_games(
     now: datetime,
 ) -> None:
     from backend.services.game_cancellation_service import (
-        close_game_chats,
         cancel_game_bookings,
         cancel_game_participants,
         cancel_game_waitlist_entries,
-        create_game_cancelled_notifications,
+        close_game_chats,
         create_game_cancellation_history,
+        create_game_cancelled_notifications,
     )
 
     games = db.scalars(
@@ -925,7 +933,9 @@ def cancel_need_a_sub_requests_made(
         notify_waitlist_promoted,
         resolve_owner_request_activity_notification,
     )
-    from backend.services.need_a_sub_request_service import promote_next_waitlisted_request
+    from backend.services.need_a_sub_request_service import (
+        promote_next_waitlisted_request,
+    )
     from backend.services.sub_post_chat_service import (
         resolve_sub_chat_notifications_for_user,
     )
@@ -1202,7 +1212,7 @@ def delete_account_workflow(
             ),
         )
         raise
-    except Exception as exc:
+    except Exception:  # noqa: BLE001 - restore app state after unknown Firebase failure
         restore_self_delete_staged_account_after_firebase_failure(
             db,
             user=user,

@@ -12,6 +12,65 @@ function wait(milliseconds) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
 
+export function describeCheckoutStatus(checkoutStatus) {
+  if (
+    checkoutStatus.booking_status === 'confirmed' &&
+    checkoutStatus.booking_payment_status === 'paid' &&
+    checkoutStatus.payment_status === 'succeeded'
+  ) {
+    return { outcome: 'confirmed', message: '' }
+  }
+  if (checkoutStatus.booking_status === 'capacity_conflict') {
+    return {
+      outcome: 'stopped',
+      message: 'Your payment completed, but the spot could not be confirmed. A refund is required.',
+    }
+  }
+  if (
+    checkoutStatus.booking_status === 'expired' &&
+    checkoutStatus.payment_status === 'succeeded'
+  ) {
+    return {
+      outcome: 'stopped',
+      message: 'Your payment completed after the spot expired. A refund is required.',
+    }
+  }
+  if (checkoutStatus.booking_status === 'expired') {
+    return {
+      outcome: 'stopped',
+      message: 'The spot expired while payment was unresolved. Payment status is still being checked.',
+    }
+  }
+  if (checkoutStatus.payment_status === 'requires_payment_method') {
+    return { outcome: 'retry_card', message: 'Choose another saved card to continue.' }
+  }
+  if (checkoutStatus.payment_status === 'requires_action') {
+    return { outcome: 'pending', message: 'Payment authentication is required.' }
+  }
+  if (checkoutStatus.payment_status === 'requires_confirmation') {
+    return { outcome: 'pending', message: 'Payment is ready for secure confirmation.' }
+  }
+  if (checkoutStatus.payment_status === 'requires_capture') {
+    return {
+      outcome: 'pending',
+      message: 'Payment is unresolved and no spot has been confirmed.',
+    }
+  }
+  if (checkoutStatus.payment_status === 'unknown') {
+    return {
+      outcome: 'pending',
+      message: 'The payment result is not available yet. Your spot will not remain held past expiry.',
+    }
+  }
+  if (
+    ['failed', 'cancelled'].includes(checkoutStatus.booking_status) ||
+    ['failed', 'canceled'].includes(checkoutStatus.payment_status)
+  ) {
+    return { outcome: 'failed', message: 'Payment could not be confirmed. Please try again.' }
+  }
+  return { outcome: 'pending', message: 'Confirming payment and your spot...' }
+}
+
 export function useGameCheckoutActions({ navigate }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -49,27 +108,25 @@ export function useGameCheckoutActions({ navigate }) {
 
       for (let attempt = 0; attempt < CHECKOUT_STATUS_POLL_COUNT; attempt += 1) {
         latestStatus = await getGameCheckoutStatus({ bookingId, firebaseUser })
-
-        if (
-          latestStatus.booking_status === 'confirmed' &&
-          latestStatus.booking_payment_status === 'paid' &&
-          latestStatus.payment_status === 'succeeded'
-        ) {
+        const presentation = describeCheckoutStatus(latestStatus)
+        if (presentation.outcome === 'confirmed') {
           navigate(`/games/${gameId}`, { replace: true })
           return latestStatus
         }
-
-        if (
-          ['failed', 'cancelled', 'expired'].includes(latestStatus.booking_status) ||
-          ['failed', 'canceled'].includes(latestStatus.payment_status)
-        ) {
-          throw new Error('Payment could not be confirmed. Please try again.')
+        if (['failed', 'retry_card'].includes(presentation.outcome)) {
+          throw new Error(presentation.message)
         }
+        if (presentation.outcome === 'stopped') {
+          setStripeStatusMessage(presentation.message)
+          return latestStatus
+        }
+
+        setStripeStatusMessage(presentation.message)
 
         await wait(CHECKOUT_STATUS_POLL_DELAY_MS)
       }
 
-      setStripeStatusMessage('Still confirming your spot.')
+      setStripeStatusMessage('Payment is still unresolved. Your spot will not remain held past expiry.')
       return latestStatus
     },
     [navigate],

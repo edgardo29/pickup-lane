@@ -7,7 +7,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
-    Text,
     UniqueConstraint,
     text,
 )
@@ -27,7 +26,11 @@ class PaymentEvent(Base):
             name="ck_payment_events_provider",
         ),
         CheckConstraint(
-            "processing_status IN ('pending', 'processed', 'failed', 'ignored')",
+            (
+                "processing_status IN ("
+                "'pending', 'processing', 'processed', 'failed', 'ignored'"
+                ")"
+            ),
             name="ck_payment_events_processing_status",
         ),
         CheckConstraint(
@@ -39,7 +42,7 @@ class PaymentEvent(Base):
             name="ck_payment_events_processed_requires_processed_at",
         ),
         CheckConstraint(
-            "(processing_status <> 'failed' OR processing_error IS NOT NULL)",
+            "(processing_status <> 'failed' OR processing_error_code IS NOT NULL)",
             name="ck_payment_events_failed_requires_processing_error",
         ),
         UniqueConstraint(
@@ -74,7 +77,11 @@ class PaymentEvent(Base):
 
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
 
-    raw_payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    event_envelope: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+    provider_created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     processing_status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'pending'")
@@ -84,7 +91,7 @@ class PaymentEvent(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processing_error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")

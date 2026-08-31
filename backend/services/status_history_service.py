@@ -30,7 +30,10 @@ from backend.schemas.participant_status_history_schema import (
     ParticipantStatusHistoryUpdate,
 )
 from backend.services.auth_service import ADMIN_ROLE
-from backend.services.booking_rules import VALID_BOOKING_STATUSES, VALID_PAYMENT_STATUSES
+from backend.services.booking_rules import (
+    VALID_BOOKING_STATUSES,
+    VALID_PAYMENT_STATUSES,
+)
 from backend.services.game_participant_rules import (
     VALID_ATTENDANCE_STATUSES,
     VALID_PARTICIPANT_STATUSES,
@@ -66,6 +69,8 @@ BOOKING_IMMUTABLE_HISTORY_UPDATE_FIELDS = {
     "new_booking_status",
     "old_payment_status",
     "new_payment_status",
+    "old_reservation_status",
+    "new_reservation_status",
     "changed_by_user_id",
     "change_source",
 }
@@ -127,13 +132,25 @@ def add_booking_status_history_if_changed(
     *,
     old_booking_status: str,
     old_payment_status: str,
+    old_reservation_status: str | None = None,
     reason: str,
     changed_by_user_id: uuid.UUID | None = None,
     change_source: str = "system",
 ) -> None:
+    if old_reservation_status is None:
+        old_reservation_status = reservation_status_for_booking_status(
+            old_booking_status
+        )
+    booking.reservation_status = reservation_status_for_booking_status(
+        booking.booking_status,
+        previous=old_reservation_status,
+    )
+    if booking.reservation_status != "held":
+        booking.expires_at = None
     if (
         old_booking_status == booking.booking_status
         and old_payment_status == booking.payment_status
+        and old_reservation_status == booking.reservation_status
     ):
         return
 
@@ -145,11 +162,33 @@ def add_booking_status_history_if_changed(
             new_booking_status=booking.booking_status,
             old_payment_status=old_payment_status,
             new_payment_status=booking.payment_status,
+            old_reservation_status=old_reservation_status,
+            new_reservation_status=booking.reservation_status,
             changed_by_user_id=changed_by_user_id,
             change_source=change_source,
             change_reason=reason,
         )
     )
+
+
+def reservation_status_for_booking_status(
+    booking_status: str | None,
+    *,
+    previous: str | None = None,
+) -> str | None:
+    if booking_status == "pending_payment":
+        return "held"
+    if booking_status in {"confirmed", "partially_cancelled"}:
+        return "confirmed"
+    if booking_status == "waitlisted":
+        return "not_required"
+    if booking_status in {"expired", "failed"}:
+        return "released"
+    if booking_status == "capacity_conflict":
+        return "capacity_conflict"
+    if booking_status == "cancelled":
+        return "not_required" if previous == "not_required" else "released"
+    return None
 
 
 def add_participant_status_history_if_changed(
@@ -527,6 +566,8 @@ def validate_booking_status_history_business_rules(
     if (
         history_data["old_booking_status"] == history_data["new_booking_status"]
         and history_data["old_payment_status"] == history_data["new_payment_status"]
+        and history_data["old_reservation_status"]
+        == history_data["new_reservation_status"]
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -562,6 +603,15 @@ def create_booking_status_history_record(
     payload: BookingStatusHistoryCreate,
 ) -> BookingStatusHistory:
     history_data = payload.model_dump()
+    history_data["old_reservation_status"] = history_data.get(
+        "old_reservation_status"
+    ) or reservation_status_for_booking_status(history_data["old_booking_status"])
+    history_data["new_reservation_status"] = history_data.get(
+        "new_reservation_status"
+    ) or reservation_status_for_booking_status(
+        history_data["new_booking_status"],
+        previous=history_data["old_reservation_status"],
+    )
     validate_booking_status_history_business_rules(history_data)
     validate_booking_status_history_references(db, history_data)
 

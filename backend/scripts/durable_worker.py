@@ -4,8 +4,7 @@ Run with:
 
     python -m backend.scripts.durable_worker --once
 
-Production job definitions are intentionally not registered in WS05-01A. Later
-passes add consumer-specific handlers after their state machines are approved.
+The production registry is shared by every enqueue path and this worker.
 """
 
 from __future__ import annotations
@@ -19,11 +18,11 @@ from backend.database import SessionLocal, check_database_connection
 from backend.services.durable_job_service import (
     DEFAULT_WORKER_VERSION,
     DurableJobQueuePolicy,
-    DurableJobRegistry,
     DurableJobRunner,
     backlog_summary,
     inspect_job_history,
 )
+from backend.services.payment_job_service import build_production_job_registry
 
 
 def _format_worker_summaries(summary) -> list[dict[str, object]]:
@@ -65,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     check_database_connection()
-    registry = DurableJobRegistry()
+    registry = build_production_job_registry()
     policy = DurableJobQueuePolicy(poll_interval_seconds=args.poll_seconds)
 
     if args.status:

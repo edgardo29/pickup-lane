@@ -27,6 +27,12 @@ class StripePaymentIntentResult:
     client_secret: str | None
     status: str
     latest_charge_id: str | None = None
+    amount_cents: int | None = None
+    amount_received_cents: int | None = None
+    currency: str | None = None
+    customer_id: str | None = None
+    metadata: dict[str, str] | None = None
+    failure_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -172,11 +178,24 @@ def extract_payment_intent_result(payment_intent: Any) -> StripePaymentIntentRes
     latest_charge = getattr(payment_intent, "latest_charge", None)
     latest_charge_id = latest_charge if isinstance(latest_charge, str) else None
 
+    customer = getattr(payment_intent, "customer", None)
+    metadata = getattr(payment_intent, "metadata", None)
+    last_error = getattr(payment_intent, "last_payment_error", None)
     return StripePaymentIntentResult(
         id=payment_intent.id,
         client_secret=getattr(payment_intent, "client_secret", None),
         status=payment_intent.status,
         latest_charge_id=latest_charge_id,
+        amount_cents=getattr(payment_intent, "amount", None),
+        amount_received_cents=getattr(payment_intent, "amount_received", None),
+        currency=str(getattr(payment_intent, "currency", "") or "").upper() or None,
+        customer_id=customer if isinstance(customer, str) else None,
+        metadata=dict(metadata) if isinstance(metadata, dict) else None,
+        failure_code=(
+            str(getattr(last_error, "code", "") or "") or None
+            if last_error is not None
+            else None
+        ),
     )
 
 
@@ -297,35 +316,73 @@ def retrieve_payment_method(
     return extract_card_payment_method_result(payment_method)
 
 
-def detach_payment_method(payment_method_id: str) -> None:
+def detach_payment_method(
+    payment_method_id: str,
+    *,
+    idempotency_key: str | None = None,
+) -> None:
     client = get_stripe_client_pair().mutation
+
+    def detach():
+        if idempotency_key is None:
+            return client.v1.payment_methods.detach(payment_method_id)
+        return client.v1.payment_methods.detach(
+            payment_method_id,
+            options={"idempotency_key": idempotency_key},
+        )
+
     _call_stripe_mutation(
         "payment_method.detach",
-        lambda: client.v1.payment_methods.detach(payment_method_id),
+        detach,
     )
 
 
 def set_customer_default_payment_method(
-    *, customer_id: str, payment_method_id: str
+    *,
+    customer_id: str,
+    payment_method_id: str,
+    idempotency_key: str | None = None,
 ) -> None:
     client = get_stripe_client_pair().mutation
+
+    def set_default():
+        payload = {
+            "invoice_settings": {"default_payment_method": payment_method_id}
+        }
+        if idempotency_key is None:
+            return client.v1.customers.update(customer_id, payload)
+        return client.v1.customers.update(
+            customer_id,
+            payload,
+            options={"idempotency_key": idempotency_key},
+        )
+
     _call_stripe_mutation(
         "customer.default_payment_method.set",
-        lambda: client.v1.customers.update(
-            customer_id,
-            {"invoice_settings": {"default_payment_method": payment_method_id}},
-        ),
+        set_default,
     )
 
 
-def clear_customer_default_payment_method(*, customer_id: str) -> None:
+def clear_customer_default_payment_method(
+    *,
+    customer_id: str,
+    idempotency_key: str | None = None,
+) -> None:
     client = get_stripe_client_pair().mutation
+
+    def clear_default():
+        payload = {"invoice_settings": {"default_payment_method": None}}
+        if idempotency_key is None:
+            return client.v1.customers.update(customer_id, payload)
+        return client.v1.customers.update(
+            customer_id,
+            payload,
+            options={"idempotency_key": idempotency_key},
+        )
+
     _call_stripe_mutation(
         "customer.default_payment_method.clear",
-        lambda: client.v1.customers.update(
-            customer_id,
-            {"invoice_settings": {"default_payment_method": None}},
-        ),
+        clear_default,
     )
 
 
@@ -364,8 +421,8 @@ def confirm_payment_intent(
     payment_method_id: str,
     return_url: str | None = None,
     off_session: bool = False,
+    idempotency_key: str | None = None,
 ) -> StripePaymentIntentResult:
-    stripe = get_stripe_module()
     confirm_payload: dict[str, object] = {
         "payment_method": payment_method_id,
     }
@@ -375,13 +432,19 @@ def confirm_payment_intent(
         confirm_payload["off_session"] = True
 
     client = get_stripe_client_pair().mutation
-    payment_intent = _call_stripe_mutation(
-        "payment_intent.confirm",
-        lambda: client.v1.payment_intents.confirm(
+    def confirm():
+        if idempotency_key is None:
+            return client.v1.payment_intents.confirm(
+                payment_intent_id,
+                confirm_payload,
+            )
+        return client.v1.payment_intents.confirm(
             payment_intent_id,
             confirm_payload,
-        ),
-    )
+            options={"idempotency_key": idempotency_key},
+        )
+
+    payment_intent = _call_stripe_mutation("payment_intent.confirm", confirm)
 
     return extract_payment_intent_result(payment_intent)
 
@@ -468,20 +531,12 @@ def map_payment_intent_status(payment_intent_status: str) -> str:
     if payment_intent_status in {
         "requires_payment_method",
         "requires_confirmation",
+        "requires_action",
+        "processing",
         "requires_capture",
+        "succeeded",
+        "canceled",
     }:
-        return "requires_payment_method"
+        return payment_intent_status
 
-    if payment_intent_status == "requires_action":
-        return "requires_action"
-
-    if payment_intent_status == "processing":
-        return "processing"
-
-    if payment_intent_status == "succeeded":
-        return "succeeded"
-
-    if payment_intent_status == "canceled":
-        return "canceled"
-
-    return "processing"
+    return "unknown"
