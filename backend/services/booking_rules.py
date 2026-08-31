@@ -15,6 +15,14 @@ VALID_BOOKING_STATUSES = {
     "cancelled",
     "expired",
     "failed",
+    "capacity_conflict",
+}
+VALID_RESERVATION_STATUSES = {
+    "not_required",
+    "held",
+    "confirmed",
+    "released",
+    "capacity_conflict",
 }
 VALID_PAYMENT_STATUSES = {
     "not_required",
@@ -44,7 +52,7 @@ def validate_booking_status(value: str) -> None:
             detail=(
                 "booking_status must be 'pending_payment', 'confirmed', "
                 "'waitlisted', 'partially_cancelled', 'cancelled', "
-                "'expired', or 'failed'."
+                "'expired', 'failed', or 'capacity_conflict'."
             ),
         )
 
@@ -65,6 +73,28 @@ def validate_booking_payment_status(value: str) -> None:
 def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
     validate_booking_status(booking_data["booking_status"])
     validate_booking_payment_status(booking_data["payment_status"])
+    reservation_status = booking_data["reservation_status"]
+    if reservation_status not in VALID_RESERVATION_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="reservation_status is not supported.",
+        )
+
+    expected_reservations = {
+        "pending_payment": {"held"},
+        "confirmed": {"confirmed"},
+        "partially_cancelled": {"confirmed"},
+        "waitlisted": {"not_required"},
+        "expired": {"released"},
+        "failed": {"released"},
+        "capacity_conflict": {"capacity_conflict"},
+        "cancelled": {"released", "not_required"},
+    }
+    if reservation_status not in expected_reservations[booking_data["booking_status"]]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="booking_status and reservation_status are inconsistent.",
+        )
 
     if (
         booking_data["booking_status"] == "pending_payment"
@@ -189,5 +219,28 @@ def normalize_booking_lifecycle_fields(
         normalized_data["cancelled_at"] = None
         normalized_data["cancelled_by_user_id"] = None
         normalized_data["cancel_reason"] = None
+
+    previous_reservation = (
+        existing_booking.reservation_status if existing_booking is not None else None
+    )
+    reservation_by_booking = {
+        "pending_payment": "held",
+        "confirmed": "confirmed",
+        "partially_cancelled": "confirmed",
+        "waitlisted": "not_required",
+        "expired": "released",
+        "failed": "released",
+        "capacity_conflict": "capacity_conflict",
+    }
+    if normalized_data["booking_status"] == "cancelled":
+        normalized_data["reservation_status"] = (
+            "not_required" if previous_reservation == "not_required" else "released"
+        )
+    else:
+        normalized_data["reservation_status"] = reservation_by_booking[
+            normalized_data["booking_status"]
+        ]
+    if normalized_data["reservation_status"] != "held":
+        normalized_data["expires_at"] = None
 
     return normalized_data

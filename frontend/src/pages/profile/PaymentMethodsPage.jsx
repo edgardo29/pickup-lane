@@ -1,5 +1,5 @@
 import { Elements } from '@stripe/react-stripe-js'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ArrowLeftIcon } from '../../components/AuthIcons.jsx'
 import { AppPageHeader } from '../../components/app/index.js'
@@ -18,6 +18,7 @@ import {
   stripePromise,
 } from '../../lib/stripe.js'
 import {
+  createPaymentMethodOperationId,
   createPaymentMethodSetupIntent,
   listUserPaymentMethods,
   removePaymentMethod,
@@ -61,6 +62,8 @@ export function PaymentMethodsPage() {
   const [activeMenuPaymentMethodId, setActiveMenuPaymentMethodId] = useState('')
   const [removeCandidate, setRemoveCandidate] = useState(null)
   const [removeStatus, setRemoveStatus] = useState('idle')
+  const [setupSyncOperationId, setSetupSyncOperationId] = useState('')
+  const setupCreateOperationIdRef = useRef('')
   const stripePaymentsEnabled = areStripePaymentsEnabled()
   const stripeReady = hasStripeCheckoutSupport()
   const hasReachedSavedCardLimit = paymentMethods.length >= MAX_SAVED_PAYMENT_METHODS
@@ -95,6 +98,16 @@ export function PaymentMethodsPage() {
     return () => window.clearTimeout(timerId)
   }, [loadPaymentMethods])
 
+  function resetSetupOperationIds() {
+    setupCreateOperationIdRef.current = ''
+    setSetupSyncOperationId('')
+  }
+
+  function prepareSetupOperationIds() {
+    setupCreateOperationIdRef.current = createPaymentMethodOperationId()
+    setSetupSyncOperationId(createPaymentMethodOperationId())
+  }
+
   async function createFreshSetupIntent() {
     if (!firebaseUser) {
       return null
@@ -103,6 +116,7 @@ export function PaymentMethodsPage() {
     return createPaymentMethodSetupIntent(
       firebaseUser,
       paymentMethods.length === 0,
+      setupCreateOperationIdRef.current,
     )
   }
 
@@ -116,6 +130,7 @@ export function PaymentMethodsPage() {
     setSuccessMessage('')
 
     try {
+      prepareSetupOperationIds()
       const setupIntent = await createFreshSetupIntent()
       if (!setupIntent) {
         throw new Error('Sign in to manage payment methods.')
@@ -136,6 +151,7 @@ export function PaymentMethodsPage() {
     setSetupError(errorMessage)
 
     try {
+      prepareSetupOperationIds()
       const setupIntent = await createFreshSetupIntent()
       if (!setupIntent) {
         throw new Error('Sign in to manage payment methods.')
@@ -164,8 +180,9 @@ export function PaymentMethodsPage() {
     setSuccessMessage('')
 
     try {
+      const operationId = createPaymentMethodOperationId()
       await runWithStepUp(
-        () => setDefaultPaymentMethod(firebaseUser, paymentMethodId),
+        () => setDefaultPaymentMethod(firebaseUser, paymentMethodId, operationId),
         { actionLabel: 'change your default card' },
       )
       await loadPaymentMethods()
@@ -193,8 +210,9 @@ export function PaymentMethodsPage() {
     setSuccessMessage('')
 
     try {
+      const operationId = createPaymentMethodOperationId()
       await runWithStepUp(
-        () => removePaymentMethod(firebaseUser, removeCandidate.id),
+        () => removePaymentMethod(firebaseUser, removeCandidate.id, operationId),
         { actionLabel: 'remove this card' },
       )
       await loadPaymentMethods()
@@ -216,6 +234,7 @@ export function PaymentMethodsPage() {
     setSetupClientSecret('')
     setSetupError('')
     setSetupStatus('idle')
+    resetSetupOperationIds()
   }
 
   return (
@@ -326,11 +345,13 @@ export function PaymentMethodsPage() {
                   onSaved={async () => {
                     setSetupClientSecret('')
                     setSetupStatus('idle')
+                    resetSetupOperationIds()
                     await loadPaymentMethods()
                     setSuccessMessage('Card saved.')
                   }}
                   onSyncRejected={handleSetupRejectedAfterStripeSuccess}
                   setAsDefault={paymentMethods.length === 0}
+                  syncOperationId={setupSyncOperationId}
                   setupClientSecret={setupClientSecret}
                   setSetupError={setSetupError}
                   setSetupStatus={setSetupStatus}

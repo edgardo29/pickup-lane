@@ -200,7 +200,6 @@ def test_current_stripe_mutation_callers_have_workflow_specific_contexts() -> No
         "admin_refund_retry",
         "official_game_cancellation_refund",
         "official_player_removal_refund",
-        "late_checkout_payment_refund",
         "community_publish_financial_outcome_refund",
         "user_visible_saved_card_detach",
         "account_deletion_saved_card_cleanup",
@@ -208,6 +207,7 @@ def test_current_stripe_mutation_callers_have_workflow_specific_contexts() -> No
         "saved_card_default_set",
         "saved_card_default_clear",
     }
+    assert "late_checkout_payment_refund" not in contexts
 
 
 @pytest.mark.requirement("WS02-04C2-R3")

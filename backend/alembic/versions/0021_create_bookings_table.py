@@ -1,7 +1,7 @@
 """create bookings table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0021_bookings'
@@ -18,6 +18,7 @@ def upgrade() -> None:
         sa.Column('buyer_user_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('booking_status', sa.String(length=30), nullable=False, server_default=sa.text("'pending_payment'")),
         sa.Column('payment_status', sa.String(length=30), nullable=False, server_default=sa.text("'unpaid'")),
+        sa.Column('reservation_status', sa.String(length=30), nullable=False, server_default=sa.text("'held'")),
         sa.Column('participant_count', sa.Integer(), nullable=False),
         sa.Column('subtotal_cents', sa.Integer(), nullable=False),
         sa.Column('platform_fee_cents', sa.Integer(), nullable=False, server_default=sa.text('0')),
@@ -33,10 +34,12 @@ def upgrade() -> None:
         sa.Column('expires_at', sa.DateTime(timezone=True)),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
-        sa.CheckConstraint("booking_status IN ('pending_payment', 'confirmed', 'waitlisted', 'partially_cancelled', 'cancelled', 'expired', 'failed')", name='ck_bookings_booking_status'),
+        sa.CheckConstraint("booking_status IN ('pending_payment', 'confirmed', 'waitlisted', 'partially_cancelled', 'cancelled', 'expired', 'failed', 'capacity_conflict')", name='ck_bookings_booking_status'),
         sa.CheckConstraint("(booking_status <> 'cancelled' OR cancelled_at IS NOT NULL)", name='ck_bookings_cancelled_requires_cancelled_at'),
         sa.CheckConstraint("(booking_status <> 'confirmed' OR booked_at IS NOT NULL)", name='ck_bookings_confirmed_requires_booked_at'),
-        sa.CheckConstraint("(booking_status <> 'pending_payment' OR expires_at IS NOT NULL)", name='ck_bookings_pending_payment_requires_expires_at'),
+        sa.CheckConstraint("reservation_status IN ('not_required', 'held', 'confirmed', 'released', 'capacity_conflict')", name='ck_bookings_reservation_status'),
+        sa.CheckConstraint("(booking_status = 'pending_payment' AND reservation_status = 'held' AND expires_at IS NOT NULL) OR (booking_status IN ('confirmed', 'partially_cancelled') AND reservation_status = 'confirmed' AND expires_at IS NULL) OR (booking_status = 'waitlisted' AND reservation_status = 'not_required' AND expires_at IS NULL) OR (booking_status IN ('expired', 'failed') AND reservation_status = 'released' AND expires_at IS NULL) OR (booking_status = 'capacity_conflict' AND reservation_status = 'capacity_conflict' AND expires_at IS NULL) OR (booking_status = 'cancelled' AND reservation_status IN ('released', 'not_required') AND expires_at IS NULL)", name='ck_bookings_reservation_lifecycle'),
+        sa.CheckConstraint("reservation_status <> 'held' OR payment_status NOT IN ('partially_refunded', 'refunded', 'credit_restored')", name='ck_bookings_held_financial_summary'),
         sa.CheckConstraint("currency = 'USD'", name='ck_bookings_currency'),
         sa.CheckConstraint('discount_cents >= 0', name='ck_bookings_discount_cents'),
         sa.CheckConstraint('participant_count > 0', name='ck_bookings_participant_count'),

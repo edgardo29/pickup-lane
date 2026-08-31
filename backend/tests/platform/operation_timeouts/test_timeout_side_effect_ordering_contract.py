@@ -45,6 +45,13 @@ class _RecordingSession:
     def refresh(self, value: object) -> None:
         self.refreshed.append(value)
 
+    def get(self, model, ident):
+        del model
+        for value in reversed(self.added):
+            if getattr(value, "id", None) == ident:
+                return value
+        return None
+
 
 def _stripe_timeout(operation: str) -> DependencyMutationTimeoutUnknownError:
     return DependencyMutationTimeoutUnknownError(
@@ -105,7 +112,7 @@ def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_pr
 ) -> None:
     from backend.models import Payment
     from backend.schemas.checkout_schema import GameCheckoutPaymentIntentCreate
-    import backend.services.checkout_service as checkout_service
+    from backend.services import checkout_service
     from backend.services.game_credit_service import GameCreditApplication
 
     game_id = uuid.uuid4()
@@ -125,6 +132,7 @@ def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_pr
     db = _RecordingSession(added=[], added_many=[], refreshed=[])
     provider_create_calls: list[dict[str, object]] = []
     provider_confirm_calls: list[str] = []
+    reconciliation_jobs: list[tuple[uuid.UUID, str]] = []
 
     monkeypatch.setattr(
         checkout_service,
@@ -177,6 +185,18 @@ def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_pr
         "sync_game_capacity_status",
         lambda *args, **kwargs: None,
     )
+    monkeypatch.setattr(
+        checkout_service,
+        "get_database_now",
+        lambda db: datetime.now(timezone.utc),
+    )
+    monkeypatch.setattr(
+        checkout_service,
+        "enqueue_payment_reconcile_job",
+        lambda db, payment_id, *, reason: reconciliation_jobs.append(
+            (payment_id, reason)
+        ),
+    )
 
     def create_payment_intent(**kwargs):
         provider_create_calls.append(kwargs)
@@ -200,27 +220,35 @@ def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_pr
             current_user,
         )
 
-    staged_payments = [value for value in db.added if isinstance(value, Payment)]
+    staged_payments = {
+        value.id: value for value in db.added if isinstance(value, Payment)
+    }
     assert exc_info.value.operation == "stripe.payment_intent.create"
     assert len(provider_create_calls) == 1
     assert provider_confirm_calls == []
     assert db.flush_calls == 1
-    assert db.commit_calls == 1
-    assert db.rollback_calls == 0
+    assert db.commit_calls == 2
+    assert db.rollback_calls == 2
     assert len(staged_payments) == 1
-    assert staged_payments[0].payment_status == "requires_payment_method"
-    assert staged_payments[0].provider_payment_intent_id is None
-    assert staged_payments[0].provider_charge_id is None
-    assert staged_payments[0].payment_status not in {"failed", "succeeded"}
+    staged_payment = next(iter(staged_payments.values()))
+    assert staged_payment.payment_status == "unknown"
+    assert staged_payment.provider_payment_intent_id is None
+    assert staged_payment.provider_charge_id is None
+    assert staged_payment.payment_status not in {"failed", "succeeded"}
+    assert reconciliation_jobs == [
+        (staged_payment.id, "payment_intent_creation")
+    ]
 
 
 @pytest.mark.requirement("WS02-04C1-R8")
 @pytest.mark.no_db_cleanup
 def test_refund_timeout_branches_preserve_processing_unknown_handoff() -> None:
-    import backend.services.admin_financial_outcome_service as admin_financial_outcome_service
-    import backend.services.game_cancellation_service as game_cancellation_service
-    import backend.services.official_game_player_removal_service as official_game_player_removal_service
-    import backend.services.stripe_webhook_service as stripe_webhook_service
+    from backend.services import (
+        admin_financial_outcome_service,
+        game_cancellation_service,
+        official_game_player_removal_service,
+        stripe_webhook_service,
+    )
 
     timeout_sources = {
         "publish_fee": inspect.getsource(
@@ -229,20 +257,23 @@ def test_refund_timeout_branches_preserve_processing_unknown_handoff() -> None:
         "cancellation": inspect.getsource(
             game_cancellation_service.create_official_cancellation_refunds
         ),
-        "late_payment": inspect.getsource(
-            stripe_webhook_service.create_late_payment_refund_if_needed
-        ),
         "admin_removal": inspect.getsource(
             official_game_player_removal_service.execute_admin_removal_refunds
         ),
     }
+    late_payment_source = inspect.getsource(
+        stripe_webhook_service.expire_late_successful_payment
+    )
 
     for source in timeout_sources.values():
         assert "except DependencyMutationTimeoutUnknownError:" in source
         assert "processing" in source
     assert '"unknown"' in timeout_sources["publish_fee"]
-    for key in ("cancellation", "late_payment", "admin_removal"):
+    for key in ("cancellation", "admin_removal"):
         assert "stripe_refund_timeout_unknown" in timeout_sources[key]
+    assert "ensure_payment_compensation(" in late_payment_source
+    assert "DependencyMutationTimeoutUnknownError" not in late_payment_source
+    assert "create_stripe_refund(" not in late_payment_source
 
 
 @pytest.mark.requirement("WS02-04C1-R8")
@@ -251,7 +282,7 @@ def test_firebase_account_deletion_timeout_records_support_unknown_outcome(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.schemas.auth_schema import AuthDeleteAccountRequest
-    import backend.services.account_deletion_service as account_deletion_service
+    from backend.services import account_deletion_service
 
     user = SimpleNamespace(
         id=uuid.uuid4(),
@@ -389,6 +420,7 @@ def test_saved_card_unpersisted_cleanup_timeout_cannot_create_saved_card_state(
                 user,
                 setup_intent_id="seti_ws02_04c1_unpersisted",
                 set_as_default=False,
+                idempotency_key=uuid.uuid4(),
             )
         db.rollback()
 
@@ -412,7 +444,7 @@ def test_saved_card_unpersisted_cleanup_timeout_cannot_create_saved_card_state(
 def test_saved_card_unpersisted_cleanup_timeout_is_best_effort_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.payment_method_service as payment_method_service
+    from backend.services import payment_method_service
 
     sync_source = inspect.getsource(payment_method_service.sync_saved_payment_method)
     detach_calls: list[str] = []

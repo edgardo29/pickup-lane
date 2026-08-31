@@ -1,10 +1,10 @@
 """Waitlist workflow orchestration for game joins and promotion."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.models import (
@@ -12,12 +12,21 @@ from backend.models import (
     Game,
     GameParticipant,
     Payment,
+    PaymentConfirmationAttempt,
     User,
     UserPaymentMethod,
     WaitlistEntry,
 )
-from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
+from backend.observability.timeouts import (
+    DependencyMutationTimeoutUnknownError,
+    PublicTimeoutError,
+)
 from backend.schemas.game_schema import GameJoinCreate
+from backend.services.game_credit_service import release_reserved_game_credits
+from backend.services.game_notification_service import (
+    create_waitlist_payment_failed_notification,
+    create_waitlist_promotion_notification,
+)
 from backend.services.game_rules import (
     AUTO_CHARGE_CONSENT_VERSION_MAX_LENGTH,
     WAITLIST_PROMOTION_CANDIDATE_STATUSES,
@@ -32,17 +41,18 @@ from backend.services.game_service import (
     get_next_waitlist_position,
     sync_game_capacity_status,
 )
-from backend.services.game_notification_service import (
-    create_waitlist_payment_failed_notification,
-    create_waitlist_promotion_notification,
+from backend.services.payment_job_service import enqueue_payment_reconcile_job
+from backend.services.payment_lifecycle_policy import canonical_fingerprint
+from backend.services.payment_method_service import (
+    apply_provider_verified_saved_payment_method,
+    is_saved_payment_method_expired,
 )
-from backend.services.payment_method_service import is_saved_payment_method_expired
 from backend.services.stripe_service import (
     StripeConfigError,
-    StripePaymentIntentResult,
     confirm_payment_intent,
     create_payment_intent,
     map_payment_intent_status,
+    retrieve_payment_method,
 )
 
 PAYMENT_PROCESSING_HOLD_MINUTES = 2
@@ -68,6 +78,17 @@ def commit_paid_waitlist_auto_promotion_state(db: Session, *, detail: str) -> No
             status_code=status.HTTP_409_CONFLICT,
             detail=detail,
         ) from exc
+
+
+def get_database_now(db: Session) -> datetime:
+    if not isinstance(db, Session):
+        return datetime.now(timezone.utc)
+    database_now = db.scalar(select(func.now()))
+    if not isinstance(database_now, datetime):
+        raise RuntimeError(  # noqa: TRY004
+            "PostgreSQL did not return the current database time"
+        )
+    return database_now
 
 
 def get_authorized_waitlist_payment_method(
@@ -203,6 +224,7 @@ def create_waitlist_auto_charge_payment(
     db_game: Game,
     booking: Booking,
     waitlist_entry: WaitlistEntry,
+    provider_customer_id: str,
     now: datetime,
 ) -> Payment:
     payment_id = uuid.uuid4()
@@ -218,8 +240,22 @@ def create_waitlist_auto_charge_payment(
         idempotency_key=(
             f"waitlist:{waitlist_entry.id}:booking:{booking.id}:auto_charge"
         ),
+        creation_fingerprint=canonical_fingerprint(
+            {
+                "payment_id": str(payment_id),
+                "booking_id": str(booking.id),
+                "payer_user_id": str(booking.buyer_user_id),
+                "provider_customer_id": provider_customer_id,
+                "amount_cents": booking.total_cents,
+                "currency": booking.currency,
+                "game_id": str(db_game.id),
+                "participant_count": booking.participant_count,
+                "waitlist_entry_id": str(waitlist_entry.id),
+            }
+        ),
         amount_cents=booking.total_cents,
         currency=booking.currency,
+        provider_customer_id=provider_customer_id,
         payment_status="requires_payment_method",
         paid_at=None,
         failure_code=None,
@@ -228,6 +264,7 @@ def create_waitlist_auto_charge_payment(
             "source": "waitlist_auto_promote",
             "game_id": str(db_game.id),
             "booking_id": str(booking.id),
+            "payment_id": str(payment_id),
             "waitlist_entry_id": str(waitlist_entry.id),
             "user_id": str(booking.buyer_user_id),
             "authorized_amount_cents": waitlist_entry.authorized_amount_cents,
@@ -263,6 +300,7 @@ def mark_paid_waitlist_auto_promotion_processing(
 
     booking.booking_status = "pending_payment"
     booking.payment_status = "processing"
+    booking.reservation_status = "held"
     booking.expires_at = hold_expires_at
     booking.updated_at = now
     db.add(booking)
@@ -347,8 +385,19 @@ def mark_paid_waitlist_auto_promotion_failed(
     failure_code: str,
     failure_message: str,
 ) -> None:
+    release_reserved_game_credits(
+        db,
+        booking.id,
+        now=now,
+        reason_code=failure_code,
+        user_id=booking.buyer_user_id,
+    )
+
     if payment is not None:
         payment.payment_status = payment_status or "failed"
+        payment.provider_status = (
+            payment_status if payment_status not in {None, "failed", "unknown"} else None
+        )
         payment.failure_code = failure_code
         payment.failure_message = failure_message
         payment.updated_at = now
@@ -363,6 +412,7 @@ def mark_paid_waitlist_auto_promotion_failed(
 
     booking.booking_status = "failed"
     booking.payment_status = "failed"
+    booking.reservation_status = "released"
     booking.expires_at = None
     booking.updated_at = now
     db.add(booking)
@@ -385,56 +435,6 @@ def mark_paid_waitlist_auto_promotion_failed(
     )
 
 
-def confirm_paid_waitlist_auto_promotion(
-    db: Session,
-    db_game: Game,
-    waitlist_entry: WaitlistEntry,
-    booking: Booking,
-    booking_participants: list[GameParticipant],
-    payment: Payment,
-    payment_intent: StripePaymentIntentResult,
-    now: datetime,
-) -> None:
-    next_roster_order = get_next_roster_order(db, db_game.id)
-    for index, booking_participant in enumerate(booking_participants):
-        booking_participant.participant_status = "confirmed"
-        booking_participant.attendance_status = "unknown"
-        booking_participant.confirmed_at = now
-        booking_participant.roster_order = next_roster_order + index
-        booking_participant.updated_at = now
-        db.add(booking_participant)
-
-    booking.booking_status = "confirmed"
-    booking.payment_status = "paid"
-    booking.booked_at = now
-    booking.expires_at = None
-    booking.updated_at = now
-    db.add(booking)
-
-    payment.payment_status = "succeeded"
-    payment.provider_charge_id = payment_intent.latest_charge_id
-    payment.paid_at = now
-    payment.failure_code = None
-    payment.failure_message = None
-    payment.updated_at = now
-    db.add(payment)
-
-    waitlist_entry.waitlist_status = "accepted"
-    waitlist_entry.promoted_booking_id = booking.id
-    waitlist_entry.promoted_at = waitlist_entry.promoted_at or now
-    waitlist_entry.updated_at = now
-    db.add(waitlist_entry)
-
-    create_waitlist_promotion_notification(
-        db,
-        db_game,
-        waitlist_entry,
-        booking_participants[0],
-        now,
-        payment,
-    )
-
-
 def paid_waitlist_prerequisites_missing(
     waitlist_entry: WaitlistEntry,
     booking: Booking,
@@ -442,10 +442,54 @@ def paid_waitlist_prerequisites_missing(
     return (
         waitlist_entry.auto_charge_consent_at is None
         or not waitlist_entry.auto_charge_consent_version
+        or waitlist_entry.authorized_payment_method_id is None
         or not waitlist_entry.authorized_stripe_payment_method_id
         or waitlist_entry.authorized_amount_cents is None
         or waitlist_entry.authorized_amount_cents < booking.total_cents
     )
+
+
+def fail_paid_waitlist_auto_promotion_after_checkpoint(
+    db: Session,
+    *,
+    game_id: uuid.UUID,
+    waitlist_entry_id: uuid.UUID,
+    booking_id: uuid.UUID,
+    payment_id: uuid.UUID,
+    now: datetime,
+    failure_code: str,
+    failure_message: str,
+) -> tuple[str, int]:
+    (
+        db_game,
+        waitlist_entry,
+        booking,
+        booking_participants,
+        payment,
+    ) = get_locked_paid_waitlist_auto_promotion_state(
+        db,
+        game_id=game_id,
+        waitlist_entry_id=waitlist_entry_id,
+        booking_id=booking_id,
+        payment_id=payment_id,
+    )
+    mark_paid_waitlist_auto_promotion_failed(
+        db,
+        db_game,
+        waitlist_entry,
+        booking,
+        booking_participants,
+        payment,
+        now,
+        payment_status="failed",
+        failure_code=failure_code,
+        failure_message=failure_message,
+    )
+    commit_paid_waitlist_auto_promotion_state(
+        db,
+        detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+    )
+    return "failed", 0
 
 
 def attempt_paid_waitlist_auto_promotion(
@@ -471,6 +515,22 @@ def attempt_paid_waitlist_auto_promotion(
         )
         return "failed", 0
 
+    buyer_user = db.get(User, booking.buyer_user_id)
+    if buyer_user is None or not buyer_user.stripe_customer_id:
+        mark_paid_waitlist_auto_promotion_failed(
+            db,
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            None,
+            now,
+            payment_status=None,
+            failure_code="waitlist_auto_charge_customer_missing",
+            failure_message="Waitlist auto-charge customer identity was missing.",
+        )
+        return "failed", 0
+
     mark_paid_waitlist_auto_promotion_processing(
         db,
         waitlist_entry,
@@ -482,6 +542,7 @@ def attempt_paid_waitlist_auto_promotion(
         db_game,
         booking,
         waitlist_entry,
+        buyer_user.stripe_customer_id,
         now,
     )
     db.add(payment)
@@ -496,14 +557,146 @@ def attempt_paid_waitlist_auto_promotion(
     payment_idempotency_key = payment.idempotency_key
     waitlist_entry_id = waitlist_entry.id
     authorized_amount_cents = waitlist_entry.authorized_amount_cents
-    authorized_payment_method_id = waitlist_entry.authorized_stripe_payment_method_id
+    authorized_payment_method_local_id = waitlist_entry.authorized_payment_method_id
+    authorized_provider_payment_method_id = (
+        waitlist_entry.authorized_stripe_payment_method_id
+    )
     commit_paid_waitlist_auto_promotion_state(
         db,
         detail=WAITLIST_AUTO_PROMOTION_CHECKPOINT_FAILED_DETAIL,
     )
 
     try:
-        buyer_user = db.get(User, buyer_user_id)
+        stripe_payment_method = retrieve_payment_method(
+            authorized_provider_payment_method_id
+        )
+    except StripeConfigError as exc:
+        failure_now = get_database_now(db)
+        return fail_paid_waitlist_auto_promotion_after_checkpoint(
+            db,
+            game_id=game_id,
+            waitlist_entry_id=waitlist_entry_id,
+            booking_id=booking_id,
+            payment_id=payment_id,
+            now=failure_now,
+            failure_code="waitlist_auto_charge_payment_method_config_error",
+            failure_message=str(exc),
+        )
+    except PublicTimeoutError:
+        failure_now = get_database_now(db)
+        return fail_paid_waitlist_auto_promotion_after_checkpoint(
+            db,
+            game_id=game_id,
+            waitlist_entry_id=waitlist_entry_id,
+            booking_id=booking_id,
+            payment_id=payment_id,
+            now=failure_now,
+            failure_code="waitlist_auto_charge_payment_method_verification_timeout",
+            failure_message="Saved card could not be verified before auto-charge.",
+        )
+    except Exception:  # noqa: BLE001 - verification failure definitively fails promotion
+        failure_now = get_database_now(db)
+        return fail_paid_waitlist_auto_promotion_after_checkpoint(
+            db,
+            game_id=game_id,
+            waitlist_entry_id=waitlist_entry_id,
+            booking_id=booking_id,
+            payment_id=payment_id,
+            now=failure_now,
+            failure_code="waitlist_auto_charge_payment_method_verification_failed",
+            failure_message="Saved card could not be verified before auto-charge.",
+        )
+
+    (
+        db_game,
+        waitlist_entry,
+        booking,
+        booking_participants,
+        payment,
+    ) = get_locked_paid_waitlist_auto_promotion_state(
+        db,
+        game_id=game_id,
+        waitlist_entry_id=waitlist_entry_id,
+        booking_id=booking_id,
+        payment_id=payment_id,
+    )
+    buyer_user = db.get(User, buyer_user_id)
+    authorized_payment_method = db.scalar(
+        select(UserPaymentMethod)
+        .where(UserPaymentMethod.id == authorized_payment_method_local_id)
+        .with_for_update()
+    )
+    if (
+        buyer_user is None
+        or not buyer_user.stripe_customer_id
+        or authorized_payment_method is None
+        or authorized_payment_method.user_id != buyer_user.id
+        or authorized_payment_method.method_status != "active"
+        or authorized_payment_method.stripe_customer_id != buyer_user.stripe_customer_id
+        or authorized_payment_method.stripe_payment_method_id
+        != authorized_provider_payment_method_id
+    ):
+        mark_paid_waitlist_auto_promotion_failed(
+            db,
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+            now,
+            payment_status="failed",
+            failure_code="waitlist_auto_charge_payment_method_stale",
+            failure_message="Saved card authorization is no longer valid.",
+        )
+        commit_paid_waitlist_auto_promotion_state(
+            db,
+            detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+        )
+        return "failed", 0
+
+    try:
+        apply_provider_verified_saved_payment_method(
+            db,
+            authorized_payment_method,
+            buyer_user,
+            stripe_payment_method,
+            now,
+        )
+    except HTTPException as exc:
+        mark_paid_waitlist_auto_promotion_failed(
+            db,
+            db_game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+            now,
+            payment_status="failed",
+            failure_code="waitlist_auto_charge_payment_method_stale",
+            failure_message=str(exc.detail),
+        )
+        commit_paid_waitlist_auto_promotion_state(
+            db,
+            detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+        )
+        return "failed", 0
+
+    waitlist_entry.authorized_payment_method_brand = (
+        authorized_payment_method.card_brand
+    )
+    waitlist_entry.authorized_payment_method_last4 = (
+        authorized_payment_method.card_last4
+    )
+    waitlist_entry.updated_at = now
+    db.add(waitlist_entry)
+    commit_paid_waitlist_auto_promotion_state(
+        db,
+        detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+    )
+
+    authorized_payment_method_id = stripe_payment_method.id
+
+    try:
         payment_intent = create_payment_intent(
             amount_cents=payment_amount_cents,
             currency=payment_currency,
@@ -517,8 +710,9 @@ def attempt_paid_waitlist_auto_promotion(
                 "waitlist_entry_id": str(waitlist_entry_id),
                 "authorized_amount_cents": str(authorized_amount_cents),
             },
-            customer_id=buyer_user.stripe_customer_id if buyer_user is not None else None,
+            customer_id=buyer_user.stripe_customer_id,
         )
+        create_now = get_database_now(db)
         (
             db_game,
             waitlist_entry,
@@ -533,9 +727,62 @@ def attempt_paid_waitlist_auto_promotion(
             payment_id=payment_id,
         )
         payment.provider_payment_intent_id = payment_intent.id
-        payment.payment_status = "processing"
-        payment.updated_at = now
+        payment.provider_status = payment_intent.status
+        payment.payment_status = map_payment_intent_status(payment_intent.status)
+        payment.updated_at = create_now
         db.add(payment)
+        enqueue_payment_reconcile_job(
+            db,
+            payment.id,
+            reason="waitlist_payment_intent_creation",
+        )
+        if booking.expires_at is not None and booking.expires_at <= create_now:
+            from backend.services.checkout_service import expire_stale_pending_checkouts
+
+            expire_stale_pending_checkouts(
+                db,
+                db_game,
+                create_now,
+                enqueue_reconciliation=False,
+            )
+            commit_paid_waitlist_auto_promotion_state(
+                db,
+                detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+            )
+            return "failed", 0
+        commit_paid_waitlist_auto_promotion_state(
+            db,
+            detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+        )
+
+        confirmation_fingerprint = canonical_fingerprint(
+            {
+                "payment_id": str(payment_id),
+                "booking_id": str(booking_id),
+                "payer_user_id": str(buyer_user_id),
+                "provider_customer_id": payment.provider_customer_id,
+                "provider_payment_method_id": authorized_payment_method_id,
+                "provider_payment_intent_id": payment_intent.id,
+                "amount_cents": payment_amount_cents,
+                "currency": payment_currency,
+                "game_id": str(game_id),
+                "participant_count": len(booking_participants),
+            }
+        )
+        confirmation_attempt = PaymentConfirmationAttempt(
+            id=uuid.uuid4(),
+            payment_id=payment_id,
+            booking_id=booking_id,
+            user_id=buyer_user_id,
+            provider_customer_id=payment.provider_customer_id,
+            provider_payment_method_id=authorized_payment_method_id,
+            confirmation_fingerprint=confirmation_fingerprint,
+            confirmation_idempotency_key=(
+                f"waitlist-confirm:{payment_id}:{confirmation_fingerprint}"
+            ),
+            outcome="pending",
+        )
+        db.add(confirmation_attempt)
         commit_paid_waitlist_auto_promotion_state(
             db,
             detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
@@ -545,7 +792,9 @@ def attempt_paid_waitlist_auto_promotion(
             payment_intent.id,
             payment_method_id=authorized_payment_method_id,
             off_session=True,
+            idempotency_key=confirmation_attempt.confirmation_idempotency_key,
         )
+        observation_now = get_database_now(db)
         (
             db_game,
             waitlist_entry,
@@ -561,11 +810,62 @@ def attempt_paid_waitlist_auto_promotion(
         )
         payment.provider_payment_intent_id = payment_intent.id
         payment.provider_charge_id = payment_intent.latest_charge_id
-        payment.updated_at = now
+        observed_payment_status = map_payment_intent_status(payment_intent.status)
+        payment.updated_at = observation_now
         db.add(payment)
+        confirmation_attempt = db.get(
+            PaymentConfirmationAttempt, confirmation_attempt.id
+        )
+        confirmation_attempt.outcome = {
+            "succeeded": "succeeded",
+            "requires_action": "failed",
+            "requires_payment_method": "failed",
+            "canceled": "failed",
+        }.get(observed_payment_status, "pending")
+        confirmation_attempt.resolved_at = (
+            observation_now
+            if confirmation_attempt.outcome in {"succeeded", "failed"}
+            else None
+        )
+        confirmation_attempt.error_code = (
+            f"waitlist_confirmation_{observed_payment_status}"
+            if confirmation_attempt.outcome == "failed"
+            else None
+        )
+        confirmation_attempt.updated_at = observation_now
+        db.add(confirmation_attempt)
+        enqueue_payment_reconcile_job(
+            db,
+            payment.id,
+            reason=f"waitlist_confirmation_{confirmation_attempt.id}",
+        )
+        if observed_payment_status in {
+            "requires_action",
+            "requires_payment_method",
+        }:
+            mark_paid_waitlist_auto_promotion_failed(
+                db,
+                db_game,
+                waitlist_entry,
+                booking,
+                booking_participants,
+                payment,
+                observation_now,
+                payment_status=observed_payment_status,
+                failure_code=f"waitlist_auto_charge_{observed_payment_status}",
+                failure_message=(
+                    "Saved card auto-charge could not complete off-session."
+                ),
+            )
+            commit_paid_waitlist_auto_promotion_state(
+                db,
+                detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+            )
+            return "failed", 0
     except HTTPException:
         raise
     except StripeConfigError as exc:
+        failure_now = get_database_now(db)
         (
             db_game,
             waitlist_entry,
@@ -586,7 +886,7 @@ def attempt_paid_waitlist_auto_promotion(
             booking,
             booking_participants,
             payment,
-            now,
+            failure_now,
             payment_status="failed",
             failure_code="waitlist_auto_charge_stripe_config_error",
             failure_message=str(exc),
@@ -597,6 +897,7 @@ def attempt_paid_waitlist_auto_promotion(
         )
         return "failed", 0
     except DependencyMutationTimeoutUnknownError:
+        timeout_now = get_database_now(db)
         (
             db_game,
             waitlist_entry,
@@ -610,17 +911,37 @@ def attempt_paid_waitlist_auto_promotion(
             booking_id=booking_id,
             payment_id=payment_id,
         )
-        payment.payment_status = "processing"
+        payment.payment_status = "unknown"
         payment.failure_code = None
         payment.failure_message = None
-        payment.updated_at = now
+        payment.updated_at = timeout_now
         db.add(payment)
+        enqueue_payment_reconcile_job(
+            db,
+            payment.id,
+            reason="waitlist_payment_intent_creation",
+        )
+        if booking.expires_at is not None and booking.expires_at <= timeout_now:
+            from backend.services.checkout_service import expire_stale_pending_checkouts
+
+            expire_stale_pending_checkouts(
+                db,
+                db_game,
+                timeout_now,
+                enqueue_reconciliation=False,
+            )
+            commit_paid_waitlist_auto_promotion_state(
+                db,
+                detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+            )
+            return "failed", 0
         commit_paid_waitlist_auto_promotion_state(
             db,
             detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
         )
         return "processing", held_spots
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - provider outcome is checkpointed below
+        failure_now = get_database_now(db)
         (
             db_game,
             waitlist_entry,
@@ -641,7 +962,7 @@ def attempt_paid_waitlist_auto_promotion(
             booking,
             booking_participants,
             payment,
-            now,
+            failure_now,
             payment_status="failed",
             failure_code="waitlist_auto_charge_stripe_error",
             failure_message=str(exc) or "Stripe could not complete auto-charge.",
@@ -652,76 +973,28 @@ def attempt_paid_waitlist_auto_promotion(
         )
         return "failed", 0
 
-    payment_status = map_payment_intent_status(payment_intent.status)
-    if payment_status == "succeeded":
-        confirm_paid_waitlist_auto_promotion(
-            db,
-            db_game,
-            waitlist_entry,
-            booking,
-            booking_participants,
-            payment,
-            payment_intent,
-            now,
-        )
-        commit_paid_waitlist_auto_promotion_state(
-            db,
-            detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
-        )
-        return "succeeded", held_spots
-
-    if payment_status == "processing":
-        (
-            db_game,
-            waitlist_entry,
-            booking,
-            booking_participants,
-            payment,
-        ) = get_locked_paid_waitlist_auto_promotion_state(
-            db,
-            game_id=game_id,
-            waitlist_entry_id=waitlist_entry_id,
-            booking_id=booking_id,
-            payment_id=payment_id,
-        )
-        payment.payment_status = "processing"
-        payment.updated_at = now
-        db.add(payment)
-        commit_paid_waitlist_auto_promotion_state(
-            db,
-            detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
-        )
-        return "processing", held_spots
-
-    (
-        db_game,
-        waitlist_entry,
-        booking,
-        booking_participants,
-        payment,
-    ) = get_locked_paid_waitlist_auto_promotion_state(
-        db,
-        game_id=game_id,
-        waitlist_entry_id=waitlist_entry_id,
-        booking_id=booking_id,
-        payment_id=payment_id,
+    from backend.services.stripe_webhook_service import (
+        apply_authoritative_payment_intent_observation,
     )
-    mark_paid_waitlist_auto_promotion_failed(
+
+    apply_authoritative_payment_intent_observation(
         db,
-        db_game,
-        waitlist_entry,
-        booking,
-        booking_participants,
-        payment,
-        now,
-        payment_status=payment_status,
-        failure_code=f"waitlist_auto_charge_{payment_status}",
-        failure_message="Waitlist auto-charge could not be completed.",
+        payment=payment,
+        observation=payment_intent,
+        source="waitlist_confirmation",
+        now=observation_now,
     )
     commit_paid_waitlist_auto_promotion_state(
         db,
         detail=WAITLIST_AUTO_PROMOTION_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
     )
+    db.refresh(booking)
+    if booking.booking_status == "confirmed":
+        return "succeeded", held_spots
+    if booking.booking_status == "capacity_conflict":
+        return "capacity_conflict", 0
+    if booking.booking_status == "pending_payment":
+        return "processing", held_spots
     return "failed", 0
 
 
@@ -849,6 +1122,8 @@ def promote_waitlist_entries(db: Session, db_game: Game, now: datetime) -> None:
 
             booking.booking_status = "confirmed"
             booking.payment_status = "not_required"
+            booking.reservation_status = "confirmed"
+            booking.expires_at = None
             booking.booked_at = now
             booking.updated_at = now
             db.add(booking)

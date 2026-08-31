@@ -171,12 +171,20 @@ def _request(state: _CheckoutState) -> GameCheckoutPaymentIntentCreate:
 
 
 def _install_common_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
-    import backend.services.checkout_service as checkout_service
+    from backend.services import checkout_service
 
     monkeypatch.setattr(checkout_service, "require_stripe_payments_enabled", lambda: None)
     monkeypatch.setattr(checkout_service, "get_stripe_currency", lambda: "USD")
 
-    def saved_payment_method(db, payment_method_id, current_user, *, now):
+    def saved_payment_method(
+        db,
+        payment_method_id,
+        current_user,
+        *,
+        now,
+        verify_provider=True,
+    ):
+        del verify_provider
         del current_user, now
         from backend.models import UserPaymentMethod
 
@@ -193,8 +201,15 @@ def _install_common_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_create_timeout_preserves_checkpoint_without_confirmation_or_blind_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import Booking, GameCredit, GameCreditUsage, Payment, User
-    import backend.services.checkout_service as checkout_service
+    from backend.models import (
+        Booking,
+        DurableJob,
+        GameCredit,
+        GameCreditUsage,
+        Payment,
+        User,
+    )
+    from backend.services import checkout_service
 
     _install_common_fakes(monkeypatch)
     create_calls: list[str] = []
@@ -236,7 +251,10 @@ def test_create_timeout_preserves_checkpoint_without_confirmation_or_blind_repla
         assert booking.booking_status == "pending_payment"
         assert booking.payment_status == "processing"
         assert payment.provider_payment_intent_id is None
-        assert payment.payment_status == "requires_payment_method"
+        assert payment.payment_status == "unknown"
+        reconcile_job = db.scalars(select(DurableJob)).one()
+        assert reconcile_job.job_type == "stripe_payment_intent_reconcile"
+        assert reconcile_job.payload == {"payment_id": str(payment.id)}
         assert usage.usage_status == "reserved"
         assert credit.available_cents == 0
 
@@ -246,7 +264,7 @@ def test_confirmation_unknown_preserves_checkpoint_without_blind_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.models import Booking, GameCredit, GameCreditUsage, Payment, User
-    import backend.services.checkout_service as checkout_service
+    from backend.services import checkout_service
 
     _install_common_fakes(monkeypatch)
     events: list[str] = []
@@ -305,7 +323,7 @@ def test_confirmation_unknown_preserves_checkpoint_without_blind_replay(
             "confirm:pi_ws02_04c2_unknown",
         ]
         assert payment.provider_payment_intent_id == "pi_ws02_04c2_unknown"
-        assert payment.payment_status in {"requires_payment_method", "processing"}
+        assert payment.payment_status == "unknown"
         assert payment.payment_status not in {"succeeded", "failed", "canceled"}
         assert booking.booking_status == "pending_payment"
         assert booking.payment_status == "processing"
@@ -350,7 +368,7 @@ def test_active_hold_confirmation_decision_is_serialized_after_checkpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.models import GameCreditUsage, Payment, User
-    import backend.services.checkout_service as checkout_service
+    from backend.services import checkout_service
 
     _install_common_fakes(monkeypatch)
     with _session() as setup_db:
@@ -430,7 +448,7 @@ def test_active_hold_confirmation_decision_is_serialized_after_checkpoint(
                     _request(state),
                     current_user,
                 )
-        except BaseException as exc:
+        except BaseException as exc:  # noqa: BLE001 - thread worker must capture all failures
             errors[label] = exc
 
     first = threading.Thread(target=run_checkout, args=("first",))
@@ -482,8 +500,16 @@ def test_active_hold_confirmation_decision_is_serialized_after_checkpoint(
 def test_stale_checkout_expiration_releases_local_hold_but_keeps_provider_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import Booking, Game, GameCredit, GameCreditUsage, GameParticipant, Payment, User
-    import backend.services.checkout_service as checkout_service
+    from backend.models import (
+        Booking,
+        Game,
+        GameCredit,
+        GameCreditUsage,
+        GameParticipant,
+        Payment,
+        User,
+    )
+    from backend.services import checkout_service
 
     _install_common_fakes(monkeypatch)
     monkeypatch.setattr(
@@ -541,9 +567,9 @@ def test_stale_checkout_expiration_releases_local_hold_but_keeps_provider_identi
         credit = db.get(GameCredit, state.credit_id)
 
         assert expired_booking.booking_status == "expired"
-        assert expired_booking.payment_status == "failed"
+        assert expired_booking.payment_status == "processing"
         assert participant.participant_status == "cancelled"
-        assert expired_payment.payment_status == "canceled"
+        assert expired_payment.payment_status == "unknown"
         assert expired_payment.provider_payment_intent_id == "pi_ws02_04c2_expiry"
         assert usage.usage_status == "released"
         assert credit.available_cents == 700

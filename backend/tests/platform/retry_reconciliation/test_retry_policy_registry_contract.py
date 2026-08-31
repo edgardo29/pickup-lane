@@ -110,15 +110,36 @@ def test_workflow_specific_stripe_mutation_entries_are_truthful() -> None:
     assert "re-reads the persisted PaymentIntent" in policies[
         "checkout_initial_confirm_after_checkpoint"
     ].current_recovery
+    assert policies["checkout_initial_confirm_after_checkpoint"].provider_idempotency_key_used
+    assert policies[
+        "checkout_initial_confirm_after_checkpoint"
+    ].client_retry_stable_idempotency
+    assert "PaymentConfirmationAttempt" in policies[
+        "checkout_initial_confirm_after_checkpoint"
+    ].idempotency_identity_source
+    assert policies[
+        "checkout_existing_pending_confirm_after_provider_read"
+    ].provider_idempotency_key_used
+    assert "PaymentConfirmationAttempt" in policies[
+        "checkout_existing_pending_confirm_after_provider_read"
+    ].idempotency_identity_source
 
     assert policies["saved_card_customer_creation"].safety_class == (
         retry_policy.RetrySafetyClass.IDEMPOTENT_MUTATION
     )
     assert policies["saved_card_customer_creation"].client_retry_stable_idempotency
     assert policies["saved_card_setup_intent_creation"].safety_class == (
-        retry_policy.RetrySafetyClass.NO_AUTOMATIC_RETRY
+        retry_policy.RetrySafetyClass.IDEMPOTENT_MUTATION
     )
-    assert not policies["saved_card_setup_intent_creation"].client_retry_stable_idempotency
+    assert policies["saved_card_setup_intent_creation"].client_retry_stable_idempotency
+    assert policies["saved_card_setup_intent_creation"].identity_survives_replay
+    assert (
+        policies["saved_card_setup_intent_creation"].idempotency_identity_source
+        == "persisted payment-method operation provider_idempotency_key"
+    )
+    assert "stripe_payment_method_operation_reconcile" in policies[
+        "saved_card_setup_intent_creation"
+    ].current_recovery
 
     assert policies["community_publish_fee_initial_create"].material_callers == (
         "backend.services.community_game_publish_service.create_paid_publish_attempt",
@@ -128,6 +149,20 @@ def test_workflow_specific_stripe_mutation_entries_are_truthful() -> None:
     ].material_callers == (
         "backend.services.community_game_publish_service.create_paid_publish_attempt",
     )
+    assert policies["waitlist_auto_promotion_confirm"].provider_idempotency_key_used
+    assert "PaymentConfirmationAttempt" in policies[
+        "waitlist_auto_promotion_confirm"
+    ].idempotency_identity_source
+    for context in (
+        "user_visible_saved_card_detach",
+        "saved_card_default_set",
+        "saved_card_default_clear",
+    ):
+        assert policies[context].provider_idempotency_key_used
+        assert policies[context].client_retry_stable_idempotency
+        assert policies[context].idempotency_identity_source == (
+            "persisted payment-method operation provider_idempotency_key"
+        )
 
 
 @pytest.mark.requirement("WS02-04C2-R1", "WS02-04C2-R5")
@@ -187,13 +222,16 @@ def test_fanout_entries_and_durable_handoffs_are_complete_and_non_numeric() -> N
         "official_game_cancellation.refunds",
         "official_game_player_removal.refunds",
         "community_publish_fee.financial_outcome_refund",
-        "late_checkout_payment.refund",
+        "late_checkout_payment.compensation",
     }
     for policy in retry_policy.FANOUT_EXECUTION_POLICIES:
         assert (
             "sequential" in policy.execution_model
             or policy.execution_model
-            in {"single_admin_state_gated_workflow", "single_webhook_repair_helper"}
+            in {
+                "single_admin_state_gated_workflow",
+                "single_webhook_compensation_checkpoint",
+            }
         )
         assert policy.new_concurrency_allowed is False
         assert policy.approved_concurrency_cap is None

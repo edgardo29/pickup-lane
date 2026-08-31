@@ -17,7 +17,8 @@ class BookingStatusHistory(Base):
             (
                 "(old_booking_status IS NULL OR old_booking_status IN "
                 "('pending_payment', 'confirmed', 'waitlisted', "
-                "'partially_cancelled', 'cancelled', 'expired', 'failed'))"
+                "'partially_cancelled', 'cancelled', 'expired', 'failed', "
+                "'capacity_conflict'))"
             ),
             name="ck_booking_status_history_old_booking_status",
         ),
@@ -25,7 +26,8 @@ class BookingStatusHistory(Base):
             (
                 "new_booking_status IN ("
                 "'pending_payment', 'confirmed', 'waitlisted', "
-                "'partially_cancelled', 'cancelled', 'expired', 'failed'"
+                "'partially_cancelled', 'cancelled', 'expired', 'failed', "
+                "'capacity_conflict'"
                 ")"
             ),
             name="ck_booking_status_history_new_booking_status",
@@ -47,6 +49,22 @@ class BookingStatusHistory(Base):
                 "'credit_restored', 'disputed'))"
             ),
             name="ck_booking_status_history_new_payment_status",
+        ),
+        CheckConstraint(
+            (
+                "(old_reservation_status IS NULL OR old_reservation_status IN ("
+                "'not_required', 'held', 'confirmed', 'released', "
+                "'capacity_conflict'))"
+            ),
+            name="ck_booking_status_history_old_reservation_status",
+        ),
+        CheckConstraint(
+            (
+                "new_reservation_status IN ("
+                "'not_required', 'held', 'confirmed', 'released', "
+                "'capacity_conflict')"
+            ),
+            name="ck_booking_status_history_new_reservation_status",
         ),
         CheckConstraint(
             (
@@ -86,6 +104,12 @@ class BookingStatusHistory(Base):
     old_payment_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     new_payment_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
+    old_reservation_status: Mapped[str | None] = mapped_column(
+        String(30), nullable=True
+    )
+
+    new_reservation_status: Mapped[str] = mapped_column(String(30), nullable=False)
 
     changed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

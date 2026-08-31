@@ -50,6 +50,7 @@ export function PaymentMethodSetupForm({
   setupError,
   setupStatus,
   submitLabel = 'Save card',
+  syncOperationId,
 }) {
   const stripe = useStripe()
   const elements = useElements()
@@ -92,7 +93,10 @@ export function PaymentMethodSetupForm({
 
       let paymentMethod = null
       try {
-        paymentMethod = await syncPaymentMethod(firebaseUser, { setupIntentId, setAsDefault })
+        paymentMethod = await syncPaymentMethod(
+          firebaseUser,
+          { setupIntentId, setAsDefault, operationId: syncOperationId },
+        )
       } catch (syncError) {
         await onSyncRejected(syncError)
         return

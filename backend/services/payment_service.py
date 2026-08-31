@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 from backend.models import Booking, Game, Payment, User
 from backend.schemas.payment_schema import PaymentCreate, PaymentUpdate
 from backend.services.admin_action_service import record_admin_action
-from backend.services.auth_service import require_active_admin_user, user_is_active_admin
+from backend.services.auth_service import (
+    require_active_admin_user,
+    user_is_active_admin,
+)
+from backend.services.payment_lifecycle_policy import canonical_fingerprint
 from backend.services.payment_rules import (
     COLLECTED_PAYMENT_STATUSES,
     FAILED_PAYMENT_STATUSES,
@@ -277,6 +281,17 @@ def create_payment_record(
 ) -> Payment:
     payment_data = payload.model_dump()
     payment_data["payment_metadata"] = payment_data.pop("metadata")
+    payment_data["creation_fingerprint"] = payment_data.get(
+        "creation_fingerprint"
+    ) or canonical_fingerprint(
+        {
+            "payer_user_id": str(payment_data["payer_user_id"]),
+            "payment_type": payment_data["payment_type"],
+            "idempotency_key": payment_data["idempotency_key"],
+            "amount_cents": payment_data["amount_cents"],
+            "currency": payment_data["currency"],
+        }
+    )
     normalized_payment_data = normalize_payment_lifecycle_fields(payment_data)
     validate_payment_business_rules(normalized_payment_data)
     validate_payment_references(db, normalized_payment_data)

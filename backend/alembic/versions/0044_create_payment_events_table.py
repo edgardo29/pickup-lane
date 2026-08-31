@@ -1,7 +1,7 @@
 """create payment_events table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0044_payment_events'
@@ -18,15 +18,16 @@ def upgrade() -> None:
         sa.Column('provider', sa.String(length=20), nullable=False, server_default=sa.text("'stripe'")),
         sa.Column('provider_event_id', sa.String(length=255), nullable=False),
         sa.Column('event_type', sa.String(length=100), nullable=False),
-        sa.Column('raw_payload', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column('event_envelope', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column('provider_created_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('processing_status', sa.String(length=30), nullable=False, server_default=sa.text("'pending'")),
         sa.Column('processed_at', sa.DateTime(timezone=True)),
-        sa.Column('processing_error', sa.Text()),
+        sa.Column('processing_error_code', sa.String(length=100)),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.CheckConstraint('char_length(btrim(event_type)) > 0', name='ck_payment_events_event_type_not_empty'),
-        sa.CheckConstraint("(processing_status <> 'failed' OR processing_error IS NOT NULL)", name='ck_payment_events_failed_requires_processing_error'),
+        sa.CheckConstraint("(processing_status <> 'failed' OR processing_error_code IS NOT NULL)", name='ck_payment_events_failed_requires_processing_error'),
         sa.CheckConstraint("(processing_status <> 'processed' OR processed_at IS NOT NULL)", name='ck_payment_events_processed_requires_processed_at'),
-        sa.CheckConstraint("processing_status IN ('pending', 'processed', 'failed', 'ignored')", name='ck_payment_events_processing_status'),
+        sa.CheckConstraint("processing_status IN ('pending', 'processing', 'processed', 'failed', 'ignored')", name='ck_payment_events_processing_status'),
         sa.CheckConstraint("provider IN ('stripe')", name='ck_payment_events_provider'),
         sa.ForeignKeyConstraint(['payment_id'], ['payments.id'], ondelete='SET NULL'),
         sa.PrimaryKeyConstraint('id'),

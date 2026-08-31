@@ -18,7 +18,10 @@ class PaymentCreate(BaseModel):
     provider: str = "stripe"
     provider_payment_intent_id: str | None = None
     provider_charge_id: str | None = None
+    provider_customer_id: str | None = None
+    provider_status: str | None = None
     idempotency_key: str
+    creation_fingerprint: str | None = None
     amount_cents: int
     currency: str = "USD"
     payment_status: str
@@ -41,7 +44,10 @@ class PaymentRead(BaseModel):
     provider: str
     provider_payment_intent_id: str | None
     provider_charge_id: str | None
+    provider_customer_id: str | None
+    provider_status: str | None
     idempotency_key: str
+    creation_fingerprint: str
     amount_cents: int
     currency: str
     payment_status: str
@@ -87,7 +93,10 @@ class PaymentUpdate(BaseModel):
     provider: str | None = None
     provider_payment_intent_id: str | None = None
     provider_charge_id: str | None = None
+    provider_customer_id: str | None = None
+    provider_status: str | None = None
     idempotency_key: str | None = None
+    creation_fingerprint: str | None = None
     amount_cents: int | None = None
     currency: str | None = None
     payment_status: str | None = None

@@ -84,7 +84,7 @@ observability, dashboards, alerts, or incident-response evidence.
 | Requirement(s) | Scenario Group | Proof Layer | Current Evidence | Why This Is Enough / Not Enough |
 |---|---|---|---|---|
 | `WS04-03A-R1`, `R8` | Policy and boundary contract | pytest/static | `test_migration_safety_policy_contract.py` | Proves one side-effect-free policy covers all requirement families and preserves later owners. |
-| `WS04-03A-R2`, `R3`, `R5`, `R6`, `R7` | Current migration inventory and graph | pytest/static/Alembic | `test_migration_inventory_graph_contract.py` | Proves the current 62-revision chain is linear and risky upgrade-side patterns fail closed. |
+| `WS04-03A-R2`, `R3`, `R5`, `R6`, `R7` | Current migration inventory and graph | pytest/static/Alembic | `test_migration_inventory_graph_contract.py` | Proves the current 65-revision chain is linear and risky upgrade-side patterns fail closed. |
 | `WS04-03A-R4`, `R7`, `R8` | Exact-purpose migration DB safety | pytest/static | `test_migration_database_safety_contract.py` | Proves migration tests require `pickup_lane_migration_test_db` and cannot fall back to `pickup_lane_test_db`. |
 | `WS04-03A-R3`, `R4`, `R6`, `R7`, `R8` | Empty/prior upgrade, rerun, drift, reset, interruption | pytest/PostgreSQL/Alembic | `test_migration_lifecycle_rehearsal.py` | Proves provider-independent runtime behavior on the dedicated migration database; not final provider/runtime evidence. |
 | `WS04-03A-R8` | Accepted compatibility boundaries | pytest | WS04-01A/B/C and WS04-02A/B/C compatibility scopes | Proves this pass did not weaken accepted database, transaction, invariant, or value/SQL contracts. |
@@ -127,7 +127,7 @@ compliance only, not human adequacy by itself.
 | Validation | Result |
 |---|---|
 | Focused WS04-03A migration pytest scope | PASS: `26 passed` against `pickup_lane_migration_test_db` through `MIGRATION_DATABASE_URL`. The scope now includes Alembic-backed interruption/repaired-rerun proof, mixed raw-SQL fail-closed regression coverage, and two-session advisory-lock serialization proof. Warnings were limited to existing Alembic `path_separator` deprecation output and an Alembic expression-index comparison warning for the existing trigram index. |
-| Backend test checker for `migrations/migration_policy_compatibility_rehearsal` | PASS: 26 collected pytest nodes; all `WS04-03A-R1` through `WS04-03A-R8` requirements mapped; 36 traceability passes and 324 requirement declarations loaded. |
+| Backend test checker for `migrations/migration_policy_compatibility_rehearsal` | PASS: 26 collected pytest nodes; all `WS04-03A-R1` through `WS04-03A-R8` requirements mapped; 38 traceability passes and 341 requirement declarations loaded. |
 | Focused settings, environment-safety, and non-lifecycle migration tests | PASS: `154 passed` with the ordinary dedicated `pickup_lane_test_db` boundary. Warnings were limited to existing Alembic `path_separator` deprecation output. |
 | Backend checker pytest scope | PASS: `78 passed` with the ordinary dedicated `pickup_lane_test_db` boundary. |
 | Accepted WS04-01A/B/C and WS04-02A/B/C compatibility scopes | PASS: `118 passed` across application database lifecycle, query/cursor behavior, production database verification contracts, transaction-boundary contracts, deterministic concurrency/invariant contracts, and value/default/SQL-safety contracts. |

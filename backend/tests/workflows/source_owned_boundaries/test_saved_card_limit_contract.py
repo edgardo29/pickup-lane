@@ -3,11 +3,15 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    from backend.models import User, UserPaymentMethod
 
 pytestmark = pytest.mark.suite_type("ordinary")
 
@@ -73,7 +77,10 @@ def _count(db: Session, model: type[object]) -> int:
 
 def _install_stripe_fake(monkeypatch: pytest.MonkeyPatch) -> _StripeFake:
     from backend.services import payment_method_service
-    from backend.services.stripe_service import StripePaymentMethodCardResult, StripeSetupIntentResult
+    from backend.services.stripe_service import (
+        StripePaymentMethodCardResult,
+        StripeSetupIntentResult,
+    )
 
     fake = _StripeFake([], [], [], [])
 
@@ -101,10 +108,12 @@ def _install_stripe_fake(monkeypatch: pytest.MonkeyPatch) -> _StripeFake:
             exp_year=2035,
         )
 
-    def detach_payment_method(payment_method_id: str) -> None:
+    def detach_payment_method(payment_method_id: str, **_kwargs: object) -> None:
         fake.detached_payment_methods.append(payment_method_id)
 
-    def set_customer_default_payment_method(*, customer_id: str, payment_method_id: str) -> None:
+    def set_customer_default_payment_method(
+        *, customer_id: str, payment_method_id: str, **_kwargs: object
+    ) -> None:
         assert customer_id == "cus_ws02_04b1"
         fake.default_payment_methods.append(payment_method_id)
 
@@ -121,7 +130,10 @@ def test_saved_card_serial_cap_counts_only_active_local_rows_and_rejects_sixth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.models import UserPaymentMethod
-    from backend.services.payment_method_service import count_active_payment_methods, sync_saved_payment_method
+    from backend.services.payment_method_service import (
+        count_active_payment_methods,
+        sync_saved_payment_method,
+    )
 
     fake = _install_stripe_fake(monkeypatch)
     with _session() as db:
@@ -139,6 +151,7 @@ def test_saved_card_serial_cap_counts_only_active_local_rows_and_rejects_sixth(
             user,
             setup_intent_id="seti_5",
             set_as_default=False,
+            idempotency_key=uuid.uuid4(),
         )
 
         assert fifth.method_status == "active"
@@ -151,6 +164,7 @@ def test_saved_card_serial_cap_counts_only_active_local_rows_and_rejects_sixth(
                 user,
                 setup_intent_id="seti_6",
                 set_as_default=False,
+                idempotency_key=uuid.uuid4(),
             )
         db.rollback()
 

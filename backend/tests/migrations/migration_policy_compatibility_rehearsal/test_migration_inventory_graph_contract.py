@@ -19,9 +19,9 @@ pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _VERSIONS_DIR = _REPO_ROOT / "backend" / "alembic" / "versions"
-_EXPECTED_CURRENT_REVISION_COUNT = 62
+_EXPECTED_CURRENT_REVISION_COUNT = 65
 _EXPECTED_CURRENT_BASE = "0001_pg_trgm"
-_EXPECTED_CURRENT_HEAD = "0062_durable_worker_heartbeats"
+_EXPECTED_CURRENT_HEAD = "0065_payment_method_ops"
 
 
 @pytest.mark.requirement("WS04-03A-R2", "WS04-03A-R3", "WS04-03A-R8")
@@ -30,7 +30,7 @@ def test_current_alembic_revision_chain_is_linear_and_complete() -> None:
 
     assert len(revisions) == _EXPECTED_CURRENT_REVISION_COUNT
     assert revisions[0].path.name == "0001_enable_pg_trgm_extension.py"
-    assert revisions[-1].path.name == "0062_create_durable_worker_heartbeats_table.py"
+    assert revisions[-1].path.name == "0065_create_payment_method_operations_table.py"
 
     assert_linear_revision_chain(revisions)
 
@@ -38,7 +38,7 @@ def test_current_alembic_revision_chain_is_linear_and_complete() -> None:
         _EXPECTED_CURRENT_BASE
     ]
     assert alembic_head_revision() == _EXPECTED_CURRENT_HEAD
-    assert alembic_parent_revision(_EXPECTED_CURRENT_HEAD) == "0061_durable_job_events"
+    assert alembic_parent_revision(_EXPECTED_CURRENT_HEAD) == "0064_payment_compensations"
 
     script = alembic_script_directory()
     assert script.get_heads() == [_EXPECTED_CURRENT_HEAD]

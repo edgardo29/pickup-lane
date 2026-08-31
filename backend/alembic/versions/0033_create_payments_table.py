@@ -1,7 +1,7 @@
 """create payments table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0033_payments'
@@ -21,7 +21,10 @@ def upgrade() -> None:
         sa.Column('provider', sa.String(length=20), nullable=False, server_default=sa.text("'stripe'")),
         sa.Column('provider_payment_intent_id', sa.String(length=255)),
         sa.Column('provider_charge_id', sa.String(length=255)),
+        sa.Column('provider_customer_id', sa.String(length=255)),
+        sa.Column('provider_status', sa.String(length=100)),
         sa.Column('idempotency_key', sa.String(length=255), nullable=False),
+        sa.Column('creation_fingerprint', sa.String(length=64), nullable=False),
         sa.Column('amount_cents', sa.Integer(), nullable=False),
         sa.Column('currency', sa.CHAR(length=3), nullable=False, server_default=sa.text("'USD'")),
         sa.Column('payment_status', sa.String(length=30), nullable=False),
@@ -35,7 +38,8 @@ def upgrade() -> None:
         sa.CheckConstraint("(payment_type <> 'booking' OR booking_id IS NOT NULL)", name='ck_payments_booking_requires_booking_id'),
         sa.CheckConstraint("(payment_type <> 'community_publish_fee' OR booking_id IS NULL)", name='ck_payments_community_publish_fee_no_booking'),
         sa.CheckConstraint("currency = 'USD'", name='ck_payments_currency'),
-        sa.CheckConstraint("payment_status IN ('requires_payment_method', 'processing', 'requires_action', 'succeeded', 'failed', 'canceled')", name='ck_payments_payment_status'),
+        sa.CheckConstraint("payment_status IN ('requires_payment_method', 'requires_confirmation', 'requires_action', 'processing', 'requires_capture', 'succeeded', 'failed', 'canceled', 'unknown')", name='ck_payments_payment_status'),
+        sa.CheckConstraint("provider_status IS NULL OR char_length(btrim(provider_status)) > 0", name='ck_payments_provider_status'),
         sa.CheckConstraint("payment_type IN ('booking', 'community_publish_fee', 'admin_charge')", name='ck_payments_payment_type'),
         sa.CheckConstraint("provider IN ('stripe')", name='ck_payments_provider'),
         sa.CheckConstraint("(payment_status <> 'succeeded' OR paid_at IS NOT NULL)", name='ck_payments_succeeded_requires_paid_at'),

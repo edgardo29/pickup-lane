@@ -15,6 +15,7 @@ class BookingCreate(BaseModel):
     buyer_user_id: UUID
     booking_status: str = "pending_payment"
     payment_status: str = "unpaid"
+    reservation_status: str = "held"
     participant_count: int
     subtotal_cents: int
     platform_fee_cents: int = 0
@@ -41,6 +42,7 @@ class BookingRead(BaseModel):
     buyer_user_id: UUID
     booking_status: str
     payment_status: str
+    reservation_status: str
     participant_count: int
     subtotal_cents: int
     platform_fee_cents: int
@@ -67,6 +69,7 @@ class BookingUpdate(BaseModel):
     buyer_user_id: UUID | None = None
     booking_status: str | None = None
     payment_status: str | None = None
+    reservation_status: str | None = None
     participant_count: int | None = None
     subtotal_cents: int | None = None
     platform_fee_cents: int | None = None

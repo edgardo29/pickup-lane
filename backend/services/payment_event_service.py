@@ -9,8 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import Payment, PaymentEvent
+from backend.models import DurableJob, Payment, PaymentEvent
 from backend.schemas.payment_event_schema import PaymentEventCreate, PaymentEventUpdate
+from backend.services.durable_job_service import requeue_exhausted_job
+from backend.services.payment_job_service import (
+    PAYMENT_JOB_MAXIMUM_ATTEMPTS,
+    STRIPE_WEBHOOK_EVENT_JOB,
+    enqueue_webhook_event_job,
+)
 from backend.services.payment_rules import VALID_PROVIDERS
 from backend.services.query_pagination import (
     DEFAULT_ADMIN_COLLECTION_LIMIT,
@@ -21,6 +27,7 @@ from backend.services.query_pagination import (
 
 VALID_PROCESSING_STATUSES = {
     "pending",
+    "processing",
     "processed",
     "failed",
     "ignored",
@@ -29,7 +36,8 @@ IMMUTABLE_PAYMENT_EVENT_UPDATE_FIELDS = {
     "provider",
     "provider_event_id",
     "event_type",
-    "raw_payload",
+    "event_envelope",
+    "provider_created_at",
 }
 
 
@@ -43,7 +51,7 @@ def build_payment_event_conflict_detail(exc: IntegrityError) -> str:
         return "provider must be 'stripe'."
 
     if "ck_payment_events_processing_status" in error_text:
-        return "processing_status must be 'pending', 'processed', 'failed', or 'ignored'."
+        return "processing_status is not supported."
 
     if "ck_payment_events_event_type_not_empty" in error_text:
         return "event_type must not be empty."
@@ -83,7 +91,8 @@ def validate_payment_event_business_rules(event_data: dict[str, Any]) -> None:
         "provider",
         "provider_event_id",
         "event_type",
-        "raw_payload",
+        "event_envelope",
+        "provider_created_at",
         "processing_status",
     ):
         if event_data[field_name] is None:
@@ -102,8 +111,7 @@ def validate_payment_event_business_rules(event_data: dict[str, Any]) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "processing_status must be 'pending', 'processed', 'failed', "
-                "or 'ignored'."
+                "processing_status is not supported."
             ),
         )
 
@@ -119,10 +127,10 @@ def validate_payment_event_business_rules(event_data: dict[str, Any]) -> None:
             detail="event_type must not be empty.",
         )
 
-    if event_data["processing_status"] == "failed" and not event_data["processing_error"]:
+    if event_data["processing_status"] == "failed" and not event_data["processing_error_code"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed payment events require processing_error.",
+            detail="Failed payment events require processing_error_code.",
         )
 
 
@@ -141,7 +149,7 @@ def normalize_payment_event_lifecycle_fields(
         normalized_data["processed_at"] = None
 
     if normalized_data["processing_status"] != "failed":
-        normalized_data["processing_error"] = None
+        normalized_data["processing_error_code"] = None
 
     return normalized_data
 
@@ -224,8 +232,7 @@ def list_payment_event_records(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "processing_status must be 'pending', 'processed', 'failed', "
-                    "or 'ignored'."
+                    "processing_status is not supported."
                 ),
             )
         statement = statement.where(PaymentEvent.processing_status == processing_status)
@@ -253,31 +260,39 @@ def update_payment_event_record(
     update_data = payload.model_dump(exclude_unset=True)
     validate_payment_event_update_fields(update_data)
 
-    effective_event_data = {
-        "payment_id": update_data.get("payment_id", db_payment_event.payment_id),
-        "provider": db_payment_event.provider,
-        "provider_event_id": db_payment_event.provider_event_id,
-        "event_type": db_payment_event.event_type,
-        "raw_payload": db_payment_event.raw_payload,
-        "processing_status": update_data.get(
-            "processing_status",
-            db_payment_event.processing_status,
-        ),
-        "processed_at": update_data.get("processed_at", db_payment_event.processed_at),
-        "processing_error": update_data.get(
-            "processing_error",
-            db_payment_event.processing_error,
-        ),
-    }
-    effective_event_data = normalize_payment_event_lifecycle_fields(effective_event_data)
-    validate_payment_event_business_rules(effective_event_data)
-    validate_payment_event_references(db, effective_event_data)
-
-    update_data["processed_at"] = effective_event_data["processed_at"]
-    update_data["processing_error"] = effective_event_data["processing_error"]
-
-    for field_name, field_value in update_data.items():
-        setattr(db_payment_event, field_name, field_value)
+    payment_id = update_data.get("payment_id", db_payment_event.payment_id)
+    if payment_id is not None:
+        get_payment_or_404(db, payment_id)
+    db_payment_event.payment_id = payment_id
+    if update_data.get("reprocess"):
+        job = db.scalars(
+            select(DurableJob)
+            .where(
+                DurableJob.job_type == STRIPE_WEBHOOK_EVENT_JOB,
+                DurableJob.origin_reference_type == "payment_event",
+                DurableJob.origin_reference_id == str(db_payment_event.id),
+            )
+            .order_by(DurableJob.created_at.desc(), DurableJob.id.desc())
+            .with_for_update()
+            .limit(1)
+        ).first()
+        if job is None:
+            enqueue_webhook_event_job(db, db_payment_event.id)
+        elif job.status == "exhausted":
+            requeue_exhausted_job(
+                db,
+                job_id=job.id,
+                maximum_attempts=PAYMENT_JOB_MAXIMUM_ATTEMPTS,
+                reason_code="payment_event_reprocess",
+            )
+        elif job.status not in {"pending", "retry_waiting", "leased"}:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This payment event does not have requeueable durable work.",
+            )
+        db_payment_event.processing_status = "pending"
+        db_payment_event.processed_at = None
+        db_payment_event.processing_error_code = None
 
     try:
         db.add(db_payment_event)

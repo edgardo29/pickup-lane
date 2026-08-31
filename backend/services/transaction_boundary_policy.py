@@ -128,7 +128,7 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "expired Booking rows",
             "cancelled or removed GameParticipant rows",
             "released GameCreditUsage rows",
-            "canceled Payment rows",
+            "provider-truth-preserving Payment rows",
             "payment_failed WaitlistEntry rows",
         ),
         external_effect="User-visible release of checkout hold and local capacity.",
@@ -262,28 +262,24 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         downstream_owner="WS05",
     ),
     TransactionBoundaryPolicy(
-        workflow="late_checkout_payment.refund",
-        service_function="backend.services.stripe_webhook_service.create_late_payment_refund_if_needed",
+        workflow="late_checkout_payment.compensation",
+        service_function="backend.services.stripe_webhook_service.ensure_payment_compensation",
         database_unit_of_work=(
             "expired Booking",
             "succeeded late Payment",
-            "Refund duplicate_payment row",
-            "RefundEvent",
-            "MoneyIssue when provider outcome is not succeeded",
+            "PaymentCompensation refund requirement",
         ),
-        external_effect="Stripe Refund creation for late successful checkout payment.",
-        operation_class=ExternalOperationClass.RECONCILE_BEFORE_RETRY_MUTATION,
-        provider_retry_contexts=("late_checkout_payment_refund",),
+        external_effect="Operator-visible local compensation requirement for a late successful checkout payment.",
+        operation_class=ExternalOperationClass.ADMIN_VISIBLE_LOCAL_EFFECT,
+        provider_retry_contexts=(),
         required_pre_effect_checkpoint=(
-            "Existing durable booking/payment identity and deterministic refund key."
+            "Existing durable booking/payment identity under the game-first lock order."
         ),
         required_post_effect_recording=(
-            "Refund provider_refund_id when available",
-            "Refund status",
-            "RefundEvent and money issue state for failed or unknown outcomes",
+            "One active PaymentCompensation requirement per payment and booking",
         ),
-        timeout_or_unknown_outcome="Record processing/unknown refund state; no blind replay.",
-        recovery_path="WS05 durable financial reconciliation.",
+        timeout_or_unknown_outcome="Not applicable - this path performs no provider mutation.",
+        recovery_path="Later operator financial repair processes the durable compensation requirement.",
         downstream_owner="WS05",
     ),
     TransactionBoundaryPolicy(
@@ -411,10 +407,16 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         external_effect="Stripe SetupIntent creation.",
         operation_class=ExternalOperationClass.RECONCILE_BEFORE_RETRY_MUTATION,
         provider_retry_contexts=("saved_card_setup_intent_creation",),
-        required_pre_effect_checkpoint="Existing durable user identity; setup request identity is not durable.",
+        required_pre_effect_checkpoint=(
+            "Committed PaymentMethodOperation row with setup_create kind and "
+            "provider idempotency identity before Stripe SetupIntent create."
+        ),
         required_post_effect_recording=("returned client_secret only; no saved-card row yet",),
-        timeout_or_unknown_outcome="No automatic app retry because setup intent identity is request-local.",
-        recovery_path="User starts a new setup; durable setup identity remains later-owned.",
+        timeout_or_unknown_outcome=(
+            "PaymentMethodOperation identity is committed before provider create; "
+            "unknown outcome is durable and blocks blind user replay."
+        ),
+        recovery_path="WS05 payment-method operation reconciliation reuses the durable setup identity.",
         downstream_owner="WS05",
     ),
     TransactionBoundaryPolicy(
@@ -439,25 +441,40 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         external_effect="Stripe Customer default payment method mutation.",
         operation_class=ExternalOperationClass.RECONCILE_BEFORE_RETRY_MUTATION,
         provider_retry_contexts=("saved_card_default_set",),
-        required_pre_effect_checkpoint="Persisted active saved-card row and user customer identity.",
+        required_pre_effect_checkpoint=(
+            "Provider-verified active saved-card row, user customer identity, "
+            "and PaymentMethodOperation idempotency identity."
+        ),
         required_post_effect_recording=("local default-card state",),
-        timeout_or_unknown_outcome="Do not claim local success until local default state is durable.",
-        recovery_path="Re-read/sync/support repair.",
+        timeout_or_unknown_outcome=(
+            "Provider-unknown operation blocks conflicting card mutations until "
+            "durable reconciliation or support repair resolves it."
+        ),
+        recovery_path="Payment-method operation reconciliation and support repair.",
     ),
     TransactionBoundaryPolicy(
         workflow="saved_card.detach",
         service_function="backend.services.payment_method_service.detach_saved_payment_method",
         database_unit_of_work=("UserPaymentMethod row", "User default-card state"),
-        external_effect="Stripe PaymentMethod detach and optional default clear.",
+        external_effect=(
+            "Stripe PaymentMethod detach plus a separate default set/clear mutation "
+            "when the detached card was default."
+        ),
         operation_class=ExternalOperationClass.RECONCILE_BEFORE_RETRY_MUTATION,
         provider_retry_contexts=(
             "user_visible_saved_card_detach",
             "saved_card_default_clear",
         ),
-        required_pre_effect_checkpoint="Persisted saved-card row and provider PaymentMethod ID.",
+        required_pre_effect_checkpoint=(
+            "Provider-verified saved-card row and PaymentMethodOperation "
+            "idempotency identity; default repair uses its own operation identity."
+        ),
         required_post_effect_recording=("UserPaymentMethod inactive state", "default-card state"),
-        timeout_or_unknown_outcome="Require reconciliation/support before another detach decision.",
-        recovery_path="Saved-card state repair and WS05 account cleanup recovery when applicable.",
+        timeout_or_unknown_outcome=(
+            "Provider-unknown detach or default-repair operation blocks conflicting "
+            "card mutations until reconciliation/support resolves it."
+        ),
+        recovery_path="Saved-card operation repair and WS05 account cleanup recovery when applicable.",
         downstream_owner="WS05 when account cleanup owns the detach.",
     ),
     TransactionBoundaryPolicy(

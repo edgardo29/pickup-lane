@@ -5,11 +5,20 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import Booking, Game, GameParticipant, Payment, User, WaitlistEntry
+from backend.models import (
+    Booking,
+    Game,
+    GameParticipant,
+    Payment,
+    PaymentCompensation,
+    PaymentConfirmationAttempt,
+    User,
+    WaitlistEntry,
+)
 from backend.observability.timeouts import PublicTimeoutError
 from backend.schemas.checkout_schema import (
     GameCheckoutPaymentIntentCreate,
@@ -29,6 +38,9 @@ from backend.services.game_credit_service import (
     release_reserved_game_credits,
     reserve_game_credits,
 )
+from backend.services.game_notification_service import (
+    create_waitlist_payment_failed_notification,
+)
 from backend.services.game_rules import (
     JOINABLE_GAME_STATUSES,
     build_game_conflict_detail,
@@ -46,11 +58,14 @@ from backend.services.game_service import (
     get_next_roster_order,
     sync_game_capacity_status,
 )
+from backend.services.payment_job_service import enqueue_payment_reconcile_job
+from backend.services.payment_lifecycle_policy import (
+    canonical_fingerprint,
+)
 from backend.services.payment_method_service import (
     get_current_user_saved_payment_method_for_checkout,
 )
 from backend.services.payment_rules import PENDING_PAYMENT_STATUSES
-from backend.settings import get_settings
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
@@ -65,6 +80,7 @@ from backend.services.stripe_service import (
     stripe_payments_enabled,
 )
 from backend.services.user_service import get_user_display_name
+from backend.settings import get_settings
 
 CHECKOUT_HOLD_MINUTES = 2
 MINIMUM_USD_PAYMENT_INTENT_AMOUNT_CENTS = 50
@@ -78,6 +94,15 @@ CHECKOUT_PROVIDER_STATUS_RECORDING_FAILED_DETAIL = (
 )
 STRIPE_PAYMENTS_DISABLED_DETAIL = "Stripe payments are disabled for this demo."
 CHECKOUT_RETURN_URL_INVALID_DETAIL = "Checkout return URL is not supported."
+
+
+def get_database_now(db: Session) -> datetime:
+    database_now = db.scalar(select(func.now()))
+    if not isinstance(database_now, datetime):
+        raise RuntimeError(  # noqa: TRY004
+            "PostgreSQL did not return the current database time"
+        )
+    return database_now
 
 
 def get_locked_active_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
@@ -196,37 +221,82 @@ def validate_checkout_return_url(
     return normalized
 
 
-def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) -> None:
+def require_provider_verified_checkout_payment_method(
+    db: Session,
+    payment_method_id: uuid.UUID | None,
+    current_user: User,
+    *,
+    now: datetime,
+) -> uuid.UUID:
+    if payment_method_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Choose a saved card before checkout.",
+        )
+
+    saved_payment_method = get_current_user_saved_payment_method_for_checkout(
+        db,
+        payment_method_id,
+        current_user,
+        now=now,
+    )
+    if saved_payment_method is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Choose a saved card before checkout.",
+        )
+    return payment_method_id
+
+
+def expire_stale_pending_checkouts(
+    db: Session,
+    db_game: Game,
+    now: datetime,
+    *,
+    enqueue_reconciliation: bool = True,
+) -> None:
     stale_bookings = db.scalars(
-        select(Booking).where(
+        select(Booking)
+        .where(
             Booking.game_id == db_game.id,
             Booking.booking_status == "pending_payment",
             Booking.expires_at.is_not(None),
             Booking.expires_at <= now,
-        ).with_for_update()
+        )
+        .order_by(Booking.id.asc())
+        .with_for_update()
     ).all()
 
     if not stale_bookings:
         return
 
     stale_booking_ids = [booking.id for booking in stale_bookings]
-    stale_participants = db.scalars(
-        select(GameParticipant).where(
-            GameParticipant.booking_id.in_(stale_booking_ids),
-            GameParticipant.participant_status == "pending_payment",
-        ).with_for_update()
-    ).all()
-    stale_payments = db.scalars(
-        select(Payment).where(
-            Payment.booking_id.in_(stale_booking_ids),
-            Payment.payment_status.in_(PENDING_PAYMENT_STATUSES),
-        ).with_for_update()
-    ).all()
     stale_waitlist_entries = db.scalars(
-        select(WaitlistEntry).where(
+        select(WaitlistEntry)
+        .where(
             WaitlistEntry.promoted_booking_id.in_(stale_booking_ids),
             WaitlistEntry.waitlist_status == "payment_processing",
-        ).with_for_update()
+        )
+        .order_by(WaitlistEntry.id.asc())
+        .with_for_update()
+    ).all()
+    stale_participants = db.scalars(
+        select(GameParticipant)
+        .where(
+            GameParticipant.booking_id.in_(stale_booking_ids),
+            GameParticipant.participant_status == "pending_payment",
+        )
+        .order_by(GameParticipant.id.asc())
+        .with_for_update()
+    ).all()
+    stale_payments = db.scalars(
+        select(Payment)
+        .where(
+            Payment.booking_id.in_(stale_booking_ids),
+            Payment.payment_status.in_(PENDING_PAYMENT_STATUSES),
+        )
+        .order_by(Payment.id.asc())
+        .with_for_update()
     ).all()
     waitlist_booking_ids = {
         waitlist_entry.promoted_booking_id
@@ -235,6 +305,9 @@ def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) ->
     }
 
     for booking in stale_bookings:
+        old_booking_status = booking.booking_status
+        old_payment_status = booking.payment_status
+        old_reservation_status = booking.reservation_status
         release_reserved_game_credits(
             db,
             booking.id,
@@ -243,11 +316,23 @@ def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) ->
             user_id=booking.buyer_user_id,
         )
         booking.booking_status = "expired"
-        booking.payment_status = "failed"
+        booking.reservation_status = "released"
+        booking.expires_at = None
         booking.updated_at = now
         db.add(booking)
+        add_booking_status_history_if_changed(
+            db,
+            booking,
+            old_booking_status=old_booking_status,
+            old_payment_status=old_payment_status,
+            old_reservation_status=old_reservation_status,
+            reason="Checkout reservation expired with provider truth unresolved.",
+            change_source="scheduled_job",
+        )
 
     for participant in stale_participants:
+        old_participant_status = participant.participant_status
+        old_attendance_status = participant.attendance_status
         participant.participant_status = (
             "removed" if participant.booking_id in waitlist_booking_ids else "cancelled"
         )
@@ -255,6 +340,14 @@ def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) ->
         participant.cancelled_at = now
         participant.updated_at = now
         db.add(participant)
+        add_participant_status_history_if_changed(
+            db,
+            participant,
+            old_participant_status=old_participant_status,
+            old_attendance_status=old_attendance_status,
+            reason="Checkout reservation expired with provider truth unresolved.",
+            change_source="scheduled_job",
+        )
 
     for waitlist_entry in stale_waitlist_entries:
         waitlist_entry.waitlist_status = "payment_failed"
@@ -263,11 +356,34 @@ def expire_stale_pending_checkouts(db: Session, db_game: Game, now: datetime) ->
         db.add(waitlist_entry)
 
     for payment in stale_payments:
-        payment.payment_status = "canceled"
-        payment.failure_code = "checkout_hold_expired"
-        payment.failure_message = "Checkout hold expired before payment confirmation."
         payment.updated_at = now
         db.add(payment)
+        if enqueue_reconciliation:
+            enqueue_payment_reconcile_job(
+                db,
+                payment.id,
+                reason="reservation_expiry",
+            )
+
+    bookings_by_id = {booking.id: booking for booking in stale_bookings}
+    payments_by_booking_id = {
+        payment.booking_id: payment
+        for payment in stale_payments
+        if payment.booking_id is not None
+    }
+    for waitlist_entry in stale_waitlist_entries:
+        if waitlist_entry.promoted_booking_id is None:
+            continue
+        booking = bookings_by_id.get(waitlist_entry.promoted_booking_id)
+        payment = payments_by_booking_id.get(waitlist_entry.promoted_booking_id)
+        if booking is not None and payment is not None:
+            create_waitlist_payment_failed_notification(
+                db,
+                db_game,
+                booking,
+                payment,
+                now,
+            )
 
     db.flush()
     sync_game_capacity_status(db, db_game)
@@ -291,14 +407,17 @@ def get_reusable_pending_checkout(
             Booking.game_id == db_game.id,
             Booking.buyer_user_id == current_user.id,
             Booking.booking_status == "pending_payment",
-            Booking.payment_status == "processing",
+            Booking.payment_status.in_({"processing", "requires_action"}),
             Booking.participant_count == party_size,
             Booking.subtotal_cents == subtotal_cents,
             Booking.expires_at.is_not(None),
             Booking.expires_at > now,
             Payment.payment_type == "booking",
             Payment.payment_status.in_(PENDING_PAYMENT_STATUSES),
-            Payment.provider_payment_intent_id.is_not(None),
+            or_(
+                Payment.provider_payment_intent_id.is_not(None),
+                Payment.payment_status == "unknown",
+            ),
         )
         .order_by(Booking.created_at.desc())
         .limit(1)
@@ -347,6 +466,7 @@ def build_pending_checkout_rows(
         buyer_user_id=current_user.id,
         booking_status="pending_payment",
         payment_status="processing",
+        reservation_status="held",
         participant_count=party_size,
         subtotal_cents=subtotal_cents,
         platform_fee_cents=platform_fee_cents,
@@ -371,6 +491,21 @@ def build_pending_checkout_rows(
             provider_payment_intent_id=None,
             provider_charge_id=None,
             idempotency_key=f"checkout:{booking.id}:{payment_id}:payment_intent",
+            creation_fingerprint=canonical_fingerprint(
+                {
+                    "payment_id": str(payment_id),
+                    "booking_id": str(booking.id),
+                    "payer_user_id": str(current_user.id),
+                    "provider_customer_id": current_user.stripe_customer_id,
+                    "amount_cents": credit_application.stripe_amount_cents,
+                    "currency": booking.currency,
+                    "game_id": str(db_game.id),
+                    "participant_count": party_size,
+                    "credit_applied_cents": credit_application.credit_applied_cents,
+                    "checkout_total_cents": total_cents,
+                }
+            ),
+            provider_customer_id=current_user.stripe_customer_id,
             amount_cents=credit_application.stripe_amount_cents,
             currency=booking.currency,
             payment_status="requires_payment_method",
@@ -379,8 +514,11 @@ def build_pending_checkout_rows(
             failure_message=None,
             payment_metadata={
                 "source": "game_checkout",
+                "payment_id": str(payment_id),
+                "booking_id": str(booking.id),
                 "game_id": str(db_game.id),
                 "user_id": str(current_user.id),
+                "participant_count": party_size,
                 "guest_count": guest_count,
                 "checkout_hold_expires_at": booking.expires_at.isoformat(),
                 "subtotal_cents": subtotal_cents,
@@ -416,7 +554,6 @@ def get_credit_application_for_booking(
     credit_owner_user_id: uuid.UUID,
     now: datetime,
 ) -> GameCreditApplication:
-    checkout_total_cents = booking.subtotal_cents + booking.platform_fee_cents
     credit_applied_cents = get_booking_credit_usage_total(
         db,
         booking.id,
@@ -451,7 +588,11 @@ def build_checkout_response(
     credit_application: GameCreditApplication | None = None,
     stripe_status: str | None = None,
 ) -> GameCheckoutPaymentIntentRead:
-    if payment is not None and not client_secret:
+    if (
+        payment is not None
+        and payment.payment_status == "requires_action"
+        and not client_secret
+    ):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Stripe did not return a client secret for this payment.",
@@ -464,6 +605,19 @@ def build_checkout_response(
         now=datetime.now(timezone.utc),
     )
     checkout_total_cents = booking.subtotal_cents + booking.platform_fee_cents
+    compensation = (
+        db.scalars(
+            select(PaymentCompensation)
+            .where(
+                PaymentCompensation.booking_id == booking.id,
+                PaymentCompensation.status.in_({"required", "processing"}),
+            )
+            .order_by(PaymentCompensation.created_at.desc())
+            .limit(1)
+        ).first()
+        if payment is not None
+        else None
+    )
     return GameCheckoutPaymentIntentRead(
         client_secret=client_secret,
         booking_id=booking.id,
@@ -484,16 +638,11 @@ def build_checkout_response(
         payment_required=application.payment_required,
         booking_status=booking.booking_status,
         booking_payment_status=booking.payment_status,
+        reservation_status=booking.reservation_status,
         payment_status=payment.payment_status if payment is not None else None,
+        provider_status=payment.provider_status if payment is not None else None,
+        compensation_status=compensation.status if compensation is not None else None,
     )
-
-
-def keep_payment_pending_until_webhook(stripe_status: str) -> str:
-    internal_status = map_payment_intent_status(stripe_status)
-    if internal_status == "succeeded":
-        return "processing"
-
-    return internal_status
 
 
 def confirm_credit_covered_checkout(
@@ -526,6 +675,7 @@ def confirm_credit_covered_checkout(
         )
 
     booking.booking_status = "confirmed"
+    booking.reservation_status = "confirmed"
     booking.payment_status = "paid"
     booking.booked_at = booking.booked_at or now
     booking.expires_at = None
@@ -554,6 +704,7 @@ def resume_pending_checkout_with_locked_game(
     party_size: int,
     subtotal_cents: int,
     now: datetime,
+    provider_verified_payment_method_id: uuid.UUID | None = None,
 ) -> GameCheckoutPaymentIntentRead | None:
     reusable_checkout = get_reusable_pending_checkout(
         db,
@@ -567,13 +718,38 @@ def resume_pending_checkout_with_locked_game(
         return None
 
     booking, payment = reusable_checkout
+    locked_game_id = db_game.id
+    booking_id = booking.id
+    payment_id = payment.id
+    payment_amount_cents = payment.amount_cents
+    payment_currency = payment.currency
+    participant_count = booking.participant_count
     saved_payment_method = None
     if payment.payment_status == "requires_payment_method":
+        if provider_verified_payment_method_id != checkout_request.payment_method_id:
+            db.rollback()
+            verified_payment_method_id = require_provider_verified_checkout_payment_method(
+                db,
+                checkout_request.payment_method_id,
+                current_user,
+                now=now,
+            )
+            return resume_serialized_pending_checkout(
+                db,
+                locked_game_id,
+                checkout_request,
+                current_user,
+                return_url=return_url,
+                party_size=party_size,
+                subtotal_cents=subtotal_cents,
+                provider_verified_payment_method_id=verified_payment_method_id,
+            )
         saved_payment_method = get_current_user_saved_payment_method_for_checkout(
             db,
             checkout_request.payment_method_id,
             current_user,
             now=now,
+            verify_provider=False,
         )
         if saved_payment_method is None:
             raise HTTPException(
@@ -581,14 +757,58 @@ def resume_pending_checkout_with_locked_game(
                 detail="Choose a saved card before checkout.",
             )
 
+    provider_payment_intent_id = payment.provider_payment_intent_id
+    if provider_payment_intent_id is None:
+        enqueue_payment_reconcile_job(
+            db,
+            payment.id,
+            reason="payment_intent_creation",
+        )
+        db.commit()
+        db.refresh(payment)
+        db.refresh(booking)
+        return build_checkout_response(
+            db,
+            booking,
+            payment,
+            None,
+            stripe_status=payment.payment_status,
+        )
+
+    db.commit()
     try:
-        payment_intent = retrieve_payment_intent(payment.provider_payment_intent_id)
+        payment_intent = retrieve_payment_intent(provider_payment_intent_id)
     except StripeConfigError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
     except PublicTimeoutError:
+        from backend.services.stripe_webhook_service import (
+            lock_booking_payment_domain_by_booking_id,
+        )
+
+        timeout_now = get_database_now(db)
+        booking = lock_booking_payment_domain_by_booking_id(db, booking_id)
+        if (
+            booking is not None
+            and booking.expires_at is not None
+            and booking.expires_at <= timeout_now
+        ):
+            db_game = db.get(Game, booking.game_id)
+            if db_game is not None:
+                expire_stale_pending_checkouts(
+                    db,
+                    db_game,
+                    timeout_now,
+                    enqueue_reconciliation=False,
+                )
+                enqueue_payment_reconcile_job(
+                    db,
+                    payment_id,
+                    reason="checkout_status_refresh_timeout",
+                )
+                db.commit()
         raise
     except Exception as exc:
         raise HTTPException(
@@ -603,22 +823,96 @@ def resume_pending_checkout_with_locked_game(
 
     if stripe_status == "requires_payment_method":
         if saved_payment_method is None:
+            verify_provider = (
+                provider_verified_payment_method_id
+                != checkout_request.payment_method_id
+            )
             saved_payment_method = get_current_user_saved_payment_method_for_checkout(
                 db,
                 checkout_request.payment_method_id,
                 current_user,
                 now=now,
+                verify_provider=verify_provider,
             )
             if saved_payment_method is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Choose a saved card before checkout.",
                 )
+        confirmation_identity = {
+            "payment_id": str(payment_id),
+            "booking_id": str(booking_id),
+            "payer_user_id": str(current_user.id),
+            "provider_customer_id": current_user.stripe_customer_id,
+            "provider_payment_method_id": saved_payment_method.stripe_payment_method_id,
+            "provider_payment_intent_id": provider_payment_intent_id,
+            "amount_cents": payment_amount_cents,
+            "currency": payment_currency,
+            "game_id": str(locked_game_id),
+            "participant_count": participant_count,
+        }
+        confirmation_fingerprint = canonical_fingerprint(confirmation_identity)
+        confirmation_idempotency_key = (
+            f"checkout-confirm:{payment_id}:{confirmation_fingerprint}"
+        )
+        from backend.services.stripe_webhook_service import (
+            lock_booking_payment_domain_by_booking_id,
+        )
+
+        confirmation_now = get_database_now(db)
+        booking = lock_booking_payment_domain_by_booking_id(db, booking_id)
+        if booking is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Checkout state changed before payment confirmation.",
+            )
+        payment = db.scalars(
+            select(Payment).where(Payment.id == payment_id).with_for_update()
+        ).one()
+        if (
+            booking.reservation_status != "held"
+            or booking.expires_at is None
+            or booking.expires_at <= confirmation_now
+        ):
+            if booking.expires_at is not None and booking.expires_at <= confirmation_now:
+                db_game = db.get(Game, booking.game_id)
+                if db_game is not None:
+                    expire_stale_pending_checkouts(
+                        db,
+                        db_game,
+                        confirmation_now,
+                        enqueue_reconciliation=False,
+                    )
+            return None
+        confirmation_attempt = db.scalars(
+            select(PaymentConfirmationAttempt).where(
+                PaymentConfirmationAttempt.payment_id == payment_id,
+                PaymentConfirmationAttempt.confirmation_fingerprint
+                == confirmation_fingerprint,
+            )
+        ).first()
+        if confirmation_attempt is None:
+            confirmation_attempt = PaymentConfirmationAttempt(
+                id=uuid.uuid4(),
+                payment_id=payment_id,
+                booking_id=booking_id,
+                user_id=current_user.id,
+                provider_customer_id=current_user.stripe_customer_id,
+                provider_payment_method_id=(
+                    saved_payment_method.stripe_payment_method_id
+                ),
+                confirmation_fingerprint=confirmation_fingerprint,
+                confirmation_idempotency_key=confirmation_idempotency_key,
+                outcome="pending",
+            )
+            db.add(confirmation_attempt)
+        db.commit()
         try:
             payment_intent = confirm_payment_intent(
-                payment.provider_payment_intent_id,
+                provider_payment_intent_id,
                 payment_method_id=saved_payment_method.stripe_payment_method_id,
                 return_url=return_url,
+                idempotency_key=confirmation_idempotency_key,
             )
         except StripeConfigError as exc:
             raise HTTPException(
@@ -626,6 +920,41 @@ def resume_pending_checkout_with_locked_game(
                 detail=str(exc),
             ) from exc
         except PublicTimeoutError:
+            timeout_now = get_database_now(db)
+            booking = lock_booking_payment_domain_by_booking_id(db, booking_id)
+            confirmation_attempt = db.scalars(
+                select(PaymentConfirmationAttempt)
+                .where(PaymentConfirmationAttempt.id == confirmation_attempt.id)
+                .with_for_update()
+            ).one()
+            payment = db.scalars(
+                select(Payment).where(Payment.id == payment_id).with_for_update()
+            ).one()
+            confirmation_attempt.outcome = "provider_unknown"
+            confirmation_attempt.error_code = "confirmation_timeout_unknown"
+            payment.payment_status = "unknown"
+            payment.updated_at = timeout_now
+            db.add(confirmation_attempt)
+            db.add(payment)
+            enqueue_payment_reconcile_job(
+                db,
+                payment.id,
+                reason=f"confirmation_{confirmation_attempt.id}",
+            )
+            if (
+                booking is not None
+                and booking.expires_at is not None
+                and booking.expires_at <= timeout_now
+            ):
+                db_game = db.get(Game, booking.game_id)
+                if db_game is not None:
+                    expire_stale_pending_checkouts(
+                        db,
+                        db_game,
+                        timeout_now,
+                        enqueue_reconciliation=False,
+                    )
+            db.commit()
             raise
         except Exception as exc:
             raise HTTPException(
@@ -635,13 +964,64 @@ def resume_pending_checkout_with_locked_game(
 
         stripe_status = payment_intent.status
 
-    payment_status = keep_payment_pending_until_webhook(stripe_status)
-
     try:
-        payment.payment_status = payment_status
+        from backend.services.stripe_webhook_service import (
+            apply_authoritative_payment_intent_observation,
+            lock_booking_payment_domain_by_booking_id,
+        )
+
+        observation_now = get_database_now(db)
+        booking = lock_booking_payment_domain_by_booking_id(db, booking_id)
+        if booking is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Checkout state changed before payment status could be saved.",
+            )
+        payment = db.scalars(
+            select(Payment).where(Payment.id == payment_id).with_for_update()
+        ).one()
         payment.provider_charge_id = payment_intent.latest_charge_id
-        payment.updated_at = now
+        payment.updated_at = observation_now
         db.add(payment)
+        if "confirmation_attempt" in locals():
+            confirmation_attempt = db.scalars(
+                select(PaymentConfirmationAttempt)
+                .where(PaymentConfirmationAttempt.id == confirmation_attempt.id)
+                .with_for_update()
+            ).one()
+            confirmation_attempt.outcome = {
+                "succeeded": "succeeded",
+                "requires_payment_method": "failed",
+                "canceled": "failed",
+                "unknown": "provider_unknown",
+            }.get(stripe_status, "pending")
+            confirmation_attempt.error_code = (
+                f"confirmation_{stripe_status}"
+                if confirmation_attempt.outcome == "failed"
+                else None
+            )
+            confirmation_attempt.updated_at = observation_now
+            if confirmation_attempt.outcome in {"succeeded", "failed"}:
+                confirmation_attempt.resolved_at = observation_now
+            db.add(confirmation_attempt)
+            enqueue_payment_reconcile_job(
+                db,
+                payment.id,
+                reason=f"confirmation_{confirmation_attempt.id}",
+            )
+        else:
+            enqueue_payment_reconcile_job(
+                db,
+                payment.id,
+                reason="checkout_status_refresh",
+            )
+        apply_authoritative_payment_intent_observation(
+            db,
+            payment=payment,
+            observation=payment_intent,
+            source="checkout_confirmation",
+            now=observation_now,
+        )
         db.commit()
         db.refresh(payment)
         db.refresh(booking)
@@ -669,9 +1049,10 @@ def resume_serialized_pending_checkout(
     return_url: str | None,
     party_size: int,
     subtotal_cents: int,
-    now: datetime,
+    provider_verified_payment_method_id: uuid.UUID | None = None,
 ) -> GameCheckoutPaymentIntentRead | None:
     db_game = get_locked_active_game_or_404(db, game_id)
+    now = get_database_now(db)
     require_checkout_game_open(db_game, current_user, now)
     expire_stale_pending_checkouts(db, db_game, now)
     return resume_pending_checkout_with_locked_game(
@@ -683,6 +1064,7 @@ def resume_serialized_pending_checkout(
         party_size=party_size,
         subtotal_cents=subtotal_cents,
         now=now,
+        provider_verified_payment_method_id=provider_verified_payment_method_id,
     )
 
 
@@ -691,14 +1073,16 @@ def create_game_checkout_payment_intent_workflow(
     game_id: uuid.UUID,
     checkout_request: GameCheckoutPaymentIntentCreate,
     current_user: User,
+    *,
+    provider_verified_payment_method_id: uuid.UUID | None = None,
 ) -> GameCheckoutPaymentIntentRead:
     checkpoint_committed = False
     return_url = validate_checkout_return_url(
         checkout_request.return_url,
         game_id=game_id,
     )
-    now = datetime.now(timezone.utc)
     db_game = get_locked_active_game_or_404(db, game_id)
+    now = get_database_now(db)
     require_checkout_game_open(db_game, current_user, now)
     require_stripe_payments_enabled()
 
@@ -725,9 +1109,14 @@ def create_game_checkout_payment_intent_workflow(
         party_size=party_size,
         subtotal_cents=subtotal_cents,
         now=now,
+        provider_verified_payment_method_id=provider_verified_payment_method_id,
     )
     if resumed_checkout is not None:
         return resumed_checkout
+
+    now = get_database_now(db)
+    require_checkout_game_open(db_game, current_user, now)
+    expire_stale_pending_checkouts(db, db_game, now)
 
     if get_existing_active_participant(db, db_game.id, current_user.id) is not None:
         raise HTTPException(
@@ -782,11 +1171,28 @@ def create_game_checkout_payment_intent_workflow(
                 detail="Game currency is not supported by Stripe checkout.",
             )
 
+        if provider_verified_payment_method_id != checkout_request.payment_method_id:
+            db.rollback()
+            verified_payment_method_id = require_provider_verified_checkout_payment_method(
+                db,
+                checkout_request.payment_method_id,
+                current_user,
+                now=now,
+            )
+            return create_game_checkout_payment_intent_workflow(
+                db,
+                game_id,
+                checkout_request,
+                current_user,
+                provider_verified_payment_method_id=verified_payment_method_id,
+            )
+
         saved_payment_method = get_current_user_saved_payment_method_for_checkout(
             db,
             checkout_request.payment_method_id,
             current_user,
             now=now,
+            verify_provider=False,
         )
         if saved_payment_method is None:
             raise HTTPException(
@@ -896,22 +1302,59 @@ def create_game_checkout_payment_intent_workflow(
         stripe_status = payment_intent.status
 
         try:
+            from backend.services.stripe_webhook_service import (
+                apply_authoritative_payment_intent_observation,
+                lock_booking_payment_domain_by_booking_id,
+            )
+
+            booking = lock_booking_payment_domain_by_booking_id(db, booking_id)
+            if booking is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Checkout state changed before payment result could be saved."
+                    ),
+                )
             payment = db.scalars(
                 select(Payment).where(Payment.id == payment_id).with_for_update()
             ).one()
             payment.provider_payment_intent_id = payment_intent.id
             payment.provider_charge_id = payment_intent.latest_charge_id
-            payment.payment_status = keep_payment_pending_until_webhook(stripe_status)
             payment.updated_at = datetime.now(timezone.utc)
             db.add(payment)
+            db.flush()
+            enqueue_payment_reconcile_job(
+                db,
+                payment.id,
+                reason="payment_intent_creation",
+            )
+            observation_now = get_database_now(db)
+            apply_authoritative_payment_intent_observation(
+                db,
+                payment=payment,
+                observation=payment_intent,
+                source="checkout_creation",
+                now=observation_now,
+            )
             db.commit()
             db.refresh(payment)
+            db.refresh(booking)
         except Exception as exc:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=CHECKOUT_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
             ) from exc
+
+        if booking.booking_status != "pending_payment":
+            return build_checkout_response(
+                db,
+                booking,
+                payment,
+                payment_intent.client_secret,
+                credit_application=credit_application,
+                stripe_status=stripe_status,
+            )
 
         resumed_checkout = resume_serialized_pending_checkout(
             db,
@@ -921,7 +1364,7 @@ def create_game_checkout_payment_intent_workflow(
             return_url=return_url,
             party_size=party_size,
             subtotal_cents=subtotal_cents,
-            now=datetime.now(timezone.utc),
+            provider_verified_payment_method_id=checkout_request.payment_method_id,
         )
         if resumed_checkout is None:
             raise HTTPException(
@@ -952,7 +1395,20 @@ def create_game_checkout_payment_intent_workflow(
             detail=str(exc),
         ) from exc
     except PublicTimeoutError:
-        if not checkpoint_committed:
+        if checkpoint_committed and "payment_id" in locals():
+            db.rollback()
+            payment = db.get(Payment, payment_id)
+            if payment is not None:
+                payment.payment_status = "unknown"
+                payment.updated_at = datetime.now(timezone.utc)
+                db.add(payment)
+                enqueue_payment_reconcile_job(
+                    db,
+                    payment.id,
+                    reason="payment_intent_creation",
+                )
+                db.commit()
+        else:
             db.rollback()
         raise
     except HTTPException:
@@ -997,6 +1453,22 @@ def get_game_checkout_status_workflow(
             detail="You cannot view this checkout status.",
         )
 
+    if (
+        booking.booking_status == "pending_payment"
+        and booking.expires_at is not None
+    ):
+        now = get_database_now(db)
+        if booking.expires_at <= now:
+            db_game = get_locked_active_game_or_404(db, booking.game_id)
+            expire_stale_pending_checkouts(db, db_game, now)
+            db.commit()
+            booking = db.get(Booking, booking_id)
+            if booking is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Booking not found.",
+                )
+
     payment = db.scalars(
         select(Payment)
         .where(Payment.booking_id == booking.id, Payment.payment_type == "booking")
@@ -1009,13 +1481,25 @@ def get_game_checkout_status_workflow(
         credit_owner_user_id=booking.buyer_user_id,
         now=datetime.now(timezone.utc),
     )
+    compensation = db.scalars(
+        select(PaymentCompensation)
+        .where(
+            PaymentCompensation.booking_id == booking.id,
+            PaymentCompensation.status.in_({"required", "processing"}),
+        )
+        .order_by(PaymentCompensation.created_at.desc())
+        .limit(1)
+    ).first()
 
     return GameCheckoutStatusRead(
         booking_id=booking.id,
         booking_status=booking.booking_status,
         booking_payment_status=booking.payment_status,
+        reservation_status=booking.reservation_status,
         payment_id=payment.id if payment is not None else None,
         payment_status=payment.payment_status if payment is not None else None,
+        provider_status=payment.provider_status if payment is not None else None,
+        compensation_status=compensation.status if compensation is not None else None,
         amount_cents=credit_application.stripe_amount_cents,
         currency=booking.currency,
         subtotal_cents=booking.subtotal_cents,

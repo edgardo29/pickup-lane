@@ -13,7 +13,6 @@ from typing import Any
 import pytest
 from fastapi.routing import APIRoute
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 pytestmark = pytest.mark.suite_type("ordinary")
 
@@ -64,6 +63,7 @@ EXPECTED_B_ROUTE_KEYS = {
 class _StripeFake:
     setup_intent_customer_id: str
     payment_method_customer_id: str
+    payment_method_fingerprints: dict[str, str]
     setup_intents: list[dict[str, object]]
     retrieved_setup_intents: list[str]
     retrieved_payment_methods: list[str]
@@ -88,6 +88,13 @@ def _session():
 
 def _auth_headers(token: str = "valid-token") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+def _mutation_headers(token: str = "valid-token") -> dict[str, str]:
+    return {
+        **_auth_headers(token),
+        "Idempotency-Key": str(uuid.uuid4()),
+    }
 
 
 def _recent_time() -> datetime:
@@ -126,6 +133,7 @@ def _install_stripe_fake(
     *,
     setup_customer_id: str,
     payment_method_customer_id: str | None = None,
+    payment_method_fingerprints: dict[str, str] | None = None,
 ) -> _StripeFake:
     from backend.services import payment_method_service
     from backend.services.stripe_service import (
@@ -137,6 +145,7 @@ def _install_stripe_fake(
     fake = _StripeFake(
         setup_intent_customer_id=setup_customer_id,
         payment_method_customer_id=payment_method_customer_id or setup_customer_id,
+        payment_method_fingerprints=payment_method_fingerprints or {},
         setup_intents=[],
         retrieved_setup_intents=[],
         retrieved_payment_methods=[],
@@ -174,7 +183,9 @@ def _install_stripe_fake(
         return StripePaymentMethodCardResult(
             id=payment_method_id,
             customer_id=fake.payment_method_customer_id,
-            card_fingerprint="ws03-04b-synced-fingerprint",
+            card_fingerprint=fake.payment_method_fingerprints.get(
+                payment_method_id, "ws03-04b-synced-fingerprint"
+            ),
             card_brand="visa",
             card_last4="4242",
             exp_month=12,
@@ -185,14 +196,17 @@ def _install_stripe_fake(
         *,
         customer_id: str,
         payment_method_id: str,
+        **_kwargs: object,
     ) -> None:
         del customer_id
         fake.default_payment_methods.append(payment_method_id)
 
-    def detach_payment_method(payment_method_id: str) -> None:
+    def detach_payment_method(payment_method_id: str, **_kwargs: object) -> None:
         fake.detached_payment_methods.append(payment_method_id)
 
-    def clear_customer_default_payment_method(*, customer_id: str) -> None:
+    def clear_customer_default_payment_method(
+        *, customer_id: str, **_kwargs: object
+    ) -> None:
         fake.cleared_customers.append(customer_id)
 
     monkeypatch.setattr(payment_method_service, "stripe_payments_enabled", lambda: True)
@@ -216,7 +230,9 @@ def _install_stripe_fake(
 
 def _callable_identity(callable_obj: Any) -> str:
     if isinstance(callable_obj, partial):
-        raise AssertionError(f"Unrepresentable partial dependency: {callable_obj!r}")
+        raise AssertionError(  # noqa: TRY004
+            f"Unrepresentable partial dependency: {callable_obj!r}"
+        )
     if not (isfunction(callable_obj) or ismethod(callable_obj)):
         raise AssertionError(f"Unrepresentable callable dependency: {callable_obj!r}")
 
@@ -823,7 +839,7 @@ def test_credential_status_and_recent_auth_denials_have_no_mutation_side_effects
 
     stale_default = client.patch(
         f"/user-payment-methods/{active_card_id}/default",
-        headers=_auth_headers("stale-token"),
+        headers=_mutation_headers("stale-token"),
     )
     assert stale_default.status_code == 403
 
@@ -1125,6 +1141,7 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
         user_email = user.email
         own_card_id = own_card.id
         own_stripe_payment_method_id = own_card.stripe_payment_method_id
+        own_card_fingerprint = own_card.card_fingerprint
         other_card_id = other_card.id
 
     _install_auth_identities(
@@ -1142,6 +1159,9 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
         monkeypatch,
         setup_customer_id="cus_ws03_04b_user",
         payment_method_customer_id="cus_ws03_04b_user",
+        payment_method_fingerprints={
+            own_stripe_payment_method_id: own_card_fingerprint,
+        },
     )
 
     listed = client.get("/user-payment-methods", headers=_auth_headers("card-token"))
@@ -1158,18 +1178,18 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
 
     defaulted = client.patch(
         f"/user-payment-methods/{own_card_id}/default",
-        headers=_auth_headers("card-token"),
+        headers=_mutation_headers("card-token"),
     )
     assert defaulted.status_code == 200
     assert fake.default_payment_methods == [own_stripe_payment_method_id]
 
     rejected_default = client.patch(
         f"/user-payment-methods/{other_card_id}/default",
-        headers=_auth_headers("card-token"),
+        headers=_mutation_headers("card-token"),
     )
     rejected_detach = client.delete(
         f"/user-payment-methods/{other_card_id}",
-        headers=_auth_headers("card-token"),
+        headers=_mutation_headers("card-token"),
     )
     assert rejected_default.status_code == 404
     assert rejected_detach.status_code == 404
@@ -1177,13 +1197,13 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
 
     rejected_setup_fields = client.post(
         "/user-payment-methods/setup-intent",
-        headers=_auth_headers("card-token"),
+        headers=_mutation_headers("card-token"),
         json={"set_as_default": True, "stripe_customer_id": "cus_attacker"},
     )
     assert rejected_setup_fields.status_code == 422
     setup_intent = client.post(
         "/user-payment-methods/setup-intent",
-        headers=_auth_headers("card-token"),
+        headers=_mutation_headers("card-token"),
         json={"set_as_default": True},
     )
     assert setup_intent.status_code == 201
@@ -1192,26 +1212,26 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
     fake.setup_intent_customer_id = "cus_ws03_04b_other"
     rejected_sync = client.post(
         "/user-payment-methods/sync",
-        headers=_auth_headers("card-token"),
+        headers=_mutation_headers("card-token"),
         json={"setup_intent_id": "seti_wrong_customer", "set_as_default": True},
     )
     rejected_sync_fields = client.post(
         "/user-payment-methods/sync",
-        headers=_auth_headers("card-token"),
+        headers=_mutation_headers("card-token"),
         json={"setup_intent_id": "seti_any", "user_id": str(uuid.uuid4())},
     )
     assert rejected_sync.status_code == 403
     assert rejected_sync_fields.status_code == 422
     assert fake.retrieved_setup_intents == ["seti_wrong_customer"]
-    assert fake.retrieved_payment_methods == []
+    assert fake.retrieved_payment_methods == [own_stripe_payment_method_id]
 
     detached = client.delete(
         f"/user-payment-methods/{own_card_id}",
-        headers=_auth_headers("card-token"),
+        headers=_mutation_headers("card-token"),
     )
     repeated_detach = client.delete(
         f"/user-payment-methods/{own_card_id}",
-        headers=_auth_headers("card-token"),
+        headers=_mutation_headers("card-token"),
     )
     assert detached.status_code == 200
     assert repeated_detach.status_code == 200
@@ -1220,6 +1240,10 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
     assert repeated_detach.json()["method_status"] == "detached"
     assert fake.detached_payment_methods == [own_stripe_payment_method_id]
     assert fake.cleared_customers == ["cus_ws03_04b_user"]
+    assert fake.retrieved_payment_methods == [
+        own_stripe_payment_method_id,
+        own_stripe_payment_method_id,
+    ]
 
     with _session() as db:
         from backend.models import UserPaymentMethod

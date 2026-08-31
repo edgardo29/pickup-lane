@@ -47,8 +47,6 @@ class WaitlistEntryRead(BaseModel):
     promotion_expires_at: datetime | None
     auto_charge_consent_at: datetime | None
     auto_charge_consent_version: str | None
-    authorized_payment_method_id: UUID | None
-    authorized_stripe_payment_method_id: str | None
     authorized_payment_method_brand: str | None
     authorized_payment_method_last4: str | None
     authorized_amount_cents: int | None

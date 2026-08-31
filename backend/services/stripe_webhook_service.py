@@ -19,63 +19,71 @@ from backend.models import (
     HostPublishFee,
     Notification,
     Payment,
+    PaymentCompensation,
     PaymentEvent,
     Refund,
     User,
     WaitlistEntry,
+)
+from backend.observability.timeouts import PublicTimeoutError
+from backend.services.admin_financial_outcome_service import (
+    create_financial_outcome_notice_if_needed,
+)
+from backend.services.admin_money_issue_query_service import list_related_money_issues
+from backend.services.admin_money_issue_service import (
+    append_money_issue_event,
+    stage_refund_money_issue,
 )
 from backend.services.community_game_publish_service import (
     finalize_community_publish_attempt_success,
     mark_community_publish_attempt_failed_or_canceled,
     mark_community_publish_attempt_processing,
 )
-from backend.services.admin_financial_outcome_service import (
-    create_financial_outcome_notice_if_needed,
-)
-from backend.services.admin_money_issue_service import (
-    append_money_issue_event,
-    stage_refund_money_issue,
-)
-from backend.services.admin_money_issue_query_service import list_related_money_issues
-from backend.services.payment_event_service import build_payment_event_conflict_detail
-from backend.services.refund_event_service import record_refund_event
 from backend.services.game_credit_service import (
     RESTORED_USAGE_STATUS,
     redeem_reserved_game_credits,
     release_reserved_game_credits,
-)
-from backend.services.game_service import (
-    count_roster_players,
-    get_next_roster_order,
-    sync_game_capacity_status,
-)
-from backend.services.game_rules import (
-    ACTIVE_PAYMENT_HOLD_BOOKING_STATUSES,
-    build_game_conflict_detail,
-    game_requires_app_player_payment,
 )
 from backend.services.game_notification_service import (
     create_or_reopen_booking_refunded_notification,
     create_waitlist_payment_failed_notification,
     create_waitlist_promotion_notification,
 )
+from backend.services.game_rules import (
+    ACTIVE_PAYMENT_HOLD_BOOKING_STATUSES,
+    build_game_conflict_detail,
+    game_requires_app_player_payment,
+)
+from backend.services.game_service import (
+    count_roster_players,
+    get_next_roster_order,
+    sync_game_capacity_status,
+)
 from backend.services.moderation_surfacing_service import surface_community_game_text
 from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
 )
+from backend.services.payment_event_service import build_payment_event_conflict_detail
+from backend.services.payment_job_service import enqueue_webhook_event_job
+from backend.services.payment_lifecycle_policy import (
+    exact_provider_payment_status,
+    normalize_provider_payment_status,
+    provider_observation_can_advance,
+)
 from backend.services.payment_rules import (
     COLLECTED_PAYMENT_STATUSES,
     PENDING_PAYMENT_STATUSES,
 )
-from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
+from backend.services.refund_event_service import record_refund_event
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
 )
 from backend.services.stripe_service import (
     StripeConfigError,
-    create_refund as create_stripe_refund,
+    StripePaymentIntentResult,
+    retrieve_payment_intent,
 )
 
 HANDLED_PAYMENT_INTENT_EVENTS = {
@@ -83,6 +91,9 @@ HANDLED_PAYMENT_INTENT_EVENTS = {
     "payment_intent.payment_failed",
     "payment_intent.canceled",
     "payment_intent.processing",
+    "payment_intent.requires_action",
+    "payment_intent.requires_confirmation",
+    "payment_intent.requires_capture",
 }
 HANDLED_REFUND_EVENTS = {
     "refund.created",
@@ -140,27 +151,39 @@ def record_and_process_stripe_webhook_event(
             "processing_status": existing_event.processing_status,
         }
 
+    provider_created = event_payload.get("created")
+    if not isinstance(provider_created, int):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Stripe event is missing created time.",
+        )
     now = datetime.now(timezone.utc)
+    event_envelope = normalize_stripe_event_envelope(event_payload)
     payment_event = PaymentEvent(
         id=uuid.uuid4(),
         payment_id=None,
         provider="stripe",
         provider_event_id=provider_event_id,
         event_type=event_type,
-        raw_payload=event_payload,
-        processing_status="pending",
+        event_envelope=event_envelope,
+        provider_created_at=datetime.fromtimestamp(provider_created, tz=timezone.utc),
+        processing_status=(
+            "pending" if event_type in HANDLED_STRIPE_EVENTS else "ignored"
+        ),
         processed_at=None,
-        processing_error=None,
+        processing_error_code=(
+            None if event_type in HANDLED_STRIPE_EVENTS else "unsupported_event"
+        ),
         created_at=now,
     )
 
     try:
         db.add(payment_event)
-        process_stripe_event(db, payment_event, event_payload, now)
-        db.add(payment_event)
+        db.flush()
+        if event_type in HANDLED_STRIPE_EVENTS:
+            enqueue_webhook_event_job(db, payment_event.id)
         db.commit()
         db.refresh(payment_event)
-        surface_community_publish_fee_game_if_needed(db, payment_event)
     except IntegrityError as exc:
         db.rollback()
         if "uq_payment_events_provider_event_id" in str(exc.orig):
@@ -180,6 +203,199 @@ def record_and_process_stripe_webhook_event(
         "duplicate": False,
         "processing_status": payment_event.processing_status,
     }
+
+
+def normalize_stripe_event_envelope(event_payload: dict[str, Any]) -> dict[str, Any]:
+    data = event_payload.get("data")
+    provider_object = data.get("object") if isinstance(data, dict) else None
+    if not isinstance(provider_object, dict):
+        provider_object = {}
+    metadata = get_stripe_object_metadata(provider_object)
+    safe_metadata_keys = {
+        "payment_id",
+        "booking_id",
+        "game_id",
+        "user_id",
+        "community_publish_attempt_id",
+        "host_publish_fee_id",
+        "refund_id",
+        "checkout_total_cents",
+        "credit_applied_cents",
+        "minimum_charge_adjustment_cents",
+        "stripe_amount_cents",
+    }
+    safe_object: dict[str, Any] = {
+        "id": provider_object.get("id"),
+        "status": provider_object.get("status"),
+        "amount": provider_object.get("amount"),
+        "amount_received": provider_object.get("amount_received"),
+        "currency": provider_object.get("currency"),
+        "customer": provider_object.get("customer"),
+        "payment_intent": provider_object.get("payment_intent"),
+        "charge": provider_object.get("charge"),
+        "latest_charge": get_latest_charge_id(provider_object),
+        "cancellation_reason": provider_object.get("cancellation_reason"),
+        "metadata": {
+            key: value for key, value in metadata.items() if key in safe_metadata_keys
+        },
+    }
+    last_error = provider_object.get("last_payment_error")
+    if isinstance(last_error, dict):
+        safe_object["last_payment_error"] = {"code": last_error.get("code")}
+    return {
+        "id": event_payload.get("id"),
+        "type": event_payload.get("type"),
+        "created": event_payload.get("created"),
+        "data": {"object": safe_object},
+    }
+
+
+def build_payment_intent_observation_envelope(
+    payment: Payment,
+    observation: StripePaymentIntentResult,
+    *,
+    source: str,
+    now: datetime,
+) -> dict[str, Any]:
+    event_type = {
+        "succeeded": "payment_intent.succeeded",
+        "processing": "payment_intent.processing",
+        "requires_action": "payment_intent.requires_action",
+        "requires_confirmation": "payment_intent.requires_confirmation",
+        "requires_capture": "payment_intent.requires_capture",
+        "canceled": "payment_intent.canceled",
+    }.get(observation.status, "payment_intent.payment_failed")
+    metadata = dict(observation.metadata or payment.payment_metadata or {})
+    payment_intent: dict[str, Any] = {
+        "id": observation.id,
+        "status": observation.status,
+        "amount": observation.amount_cents or payment.amount_cents,
+        "amount_received": observation.amount_received_cents,
+        "currency": (observation.currency or payment.currency).lower(),
+        "customer": observation.customer_id or payment.provider_customer_id,
+        "latest_charge": observation.latest_charge_id,
+        "metadata": metadata,
+    }
+    if observation.failure_code:
+        payment_intent["last_payment_error"] = {"code": observation.failure_code}
+    return normalize_stripe_event_envelope(
+        {
+            "id": f"{source}:{payment.id}",
+            "type": event_type,
+            "created": int(now.timestamp()),
+            "data": {"object": payment_intent},
+        }
+    )
+
+
+def apply_authoritative_payment_intent_observation(
+    db: Session,
+    *,
+    payment: Payment,
+    observation: StripePaymentIntentResult,
+    source: str,
+    now: datetime,
+) -> str:
+    envelope = build_payment_intent_observation_envelope(
+        payment,
+        observation,
+        source=source,
+        now=now,
+    )
+    event = PaymentEvent(
+        id=uuid.uuid4(),
+        payment_id=payment.id,
+        provider="stripe",
+        provider_event_id=str(envelope["id"]),
+        event_type=str(envelope["type"]),
+        event_envelope=envelope,
+        provider_created_at=now,
+        processing_status="processing",
+        created_at=now,
+    )
+    process_payment_intent_event(db, event, envelope, now)
+    return event.processing_status
+
+
+def process_stored_stripe_event(db: Session, event_id: uuid.UUID) -> str:
+    event = db.get(PaymentEvent, event_id)
+    if event is None:
+        return "failed"
+    if event.processing_status in {"processed", "ignored"}:
+        return event.processing_status
+    event_payload = event.event_envelope
+    if event.event_type in HANDLED_PAYMENT_INTENT_EVENTS:
+        payment_intent = get_payment_intent_payload(event_payload)
+        provider_payment_intent_id = (
+            payment_intent.get("id") if payment_intent is not None else None
+        )
+        payment = (
+            db.scalars(
+                select(Payment)
+                .where(
+                    Payment.provider_payment_intent_id
+                    == provider_payment_intent_id
+                )
+                .limit(1)
+            ).first()
+            if isinstance(provider_payment_intent_id, str)
+            else None
+        )
+        if payment is not None:
+            event.payment_id = payment.id
+            db.add(event)
+            db.flush()
+            db.commit()
+            try:
+                observation = retrieve_payment_intent(provider_payment_intent_id)
+            except StripeConfigError:
+                event = db.get(PaymentEvent, event_id)
+                mark_event_failed(event, "stripe_configuration_unavailable")
+                db.add(event)
+                return "failed"
+            except PublicTimeoutError:
+                expire_payment_checkout_hold_if_stale(db, payment.id)
+                event = db.get(PaymentEvent, event_id)
+                event.processing_status = "pending"
+                event.processing_error_code = "stripe_payment_intent_read_timeout"
+                db.add(event)
+                return "retry"
+            except Exception:  # noqa: BLE001 - webhook read failure leaves event retryable
+                expire_payment_checkout_hold_if_stale(db, payment.id)
+                event = db.get(PaymentEvent, event_id)
+                event.processing_status = "pending"
+                event.processing_error_code = "stripe_payment_intent_read_failed"
+                db.add(event)
+                return "retry"
+            payment = db.get(Payment, payment.id)
+            event = db.get(PaymentEvent, event_id)
+            database_now = db.scalar(select(func.now()))
+            event_payload = build_payment_intent_observation_envelope(
+                payment,
+                observation,
+                source=f"webhook_{event.provider_event_id}",
+                now=database_now,
+            )
+    database_now = db.scalar(select(func.now()))
+    process_stripe_event(
+        db,
+        event,
+        event_payload,
+        database_now,
+    )
+    db.add(event)
+    return event.processing_status
+
+
+def mark_stored_event_exhausted(db: Session, event_id: uuid.UUID) -> None:
+    event = db.scalars(
+        select(PaymentEvent).where(PaymentEvent.id == event_id).with_for_update()
+    ).first()
+    if event is None or event.processing_status in {"processed", "ignored"}:
+        return
+    expire_stored_payment_event_hold_if_stale(db, event)
+    mark_event_failed(event, "stripe_webhook_processing_exhausted")
+    db.add(event)
 
 
 def surface_community_publish_fee_game_if_needed(
@@ -352,6 +568,9 @@ def get_locked_booking(db: Session, booking_id: uuid.UUID | None) -> Booking | N
     if booking_id is None:
         return None
 
+    lock_state = get_payment_domain_lock_state(db)
+    if booking_id in lock_state["booking_ids"]:
+        return db.get(Booking, booking_id)
     return db.scalars(
         select(Booking).where(Booking.id == booking_id).with_for_update()
     ).first()
@@ -361,9 +580,150 @@ def get_locked_game(db: Session, game_id: uuid.UUID | None) -> Game | None:
     if game_id is None:
         return None
 
+    lock_state = get_payment_domain_lock_state(db)
+    if game_id in lock_state["game_ids"]:
+        return db.get(Game, game_id)
     return db.scalars(
         select(Game).where(Game.id == game_id).with_for_update()
     ).first()
+
+
+def expire_unresolved_checkout_hold_if_stale(
+    db: Session,
+    booking: Booking | None,
+    now: datetime,
+) -> bool:
+    if (
+        booking is None
+        or booking.booking_status != "pending_payment"
+        or booking.expires_at is None
+        or booking.expires_at > now
+    ):
+        return False
+
+    game = get_locked_game(db, booking.game_id)
+    if game is None:
+        return False
+
+    from backend.services.checkout_service import expire_stale_pending_checkouts
+
+    expire_stale_pending_checkouts(db, game, now)
+    return True
+
+
+def expire_payment_checkout_hold_if_stale(
+    db: Session,
+    payment_id: uuid.UUID,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    payment_reference = db.get(Payment, payment_id)
+    if (
+        payment_reference is None
+        or payment_reference.payment_type != "booking"
+        or payment_reference.booking_id is None
+    ):
+        return False
+    booking = lock_booking_payment_domain_by_booking_id(
+        db,
+        payment_reference.booking_id,
+    )
+    if booking is None:
+        return False
+    database_now = now or db.scalar(select(func.now()))
+    return expire_unresolved_checkout_hold_if_stale(db, booking, database_now)
+
+
+def expire_stored_payment_event_hold_if_stale(
+    db: Session,
+    event: PaymentEvent,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    if event.payment_id is not None:
+        return expire_payment_checkout_hold_if_stale(db, event.payment_id, now=now)
+
+    payment_intent = get_payment_intent_payload(event.event_envelope)
+    provider_payment_intent_id = (
+        payment_intent.get("id") if payment_intent is not None else None
+    )
+    if not isinstance(provider_payment_intent_id, str):
+        return False
+    payment = db.scalars(
+        select(Payment)
+        .where(Payment.provider_payment_intent_id == provider_payment_intent_id)
+        .limit(1)
+    ).first()
+    if payment is None:
+        return False
+    event.payment_id = payment.id
+    db.add(event)
+    return expire_payment_checkout_hold_if_stale(db, payment.id, now=now)
+
+
+def lock_booking_payment_domain_by_booking_id(
+    db: Session,
+    booking_id: uuid.UUID,
+) -> Booking | None:
+    lock_state = get_payment_domain_lock_state(db)
+    if booking_id in lock_state["domain_booking_ids"]:
+        return db.get(Booking, booking_id)
+
+    game_id = db.scalar(select(Booking.game_id).where(Booking.id == booking_id))
+    if game_id is None:
+        return None
+
+    lock_state = get_payment_domain_lock_state(db)
+    db.scalars(select(Game).where(Game.id == game_id).with_for_update()).one()
+    booking = db.scalars(
+        select(Booking).where(Booking.id == booking_id).with_for_update()
+    ).one()
+    locked_waitlists = db.scalars(
+        select(WaitlistEntry)
+        .where(WaitlistEntry.promoted_booking_id == booking.id)
+        .order_by(WaitlistEntry.id.asc())
+        .with_for_update()
+    ).all()
+    db.scalars(
+        select(GameParticipant)
+        .where(GameParticipant.booking_id == booking.id)
+        .order_by(GameParticipant.id.asc())
+        .with_for_update()
+    ).all()
+
+    lock_state["game_ids"].add(game_id)
+    lock_state["booking_ids"].add(booking.id)
+    lock_state["waitlist_ids"].update(
+        entry.id for entry in locked_waitlists
+    )
+    lock_state["participant_booking_ids"].add(booking.id)
+    lock_state["domain_booking_ids"].add(booking.id)
+    return booking
+
+
+def get_payment_domain_lock_state(db: Session) -> dict[str, Any]:
+    transaction = db.get_transaction()
+    state = db.info.get("ws05_02_payment_domain_lock_state")
+    if state is None or state["transaction"] is not transaction:
+        state = {
+            "transaction": transaction,
+            "domain_booking_ids": set(),
+            "game_ids": set(),
+            "booking_ids": set(),
+            "waitlist_ids": set(),
+            "participant_booking_ids": set(),
+        }
+        db.info["ws05_02_payment_domain_lock_state"] = state
+    return state
+
+
+def lock_booking_payment_domain(
+    db: Session,
+    payment: Payment,
+) -> Booking | None:
+    if payment.booking_id is None:
+        return None
+    return lock_booking_payment_domain_by_booking_id(db, payment.booking_id)
 
 
 def get_locked_refund_by_provider_id(
@@ -373,6 +733,16 @@ def get_locked_refund_by_provider_id(
         select(Refund)
         .where(Refund.provider_refund_id == provider_refund_id)
         .with_for_update()
+        .limit(1)
+    ).first()
+
+
+def get_refund_by_provider_id(
+    db: Session, provider_refund_id: str
+) -> Refund | None:
+    return db.scalars(
+        select(Refund)
+        .where(Refund.provider_refund_id == provider_refund_id)
         .limit(1)
     ).first()
 
@@ -394,38 +764,48 @@ def get_locked_host_publish_fee(
 def get_locked_booking_participants(
     db: Session, booking_id: uuid.UUID, statuses: set[str]
 ) -> list[GameParticipant]:
+    statement = (
+        select(GameParticipant)
+        .where(
+            GameParticipant.booking_id == booking_id,
+            GameParticipant.participant_status.in_(statuses),
+        )
+        .order_by(
+            GameParticipant.roster_order.asc().nulls_last(),
+            GameParticipant.joined_at.asc(),
+        )
+    )
+    lock_state = get_payment_domain_lock_state(db)
+    if booking_id not in lock_state["participant_booking_ids"]:
+        statement = statement.with_for_update()
     return list(
-        db.scalars(
-            select(GameParticipant)
-            .where(
-                GameParticipant.booking_id == booking_id,
-                GameParticipant.participant_status.in_(statuses),
-            )
-            .order_by(
-                GameParticipant.roster_order.asc().nulls_last(),
-                GameParticipant.joined_at.asc(),
-            )
-            .with_for_update()
-        ).all()
+        db.scalars(statement).all()
     )
 
 
 def mark_event_processed(event: PaymentEvent, now: datetime) -> None:
     event.processing_status = "processed"
     event.processed_at = now
-    event.processing_error = None
+    event.processing_error_code = None
 
 
 def mark_event_failed(event: PaymentEvent, error: str) -> None:
     event.processing_status = "failed"
     event.processed_at = None
-    event.processing_error = error
+    event.processing_error_code = safe_event_error_code(error)
 
 
 def mark_event_ignored(event: PaymentEvent, reason: str) -> None:
     event.processing_status = "ignored"
     event.processed_at = None
-    event.processing_error = reason
+    event.processing_error_code = safe_event_error_code(reason)
+
+
+def safe_event_error_code(value: str) -> str:
+    normalized = "".join(
+        character if character.isalnum() else "_" for character in value.lower()
+    ).strip("_")
+    return normalized[:100] or "event_processing_error"
 
 
 def add_booking_status_history(
@@ -481,6 +861,12 @@ def validate_payment_intent_references(
 
     if booking is None:
         return "Internal booking for this payment was not found."
+
+    provider_customer_id = payment_intent.get("customer")
+    if not payment.provider_customer_id:
+        return "Internal payment is missing its Stripe Customer identity."
+    if provider_customer_id != payment.provider_customer_id:
+        return "Stripe Customer does not match the internal payment owner."
 
     metadata = get_payment_intent_metadata(payment_intent)
     expected_metadata = {
@@ -613,7 +999,7 @@ def apply_community_publish_fee_processing(
         payment,
         attempt,
         payment_intent,
-        require_metadata=False,
+        require_metadata=True,
     )
     if validation_error is not None:
         mark_event_failed(event, validation_error)
@@ -651,7 +1037,7 @@ def apply_community_publish_fee_failed_or_canceled(
         payment,
         attempt,
         payment_intent,
-        require_metadata=False,
+        require_metadata=True,
     )
     if validation_error is not None:
         mark_event_failed(event, validation_error)
@@ -716,11 +1102,13 @@ def get_waitlist_auto_promote_entry(
     except ValueError:
         return None
 
-    return db.scalars(
-        select(WaitlistEntry)
-        .where(WaitlistEntry.id == parsed_waitlist_entry_id)
-        .with_for_update()
-    ).first()
+    statement = select(WaitlistEntry).where(
+        WaitlistEntry.id == parsed_waitlist_entry_id
+    )
+    lock_state = get_payment_domain_lock_state(db)
+    if parsed_waitlist_entry_id not in lock_state["waitlist_ids"]:
+        statement = statement.with_for_update()
+    return db.scalars(statement).first()
 
 
 def booking_confirmed_aggregation_key(game_id: uuid.UUID, booking_id: uuid.UUID) -> str:
@@ -849,190 +1237,6 @@ def create_checkout_payment_failed_notification(
     )
 
 
-def map_stripe_refund_result_status(stripe_status: str) -> str:
-    normalized_status = stripe_status.strip().lower()
-    if normalized_status == "succeeded":
-        return "succeeded"
-    if normalized_status == "failed":
-        return "failed"
-    if normalized_status in {"canceled", "cancelled"}:
-        return "cancelled"
-    return "processing"
-
-
-def create_late_payment_refund_record(
-    db: Session,
-    *,
-    payment: Payment,
-    booking: Booking,
-    now: datetime,
-    provider_refund_id: str | None,
-    refund_status: str,
-    reason_code: str,
-) -> Refund:
-    provider_status = (
-        "unknown"
-        if provider_refund_id is None and reason_code == "stripe_refund_timeout_unknown"
-        else refund_status if provider_refund_id is not None else None
-    )
-    refund = Refund(
-        id=uuid.uuid4(),
-        payment_id=payment.id,
-        booking_id=booking.id,
-        participant_id=None,
-        origin_workflow="pending_checkout_expiration",
-        provider="stripe",
-        provider_refund_id=provider_refund_id,
-        provider_charge_id=payment.provider_charge_id,
-        provider_status=provider_status,
-        provider_status_observed_at=now if provider_status is not None else None,
-        last_refund_event_at=now,
-        amount_cents=payment.amount_cents,
-        currency=payment.currency,
-        refund_reason="duplicate_payment",
-        refund_status=refund_status,
-        requested_by_user_id=None,
-        approved_by_user_id=None,
-        requested_at=now,
-        approved_at=(
-            now
-            if refund_status in {"approved", "processing", "succeeded"}
-            else None
-        ),
-        refunded_at=now if refund_status == "succeeded" else None,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(refund)
-    db.flush()
-    refund_event = record_refund_event(
-        db,
-        refund=refund,
-        event_type="provider_result_recorded",
-        event_source="system",
-        provider="stripe",
-        provider_refund_id=provider_refund_id,
-        provider_charge_id=payment.provider_charge_id,
-        provider_status=provider_status,
-        new_refund_status=refund_status,
-        reason_code=reason_code,
-        summary="Late successful checkout payment refund result recorded.",
-        occurred_at=now,
-    )
-    if refund_status in {"failed", "cancelled"}:
-        stage_refund_money_issue(
-            db,
-            refund=refund,
-            payment=payment,
-            issue_type=(
-                "refund_missing_provider_reference"
-                if reason_code == "provider_charge_id_missing"
-                else (
-                    "refund_cancelled"
-                    if refund_status == "cancelled"
-                    else "refund_failed"
-                )
-            ),
-            reason_code=reason_code,
-            summary="Late successful checkout payment refund could not complete.",
-            refund_event=refund_event,
-            now=now,
-        )
-    return refund
-
-
-def create_late_payment_refund_if_needed(
-    db: Session,
-    *,
-    game: Game,
-    booking: Booking,
-    payment: Payment,
-    now: datetime,
-) -> Refund | None:
-    if payment.amount_cents <= 0:
-        return None
-
-    existing_refund = db.scalars(
-        select(Refund)
-        .where(
-            Refund.payment_id == payment.id,
-            Refund.booking_id == booking.id,
-            Refund.origin_workflow == "pending_checkout_expiration",
-            Refund.refund_reason == "duplicate_payment",
-            Refund.refund_status.in_({"pending", "approved", "processing", "succeeded"}),
-        )
-        .limit(1)
-    ).first()
-    if existing_refund is not None:
-        return existing_refund
-
-    if not payment.provider_charge_id:
-        return create_late_payment_refund_record(
-            db,
-            payment=payment,
-            booking=booking,
-            now=now,
-            provider_refund_id=None,
-            refund_status="failed",
-            reason_code="provider_charge_id_missing",
-        )
-
-    refund_idempotency_key = f"late_payment:{booking.id}:payment:{payment.id}:refund"
-    try:
-        stripe_refund = create_stripe_refund(
-            charge_id=payment.provider_charge_id,
-            amount_cents=payment.amount_cents,
-            currency=payment.currency,
-            idempotency_key=refund_idempotency_key,
-            metadata={
-                "source": "late_checkout_payment",
-                "game_id": str(game.id),
-                "booking_id": str(booking.id),
-                "payment_id": str(payment.id),
-            },
-        )
-    except StripeConfigError:
-        return create_late_payment_refund_record(
-            db,
-            payment=payment,
-            booking=booking,
-            now=now,
-            provider_refund_id=None,
-            refund_status="failed",
-            reason_code="stripe_refunds_not_configured",
-        )
-    except DependencyMutationTimeoutUnknownError:
-        return create_late_payment_refund_record(
-            db,
-            payment=payment,
-            booking=booking,
-            now=now,
-            provider_refund_id=None,
-            refund_status="processing",
-            reason_code="stripe_refund_timeout_unknown",
-        )
-    except Exception:
-        return create_late_payment_refund_record(
-            db,
-            payment=payment,
-            booking=booking,
-            now=now,
-            provider_refund_id=None,
-            refund_status="failed",
-            reason_code="stripe_refund_failed",
-        )
-
-    return create_late_payment_refund_record(
-        db,
-        payment=payment,
-        booking=booking,
-        now=now,
-        provider_refund_id=stripe_refund.id,
-        refund_status=map_stripe_refund_result_status(stripe_refund.status),
-        reason_code="late_checkout_payment_refund_created",
-    )
-
-
 def expire_late_successful_payment(
     db: Session,
     *,
@@ -1055,7 +1259,9 @@ def expire_late_successful_payment(
 
     old_booking_status = booking.booking_status
     old_payment_status = booking.payment_status
+    old_reservation_status = booking.reservation_status
     payment.payment_status = "succeeded"
+    payment.provider_status = "succeeded"
     payment.provider_charge_id = get_latest_charge_id(payment_intent)
     payment.paid_at = payment.paid_at or now
     payment.failure_code = None
@@ -1085,7 +1291,34 @@ def expire_late_successful_payment(
             reason="Late Stripe payment succeeded after the checkout hold expired.",
         )
 
-    booking.booking_status = "expired"
+    if (
+        old_booking_status == "capacity_conflict"
+        or old_reservation_status == "capacity_conflict"
+    ):
+        next_booking_status = "capacity_conflict"
+        next_reservation_status = "capacity_conflict"
+        compensation_reason = "capacity_conflict"
+    elif old_booking_status == "cancelled":
+        next_booking_status = "cancelled"
+        next_reservation_status = (
+            old_reservation_status
+            if old_reservation_status in {"released", "not_required"}
+            else "released"
+        )
+        compensation_reason = "booking_cancelled"
+    else:
+        next_booking_status = (
+            "expired" if old_booking_status == "pending_payment" else old_booking_status
+        )
+        next_reservation_status = (
+            old_reservation_status
+            if old_reservation_status in {"released", "not_required"}
+            else "released"
+        )
+        compensation_reason = "reservation_expired"
+
+    booking.booking_status = next_booking_status
+    booking.reservation_status = next_reservation_status
     booking.payment_status = "paid"
     booking.expires_at = None
     booking.updated_at = now
@@ -1112,20 +1345,55 @@ def expire_late_successful_payment(
             now,
         )
 
-    refund = create_late_payment_refund_if_needed(
+    ensure_payment_compensation(
         db,
-        game=game,
-        booking=booking,
         payment=payment,
+        booking=booking,
+        reason=compensation_reason,
         now=now,
     )
-    if refund is not None and refund.refund_status == "succeeded":
-        sync_refunded_payment_and_booking(db, payment, booking, None, now)
 
     sync_game_capacity_status(db, game)
     game.updated_at = now
     db.add(game)
     return None
+
+
+def ensure_payment_compensation(
+    db: Session,
+    *,
+    payment: Payment,
+    booking: Booking,
+    reason: str,
+    now: datetime,
+) -> PaymentCompensation:
+    existing = db.scalars(
+        select(PaymentCompensation)
+        .where(
+            PaymentCompensation.payment_id == payment.id,
+            PaymentCompensation.booking_id == booking.id,
+            PaymentCompensation.status.in_({"required", "processing"}),
+        )
+        .with_for_update()
+        .limit(1)
+    ).first()
+    if existing is not None:
+        return existing
+    compensation = PaymentCompensation(
+        id=uuid.uuid4(),
+        payment_id=payment.id,
+        booking_id=booking.id,
+        action="refund",
+        reason=reason,
+        amount_cents=payment.amount_cents,
+        currency=payment.currency,
+        status="required",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(compensation)
+    db.flush()
+    return compensation
 
 
 def apply_payment_intent_succeeded(
@@ -1154,6 +1422,7 @@ def apply_payment_intent_succeeded(
     if booking.booking_status in {"confirmed", "partially_cancelled"}:
         if payment.payment_status not in COLLECTED_PAYMENT_STATUSES:
             payment.payment_status = "succeeded"
+            payment.provider_status = "succeeded"
             payment.provider_charge_id = get_latest_charge_id(payment_intent)
             payment.paid_at = payment.paid_at or now
             payment.failure_code = None
@@ -1212,8 +1481,18 @@ def apply_payment_intent_succeeded(
         )
         return
 
-    if count_roster_players(db, booking.game_id, now=now) > game.total_spots:
-        mark_event_failed(event, "Game roster is over capacity before confirmation.")
+    current_roster_count = count_roster_players(db, booking.game_id, now=now)
+    if current_roster_count > game.total_spots:
+        record_capacity_conflict_after_success(
+            db,
+            game=game,
+            booking=booking,
+            payment=payment,
+            payment_intent=payment_intent,
+            pending_participants=pending_participants,
+            now=now,
+        )
+        mark_event_processed(event, now)
         return
 
     try:
@@ -1232,6 +1511,7 @@ def apply_payment_intent_succeeded(
     next_roster_order = get_next_roster_order(db, booking.game_id)
 
     payment.payment_status = "succeeded"
+    payment.provider_status = "succeeded"
     payment.provider_charge_id = get_latest_charge_id(payment_intent)
     payment.paid_at = payment.paid_at or now
     payment.failure_code = None
@@ -1257,6 +1537,7 @@ def apply_payment_intent_succeeded(
         )
 
     booking.booking_status = "confirmed"
+    booking.reservation_status = "confirmed"
     booking.payment_status = "paid"
     booking.booked_at = booking.booked_at or now
     booking.expires_at = None
@@ -1299,6 +1580,74 @@ def apply_payment_intent_succeeded(
     mark_event_processed(event, now)
 
 
+def record_capacity_conflict_after_success(
+    db: Session,
+    *,
+    game: Game,
+    booking: Booking,
+    payment: Payment,
+    payment_intent: dict[str, Any],
+    pending_participants: list[GameParticipant],
+    now: datetime,
+) -> None:
+    release_reserved_game_credits(
+        db,
+        booking.id,
+        now=now,
+        reason_code="payment_capacity_conflict",
+        user_id=booking.buyer_user_id,
+    )
+    old_booking_status = booking.booking_status
+    old_payment_status = booking.payment_status
+    payment.payment_status = "succeeded"
+    payment.provider_status = "succeeded"
+    payment.provider_charge_id = get_latest_charge_id(payment_intent)
+    payment.paid_at = payment.paid_at or now
+    payment.failure_code = None
+    payment.failure_message = None
+    payment.updated_at = now
+    db.add(payment)
+    booking.booking_status = "capacity_conflict"
+    booking.reservation_status = "capacity_conflict"
+    booking.payment_status = "paid"
+    booking.expires_at = None
+    booking.updated_at = now
+    db.add(booking)
+    for participant in pending_participants:
+        old_participant_status = participant.participant_status
+        old_attendance_status = participant.attendance_status
+        participant.participant_status = "cancelled"
+        participant.attendance_status = "not_applicable"
+        participant.cancellation_type = "payment_failed"
+        participant.cancelled_at = participant.cancelled_at or now
+        participant.updated_at = now
+        db.add(participant)
+        add_participant_status_history(
+            db,
+            participant,
+            old_participant_status=old_participant_status,
+            old_attendance_status=old_attendance_status,
+            reason="Stripe succeeded but current capacity could not be granted.",
+        )
+    add_booking_status_history(
+        db,
+        booking,
+        old_booking_status=old_booking_status,
+        old_payment_status=old_payment_status,
+        reason="Stripe succeeded but current capacity could not be granted.",
+    )
+    ensure_payment_compensation(
+        db,
+        payment=payment,
+        booking=booking,
+        reason="capacity_conflict",
+        now=now,
+    )
+    sync_game_capacity_status(db, game)
+    game.updated_at = now
+    db.add(game)
+
+
 def apply_payment_intent_processing(
     db: Session,
     event: PaymentEvent,
@@ -1311,7 +1660,7 @@ def apply_payment_intent_processing(
         payment,
         booking,
         payment_intent,
-        require_metadata=False,
+        require_metadata=True,
     )
     if validation_error is not None:
         mark_event_failed(event, validation_error)
@@ -1325,9 +1674,19 @@ def apply_payment_intent_processing(
         mark_event_ignored(event, "Payment is no longer pending.")
         return
 
+    expire_unresolved_checkout_hold_if_stale(db, booking, now)
+    booking = get_locked_booking(db, payment.booking_id)
     old_booking_status = booking.booking_status
     old_payment_status = booking.payment_status
-    payment.payment_status = "processing"
+    exact_provider_status = exact_provider_payment_status(
+        str(payment_intent.get("status") or "processing")
+    )
+    normalized_status = normalize_provider_payment_status(exact_provider_status)
+    if not provider_observation_can_advance(payment.payment_status, normalized_status):
+        mark_event_ignored(event, "Provider observation would regress payment state.")
+        return
+    payment.provider_status = exact_provider_status
+    payment.payment_status = normalized_status
     payment.updated_at = now
     db.add(payment)
 
@@ -1343,6 +1702,100 @@ def apply_payment_intent_processing(
             reason="Stripe payment_intent.processing updated payment state.",
         )
 
+    mark_event_processed(event, now)
+
+
+def apply_payment_intent_pending_observation(
+    db: Session,
+    event: PaymentEvent,
+    payment: Payment,
+    payment_intent: dict[str, Any],
+    now: datetime,
+) -> None:
+    booking = get_locked_booking(db, payment.booking_id)
+    validation_error = validate_payment_intent_references(
+        payment,
+        booking,
+        payment_intent,
+        require_metadata=True,
+    )
+    if validation_error is not None:
+        mark_event_failed(event, validation_error)
+        return
+    exact_provider_status = exact_provider_payment_status(
+        str(payment_intent.get("status") or "")
+    )
+    observed_status = normalize_provider_payment_status(exact_provider_status)
+    if observed_status not in PENDING_PAYMENT_STATUSES:
+        mark_event_failed(event, "PaymentIntent has an invalid pending status.")
+        return
+    if not provider_observation_can_advance(payment.payment_status, observed_status):
+        mark_event_ignored(event, "Provider observation would regress payment state.")
+        return
+    expire_unresolved_checkout_hold_if_stale(db, booking, now)
+    booking = get_locked_booking(db, payment.booking_id)
+    old_booking_status = booking.booking_status
+    old_payment_status = booking.payment_status
+    waitlist_entry = get_waitlist_auto_promote_entry(db, payment)
+    if (
+        waitlist_entry is not None
+        and booking.booking_status == "pending_payment"
+        and observed_status in {"requires_action", "requires_payment_method"}
+    ):
+        game = get_locked_game(db, booking.game_id)
+        booking_participants = get_locked_booking_participants(
+            db,
+            booking.id,
+            {"pending_payment"},
+        )
+        if game is None or not booking_participants:
+            mark_event_failed(
+                event,
+                "Waitlist auto-promotion state is missing for provider failure.",
+            )
+            return
+        from backend.services.game_waitlist_service import (
+            mark_paid_waitlist_auto_promotion_failed,
+        )
+
+        mark_paid_waitlist_auto_promotion_failed(
+            db,
+            game,
+            waitlist_entry,
+            booking,
+            booking_participants,
+            payment,
+            now,
+            payment_status=observed_status,
+            failure_code=f"waitlist_auto_charge_{observed_status}",
+            failure_message="Saved card auto-charge could not complete off-session.",
+        )
+        mark_event_processed(event, now)
+        return
+    payment.provider_status = exact_provider_status
+    payment.payment_status = observed_status
+    failure_code, _ = get_payment_failure_fields(
+        payment_intent,
+        fallback_code="payment_requires_update",
+        fallback_message="Payment requires another step.",
+    )
+    payment.failure_code = failure_code if observed_status == "requires_payment_method" else None
+    payment.failure_message = None
+    payment.updated_at = now
+    db.add(payment)
+    if booking.booking_status == "pending_payment":
+        booking.payment_status = (
+            "requires_action" if observed_status == "requires_action" else "processing"
+        )
+        booking.updated_at = now
+        db.add(booking)
+        add_booking_status_history(
+            db,
+            booking,
+            old_booking_status=old_booking_status,
+            old_payment_status=old_payment_status,
+            reason="Stripe updated the pending PaymentIntent state.",
+        )
     mark_event_processed(event, now)
 
 
@@ -1366,6 +1819,12 @@ def fail_pending_booking_hold(
         fallback_message=fallback_message,
     )
     payment.payment_status = payment_status
+    payment.provider_status = exact_provider_payment_status(
+        str(
+            payment_intent.get("status")
+            or ("canceled" if payment_status == "canceled" else "")
+        )
+    )
     payment.provider_charge_id = get_latest_charge_id(payment_intent)
     payment.failure_code = failure_code
     payment.failure_message = failure_message
@@ -1384,6 +1843,7 @@ def fail_pending_booking_hold(
     old_booking_status = booking.booking_status
     old_payment_status = booking.payment_status
     booking.booking_status = booking_status
+    booking.reservation_status = "released"
     booking.payment_status = "failed"
     booking.expires_at = None
     booking.updated_at = now
@@ -1460,7 +1920,7 @@ def apply_payment_intent_failed_or_canceled(
         payment,
         booking,
         payment_intent,
-        require_metadata=False,
+        require_metadata=True,
     )
     if validation_error is not None:
         mark_event_failed(event, validation_error)
@@ -1473,7 +1933,7 @@ def apply_payment_intent_failed_or_canceled(
     waitlist_entry = get_waitlist_auto_promote_entry(db, payment)
     if is_canceled:
         terminal_payment_status = "canceled"
-        terminal_booking_status = "failed" if waitlist_entry is not None else "expired"
+        terminal_booking_status = "failed"
         fallback_code = "payment_intent_canceled"
         fallback_message = "Stripe payment intent was canceled."
         history_reason = (
@@ -1579,8 +2039,10 @@ def recover_refund_from_metadata(
 
     payment_id = parse_metadata_uuid(metadata, "payment_id")
     booking_id = parse_metadata_uuid(metadata, "booking_id")
+    if booking_id is None:
+        return None
+    booking = lock_booking_payment_domain_by_booking_id(db, booking_id)
     payment = get_locked_payment(db, payment_id)
-    booking = get_locked_booking(db, booking_id)
     if payment is None or booking is None or payment.booking_id != booking.id:
         return None
 
@@ -1744,13 +2206,17 @@ def process_refund_event(
         mark_event_failed(event, "Refund payload is missing id.")
         return
 
-    refund = get_locked_refund_by_provider_id(db, provider_refund_id)
-    if refund is None:
+    refund_reference = get_refund_by_provider_id(db, provider_refund_id)
+    if refund_reference is None:
         refund = recover_refund_from_metadata(
             db,
             refund_payload,
             now,
         )
+    else:
+        if refund_reference.booking_id is not None:
+            lock_booking_payment_domain_by_booking_id(db, refund_reference.booking_id)
+        refund = get_locked_refund_by_provider_id(db, provider_refund_id)
 
     if refund is None:
         mark_event_ignored(event, "No internal refund matched this Stripe refund.")
@@ -1886,10 +2352,26 @@ def process_payment_intent_event(
         mark_event_failed(event, "PaymentIntent payload is missing id.")
         return
 
+    payment_reference = db.scalars(
+        select(Payment)
+        .where(Payment.provider_payment_intent_id == payment_intent_id)
+        .limit(1)
+    ).first()
+    if payment_reference is not None and payment_reference.payment_type == "booking":
+        lock_booking_payment_domain(db, payment_reference)
     payment = get_locked_payment_by_intent(db, payment_intent_id)
     if payment is None:
-        mark_event_ignored(event, "No internal payment matched this PaymentIntent.")
+        mark_event_failed(event, "No internal payment matched this PaymentIntent.")
         return
+
+    persisted_event = db.scalars(
+        select(PaymentEvent)
+        .where(PaymentEvent.id == event.id)
+        .with_for_update()
+        .limit(1)
+    ).first()
+    if persisted_event is not None:
+        event = persisted_event
 
     event.payment_id = payment.id
 
@@ -1930,7 +2412,25 @@ def process_payment_intent_event(
         apply_payment_intent_processing(db, event, payment, payment_intent, now)
         return
 
+    if event_type in {
+        "payment_intent.requires_action",
+        "payment_intent.requires_confirmation",
+        "payment_intent.requires_capture",
+    }:
+        apply_payment_intent_pending_observation(
+            db, event, payment, payment_intent, now
+        )
+        return
+
     if event_type == "payment_intent.payment_failed":
+        observed_status = normalize_provider_payment_status(
+            str(payment_intent.get("status") or "")
+        )
+        if observed_status in PENDING_PAYMENT_STATUSES:
+            apply_payment_intent_pending_observation(
+                db, event, payment, payment_intent, now
+            )
+            return
         apply_payment_intent_failed_or_canceled(
             db, event, payment, payment_intent, now, is_canceled=False
         )

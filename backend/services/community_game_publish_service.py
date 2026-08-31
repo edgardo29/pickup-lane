@@ -18,12 +18,12 @@ from backend.models import (
     Venue,
 )
 from backend.observability.timeouts import PublicTimeoutError
-from backend.schemas.community_publish_attempt_schema import (
-    CommunityPublishAttemptStatusRead,
-)
 from backend.schemas.community_game_publish_schema import (
     CommunityGamePublishCreate,
     CommunityGamePublishRead,
+)
+from backend.schemas.community_publish_attempt_schema import (
+    CommunityPublishAttemptStatusRead,
 )
 from backend.services.auth_service import user_is_active_admin
 from backend.services.game_rules import (
@@ -36,6 +36,7 @@ from backend.services.hosting_access_service import (
     require_community_publish_hosting_access,
 )
 from backend.services.moderation_surfacing_service import surface_community_game_text
+from backend.services.payment_lifecycle_policy import canonical_fingerprint
 from backend.services.payment_method_service import (
     get_current_user_saved_payment_method_for_checkout,
 )
@@ -533,7 +534,7 @@ def expire_abandoned_community_publish_attempts(
             payment is not None
             and payment.payment_status not in COLLECTED_PAYMENT_STATUSES
         ):
-            payment.payment_status = "canceled"
+            payment.payment_status = "failed"
             payment.failure_code = payment.failure_code or "publish_attempt_expired"
             payment.failure_message = (
                 payment.failure_message
@@ -696,7 +697,17 @@ def create_paid_publish_attempt(
         provider="stripe",
         provider_payment_intent_id=None,
         provider_charge_id=None,
+        provider_customer_id=host.stripe_customer_id,
         idempotency_key=f"community-publish-fee:{attempt_id}:{payment_id}",
+        creation_fingerprint=canonical_fingerprint(
+            {
+                "payment_id": str(payment_id),
+                "attempt_id": str(attempt_id),
+                "user_id": str(host.id),
+                "amount_cents": COMMUNITY_PUBLISH_FEE_CENTS,
+                "currency": currency,
+            }
+        ),
         amount_cents=COMMUNITY_PUBLISH_FEE_CENTS,
         currency=currency,
         payment_status="requires_payment_method",
