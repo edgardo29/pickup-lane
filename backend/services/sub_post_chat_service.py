@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from time import monotonic_ns
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
@@ -11,8 +12,8 @@ from backend.models import (
     Notification,
     SubPost,
     SubPostChat,
-    SubPostChatMessageDetection,
     SubPostChatMessage,
+    SubPostChatMessageDetection,
     SubPostChatRead,
     SubPostRequest,
     User,
@@ -25,16 +26,17 @@ from backend.schemas.sub_post_chat_read_schema import (
 )
 from backend.schemas.sub_post_chat_schema import (
     SubPostChatEnsureCreate,
+)
+from backend.schemas.sub_post_chat_schema import (
     SubPostChatRead as SubPostChatReadSchema,
 )
-from backend.services.notification_event_service import (
-    build_need_a_sub_notification_fields,
-    reopen_aggregated_notification,
-    resolve_aggregated_notification,
-)
 from backend.services.chat_moderation_service import (
+    CHAT_MESSAGE_CONFLICT_DETAIL,
+    ContextPredicateFact,
     build_safe_message_preview,
+    chat_detection_record_values,
     detect_chat_message,
+    repeated_message_fact,
 )
 from backend.services.chat_rate_limit_service import (
     CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES,
@@ -43,7 +45,13 @@ from backend.services.chat_rate_limit_service import (
 from backend.services.moderation_surfacing_service import (
     surface_need_a_sub_chat_message_text,
 )
+from backend.services.moderation_taxonomy import TARGET_CONTEXT_NEED_A_SUB_CHAT
 from backend.services.need_a_sub_rules import CHAT_ALLOWED_POST_STATUSES
+from backend.services.notification_event_service import (
+    build_need_a_sub_notification_fields,
+    reopen_aggregated_notification,
+    resolve_aggregated_notification,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +98,7 @@ def get_sub_post_or_404(
 ) -> SubPost:
     if lock_for_update:
         sub_post = db.scalar(
-            select(SubPost)
-            .where(SubPost.id == sub_post_id)
-            .with_for_update()
+            select(SubPost).where(SubPost.id == sub_post_id).with_for_update()
         )
     else:
         sub_post = db.get(SubPost, sub_post_id)
@@ -110,9 +116,7 @@ def get_sub_post_chat_for_post(
     db: Session,
     sub_post_id: uuid.UUID,
 ) -> SubPostChat | None:
-    return db.scalar(
-        select(SubPostChat).where(SubPostChat.sub_post_id == sub_post_id)
-    )
+    return db.scalar(select(SubPostChat).where(SubPostChat.sub_post_id == sub_post_id))
 
 
 def get_or_create_active_sub_post_chat(
@@ -334,8 +338,8 @@ def sender_repeated_sub_chat_message(
     message_body: str,
     *,
     exclude_message_id: uuid.UUID | None = None,
-) -> bool:
-    statement = select(SubPostChatMessage.message_body).where(
+) -> ContextPredicateFact | None:
+    statement = select(SubPostChatMessage).where(
         SubPostChatMessage.chat_id == chat_id,
         SubPostChatMessage.sender_user_id == sender_user_id,
         SubPostChatMessage.message_type == "text",
@@ -344,15 +348,21 @@ def sender_repeated_sub_chat_message(
     if exclude_message_id is not None:
         statement = statement.where(SubPostChatMessage.id != exclude_message_id)
 
-    latest_body = db.scalar(
+    latest_message = db.scalar(
         statement.order_by(
             SubPostChatMessage.created_at.desc(),
             SubPostChatMessage.id.desc(),
         ).limit(1)
     )
-    return (
-        latest_body is not None
-        and latest_body.strip().casefold() == message_body.strip().casefold()
+    if (
+        latest_message is None
+        or latest_message.message_body.strip().casefold()
+        != message_body.strip().casefold()
+    ):
+        return None
+    return repeated_message_fact(
+        reference_message_id=str(latest_message.id),
+        reference_message_body=latest_message.message_body,
     )
 
 
@@ -360,36 +370,34 @@ def replace_sub_chat_message_detections(
     db: Session,
     message: SubPostChatMessage,
     *,
-    is_repeated_message: bool,
+    repeated_fact: ContextPredicateFact | None,
+    started_ns: int,
 ) -> None:
     db.execute(
         delete(SubPostChatMessageDetection).where(
             SubPostChatMessageDetection.message_id == message.id
         )
     )
-    try:
-        detections = detect_chat_message(
-            message.message_body,
-            is_repeated_message=is_repeated_message,
-        )
-    except Exception:
-        logger.exception(
-            "Need a Sub chat moderation detector failed for message %s.",
-            message.id,
-        )
-        detections = []
-    message.review_status = "needs_review" if detections else "clear"
+    scan_result = detect_chat_message(
+        message.message_body,
+        target_context=TARGET_CONTEXT_NEED_A_SUB_CHAT,
+        predicate_facts=(repeated_fact,) if repeated_fact is not None else (),
+        started_ns=started_ns,
+    )
+    message.review_status = "needs_review" if scan_result.detections else "clear"
     message.reviewed_at = None
     message.reviewed_by_user_id = None
-    for detection in detections:
+    for detection in scan_result.detections:
         db.add(
             SubPostChatMessageDetection(
                 id=uuid.uuid4(),
                 message_id=message.id,
-                category=detection.category,
-                severity=detection.severity,
-                rule_key=detection.rule_key,
-                matched_preview=detection.matched_preview,
+                **chat_detection_record_values(
+                    message_id=str(message.id),
+                    source_text=message.message_body,
+                    detection=detection,
+                    provenance=scan_result.provenance,
+                ),
             )
         )
 
@@ -469,15 +477,18 @@ def validate_sender_rate_limit(
 
 
 def validate_total_message_limit(db: Session, chat_id: uuid.UUID) -> None:
-    message_count = db.scalar(
-        select(func.count())
-        .select_from(SubPostChatMessage)
-        .where(
-            SubPostChatMessage.chat_id == chat_id,
-            SubPostChatMessage.message_type == "text",
-            SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
+    message_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(SubPostChatMessage)
+            .where(
+                SubPostChatMessage.chat_id == chat_id,
+                SubPostChatMessage.message_type == "text",
+                SubPostChatMessage.visibility_status == VISIBLE_MESSAGE_STATUS,
+            )
         )
-    ) or 0
+        or 0
+    )
 
     if message_count >= MAX_SUB_CHAT_MESSAGES_TOTAL:
         raise HTTPException(
@@ -760,8 +771,7 @@ def reconcile_sub_chat_notifications_after_moderation(
         ]
         if read_state is not None:
             unread_filters.append(
-                SubPostChatMessage.created_at
-                > ensure_aware(read_state.last_read_at)
+                SubPostChatMessage.created_at > ensure_aware(read_state.last_read_at)
             )
 
         unread_count = (
@@ -792,9 +802,7 @@ def reconcile_sub_chat_notifications_after_moderation(
             notification.read_at = None
             notification.aggregate_count = unread_count
             notification.actor_user_id = latest_unread_message.sender_user_id
-            notification.related_sub_post_chat_message_id = (
-                latest_unread_message.id
-            )
+            notification.related_sub_post_chat_message_id = latest_unread_message.id
             notification.event_at = latest_unread_message.created_at
 
         notification.updated_at = moderated_at
@@ -909,7 +917,7 @@ def ensure_sub_post_chat_workflow(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc.orig),
+            detail=CHAT_MESSAGE_CONFLICT_DETAIL,
         ) from exc
 
     read_state, unread_count = get_sub_chat_read_state(db, db_chat, current_user)
@@ -1035,7 +1043,8 @@ def create_sub_post_chat_message_workflow(
     message_body = normalize_message_body(payload.message_body)
     validate_sender_rate_limit(db, db_chat.id, current_user.id, current_time)
     validate_total_message_limit(db, db_chat.id)
-    is_repeated_message = sender_repeated_sub_chat_message(
+    moderation_started_ns = monotonic_ns()
+    repeated_fact = sender_repeated_sub_chat_message(
         db,
         db_chat.id,
         current_user.id,
@@ -1059,7 +1068,8 @@ def create_sub_post_chat_message_workflow(
         replace_sub_chat_message_detections(
             db,
             new_message,
-            is_repeated_message=is_repeated_message,
+            repeated_fact=repeated_fact,
+            started_ns=moderation_started_ns,
         )
         db.add(new_message)
         db.flush()
@@ -1079,8 +1089,11 @@ def create_sub_post_chat_message_workflow(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc.orig),
+            detail=CHAT_MESSAGE_CONFLICT_DETAIL,
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
     surface_need_a_sub_chat_message_text(db, message_id=new_message.id)
     return serialize_sub_chat_message(db, new_message, sub_post)

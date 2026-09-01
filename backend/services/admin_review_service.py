@@ -951,12 +951,13 @@ def find_open_case_for_signal(
     *,
     target_data: dict[str, uuid.UUID | None],
     case_category: str,
+    allow_reference_inserts: bool = False,
 ) -> AdminReviewCase | None:
     primary = primary_target(target_data)
     if primary is None:
         return None
     field_name, target_id = primary
-    active_case = db.scalar(
+    statement = (
         select(AdminReviewCase)
         .where(
             AdminReviewCase.case_status.in_(CASE_ACTIVE_STATUSES),
@@ -965,7 +966,9 @@ def find_open_case_for_signal(
         )
         .order_by(AdminReviewCase.created_at.asc(), AdminReviewCase.id.asc())
         .limit(1)
-        .with_for_update()
+    )
+    active_case = db.scalar(
+        statement.with_for_update(key_share=allow_reference_inserts)
     )
     if active_case is not None:
         return active_case

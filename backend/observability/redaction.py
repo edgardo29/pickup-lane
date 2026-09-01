@@ -12,6 +12,12 @@ REDACTION_MARKER = "[REDACTED]"
 
 _EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 _PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\d)")
+_UUID_RE = re.compile(
+    r"(?<![0-9A-Fa-f])"
+    r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
+    r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
+    r"(?![0-9A-Fa-f])"
+)
 _DATABASE_URL_RE = re.compile(
     r"\b(?:postgresql|postgres|mysql|sqlite)(?:\+[a-z0-9_]+)?://",
     re.IGNORECASE,
@@ -186,7 +192,7 @@ def contains_sensitive_text(value: str) -> bool:
 
     if (
         _EMAIL_RE.search(value)
-        or _PHONE_RE.search(value)
+        or _contains_phone_outside_uuid(value)
         or _DATABASE_URL_RE.search(value)
         or _SECRET_VALUE_RE.search(value)
         or _SECRET_NAME_RE.search(value)
@@ -196,6 +202,17 @@ def contains_sensitive_text(value: str) -> bool:
         return True
 
     return _url_has_sensitive_query(value)
+
+
+def _contains_phone_outside_uuid(value: str) -> bool:
+    uuid_spans = tuple(match.span() for match in _UUID_RE.finditer(value))
+    return any(
+        not any(
+            phone_match.start() < uuid_end and phone_match.end() > uuid_start
+            for uuid_start, uuid_end in uuid_spans
+        )
+        for phone_match in _PHONE_RE.finditer(value)
+    )
 
 
 def _redact_value(value: Any, *, seen: set[int]) -> Any:

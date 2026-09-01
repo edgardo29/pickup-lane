@@ -189,10 +189,10 @@ def _admin_bootstrap_route_candidates() -> list[tuple[str, str, str]]:
         if not isinstance(route, APIRoute):
             continue
         try:
-            endpoint_source = inspect.getsource(route.endpoint)
-        except (OSError, TypeError):
-            endpoint_source = ""
-        haystack = f"{route.path} {route.endpoint.__name__} {endpoint_source}".lower()
+            endpoint_calls = " ".join(_call_names(_parse_function(route.endpoint)))
+        except (AssertionError, OSError, SyntaxError, TypeError):
+            endpoint_calls = ""
+        haystack = f"{route.path} {route.endpoint.__name__} {endpoint_calls}".lower()
         if not any(term in haystack for term in terms):
             continue
         for method in sorted(route.methods or set()):

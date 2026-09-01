@@ -35,6 +35,8 @@ def _settings_env(app_env: str = "test", **overrides: str | None) -> dict[str, s
         "R2_BUCKET_NAME": "pickup-lane-synthetic-bucket",
         "R2_ENDPOINT_URL": "https://synthetic-r2-account.r2.cloudflarestorage.com",
     }
+    if app_env in {"preview", "staging", "production"}:
+        env.update(DB_POOL_SIZE="5", DB_MAX_OVERFLOW="2")
     for name, value in overrides.items():
         if value is None:
             env.pop(name, None)

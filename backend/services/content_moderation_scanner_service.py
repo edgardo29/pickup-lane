@@ -1,104 +1,47 @@
-"""Deterministic moderation scanning for user-entered game and post text."""
+"""Deterministic saved-content moderation scanner primitives."""
 
 from __future__ import annotations
 
-import hashlib
-import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from time import monotonic_ns
 
-SCANNER_VERSION = "pickup-lane-moderation-v2"
+from backend.services.moderation_evidence_service import exact_source_hash
+from backend.services.moderation_taxonomy import (
+    EXECUTION_KIND_REGEX,
+    FIELD_PURPOSE_GENERAL,
+    FINDING_TYPE_HARASSMENT_OR_ABUSE,
+    FINDING_TYPE_OFF_APP_CONTACT,
+    FINDING_TYPE_SEXUAL_OR_EXPLICIT,
+    FINDING_TYPE_SLUR_OR_HATE,
+    FINDING_TYPE_SPAM_OR_SCAM,
+    FINDING_TYPE_THREAT_OR_VIOLENCE,
+    RISK_AREA_UNSAFE_PAYMENT,
+    RISK_AREA_UNSAFE_POST,
+    RULES_BY_ID,
+    SAVED_CONTENT_PROFILE,
+    TARGET_CONTEXT_COMMUNITY_GAME,
+    ModerationTaxonomyError,
+    ScannerProfileDefinition,
+    profile_configuration_hash,
+    rules_for_context,
+    validate_registry,
+)
+
 EXCERPT_MAX_LENGTH = 220
-
-FIELD_PURPOSE_GENERAL = "general"
-FIELD_PURPOSE_PAYMENT = "payment"
-FIELD_PURPOSE_PAYMENT_METHOD = "payment_method"
-FIELD_PURPOSE_LOCATION = "location"
-FIELD_PURPOSE_ADDRESS = "address"
-FIELD_PURPOSE_CHAT = "chat"
-
-RISK_AREA_UNSAFE_PAYMENT = "unsafe_payment_text"
-RISK_AREA_UNSAFE_POST = "unsafe_post_text"
-
 SIGNAL_CATEGORY_UNSAFE_PAYMENT = RISK_AREA_UNSAFE_PAYMENT
 SIGNAL_CATEGORY_UNSAFE_POST = RISK_AREA_UNSAFE_POST
-
 MODERATION_DOMAIN_CHAT = "chat_risk"
 
-FINDING_TYPE_OFF_APP_CONTACT = "off_app_contact"
-FINDING_TYPE_PAYMENT_PRESSURE = "payment_pressure"
-FINDING_TYPE_SPAM_OR_SCAM = "spam_or_scam"
-FINDING_TYPE_THREAT_OR_VIOLENCE = "threat_or_violence"
-FINDING_TYPE_HARASSMENT_OR_ABUSE = "harassment_or_abuse"
-FINDING_TYPE_SLUR_OR_HATE = "slur_or_hate"
-FINDING_TYPE_SEXUAL_OR_EXPLICIT = "sexual_or_explicit"
-
-EVIDENCE_TYPE_CONTACT_PHRASE = "contact_phrase"
-EVIDENCE_TYPE_EMAIL = "email"
-EVIDENCE_TYPE_PAYMENT_HANDLE = "payment_handle"
-EVIDENCE_TYPE_PAYMENT_METHOD = "payment_method"
-EVIDENCE_TYPE_PAYMENT_PRESSURE_PHRASE = "payment_pressure_phrase"
-EVIDENCE_TYPE_PHONE = "phone"
-EVIDENCE_TYPE_PHRASE = "phrase"
-EVIDENCE_TYPE_SOCIAL_HANDLE = "social_handle"
-EVIDENCE_TYPE_URL = "url"
-
-PHONE_PATTERN = re.compile(
-    r"(?<!\d)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\d)"
-)
-EMAIL_PATTERN = re.compile(
-    r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
-    re.IGNORECASE,
-)
-LINK_PATTERN = re.compile(
-    r"\b(?:https?://[^\s<>()]+|www\.[^\s<>()]+|"
-    r"[a-z0-9][a-z0-9.-]*\.(?:com|net|org|io|co|app)(?:/[^\s<>()]*)?)",
-    re.IGNORECASE,
-)
-SOCIAL_HANDLE_PATTERN = re.compile(r"(?<!\w)@[A-Z][A-Z0-9_.]{1,29}\b", re.IGNORECASE)
-OFF_APP_CONTACT_PATTERN = re.compile(
-    r"\b(?:text\s+me|txt\s+me|call\s+me|dm\s+me|whatsapp|telegram|signal|"
-    r"instagram|snapchat|phone\s+number|my\s+number)\b",
-    re.IGNORECASE,
-)
-PAYMENT_METHOD_PATTERN = re.compile(
-    r"\b(?:venmo|zelle|cash\s?app|paypal|apple\s+cash|apple\s+pay|chime)\b",
-    re.IGNORECASE,
-)
-PAYMENT_HANDLE_PATTERN = re.compile(r"(?<!\w)\$[A-Z][A-Z0-9_]{1,29}\b", re.IGNORECASE)
-PAYMENT_PRESSURE_PATTERN = re.compile(
-    r"\b(?:deposit\s+required|send\s+(?:a\s+)?deposit|pay\s+first|pay\s+before|"
-    r"send\s+money\s+before|pay\s+upfront|upfront\s+payment|no\s+refunds?|"
-    r"hold\s+your\s+spot|before\s+(?:i\s+)?(?:approve|accept)|before\s+approval|"
-    r"before\s+accepted|payment\s+required\s+before)\b",
-    re.IGNORECASE,
-)
-PAYMENT_CONTACT_PATTERN = re.compile(
-    r"\b(?:dm|text|txt|call|message)\s+me\s+(?:for|to)\s+(?:pay|payment)\b",
-    re.IGNORECASE,
-)
-SCAM_SPAM_PATTERN = re.compile(
-    r"\b(?:crypto|bitcoin|investment|promo\s+code|click\s+(?:this\s+)?link|"
-    r"guaranteed\s+money|limited\s+offer)\b",
-    re.IGNORECASE,
-)
-THREAT_PATTERN = re.compile(
-    r"\b(?:i(?:'|’)ll\s+hurt|i\s+will\s+hurt|i(?:'|’)ll\s+kill|i\s+will\s+kill|"
-    r"hurt\s+you|kill\s+you|beat\s+you\s+up|bring\s+a\s+weapon)\b",
-    re.IGNORECASE,
-)
-HARASSMENT_PATTERN = re.compile(
-    r"\b(?:kill\s+yourself|go\s+die|nobody\s+wants\s+you|you\s+are\s+worthless)\b",
-    re.IGNORECASE,
-)
-HATE_PATTERN = re.compile(
-    r"\b(?:go\s+back\s+to\s+your\s+country|racial\s+slur|homophobic\s+slur)\b",
-    re.IGNORECASE,
-)
-SEXUAL_PATTERN = re.compile(
-    r"\b(?:explicit\s+sexual|sexual\s+favors?|hookups?)\b",
-    re.IGNORECASE,
-)
+STANDALONE_FINDING_TYPES = {
+    FINDING_TYPE_OFF_APP_CONTACT,
+    FINDING_TYPE_SPAM_OR_SCAM,
+    FINDING_TYPE_THREAT_OR_VIOLENCE,
+    FINDING_TYPE_HARASSMENT_OR_ABUSE,
+    FINDING_TYPE_SLUR_OR_HATE,
+    FINDING_TYPE_SEXUAL_OR_EXPLICIT,
+}
 
 
 @dataclass(frozen=True)
@@ -110,19 +53,9 @@ class ModerationTextField:
 
 
 @dataclass(frozen=True)
-class ContentModerationRule:
-    rule_id: str
-    risk_area: str
-    finding_type: str
-    evidence_type: str
-    priority: str
-    pattern: re.Pattern[str]
-    supporting_only: bool = False
-
-
-@dataclass(frozen=True)
 class ContentModerationRuleMatch:
     rule_id: str
+    rule_version: str
     risk_area: str
     finding_type: str
     evidence_type: str
@@ -133,6 +66,20 @@ class ContentModerationRuleMatch:
     end: int
     matched_text: str
     original_text: str
+
+
+@dataclass(frozen=True)
+class ScanProvenance:
+    scanner_id: str
+    scanner_version: str
+    taxonomy_version: str
+    configuration_hash: str
+    canonicalization_version: str
+    evidence_format_version: str
+    target_context: str
+    declared_limits: tuple[str, ...]
+    scanned_at: datetime
+    execution_duration_us: int
 
 
 @dataclass(frozen=True)
@@ -147,134 +94,12 @@ class ModerationFinding:
     excerpt: str
     content_hash: str
     matched_rule_ids: tuple[str, ...]
-    scanner_version: str = SCANNER_VERSION
+    matched_rule_versions: tuple[dict[str, str], ...]
+    provenance: ScanProvenance
 
-
-CONTENT_MODERATION_RULES: tuple[ContentModerationRule, ...] = (
-    ContentModerationRule(
-        "personal_info.phone_number",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_OFF_APP_CONTACT,
-        EVIDENCE_TYPE_PHONE,
-        "attention",
-        PHONE_PATTERN,
-    ),
-    ContentModerationRule(
-        "personal_info.email",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_OFF_APP_CONTACT,
-        EVIDENCE_TYPE_EMAIL,
-        "attention",
-        EMAIL_PATTERN,
-    ),
-    ContentModerationRule(
-        "personal_info.link",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_OFF_APP_CONTACT,
-        EVIDENCE_TYPE_URL,
-        "attention",
-        LINK_PATTERN,
-    ),
-    ContentModerationRule(
-        "off_app_contact.social_handle",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_OFF_APP_CONTACT,
-        EVIDENCE_TYPE_SOCIAL_HANDLE,
-        "attention",
-        SOCIAL_HANDLE_PATTERN,
-    ),
-    ContentModerationRule(
-        "off_app_contact.phrase",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_OFF_APP_CONTACT,
-        EVIDENCE_TYPE_CONTACT_PHRASE,
-        "attention",
-        OFF_APP_CONTACT_PATTERN,
-    ),
-    ContentModerationRule(
-        "payment_method.phrase",
-        RISK_AREA_UNSAFE_PAYMENT,
-        FINDING_TYPE_PAYMENT_PRESSURE,
-        EVIDENCE_TYPE_PAYMENT_METHOD,
-        "attention",
-        PAYMENT_METHOD_PATTERN,
-        supporting_only=True,
-    ),
-    ContentModerationRule(
-        "payment_handle.cash_app",
-        RISK_AREA_UNSAFE_PAYMENT,
-        FINDING_TYPE_PAYMENT_PRESSURE,
-        EVIDENCE_TYPE_PAYMENT_HANDLE,
-        "attention",
-        PAYMENT_HANDLE_PATTERN,
-        supporting_only=True,
-    ),
-    ContentModerationRule(
-        "payment_pressure.phrase",
-        RISK_AREA_UNSAFE_PAYMENT,
-        FINDING_TYPE_PAYMENT_PRESSURE,
-        EVIDENCE_TYPE_PAYMENT_PRESSURE_PHRASE,
-        "attention",
-        PAYMENT_PRESSURE_PATTERN,
-    ),
-    ContentModerationRule(
-        "payment_contact.phrase",
-        RISK_AREA_UNSAFE_PAYMENT,
-        FINDING_TYPE_PAYMENT_PRESSURE,
-        EVIDENCE_TYPE_PAYMENT_PRESSURE_PHRASE,
-        "attention",
-        PAYMENT_CONTACT_PATTERN,
-    ),
-    ContentModerationRule(
-        "spam_or_scam.phrase",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_SPAM_OR_SCAM,
-        EVIDENCE_TYPE_PHRASE,
-        "attention",
-        SCAM_SPAM_PATTERN,
-    ),
-    ContentModerationRule(
-        "threat_or_violence.phrase",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_THREAT_OR_VIOLENCE,
-        EVIDENCE_TYPE_PHRASE,
-        "urgent",
-        THREAT_PATTERN,
-    ),
-    ContentModerationRule(
-        "harassment_or_abuse.phrase",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_HARASSMENT_OR_ABUSE,
-        EVIDENCE_TYPE_PHRASE,
-        "attention",
-        HARASSMENT_PATTERN,
-    ),
-    ContentModerationRule(
-        "slur_or_hate.phrase",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_SLUR_OR_HATE,
-        EVIDENCE_TYPE_PHRASE,
-        "urgent",
-        HATE_PATTERN,
-    ),
-    ContentModerationRule(
-        "sexual_or_explicit.phrase",
-        RISK_AREA_UNSAFE_POST,
-        FINDING_TYPE_SEXUAL_OR_EXPLICIT,
-        EVIDENCE_TYPE_PHRASE,
-        "urgent",
-        SEXUAL_PATTERN,
-    ),
-)
-
-STANDALONE_FINDING_TYPES = {
-    FINDING_TYPE_OFF_APP_CONTACT,
-    FINDING_TYPE_SPAM_OR_SCAM,
-    FINDING_TYPE_THREAT_OR_VIOLENCE,
-    FINDING_TYPE_HARASSMENT_OR_ABUSE,
-    FINDING_TYPE_SLUR_OR_HATE,
-    FINDING_TYPE_SEXUAL_OR_EXPLICIT,
-}
+    @property
+    def scanner_version(self) -> str:
+        return self.provenance.scanner_version
 
 
 def normalize_scan_text(value: str | None) -> str:
@@ -282,33 +107,39 @@ def normalize_scan_text(value: str | None) -> str:
 
 
 def content_hash(value: str | None) -> str:
-    normalized = normalize_scan_text(value).casefold()
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    """Return the exact UTF-8 source hash retained by compatibility callers."""
+
+    return exact_source_hash(value)
+
+
+def is_utc_datetime(value: datetime) -> bool:
+    return (
+        value.tzinfo is not None
+        and value.utcoffset() is not None
+        and value.utcoffset() == timedelta(0)
+    )
 
 
 def build_review_excerpt(
     value: str,
     *,
-    match: re.Match[str] | None = None,
+    match=None,
     limit: int = EXCERPT_MAX_LENGTH,
 ) -> str:
     normalized = normalize_scan_text(value)
     if len(normalized) <= limit:
         return normalized
-
     if match is not None:
         start = max(match.start() - 60, 0)
         end = min(match.end() + 60, len(value))
         normalized = normalize_scan_text(value[start:end])
-
         if len(normalized) <= limit:
             return normalized
-
     return normalized[: max(0, limit - 3)].rstrip() + "..."
 
 
 def trimmed_match_span(
-    match: re.Match[str],
+    match,
     *,
     trim_chars: str = ".,;:!?)]}",
 ) -> tuple[int, int, str]:
@@ -320,24 +151,34 @@ def trimmed_match_span(
     return start, end, trimmed
 
 
-def scan_text_field_matches(field: ModerationTextField) -> list[ContentModerationRuleMatch]:
+def scan_text_field_matches(
+    field: ModerationTextField,
+    *,
+    target_context: str = TARGET_CONTEXT_COMMUNITY_GAME,
+) -> list[ContentModerationRuleMatch]:
     original_text = str(field.value or "")
     if not normalize_scan_text(original_text):
         return []
 
     matches: list[ContentModerationRuleMatch] = []
-    for rule in CONTENT_MODERATION_RULES:
-        for regex_match in rule.pattern.finditer(original_text):
+    for rule in rules_for_context(target_context):
+        if (
+            rule.execution_kind != EXECUTION_KIND_REGEX
+            or field.purpose not in rule.allowed_field_purposes
+        ):
+            continue
+        for regex_match in rule.compile_expression().finditer(original_text):
             start, end, matched_text = trimmed_match_span(regex_match)
             if not matched_text:
                 continue
             matches.append(
                 ContentModerationRuleMatch(
                     rule_id=rule.rule_id,
-                    risk_area=rule.risk_area,
-                    finding_type=rule.finding_type,
+                    rule_version=rule.rule_version,
+                    risk_area=str(rule.risk_area),
+                    finding_type=rule.outcome,
                     evidence_type=rule.evidence_type,
-                    priority=rule.priority,
+                    priority=rule.priority_or_severity,
                     source_field=field.field_name,
                     source_field_purpose=field.purpose,
                     start=start,
@@ -346,18 +187,67 @@ def scan_text_field_matches(field: ModerationTextField) -> list[ContentModeratio
                     original_text=original_text,
                 )
             )
-
     return sorted(matches, key=lambda item: (item.start, item.end, item.rule_id))
 
 
 def scan_text_fields_for_matches(
     fields: list[ModerationTextField],
+    *,
+    target_context: str = TARGET_CONTEXT_COMMUNITY_GAME,
 ) -> list[ContentModerationRuleMatch]:
     matches: list[ContentModerationRuleMatch] = []
     for field in fields:
-        matches.extend(scan_text_field_matches(field))
+        matches.extend(scan_text_field_matches(field, target_context=target_context))
     return matches
+
+
+def validate_field_inventory(
+    fields: list[ModerationTextField],
+    *,
+    target_context: str,
+    profile: ScannerProfileDefinition = SAVED_CONTENT_PROFILE,
+) -> None:
+    expected = profile.context_field_inventory.get(target_context)
+    actual = tuple((field.field_name, field.purpose) for field in fields)
+    if expected is None or actual != expected:
+        raise ModerationTaxonomyError(
+            f"Moderation field inventory for {target_context!r} is not authoritative."
+        )
+
+
+def build_scan_provenance(
+    *,
+    profile: ScannerProfileDefinition,
+    target_context: str,
+    started_ns: int,
+    wall_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    monotonic_clock: Callable[[], int] = monotonic_ns,
+) -> ScanProvenance:
+    scanned_at = wall_clock()
+    if scanned_at.tzinfo is None or scanned_at.utcoffset() is None:
+        raise ValueError("Moderation scan wall clock must be timezone-aware.")
+    scanned_at = scanned_at.astimezone(timezone.utc)
+    duration_us = max(0, (monotonic_clock() - started_ns) // 1_000)
+    return ScanProvenance(
+        scanner_id=profile.scanner_id,
+        scanner_version=profile.scanner_version,
+        taxonomy_version=profile.taxonomy_version,
+        configuration_hash=profile_configuration_hash(profile),
+        canonicalization_version=profile.canonicalization_version,
+        evidence_format_version=profile.evidence_format_version,
+        target_context=target_context,
+        declared_limits=profile.declared_limits,
+        scanned_at=scanned_at,
+        execution_duration_us=duration_us,
+    )
 
 
 def scanner_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+# Compatibility exports remain registry-owned rather than independently defined.
+CONTENT_MODERATION_RULES = tuple(
+    RULES_BY_ID[rule_id] for rule_id in SAVED_CONTENT_PROFILE.enabled_rule_ids
+)
+validate_registry()

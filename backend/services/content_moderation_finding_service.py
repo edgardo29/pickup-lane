@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
@@ -30,8 +29,11 @@ from backend.services.admin_review_service import (
 )
 from backend.services.content_moderation_evidence_service import (
     ContentModerationFinding,
+    ContentModerationScanResult,
+    validate_content_moderation_scan_result,
 )
-from backend.services.content_moderation_scanner_service import content_hash
+from backend.services.content_moderation_scanner_service import ScanProvenance
+from backend.services.moderation_evidence_service import durable_identity_hash
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,7 @@ def get_or_create_open_content_moderation_case(
         db,
         target_data=target_data,
         case_category=CONTENT_MODERATION_CASE_CATEGORY,
+        allow_reference_inserts=True,
     )
     if review_case is not None:
         validate_content_moderation_case_for_findings(review_case)
@@ -99,20 +102,43 @@ def get_or_create_open_content_moderation_case(
     return review_case, True
 
 
-def finding_identity(
-    finding: ContentModerationFinding | AdminContentModerationFinding,
-) -> tuple[str, str, str]:
-    return (
-        finding.source_field,
-        finding.finding_type,
-        finding.evidence_fingerprint,
+def finding_identity_hash(
+    finding: ContentModerationFinding,
+    *,
+    provenance: ScanProvenance,
+    target_data: dict[str, uuid.UUID | None],
+) -> str:
+    target_scope = {
+        key: str(value)
+        for key, value in sorted(target_data.items())
+        if value is not None
+    }
+    return durable_identity_hash(
+        {
+            "canonicalization_version": provenance.canonicalization_version,
+            "configuration_hash": provenance.configuration_hash,
+            "evidence_fingerprint": finding.evidence_fingerprint,
+            "evidence_format_version": provenance.evidence_format_version,
+            "finding_type": finding.finding_type,
+            "matched_rule_versions": list(finding.matched_rule_versions),
+            "scanner_id": provenance.scanner_id,
+            "scanner_version": provenance.scanner_version,
+            "source_content_hash": finding.source_content_hash,
+            "source_field": finding.source_field,
+            "target_context": provenance.target_context,
+            "target_scope": target_scope,
+            "taxonomy_version": provenance.taxonomy_version,
+        }
     )
 
 
-def build_finding_metadata(finding: ContentModerationFinding) -> dict:
+def build_finding_metadata(
+    finding: ContentModerationFinding,
+    provenance: ScanProvenance,
+) -> dict:
     return {
         "matched_rule_ids": list(finding.matched_rule_ids),
-        "scanner_version": finding.scanner_version,
+        "scanner_version": provenance.scanner_version,
         "source": "content_moderation_scanner",
     }
 
@@ -132,8 +158,8 @@ def apply_content_moderation_findings(
     db: Session,
     *,
     review_case: AdminReviewCase,
-    findings: list[ContentModerationFinding],
-    scanned_field_hashes: dict[str, str],
+    scan_result: ContentModerationScanResult,
+    target_data: dict[str, uuid.UUID | None],
     now: datetime,
 ) -> None:
     validate_content_moderation_case_for_findings(review_case)
@@ -149,23 +175,24 @@ def apply_content_moderation_findings(
         ).all()
     )
     current_by_identity = {
-        finding_identity(finding): finding
+        finding.finding_identity_hash: finding
         for finding in existing_findings
         if finding.current_match
     }
-    incoming_by_identity = {finding_identity(finding): finding for finding in findings}
+    incoming_by_identity = {
+        finding_identity_hash(
+            finding,
+            provenance=scan_result.provenance,
+            target_data=target_data,
+        ): finding
+        for finding in scan_result.findings
+    }
     changed_case = False
 
     for identity, finding in incoming_by_identity.items():
         existing = current_by_identity.get(identity)
         if existing is not None:
-            existing.risk_area = finding.risk_area
-            existing.priority = finding.priority
-            existing.source_content_hash = finding.source_content_hash
-            existing.evidence = finding.evidence
             existing.last_detected_at = now
-            existing.scanner_version = finding.scanner_version
-            existing.metadata_ = build_finding_metadata(finding)
             existing.updated_at = now
             db.add(existing)
             continue
@@ -180,12 +207,24 @@ def apply_content_moderation_findings(
             source_content_hash=finding.source_content_hash,
             evidence_fingerprint=finding.evidence_fingerprint,
             evidence=finding.evidence,
+            scanner_id=scan_result.provenance.scanner_id,
+            scanner_version=scan_result.provenance.scanner_version,
+            taxonomy_version=scan_result.provenance.taxonomy_version,
+            configuration_hash=scan_result.provenance.configuration_hash,
+            canonicalization_version=scan_result.provenance.canonicalization_version,
+            evidence_format_version=scan_result.provenance.evidence_format_version,
+            target_context=scan_result.provenance.target_context,
+            field_purpose=finding.field_purpose,
+            matched_rule_versions=list(finding.matched_rule_versions),
+            declared_limits=list(scan_result.provenance.declared_limits),
+            scanned_at=scan_result.provenance.scanned_at,
+            execution_duration_us=scan_result.provenance.execution_duration_us,
+            finding_identity_hash=identity,
             current_match=True,
             first_detected_at=now,
             last_detected_at=now,
             cleared_at=None,
-            scanner_version=finding.scanner_version,
-            metadata_=build_finding_metadata(finding),
+            metadata_=build_finding_metadata(finding, scan_result.provenance),
             created_at=now,
             updated_at=now,
         )
@@ -206,13 +245,13 @@ def apply_content_moderation_findings(
         )
         changed_case = True
 
-    scanned_fields = set(scanned_field_hashes)
+    scanned_fields = {field.field_name for field in scan_result.scanned_fields}
     for existing in existing_findings:
         if not existing.current_match:
             continue
         if existing.source_field not in scanned_fields:
             continue
-        if finding_identity(existing) in incoming_by_identity:
+        if existing.finding_identity_hash in incoming_by_identity:
             continue
         existing.current_match = False
         existing.cleared_at = now
@@ -245,66 +284,58 @@ def reconcile_content_moderation_findings(
     db: Session,
     *,
     target_data: dict[str, uuid.UUID | None],
-    findings: list[ContentModerationFinding],
-    scanned_field_values: dict[str, str | None],
-    _retrying_after_conflict: bool = False,
+    scan_result: ContentModerationScanResult,
 ) -> AdminReviewCase | None:
     primary = primary_target(target_data)
     if primary is None:
         return None
     normalized_targets = copy_targets(target_data)
     validate_target_references(db, normalized_targets)
+    validate_content_moderation_scan_result(scan_result)
 
-    scanned_field_hashes = {
-        field_name: content_hash(value)
-        for field_name, value in scanned_field_values.items()
-    }
-    now = datetime.now(timezone.utc)
+    now = scan_result.provenance.scanned_at
     initial_priority = (
-        priority_for_content_moderation_candidates(findings)
-        if findings
+        priority_for_content_moderation_candidates(list(scan_result.findings))
+        if scan_result.findings
         else "attention"
     )
 
-    try:
-        review_case = find_open_case_for_signal(
+    review_case = find_open_case_for_signal(
+        db,
+        target_data=normalized_targets,
+        case_category=CONTENT_MODERATION_CASE_CATEGORY,
+        allow_reference_inserts=True,
+    )
+    if review_case is None and not scan_result.findings:
+        db.commit()
+        return None
+    if review_case is None:
+        review_case, _created_case = get_or_create_open_content_moderation_case(
             db,
             target_data=normalized_targets,
-            case_category=CONTENT_MODERATION_CASE_CATEGORY,
-        )
-        if review_case is None and not findings:
-            return None
-        if review_case is None:
-            review_case, _created_case = get_or_create_open_content_moderation_case(
-                db,
-                target_data=normalized_targets,
-                priority=initial_priority,
-                now=now,
-            )
-        if review_case is None:
-            return None
-
-        apply_content_moderation_findings(
-            db,
-            review_case=review_case,
-            findings=findings,
-            scanned_field_hashes=scanned_field_hashes,
+            priority=initial_priority,
             now=now,
         )
-        db.commit()
-        db.refresh(review_case)
-        return review_case
-    except IntegrityError:
-        db.rollback()
-        if not _retrying_after_conflict:
-            return reconcile_content_moderation_findings(
-                db,
-                target_data=target_data,
-                findings=findings,
-                scanned_field_values=scanned_field_values,
-                _retrying_after_conflict=True,
-            )
-        raise
+    if review_case is None:
+        return None
+
+    apply_content_moderation_findings(
+        db,
+        review_case=review_case,
+        scan_result=scan_result,
+        target_data=normalized_targets,
+        now=now,
+    )
+    review_case_id = review_case.id
+    db.commit()
+    persisted_review_case = db.get(
+        AdminReviewCase,
+        review_case_id,
+        populate_existing=True,
+    )
+    if persisted_review_case is None:
+        raise RuntimeError("Moderation review case disappeared after commit.")
+    return persisted_review_case
 
 
 def priority_for_content_moderation_candidates(
@@ -317,19 +348,19 @@ def run_content_moderation_finding_reconciliation_safely(
     db: Session,
     *,
     target_data: dict[str, uuid.UUID | None],
-    findings: list[ContentModerationFinding],
-    scanned_field_values: dict[str, str | None],
+    scan_result: ContentModerationScanResult,
 ) -> None:
     try:
         reconcile_content_moderation_findings(
             db,
             target_data=target_data,
-            findings=findings,
-            scanned_field_values=scanned_field_values,
+            scan_result=scan_result,
         )
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
         db.rollback()
-        logger.exception(
-            "Content moderation finding reconciliation failed for target %s.",
+        logger.error(
+            "Content moderation finding reconciliation failed for target %s "
+            "(error_type=%s).",
             target_data,
+            type(exc).__name__,
         )
