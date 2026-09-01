@@ -29,6 +29,8 @@ def _production_like_env(**overrides: str | None) -> dict[str, str]:
         "ALLOWED_HOSTS": "api.example.invalid",
         "CORS_ALLOWED_ORIGINS": "https://app.example.invalid",
         "ENABLE_API_DOCS": "false",
+        "DB_POOL_SIZE": "5",
+        "DB_MAX_OVERFLOW": "2",
         "FIREBASE_ADMIN_CREDENTIALS_JSON": _FIREBASE_ADMIN_JSON,
         "FIREBASE_PROJECT_ID": "pickup-lane-synthetic",
         "FIREBASE_APP_CHECK_MODE": "disabled",

@@ -8,13 +8,13 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import AdminReviewCase, AdminReviewSignal
 from backend.services.admin_review_service import create_internal_review_signal
 from backend.services.content_moderation_scanner_service import (
     ModerationFinding,
-    content_hash,
     scanner_timestamp,
 )
 
@@ -87,6 +87,15 @@ def build_signal_metadata(
         "severity": finding.severity,
         "scanner_version": finding.scanner_version,
         "matched_rule_ids": list(finding.matched_rule_ids),
+        "matched_rule_versions": list(finding.matched_rule_versions),
+        "scanner_id": finding.provenance.scanner_id,
+        "taxonomy_version": finding.provenance.taxonomy_version,
+        "configuration_hash": finding.provenance.configuration_hash,
+        "canonicalization_version": finding.provenance.canonicalization_version,
+        "evidence_format_version": finding.provenance.evidence_format_version,
+        "target_context": finding.provenance.target_context,
+        "declared_limits": list(finding.provenance.declared_limits),
+        "scan_execution_duration_us": finding.provenance.execution_duration_us,
         "current_match": True,
         "superseded_by_content_change": False,
         "last_scanned_at": scanned_at,
@@ -143,7 +152,9 @@ def mark_superseded_signals(
         metadata = dict(signal.metadata_ or {})
         field_name = metadata.get("field_name")
         moderation_domain = metadata.get("moderation_domain")
-        original_hash = metadata.get("content_hash") or metadata.get("original_content_hash")
+        original_hash = metadata.get("content_hash") or metadata.get(
+            "original_content_hash"
+        )
         if not isinstance(field_name, str) or not isinstance(moderation_domain, str):
             continue
         if not isinstance(original_hash, str):
@@ -173,7 +184,10 @@ def mark_superseded_signals(
                 changed = True
             continue
 
-        if metadata.get("current_match") is False and metadata.get("latest_content_hash") == latest_hash:
+        if (
+            metadata.get("current_match") is False
+            and metadata.get("latest_content_hash") == latest_hash
+        ):
             continue
 
         metadata["current_match"] = False
@@ -208,6 +222,7 @@ def surface_moderation_findings(
     signal_categories = {"chat_moderation"}
     signal_categories.update(finding.signal_category for finding in findings)
     for finding in findings:
+        finding_scanned_at = finding.provenance.scanned_at.isoformat()
         current_keys.add(
             (
                 finding.signal_category,
@@ -219,7 +234,7 @@ def surface_moderation_findings(
         metadata = build_signal_metadata(
             finding,
             target_type=target_type,
-            scanned_at=scanned_at,
+            scanned_at=finding_scanned_at,
             extra_metadata=extra_metadata,
         )
         create_internal_review_signal(
@@ -265,7 +280,7 @@ def run_moderation_surfacing_safely(
     target_type: str,
     target_data: dict[str, uuid.UUID | None],
     findings: list[ModerationFinding],
-    scanned_field_values: dict[str, str | None],
+    scanned_field_hashes: dict[str, str],
     source: str = CHAT_MODERATION_SOURCE,
     extra_metadata: dict[str, Any] | None = None,
     metadata_filters: dict[str, str] | None = None,
@@ -276,18 +291,23 @@ def run_moderation_surfacing_safely(
             target_type=target_type,
             target_data=target_data,
             findings=findings,
-            scanned_field_hashes={
-                field_name: content_hash(value)
-                for field_name, value in scanned_field_values.items()
-            },
+            scanned_field_hashes=scanned_field_hashes,
             source=source,
             extra_metadata=extra_metadata,
             metadata_filters=metadata_filters,
         )
-    except Exception:
+    except IntegrityError:
         db.rollback()
-        logger.exception(
-            "Moderation surfacing failed for %s target %s.",
+        logger.error(
+            "Moderation surfacing database integrity failure for %s target %s.",
             target_type,
             target_data,
+        )
+    except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
+        db.rollback()
+        logger.error(
+            "Moderation surfacing failed for %s target %s (error_type=%s).",
+            target_type,
+            target_data,
+            type(exc).__name__,
         )

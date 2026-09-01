@@ -7,11 +7,13 @@ from zoneinfo import ZoneInfo
 import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 pytestmark = pytest.mark.suite_type("ordinary")
 
 CHICAGO = ZoneInfo("America/Chicago")
+UUID_PHONE_FALSE_POSITIVE = uuid.UUID("4b340077-7855-4d77-a0fb-558aba611ff5")
 
 PAYMENT_SUMMARY_ALLOWED_FIELDS = {
     "id",
@@ -529,10 +531,27 @@ def test_checkout_payment_intent_and_status_responses_are_product_projections(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from backend.models import DurableJob
     from backend.services import checkout_service, payment_method_service
     from backend.services.stripe_service import (
         StripePaymentIntentResult,
         StripePaymentMethodCardResult,
+    )
+
+    original_build_pending_checkout_rows = checkout_service.build_pending_checkout_rows
+
+    def build_pending_checkout_rows_with_regression_payment_id(*args, **kwargs):
+        booking, payment, participants = original_build_pending_checkout_rows(
+            *args, **kwargs
+        )
+        assert payment is not None
+        payment.id = UUID_PHONE_FALSE_POSITIVE
+        return booking, payment, participants
+
+    monkeypatch.setattr(
+        checkout_service,
+        "build_pending_checkout_rows",
+        build_pending_checkout_rows_with_regression_payment_id,
     )
 
     with _session() as db:
@@ -614,6 +633,19 @@ def test_checkout_payment_intent_and_status_responses_are_product_projections(
     assert payment_intent_data["booking_payment_status"] == "requires_action"
     assert payment_intent_data["payment_status"] == "requires_action"
     assert payment_intent_data["stripe_status"] == "requires_action"
+    assert payment_intent_data["payment_id"] == str(UUID_PHONE_FALSE_POSITIVE)
+
+    with _session() as db:
+        reconcile_job = db.scalar(
+            select(DurableJob).where(
+                DurableJob.payload["payment_id"].as_string()
+                == str(UUID_PHONE_FALSE_POSITIVE)
+            )
+        )
+        assert reconcile_job is not None
+        assert reconcile_job.payload == {
+            "payment_id": str(UUID_PHONE_FALSE_POSITIVE)
+        }
 
     _install_active_user_override(payer)
     status_response = client.get(

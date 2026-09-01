@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-05A-R1",
+      "owning_pass": "WS03-05A",
+      "source_controls": ["ADM-009"],
+      "state": "required",
+      "scope": "workflows/moderation_taxonomy_finding_evidence_lifecycle",
+      "reason": "One validated versioned registry must own every saved-content and chat moderation rule, including regex and contextual-predicate execution kinds."
+    },
+    {
+      "id": "WS03-05A-R2",
+      "owning_pass": "WS03-05A",
+      "source_controls": ["ADM-009"],
+      "state": "required",
+      "scope": "workflows/moderation_taxonomy_finding_evidence_lifecycle",
+      "reason": "Every persisted moderation finding and chat detection must retain complete immutable scanner, taxonomy, rule, configuration, context, language-limit, and execution provenance."
+    },
+    {
+      "id": "WS03-05A-R3",
+      "owning_pass": "WS03-05A",
+      "source_controls": ["ADM-010"],
+      "state": "required",
+      "scope": "workflows/moderation_taxonomy_finding_evidence_lifecycle",
+      "reason": "Evidence must bind to the exact UTF-8 source hash, explicit field purpose, versioned canonicalization, recomputable fingerprint, valid source offsets when applicable, and attributable non-span predicate evidence otherwise."
+    },
+    {
+      "id": "WS03-05A-R4",
+      "owning_pass": "WS03-05A",
+      "source_controls": ["ADM-010"],
+      "state": "required",
+      "scope": "workflows/moderation_taxonomy_finding_evidence_lifecycle",
+      "reason": "Identical rescans must deduplicate while edits, clearing, configuration changes, and reappearance preserve immutable historical evidence and truthful current state."
+    },
+    {
+      "id": "WS03-05A-R5",
+      "owning_pass": "WS03-05A",
+      "source_controls": ["ADM-010", "WS04-02A", "WS04-02B"],
+      "state": "required",
+      "scope": "workflows/moderation_taxonomy_finding_evidence_lifecycle",
+      "reason": "Target-first locking, stable reconciliation order, database uniqueness, and rollback must prevent stale findings, duplicate events, and partial moderation persistence under failures or races."
+    },
+    {
+      "id": "WS03-05A-R6",
+      "owning_pass": "WS03-05A",
+      "source_controls": ["ADM-009", "ADM-010", "WS03-04", "WS04-03A"],
+      "state": "required",
+      "scope": "workflows/moderation_taxonomy_finding_evidence_lifecycle",
+      "reason": "Models and canonical migrations must agree on the constrained schema while existing admin review, chat, authorization, notification, and rate-limit contracts remain compatible."
+    }
+  ]
+}

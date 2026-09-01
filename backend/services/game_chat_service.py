@@ -1,6 +1,7 @@
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from time import monotonic_ns
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
@@ -18,18 +19,24 @@ from backend.models import (
     User,
 )
 from backend.schemas.chat_message_schema import ChatMessageCreate
+from backend.schemas.game_chat_read_schema import GameChatReadStateRead
 from backend.schemas.game_chat_schema import (
     GameChatCreate,
     GameChatEnsureCreate,
-    GameChatRead as GameChatReadSchema,
     GameChatUpdate,
 )
-from backend.schemas.game_chat_read_schema import GameChatReadStateRead
+from backend.schemas.game_chat_schema import (
+    GameChatRead as GameChatReadSchema,
+)
 from backend.services.admin_action_service import record_admin_action
 from backend.services.auth_service import user_is_active_admin
 from backend.services.chat_moderation_service import (
+    CHAT_MESSAGE_CONFLICT_DETAIL,
+    ContextPredicateFact,
     build_safe_message_preview,
+    chat_detection_record_values,
     detect_chat_message,
+    repeated_message_fact,
 )
 from backend.services.chat_rate_limit_service import (
     CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES,
@@ -38,6 +45,7 @@ from backend.services.chat_rate_limit_service import (
 from backend.services.game_participant_rules import ROSTER_USER_PARTICIPANT_TYPES
 from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.moderation_surfacing_service import surface_game_chat_message_text
+from backend.services.moderation_taxonomy import TARGET_CONTEXT_GAME_CHAT
 from backend.services.notification_event_service import (
     build_game_notification_fields,
     reopen_aggregated_notification,
@@ -155,7 +163,9 @@ def normalize_game_chat_lifecycle_fields(
     if normalized_data["chat_status"] == "closed":
         normalized_data["closed_at"] = (
             normalized_data.get("closed_at")
-            or (existing_game_chat.closed_at if existing_game_chat is not None else None)
+            or (
+                existing_game_chat.closed_at if existing_game_chat is not None else None
+            )
             or datetime.now(timezone.utc)
         )
     else:
@@ -576,15 +586,18 @@ def validate_sender_rate_limit(
 
 
 def validate_total_message_limit(db: Session, chat_id: uuid.UUID) -> None:
-    message_count = db.scalar(
-        select(func.count())
-        .select_from(ChatMessage)
-        .where(
-            ChatMessage.chat_id == chat_id,
-            ChatMessage.message_type == "text",
-            ChatMessage.visibility_status == "visible",
+    message_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(ChatMessage)
+            .where(
+                ChatMessage.chat_id == chat_id,
+                ChatMessage.message_type == "text",
+                ChatMessage.visibility_status == "visible",
+            )
         )
-    ) or 0
+        or 0
+    )
 
     if message_count >= MAX_CHAT_MESSAGES_TOTAL:
         raise HTTPException(
@@ -600,8 +613,8 @@ def sender_repeated_message(
     message_body: str,
     *,
     exclude_message_id: uuid.UUID | None = None,
-) -> bool:
-    statement = select(ChatMessage.message_body).where(
+) -> ContextPredicateFact | None:
+    statement = select(ChatMessage).where(
         ChatMessage.chat_id == chat_id,
         ChatMessage.sender_user_id == sender_user_id,
         ChatMessage.message_type == "text",
@@ -610,12 +623,20 @@ def sender_repeated_message(
     if exclude_message_id is not None:
         statement = statement.where(ChatMessage.id != exclude_message_id)
 
-    latest_body = db.scalar(
-        statement.order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc()).limit(1)
+    latest_message = db.scalar(
+        statement.order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc()).limit(
+            1
+        )
     )
-    return (
-        latest_body is not None
-        and latest_body.strip().casefold() == message_body.strip().casefold()
+    if (
+        latest_message is None
+        or latest_message.message_body.strip().casefold()
+        != message_body.strip().casefold()
+    ):
+        return None
+    return repeated_message_fact(
+        reference_message_id=str(latest_message.id),
+        reference_message_body=latest_message.message_body,
     )
 
 
@@ -864,9 +885,7 @@ def reconcile_game_chat_notifications_after_moderation(
 
         unread_count = (
             db.scalar(
-                select(func.count())
-                .select_from(ChatMessage)
-                .where(*unread_filters)
+                select(func.count()).select_from(ChatMessage).where(*unread_filters)
             )
             or 0
         )
@@ -902,7 +921,8 @@ def ensure_timezone(value: datetime) -> datetime:
 
 
 def build_chat_message_conflict_detail(exc: IntegrityError) -> str:
-    return str(exc.orig)
+    del exc
+    return CHAT_MESSAGE_CONFLICT_DETAIL
 
 
 def refresh_game_chat_summary(db: Session, db_game_chat: GameChat) -> None:
@@ -966,36 +986,36 @@ def replace_game_chat_message_detections(
     db: Session,
     db_chat_message: ChatMessage,
     *,
-    is_repeated_message: bool,
+    repeated_fact: ContextPredicateFact | None,
+    started_ns: int,
 ) -> None:
     db.execute(
         delete(GameChatMessageDetection).where(
             GameChatMessageDetection.message_id == db_chat_message.id
         )
     )
-    try:
-        detections = detect_chat_message(
-            db_chat_message.message_body,
-            is_repeated_message=is_repeated_message,
-        )
-    except Exception:
-        logger.exception(
-            "Game chat moderation detector failed for message %s.",
-            db_chat_message.id,
-        )
-        detections = []
-    db_chat_message.review_status = "needs_review" if detections else "clear"
+    scan_result = detect_chat_message(
+        db_chat_message.message_body,
+        target_context=TARGET_CONTEXT_GAME_CHAT,
+        predicate_facts=(repeated_fact,) if repeated_fact is not None else (),
+        started_ns=started_ns,
+    )
+    db_chat_message.review_status = (
+        "needs_review" if scan_result.detections else "clear"
+    )
     db_chat_message.reviewed_at = None
     db_chat_message.reviewed_by_user_id = None
-    for detection in detections:
+    for detection in scan_result.detections:
         db.add(
             GameChatMessageDetection(
                 id=uuid.uuid4(),
                 message_id=db_chat_message.id,
-                category=detection.category,
-                severity=detection.severity,
-                rule_key=detection.rule_key,
-                matched_preview=detection.matched_preview,
+                **chat_detection_record_values(
+                    message_id=str(db_chat_message.id),
+                    source_text=db_chat_message.message_body,
+                    detection=detection,
+                    provenance=scan_result.provenance,
+                ),
             )
         )
 
@@ -1036,7 +1056,8 @@ def create_chat_message_record(
     message_data["message_body"] = normalize_message_body(message_data["message_body"])
     validate_sender_rate_limit(db, db_game_chat.id, current_user.id, now)
     validate_total_message_limit(db, db_game_chat.id)
-    is_repeated_message = sender_repeated_message(
+    moderation_started_ns = monotonic_ns()
+    repeated_fact = sender_repeated_message(
         db,
         db_game_chat.id,
         current_user.id,
@@ -1058,7 +1079,8 @@ def create_chat_message_record(
         replace_game_chat_message_detections(
             db,
             new_chat_message,
-            is_repeated_message=is_repeated_message,
+            repeated_fact=repeated_fact,
+            started_ns=moderation_started_ns,
         )
         db.add(new_chat_message)
         db.flush()
@@ -1080,6 +1102,9 @@ def create_chat_message_record(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_chat_message_conflict_detail(exc),
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
     surface_game_chat_message_text(db, message_id=new_chat_message.id)
     return new_chat_message
@@ -1134,7 +1159,10 @@ def list_chat_message_records(
                 detail="Admin access required.",
             )
 
-    if visibility_status is not None and visibility_status not in VALID_VISIBILITY_STATUSES:
+    if (
+        visibility_status is not None
+        and visibility_status not in VALID_VISIBILITY_STATUSES
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="visibility_status must be 'visible' or 'removed'.",

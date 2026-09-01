@@ -165,7 +165,11 @@ def run_alembic_upgrade(revision: str = "head") -> None:
     migration_database_targets_from_environment()
     reset_settings_cache()
     try:
-        command.upgrade(alembic_config(), revision)
+        config = alembic_config()
+        # In-process migration tests must not replace or disable pytest/application loggers.
+        config.get_section(config.config_ini_section, {})
+        config.config_file_name = None
+        command.upgrade(config, revision)
     finally:
         reset_settings_cache()
 

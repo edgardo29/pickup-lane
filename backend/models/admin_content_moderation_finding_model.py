@@ -1,7 +1,15 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,16 +41,35 @@ class AdminContentModerationFinding(Base):
             name="ck_admin_content_moderation_findings_source_field_present",
         ),
         CheckConstraint(
-            "length(trim(source_content_hash)) > 0",
+            "source_content_hash ~ '^[0-9a-f]{64}$'",
             name="ck_admin_content_moderation_findings_source_hash_present",
         ),
         CheckConstraint(
-            "length(trim(evidence_fingerprint)) > 0",
+            "evidence_fingerprint ~ '^[0-9a-f]{64}$'",
             name="ck_admin_content_moderation_findings_fingerprint_present",
         ),
         CheckConstraint(
-            "jsonb_typeof(evidence) = 'array' AND jsonb_array_length(evidence) > 0",
+            "configuration_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_admin_content_moderation_findings_configuration_hash",
+        ),
+        CheckConstraint(
+            "finding_identity_hash ~ '^[0-9a-f]{64}$'",
+            name="ck_admin_content_moderation_findings_identity_hash",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(evidence) = 'array' "
+            "AND jsonb_array_length(evidence) BETWEEN 1 AND 8",
             name="ck_admin_content_moderation_findings_evidence_nonempty",
+        ),
+        CheckConstraint(
+            "length(trim(scanner_id)) > 0 "
+            "AND length(trim(scanner_version)) > 0 "
+            "AND length(trim(taxonomy_version)) > 0 "
+            "AND length(trim(canonicalization_version)) > 0 "
+            "AND length(trim(evidence_format_version)) > 0 "
+            "AND length(trim(target_context)) > 0 "
+            "AND length(trim(field_purpose)) > 0",
+            name="ck_admin_content_moderation_findings_provenance_present",
         ),
         CheckConstraint(
             (
@@ -54,6 +81,20 @@ class AdminContentModerationFinding(Base):
         CheckConstraint(
             "first_detected_at <= last_detected_at",
             name="ck_admin_content_moderation_findings_detected_order",
+        ),
+        CheckConstraint(
+            "execution_duration_us >= 0",
+            name="ck_admin_content_moderation_findings_duration_nonnegative",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(matched_rule_versions) = 'array' "
+            "AND jsonb_array_length(matched_rule_versions) BETWEEN 1 AND 32",
+            name="ck_admin_content_moderation_findings_rule_versions_nonempty",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(declared_limits) = 'array' "
+            "AND jsonb_array_length(declared_limits) BETWEEN 1 AND 16",
+            name="ck_admin_content_moderation_findings_declared_limits_nonempty",
         ),
         Index(
             "ix_admin_content_moderation_findings_review_case_id",
@@ -76,9 +117,7 @@ class AdminContentModerationFinding(Base):
         Index(
             "uq_admin_content_moderation_findings_current_identity",
             "review_case_id",
-            "source_field",
-            "finding_type",
-            "evidence_fingerprint",
+            "finding_identity_hash",
             unique=True,
             postgresql_where=text("current_match = true"),
         ),
@@ -101,6 +140,20 @@ class AdminContentModerationFinding(Base):
     source_content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     evidence_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     evidence: Mapped[list[dict]] = mapped_column(JSONB, nullable=False)
+    scanner_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    taxonomy_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    configuration_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    canonicalization_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    evidence_format_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_context: Mapped[str] = mapped_column(String(60), nullable=False)
+    field_purpose: Mapped[str] = mapped_column(String(40), nullable=False)
+    matched_rule_versions: Mapped[list[dict]] = mapped_column(JSONB, nullable=False)
+    declared_limits: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    scanned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    execution_duration_us: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    finding_identity_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     current_match: Mapped[bool] = mapped_column(
         nullable=False,
         server_default=text("true"),

@@ -26,6 +26,7 @@ These WS01 artifacts are governance records. They are not proof that application
 | [Limits and thresholds register](limits-and-thresholds-register.md) | Evidence-based method and open value register for limits, timeouts, retention, recovery, alerts, and capacity. | GOV-006 |
 | [Production-readiness audit process](production-readiness-audit-process.md) | Repeatable audit workflow, evidence classes, approval gates, reassessment, result versioning, and unresolved-control handling. | GOV-005, GOV-007 |
 | [Risk and exception register](risk-and-exception-register.md) | Empty governed exception register and required approval process. | GOV-007 |
+| [Moderation taxonomy register](moderation-taxonomy-register.md) | Governed moderation ownership, contexts, limits, active versions, and version-change rules without raw expressions or user evidence. | ADM-009, ADM-010 |
 | [Reusable templates](templates.md) | Decision, exception, and audit-run templates for future governed changes. | GOV-005, GOV-006, GOV-007 |
 | [Provider control-plane register](provider-control-plane-register.md) | Sanitized register of provider/control-plane ownership, access, MFA, recovery, separation, and evidence gaps. | OPS-005, OPS-025 |
 | [Secret lifecycle register](secret-lifecycle-register.md) | Secret-name and configuration lifecycle register without values. | OPS-006, OPS-007 |

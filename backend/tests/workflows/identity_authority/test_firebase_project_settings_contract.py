@@ -26,6 +26,8 @@ def _settings_env(**overrides: str | None) -> dict[str, str]:
         "CORS_ALLOWED_ORIGINS": "https://app.example.invalid",
         "ENABLE_API_DOCS": "false",
         "ENABLE_DB_HEALTH": "false",
+        "DB_POOL_SIZE": "5",
+        "DB_MAX_OVERFLOW": "2",
         "FIREBASE_ADMIN_CREDENTIALS_JSON": FIREBASE_ADMIN_JSON,
         "FIREBASE_PROJECT_ID": SYNTHETIC_PROJECT_ID,
         "FIREBASE_APP_CHECK_MODE": "disabled",

@@ -100,6 +100,7 @@ def _install_environment(
     monkeypatch: pytest.MonkeyPatch,
     env: Mapping[str, str],
 ) -> None:
+    monkeypatch.setattr("backend.settings.load_dotenv", lambda *_args, **_kwargs: False)
     for name in (
         "APP_ENV",
         "CI",

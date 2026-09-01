@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from backend.observability.redaction import REDACTION_MARKER, is_sensitive_key, redact_value
-
+from backend.observability.redaction import (
+    REDACTION_MARKER,
+    contains_sensitive_text,
+    is_sensitive_key,
+    redact_value,
+)
 
 pytestmark = pytest.mark.no_db_cleanup
 
@@ -90,6 +94,20 @@ def test_redaction_does_not_redact_safe_structural_identifiers_without_authority
     }
 
     assert redact_value(payload) == payload
+
+
+@pytest.mark.requirement("EN02-REDACT-001")
+def test_phone_detection_ignores_only_validated_uuid_spans():
+    offending_uuid = "4b340077-7855-4d77-a0fb-558aba611ff5"
+    invalid_uuid_lookalike = "4b340077-7855-4d77-a0fb-558aba611ffg"
+    real_phone = "312-555-1212"
+
+    assert not contains_sensitive_text(offending_uuid)
+    assert contains_sensitive_text(invalid_uuid_lookalike)
+    assert contains_sensitive_text(real_phone)
+    assert contains_sensitive_text(f"{offending_uuid} {real_phone}")
+    assert redact_value(offending_uuid) == offending_uuid
+    assert redact_value(f"{offending_uuid} {real_phone}") == REDACTION_MARKER
 
 
 @pytest.mark.requirement("EN02-REDACT-001")
