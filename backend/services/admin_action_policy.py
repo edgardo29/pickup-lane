@@ -54,6 +54,7 @@ ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
 )
 
+
 @dataclass(frozen=True)
 class TargetRule:
     all_of: tuple[str, ...] = ()
@@ -70,7 +71,6 @@ class AdminActionPolicy:
     server_copied_target_fields: frozenset[str] = frozenset()
     allows_audit_note: bool = True
     requires_reason: bool = False
-
 
 
 def target_set(*fields: str) -> frozenset[str]:
@@ -127,9 +127,7 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "create_financial_outcome": AdminActionPolicy(
         action_type="create_financial_outcome",
-        required_target_rules=(
-            TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),
-        ),
+        required_target_rules=(TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),),
         allowed_target_fields=target_set(
             TARGET_USER_ID,
             TARGET_GAME_ID,
@@ -143,9 +141,7 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "apply_financial_outcome": AdminActionPolicy(
         action_type="apply_financial_outcome",
-        required_target_rules=(
-            TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),
-        ),
+        required_target_rules=(TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),),
         allowed_target_fields=target_set(
             TARGET_USER_ID,
             TARGET_GAME_ID,
@@ -419,7 +415,9 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "admin_add_player": AdminActionPolicy(
         action_type="admin_add_player",
-        required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID, TARGET_PARTICIPANT_ID)),),
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_GAME_ID, TARGET_PARTICIPANT_ID)),
+        ),
         allowed_target_fields=target_set(
             TARGET_GAME_ID,
             TARGET_USER_ID,
@@ -431,7 +429,9 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "admin_remove_player": AdminActionPolicy(
         action_type="admin_remove_player",
-        required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID, TARGET_PARTICIPANT_ID)),),
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_GAME_ID, TARGET_PARTICIPANT_ID)),
+        ),
         allowed_target_fields=target_set(
             TARGET_GAME_ID,
             TARGET_USER_ID,
@@ -444,7 +444,9 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "waive_payment": AdminActionPolicy(
         action_type="waive_payment",
-        required_target_rules=(TargetRule(one_of=(TARGET_BOOKING_ID, TARGET_PAYMENT_ID)),),
+        required_target_rules=(
+            TargetRule(one_of=(TARGET_BOOKING_ID, TARGET_PAYMENT_ID)),
+        ),
         allowed_target_fields=target_set(
             TARGET_USER_ID,
             TARGET_GAME_ID,
@@ -569,6 +571,51 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         metadata_builder_key="review_workflow",
         requires_reason=True,
     ),
+    "assign_review_case": AdminActionPolicy(
+        action_type="assign_review_case",
+        required_target_rules=(TargetRule(all_of=(TARGET_REVIEW_CASE_ID,)),),
+        allowed_target_fields=target_set(
+            TARGET_REVIEW_CASE_ID,
+            TARGET_USER_ID,
+            TARGET_GAME_ID,
+            TARGET_SUB_POST_ID,
+            TARGET_SUB_POST_REQUEST_ID,
+            TARGET_PAYMENT_ID,
+            TARGET_FINANCIAL_OUTCOME_ID,
+        ),
+        metadata_builder_key="review_workflow",
+        requires_reason=True,
+    ),
+    "reopen_review_case": AdminActionPolicy(
+        action_type="reopen_review_case",
+        required_target_rules=(TargetRule(all_of=(TARGET_REVIEW_CASE_ID,)),),
+        allowed_target_fields=target_set(
+            TARGET_REVIEW_CASE_ID,
+            TARGET_USER_ID,
+            TARGET_GAME_ID,
+            TARGET_SUB_POST_ID,
+            TARGET_SUB_POST_REQUEST_ID,
+            TARGET_PAYMENT_ID,
+            TARGET_FINANCIAL_OUTCOME_ID,
+        ),
+        metadata_builder_key="review_workflow",
+        requires_reason=True,
+    ),
+    "merge_review_case": AdminActionPolicy(
+        action_type="merge_review_case",
+        required_target_rules=(TargetRule(all_of=(TARGET_REVIEW_CASE_ID,)),),
+        allowed_target_fields=target_set(
+            TARGET_REVIEW_CASE_ID,
+            TARGET_USER_ID,
+            TARGET_GAME_ID,
+            TARGET_SUB_POST_ID,
+            TARGET_SUB_POST_REQUEST_ID,
+            TARGET_PAYMENT_ID,
+            TARGET_FINANCIAL_OUTCOME_ID,
+        ),
+        metadata_builder_key="review_workflow",
+        requires_reason=True,
+    ),
     "update_notification": AdminActionPolicy(
         action_type="update_notification",
         required_target_rules=(TargetRule(all_of=(TARGET_NOTIFICATION_ID,)),),
@@ -608,7 +655,9 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     "append_audit_note": AdminActionPolicy(
         action_type="append_audit_note",
         required_target_rules=(TargetRule(all_of=(TARGET_ADMIN_ACTION_ID,)),),
-        allowed_target_fields=target_set(TARGET_ADMIN_ACTION_ID, *ADMIN_ACTION_TARGET_FIELDS),
+        allowed_target_fields=target_set(
+            TARGET_ADMIN_ACTION_ID, *ADMIN_ACTION_TARGET_FIELDS
+        ),
         client_allowed_target_fields=target_set(TARGET_ADMIN_ACTION_ID),
         server_copied_target_fields=target_set(*ADMIN_ACTION_TARGET_FIELDS),
         metadata_builder_key="audit_note",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -12,7 +13,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import AdminReviewCase, AdminReviewSignal
-from backend.services.admin_review_service import create_internal_review_signal
+from backend.services.admin_review_service import (
+    apply_review_signal_current_state,
+    create_internal_review_signal,
+)
 from backend.services.content_moderation_scanner_service import (
     ModerationFinding,
     scanner_timestamp,
@@ -180,8 +184,15 @@ def mark_superseded_signals(
                 metadata["superseded_by_content_change"] = False
                 metadata["latest_content_hash"] = latest_hash
                 metadata["last_scanned_at"] = scanned_at
-                signal.metadata_ = metadata
-                changed = True
+                changed = (
+                    apply_review_signal_current_state(
+                        db,
+                        signal_id=signal.id,
+                        metadata=metadata,
+                        changed_at=datetime.fromisoformat(scanned_at),
+                    )
+                    or changed
+                )
             continue
 
         if (
@@ -194,8 +205,15 @@ def mark_superseded_signals(
         metadata["superseded_by_content_change"] = True
         metadata["latest_content_hash"] = latest_hash
         metadata["last_scanned_at"] = scanned_at
-        signal.metadata_ = metadata
-        changed = True
+        changed = (
+            apply_review_signal_current_state(
+                db,
+                signal_id=signal.id,
+                metadata=metadata,
+                changed_at=datetime.fromisoformat(scanned_at),
+            )
+            or changed
+        )
 
     if changed:
         db.commit()

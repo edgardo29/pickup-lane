@@ -12,26 +12,36 @@ class AdminReviewCaseNote(Base):
     __tablename__ = "admin_review_case_notes"
     __table_args__ = (
         CheckConstraint(
-            "note_status IN ('active', 'deleted')",
+            "note_status = 'active' AND edited_at IS NULL AND deleted_at IS NULL",
             name="ck_admin_review_case_notes_note_status",
+        ),
+        CheckConstraint(
+            "corrects_note_id IS NULL OR corrects_note_id <> id",
+            name="ck_admin_review_case_notes_no_self_correction",
         ),
         Index("ix_admin_review_case_notes_review_case_id", "review_case_id"),
         Index("ix_admin_review_case_notes_author_user_id", "author_user_id"),
         Index("ix_admin_review_case_notes_created_at", "created_at"),
+        Index("ix_admin_review_case_notes_corrects_note_id", "corrects_note_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     review_case_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("admin_review_cases.id", ondelete="CASCADE"),
+        ForeignKey("admin_review_cases.id", ondelete="RESTRICT"),
         nullable=False,
     )
     author_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    corrects_note_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("admin_review_case_notes.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     note_status: Mapped[str] = mapped_column(
         String(30),
         nullable=False,

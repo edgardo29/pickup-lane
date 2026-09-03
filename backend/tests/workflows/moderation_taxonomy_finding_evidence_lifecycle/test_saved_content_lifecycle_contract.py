@@ -31,17 +31,19 @@ try:
         User,
         Venue,
     )
+    from backend.schemas.admin_review_schema import AdminReviewCaseClose
     from backend.services import (
         content_moderation_finding_service,
         moderation_surfacing_service,
     )
-    from backend.services.admin_review_service import serialize_review_case_detail
+    from backend.services.admin_review_service import (
+        close_review_case,
+        serialize_review_case_detail,
+    )
     from backend.services.content_moderation_evidence_service import (
         build_content_moderation_findings,
     )
     from backend.services.content_moderation_finding_service import (
-        build_finding_metadata,
-        finding_identity_hash,
         reconcile_content_moderation_findings,
         run_content_moderation_finding_reconciliation_safely,
     )
@@ -315,7 +317,10 @@ def test_saved_finding_exact_repeat_edit_clear_and_reappearance_preserve_history
         event_types = list(
             db.scalars(
                 select(AdminReviewCaseEvent.event_type)
-                .join(AdminReviewCase)
+                .join(
+                    AdminReviewCase,
+                    AdminReviewCase.id == AdminReviewCaseEvent.review_case_id,
+                )
                 .where(AdminReviewCase.target_game_id == game.id)
             ).all()
         )
@@ -400,11 +405,20 @@ def test_priority_uses_only_current_findings_and_closed_case_stays_immutable() -
             for finding in _findings(db, game.id)
         ]
 
-        first_case.case_status = "closed"
-        first_case.closure_outcome = "no_action_needed"
-        first_case.closure_reason = "Synthetic closed-case lifecycle proof"
-        first_case.closed_at = datetime.now(timezone.utc)
+        admin_user = db.get(User, game.host_user_id)
+        admin_user.role = "admin"
         db.commit()
+        close_review_case(
+            db,
+            review_case_id=first_case.id,
+            admin_user=admin_user,
+            payload=AdminReviewCaseClose(
+                outcome="no_action_needed",
+                reason="Synthetic closed-case lifecycle proof",
+                expected_case_version=first_case.case_version,
+                idempotency_key="ws03-05a-synthetic-close",
+            ),
+        )
 
         game.description = "Text me at 214-555-0100"
         db.commit()
@@ -644,7 +658,7 @@ def test_reconciliation_helper_exception_log_excludes_sensitive_evidence(
 
 
 @pytest.mark.requirement("WS03-05A-R4", "WS03-05A-R5")
-def test_current_identity_conflict_retries_from_a_fresh_locked_snapshot() -> None:
+def test_current_identity_reconciliation_serializes_on_the_locked_target() -> None:
     from backend.database import engine
 
     with _session() as db:
@@ -656,97 +670,56 @@ def test_current_identity_conflict_retries_from_a_fresh_locked_snapshot() -> Non
         db.commit()
 
     insert_started = threading.Event()
+    loser_target_started = threading.Event()
+    release_winner = threading.Event()
     target_reads: list[str] = []
 
-    def observe_retry_path(
+    def observe_lock_path(
         conn, cursor, statement, parameters, context, executemany
     ) -> None:
         del conn, cursor, parameters, context, executemany
-        if not threading.current_thread().name.startswith("moderation-conflict"):
-            return
-        if "FROM games" in statement and "FOR UPDATE" in statement:
+        thread_name = threading.current_thread().name
+        if (
+            thread_name.startswith(("moderation-winner", "moderation-loser"))
+            and "FROM games" in statement
+            and "FOR UPDATE" in statement
+        ):
             target_reads.append(statement)
-        if "INSERT INTO admin_content_moderation_findings" in statement:
+            if thread_name.startswith("moderation-loser"):
+                loser_target_started.set()
+        if (
+            thread_name.startswith("moderation-winner")
+            and "INSERT INTO admin_content_moderation_findings" in statement
+        ):
             insert_started.set()
+            assert release_winner.wait(timeout=10)
 
-    def reconcile_in_losing_session() -> None:
+    def reconcile_in_independent_session() -> None:
         with _session() as worker_db:
             surface_community_game_text(worker_db, game_id=game_id)
 
-    event.listen(engine, "before_cursor_execute", observe_retry_path)
+    event.listen(engine, "before_cursor_execute", observe_lock_path)
     try:
-        with _session() as winner:
-            game = winner.get(Game, game_id)
-            review_case = winner.scalar(
-                select(AdminReviewCase).where(AdminReviewCase.target_game_id == game_id)
-            )
-            scan = build_content_moderation_findings(
-                build_community_game_moderation_fields(game, None),
-                target_context=TARGET_CONTEXT_COMMUNITY_GAME,
-            )
-            finding = scan.findings[0]
-            target_data = {"target_game_id": game_id}
-            identity = finding_identity_hash(
-                finding,
-                provenance=scan.provenance,
-                target_data=target_data,
-            )
-            winning_finding = AdminContentModerationFinding(
-                id=uuid.uuid4(),
-                review_case_id=review_case.id,
-                risk_area=finding.risk_area,
-                finding_type=finding.finding_type,
-                priority=finding.priority,
-                source_field=finding.source_field,
-                source_content_hash=finding.source_content_hash,
-                evidence_fingerprint=finding.evidence_fingerprint,
-                evidence=finding.evidence,
-                scanner_id=scan.provenance.scanner_id,
-                scanner_version=scan.provenance.scanner_version,
-                taxonomy_version=scan.provenance.taxonomy_version,
-                configuration_hash=scan.provenance.configuration_hash,
-                canonicalization_version=scan.provenance.canonicalization_version,
-                evidence_format_version=scan.provenance.evidence_format_version,
-                target_context=scan.provenance.target_context,
-                field_purpose=finding.field_purpose,
-                matched_rule_versions=list(finding.matched_rule_versions),
-                declared_limits=list(scan.provenance.declared_limits),
-                scanned_at=scan.provenance.scanned_at,
-                execution_duration_us=scan.provenance.execution_duration_us,
-                finding_identity_hash=identity,
-                current_match=True,
-                first_detected_at=scan.provenance.scanned_at,
-                last_detected_at=scan.provenance.scanned_at,
-                cleared_at=None,
-                metadata_=build_finding_metadata(finding, scan.provenance),
-                created_at=scan.provenance.scanned_at,
-                updated_at=scan.provenance.scanned_at,
-            )
-            winner.add(winning_finding)
-            winner.flush()
-            winner.add(
-                AdminReviewCaseEvent(
-                    id=uuid.uuid4(),
-                    review_case_id=review_case.id,
-                    event_type="finding_attached",
-                    content_moderation_finding_id=winning_finding.id,
-                    event_metadata={"source": "independent_session_winner"},
-                    created_at=scan.provenance.scanned_at,
-                )
-            )
-            winner.flush()
-            winning_finding_id = winning_finding.id
-
-            with ThreadPoolExecutor(
+        with (
+            ThreadPoolExecutor(
                 max_workers=1,
-                thread_name_prefix="moderation-conflict",
-            ) as executor:
-                future = executor.submit(reconcile_in_losing_session)
-                assert insert_started.wait(timeout=5)
-                winner.commit()
-                future.result(timeout=15)
+                thread_name_prefix="moderation-winner",
+            ) as winner_executor,
+            ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="moderation-loser",
+            ) as loser_executor,
+        ):
+            winner_future = winner_executor.submit(reconcile_in_independent_session)
+            assert insert_started.wait(timeout=5)
+            loser_future = loser_executor.submit(reconcile_in_independent_session)
+            assert loser_target_started.wait(timeout=5)
+            release_winner.set()
+            winner_future.result(timeout=15)
+            loser_future.result(timeout=15)
     finally:
-        event.remove(engine, "before_cursor_execute", observe_retry_path)
+        release_winner.set()
+        event.remove(engine, "before_cursor_execute", observe_lock_path)
 
     with _session() as db:
         cases = list(
@@ -774,9 +747,7 @@ def test_current_identity_conflict_retries_from_a_fresh_locked_snapshot() -> Non
         assert len(target_reads) == 2
         assert len(cases) == 1
         assert len(findings) == 2
-        assert [finding.id for finding in findings if finding.current_match] == [
-            winning_finding_id
-        ]
+        assert len([finding for finding in findings if finding.current_match]) == 1
         assert len([finding for finding in findings if not finding.current_match]) == 1
         assert all(
             finding.cleared_at is not None
@@ -784,13 +755,8 @@ def test_current_identity_conflict_retries_from_a_fresh_locked_snapshot() -> Non
             if not finding.current_match
         )
         assert len(attachment_events) == 2
-        assert (
-            sum(
-                event.content_moderation_finding_id == winning_finding_id
-                for event in attachment_events
-            )
-            == 1
-        )
+        assert cases[0].case_version == 4
+        assert [event.event_sequence for event in attachment_events] == [2, 3]
 
 
 def _integrity_error_for_constraint(constraint_name: str) -> IntegrityError:
@@ -802,8 +768,8 @@ def _integrity_error_for_constraint(constraint_name: str) -> IntegrityError:
 @pytest.mark.requirement("WS03-05A-R5")
 def test_retry_classification_is_limited_to_creation_race_constraints() -> None:
     for constraint_name in (
-        "uq_admin_review_cases_open_community_game_content_moderation",
-        "uq_admin_review_cases_open_need_sub_content_moderation",
+        "uq_admin_review_cases_open_community_game_moderation",
+        "uq_admin_review_cases_open_need_sub_moderation",
         "uq_admin_content_moderation_findings_current_identity",
     ):
         assert is_retryable_moderation_creation_race(

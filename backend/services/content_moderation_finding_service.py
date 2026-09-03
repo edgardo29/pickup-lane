@@ -18,6 +18,8 @@ from backend.services.admin_review_service import (
     CASE_ACTIVE_STATUSES,
     CONTENT_MODERATION_CASE_CATEGORY,
     PRIORITY_RANK,
+    SOURCE_RECONCILIATION_RULE_ID,
+    SOURCE_RECONCILIATION_RULE_VERSION,
     build_content_moderation_case_summary,
     build_content_moderation_case_title,
     copy_targets,
@@ -84,6 +86,8 @@ def get_or_create_open_content_moderation_case(
         priority=priority,
         title=build_content_moderation_case_title(case_type),
         summary=build_content_moderation_case_summary(case_type),
+        case_version=1,
+        creation_reason="content_moderation_finding",
         opened_by_user_id=None,
         created_at=now,
         updated_at=now,
@@ -96,6 +100,8 @@ def get_or_create_open_content_moderation_case(
         review_case_id=review_case.id,
         event_type="case_created",
         actor_user_id=None,
+        automation_rule_id=SOURCE_RECONCILIATION_RULE_ID,
+        automation_rule_version=SOURCE_RECONCILIATION_RULE_VERSION,
         event_metadata={"source": "content_moderation_scanner"},
         created_at=now,
     )
@@ -171,6 +177,7 @@ def apply_content_moderation_findings(
                 AdminContentModerationFinding.created_at.asc(),
                 AdminContentModerationFinding.id.asc(),
             )
+            .execution_options(populate_existing=True)
             .with_for_update()
         ).all()
     )
@@ -189,7 +196,12 @@ def apply_content_moderation_findings(
     }
     changed_case = False
 
-    for identity, finding in incoming_by_identity.items():
+    ordered_incoming = sorted(
+        incoming_by_identity.items(),
+        key=lambda item: PRIORITY_RANK[item[1].priority],
+        reverse=True,
+    )
+    for identity, finding in ordered_incoming:
         existing = current_by_identity.get(identity)
         if existing is not None:
             existing.last_detected_at = now
@@ -197,6 +209,7 @@ def apply_content_moderation_findings(
             db.add(existing)
             continue
 
+        priority_before = review_case.priority
         created = AdminContentModerationFinding(
             id=uuid.uuid4(),
             review_case_id=review_case.id,
@@ -231,15 +244,21 @@ def apply_content_moderation_findings(
         db.add(created)
         db.flush()
         existing_findings.append(created)
+        recalculated_priority = priority_for_current_findings(existing_findings)
+        review_case.priority = recalculated_priority
         create_case_event(
             db,
             review_case_id=review_case.id,
             event_type="finding_attached",
             content_moderation_finding_id=created.id,
+            automation_rule_id=SOURCE_RECONCILIATION_RULE_ID,
+            automation_rule_version=SOURCE_RECONCILIATION_RULE_VERSION,
             event_metadata={
                 "finding_type": created.finding_type,
                 "risk_area": created.risk_area,
                 "source_field": created.source_field,
+                "priority_before": priority_before,
+                "priority_after": recalculated_priority,
             },
             created_at=now,
         )
@@ -253,30 +272,33 @@ def apply_content_moderation_findings(
             continue
         if existing.finding_identity_hash in incoming_by_identity:
             continue
+        priority_before = review_case.priority
         existing.current_match = False
         existing.cleared_at = now
         existing.updated_at = now
         db.add(existing)
+        recalculated_priority = priority_for_current_findings(existing_findings)
+        review_case.priority = recalculated_priority
+        db.flush()
         create_case_event(
             db,
             review_case_id=review_case.id,
             event_type="finding_cleared",
             content_moderation_finding_id=existing.id,
+            automation_rule_id=SOURCE_RECONCILIATION_RULE_ID,
+            automation_rule_version=SOURCE_RECONCILIATION_RULE_VERSION,
             event_metadata={
                 "finding_type": existing.finding_type,
                 "risk_area": existing.risk_area,
                 "source_field": existing.source_field,
+                "priority_before": priority_before,
+                "priority_after": recalculated_priority,
             },
             created_at=now,
         )
         changed_case = True
 
-    recalculated_priority = priority_for_current_findings(existing_findings)
-    if review_case.priority != recalculated_priority:
-        review_case.priority = recalculated_priority
-        changed_case = True
     if changed_case:
-        review_case.updated_at = now
         db.add(review_case)
 
 

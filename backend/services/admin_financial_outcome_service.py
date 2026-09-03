@@ -33,13 +33,15 @@ from backend.services.admin_record_rules import (
 )
 from backend.services.admin_review_service import link_admin_action_to_open_review_case
 from backend.services.admin_target_notice_service import create_admin_target_notice
+from backend.services.refund_event_service import record_refund_event
 from backend.services.refund_service import (
     build_refund_conflict_detail,
     validate_refund_amount_available,
 )
-from backend.services.refund_event_service import record_refund_event
 from backend.services.stripe_service import (
     StripeConfigError,
+)
+from backend.services.stripe_service import (
     create_refund as create_stripe_refund,
 )
 
@@ -314,10 +316,12 @@ def resolve_outcome_context(
                 detail="target_game_id must match the host publish fee game.",
             )
 
-        if (
-            host_publish_fee.payment_id is not None
-            and outcome in {"refund", "credit", "forfeit", "manual_review"}
-        ):
+        if host_publish_fee.payment_id is not None and outcome in {
+            "refund",
+            "credit",
+            "forfeit",
+            "manual_review",
+        }:
             payment = get_locked_payment_or_404(db, host_publish_fee.payment_id)
 
         amount_cents = (
@@ -376,7 +380,9 @@ def get_existing_active_financial_decision(
 ) -> AdminFinancialOutcome | None:
     statement = (
         select(AdminFinancialOutcome)
-        .where(AdminFinancialOutcome.applied_status.in_(ACTIVE_FINANCIAL_DECISION_STATUSES))
+        .where(
+            AdminFinancialOutcome.applied_status.in_(ACTIVE_FINANCIAL_DECISION_STATUSES)
+        )
         .order_by(
             AdminFinancialOutcome.created_at.desc(),
             AdminFinancialOutcome.id.desc(),
@@ -994,7 +1000,9 @@ def record_financial_outcome_actions(
         ),
         **financial_outcome_audit_targets(financial_outcome),
     )
-    linked_review_case = link_admin_action_to_open_review_case(db, create_action)
+    linked_review_case = link_admin_action_to_open_review_case(
+        db, create_action, case_category="content_moderation"
+    )
     if linked_review_case is not None and financial_outcome.review_case_id is None:
         financial_outcome.review_case_id = linked_review_case.id
     db.flush()
@@ -1024,7 +1032,9 @@ def record_financial_outcome_actions(
             ),
             **financial_outcome_audit_targets(financial_outcome),
         )
-        link_admin_action_to_open_review_case(db, apply_action)
+        link_admin_action_to_open_review_case(
+            db, apply_action, case_category="content_moderation"
+        )
 
     create_financial_outcome_notice_if_needed(
         db,

@@ -146,10 +146,10 @@ def test_current_ordinary_route_inventory_is_derived_from_final_fastapi_body_met
         for route in main_module._ordinary_json_body_routes(app)
     }
 
-    assert len(final_body_keys) == 82
-    assert len(direct_body_keys) == 82
+    assert len(final_body_keys) == 85
+    assert len(direct_body_keys) == 85
     assert final_body_keys == direct_body_keys
-    assert len(ordinary_keys) == 81
+    assert len(ordinary_keys) == 84
     assert production_keys == ordinary_keys
     assert ((_PLATFORM_NOTICE_CREATE[0],), _PLATFORM_NOTICE_CREATE[1]) not in production_keys
     assert ((_STRIPE_WEBHOOK[0],), _STRIPE_WEBHOOK[1]) not in production_keys
@@ -181,8 +181,8 @@ def test_special_bodyless_and_tombstone_route_counts_remain_accounted_for() -> N
         and route.body_field is not None
     ]
 
-    assert len(_ordinary_from_final_metadata(app)) == 81
-    assert len(final_body_routes) == 82
+    assert len(_ordinary_from_final_metadata(app)) == 84
+    assert len(final_body_routes) == 85
     assert len(no_final_body_routes) == 63
     assert len(no_final_body_tombstones) == 44
     assert len(total_tombstones) == 45

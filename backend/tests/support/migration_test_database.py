@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
 
 from alembic import command
 from alembic.autogenerate import compare_metadata
@@ -23,7 +23,6 @@ from backend.tests.support.environment_safety import (
     MigrationTestDatabaseTargets,
     validate_migration_test_database_urls,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_INI_PATH = REPO_ROOT / "alembic.ini"
@@ -79,6 +78,7 @@ def reset_migration_database(engine: Engine) -> None:
         _drop_public_views(connection)
         _drop_public_tables(connection)
         _drop_public_sequences(connection)
+        _drop_public_routines(connection)
         _drop_public_types(connection)
 
 
@@ -100,6 +100,27 @@ def _drop_public_sequences(connection: Connection) -> None:
         connection.execute(text(f"DROP SEQUENCE IF EXISTS {sequence_name} CASCADE"))
 
 
+def _drop_public_routines(connection: Connection) -> None:
+    routine_names = connection.execute(
+        text(
+            """
+            SELECT format(
+                '%I.%I(%s)',
+                pg_namespace.nspname,
+                pg_proc.proname,
+                pg_get_function_identity_arguments(pg_proc.oid)
+            )
+            FROM pg_proc
+            JOIN pg_namespace ON pg_namespace.oid = pg_proc.pronamespace
+            WHERE pg_namespace.nspname = 'public'
+            ORDER BY pg_proc.proname, pg_proc.oid
+            """
+        )
+    ).scalars()
+    for routine_name in routine_names:
+        connection.execute(text(f"DROP ROUTINE IF EXISTS {routine_name} CASCADE"))
+
+
 def _drop_public_types(connection: Connection) -> None:
     type_names = connection.execute(
         text(
@@ -119,7 +140,9 @@ def _drop_public_types(connection: Connection) -> None:
         connection.execute(text(f"DROP TYPE IF EXISTS {type_name} CASCADE"))
 
 
-def _public_class_names(connection: Connection, relkind_predicate: str) -> tuple[str, ...]:
+def _public_class_names(
+    connection: Connection, relkind_predicate: str
+) -> tuple[str, ...]:
     rows = connection.execute(
         text(
             f"""
@@ -157,7 +180,9 @@ def alembic_parent_revision(revision: str) -> str:
         raise AssertionError(f"unknown Alembic revision: {revision}")
     parent = revision_script.down_revision
     if not isinstance(parent, str):
-        raise AssertionError(f"expected one parent revision for {revision}; got {parent!r}")
+        raise AssertionError(
+            f"expected one parent revision for {revision}; got {parent!r}"
+        )
     return parent
 
 
@@ -208,9 +233,7 @@ def model_schema_drift(engine: Engine) -> tuple[str, ...]:
         context = MigrationContext.configure(connection)
         raw_diffs = compare_metadata(context, Base.metadata)
     return tuple(
-        repr(diff)
-        for diff in raw_diffs
-        if not _ignored_autogenerate_diff(diff)
+        repr(diff) for diff in raw_diffs if not _ignored_autogenerate_diff(diff)
     )
 
 

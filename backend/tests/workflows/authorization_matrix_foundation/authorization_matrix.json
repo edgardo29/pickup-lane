@@ -13,8 +13,8 @@
     "HEAD",
     "OPTIONS"
   ],
-  "baseline_apiroute_count": 289,
-  "baseline_flattened_route_key_count": 289,
+  "baseline_apiroute_count": 292,
+  "baseline_flattened_route_key_count": 292,
   "auth_dependency_serialization": {
     "version": 1,
     "route_tree": "APIRoute.dependant.dependencies recursive traversal",
@@ -4871,7 +4871,7 @@
     },
     {
       "family_id": "admin_admin_review_cases_ws03_04d_ws03_04d",
-      "summary": "4 route(s) allocated to WS03-04D for later behavioral authorization proof.",
+      "summary": "7 route(s) allocated to WS03-04D for later behavioral authorization proof.",
       "primary_child_owner": "WS03-04D",
       "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
       "behavior_owner_detail": "WS03-04D",
@@ -5033,6 +5033,153 @@
           "method": "POST",
           "path": "/admin/review-cases/{review_case_id}/notes",
           "name": "add_admin_review_case_note_route",
+          "tags": [
+            "admin_review_cases"
+          ],
+          "source_module": "backend.routes.admin_review_routes",
+          "auth_dependencies": [
+            "backend.services.auth_service:get_current_app_user",
+            "backend.services.auth_service:get_verified_firebase_identity",
+            "backend.services.auth_service:require_active_admin",
+            "backend.services.auth_service:require_active_user",
+            "backend.services.auth_service:require_verified_user"
+          ],
+          "route_disposition": "protected",
+          "disposition_reason": "Route has backend auth_service dependency classification: backend.services.auth_service:get_current_app_user, backend.services.auth_service:get_verified_firebase_identity, backend.services.auth_service:require_active_admin, backend.services.auth_service:require_active_user, backend.services.auth_service:require_verified_user.",
+          "child_owner": "WS03-04D",
+          "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
+          "behavior_owner_detail": "WS03-04D",
+          "actor_classes": [
+            "active_user",
+            "admin",
+            "current_user",
+            "verified_user"
+          ],
+          "resource_family": "admin_review_cases",
+          "resource_id_fields": [
+            "review_case_id"
+          ],
+          "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_review_cases; path identifiers: review_case_id.",
+          "workflow_state_rules": "admin_review_cases workflow state",
+          "list_query_rules": "not_applicable",
+          "field_rules": "WS03-04D must prove privileged writable fields, audit-relevant fields, and admin mass-assignment resistance.",
+          "function_rules": "WS03-04D must prove action-specific permission, recent-auth preservation where applicable, idempotency, and audit relevance for this function.",
+          "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
+          "concealment_policy": "403",
+          "negative_proof_owner": "WS03-04D",
+          "negative_proof_owner_detail": "WS03-04D",
+          "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",
+          "source_ids": [
+            "SRC-AUTH-SERVICE",
+            "SRC-CURRENT-ROUTE-TABLE",
+            "SRC-FROZEN-INTAKE",
+            "SRC-FROZEN-PLAN",
+            "SRC-SOURCE-ROUTES-ADMIN-REVIEW-ROUTES"
+          ],
+          "gap_refs": []
+        },
+        {
+          "method": "POST",
+          "path": "/admin/review-cases/{review_case_id}/assignment",
+          "name": "assign_admin_review_case_route",
+          "tags": [
+            "admin_review_cases"
+          ],
+          "source_module": "backend.routes.admin_review_routes",
+          "auth_dependencies": [
+            "backend.services.auth_service:get_current_app_user",
+            "backend.services.auth_service:get_verified_firebase_identity",
+            "backend.services.auth_service:require_active_admin",
+            "backend.services.auth_service:require_active_user",
+            "backend.services.auth_service:require_verified_user"
+          ],
+          "route_disposition": "protected",
+          "disposition_reason": "Route has backend auth_service dependency classification: backend.services.auth_service:get_current_app_user, backend.services.auth_service:get_verified_firebase_identity, backend.services.auth_service:require_active_admin, backend.services.auth_service:require_active_user, backend.services.auth_service:require_verified_user.",
+          "child_owner": "WS03-04D",
+          "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
+          "behavior_owner_detail": "WS03-04D",
+          "actor_classes": [
+            "active_user",
+            "admin",
+            "current_user",
+            "verified_user"
+          ],
+          "resource_family": "admin_review_cases",
+          "resource_id_fields": [
+            "review_case_id"
+          ],
+          "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_review_cases; path identifiers: review_case_id.",
+          "workflow_state_rules": "admin_review_cases workflow state",
+          "list_query_rules": "not_applicable",
+          "field_rules": "WS03-04D must prove privileged writable fields, audit-relevant fields, and admin mass-assignment resistance.",
+          "function_rules": "WS03-04D must prove action-specific permission, recent-auth preservation where applicable, idempotency, and audit relevance for this function.",
+          "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
+          "concealment_policy": "403",
+          "negative_proof_owner": "WS03-04D",
+          "negative_proof_owner_detail": "WS03-04D",
+          "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",
+          "source_ids": [
+            "SRC-AUTH-SERVICE",
+            "SRC-CURRENT-ROUTE-TABLE",
+            "SRC-FROZEN-INTAKE",
+            "SRC-FROZEN-PLAN",
+            "SRC-SOURCE-ROUTES-ADMIN-REVIEW-ROUTES"
+          ],
+          "gap_refs": []
+        },
+        {
+          "method": "POST",
+          "path": "/admin/review-cases/{review_case_id}/reopen",
+          "name": "reopen_admin_review_case_route",
+          "tags": [
+            "admin_review_cases"
+          ],
+          "source_module": "backend.routes.admin_review_routes",
+          "auth_dependencies": [
+            "backend.services.auth_service:get_current_app_user",
+            "backend.services.auth_service:get_verified_firebase_identity",
+            "backend.services.auth_service:require_active_admin",
+            "backend.services.auth_service:require_active_user",
+            "backend.services.auth_service:require_verified_user"
+          ],
+          "route_disposition": "protected",
+          "disposition_reason": "Route has backend auth_service dependency classification: backend.services.auth_service:get_current_app_user, backend.services.auth_service:get_verified_firebase_identity, backend.services.auth_service:require_active_admin, backend.services.auth_service:require_active_user, backend.services.auth_service:require_verified_user.",
+          "child_owner": "WS03-04D",
+          "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
+          "behavior_owner_detail": "WS03-04D",
+          "actor_classes": [
+            "active_user",
+            "admin",
+            "current_user",
+            "verified_user"
+          ],
+          "resource_family": "admin_review_cases",
+          "resource_id_fields": [
+            "review_case_id"
+          ],
+          "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_review_cases; path identifiers: review_case_id.",
+          "workflow_state_rules": "admin_review_cases workflow state",
+          "list_query_rules": "not_applicable",
+          "field_rules": "WS03-04D must prove privileged writable fields, audit-relevant fields, and admin mass-assignment resistance.",
+          "function_rules": "WS03-04D must prove action-specific permission, recent-auth preservation where applicable, idempotency, and audit relevance for this function.",
+          "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
+          "concealment_policy": "403",
+          "negative_proof_owner": "WS03-04D",
+          "negative_proof_owner_detail": "WS03-04D",
+          "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",
+          "source_ids": [
+            "SRC-AUTH-SERVICE",
+            "SRC-CURRENT-ROUTE-TABLE",
+            "SRC-FROZEN-INTAKE",
+            "SRC-FROZEN-PLAN",
+            "SRC-SOURCE-ROUTES-ADMIN-REVIEW-ROUTES"
+          ],
+          "gap_refs": []
+        },
+        {
+          "method": "POST",
+          "path": "/admin/review-cases/{review_case_id}/merge",
+          "name": "merge_admin_review_case_route",
           "tags": [
             "admin_review_cases"
           ],

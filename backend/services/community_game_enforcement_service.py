@@ -206,9 +206,7 @@ def apply_community_game_state_action(
             idempotent_replay=True,
         )
 
-    locked_game = db.scalar(
-        select(Game).where(Game.id == game.id).with_for_update()
-    )
+    locked_game = db.scalar(select(Game).where(Game.id == game.id).with_for_update())
     if locked_game is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -254,7 +252,9 @@ def apply_community_game_state_action(
         idempotency_key=idempotency_key,
         created_at=now,
     )
-    link_admin_action_to_open_review_case(db, audit_action)
+    link_admin_action_to_open_review_case(
+        db, audit_action, case_category="content_moderation"
+    )
     notice = create_host_notice(
         db,
         game=game,
@@ -461,9 +461,7 @@ def admin_cancel_community_game(
             idempotent_replay=True,
         )
 
-    locked_game = db.scalar(
-        select(Game).where(Game.id == game.id).with_for_update()
-    )
+    locked_game = db.scalar(select(Game).where(Game.id == game.id).with_for_update())
     if locked_game is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -510,7 +508,9 @@ def admin_cancel_community_game(
             status_code=status.HTTP_409_CONFLICT,
             detail="Community game cancellation audit was not recorded.",
         )
-    link_admin_action_to_open_review_case(db, audit_action)
+    link_admin_action_to_open_review_case(
+        db, audit_action, case_category="content_moderation"
+    )
 
     notice = create_host_notice(
         db,

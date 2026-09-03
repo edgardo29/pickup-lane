@@ -261,7 +261,11 @@ def build_admin_community_game_list_cursor_filter(
 
 
 def get_admin_community_game_list_sort(view: str) -> str:
-    return "starts_at_asc" if view in COMMUNITY_GAME_LIST_ASCENDING_VIEWS else "starts_at_desc"
+    return (
+        "starts_at_asc"
+        if view in COMMUNITY_GAME_LIST_ASCENDING_VIEWS
+        else "starts_at_desc"
+    )
 
 
 def build_community_game_active_roster_count_subquery():
@@ -271,9 +275,7 @@ def build_community_game_active_roster_count_subquery():
             func.count(GameParticipant.id).label("roster_count"),
         )
         .where(
-            GameParticipant.participant_status.in_(
-                ACTIVE_ROSTER_PARTICIPANT_STATUSES
-            ),
+            GameParticipant.participant_status.in_(ACTIVE_ROSTER_PARTICIPANT_STATUSES),
         )
         .group_by(GameParticipant.game_id)
         .subquery()
@@ -433,9 +435,9 @@ def summarize_game_participants_by_game(
         select(
             GameParticipant.game_id.label("game_id"),
             func.count(GameParticipant.id).label("total_count"),
-            func.sum(
-                case((confirmed_participant, 1), else_=0)
-            ).label("confirmed_count"),
+            func.sum(case((confirmed_participant, 1), else_=0)).label(
+                "confirmed_count"
+            ),
             func.sum(
                 case(
                     (GameParticipant.participant_status == "waitlisted", 1),
@@ -621,9 +623,7 @@ def flag_admin_community_game_for_review(
     require_active_admin_user(admin_user)
     reason, idempotency_key = normalize_review_flag_request(payload)
     game = get_community_game_or_404(db, game_id)
-    db.execute(
-        select(Game.id).where(Game.id == game.id).with_for_update()
-    ).scalar_one()
+    db.execute(select(Game.id).where(Game.id == game.id).with_for_update()).scalar_one()
 
     existing_flag = get_existing_support_flag_by_idempotency_key(
         db,
@@ -989,7 +989,9 @@ def hide_admin_community_game_payment_text(
         idempotency_key=idempotency_key,
         created_at=now,
     )
-    link_admin_action_to_open_review_case(db, audit_action)
+    link_admin_action_to_open_review_case(
+        db, audit_action, case_category="content_moderation"
+    )
     notice = create_payment_text_notice(
         db,
         game=game,
@@ -1150,7 +1152,9 @@ def restore_admin_community_game_payment_text(
         idempotency_key=idempotency_key,
         created_at=now,
     )
-    link_admin_action_to_open_review_case(db, audit_action)
+    link_admin_action_to_open_review_case(
+        db, audit_action, case_category="content_moderation"
+    )
     notice = create_payment_text_notice(
         db,
         game=game,
@@ -1423,9 +1427,7 @@ def list_admin_community_games(
     if cursor_payload is None:
         statement = statement.offset(offset)
 
-    rows = db.execute(
-        statement.limit(limit + 1)
-    ).all()
+    rows = db.execute(statement.limit(limit + 1)).all()
     page_rows = rows[:limit]
     has_more = len(rows) > limit
     review_statuses = get_community_review_flag_statuses(

@@ -467,11 +467,16 @@ stop for owner selection instead of inventing priority.
 Gate A converts the accepted Stage 0 boundary into a frozen executable pass
 plan. It includes planning followed by a read-only review of the complete plan.
 A clean review freezes the exact reviewed canonical-plan SHA and advances
-automatically to Gate B. Gate A is read-only with respect to production source, tests,
-requirement declarations, testing records, provider settings, migrations, and
-runtime configuration except for the canonical pass plan itself when the prompt
-authorizes that edit. Any plan correction is performed by the main Codex session
-as separate Gate A correction work.
+automatically to Gate B. Gate A is read-only with respect to production source,
+tests, requirement declarations, testing records, provider settings, migrations,
+and runtime configuration except for the canonical pass plan itself when the
+prompt authorizes that edit. Any plan correction is performed by the main Codex
+session as separate Gate A correction work.
+
+A plan must be both implementable and reviewable. Prose may explain the design,
+but any finite or cross-cutting contract that can be omitted, inverted, or
+misapplied must also have a complete engineering matrix or inventory at the
+appropriate level of detail.
 
 ### 7.1 Gate A Responsibilities
 
@@ -487,9 +492,11 @@ Gate A must:
 - reconcile the executable pass against current authority and current source;
 - define stable requirements and requirement states;
 - define exact technical contracts and invariants;
+- identify the contract-sized review units that Gate B must implement and prove
+  and Gate C must independently verify;
 - define pass-owned source, configuration, documentation, provider, runtime,
   migration, operational, and evidence boundaries;
-- decide the lowest reliable proof layer for each requirement;
+- decide the lowest reliable proof layer for each requirement and review unit;
 - design requirement declarations and testing records where applicable;
 - design executable and non-executable evidence;
 - define the Gate B implementation scope and changed-file justification rule;
@@ -506,8 +513,8 @@ Gate A must:
   CI, README, free-tier, framework-default, or demo values to stand in for final
   production facts;
 - stop on conflicts, missing owner decisions, missing proof layers, scope that
-  cannot fit the current executable pass, or a late-bound infrastructure
-  dependency that Stage 0 did not allocate correctly.
+  cannot fit the current executable pass, a materially unreviewable design, or a
+  late-bound infrastructure dependency that Stage 0 did not allocate correctly.
 
 The final Gate A plan must distinguish:
 
@@ -537,7 +544,48 @@ for the same frozen engineering outcome does not itself require Gate A
 correction, but every changed file must be justified by the frozen pass scope
 and design.
 
-### 7.2 Repository-Wide Impact And Compatibility Scan
+### 7.2 Reviewability Contract
+
+Gate A must determine which contract families below materially apply. Every
+applicable family must be defined completely in the natural requirements,
+design, failure, or testing section of the canonical plan. Do not add a generic
+process appendix merely to satisfy this rule.
+
+| Applicable contract family | Minimum frozen engineering definition |
+|---|---|
+| Aggregate identity, uniqueness, or deduplication | Complete identity inputs, allowed identities, wrong-type/category/target siblings, uniqueness boundary, historical behavior, and collision or replay handling. |
+| State machine or lifecycle | Allowed and prohibited transitions, actors or triggers, preconditions, resulting state, required side effects, prohibited side effects, and terminal or reopen behavior. |
+| Immutable events, audit rows, or history | One row per event/action type defining actor rules, required and forbidden references, reference ownership, metadata keys and types, ordering/version behavior, and prior-event or reciprocal-link rules. |
+| Concurrent mutations | One global lock order plus an operation-by-operation lock acquisition table covering every row family, retryable race, non-retryable failure, and materially possible cross-operation inversion. |
+| API, authorization, or administrative commands | Endpoint/command by actor state, allowed or denied result, response/error contract, and required absence of side effects on rejection. |
+| Production callers, adapters, or lifecycle triggers | Complete caller/trigger inventory, branch conditions, inputs, resulting domain operation, attribution, and compatibility boundary. |
+| Pagination, search, filtering, or bounded discovery | Result-set identity, ordering and tie-breaker, cursor/filter binding, viewer binding where applicable, completeness behavior, limits, and failure handling. |
+| Finite sets and database-enforced shapes | Complete values and cross-field combinations, authoritative owner, model/migration/live-database parity, and invalid-value behavior including SQL `NULL` semantics. |
+| External effects, retries, or reconciliation | Commit/checkpoint sequence, idempotency identity, retry classification, unknown outcomes, rollback/repair behavior, and duplicate-effect prevention. |
+| Sensitive data, errors, or logging | Allowed data by surface, redaction/minimization, safe error fields, logging/traceback/SQL-parameter rules, cache behavior, and negative-space requirements. |
+
+A review unit is one contract-sized row or coherent invariant that can be
+implemented and proved independently enough to be marked verified or deficient.
+Do not reduce review units to individual sentences or pytest assertions, and do
+not combine materially different actors, transitions, event types, callers, or
+lock paths merely to reduce row count.
+
+Equivalent rows may be grouped only when the plan states the exact equivalence
+basis and one implementation and proof strategy truly covers them. “Handled by
+the same helper” is not by itself proof of behavioral equivalence.
+
+Gate A must classify every contract family as either applicable or not
+applicable with a reason. A family is not inapplicable merely because the current
+repository lacks tests or because the implementation intends to use one generic
+helper.
+
+When a plan was frozen before this reviewability rule existed, later gates do
+not edit the plan solely to add matrices. They may derive review units from the
+existing frozen requirements, design, failures, and testing sections when the
+engineering contract is already unambiguous. Any material design choice that
+cannot be derived without invention returns to Gate A.
+
+### 7.3 Repository-Wide Impact And Compatibility Scan
 
 Before freezing the engineering design and proof strategy, Gate A must inspect
 every applicable:
@@ -561,11 +609,17 @@ every applicable:
 - accepted prior-pass compatibility test;
 - materially affected documentation statement.
 
+For finite populations such as endpoints, actor classes, event types, lifecycle
+callers, state values, constraints, and equivalent domain adapters, Gate A must
+record the complete relevant population or the exact repository-derived method
+used to establish completeness. Sampling an apparently representative subset is
+not a complete impact scan.
+
 Gate A must identify every trusted compatibility file expected to become stale
 because of the frozen implementation. Do not wait for full regression to
 discover an obvious finite inventory or caller expectation.
 
-### 7.3 Gate A Outputs
+### 7.4 Gate A Outputs
 
 Gate A returns:
 
@@ -573,10 +627,16 @@ Gate A returns:
 - the exact canonical-plan path and SHA-256;
 - requirement reconciliation;
 - exact implementation and evidence design;
+- applicable contract-family classification and review-unit inventory;
 - implementation scope boundaries and changed-file justification rule;
 - validation plan;
 - explicit non-goals and external evidence boundaries;
 - blockers.
+
+The review-unit inventory may be distributed through the canonical plan's
+engineering sections. It does not require a separate tracked artifact, but it
+must be concrete enough for Gate B to build the completion ledger and Gate C to
+reconstruct it independently.
 
 The plan, canonical-plan SHA, requirements, correction/design decisions,
 evidence design, implementation scope boundaries, and validation strategy become
@@ -607,38 +667,69 @@ it before staging and committing. Gate B must not edit the frozen canonical
 plan. Any required canonical-plan content change returns to Gate A, produces a
 new SHA, and requires a new clean Gate A plan review before Gate B resumes.
 
-### 7.4 Gate A Plan Review
+### 7.5 Gate A Plan Review
 
 Before Gate B, the complete current canonical plan must receive a read-only
-review.
+review. The review must be performed in three ordered phases and must finish all
+three before issuing a semantic verdict.
 
-The review must inspect the complete plan against:
+#### Phase 1: Obligation And Reviewability Accounting
+
+Independently account for the complete executable-pass obligation from current
+authority, accepted intake, prerequisites, and repository truth. Verify that:
+
+- every required outcome, invariant, completion criterion, and boundary appears
+  in the plan;
+- every applicable contract family in section 7.2 is defined with a complete
+  matrix or inventory at the necessary engineering level;
+- every non-applicable family has a valid reason;
+- every finite population and repository-wide impact set is complete;
+- every planned proof layer can actually establish its claimed behavior.
+
+#### Phase 2: Technical And Adversarial Plan Review
+
+Review the complete design against:
 
 - current authority and accepted intake when applicable;
 - current repository truth and accepted prerequisites;
-- the complete executable-pass obligation;
 - requirements and requirement ownership;
 - technical contracts and invariants;
+- identity, state, history, concurrency, authorization, caller, pagination,
+  finite-set, external-effect, and sensitive-data contracts where applicable;
 - repository-wide impact and compatibility analysis;
 - implementation scope and changed-file justification rules;
 - evidence design and proof-layer choices;
 - validation strategy and proof feasibility;
-- non-goals, handoffs, external/later-pass gaps, and completion criteria;
+- non-goals, external/later-pass gaps, and completion criteria;
 - final-infrastructure timing, provider-neutrality, deferred-owner/trigger
   correctness, and absence of temporary-provider substitution;
 - applicable engineering/testing standards and templates.
+
+#### Phase 3: Reconciliation And Second Look
+
+Re-read the plan from the perspective of omissions rather than internal
+consistency. Compare the Phase 1 accounting with Phase 2 findings, revisit every
+family affected by a finding, inspect equivalent domains and sibling paths, and
+confirm that no unresolved design choice is being left for Gate B to invent.
+Finding enough defects to require correction is not permission to stop before
+this phase is complete.
+
+The Gate A review report must include compact, visible contract-family
+accounting. It must identify each applicable family, where it is defined, and
+its review result; counts without family or matrix references are insufficient.
+The accounting is review output and does not require editing the plan.
 
 For recheck-equivalent planning concerns that arise during a first-time pass,
 review the current plan against repository truth and authority without importing
 historical recheck mechanics that do not apply.
 
-The review must be comprehensive and return all material findings together. Do
-not drip-feed findings across rounds or require corrections for cosmetic
-wording, stylistic preferences, harmless naming differences, formatting
-preferences, or another reasonable design choice that still fully satisfies the
-authority and approved executable boundary. A correction-worthy finding must
-materially affect requirement correctness/completeness, technical-design
-sufficiency, evidence/proof adequacy, validation adequacy, scope/ownership,
+The review must return all material findings together. Do not drip-feed findings
+across rounds or require corrections for cosmetic wording, stylistic
+preferences, harmless naming differences, formatting preferences, or another
+reasonable design choice that still fully satisfies the authority and approved
+executable boundary. A correction-worthy finding must materially affect
+requirement correctness/completeness, technical-design sufficiency,
+evidence/proof adequacy, validation adequacy, scope/ownership,
 security/production-readiness behavior, traceability, or completion
 truthfulness.
 
@@ -647,8 +738,10 @@ The review has these semantic outcomes:
 - plan approved (`gate_a_plan_approved`);
 - corrections required (`gate_a_corrections_required`).
 
-A preflight condition that prevents the review is
-`blocked_before_review`; it is not semantic approval or a correction finding.
+If preflight, safety, tool, or context limits prevent completion of all three
+phases, return `blocked_before_review` with the unfinished accounting. Do not
+issue semantic approval or a corrections-required verdict from a partial
+review.
 
 When corrections are required, each finding must route to one of:
 
@@ -668,15 +761,15 @@ review.
 For automated execution, one Gate A plan-review cycle may contain at most three
 full reviews and at most two automatic plan-correction rounds:
 
-1. Plan Review 1 performs a full review. If it returns eligible Gate
-   A corrections, Plan Correction Round 1 may run, produce a new plan SHA, and
+1. Plan Review 1 performs a full review. If it returns eligible Gate A
+   corrections, Plan Correction Round 1 may run, produce a new plan SHA, and
    continue to the next full review.
-2. Plan Review 2 performs another full review of the entire corrected
-   plan. If it returns eligible Gate A corrections, Plan Correction Round 2 may
-   run, produce a new plan SHA, and continue to the next full review.
-3. Plan Review 3 performs a final full review of the entire corrected
-   plan. If it still returns material corrections required, stop for owner
-   direction. Do not perform an automatic Plan Correction Round 3.
+2. Plan Review 2 performs another full review of the entire corrected plan. If
+   it returns eligible Gate A corrections, Plan Correction Round 2 may run,
+   produce a new plan SHA, and continue to the next full review.
+3. Plan Review 3 performs a final full review of the entire corrected plan. If
+   it still returns material corrections required, stop for owner direction. Do
+   not perform an automatic Plan Correction Round 3.
 
 Review count does not reset merely because a correction run starts. A finding
 that routes to Stage 0 or a blocker/owner decision exits the automatic
@@ -685,8 +778,10 @@ plan-review cycle immediately and follows that routing instead.
 When Review 2 or Review 3 discovers a material issue that was already present
 and reasonably discoverable in the immediately preceding reviewed plan state,
 and that issue was not introduced or newly exposed by the intervening
-correction, identify it as a prior-review miss. The classification makes review
-quality visible; it does not make the issue non-material.
+correction, identify it as a prior-review miss and name the contract-family row
+or review phase that was previously marked complete incorrectly. The
+classification makes review quality visible; it does not make the issue
+non-material.
 
 `gate_a_plan_approved` freezes the exact reviewed canonical-plan SHA for the
 current automated run. The main Codex session then begins Gate B subject to the
@@ -696,6 +791,11 @@ normal Gate B preflight.
 
 Gate B implements exactly the frozen Gate A design that passed Gate A review. It
 must not redesign the pass while implementing it.
+
+Gate B owns both implementation and the materialized accounting that shows how
+each frozen contract was implemented and proved. A green suite does not replace
+that accounting because an omitted scenario cannot fail a test that does not
+exist.
 
 ### 8.1 Requirement-Group Implementation Order
 
@@ -707,10 +807,11 @@ REQUIREMENT / INVARIANT
 -> FOCUSED TRUSTED EVIDENCE
 -> COMPATIBILITY UPDATE
 -> FOCUSED VALIDATION
+-> COMPLETION-LEDGER UPDATE
 ```
 
-Do not implement all source first and bolt evidence on afterward. Skip any
-item that Gate A explicitly marked not applicable.
+Do not implement all source first and bolt evidence on afterward. Skip any item
+that Gate A explicitly marked not applicable.
 
 ### 8.2 Gate B Rules
 
@@ -718,8 +819,8 @@ Gate B must:
 
 - before editing, verify current branch, current HEAD, accepted baseline,
   merge-base with the accepted baseline, worktree status, staged-file status,
-  frozen intake-record path and SHA when applicable, frozen canonical-plan
-  path and SHA, frozen engineering design, implementation scope boundaries, and
+  frozen intake-record path and SHA when applicable, frozen canonical-plan path
+  and SHA, frozen engineering design, implementation scope boundaries, and
   validation strategy;
 - verify the frozen intake-record SHA when applicable and the frozen
   canonical-plan SHA before implementation;
@@ -728,7 +829,8 @@ Gate B must:
 - not edit the frozen intake record or frozen canonical plan;
 - preserve pass boundaries and prerequisite contracts;
 - use `docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md`
-  for any testing record;
+  for the testing record and add the completion accounting required by section
+  8.3 when the current template does not yet contain a dedicated heading;
 - derive tests from authority and the frozen plan, not from current code shape
   alone;
 - verify meaningful persisted effects, rejected side effects, concurrency,
@@ -738,8 +840,8 @@ Gate B must:
 - continue within Gate B when another file is genuinely necessary for the same
   frozen requirements, engineering design, proof strategy, and pass scope;
 - stop and return to Gate A if correct completion needs a new requirement,
-  changed engineering design, changed proof strategy, provider mutation,
-  a migration not already approved by the frozen design, owner decision, or
+  changed engineering design, changed proof strategy, provider mutation, a
+  migration not already approved by the frozen design, owner decision, or
   broader pass scope;
 - stop and return to Stage 0 if the executable-pass boundary itself is wrong,
   including when implementation discovers that current completion actually
@@ -751,16 +853,85 @@ Unexpected commits, divergence, staged content, unrelated local changes, or
 branch ambiguity cause a stop. Do not automatically merge, rebase, reset,
 cherry-pick, stash, restore, clean, or delete.
 
+### 8.3 Implementation And Review Coverage Ledger
+
+Gate B must maintain a visible completion ledger in the pass
+`TESTING_RECORD.md`. The ledger is the bridge between the frozen plan,
+implementation, evidence, and independent review. It does not replace the plan
+or duplicate individual test node IDs.
+
+For every frozen review unit, record:
+
+| Field | Required content |
+|---|---|
+| Review unit | Stable, concise name tied to a plan section, matrix row, transition, event type, endpoint/actor group, caller, lock path, finite set, or other contract-sized invariant. |
+| Implementation | Source, model, migration, configuration, UI, or artifact paths that establish the behavior. |
+| Positive proof | Evidence that the allowed or successful behavior occurs. |
+| Negative and failure proof | Evidence for invalid input, prohibited side effects, rollback, privacy, stale state, conflict, or other material negative behavior. |
+| Caller and compatibility proof | Applicable production callers, equivalent domains, public contracts, prerequisites, and compatibility evidence. |
+| Status | `verified`, `covered_elsewhere`, `deferred`, `blocked`, or `not_applicable`, with a reason for every state except `verified`. |
+
+Contract families with finite rows must be expanded enough to expose omissions.
+Where applicable, the ledger or a directly referenced matrix must account for:
+
+- every identity and wrong-sibling class;
+- every allowed and prohibited transition;
+- every event/action type and its semantic references and metadata;
+- every materially distinct lock path and required concurrency pairing;
+- every endpoint or command across the authoritative actor classes and required
+  no-side-effect checks;
+- every production caller or lifecycle trigger and branch;
+- every pagination/filter/search context;
+- every finite set and model/migration/live-database parity relationship.
+
+Equivalent rows may be grouped only with an explicit equivalence basis. Do not
+mark an entire family verified because one representative path passed.
+
+Gate B must also maintain a changed-file map in the testing record. Every actual
+changed file must name the review unit or units that justify it. Generated files
+or mechanical parity files may be grouped when their relationship is explicit.
+No changed file may remain justified only by “needed for the pass.”
+
+For a plan frozen before section 7.2 existed, derive the review units from the
+frozen requirements, design, failures, testing, and completion criteria. Do not
+edit the frozen plan merely to add accounting. If a material contract cannot be
+derived without choosing new behavior, return to Gate A.
+
+Gate B cannot return PASS while any required review unit is missing,
+unsupported, falsely grouped, or left in an unresolved state, or while any
+changed file lacks a frozen-scope justification. A complete backend or frontend
+suite is regression evidence, not proof that the ledger is complete.
+
+### 8.4 Gate B Completion Audit
+
+After implementation and focused validation, Gate B must perform a completion
+audit in three passes before the final broad validation:
+
+1. **Forward pass:** trace every frozen review unit from the plan into the
+   implementation, positive proof, negative proof, callers, and compatibility.
+2. **Reverse pass:** trace every changed file, new state, event, route, caller,
+   constraint, and test back to a frozen review unit and identify unexplained or
+   unproved behavior.
+3. **High-risk family pass:** independently inspect every applicable matrix from
+   section 7.2 for missing rows, wrong equivalence grouping, cross-domain drift,
+   lock inversions, incomplete actor/caller populations, and evidence claims that
+   exceed the actual assertions.
+
+This is a completeness and evidence audit, not Gate C semantic approval. Gate B
+must correct in-scope omissions before handoff and update the testing record to
+show the final accounting.
+
 Before handoff, Gate B must reverify current branch, accepted baseline,
-merge-base with that baseline, frozen intake-record SHA when applicable,
-frozen canonical-plan SHA, that every actual changed file is justified by the
-frozen pass scope and design, and nothing staged.
+merge-base with that baseline, frozen intake-record SHA when applicable, frozen
+canonical-plan SHA, that every actual changed file is justified by the frozen
+pass scope and design, that the completion ledger is fully reconciled, and that
+nothing is staged.
 
 Gate B ends with a validated local change set. It does not stage, commit, push,
 create a PR, or begin Gate C.
 
-After all requirement groups, run the validation layers frozen in Gate A, which
-may include:
+After all requirement groups and the completion audit, run the validation layers
+frozen in Gate A, which may include:
 
 - complete focused pass scope;
 - affected compatibility scopes;
@@ -777,8 +948,22 @@ may include:
 
 ## 9. GATE C: Semantic Review
 
-Gate C is a read-only review of the entire final pass state. Green commands are
-not semantic approval.
+Gate C is a read-only independent review of the entire final pass state. Green
+commands are not semantic approval, and the Gate B completion ledger is an input
+to verify rather than a conclusion to trust.
+
+The review method in this section is mandatory by reference. Individual Gate C
+prompts should identify the pass, frozen artifacts, review round when applicable,
+and any run-specific boundary or owner instruction. They must not restate this
+method.
+
+One Gate C review round may contain multiple bounded internal review passes or
+independent review workstreams. When several high-risk contract families apply,
+a single linear read-through is insufficient; review the families separately and
+reconcile them before one verdict. Internal batching does not count as another
+Gate C review round.
+
+### 9.1 Review Boundary And Preflight
 
 Gate C must inspect:
 
@@ -792,13 +977,12 @@ Gate C must inspect:
 - implementation;
 - trusted evidence;
 - requirement declaration;
-- `TESTING_RECORD.md`;
+- `TESTING_RECORD.md`, including the Gate B completion ledger and changed-file
+  map;
 - generated traceability;
-- scope;
 - security and publication safety;
 - validation results;
 - proposed execution-register update;
-- actual changed-file scope justification;
 - external and later-pass gaps;
 - final-infrastructure timing and provider-neutrality, including whether any
   temporary Vercel, Render, Neon, local, CI, README, free-tier, or demo value was
@@ -806,67 +990,256 @@ Gate C must inspect:
 - the complete local change set and secret/confidentiality safety.
 
 Gate C must verify that the complete tracked pass state contains no prohibited
-literal credentials or sensitive values under the read-first document.
-Gate C approval confirms that the final pass state matches both the frozen
-design and the current run instruction's execution boundaries.
+literal credentials or sensitive values under the read-first document. Gate C
+approval confirms that the final pass state matches both the frozen design and
+the current run instruction's execution boundaries.
 
 Gate C must not edit files, stage files, commit, push, create or update a PR,
-merge, rebase, reset, apply a stash, or self-fix. Gate C must review the complete
-diff from the accepted baseline, not merely inspect currently modified files
-without confirming the baseline.
+merge, rebase, reset, apply a stash, or self-fix. It must review the complete
+diff from the accepted baseline, not merely inspect currently modified files.
 
-Gate C has exactly two outcomes:
+If preflight, safety, unavailable source, tool limits, or context limits prevent
+the complete review method below, return `blocked_before_review` and identify the
+unfinished review units or phases. Do not issue PASS or corrections required
+from a partial review.
+
+### 9.2 Auditable Review Accounting
+
+Before reviewing implementation details, Gate C must independently reconstruct
+the complete review-unit inventory from authority, the accepted intake, frozen
+plan, prerequisites, and current repository truth. Do not use the Gate B report
+or testing-record ledger as the organizing source for this reconstruction.
+
+Then reconcile the independent inventory against the Gate B completion ledger:
+
+- a missing Gate B row is a potential evidence/completeness defect;
+- an extra Gate B row must map to frozen scope or be rejected as expansion;
+- an equivalence group must have a valid shared contract and proof basis;
+- every changed file must map to one or more frozen review units;
+- every `not_applicable`, `covered_elsewhere`, `deferred`, or `blocked` state must
+  have valid authority and reasoning.
+
+The review accounting may remain untracked, but it may not remain invisible. The
+Gate C report must include a compact coverage appendix or equivalent visible
+accounting containing:
+
+- each contract family and its review-unit or matrix-row identifiers;
+- result for each row or justified equivalence group: `verified`, `finding`, or
+  `not_applicable`;
+- reason for every not-applicable result;
+- implementation and evidence references sufficient to identify what was
+  inspected;
+- changed-file accounting;
+- every proactive or defect-triggered sibling scan performed.
+
+A counts-only statement such as “53 obligations reviewed” is insufficient. The
+report may reference a clearly identified table already present in the frozen
+plan or testing record rather than repeating its full prose, but the row-level
+result must remain visible.
+
+### 9.3 Phase 1: Obligation And Changed-File Traversal
+
+Trace every reconstructed review unit through every materially applicable
+surface:
+
+- implementation paths and resulting behavior;
+- persistence, models, migrations, database constraints, and live-schema parity;
+- API, UI, serialization, and other public or internal contracts;
+- negative behavior, failure handling, rollback, and recovery paths;
+- authorization, security, privacy, redaction, logging, and sensitive-data
+  behavior;
+- evidence, tests, requirement mappings, testing-record claims, and validation
+  results;
+- compatibility with accepted prerequisites, sibling domains, callers, and
+  downstream contracts.
+
+A dimension that is genuinely inapplicable must be marked that way with a
+reason. Requirement-marker counts, green tests, or changed-file inspection alone
+do not satisfy this traversal.
+
+The traversal runs in both directions:
+
+```text
+EVERY FROZEN REVIEW UNIT -> IMPLEMENTATION AND PROOF
+EVERY CHANGED FILE / NEW BEHAVIOR -> FROZEN REVIEW UNIT
+```
+
+No row may remain unreviewed or only indirectly assumed complete.
+
+### 9.4 Phase 2: Independent Adversarial And Contract-Family Sweep
+
+After Phase 1, start an independent second review from the system's high-risk
+structures rather than from the Phase 1 conclusions. Every applicable contract
+family below must be inspected proactively, even when Phase 1 found no initial
+defect.
+
+#### Required proactive family sweeps
+
+- **Identity and uniqueness:** complete identity inputs, wrong type/category/
+  target siblings, duplicate/replay behavior, historical rows, and collision
+  boundaries.
+- **State and transitions:** every allowed and prohibited transition, stale
+  state, terminal behavior, required effects, and prohibited effects.
+- **Events and immutable history:** every event type's actor, references,
+  reference ownership, metadata keys/types, sequence/version, prior-event rules,
+  reciprocal relationships, immutability, and malformed/cross-case mutations.
+- **Global lock graph:** every operation's complete lock sequence, all shared row
+  families, pairwise and cross-target inversions, retry points, rollback, and
+  deterministic no-deadlock evidence.
+- **API and authorization matrix:** every endpoint/command across every
+  authoritative actor state, including read behavior, error shape, and absence
+  of all relevant side effects on denial.
+- **Production caller and trigger inventory:** every adapter, lifecycle caller,
+  branch, scheduler or automatic path, exact attribution, and equivalent-domain
+  behavior.
+- **Pagination, search, and bounded discovery:** ordering, tie-breakers, cursor
+  and viewer binding, completeness beyond page limits, exact identity filters,
+  and independent failure handling.
+- **Finite sets and database parity:** complete values and cross-field shapes,
+  SQL `NULL` behavior, foreign keys, indexes, model/migration/live-schema parity,
+  and invalid direct-database mutations.
+- **External effects and reconciliation:** idempotency, duplicate effects,
+  retryable versus non-retryable failures, unknown outcomes, rollback, and
+  repair paths.
+- **Sensitive data and error surfaces:** wrong types, coercion, nulls, blanks,
+  malformed values, limits, long values, exception text, tracebacks, SQL
+  statements/parameters, logs, conflict responses, serialization, caching, and
+  public negative space.
+
+The sweep must also compare equivalent domains, representations, adapters,
+callers, models, migrations, UI paths, and evidence paths. Lack of an existing
+test is not a reason to mark a family or row inapplicable.
+
+For each family, use the complete matrix or inventory defined by the frozen plan
+or reconstructed under section 9.2. Do not sample one representative event,
+endpoint, actor, caller, lock path, or domain and infer the rest.
+
+### 9.5 Phase 3: Reconciliation, Pattern Completion, And Second Look
+
+After Phases 1 and 2:
+
+1. compare both sets of results against the Gate B completion ledger and testing
+   record claims;
+2. for every defect pattern, inspect the entire relevant pass boundary for
+   sibling instances in equivalent domains, representations, adapters, callers,
+   models, migrations, constraints, API/UI projections, error paths, and
+   evidence paths;
+3. reopen every review-unit row and contract family materially affected by a
+   finding, even if it was marked verified earlier;
+4. review the complete finding list for shared causes and missing adjacent
+   invariants;
+5. perform a final omission-focused pass over all rows marked verified or not
+   applicable;
+6. confirm every changed file and every evidence claim remains accounted for;
+7. only then issue the semantic verdict.
+
+Finding one or several material defects is not permission to stop. Unless a
+preflight or safety condition makes continued review impossible, Gate C must
+finish all three phases and report all reasonably discoverable material findings
+together.
+
+### 9.6 Outcomes, Findings, And Approval Completeness
+
+Gate C has exactly two semantic outcomes after the complete review:
 
 - approved for Git finalization;
 - corrections required.
 
-Every Gate C review must be comprehensive across the complete current pass
-state and return all material findings together. Do not drip-feed findings
-across review rounds or create correction churn for cosmetic wording, stylistic
-preferences, or other non-material issues. Require correction only for issues
-affecting correctness, evidence truthfulness, security, scope, maintainability,
-traceability, or production readiness.
+Gate C may return approved for Git finalization only when:
+
+- the independent review-unit inventory and Gate B ledger reconcile;
+- every review-unit and changed-file row completed Phase 1;
+- every applicable proactive family sweep completed Phase 2;
+- every sibling-pattern scan and omission-focused second look completed Phase 3;
+- every not-applicable classification has a valid reason;
+- implementation behavior, compatibility, evidence, testing records, and
+  validation claims agree with actual proof;
+- the visible coverage appendix is complete;
+- no material semantic defect remains.
+
+Require correction only for issues affecting correctness, evidence truthfulness,
+security, scope, maintainability, traceability, or production readiness. A
+corrections-required finding must identify:
+
+- affected frozen obligation and review-unit or matrix row;
+- conflicting authority or frozen contract;
+- material consequence;
+- affected implementation, caller, schema, UI, or evidence paths;
+- sibling paths already inspected;
+- correct routing.
+
+Findings must be specific enough for correction to inspect the surrounding
+invariant family rather than patching one observed reproduction.
 
 When a later Gate C review discovers a material issue that was already present
 and reasonably discoverable in the immediately preceding reviewed state, and
 that issue was not introduced or newly exposed by the intervening correction,
-identify it as a prior-review miss. The classification does not make the issue
-non-material or remove the need for correct routing.
+identify it as a prior-review miss. Name the exact review-unit row, proactive
+family sweep, or changed-file accounting item that the previous review
+incorrectly marked complete. The classification does not make the issue
+non-material.
+
+The Gate C report must include:
+
+- verdict;
+- visible coverage appendix from section 9.2;
+- all material findings together;
+- completed proactive and triggered sibling scans;
+- prior-review misses with their incorrectly closed rows, if any;
+- blockers;
+- exact next action;
+- confirmation that repository contents and staged state remained unchanged.
+
+### 9.7 Review Cycle, Focused Reproduction, And Corrections
 
 For automated execution, one Gate C review/correction cycle may contain at most
 three full Gate C reviews and at most two automatic correction rounds:
 
-1. Review 1 performs a full review. If it returns corrections
-   required and the findings are eligible for scoped correction under the frozen
-   design, Correction Round 1 may run, validate the corrected state, and continue
-   to the next full review.
-2. Review 2 performs another full review of the entire corrected
-   pass. If it returns corrections required and the findings are still eligible
-   for scoped correction under the frozen design, Correction Round 2 may run,
-   validate the corrected state, and continue to the next full review.
-3. Review 3 performs a final full review of the entire corrected
-   pass. If Review 3 returns corrections required, stop for owner direction. Do
-   not perform an automatic Correction Round 3. If any review is clean,
-   automatically proceed to Gate D.
+1. Review 1 performs a full review. If it returns corrections required and the
+   findings are eligible for scoped correction under the frozen design,
+   Correction Round 1 may run, validate the corrected state, and continue to the
+   next full review.
+2. Review 2 performs another full review of the entire corrected pass. If it
+   returns corrections required and the findings are still eligible for scoped
+   correction under the frozen design, Correction Round 2 may run, validate the
+   corrected state, and continue to the next full review.
+3. Review 3 performs a final full review of the entire corrected pass. If Review
+   3 returns corrections required, stop for owner direction. Do not perform an
+   automatic Correction Round 3. If any review is clean, automatically proceed
+   to Gate D.
 
-The review count is cumulative for the automatic cycle and does not reset merely
-because a correction step starts. A finding that routes to Gate A, Stage 0, an
-owner decision, or another approval boundary exits the automatic correction cycle
-immediately and follows that routing instead. Gate C itself still stops after
-each review and never performs corrections.
+The review count is cumulative and does not reset because a correction starts. A
+finding that routes to Gate A, Stage 0, an owner decision, or another approval
+boundary exits the automatic correction cycle immediately. Gate C itself remains
+read-only and never performs corrections.
 
 Gate C does not automatically rerun already-current successful suites. When a
 concrete concern exists, run only the smallest focused reproduction needed and
-report the exact reason and reproduction.
+report the exact reason and result.
+
+Before a correction edits code, it must identify in the testing-record ledger:
+
+- every directly affected review-unit row;
+- adjacent rows in the same invariant family;
+- equivalent domains, representations, callers, and public contracts to inspect;
+- changed files and evidence expected to change.
+
+The correction must address the exact defect and inspect those surrounding rows
+for related failures introduced or exposed by the correction. Correction
+validation must prove the original reproduction, the material adjacent family,
+and affected compatibility. A single regression test for the first symptom is
+not sufficient when the defect class has siblings.
+
+After correction, update the testing-record completion ledger and changed-file
+map with the final implementation and proof. A new Gate C review independently
+reconstructs and revalidates the complete inventory; it does not merely verify
+the changed rows.
 
 If a correction changes repository content, the corrected final pass must
-receive correction validation and a new full Gate C review of the entire
-corrected pass before Gate D. Targeted-only final approval is forbidden. The
-automatic correction/review cycle remains subject to the three-review,
-two-correction-round limit above.
-
-At the end of Gate C, verify repository contents and staged state remained
-unchanged by the review.
+receive correction validation and a new complete Gate C review before Gate D.
+Targeted-only final approval is forbidden. Existing current successful broad
+validation remains evidence unless the frozen validation design or a concrete
+new concern requires rerunning it.
 
 ## 10. GATE D: Git And PR Finalization
 
@@ -919,11 +1292,13 @@ Do not publish stale-baseline work silently.
 | Gate A or Gate B discovers intentionally unselected final infrastructure is required by the current pass but no valid deferred owner/trigger exists | Stage 0 revision |
 | Gate A Review 3 still finds material plan corrections | Stop for owner direction; no automatic Plan Correction Round 3 |
 | Gate B finds an implementation defect inside frozen scope | Fix and validate in Gate B |
+| Gate B finds an unaccounted review unit, missing proof row, or unjustified changed file while the frozen design remains clear | Complete the Gate B implementation/evidence ledger and validate it before handoff |
 | Gate B needs another file for the same frozen outcome | Continue Gate B and justify the file against the frozen design |
 | Gate B needs changed requirements, engineering design, proof strategy, or pass scope | Gate A correction |
 | Gate B discovers a separate feature or child dependency | Stage 0 revision |
-| Gate C finds implementation/evidence defect inside approved scope | Separate Gate B correction, validation, new full Gate C |
-| Gate C finds pass-design defect without changing child structure | Gate A correction |
+| Gate C cannot complete the required review phases or visible accounting because source, tool, context, or safety limits block the review | `blocked_before_review`; resume the same review after the blocker is resolved without issuing a semantic verdict |
+| Gate C finds implementation/evidence defect or missing proof inside approved scope | Separate Gate B correction, ledger update, validation, and new full Gate C |
+| Gate C finds the frozen plan materially ambiguous or missing a required design contract without changing child structure | Gate A correction |
 | Gate C finds parent/child allocation wrong | Stage 0 revision |
 | Gate D finds semantic/content problem | Return to Gate B/Gate A; Gate D never fixes content |
 
@@ -999,6 +1374,12 @@ Stop and report instead of continuing when:
 - a provider, runtime, migration, deployment, or operational action is needed
   but not explicitly approved;
 - the pass needs files outside the approved scope;
+- Gate A cannot define a complete applicable reviewability contract without an
+  unresolved design or authority decision;
+- Gate B has an unaccounted frozen review unit, missing required proof, false
+  equivalence grouping, or changed file without frozen-scope justification;
+- Gate C cannot finish its independent inventory, all three review phases, or
+  visible coverage accounting;
 - evidence would overclaim external facts;
 - validation exposes a defect requiring broader authority or proof-layer
   changes;

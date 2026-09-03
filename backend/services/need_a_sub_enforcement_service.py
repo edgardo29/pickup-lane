@@ -204,7 +204,9 @@ def apply_need_sub_visibility_action(
         idempotency_key=idempotency_key,
         created_at=current_time,
     )
-    link_admin_action_to_open_review_case(db, audit_action)
+    link_admin_action_to_open_review_case(
+        db, audit_action, case_category="content_moderation"
+    )
     notice = create_owner_notice(
         db,
         post=post,

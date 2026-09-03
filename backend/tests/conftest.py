@@ -26,6 +26,7 @@ TEST_TABLES = (
     "durable_job_events",
     "durable_worker_heartbeats",
     "durable_jobs",
+    "admin_review_case_resolution_references",
     "admin_review_case_events",
     "admin_review_case_notes",
     "admin_content_moderation_findings",
@@ -90,6 +91,7 @@ TEST_TABLES = (
 )
 CLEANUP_TABLE_EXCLUSIONS: dict[str, str] = {}
 TEST_DATABASE_ADVISORY_LOCK_ID = 917_263_514
+TEST_DATABASE_CLEANUP_STATEMENT_TIMEOUT_MILLISECONDS = 60_000
 NON_DATABASE_TEST_FILES = {
     "test_check_backend_tests.py",
     "test_environment_safety.py",
@@ -211,6 +213,12 @@ def _test_uses_database(request: pytest.FixtureRequest) -> bool:
 
 
 def _truncate_test_tables(connection, table_names: str) -> None:
+    # Bulk test cleanup is infrastructure work, not an application request.
+    # Keep the ordinary lock timeout so leaked transactions still fail fast.
+    connection.execute(
+        text("SELECT set_config('statement_timeout', :timeout, true)"),
+        {"timeout": str(TEST_DATABASE_CLEANUP_STATEMENT_TIMEOUT_MILLISECONDS)},
+    )
     connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
 
 

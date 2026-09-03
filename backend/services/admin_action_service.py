@@ -50,8 +50,8 @@ from backend.services.admin_action_policy import (
     TARGET_GAME_ID,
     TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
     TARGET_HOST_PUBLISH_FEE_ID,
-    TARGET_MONEY_ISSUE_ID,
     TARGET_MESSAGE_ID,
+    TARGET_MONEY_ISSUE_ID,
     TARGET_NOTIFICATION_ID,
     TARGET_PARTICIPANT_ID,
     TARGET_PAYMENT_ID,
@@ -62,10 +62,10 @@ from backend.services.admin_action_policy import (
     TARGET_SUB_POST_ID,
     TARGET_SUB_POST_POSITION_ID,
     TARGET_SUB_POST_REQUEST_ID,
+    TARGET_SUPPORT_FLAG_ID,
     TARGET_USER_ID,
     TARGET_VENUE_ID,
     TARGET_VENUE_IMAGE_ID,
-    TARGET_SUPPORT_FLAG_ID,
     AdminActionPolicy,
     TargetRule,
     get_admin_action_policy,
@@ -235,6 +235,23 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
             "before",
             "after",
             "closure_outcome",
+            "corrects_note_id",
+            "request_fingerprint",
+            "applied_case_version",
+            "resulting_case_version",
+            "previous_assignee_id",
+            "next_assignee_id",
+            "prior_closure_event_id",
+            "prior_resolution_mode",
+            "prior_resolution_outcome",
+            "destination_case_id",
+            "applied_source_version",
+            "applied_destination_version",
+            "resulting_source_version",
+            "resulting_destination_version",
+            "retained_closure_event_id",
+            "source_event_id",
+            "destination_event_id",
         }
     ),
 }
@@ -352,7 +369,9 @@ def provided_target_fields(action_data: dict[str, Any]) -> set[str]:
     }
 
 
-def validate_required_rule(action_type: str, rule: TargetRule, data: dict[str, Any]) -> None:
+def validate_required_rule(
+    action_type: str, rule: TargetRule, data: dict[str, Any]
+) -> None:
     if rule.all_of:
         missing_fields = [
             field_name for field_name in rule.all_of if data.get(field_name) is None
@@ -366,7 +385,9 @@ def validate_required_rule(action_type: str, rule: TargetRule, data: dict[str, A
                 ),
             )
 
-    if rule.one_of and not any(data.get(field_name) is not None for field_name in rule.one_of):
+    if rule.one_of and not any(
+        data.get(field_name) is not None for field_name in rule.one_of
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -500,7 +521,9 @@ def build_admin_action_instance(
         "action_type": policy.action_type,
         "reason": normalized_reason,
         "metadata_": metadata,
-        "idempotency_key": normalize_idempotency_key(action_data.get("idempotency_key")),
+        "idempotency_key": normalize_idempotency_key(
+            action_data.get("idempotency_key")
+        ),
         **{
             field_name: action_data.get(field_name)
             for field_name in ADMIN_ACTION_TARGET_FIELDS
@@ -754,9 +777,7 @@ def build_admin_action_user_lookup(
 ) -> dict[uuid.UUID, User]:
     user_ids = {action.admin_user_id for action in actions}
     user_ids.update(
-        action.target_user_id
-        for action in actions
-        if action.target_user_id is not None
+        action.target_user_id for action in actions if action.target_user_id is not None
     )
 
     if not user_ids:

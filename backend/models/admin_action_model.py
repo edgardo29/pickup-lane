@@ -47,7 +47,8 @@ class AdminAction(Base):
                 "'retry_money_issue_credit', "
                 "'reconcile_refund', "
                 "'create_review_case', 'close_review_case', "
-                "'add_review_case_note'"
+                "'add_review_case_note', 'assign_review_case', "
+                "'reopen_review_case', 'merge_review_case'"
                 ")"
             ),
             name="ck_admin_actions_action_type",
@@ -224,7 +225,8 @@ class AdminAction(Base):
             postgresql_where=text(
                 "action_type IN ("
                 "'create_review_case', 'close_review_case', "
-                "'add_review_case_note'"
+                "'add_review_case_note', 'assign_review_case', "
+                "'reopen_review_case', 'merge_review_case'"
                 ") AND idempotency_key IS NOT NULL"
             ),
         ),

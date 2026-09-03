@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   ClipboardList,
   SearchCheck,
+  UserRound,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
 import { useAuth } from '../../../hooks/useAuth.js'
@@ -17,10 +18,21 @@ import {
   formatAdminReviewUpdated,
   getAdminReviewFindingCountParts,
 } from './adminReviewFormatters.js'
+import { describeReviewCaseAssignment } from './adminReviewLifecycle.js'
 
 const PAGE_SIZE = 24
 const DEFAULT_CASE_STATUS = 'open'
 const DEFAULT_TARGET_TYPE = 'content_targets'
+const CASE_CATEGORY_OPTIONS = [
+  { label: 'All categories', value: '' },
+  { label: 'Saved content', value: 'content_moderation' },
+  { label: 'Chat', value: 'chat_moderation' },
+]
+const ASSIGNMENT_OPTIONS = [
+  { label: 'All assignments', value: 'all' },
+  { label: 'Mine', value: 'mine' },
+  { label: 'Unassigned', value: 'unassigned' },
+]
 const CASE_STATUS_TABS = [
   { label: 'Open', value: 'open' },
   { label: 'Closed', value: 'closed' },
@@ -61,6 +73,10 @@ function ReviewCaseCard({ reviewCase }) {
             ? formatAdminReviewClosed(reviewCase.closed_at)
             : formatAdminReviewUpdated(reviewCase.updated_at)}
         </span>
+        <span className="admin-review-card__assignment">
+          <UserRound />
+          {describeReviewCaseAssignment(reviewCase)}
+        </span>
       </footer>
     </Link>
   )
@@ -76,6 +92,8 @@ function AdminReviewCasesPage() {
   const [pageError, setPageError] = useState('')
   const [loadMoreError, setLoadMoreError] = useState('')
   const [caseStatus, setCaseStatus] = useState(DEFAULT_CASE_STATUS)
+  const [caseCategory, setCaseCategory] = useState('')
+  const [assignment, setAssignment] = useState('all')
   const requestIdRef = useRef(0)
 
   useEffect(() => {
@@ -94,7 +112,8 @@ function AdminReviewCasesPage() {
 
       try {
         const response = await listAdminReviewCases({
-          caseCategory: 'content_moderation',
+          assignment,
+          caseCategory,
           caseStatus,
           firebaseUser: currentUser,
           limit: PAGE_SIZE,
@@ -120,7 +139,7 @@ function AdminReviewCasesPage() {
     return () => {
       isMounted = false
     }
-  }, [caseStatus, currentUser])
+  }, [assignment, caseCategory, caseStatus, currentUser])
 
   async function loadMoreCases() {
     if (!currentUser || isLoadingMore || !hasMoreCases || !nextCursor) {
@@ -133,7 +152,8 @@ function AdminReviewCasesPage() {
 
     try {
       const response = await listAdminReviewCases({
-        caseCategory: 'content_moderation',
+        assignment,
+        caseCategory,
         caseStatus,
         cursor: nextCursor,
         firebaseUser: currentUser,
@@ -184,6 +204,31 @@ function AdminReviewCasesPage() {
               {tab.label}
             </button>
           ))}
+        </div>
+
+        <div className="admin-review-filter-row">
+          <label>
+            <span>Category</span>
+            <select
+              value={caseCategory}
+              onChange={(event) => setCaseCategory(event.target.value)}
+            >
+              {CASE_CATEGORY_OPTIONS.map((option) => (
+                <option key={option.label} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Assignment</span>
+            <select
+              value={assignment}
+              onChange={(event) => setAssignment(event.target.value)}
+            >
+              {ASSIGNMENT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <section className="admin-review-case-board" aria-label="Review cases">

@@ -17,10 +17,10 @@ when durable authority leaves multiple equally valid choices.
 | Field | Value |
 |---|---|
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes and record accepted progression state. |
-| Current reconciliation point | Accepted `develop` at the `WS03-05A` implementation baseline; Gate B validation is complete, and this revision proposes the first `WS03-05` child acceptance state, which becomes true only after the substantive `WS03-05A` PR merges. |
-| Current accepted develop SHA at reconciliation | `2fecae7e4b97a13d01265af178f59fc419556ddc`. |
+| Current reconciliation point | Accepted `develop` through `WS03-05A`; this revision proposes `WS03-05B` acceptance, which becomes true only after the substantive `WS03-05B` PR merges. |
+| Current accepted develop SHA at reconciliation | `662c4ae4536e1fb266e5a25b88ae48681f5a9bab`. |
 | Original blueprint register | 42 parent-level planned passes in `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md`. |
-| Accepted executable requirement declarations through this point | 39 files under `backend/tests/support/requirements/`. |
+| Accepted executable requirement declarations through this point | 40 files under `backend/tests/support/requirements/` when this revision merges. |
 | Next pass selected by this register? | Not by itself. Automated progression uses this register together with the master blueprint, remediation plan, accepted intake/dependencies, prerequisites, and current `develop`; owner selection is required only when durable authority does not determine one safe next unit. |
 
 The recorded accepted `develop` SHA is a historical reconciliation basis for
@@ -36,7 +36,7 @@ production-readiness run instruction.
 | Original blueprint parent-level entries | 42 | Parent-level entries mirrored from the master blueprint. |
 | Accepted/completed parent-level entries | 16 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through direct `WS05-02`. |
 | Remaining parent-level entries | 26 | Parent-level entries not yet completed in this register; includes decomposed in-progress `WS04-01`, `WS04-03`, and `WS05-01`. |
-| Accepted executable passes with requirement declarations | 39 | Current accepted executable passes after `WS03-05A` merges. |
+| Accepted executable passes with requirement declarations | 40 | Current accepted executable passes after `WS03-05B` merges. |
 | Remaining actual executable-pass count | Unknown | Future executable-unit count depends on Stage 0 decomposition of remaining parent scope. |
 
 Count magnitude is not completion proof or control-closure proof. Controls
@@ -94,7 +94,7 @@ navigation. It does not replace the master blueprint.
 | `WS03-02` | Provisioning, account-state lifecycle, and concurrent first login | Accepted executable pass. |
 | `WS03-03` | High-risk authentication and Firebase control verification | Decomposed into accepted executable child passes `WS03-03A` and `WS03-03B`. |
 | `WS03-04` | Complete authorization matrix and negative proof | Decomposed into accepted executable child passes `WS03-04A`, `WS03-04B`, `WS03-04C`, and `WS03-04D`; WS03-04 parent complete, with the Stripe webhook lifecycle gap explicitly covered elsewhere by `WS05`. |
-| `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | Decomposed into `WS03-05A`, `WS03-05B`, `WS03-05C`, and `WS03-05D`; this revision records A accepted on merge, B as the next current child, C after B, and D after B plus its applicable reusable `WS09-02` audit-capability prerequisite. |
+| `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | Decomposed into `WS03-05A`, `WS03-05B`, `WS03-05C`, and `WS03-05D`; A is accepted, this revision records B accepted on merge, C follows B, and D follows B plus its applicable reusable `WS09-02` audit-capability prerequisite. |
 | `WS04-01` | Database engine/session lifecycle, connection budget, and least-privilege roles | Structurally revised after accepted `WS04-01A` and `WS04-01B`: revised `WS04-01C` accepted the provider-independent production-verification framework; final production topology/budget/role proof is preserved for mandatory later `WS04-01D` after final infrastructure is selected. |
 | `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Decomposed into accepted executable children `WS04-02A`, `WS04-02B`, and `WS04-02C`; this revision records the current executable child set complete when the substantive `WS04-02C` PR merges, with later-owned migration, payment, observability, operations, and final-infrastructure evidence preserved outside `WS04-02`. |
 | `WS04-03` | Migration policy, compatibility, interruption, and production-like rehearsal | Decomposed into current executable child `WS04-03A` plus mandatory deferred follow-up `WS04-03B`; this revision records `WS04-03A` as accepted on merge while final provider/runtime migration rehearsal remains open. |
@@ -162,6 +162,7 @@ Every path in the Plan column is relative to
 | `WS03-04C` | `WS03-04` | `passes/ws03/ws03-04c-game-community-roster-chat-need-a-sub-relationship-authorization.md` | `ws03_04c.json` | 12 | 11 | 0 | 1 | `workflows/game_community_roster_chat_need_a_sub_relationship_authorization` plus governance |
 | `WS03-04D` | `WS03-04` | `passes/ws03/ws03-04d-admin-route-list-high-risk-function-authorization.md` | `ws03_04d.json` | 12 | 12 | 0 | 0 | `workflows/admin_route_list_high_risk_function_authorization` plus governance |
 | `WS03-05A` | `WS03-05` | `passes/ws03/ws03-05a-versioned-moderation-taxonomy-finding-evidence-lifecycle.md` | `ws03_05a.json` | 6 | 6 | 0 | 0 | `workflows/moderation_taxonomy_finding_evidence_lifecycle` plus governance/migration compatibility |
+| `WS03-05B` | `WS03-05` | `passes/ws03/ws03-05b-conflict-safe-moderation-review-case-lifecycle.md` | `ws03_05b.json` | 7 | 7 | 0 | 0 | `workflows/conflict_safe_moderation_review_case_lifecycle` plus frontend/migration compatibility |
 | `WS04-01A` | `WS04-01` | `passes/ws04/ws04-01a-application-database-lifecycle-pool-settings-role-credential-boundaries.md` | `ws04_01a.json` | 7 | 7 | 0 | 0 | `workflows/application_database_lifecycle_pool_settings_role_credential_boundaries` |
 | `WS04-01B` | `WS04-01` | `passes/ws04/ws04-01b-query-cursor-database-access-behavior.md` | `ws04_01b.json` | 7 | 7 | 0 | 0 | `workflows/query_cursor_database_access_behavior` |
 | `WS04-01C` | `WS04-01` | `passes/ws04/ws04-01c-production-postgresql-topology-connection-budget-role-verification.md` | `ws04_01c.json` | 8 | 8 | 0 | 0 | `platform/production_database_verification` |
@@ -177,7 +178,7 @@ Every path in the Plan column is relative to
 | Parent pass | Intake record | SHA-256 | Accepted by executable pass | Accepted state |
 |---|---|---|---|---|
 | `WS03-04` | `docs/production-readiness/planning/passes/ws03/ws03-04-intake.md` | `e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4` | `WS03-04A` | Accepted in `develop` through `WS03-04A`; reused by the remaining `WS03-04` children. |
-| `WS03-05` | `docs/production-readiness/planning/passes/ws03/ws03-05-intake.md` | `4c255545449a085591f412175253f0b0207abcfc53c61f0c4cd60c89125a1a02` | `WS03-05A` | Accepted four-child structure on merge: A accepted; B is the next current child; C follows B; D follows B and the applicable accepted reusable append-only audit capability under `WS09-02`. |
+| `WS03-05` | `docs/production-readiness/planning/passes/ws03/ws03-05-intake.md` | `4c255545449a085591f412175253f0b0207abcfc53c61f0c4cd60c89125a1a02` | `WS03-05A`, `WS03-05B` | Accepted four-child structure: A accepted; this revision records B accepted on merge; C follows B; D follows B and the applicable accepted reusable append-only audit capability under `WS09-02`. |
 | `WS04-01` | `docs/production-readiness/planning/passes/ws04/ws04-01-intake.md` | `cb26606f6bca7dbc304a07e172771eeeebcece5312f73627fe8c67738a960ced` | `WS04-01A`, `WS04-01B`, `WS04-01C` | Accepted A/B/C structure preserved; mandatory later `WS04-01D` remains deferred until final production infrastructure is selected. |
 | `WS04-02` | `docs/production-readiness/planning/passes/ws04/ws04-02-intake.md` | `bbcea141dec04890be5c0812131996548f86f82f6bc80ad66ce7f700e6ba3701` | `WS04-02A`, `WS04-02B`, `WS04-02C` | Accepted three-child structure: `WS04-02A -> WS04-02B -> WS04-02C`; this revision records the current child set complete when the substantive `WS04-02C` PR merges. |
 | `WS04-03` | `docs/production-readiness/planning/passes/ws04/ws04-03-intake.md` | `ffc3e81d2d55ce9cca60d6ae40390d8ae9df2d8f8d3995b4b9c8464c101cfb48` | `WS04-03A` | Accepted split: `WS04-03A` is the current provider-independent migration-policy/rehearsal child; mandatory `WS04-03B` remains deferred until final production database provider, deployment topology, migration runner, and production-equivalent rehearsal inputs are selected and evidenced. |
@@ -327,12 +328,18 @@ canonical plan is
 `docs/production-readiness/planning/passes/ws03/ws03-05a-versioned-moderation-taxonomy-finding-evidence-lifecycle.md`
 with frozen SHA-256
 `279aee40401cf123bdcee1c5d17b605e6da99bf4ca0f1c87b800364bf265337b`.
-This revision records A accepted on merge. It does not expand review-case state,
+`WS03-05A` is accepted in `develop`. It does not expand review-case state,
 enforcement, notices, or sensitive administrative access.
 
 `WS03-05B` owns `ADM-012` review-case lifecycle and is the deterministic next
-current child after A. `WS03-05C` owns `ADM-013`/`ADM-014` action-scoped
-enforcement and safe-notice semantics after B. `WS03-05D` owns
+child after A. Its canonical plan is
+`docs/production-readiness/planning/passes/ws03/ws03-05b-conflict-safe-moderation-review-case-lifecycle.md`
+with frozen SHA-256
+`7fc296334af820bff3e24adbda47cd0450782c271ed2ea539c546789eaa94a28`.
+This revision records B accepted on merge without reopening A or implementing
+later enforcement, notice, minimum-data, or audit behavior. `WS03-05C` owns
+`ADM-013`/`ADM-014` action-scoped enforcement and safe-notice semantics after
+B. `WS03-05D` owns
 `ADM-007`/`ADM-015` minimum-necessary and audited sensitive access after B, but
 must not enable audit-dependent access until the applicable reusable
 append-only audit capability from `WS09-02` is accepted.

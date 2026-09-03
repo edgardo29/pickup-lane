@@ -1,4 +1,12 @@
 import { apiRequest } from '../../../lib/apiClient.js'
+import {
+  buildReviewCaseAssignmentPayload,
+  buildReviewCaseClosePayload,
+  buildReviewCaseListQuery,
+  buildReviewCaseMergePayload,
+  buildReviewCaseNotePayload,
+  buildReviewCaseReopenPayload,
+} from '../review-cases/adminReviewLifecycle.js'
 
 export async function getAdminHeaders(firebaseUser, includeJson = false) {
   if (!firebaseUser) {
@@ -42,25 +50,19 @@ export async function listAdminReviewCases({
   limit = 50,
   offset = 0,
   targetType = 'content_targets',
+  assignment = 'all',
 } = {}) {
-  const searchParams = new URLSearchParams()
-  if (caseStatus) {
-    searchParams.set('case_status', caseStatus)
-  }
-  if (caseCategory) {
-    searchParams.set('case_category', caseCategory)
-  }
-  if (targetType) {
-    searchParams.set('target_type', targetType)
-  }
-  if (cursor) {
-    searchParams.set('cursor', cursor)
-  } else {
-    searchParams.set('offset', String(offset))
-  }
-  searchParams.set('limit', String(limit))
+  const query = buildReviewCaseListQuery({
+    assignment,
+    caseCategory,
+    caseStatus,
+    cursor,
+    limit,
+    offset,
+    targetType,
+  })
 
-  return apiRequest(`/admin/review-cases?${searchParams.toString()}`, {
+  return apiRequest(`/admin/review-cases?${query}`, {
     headers: await getAdminHeaders(firebaseUser),
   })
 }
@@ -76,14 +78,18 @@ export async function addAdminReviewCaseNote({
   firebaseUser,
   idempotencyKey,
   reviewCaseId,
+  expectedCaseVersion,
+  correctsNoteId = null,
 }) {
   return apiRequest(`/admin/review-cases/${reviewCaseId}/notes`, {
     method: 'POST',
     headers: await getAdminHeaders(firebaseUser, true),
-    body: JSON.stringify({
+    body: JSON.stringify(buildReviewCaseNotePayload({
       body,
-      idempotency_key: idempotencyKey,
-    }),
+      correctsNoteId,
+      expectedCaseVersion,
+      idempotencyKey,
+    })),
   })
 }
 
@@ -93,15 +99,77 @@ export async function closeAdminReviewCase({
   outcome,
   reason,
   reviewCaseId,
+  expectedCaseVersion,
 }) {
   return apiRequest(`/admin/review-cases/${reviewCaseId}/close`, {
     method: 'POST',
     headers: await getAdminHeaders(firebaseUser, true),
-    body: JSON.stringify({
+    body: JSON.stringify(buildReviewCaseClosePayload({
+      expectedCaseVersion,
+      idempotencyKey,
       outcome,
       reason,
-      idempotency_key: idempotencyKey,
-    }),
+    })),
+  })
+}
+
+export async function assignAdminReviewCase({
+  assigneeUserId,
+  expectedCaseVersion,
+  firebaseUser,
+  idempotencyKey,
+  reason,
+  reviewCaseId,
+}) {
+  return apiRequest(`/admin/review-cases/${reviewCaseId}/assignment`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify(buildReviewCaseAssignmentPayload({
+      assigneeUserId,
+      expectedCaseVersion,
+      idempotencyKey,
+      reason,
+    })),
+  })
+}
+
+export async function reopenAdminReviewCase({
+  expectedCaseVersion,
+  firebaseUser,
+  idempotencyKey,
+  reason,
+  reviewCaseId,
+}) {
+  return apiRequest(`/admin/review-cases/${reviewCaseId}/reopen`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify(buildReviewCaseReopenPayload({
+      expectedCaseVersion,
+      idempotencyKey,
+      reason,
+    })),
+  })
+}
+
+export async function mergeAdminReviewCase({
+  destinationCaseId,
+  expectedDestinationVersion,
+  expectedSourceVersion,
+  firebaseUser,
+  idempotencyKey,
+  reason,
+  reviewCaseId,
+}) {
+  return apiRequest(`/admin/review-cases/${reviewCaseId}/merge`, {
+    method: 'POST',
+    headers: await getAdminHeaders(firebaseUser, true),
+    body: JSON.stringify(buildReviewCaseMergePayload({
+      destinationCaseId,
+      expectedDestinationVersion,
+      expectedSourceVersion,
+      idempotencyKey,
+      reason,
+    })),
   })
 }
 

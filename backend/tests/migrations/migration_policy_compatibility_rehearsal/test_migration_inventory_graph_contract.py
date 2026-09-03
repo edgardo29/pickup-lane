@@ -19,9 +19,9 @@ pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _VERSIONS_DIR = _REPO_ROOT / "backend" / "alembic" / "versions"
-_EXPECTED_CURRENT_REVISION_COUNT = 65
+_EXPECTED_CURRENT_REVISION_COUNT = 66
 _EXPECTED_CURRENT_BASE = "0001_pg_trgm"
-_EXPECTED_CURRENT_HEAD = "0065_payment_method_ops"
+_EXPECTED_CURRENT_HEAD = "0066_review_case_resolution_refs"
 
 
 @pytest.mark.requirement("WS04-03A-R2", "WS04-03A-R3", "WS04-03A-R8")
@@ -30,15 +30,17 @@ def test_current_alembic_revision_chain_is_linear_and_complete() -> None:
 
     assert len(revisions) == _EXPECTED_CURRENT_REVISION_COUNT
     assert revisions[0].path.name == "0001_enable_pg_trgm_extension.py"
-    assert revisions[-1].path.name == "0065_create_payment_method_operations_table.py"
+    assert revisions[-1].path.name == (
+        "0066_create_admin_review_case_resolution_references_table.py"
+    )
 
     assert_linear_revision_chain(revisions)
 
-    assert [revision.revision for revision in revisions if revision.down_revision is None] == [
-        _EXPECTED_CURRENT_BASE
-    ]
+    assert [
+        revision.revision for revision in revisions if revision.down_revision is None
+    ] == [_EXPECTED_CURRENT_BASE]
     assert alembic_head_revision() == _EXPECTED_CURRENT_HEAD
-    assert alembic_parent_revision(_EXPECTED_CURRENT_HEAD) == "0064_payment_compensations"
+    assert alembic_parent_revision(_EXPECTED_CURRENT_HEAD) == "0065_payment_method_ops"
 
     script = alembic_script_directory()
     assert script.get_heads() == [_EXPECTED_CURRENT_HEAD]
@@ -46,7 +48,9 @@ def test_current_alembic_revision_chain_is_linear_and_complete() -> None:
 
 
 @pytest.mark.requirement("WS04-03A-R2", "WS04-03A-R5", "WS04-03A-R6", "WS04-03A-R7")
-def test_current_migration_operation_inventory_classifies_upgrade_side_operations() -> None:
+def test_current_migration_operation_inventory_classifies_upgrade_side_operations() -> (
+    None
+):
     inventory = build_migration_operation_inventory(_VERSIONS_DIR)
 
     assert inventory.revision_count == _EXPECTED_CURRENT_REVISION_COUNT
@@ -136,4 +140,31 @@ def test_raw_sql_inventory_requires_exact_reviewed_extension_forms(
 
     assert inventory.risky_upgrade_findings == (
         "0001_base.py: op.execute uses unreviewed extension SQL",
+    )
+
+
+@pytest.mark.requirement("WS04-03A-R2", "WS04-03A-R5", "WS04-03A-R6", "WS04-03A-R8")
+def test_raw_sql_inventory_distinguishes_update_trigger_ddl_from_data_update(
+    tmp_path: Path,
+) -> None:
+    versions_dir = tmp_path / "versions"
+    versions_dir.mkdir()
+    (versions_dir / "0001_base.py").write_text(
+        "revision = 'base'\n"
+        "down_revision = None\n"
+        "branch_labels = None\n"
+        "depends_on = None\n\n"
+        "from alembic import op\n\n"
+        "def upgrade():\n"
+        '    op.execute("""CREATE TRIGGER trg_items_immutable '
+        'BEFORE UPDATE ON items FOR EACH ROW EXECUTE FUNCTION reject_item_update()""")\n'
+        "    op.execute(\"UPDATE items SET status = 'active'\")\n\n"
+        "def downgrade():\n"
+        "    pass\n"
+    )
+
+    inventory = build_migration_operation_inventory(versions_dir)
+
+    assert inventory.risky_upgrade_findings == (
+        "0001_base.py: op.execute contains UPDATE",
     )

@@ -489,7 +489,9 @@ def test_admin_money_cursors_reject_malformed_values_stably() -> None:
 
 
 @pytest.mark.requirement("WS04-01B-R3")
-def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_contexts() -> None:
+def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_contexts() -> (
+    None
+):
     from backend.models import (
         GameCredit,
         MoneyIssue,
@@ -498,7 +500,9 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
         RefundEvent,
     )
     from backend.services.admin_money_credit_service import list_admin_money_credits
-    from backend.services.admin_money_issue_query_service import list_admin_money_issues_page
+    from backend.services.admin_money_issue_query_service import (
+        list_admin_money_issues_page,
+    )
     from backend.services.admin_money_payment_service import list_admin_money_payments
     from backend.services.admin_money_refund_query_service import (
         list_admin_money_refunds,
@@ -537,11 +541,15 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
                 amount_cents=1200,
                 currency="USD",
                 payment_status=status,
-                paid_at=now + timedelta(minutes=index) if status == "succeeded" else None,
+                paid_at=now + timedelta(minutes=index)
+                if status == "succeeded"
+                else None,
                 created_at=now + timedelta(minutes=index),
                 updated_at=now + timedelta(minutes=index),
             )
-            for index, status in enumerate(("succeeded", "succeeded", "failed"), start=1)
+            for index, status in enumerate(
+                ("succeeded", "succeeded", "failed"), start=1
+            )
         ]
         db.add_all(payments)
         db.commit()
@@ -815,13 +823,14 @@ def test_need_a_sub_request_list_response_batches_related_database_reads() -> No
 
     statements: list[str] = []
 
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    def before_cursor_execute(
+        conn, cursor, statement, parameters, context, executemany
+    ):
         del conn, cursor, parameters, context, executemany
         normalized = " ".join(statement.lower().split())
         if normalized.startswith("select"):
             statements.append(normalized)
 
-    now = datetime(2026, 8, 22, 12, tzinfo=timezone.utc)
     with _session() as db:
         owner = _user(20)
         requesters = [_user(index) for index in range(21, 29)]
@@ -829,6 +838,10 @@ def test_need_a_sub_request_list_response_batches_related_database_reads() -> No
         db.commit()
 
         sub_post = _sub_post(owner_id=owner.id)
+        sub_post.starts_at = datetime(2038, 9, 2, 18, tzinfo=timezone.utc)
+        sub_post.ends_at = sub_post.starts_at + timedelta(hours=1)
+        sub_post.starts_on_local = sub_post.starts_at.date()
+        sub_post.expires_at = sub_post.starts_at - timedelta(hours=1)
         db.add(sub_post)
         db.commit()
 
@@ -904,7 +917,9 @@ def test_need_a_sub_post_lists_batch_positions_and_request_counts() -> None:
     def capture_selects(call):
         statements: list[str] = []
 
-        def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        def before_cursor_execute(
+            conn, cursor, statement, parameters, context, executemany
+        ):
             del conn, cursor, parameters, context, executemany
             normalized = " ".join(statement.lower().split())
             if normalized.startswith("select"):
@@ -929,7 +944,7 @@ def test_need_a_sub_post_lists_batch_positions_and_request_counts() -> None:
         requester_index = 0
         for post_index in range(3):
             post = _sub_post(owner_id=owner.id)
-            starts_at = datetime(2026, 9, 2 + post_index, 18, tzinfo=timezone.utc)
+            starts_at = datetime(2038, 9, 2 + post_index, 18, tzinfo=timezone.utc)
             city = city or post.city
             post.city = city
             post.starts_at = starts_at
@@ -1015,7 +1030,9 @@ def test_notification_list_batches_related_action_records() -> None:
 
     statements: list[str] = []
 
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    def before_cursor_execute(
+        conn, cursor, statement, parameters, context, executemany
+    ):
         del conn, cursor, parameters, context, executemany
         normalized = " ".join(statement.lower().split())
         if normalized.startswith("select"):
