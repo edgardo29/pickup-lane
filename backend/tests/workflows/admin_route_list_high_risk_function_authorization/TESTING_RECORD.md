@@ -17,7 +17,7 @@ deployed, production-runtime, live-provider, or real-world provider evidence.
 
 | Requirement | Evidence |
 | --- | --- |
-| `WS03-04D-R1` | Matrix/current-route tests prove `40` D-owned route families and `187` route keys still match the accepted authorization matrix and current FastAPI route table. |
+| `WS03-04D-R1` | Matrix/current-route tests prove `40` D-owned route families and `190` route keys still match the accepted authorization matrix and current FastAPI route table. |
 | `WS03-04D-R2` | Shared admin-gate tests prove missing and invalid credentials return `401`, and ordinary, unverified, or inactive users return `403` before admin behavior. |
 | `WS03-04D-R3` | Recent-admin inventory and stale-session tests prove the `22` current high-risk route keys retain `require_recent_active_admin` and reject stale admin sessions before protected effects. |
 | `WS03-04D-R4` | Admin list/read tests prove user, money, support, review, platform-notice, admin-action, lookup, notification, game-image, rejected-attempt, payment-event, host-fee, status-history, user-settings, user-stats, venue-approval, waitlist, legacy `/users`, official-game, community-game, and Need-a-Sub reads are active-admin-only. The corrected game/community/Need-a-Sub evidence proves source-defined filters, cursor context, detail lookups, missing-object behavior, unsupported-query rejection where source defines it, response shape, and binding to the persisted object or child object being read. |

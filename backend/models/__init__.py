@@ -9,6 +9,9 @@ from backend.models.admin_rejected_attempt_model import AdminRejectedAttempt
 from backend.models.admin_review_case_event_model import AdminReviewCaseEvent
 from backend.models.admin_review_case_model import AdminReviewCase
 from backend.models.admin_review_case_note_model import AdminReviewCaseNote
+from backend.models.admin_review_case_resolution_reference_model import (
+    AdminReviewCaseResolutionReference,
+)
 from backend.models.admin_review_signal_model import AdminReviewSignal
 from backend.models.admin_target_notice_model import AdminTargetNotice
 from backend.models.booking_model import Booking
@@ -83,6 +86,7 @@ __all__ = [
     "AdminReviewCase",
     "AdminReviewCaseEvent",
     "AdminReviewCaseNote",
+    "AdminReviewCaseResolutionReference",
     "AdminReviewSignal",
     "AdminTargetNotice",
     "Booking",

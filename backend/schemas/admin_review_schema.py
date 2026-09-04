@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,6 +11,8 @@ AdminReviewClosureOutcome = Literal[
     "no_action_needed",
     "invalid_signal",
 ]
+AdminReviewAssignmentMode = Literal["all", "mine", "unassigned"]
+AdminReviewExpectedVersion = Annotated[int, Field(strict=True, ge=1)]
 
 
 class AdminReviewTargetFields(BaseModel):
@@ -71,14 +73,44 @@ class AdminReviewCaseClose(BaseModel):
 
     outcome: AdminReviewClosureOutcome
     reason: str = Field(min_length=1, max_length=1000)
-    idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)
+    expected_case_version: AdminReviewExpectedVersion
+    idempotency_key: str = Field(min_length=8, max_length=160)
 
 
 class AdminReviewCaseNoteCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    body: str = Field(max_length=MAX_REVIEW_CASE_NOTE_BODY_LENGTH)
-    idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)
+    body: str = Field(min_length=1, max_length=MAX_REVIEW_CASE_NOTE_BODY_LENGTH)
+    corrects_note_id: UUID | None = None
+    expected_case_version: AdminReviewExpectedVersion
+    idempotency_key: str = Field(min_length=8, max_length=160)
+
+
+class AdminReviewCaseAssignment(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    assignee_user_id: UUID | None = None
+    reason: str = Field(min_length=1, max_length=1000)
+    expected_case_version: AdminReviewExpectedVersion
+    idempotency_key: str = Field(min_length=8, max_length=160)
+
+
+class AdminReviewCaseReopen(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    reason: str = Field(min_length=1, max_length=1000)
+    expected_case_version: AdminReviewExpectedVersion
+    idempotency_key: str = Field(min_length=8, max_length=160)
+
+
+class AdminReviewCaseMerge(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    destination_case_id: UUID
+    reason: str = Field(min_length=1, max_length=1000)
+    expected_source_version: AdminReviewExpectedVersion
+    expected_destination_version: AdminReviewExpectedVersion
+    idempotency_key: str = Field(min_length=8, max_length=160)
 
 
 class AdminReviewSignalRead(BaseModel):
@@ -114,11 +146,19 @@ class AdminReviewCaseEventRead(BaseModel):
     id: UUID
     review_case_id: UUID
     event_type: str
+    event_sequence: int
+    case_version: int
+    actor_kind: str
     actor_user_id: UUID | None
     admin_action_id: UUID | None
     signal_id: UUID | None
     content_moderation_finding_id: UUID | None
     note_id: UUID | None
+    related_case_id: UUID | None
+    related_event_id: UUID | None
+    automation_rule_id: str | None
+    automation_rule_version: str | None
+    trigger_actor_user_id: UUID | None
     event_metadata: dict[str, Any] | None
     created_at: datetime
 
@@ -131,6 +171,7 @@ class AdminReviewCaseNoteRead(BaseModel):
     author_user_id: UUID
     author_display_name: str | None = None
     body: str
+    corrects_note_id: UUID | None
     note_status: str
     edited_at: datetime | None
     deleted_at: datetime | None
@@ -165,6 +206,8 @@ class AdminReviewCaseRead(BaseModel):
     priority: str
     title: str
     summary: str
+    case_version: int
+    creation_reason: str
     target_user_id: UUID | None
     target_game_id: UUID | None
     target_sub_post_id: UUID | None
@@ -175,6 +218,14 @@ class AdminReviewCaseRead(BaseModel):
     closed_by_user_id: UUID | None
     closure_outcome: str | None
     closure_reason: str | None
+    closure_mode: str | None
+    closure_rule_id: str | None
+    closure_rule_version: str | None
+    assigned_to_user_id: UUID | None
+    assigned_at: datetime | None
+    assignee_display_name: str | None = None
+    assignee_is_eligible: bool | None = None
+    merged_into_case_id: UUID | None
     closed_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -189,6 +240,50 @@ class AdminReviewCaseDetailRead(AdminReviewCaseRead):
     findings: list[AdminContentModerationFindingRead] = Field(default_factory=list)
     events: list[AdminReviewCaseEventRead] = Field(default_factory=list)
     notes: list[AdminReviewCaseNoteRead] = Field(default_factory=list)
+    linked_cases: list["AdminReviewLinkedCaseRead"] = Field(default_factory=list)
+    resolution_references: list["AdminReviewResolutionReferenceRead"] = Field(
+        default_factory=list
+    )
+    resolution_history: list["AdminReviewResolutionHistoryRead"] = Field(
+        default_factory=list
+    )
+
+
+class AdminReviewLinkedCaseRead(BaseModel):
+    id: UUID
+    case_status: str
+    case_version: int
+    priority: str
+    relation: Literal["merged_into", "merged_from"]
+
+
+class AdminReviewResolutionReferenceRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    closure_event_id: UUID
+    reference_type: str
+    content_moderation_finding_id: UUID | None
+    signal_id: UUID | None
+    admin_action_id: UUID | None
+    source_case_id: UUID | None
+    was_current: bool | None
+
+
+class AdminReviewResolutionHistoryRead(BaseModel):
+    closure_event_id: UUID
+    event_sequence: int
+    outcome: AdminReviewClosureOutcome
+    mode: Literal["manual", "automatic"]
+    reason: str
+    actor_kind: Literal["admin", "automation"]
+    actor_user_id: UUID | None
+    automation_rule_id: str | None
+    automation_rule_version: str | None
+    trigger_actor_user_id: UUID | None
+    admin_action_id: UUID | None
+    closed_at: datetime
+    references: list[AdminReviewResolutionReferenceRead] = Field(default_factory=list)
 
 
 class AdminReviewCaseListRead(BaseModel):
@@ -205,9 +300,27 @@ class AdminReviewCaseNoteResultRead(BaseModel):
     note: AdminReviewCaseNoteRead
     audit_action_id: UUID
     idempotent_replay: bool
+    applied_case_version: int
+    resulting_case_version: int
 
 
 class AdminReviewCaseActionResultRead(BaseModel):
     review_case: AdminReviewCaseDetailRead
     audit_action_id: UUID
     idempotent_replay: bool
+    applied_case_version: int
+    resulting_case_version: int
+
+
+class AdminReviewCaseMergeResultRead(BaseModel):
+    source_case: AdminReviewCaseDetailRead
+    destination_case: AdminReviewCaseDetailRead
+    audit_action_id: UUID
+    idempotent_replay: bool
+    applied_source_version: int
+    applied_destination_version: int
+    resulting_source_version: int
+    resulting_destination_version: int
+
+
+AdminReviewCaseDetailRead.model_rebuild()

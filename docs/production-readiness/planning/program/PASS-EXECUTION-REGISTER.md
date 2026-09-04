@@ -1,13 +1,13 @@
 # Production-Readiness Pass Execution Register
 
-This register records how Pickup Lane's original parent-level production
-readiness blueprint has been translated into actual executable passes.
+This register records accepted implementation history, current work, and
+remaining production-readiness units.
 
-The master blueprint remains authoritative for the original 42 planned parent
-passes. This register does not alter that blueprint or close controls. It is a
-navigation and accepted execution-state record used together with the master
-blueprint, final remediation plan, accepted prerequisites, Stage 0 intake
-records, and current `develop` to determine safe program progression.
+The corrected master blueprint controls current production-readiness scope and
+roadmap. The original 42 parent entries and prior decompositions remain useful
+historical provenance, but they do not restore scope rejected by the corrected
+master. This register is a navigation and execution-state record used with
+current `develop`, applicable prerequisites, and the corrected master.
 
 The register does not, by itself, authorize implementation or invent ordering
 when durable authority leaves multiple equally valid choices.
@@ -17,11 +17,13 @@ when durable authority leaves multiple equally valid choices.
 | Field | Value |
 |---|---|
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes and record accepted progression state. |
-| Current reconciliation point | Accepted `develop` at the `WS03-05A` implementation baseline; Gate B validation is complete, and this revision proposes the first `WS03-05` child acceptance state, which becomes true only after the substantive `WS03-05A` PR merges. |
-| Current accepted develop SHA at reconciliation | `2fecae7e4b97a13d01265af178f59fc419556ddc`. |
-| Original blueprint register | 42 parent-level planned passes in `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md`. |
-| Accepted executable requirement declarations through this point | 39 files under `backend/tests/support/requirements/`. |
-| Next pass selected by this register? | Not by itself. Automated progression uses this register together with the master blueprint, remediation plan, accepted intake/dependencies, prerequisites, and current `develop`; owner selection is required only when durable authority does not determine one safe next unit. |
+| Current reconciliation point | 39 passes are accepted in `develop`, including `WS03-05A` and accepted WS04/WS05 work; `WS03-05B` is implemented in open PR #176 but unmerged and requires the correction defined by the corrected master before it may merge. |
+| Current accepted develop SHA at reconciliation | `662c4ae4536e1fb266e5a25b88ae48681f5a9bab`. |
+| Historical blueprint register | 42 original parent-level planned entries, retained as provenance. |
+| Accepted implemented passes | 39 merged/accepted passes. |
+| Implemented but unmerged | `WS03-05B` in PR #176; correction required before merge. |
+| Remaining roadmap | 27 genuinely unimplemented units under section 8 of the corrected master. |
+| Next unit selected by this register? | Not by itself. Use the corrected master, applicable prerequisites, current `develop`, and owner selection when more than one unit is valid. |
 
 The recorded accepted `develop` SHA is a historical reconciliation basis for
 this register version. It is not a mutable instruction and is not the
@@ -33,14 +35,14 @@ production-readiness run instruction.
 
 | Metric | Count | Meaning |
 |---|---:|---|
-| Original blueprint parent-level entries | 42 | Parent-level entries mirrored from the master blueprint. |
-| Accepted/completed parent-level entries | 16 | Includes `BASE-00` and `GOV-01` program predecessors plus accepted direct or decomposed parent entries through direct `WS05-02`. |
-| Remaining parent-level entries | 26 | Parent-level entries not yet completed in this register; includes decomposed in-progress `WS04-01`, `WS04-03`, and `WS05-01`. |
-| Accepted executable passes with requirement declarations | 39 | Current accepted executable passes after `WS03-05A` merges. |
-| Remaining actual executable-pass count | Unknown | Future executable-unit count depends on Stage 0 decomposition of remaining parent scope. |
+| Historical parent-level entries | 42 | Original planning inventory retained as provenance. |
+| Merged/accepted implemented passes | 39 | Current authoritative audit status from the corrected master. |
+| Implemented but unmerged passes | 1 | `WS03-05B` in PR #176; not accepted or merge-ready. |
+| Genuinely unimplemented remaining units | 27 | Corrected roadmap units in master section 8. |
 
-Count magnitude is not completion proof or control-closure proof. Controls
-close only through accepted evidence and reassessment.
+Count magnitude is not production-readiness proof. Completion depends on the
+actual surviving safety obligations and final evidence required by the corrected
+master.
 
 ## 3. How To Use This Register
 
@@ -49,29 +51,25 @@ Before starting or resuming production-readiness work:
 1. Read the read-first document, program context, and applicable workflow.
 2. Identify the current parent blueprint pass or accepted executable child from
    current repository state.
-3. Check this register for accepted child passes, accepted Stage 0 intake,
-   dependency state, and remaining parent scope.
-4. Use `docs/production-readiness/planning/templates/PASS-INTAKE-TEMPLATE.md`
-   when a newly selected parent requires Stage 0 decomposition or readiness
-   review.
-5. For an already decomposed parent, use its accepted child graph to determine
-   the next executable child whose prerequisites are satisfied.
-6. When a parent is complete, determine the next parent from this register
-   together with the master blueprint, final remediation plan, accepted
-   prerequisites, and current `develop`.
-7. If those durable sources determine exactly one next unit, automated
-   progression may select it. If they leave multiple equally valid next units,
+3. Check this register for accepted implementation, dependency state, and
+   remaining corrected scope.
+4. Use Stage 0 only when the selected unit genuinely needs scoping or
+   decomposition; create a planning artifact only when the work is complex
+   enough to need one.
+5. Determine subsequent work from the corrected master, applicable
+   prerequisites, current repository truth, and owner direction.
+6. If more than one unit is valid and the corrected master does not select one,
    stop for owner selection.
-8. Never infer progression from alphabetical order, filename order, stale branch
+7. Never infer progression from alphabetical order, filename order, stale branch
    names, or old chat context.
-9. Apply the final-infrastructure timing rule from the read-first document,
+8. Apply the final-infrastructure timing rule from the read-first document,
    Program Context, implementation workflow, and master blueprint. Temporary
    Vercel, Render, and Neon demo/prototype values do not satisfy final-production
    provider, topology, configuration, capacity, or runtime prerequisites. When a
    parent mixes provider-independent work with final-infrastructure-dependent
-   work, Stage 0 must keep the executable work provider-neutral where practical
-   and record the remaining provider-specific obligation as an explicit later
-   owner/pass with a trigger and latest required completion boundary.
+   work, keep executable work provider-neutral where practical and record the
+   remaining provider-specific obligation with its owner, trigger, and required
+   completion boundary.
 
 ## 4. Original Blueprint Parent-Pass Register
 
@@ -80,8 +78,8 @@ navigation. It does not replace the master blueprint.
 
 | Blueprint pass | Title | Execution-register state |
 |---|---|---|
-| `BASE-00` | Repository baseline and isolation gate | Historical program setup predecessor; no executable requirement declaration. |
-| `GOV-01` | Import and reconcile the approved governance package | Historical governance predecessor; no executable requirement declaration in the current trusted backend architecture. |
+| `BASE-00` | Repository baseline and isolation gate | Historical program setup predecessor; no current executable scope. |
+| `GOV-01` | Import and reconcile the approved governance package | Historical governance predecessor; no current executable scope. |
 | `EN-01` | Early current-test taxonomy and isolation baseline | Accepted executable pass. |
 | `EN-02` | Early correlation, event-envelope, and redaction contract | Accepted executable pass. |
 | `EN-03` | Early secrets, control-plane access, and evidence-handling foundation | Accepted executable pass. |
@@ -94,112 +92,108 @@ navigation. It does not replace the master blueprint.
 | `WS03-02` | Provisioning, account-state lifecycle, and concurrent first login | Accepted executable pass. |
 | `WS03-03` | High-risk authentication and Firebase control verification | Decomposed into accepted executable child passes `WS03-03A` and `WS03-03B`. |
 | `WS03-04` | Complete authorization matrix and negative proof | Decomposed into accepted executable child passes `WS03-04A`, `WS03-04B`, `WS03-04C`, and `WS03-04D`; WS03-04 parent complete, with the Stripe webhook lifecycle gap explicitly covered elsewhere by `WS05`. |
-| `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | Decomposed into `WS03-05A`, `WS03-05B`, `WS03-05C`, and `WS03-05D`; this revision records A accepted on merge, B as the next current child, C after B, and D after B plus its applicable reusable `WS09-02` audit-capability prerequisite. |
+| `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | `WS03-05A` is accepted. `WS03-05B` is implemented but unmerged and must be reduced to the corrected master target before merge. Corrected `WS03-05C` and `WS03-05D` scope remains in master section 8.1. |
 | `WS04-01` | Database engine/session lifecycle, connection budget, and least-privilege roles | Structurally revised after accepted `WS04-01A` and `WS04-01B`: revised `WS04-01C` accepted the provider-independent production-verification framework; final production topology/budget/role proof is preserved for mandatory later `WS04-01D` after final infrastructure is selected. |
-| `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Decomposed into accepted executable children `WS04-02A`, `WS04-02B`, and `WS04-02C`; this revision records the current executable child set complete when the substantive `WS04-02C` PR merges, with later-owned migration, payment, observability, operations, and final-infrastructure evidence preserved outside `WS04-02`. |
-| `WS04-03` | Migration policy, compatibility, interruption, and production-like rehearsal | Decomposed into current executable child `WS04-03A` plus mandatory deferred follow-up `WS04-03B`; this revision records `WS04-03A` as accepted on merge while final provider/runtime migration rehearsal remains open. |
-| `WS05-01` | Durable job model, claim/lease lifecycle, and worker deployment | Decomposed into current executable child `WS05-01A` plus mandatory deferred follow-up `WS05-01B`; this revision records `WS05-01A` as accepted on merge while final worker hosting/runtime proof remains open. |
-| `WS05-02` | Payment and booking state machines with webhook authority | Accepted direct executable pass on merge; source-owned payment/booking/webhook state-machine obligations are implemented while final worker hosting, provider/runtime proof, refund execution, observability, and operations evidence remain preserved for later owners. |
-| `WS05-03` | Refunds, credits, notices, moderation delivery, and reconciliation | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS05-04` | Deterministic failure, replay, sandbox, and deployed-worker verification | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS06-01` | Admin-only venue-image authority and upload initiation | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS06-02` | Venue-image validation, sanitization, re-encoding, and derivatives | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS06-03` | R2 lifecycle, deletion, cache behavior, reconciliation, and recovery | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS07-01` | Production frontend build, public configuration, artifact identity, and source maps | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS07-02` | Authentication persistence, identity-scoped state, logout, switch, and safe retries | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS07-03` | Routes, API errors, forms, URLs, browser storage, and resilient UI state | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS07-04` | Third-party browser code, CSP/SRI posture, headers, and provider failure isolation | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS07-05` | WCAG 2.2 AA, browser support, and performance verification | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS08-01` | Complete current-test inventory, fixtures, and control mapping | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS08-02` | Critical workflow, deterministic concurrency, migration, provider, privacy, and recovery suites | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS08-03` | Reproducible CI, scans, branch protection, SBOM, provenance, and release evidence | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS09-01` | Structured request/event logging, correlation, redaction, and log aggregation | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS09-02` | Append-only administrative audit trail and sensitive-access controls | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS09-03` | Metrics, service objectives, dashboards, alerts, capacity, and cost evidence | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS10-01` | Data classification, table lifecycle, retention, privacy, and audit lifecycle | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS10-02` | Secrets, provider control-plane access, MFA, rotation, revocation, and offboarding | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS10-03` | Incident response, provider-outage handling, and operational runbooks | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `WS10-04` | Backup/PITR evidence, isolated restore, recovery validation, and exercises | Not yet decomposed/implemented. Requires Stage 0 before first-time implementation when selected by current program progression. |
-| `CLOSE-01` | Cross-workstream evidence completeness and discrepancy sweep | Not yet selected in this register. Requires all workstream exit gates. |
-| `CLOSE-02` | Fresh 163-control reassessment and production-readiness decision | Not yet selected in this register. Requires `CLOSE-01` and all correction/retest passes. |
+| `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Accepted children `WS04-02A`, `WS04-02B`, and `WS04-02C`; later-owned corrected-master work remains outside this historical parent. |
+| `WS04-03` | Migration policy, compatibility, interruption, and production-like rehearsal | `WS04-03A` is accepted; corrected `WS04-03B` final migration/runtime rehearsal remains deferred. |
+| `WS05-01` | Durable job model, claim/lease lifecycle, and worker deployment | `WS05-01A` is accepted; corrected `WS05-01B` final worker deployment/runtime proof remains deferred. |
+| `WS05-02` | Payment and booking state machines with webhook authority | Accepted; surviving later refund, provider/runtime, observability, and operations work is governed by the corrected master. |
+| `WS05-03` | Refunds, credits, notices and reconciliation | Not implemented. Corrected scope is governed by master section 8.3; scope or decompose only if genuinely needed. |
+| `WS05-04` | Failure/concurrency/provider verification | Not implemented. Corrected scope is governed by master section 8.3; scope or decompose only if genuinely needed. |
+| `WS06-01` | Admin upload authority and initiation | Not implemented. Corrected scope is governed by master section 8.4; scope or decompose only if genuinely needed. |
+| `WS06-02` | Image validation and sanitization | Not implemented. Corrected scope is governed by master section 8.4; scope or decompose only if genuinely needed. |
+| `WS06-03` | R2 lifecycle and repair | Not implemented. Corrected scope is governed by master section 8.4; scope or decompose only if genuinely needed. |
+| `WS07-01` | Production build and public configuration | Not implemented. Corrected scope is governed by master section 8.5; scope or decompose only if genuinely needed. |
+| `WS07-02` | Identity-scoped state and safe retries | Not implemented. Corrected scope is governed by master section 8.5; scope or decompose only if genuinely needed. |
+| `WS07-03` | Routes, forms and resilient UI state | Not implemented. Corrected scope is governed by master section 8.5; scope or decompose only if genuinely needed. |
+| `WS07-04` | Browser security and third-party code | Not implemented. Corrected scope is governed by master section 8.5; scope or decompose only if genuinely needed. |
+| `WS07-05` | Accessibility, browser support and performance | Not implemented. Corrected scope is governed by master section 8.5; scope or decompose only if genuinely needed. |
+| `WS08-01` | Current test inventory and gap cleanup | Not implemented. Corrected scope is governed by master section 8.6; do not recreate trusted-root, checker, or permanent compliance mapping. |
+| `WS08-02` | Critical risk-based suites | Not implemented. Corrected scope is governed by master section 8.6; scope or decompose only if genuinely needed. |
+| `WS08-03` | CI and supply-chain hardening | Not implemented. Corrected scope is governed by master section 8.6; no default SBOM or custom provenance/signing framework. |
+| `WS09-01` | Structured logging | Not implemented. Corrected scope is governed by master section 8.7; scope or decompose only if genuinely needed. |
+| `WS09-02` | Administrative auditability | Not implemented. Corrected scope is governed by master section 8.7; scope or decompose only if genuinely needed. |
+| `WS09-03` | Metrics, alerts and capacity | Not implemented. Corrected scope is governed by master section 8.7; no formal SLO/error-budget bureaucracy. |
+| `WS10-01` | Privacy/data lifecycle | Not implemented. Corrected scope is governed by master section 8.8; scope or decompose only if genuinely needed. |
+| `WS10-02` | Secrets and control-plane access | Not implemented. Corrected scope is governed by master section 8.8; scope or decompose only if genuinely needed. |
+| `WS10-03` | Incident readiness | Not implemented. Corrected scope is governed by master section 8.8; scope or decompose only if genuinely needed. |
+| `WS10-04` | Backup and recovery | Not implemented. Corrected scope is governed by master section 8.8; scope or decompose only if genuinely needed. |
+| `CLOSE-01` | Final discrepancy/completeness sweep | Not implemented. Use the small corrected-master check; do not build a universal evidence index or control dossier. |
+| `CLOSE-02` | Final readiness decision | Not implemented. Decide against actual corrected requirements, repository state, final evidence, and unresolved material risk. |
 
 ## 5. Accepted Executable Passes
 
-The following executable passes have accepted requirement declarations in the
-current repository. Counts are declaration counts, not proof-strength ratings.
-Every path in the Plan column is relative to
-`docs/production-readiness/planning/`.
+The following 39 executable passes are merged and accepted in the current
+repository. Plan paths are retained as implementation provenance, not current
+scope authority. Every path is relative to `docs/production-readiness/planning/`.
 
-| Executable pass | Blueprint parent | Plan | Requirement declaration | Requirements | Required | Covered elsewhere | Deferred | Current trusted scope |
-|---|---|---|---|---:|---:|---:|---:|---|
-| `EN-01` | `EN-01` | `passes/en/en-01-test-taxonomy-and-isolation-baseline.md` | `en01.json` | 11 | 11 | 0 | 0 | `checker` |
-| `EN-02` | `EN-02` | `passes/en/en-02-correlation-event-envelope-redaction-contract.md` | `en02.json` | 7 | 6 | 1 | 0 | `platform/observability` plus planning |
-| `EN-03` | `EN-03` | `passes/en/en-03-secrets-control-plane-evidence-foundation.md` | `en03.json` | 6 | 1 | 5 | 0 | `platform/secrets`, governance, planning |
-| `WS02-01` | `WS02-01` | `passes/ws02/ws02-01-typed-settings-environment-isolation.md` | `ws02_01.json` | 11 | 8 | 3 | 0 | `platform/settings` plus governance/planning |
-| `WS02-02` | `WS02-02` | `passes/ws02/ws02-02-runtime-lifecycle-health-deployability.md` | `ws02_02.json` | 10 | 8 | 1 | 1 | `platform/runtime` plus governance/planning |
-| `WS02-03` | `WS02-03` | `passes/ws02/ws02-03-proxy-host-tls-cors-security-headers.md` | `ws02_03.json` | 9 | 7 | 1 | 1 | `platform/http_security` plus governance/planning |
-| `WS02-04A` | `WS02-04` | `passes/ws02/ws02-04a-stable-error-contracts.md` | `ws02_04a.json` | 8 | 7 | 0 | 1 | `platform/api_errors` plus governance |
-| `WS02-04B1` | `WS02-04` | `passes/ws02/ws02-04b1-source-owned-boundaries.md` | `ws02_04b1.json` | 9 | 8 | 0 | 1 | `workflows/source_owned_boundaries` plus governance |
-| `WS02-04B2A1` | `WS02-04` | `passes/ws02/ws02-04b2a1-portable-request-boundaries.md` | `ws02_04b2a1.json` | 8 | 7 | 0 | 1 | `platform/request_body_limits` plus governance |
-| `WS02-04B2A2A` | `WS02-04` | `passes/ws02/ws02-04b2a2a-active-workflow-schema-bounds.md` | `ws02_04b2a2a.json` | 7 | 6 | 0 | 1 | `workflows/active_request_schema_bounds` plus governance |
-| `WS02-04B2A2B1` | `WS02-04` | `passes/ws02/ws02-04b2a2b1-route-lifecycle-cleanup.md` | `ws02_04b2a2b1.json` | 7 | 6 | 0 | 1 | `workflows/route_lifecycle_cleanup` plus governance |
-| `WS02-04B2A2B2` | `WS02-04` | `passes/ws02/ws02-04b2a2b2-opaque-provider-payment-inputs.md` | `ws02_04b2a2b2.json` | 8 | 7 | 0 | 1 | `workflows/provider_payment_input_ownership` plus governance |
-| `WS02-04B2A2B3` | `WS02-04` | `passes/ws02/ws02-04b2a2b3-policy-legal-request-ownership.md` | `ws02_04b2a2b3.json` | 6 | 5 | 0 | 1 | `workflows/policy_legal_request_ownership` plus governance |
-| `WS02-04B2A2C` | `WS02-04` | `passes/ws02/ws02-04b2a2c-ordinary-json-request-body-limit.md` | `ws02_04b2a2c.json` | 7 | 6 | 0 | 1 | `platform/request_body_limits` plus governance |
-| `WS02-04C1` | `WS02-04` | `passes/ws02/ws02-04c1-operation-timeouts-cancellation.md` | `ws02_04c1.json` | 10 | 9 | 0 | 1 | `platform/operation_timeouts` plus governance |
-| `WS02-04C2` | `WS02-04` | `passes/ws02/ws02-04c2-retry-reconciliation-backpressure.md` | `ws02_04c2.json` | 11 | 10 | 0 | 1 | `platform/retry_reconciliation` plus governance |
-| `WS02-04C3A` | `WS02-04` | `passes/ws02/ws02-04c3a-chat-rate-limit-contract.md` | `ws02_04c3a.json` | 11 | 10 | 0 | 1 | `platform/chat_rate_limits` plus governance |
-| `WS02-04C3B` | `WS02-04` | `passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md` | `ws02_04c3b.json` | 8 | 7 | 0 | 1 | `platform/provider_cost_rate_limits` plus governance |
-| `WS02-05A` | `WS02-05` | `passes/ws02/ws02-05a-http-openapi-cache-contracts.md` | `ws02_05a.json` | 8 | 7 | 0 | 1 | `platform/http_contracts` plus governance |
-| `WS02-05B1` | `WS02-05` | `passes/ws02/ws02-05b1-request-ownership.md` | `ws02_05b1.json` | 7 | 6 | 0 | 1 | `workflows/request_ownership` plus governance |
-| `WS02-05B2` | `WS02-05` | `passes/ws02/ws02-05b2-response-minimization.md` | `ws02_05b2.json` | 10 | 9 | 0 | 1 | `workflows/response_minimization` plus governance |
-| `WS03-01` | `WS03-01` | `passes/ws03/ws03-01-identity-authority.md` | `ws03_01.json` | 11 | 10 | 0 | 1 | `workflows/identity_authority` plus governance |
-| `WS03-02` | `WS03-02` | `passes/ws03/ws03-02-account-lifecycle-concurrency.md` | `ws03_02.json` | 12 | 11 | 0 | 1 | `workflows/account_lifecycle_concurrency` plus governance |
-| `WS03-03A` | `WS03-03` | `passes/ws03/ws03-03a-recent-auth-step-up.md` | `ws03_03a.json` | 14 | 11 | 0 | 3 | `workflows/recent_auth_step_up` plus governance |
-| `WS03-03B` | `WS03-03` | `passes/ws03/ws03-03b-app-check-admin-mfa-firebase-governance.md` | `ws03_03b.json` | 10 | 7 | 0 | 3 | `workflows/app_check_provider_security` plus governance |
-| `WS03-04A` | `WS03-04` | `passes/ws03/ws03-04a-authorization-matrix-foundation.md` | `ws03_04a.json` | 9 | 8 | 0 | 1 | `workflows/authorization_matrix_foundation` plus governance |
-| `WS03-04B` | `WS03-04` | `passes/ws03/ws03-04b-self-owned-account-notification-financial-authorization.md` | `ws03_04b.json` | 10 | 9 | 0 | 1 | `workflows/self_owned_account_notification_financial_authorization` plus governance |
-| `WS03-04C` | `WS03-04` | `passes/ws03/ws03-04c-game-community-roster-chat-need-a-sub-relationship-authorization.md` | `ws03_04c.json` | 12 | 11 | 0 | 1 | `workflows/game_community_roster_chat_need_a_sub_relationship_authorization` plus governance |
-| `WS03-04D` | `WS03-04` | `passes/ws03/ws03-04d-admin-route-list-high-risk-function-authorization.md` | `ws03_04d.json` | 12 | 12 | 0 | 0 | `workflows/admin_route_list_high_risk_function_authorization` plus governance |
-| `WS03-05A` | `WS03-05` | `passes/ws03/ws03-05a-versioned-moderation-taxonomy-finding-evidence-lifecycle.md` | `ws03_05a.json` | 6 | 6 | 0 | 0 | `workflows/moderation_taxonomy_finding_evidence_lifecycle` plus governance/migration compatibility |
-| `WS04-01A` | `WS04-01` | `passes/ws04/ws04-01a-application-database-lifecycle-pool-settings-role-credential-boundaries.md` | `ws04_01a.json` | 7 | 7 | 0 | 0 | `workflows/application_database_lifecycle_pool_settings_role_credential_boundaries` |
-| `WS04-01B` | `WS04-01` | `passes/ws04/ws04-01b-query-cursor-database-access-behavior.md` | `ws04_01b.json` | 7 | 7 | 0 | 0 | `workflows/query_cursor_database_access_behavior` |
-| `WS04-01C` | `WS04-01` | `passes/ws04/ws04-01c-production-postgresql-topology-connection-budget-role-verification.md` | `ws04_01c.json` | 8 | 8 | 0 | 0 | `platform/production_database_verification` |
-| `WS04-02A` | `WS04-02` | `passes/ws04/ws04-02a-transaction-boundary-external-side-effect-safety.md` | `ws04_02a.json` | 8 | 8 | 0 | 0 | `workflows/transaction_boundary_external_side_effect_safety` |
-| `WS04-02B` | `WS04-02` | `passes/ws04/ws04-02b-database-enforced-invariants-locks-deterministic-concurrency.md` | `ws04_02b.json` | 9 | 9 | 0 | 0 | `workflows/database_invariants_locks_deterministic_concurrency` |
-| `WS04-02C` | `WS04-02` | `passes/ws04/ws04-02c-database-value-default-and-sql-safety-compatibility.md` | `ws04_02c.json` | 8 | 8 | 0 | 0 | `workflows/database_value_default_sql_safety_compatibility` |
-| `WS04-03A` | `WS04-03` | `passes/ws04/ws04-03a-provider-independent-migration-policy-compatibility-graph-drift-controlled-rehearsal.md` | `ws04_03a.json` | 8 | 8 | 0 | 0 | `migrations/migration_policy_compatibility_rehearsal` |
-| `WS05-01A` | `WS05-01` | `passes/ws05/ws05-01a-provider-independent-durable-job-model-claim-lease-lifecycle-portable-worker-runtime.md` | `ws05_01a.json` | 9 | 8 | 0 | 1 | `platform/durable_jobs` plus runtime/migration/SQL-safety/retry compatibility |
-| `WS05-02` | `WS05-02` | `passes/ws05/ws05-02-payment-booking-state-machines-webhook-authority.md` | `ws05_02.json` | 8 | 7 | 0 | 1 | `workflows/payment_booking_state_machines_webhook_authority` plus planning |
+| Executable pass | Historical parent | Plan | State |
+|---|---|---|---|
+| `EN-01` | `EN-01` | `passes/en/en-01-test-taxonomy-and-isolation-baseline.md` | Accepted |
+| `EN-02` | `EN-02` | `passes/en/en-02-correlation-event-envelope-redaction-contract.md` | Accepted |
+| `EN-03` | `EN-03` | `passes/en/en-03-secrets-control-plane-evidence-foundation.md` | Accepted |
+| `WS02-01` | `WS02-01` | `passes/ws02/ws02-01-typed-settings-environment-isolation.md` | Accepted |
+| `WS02-02` | `WS02-02` | `passes/ws02/ws02-02-runtime-lifecycle-health-deployability.md` | Accepted |
+| `WS02-03` | `WS02-03` | `passes/ws02/ws02-03-proxy-host-tls-cors-security-headers.md` | Accepted |
+| `WS02-04A` | `WS02-04` | `passes/ws02/ws02-04a-stable-error-contracts.md` | Accepted |
+| `WS02-04B1` | `WS02-04` | `passes/ws02/ws02-04b1-source-owned-boundaries.md` | Accepted |
+| `WS02-04B2A1` | `WS02-04` | `passes/ws02/ws02-04b2a1-portable-request-boundaries.md` | Accepted |
+| `WS02-04B2A2A` | `WS02-04` | `passes/ws02/ws02-04b2a2a-active-workflow-schema-bounds.md` | Accepted |
+| `WS02-04B2A2B1` | `WS02-04` | `passes/ws02/ws02-04b2a2b1-route-lifecycle-cleanup.md` | Accepted |
+| `WS02-04B2A2B2` | `WS02-04` | `passes/ws02/ws02-04b2a2b2-opaque-provider-payment-inputs.md` | Accepted |
+| `WS02-04B2A2B3` | `WS02-04` | `passes/ws02/ws02-04b2a2b3-policy-legal-request-ownership.md` | Accepted |
+| `WS02-04B2A2C` | `WS02-04` | `passes/ws02/ws02-04b2a2c-ordinary-json-request-body-limit.md` | Accepted |
+| `WS02-04C1` | `WS02-04` | `passes/ws02/ws02-04c1-operation-timeouts-cancellation.md` | Accepted |
+| `WS02-04C2` | `WS02-04` | `passes/ws02/ws02-04c2-retry-reconciliation-backpressure.md` | Accepted |
+| `WS02-04C3A` | `WS02-04` | `passes/ws02/ws02-04c3a-chat-rate-limit-contract.md` | Accepted |
+| `WS02-04C3B` | `WS02-04` | `passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md` | Accepted |
+| `WS02-05A` | `WS02-05` | `passes/ws02/ws02-05a-http-openapi-cache-contracts.md` | Accepted |
+| `WS02-05B1` | `WS02-05` | `passes/ws02/ws02-05b1-request-ownership.md` | Accepted |
+| `WS02-05B2` | `WS02-05` | `passes/ws02/ws02-05b2-response-minimization.md` | Accepted |
+| `WS03-01` | `WS03-01` | `passes/ws03/ws03-01-identity-authority.md` | Accepted |
+| `WS03-02` | `WS03-02` | `passes/ws03/ws03-02-account-lifecycle-concurrency.md` | Accepted |
+| `WS03-03A` | `WS03-03` | `passes/ws03/ws03-03a-recent-auth-step-up.md` | Accepted |
+| `WS03-03B` | `WS03-03` | `passes/ws03/ws03-03b-app-check-admin-mfa-firebase-governance.md` | Accepted |
+| `WS03-04A` | `WS03-04` | `passes/ws03/ws03-04a-authorization-matrix-foundation.md` | Accepted |
+| `WS03-04B` | `WS03-04` | `passes/ws03/ws03-04b-self-owned-account-notification-financial-authorization.md` | Accepted |
+| `WS03-04C` | `WS03-04` | `passes/ws03/ws03-04c-game-community-roster-chat-need-a-sub-relationship-authorization.md` | Accepted |
+| `WS03-04D` | `WS03-04` | `passes/ws03/ws03-04d-admin-route-list-high-risk-function-authorization.md` | Accepted |
+| `WS03-05A` | `WS03-05` | `passes/ws03/ws03-05a-versioned-moderation-taxonomy-finding-evidence-lifecycle.md` | Accepted |
+| `WS04-01A` | `WS04-01` | `passes/ws04/ws04-01a-application-database-lifecycle-pool-settings-role-credential-boundaries.md` | Accepted |
+| `WS04-01B` | `WS04-01` | `passes/ws04/ws04-01b-query-cursor-database-access-behavior.md` | Accepted |
+| `WS04-01C` | `WS04-01` | `passes/ws04/ws04-01c-production-postgresql-topology-connection-budget-role-verification.md` | Accepted |
+| `WS04-02A` | `WS04-02` | `passes/ws04/ws04-02a-transaction-boundary-external-side-effect-safety.md` | Accepted |
+| `WS04-02B` | `WS04-02` | `passes/ws04/ws04-02b-database-enforced-invariants-locks-deterministic-concurrency.md` | Accepted |
+| `WS04-02C` | `WS04-02` | `passes/ws04/ws04-02c-database-value-default-and-sql-safety-compatibility.md` | Accepted |
+| `WS04-03A` | `WS04-03` | `passes/ws04/ws04-03a-provider-independent-migration-policy-compatibility-graph-drift-controlled-rehearsal.md` | Accepted |
+| `WS05-01A` | `WS05-01` | `passes/ws05/ws05-01a-provider-independent-durable-job-model-claim-lease-lifecycle-portable-worker-runtime.md` | Accepted |
+| `WS05-02` | `WS05-02` | `passes/ws05/ws05-02-payment-booking-state-machines-webhook-authority.md` | Accepted |
 
-## 6. Accepted Stage 0 Intake Records
+## 6. Historical Decomposition And Intake Records
 
-| Parent pass | Intake record | SHA-256 | Accepted by executable pass | Accepted state |
+These records explain how accepted work was divided. Their paths and historical
+SHAs are provenance only; future work does not require a frozen intake artifact.
+
+| Parent pass | Intake record | Historical SHA-256 | Accepted by executable pass | Accepted state |
 |---|---|---|---|---|
-| `WS03-04` | `docs/production-readiness/planning/passes/ws03/ws03-04-intake.md` | `e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4` | `WS03-04A` | Accepted in `develop` through `WS03-04A`; reused by the remaining `WS03-04` children. |
-| `WS03-05` | `docs/production-readiness/planning/passes/ws03/ws03-05-intake.md` | `4c255545449a085591f412175253f0b0207abcfc53c61f0c4cd60c89125a1a02` | `WS03-05A` | Accepted four-child structure on merge: A accepted; B is the next current child; C follows B; D follows B and the applicable accepted reusable append-only audit capability under `WS09-02`. |
+| `WS03-04` | `docs/production-readiness/planning/passes/ws03/ws03-04-intake.md` | `e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4` | `WS03-04A`, `WS03-04B`, `WS03-04C`, `WS03-04D` | Historical four-child decomposition; all four children are accepted in `develop`. |
+| `WS03-05` | `docs/production-readiness/planning/passes/ws03/ws03-05-intake.md` | `4c255545449a085591f412175253f0b0207abcfc53c61f0c4cd60c89125a1a02` | `WS03-05A` | Historical four-child decomposition. A is accepted; B is implemented but unmerged and requires corrected-master correction; current C/D scope comes from master section 8.1. |
 | `WS04-01` | `docs/production-readiness/planning/passes/ws04/ws04-01-intake.md` | `cb26606f6bca7dbc304a07e172771eeeebcece5312f73627fe8c67738a960ced` | `WS04-01A`, `WS04-01B`, `WS04-01C` | Accepted A/B/C structure preserved; mandatory later `WS04-01D` remains deferred until final production infrastructure is selected. |
-| `WS04-02` | `docs/production-readiness/planning/passes/ws04/ws04-02-intake.md` | `bbcea141dec04890be5c0812131996548f86f82f6bc80ad66ce7f700e6ba3701` | `WS04-02A`, `WS04-02B`, `WS04-02C` | Accepted three-child structure: `WS04-02A -> WS04-02B -> WS04-02C`; this revision records the current child set complete when the substantive `WS04-02C` PR merges. |
+| `WS04-02` | `docs/production-readiness/planning/passes/ws04/ws04-02-intake.md` | `bbcea141dec04890be5c0812131996548f86f82f6bc80ad66ce7f700e6ba3701` | `WS04-02A`, `WS04-02B`, `WS04-02C` | Accepted three-child structure: `WS04-02A -> WS04-02B -> WS04-02C`; all three children are accepted. |
 | `WS04-03` | `docs/production-readiness/planning/passes/ws04/ws04-03-intake.md` | `ffc3e81d2d55ce9cca60d6ae40390d8ae9df2d8f8d3995b4b9c8464c101cfb48` | `WS04-03A` | Accepted split: `WS04-03A` is the current provider-independent migration-policy/rehearsal child; mandatory `WS04-03B` remains deferred until final production database provider, deployment topology, migration runner, and production-equivalent rehearsal inputs are selected and evidenced. |
 | `WS05-01` | `docs/production-readiness/planning/passes/ws05/ws05-01-intake.md` | `1cfa5be5898cf0e53730c7841e5c5c89d9a824c8e10b644b0fcb835e50890720` | `WS05-01A` | Accepted split: `WS05-01A` is the current provider-independent durable-job foundation child; mandatory `WS05-01B` remains deferred until final worker platform, service topology, process/instance model, scaling/resource settings, provider deployment path, and runtime verification environment are selected and evidenced. |
-| `WS05-02` | `docs/production-readiness/planning/passes/ws05/ws05-02-intake.md` | `4450d47c4bd44678b7f9ccd07a229740aad5fdec443153a0d8677dd3491f8ab1` | `WS05-02` | Accepted direct executable pass: source-owned payment/booking/webhook authority scope is complete on merge; final worker hosting, Stripe sandbox/deployed webhook proof, refund/credit execution, observability, and operations evidence remain deferred to the later owners named by `WS05-02-R8`. |
+| `WS05-02` | `docs/production-readiness/planning/passes/ws05/ws05-02-intake.md` | `4450d47c4bd44678b7f9ccd07a229740aad5fdec443153a0d8677dd3491f8ab1` | `WS05-02` | Accepted direct executable pass; surviving later payment, provider/runtime, observability, and operations work is governed by the corrected master. |
 
-Historical WS02-04, WS02-05, and WS03-03 decompositions remain accepted. Do
-not fabricate retroactive intake records for them.
-
-Future Stage 0 intake records use:
-
-```text
-docs/production-readiness/planning/passes/<family>/<parent-id>-intake.md
-```
-
-A valid Stage 0 result freezes the exact intake path and SHA-256 for the current
-automated run. When the first substantive child or direct parent PR merges, that
-intake becomes accepted in `develop` and is reused by later children unless a
-structural Stage 0 revision is required. The intake is not a Gate B-editable
-file.
+Historical WS02-04, WS02-05, and WS03-03 decompositions remain accepted
+provenance. Do not fabricate retroactive intake records for them. For future
+work, record a decomposition only when the selected corrected-master unit
+genuinely needs one.
 
 ## 7. Parent Decomposition Records
+
+The detailed records below describe accepted implementation history. Historical
+plans, labels, paths, and SHAs are provenance only and do not control future
+scope or require the old frozen-artifact workflow.
 
 ### WS02-04
 
@@ -261,20 +255,20 @@ provider/runtime/governance evidence remains later-owned.
 
 Original parent: `WS03-04 - Complete authorization matrix and negative proof`.
 
-Accepted Stage 0 intake:
+Historical Stage 0 intake:
 `docs/production-readiness/planning/passes/ws03/ws03-04-intake.md`
 
-Frozen intake SHA-256:
+Historical intake SHA-256:
 `e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4`
 
-Accepted executable children:
+Historical executable-child plan:
 
 1. `WS03-04A`
 2. `WS03-04B`
 3. `WS03-04C`
 4. `WS03-04D`
 
-Accepted dependency graph:
+Historical dependency graph:
 `WS03-04A -> {WS03-04B, WS03-04C} -> WS03-04D`
 
 `WS03-04A` owns the authorization matrix foundation and route drift guard.
@@ -304,20 +298,20 @@ WS05 payment/webhook evidence.
 Original parent: `WS03-05 - Moderation states, safe notices, and
 minimum-necessary admin data`.
 
-Accepted Stage 0 intake:
+Historical Stage 0 intake:
 `docs/production-readiness/planning/passes/ws03/ws03-05-intake.md`
 
-Frozen intake SHA-256:
+Historical intake SHA-256:
 `4c255545449a085591f412175253f0b0207abcfc53c61f0c4cd60c89125a1a02`
 
-Accepted executable children:
+Historical executable-child plan:
 
 1. `WS03-05A - Versioned moderation taxonomy and finding-evidence lifecycle`
 2. `WS03-05B - Conflict-safe moderation review-case lifecycle`
 3. `WS03-05C - Action-scoped moderation enforcement and safe-notice contract`
 4. `WS03-05D - Minimum-necessary admin data and audited sensitive access`
 
-Accepted dependency graph:
+Historical dependency graph:
 `WS03-05A -> WS03-05B -> {WS03-05C, WS03-05D}`, with `WS03-05D` also
 requiring the applicable accepted reusable append-only audit capability under
 `WS09-02`.
@@ -325,33 +319,37 @@ requiring the applicable accepted reusable append-only audit capability under
 `WS03-05A` owns `ADM-009`/`ADM-010` taxonomy and finding-evidence identity. Its
 canonical plan is
 `docs/production-readiness/planning/passes/ws03/ws03-05a-versioned-moderation-taxonomy-finding-evidence-lifecycle.md`
-with frozen SHA-256
+with historical SHA-256
 `279aee40401cf123bdcee1c5d17b605e6da99bf4ca0f1c87b800364bf265337b`.
-This revision records A accepted on merge. It does not expand review-case state,
+`WS03-05A` is accepted in `develop`. It does not expand review-case state,
 enforcement, notices, or sensitive administrative access.
 
-`WS03-05B` owns `ADM-012` review-case lifecycle and is the deterministic next
-current child after A. `WS03-05C` owns `ADM-013`/`ADM-014` action-scoped
-enforcement and safe-notice semantics after B. `WS03-05D` owns
-`ADM-007`/`ADM-015` minimum-necessary and audited sensitive access after B, but
-must not enable audit-dependent access until the applicable reusable
-append-only audit capability from `WS09-02` is accepted.
+`WS03-05B` was implemented under the historical `ADM-012` review-case lifecycle
+scope. Its canonical plan is
+`docs/production-readiness/planning/passes/ws03/ws03-05b-conflict-safe-moderation-review-case-lifecycle.md`
+with historical SHA-256
+`7fc296334af820bff3e24adbda47cd0450782c271ed2ea539c546789eaa94a28`.
+PR #176 is unmerged and must not merge as currently implemented. The corrected
+master requires retaining only the necessary review-case safety behavior and
+removing assignment, reopen, merge, formal note-correction, expanded history UI,
+and duplicate PL/pgSQL workflow machinery. Current `WS03-05C` and `WS03-05D`
+scope is defined only by corrected-master section 8.1.
 
 No final-infrastructure follow-up is created by this parent. Durable notice
-delivery/reconciliation remains `WS05-03`-owned, reusable append-only audit
-persistence/access remains `WS09-02`-owned, and those later responsibilities do
-not block A, B, or C. The parent remains incomplete until A/B/C/D are accepted
-and all allocated obligations are truthfully satisfied.
+delivery/reconciliation remains `WS05-03`-owned and minimum necessary
+administrative auditability remains later-owned. Parent completion depends on
+the surviving obligations in the corrected master, not the historical child
+contract or control labels.
 
 ### WS04-01
 
 Original parent: `WS04-01 - Database engine/session lifecycle, connection
 budget, and least-privilege roles`.
 
-Accepted Stage 0 intake, structurally revised after accepted A/B:
+Historical Stage 0 intake, structurally revised after accepted A/B:
 `docs/production-readiness/planning/passes/ws04/ws04-01-intake.md`
 
-Current frozen intake SHA-256:
+Historical intake SHA-256:
 `cb26606f6bca7dbc304a07e172771eeeebcece5312f73627fe8c67738a960ced`
 
 Accepted executable children:
@@ -360,7 +358,7 @@ Accepted executable children:
 2. `WS04-01B`
 3. `WS04-01C - Production PostgreSQL verification framework and evidence contract`
 
-Current dependency graph:
+Historical dependency graph:
 `WS04-01A + WS04-01B -> WS04-01C`
 
 `WS04-01A` owns application database lifecycle, pool settings, request-session
@@ -418,17 +416,17 @@ values remain late-bound until the final infrastructure is selected.
 After accepted `WS04-01C`, the provider-independent database foundation is
 complete for downstream engineering that needs only accepted source/database
 contracts. Final `DB-002` budget evidence and final `DB-015` production
-role/grant evidence remain explicitly deferred to `WS04-01D` and the controls
-must not be treated as closed.
+role/grant evidence remain explicitly deferred to `WS04-01D` and those
+requirements must not be treated as complete.
 
 No current `WS04-01` child remains executable while the `WS04-01D` external
 trigger is false. `WS04-01` remains incomplete until `WS04-01D` is accepted or
 the deferred obligation is otherwise truthfully resolved under durable
 authority.
 
-A downstream Stage 0 or Gate A may proceed from A/B/C only when its own required
-inputs are already accepted. If it requires a D-owned production fact, it must
-stop on that specific missing prerequisite rather than inventing it.
+A downstream unit may proceed from A/B/C only when its own required inputs are
+already accepted. If it requires a D-owned production fact, it must stop on that
+specific missing prerequisite rather than inventing it.
 
 `WS04-01D` is mandatory before `CLOSE-01` and final production-readiness
 reassessment. It may be executed earlier as soon as its final-infrastructure
@@ -439,10 +437,10 @@ trigger is satisfied.
 Original parent: `WS04-02 - Transactions, invariants, locks, and deterministic
 concurrency`.
 
-Accepted Stage 0 intake:
+Historical Stage 0 intake:
 `docs/production-readiness/planning/passes/ws04/ws04-02-intake.md`
 
-Frozen intake SHA-256:
+Historical intake SHA-256:
 `bbcea141dec04890be5c0812131996548f86f82f6bc80ad66ce7f700e6ba3701`
 
 Accepted executable children:
@@ -472,7 +470,7 @@ dashboards, alerts, or final production infrastructure evidence.
 `WS04-02B` owns the current database-enforced invariant policy; game, roster,
 waitlist, and credit financial dispositions; deterministic game-first locking
 proof; independent-session PostgreSQL contention evidence; account-deletion
-multi-game roster cleanup ordering; and the current source testing record for
+multi-game roster cleanup ordering; and the recorded test evidence for
 database-enforced invariants.
 
 `WS04-02B` does not close database value/default compatibility, SQL/logging
@@ -487,7 +485,7 @@ JSON/JSONB default and payload-shape safety; current raw-SQL construction and
 parameterization; repository-owned SQL/value logging safety; and compatibility
 proof that accepted `WS04-01A/B/C` and `WS04-02A/B` contracts remain intact.
 
-When `WS04-02C` is accepted, the current executable `WS04-02` child set is
+With `WS04-02C` accepted, the historical executable `WS04-02` child set is
 complete. Later-owned obligations explicitly allocated to `WS05`, `WS04-03`,
 `WS09`, `WS10`, or `WS04-01D` remain preserved outside this parent and are not
 claimed as closed by `WS04-02A`, `WS04-02B`, or `WS04-02C`.
@@ -497,10 +495,10 @@ claimed as closed by `WS04-02A`, `WS04-02B`, or `WS04-02C`.
 Original parent: `WS04-03 - Migration policy, compatibility, interruption, and
 production-like rehearsal`.
 
-Accepted Stage 0 intake:
+Historical Stage 0 intake:
 `docs/production-readiness/planning/passes/ws04/ws04-03-intake.md`
 
-Frozen intake SHA-256:
+Historical intake SHA-256:
 `ffc3e81d2d55ce9cca60d6ae40390d8ae9df2d8f8d3995b4b9c8464c101cfb48`
 
 Accepted executable and deferred children:
@@ -515,7 +513,7 @@ Accepted dependency graph:
 old/new compatibility expectations, Alembic graph and drift checks,
 empty-database and controlled prior-schema upgrades, dedicated migration-test
 database safety, interruption/retry/reset rehearsal, current migration
-operation classification, and trusted migration evidence under
+operation classification, and migration evidence under
 `backend/tests/migrations/`.
 
 `WS04-03A` does not close final provider/runtime migration ceilings,
@@ -534,10 +532,10 @@ accepted or otherwise truthfully resolved under durable authority.
 Original parent: `WS05-01 - Durable job model, claim/lease lifecycle, and
 worker deployment`.
 
-Accepted Stage 0 intake:
+Historical Stage 0 intake:
 `docs/production-readiness/planning/passes/ws05/ws05-01-intake.md`
 
-Frozen intake SHA-256:
+Historical intake SHA-256:
 `1cfa5be5898cf0e53730c7841e5c5c89d9a824c8e10b644b0fcb835e50890720`
 
 Accepted executable and deferred children:
@@ -552,7 +550,7 @@ Accepted dependency graph:
 job event history, portable worker heartbeat state, idempotent transactional
 enqueue, atomic claim/lease/heartbeat mechanics, expired-lease recovery,
 bounded retry/exhaustion/repair framework, version-compatible handler registry,
-portable worker command, safe source-level operator summaries, and trusted
+portable worker command, safe source-level operator summaries, and
 provider-independent PostgreSQL evidence under `backend/tests/platform/durable_jobs/`.
 
 `WS05-01A` does not close final worker hosting, provider deployment topology,
@@ -574,10 +572,10 @@ truthfully resolved under durable authority.
 Original parent: `WS05-02 - Payment and booking state machines with webhook
 authority`.
 
-Accepted Stage 0 intake:
+Historical Stage 0 intake:
 `docs/production-readiness/planning/passes/ws05/ws05-02-intake.md`
 
-Frozen intake SHA-256:
+Historical intake SHA-256:
 `4450d47c4bd44678b7f9ccd07a229740aad5fdec443153a0d8677dd3491f8ab1`
 
 Accepted executable pass:
@@ -587,13 +585,13 @@ Accepted executable pass:
 Canonical plan:
 `docs/production-readiness/planning/passes/ws05/ws05-02-payment-booking-state-machines-webhook-authority.md`
 
-Frozen canonical-plan SHA-256:
+Historical canonical-plan SHA-256:
 `12f3a3c10a87a5558872e59a74d1d1d9c8bcb9ec139e2a199553ae844defe0ea`
 
 `WS05-02` is a direct executable parent pass. It owns the source-owned payment,
 booking, reservation, participant, saved-card, webhook-event, durable
-payment-job, and compensation-obligation transitions required by the frozen
-canonical plan. It preserves provider authority, bounded webhook/event/job
+payment-job, and compensation-obligation transitions implemented under the
+historical canonical plan. It preserves provider authority, bounded webhook/event/job
 payloads, game-first lock ordering for capacity-sensitive transitions,
 database-time reservation expiry, late-success compensation handoff, and
 saved-payment-method operation reconciliation.
@@ -605,48 +603,29 @@ alerts, runbooks, or other final infrastructure evidence. Those obligations
 remain deferred exactly as declared by `WS05-02-R8` to `WS05-01B`, `WS05-03`,
 `WS05-04`, `WS09`, and `WS10`.
 
-## 8. Remaining Parent Passes And Progression
+## 8. Remaining Work And Progression
 
-A parent that has not yet received Stage 0 intake requires Stage 0 before its
-first-time Gate A when that parent becomes the deterministic next unit.
+The corrected master defines the 27 remaining units and their surviving scope.
+This register records state but does not select or expand that work.
 
-This register participates in progression but does not act as the sole selector.
+For each selected unit:
 
-For an in-progress decomposed parent:
+1. start from current accepted `develop` and inspect current repository truth;
+2. apply the corrected master's scope, real prerequisites, ownership, and
+   provider-timing rules;
+3. use Stage 0 only when scope or decomposition genuinely needs clarification;
+4. use Gate A only when the work is complex enough to benefit from a reviewed
+   engineering plan;
+5. ask the owner to choose when more than one unit is valid and no real
+   dependency selects one.
 
-1. use the accepted intake/dependency graph;
-2. find incomplete current children whose prerequisites are accepted;
-3. if exactly one child is the deterministic next executable unit, begin that
-   child at fresh Gate A from current accepted `develop`;
-4. if multiple children are simultaneously eligible and the accepted
-   dependency/order does not choose between them, stop for owner selection.
+Late-bound final-infrastructure work becomes executable only when its provider,
+topology, runtime, or production-evidence inputs exist. Temporary demo values do
+not satisfy those facts. A deferred fact blocks only work that actually depends
+on it, and deferred evidence never counts as proof of completion.
 
-A structurally approved deferred follow-up with an unmet external trigger is not
-a current executable child merely because it has been named for future work. It
-must have an exact owner/pass, trigger, preserved obligation set, and latest
-required completion boundary. The program may continue only when current
-downstream work does not depend on the deferred facts. Deferred evidence never
-counts as proof or control closure.
-
-This rule applies program-wide, not only to `WS04-01`. Stage 0 for later parents
-must use the master blueprint's infrastructure-timing map to identify work that
-requires final hosting, database, edge, worker, storage, monitoring, backup, DNS,
-or other provider/runtime choices. Such work must not be satisfied with
-temporary demo/prototype configuration merely to keep the sequence moving.
-
-Before `CLOSE-01`, reconcile all mandatory deferred follow-ups and stop if any
-required follow-up, including `WS04-01D`, remains incomplete.
-
-For a completed parent:
-
-1. reconcile the master blueprint, final remediation plan, this register,
-   accepted prerequisites, and current repository truth;
-2. if exactly one next parent is determined, begin that parent at Stage 0;
-3. if durable authority leaves multiple equally valid next parents, stop for
-   owner selection.
-
-The exact remaining executable-unit count is intentionally unknown because
-future Stage 0 decompositions may create additional child passes.
+Before final readiness is declared, reconcile every surviving deferred
+obligation required by the corrected master.
 
 ## 9. Parent Completion And Consistency Rules
 
@@ -659,7 +638,8 @@ Maintain these invariants:
 - a deferred follow-up may preserve later provider/runtime proof only when the
   exact later pass, trigger, obligations, and latest completion boundary are
   recorded;
-- deferred or covered-elsewhere evidence does not close the underlying control;
+- deferred or covered-elsewhere evidence does not satisfy the underlying
+  requirement;
 - no duplicate child ID;
 - no missing child;
 - no unapproved overlap;
@@ -673,37 +653,20 @@ Update this register when:
 - a parent pass is decomposed;
 - a source-owned closeout is accepted;
 - an accepted pass is reverted or superseded;
-- a register entry is found stale during intake or Gate A.
+- a register entry is found stale while scoping, planning, or reviewing work.
 
 Register updates normally travel with the substantive pass PR that makes the
 new state true.
 
-Every substantive first-time executable pass must update this register when
-the pass merge changes accepted execution state. That register update is
-justified by the frozen pass scope and reviewed as part of the actual
-changed-file set. Program/documentation maintenance and historical rechecks
-remain outside this automatic first-time-pass rule unless their explicit scope
-says otherwise.
-
-For a first child PR, include the frozen intake/decomposition reference,
-accepted first-child state, remaining current-child state, and the parent's
-remaining obligations. For later child PRs, update the register for that child's
-accepted state and the remaining parent obligations. Acceptance of the final
-currently executable child completes only the current executable child set when a
-mandatory deferred follow-up remains outstanding; it must not mark the parent
-fully complete or the deferred controls proven. Mark a decomposed parent complete
-only when every accepted child obligation and every mandatory deferred follow-up
-has been accepted or otherwise truthfully resolved under durable authority. If a
-parent is kept whole and has no outstanding deferred obligation, update the
-register for direct parent completion in that substantive pass. Gate D never
-authors or semantically edits register content. Do not create routine tracker-only
-PRs.
+When a substantive change alters accepted execution state, update this register
+in that change rather than through a routine tracker-only PR. Record enough
+parent/child and deferred-obligation context to keep the status truthful. Do not
+mark work complete while a surviving corrected-master obligation remains open.
+Git/PR finalization must not invent or semantically rewrite execution state.
 
 Do not update this register to:
 
-- claim control closure without reassessment;
+- claim completion without reassessment;
 - store exact pytest node IDs;
-- replace requirement declarations;
-- replace `TESTING_RECORD.md`;
 - document secret, provider-private, or personal evidence;
 - act as the sole source for selecting the next pass.

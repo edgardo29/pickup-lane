@@ -601,14 +601,12 @@ def reconcile_booking_after_account_deletion(
         booking.reservation_status = "confirmed"
         booking.expires_at = None
         booking.participant_count = len(remaining_participants)
-        booking.subtotal_cents = (
-            booking.price_per_player_snapshot_cents * len(remaining_participants)
+        booking.subtotal_cents = booking.price_per_player_snapshot_cents * len(
+            remaining_participants
         )
         booking.discount_cents = min(booking.discount_cents, booking.subtotal_cents)
         booking.total_cents = (
-            booking.subtotal_cents
-            + booking.platform_fee_cents
-            - booking.discount_cents
+            booking.subtotal_cents + booking.platform_fee_cents - booking.discount_cents
         )
     else:
         booking.booking_status = "cancelled"
@@ -764,6 +762,9 @@ def cancel_future_community_hosted_games(
     user: User,
     now: datetime,
 ) -> None:
+    from backend.services.admin_review_service import (
+        close_open_content_moderation_case_for_game_lifecycle,
+    )
     from backend.services.game_cancellation_service import (
         cancel_game_bookings,
         cancel_game_participants,
@@ -792,6 +793,8 @@ def cancel_future_community_hosted_games(
             game,
             now,
             "host_cancelled",
+            user.id,
+            "system",
         )
         cancel_game_waitlist_entries(db, game, now)
         cancel_game_bookings(db, game, user, now, "host_cancelled")
@@ -820,6 +823,21 @@ def cancel_future_community_hosted_games(
         game.completed_by_user_id = None
         game.updated_at = now
         db.add(game)
+        close_open_content_moderation_case_for_game_lifecycle(
+            db,
+            game_id=game.id,
+            closure_outcome="no_action_needed",
+            closure_reason=(
+                "Community Game host deleted their account before moderation "
+                "review was completed."
+            ),
+            lifecycle_action="host_account_deleted",
+            trigger_actor_type="owner",
+            trigger_actor_user_id=user.id,
+            previous_game_status=old_game_status,
+            new_game_status="cancelled",
+            closed_at=now,
+        )
 
 
 def cancel_owned_need_a_sub_posts(
@@ -829,6 +847,9 @@ def cancel_owned_need_a_sub_posts(
     changed_by_user_id: uuid.UUID | None,
     now: datetime,
 ) -> None:
+    from backend.services.admin_review_service import (
+        close_open_content_moderation_case_for_sub_post_lifecycle,
+    )
     from backend.services.need_a_sub_lifecycle_service import (
         add_post_status_history,
         change_request_status,
@@ -867,6 +888,21 @@ def cancel_owned_need_a_sub_posts(
             changed_by_user_id,
             "system",
             "Owner account deleted.",
+        )
+        close_open_content_moderation_case_for_sub_post_lifecycle(
+            db,
+            sub_post_id=sub_post.id,
+            closure_outcome="no_action_needed",
+            closure_reason=(
+                "Need a Sub owner deleted their account before moderation "
+                "review was completed."
+            ),
+            lifecycle_action="owner_account_deleted",
+            trigger_actor_type="owner",
+            trigger_actor_user_id=user_id,
+            previous_post_status=old_status,
+            new_post_status="cancelled",
+            closed_at=now,
         )
         close_sub_post_chat_for_post(
             db,
@@ -1240,8 +1276,7 @@ def delete_account_workflow(
                 "failure_type": "auth_unlink_checkpoint_commit_error",
             },
             summary=(
-                "Firebase deletion succeeded, but the app auth unlink did not "
-                "commit."
+                "Firebase deletion succeeded, but the app auth unlink did not commit."
             ),
         )
         raise HTTPException(
@@ -1261,9 +1296,7 @@ def delete_account_workflow(
             db,
             user_id=user.id,
             created_by_user_id=user.id,
-            metadata=payment_method_result.support_metadata(
-                auth_identity_deleted=True
-            ),
+            metadata=payment_method_result.support_metadata(auth_identity_deleted=True),
             detached_payment_method_ids=(
                 payment_method_result.detached_saved_payment_method_ids
             ),
@@ -1290,9 +1323,7 @@ def delete_account_workflow(
             user_id=user.id,
             created_by_user_id=user.id,
             metadata={
-                **payment_method_result.support_metadata(
-                    auth_identity_deleted=True
-                ),
+                **payment_method_result.support_metadata(auth_identity_deleted=True),
                 "failure_type": "saved_payment_method_checkpoint_commit_error",
             },
             detached_payment_method_ids=(

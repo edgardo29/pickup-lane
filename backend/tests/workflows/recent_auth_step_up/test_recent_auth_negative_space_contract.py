@@ -253,9 +253,9 @@ def test_complete_admin_partition_fails_closed_for_drift_and_hidden_terminal_act
     classified = required | not_required | retired
 
     assert len(required) == 22
-    assert len(not_required) == 38
+    assert len(not_required) == 41
     assert len(retired) == 47
-    assert len(classified) == 107
+    assert len(classified) == 110
     assert required.isdisjoint(not_required)
     assert required.isdisjoint(retired)
     assert not_required.isdisjoint(retired)

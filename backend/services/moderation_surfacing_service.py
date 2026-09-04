@@ -58,8 +58,8 @@ logger = logging.getLogger(__name__)
 
 RETRYABLE_MODERATION_CONSTRAINTS = frozenset(
     {
-        "uq_admin_review_cases_open_community_game_content_moderation",
-        "uq_admin_review_cases_open_need_sub_content_moderation",
+        "uq_admin_review_cases_open_community_game_moderation",
+        "uq_admin_review_cases_open_need_sub_moderation",
         "uq_admin_content_moderation_findings_current_identity",
     }
 )
@@ -115,6 +115,7 @@ def get_community_game_detail(
     return db.scalar(
         select(CommunityGameDetail)
         .where(CommunityGameDetail.game_id == game_id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
 
@@ -173,7 +174,12 @@ def surface_community_game_text(
 ) -> None:
     for attempt in range(2):
         try:
-            game = db.scalar(select(Game).where(Game.id == game_id).with_for_update())
+            game = db.scalar(
+                select(Game)
+                .where(Game.id == game_id)
+                .execution_options(populate_existing=True)
+                .with_for_update()
+            )
             if (
                 game is None
                 or game.game_type != "community"
@@ -257,7 +263,10 @@ def surface_need_a_sub_post_text(
     for attempt in range(2):
         try:
             sub_post = db.scalar(
-                select(SubPost).where(SubPost.id == sub_post_id).with_for_update()
+                select(SubPost)
+                .where(SubPost.id == sub_post_id)
+                .execution_options(populate_existing=True)
+                .with_for_update()
             )
             if not is_sub_post_content_review_actionable(sub_post):
                 db.rollback()
@@ -408,6 +417,21 @@ def surface_game_chat_message_text(
     *,
     message_id: uuid.UUID,
 ) -> None:
+    game_id = db.scalar(
+        select(GameChat.game_id)
+        .join(ChatMessage, ChatMessage.chat_id == GameChat.id)
+        .where(ChatMessage.id == message_id)
+    )
+    if game_id is None:
+        return
+    locked_game = db.scalar(
+        select(Game)
+        .where(Game.id == game_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if locked_game is None:
+        return
     row = db.execute(
         select(ChatMessage, GameChat, Game)
         .join(GameChat, GameChat.id == ChatMessage.chat_id)
@@ -458,6 +482,23 @@ def surface_need_a_sub_chat_message_text(
     *,
     message_id: uuid.UUID,
 ) -> None:
+    sub_post_id = db.scalar(
+        select(SubPostChat.sub_post_id)
+        .join(SubPostChatMessage, SubPostChatMessage.chat_id == SubPostChat.id)
+        .where(SubPostChatMessage.id == message_id)
+    )
+    if sub_post_id is None:
+        return
+    if (
+        db.scalar(
+            select(SubPost)
+            .where(SubPost.id == sub_post_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        )
+        is None
+    ):
+        return
     row = db.execute(
         select(SubPostChatMessage, SubPostChat)
         .join(SubPostChat, SubPostChat.id == SubPostChatMessage.chat_id)

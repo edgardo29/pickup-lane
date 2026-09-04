@@ -38,6 +38,7 @@ def _persist_support_review_fixture(
     target: Any,
 ) -> tuple[uuid.UUID, uuid.UUID]:
     from backend.models import AdminReviewCase, SupportFlag
+    from backend.services.admin_review_service import create_case_event
 
     now = datetime.now(timezone.utc)
     with _session() as db:
@@ -62,12 +63,25 @@ def _persist_support_review_fixture(
             priority="attention",
             title="Local review case",
             summary="Local admin review authorization fixture.",
+            case_version=1,
+            creation_reason="trusted_admin_fixture",
             target_user_id=target.id,
             opened_by_user_id=admin.id,
             created_at=now,
             updated_at=now,
         )
         db.add_all([support_flag, review_case])
+        db.flush()
+        create_case_event(
+            db,
+            review_case_id=review_case.id,
+            event_type="case_created",
+            actor_kind="automation",
+            automation_rule_id="trusted_test_fixture",
+            automation_rule_version="1",
+            event_metadata={"source": "trusted_admin_fixture"},
+            created_at=now,
+        )
         db.commit()
         return support_flag.id, review_case.id
 
@@ -103,20 +117,24 @@ def _close_review_case_for_read_fixture(
     review_case_id: uuid.UUID,
     admin_id: uuid.UUID,
 ) -> None:
-    from backend.models import AdminReviewCase
+    from backend.models import User
+    from backend.schemas.admin_review_schema import AdminReviewCaseClose
+    from backend.services.admin_review_service import close_review_case
 
-    now = datetime.now(timezone.utc)
     with _session() as db:
-        review_case = db.get(AdminReviewCase, review_case_id)
-        assert review_case is not None
-        review_case.case_status = "closed"
-        review_case.closed_by_user_id = admin_id
-        review_case.closure_outcome = "no_action_needed"
-        review_case.closure_reason = "Closed local read/list fixture."
-        review_case.closed_at = now
-        review_case.updated_at = now
-        db.add(review_case)
-        db.commit()
+        admin = db.get(User, admin_id)
+        assert admin is not None
+        close_review_case(
+            db,
+            review_case_id=review_case_id,
+            admin_user=admin,
+            payload=AdminReviewCaseClose(
+                outcome="no_action_needed",
+                reason="Closed local read/list fixture.",
+                expected_case_version=1,
+                idempotency_key=f"ws03d-read-close-{uuid.uuid4()}",
+            ),
+        )
 
 
 def _support_flag_state(support_flag_id: uuid.UUID) -> dict[str, object]:
@@ -204,9 +222,7 @@ def test_platform_notice_create_requires_recent_admin_and_scopes_recipients(
         headers=_auth_headers("admin-token"),
     )
     assert list_response.status_code == 200
-    assert [item["id"] for item in list_response.json()["notices"]] == [
-        str(notice_id)
-    ]
+    assert [item["id"] for item in list_response.json()["notices"]] == [str(notice_id)]
     detail_response = client.get(
         f"/admin/platform-notices/{notice_id}",
         headers=_auth_headers("admin-token"),
@@ -302,9 +318,7 @@ def test_support_review_and_admin_action_reads_are_admin_only(
         headers=_auth_headers("admin-token"),
     )
     assert review_list.status_code == 200
-    assert [item["id"] for item in review_list.json()["cases"]] == [
-        str(review_case_id)
-    ]
+    assert [item["id"] for item in review_list.json()["cases"]] == [str(review_case_id)]
     assert review_list.json()["limit"] == 1
     review_detail = client.get(
         f"/admin/review-cases/{review_case_id}",
@@ -331,8 +345,7 @@ def test_support_review_and_admin_action_reads_are_admin_only(
     assert action_detail.json()["id"] == str(admin_action_id)
     assert action_detail.json()["target_support_flag_id"] == str(support_flag_id)
     assert {
-        detail["target_field"]
-        for detail in action_detail.json()["target_details"]
+        detail["target_field"] for detail in action_detail.json()["target_details"]
     } >= {"target_user_id", "target_support_flag_id"}
 
     unsupported_log = client.get(
@@ -403,6 +416,7 @@ def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
         f"/admin/review-cases/{review_case_id}/notes",
         json={
             "body": "Ordinary users must not add review notes.",
+            "expected_case_version": 1,
             "idempotency_key": f"ws03d-ordinary-review-note-{uuid.uuid4()}",
         },
         headers=_auth_headers("ordinary-token"),
@@ -433,6 +447,7 @@ def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
         f"/admin/review-cases/{review_case_id}/notes",
         json={
             "body": "Active admin review note.",
+            "expected_case_version": 1,
             "idempotency_key": f"ws03d-review-note-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
@@ -446,6 +461,7 @@ def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
         json={
             "outcome": "no_action_needed",
             "reason": "Close local review case after admin review.",
+            "expected_case_version": 2,
             "idempotency_key": f"ws03d-review-close-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -7,7 +7,10 @@ import {
   FileClock,
   Link2,
   MessageSquareText,
+  MessagesSquare,
   PenLine,
+  RefreshCcw,
+  UserRound,
   X,
 } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
@@ -16,8 +19,13 @@ import '../../../styles/admin/AdminReviewCases.css'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
 import {
   addAdminReviewCaseNote,
-  getAdminReviewCase,
+  assignAdminReviewCase,
   closeAdminReviewCase,
+  getAdminReviewCase,
+  listAdminReviewCases,
+  listAdminUsers,
+  mergeAdminReviewCase,
+  reopenAdminReviewCase,
 } from '../shared/adminApi.js'
 import {
   canOpenAdminReviewTarget,
@@ -29,10 +37,23 @@ import {
   getAdminReviewTargetPath,
   shortAdminReviewId,
 } from './adminReviewFormatters.js'
+import {
+  areReviewLifecycleActionsBlocked,
+  canMergeReviewCaseSource,
+  collectCursorPages,
+  describeReviewCaseAssignment,
+  getReviewCaseConflictSnapshot,
+  getVisibleResolutionHistory,
+  isCompatibleMergeDestination,
+  reviewCaseConflictSnapshotMatchesCase,
+  reviewCaseStateScopeKey,
+  sortReviewCaseEvents,
+} from './adminReviewLifecycle.js'
+import { AdminResolutionReferenceList } from './AdminResolutionReferenceList.js'
 
 const NOTE_MAX_LENGTH = 1000
 const NOTE_CASE_LIMIT = 100
-const REASON_MAX_LENGTH = 2000
+const REASON_MAX_LENGTH = 1000
 const CLOSURE_OUTCOMES = [
   { label: 'Enforcement applied', value: 'enforcement_applied' },
   { label: 'No action needed', value: 'no_action_needed' },
@@ -114,6 +135,18 @@ function ReviewCaseOverview({ reviewCase, targetPath }) {
           value={formatAdminReviewStatus(reviewCase.case_status)}
         />
         <ReviewField
+          label="Category"
+          value={formatAdminReviewStatus(reviewCase.case_category)}
+        />
+        <ReviewField
+          label="Version"
+          value={reviewCase.case_version}
+        />
+        <ReviewField
+          label="Assignment"
+          value={describeReviewCaseAssignment(reviewCase)}
+        />
+        <ReviewField
           label="Content status"
           value={targetStatus || 'Unknown'}
         />
@@ -121,6 +154,12 @@ function ReviewCaseOverview({ reviewCase, targetPath }) {
           label="Updated"
           value={formatAdminReviewDateTime(reviewCase.updated_at)}
         />
+        {reviewCase.merged_into_case_id && (
+          <ReviewField
+            label="Merged into"
+            value={shortAdminReviewId(reviewCase.merged_into_case_id)}
+          />
+        )}
       </div>
     </section>
   )
@@ -145,37 +184,37 @@ function ClosedReviewSummary({ reviewCase }) {
   )
 }
 
-const TIMELINE_EVENT_PRIORITY = {
-  case_created: 0,
-  signal_attached: 1,
-  finding_attached: 2,
-  finding_cleared: 3,
-  note_added: 4,
-  enforcement_action_linked: 5,
-  closed: 6,
-}
+function ResolutionHistoryRows({ reviewCase }) {
+  const history = getVisibleResolutionHistory(reviewCase)
+  if (!history.length) {
+    return <p className="admin-review-empty">No prior resolutions.</p>
+  }
 
-function getTimelineEventTime(item) {
-  const timestamp = new Date(item.created_at).getTime()
-  return Number.isNaN(timestamp) ? 0 : timestamp
-}
-
-function getTimelineEventPriority(item) {
-  return TIMELINE_EVENT_PRIORITY[item.event_type] ?? 99
-}
-
-function sortTimelineEvents(items) {
-  return [...items].sort((first, second) => {
-    const firstTime = getTimelineEventTime(first)
-    const secondTime = getTimelineEventTime(second)
-    if (firstTime !== secondTime) return firstTime - secondTime
-
-    const firstPriority = getTimelineEventPriority(first)
-    const secondPriority = getTimelineEventPriority(second)
-    if (firstPriority !== secondPriority) return firstPriority - secondPriority
-
-    return String(first.id).localeCompare(String(second.id))
-  })
+  return (
+    <div className="admin-review-resolution-history">
+      {history.map((resolution) => (
+        <article key={resolution.closure_event_id}>
+          <div className="admin-review-resolution-history__heading">
+            <strong>{formatAdminReviewStatus(resolution.outcome)}</strong>
+            <time dateTime={resolution.closed_at}>
+              {formatAdminReviewDateTime(resolution.closed_at)}
+            </time>
+          </div>
+          <p>{resolution.reason}</p>
+          <div className="admin-review-resolution-history__facts">
+            <span>{formatAdminReviewStatus(resolution.mode)}</span>
+            <span>
+              {resolution.mode === 'automatic'
+                ? `${resolution.automation_rule_id} v${resolution.automation_rule_version}`
+                : `Admin ${shortAdminReviewId(resolution.actor_user_id)}`}
+            </span>
+            <span>{resolution.references.length} linked records</span>
+          </div>
+          <AdminResolutionReferenceList references={resolution.references} />
+        </article>
+      ))}
+    </div>
+  )
 }
 
 function buildFindingById(findings = []) {
@@ -205,8 +244,20 @@ function formatTimelineEventTitle(item, findingById) {
       return `${findingLabel} cleared`
     case 'note_added':
       return 'Internal note added'
+    case 'assignment_changed':
+      return 'Assignment changed'
     case 'closed':
       return 'Case closed'
+    case 'reopened':
+      return 'Case reopened'
+    case 'merged_into':
+      return 'Merged into another case'
+    case 'merged_from':
+      return 'Merged case linked'
+    case 'signal_superseded':
+      return 'Chat signal superseded'
+    case 'signal_reactivated':
+      return 'Chat signal reactivated'
     case 'enforcement_action_linked':
       return item.event_metadata?.action_type
         ? `${formatAdminReviewStatus(item.event_metadata.action_type)} linked`
@@ -226,13 +277,16 @@ function ReviewTimelineRows({ findings, items }) {
   }
 
   const findingById = buildFindingById(findings)
-  const timelineItems = sortTimelineEvents(items)
+  const timelineItems = sortReviewCaseEvents(items)
 
   return (
     <div className="admin-review-timeline">
       {timelineItems.map((item) => (
         <div className="admin-review-timeline-row" key={item.id}>
-          <strong>{formatTimelineEventTitle(item, findingById)}</strong>
+          <strong>
+            <span>#{item.event_sequence}</span>
+            {formatTimelineEventTitle(item, findingById)}
+          </strong>
           <time dateTime={item.created_at}>
             {formatAdminReviewDateTime(item.created_at)}
           </time>
@@ -295,6 +349,28 @@ function ContentModerationFindingRows({ findings }) {
   )
 }
 
+function ChatSignalRows({ signals }) {
+  if (!signals.length) {
+    return <p className="admin-review-empty">No chat signals.</p>
+  }
+
+  return (
+    <div className="admin-review-list admin-review-list--compact">
+      {signals.map((signal) => (
+        <article className="admin-review-finding-row" key={signal.id}>
+          <div className="admin-review-finding-row__summary">
+            <strong>{signal.title}</strong>
+            <span>{formatAdminReviewStatus(signal.priority)}</span>
+          </div>
+          <p className="admin-review-finding-row__updated">
+            {signal.summary}
+          </p>
+        </article>
+      ))}
+    </div>
+  )
+}
+
 function isCurrentFinding(finding) {
   return finding.current_match !== false
 }
@@ -338,6 +414,11 @@ function ReviewNoteCard({ note, preview = false }) {
         <span>{formatReviewNoteAuthor(note)}</span>
         <span>{formatAdminReviewDateTime(note.created_at)}</span>
       </div>
+      {note.corrects_note_id && (
+        <span className="admin-review-note__correction">
+          Corrects note {shortAdminReviewId(note.corrects_note_id)}
+        </span>
+      )}
       <p>{note.body}</p>
     </article>
   )
@@ -383,13 +464,15 @@ function ReviewNotesModal({ notes, onClose }) {
 }
 
 function ReviewNotesPanel({
+  actionsBlocked,
   canAddNote,
   className = '',
-  isSubmitting,
   noteBody,
+  correctsNoteId,
   notes,
   onAddNote,
   onNoteChange,
+  onCorrectionChange,
   onOpenHistory,
 }) {
   const orderedNotes = sortNotesNewestFirst(notes)
@@ -436,6 +519,7 @@ function ReviewNotesPanel({
             <div className="admin-review-note-form__textarea-shell">
               <textarea
                 className="pl-scrollbar pl-scrollbar--stable"
+                disabled={actionsBlocked}
                 maxLength={NOTE_MAX_LENGTH}
                 placeholder="Add a private admin note..."
                 spellCheck="false"
@@ -445,6 +529,23 @@ function ReviewNotesPanel({
             </div>
             <small>{noteBody.length}/{NOTE_MAX_LENGTH}</small>
           </label>
+          {notes.length > 0 && (
+            <label>
+              <span>Correction to</span>
+              <select
+                disabled={actionsBlocked}
+                value={correctsNoteId}
+                onChange={onCorrectionChange}
+              >
+                <option value="">New note</option>
+                {orderedNotes.map((note) => (
+                  <option key={note.id} value={note.id}>
+                    Note {shortAdminReviewId(note.id)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {isAtNoteLimit && (
             <p className="admin-review-note-limit">
               This case has reached the {NOTE_CASE_LIMIT}-note limit.
@@ -452,7 +553,7 @@ function ReviewNotesPanel({
           )}
           <button
             className="admin-review-button admin-review-button--primary"
-            disabled={isSubmitting || !noteBody.trim() || isAtNoteLimit}
+            disabled={actionsBlocked || !noteBody.trim() || isAtNoteLimit}
             type="submit"
           >
             <PenLine />
@@ -464,13 +565,13 @@ function ReviewNotesPanel({
   )
 }
 
-function AdminReviewCasePage() {
-  const { reviewCaseId } = useParams()
+function AdminReviewCasePageContent({ reviewCaseId }) {
   const { currentUser } = useAuth()
   const [detail, setDetail] = useState(null)
   const [loadState, setLoadState] = useState('loading')
   const [pageError, setPageError] = useState('')
   const [noteBody, setNoteBody] = useState('')
+  const [correctsNoteId, setCorrectsNoteId] = useState('')
   const [noteKey, setNoteKey] = useState(
     () => createReviewIdempotencyKey('admin-review-note', reviewCaseId),
   )
@@ -479,9 +580,39 @@ function AdminReviewCasePage() {
   const [closureKey, setClosureKey] = useState(
     () => createReviewIdempotencyKey('admin-review-close', reviewCaseId),
   )
+  const [assignmentUserId, setAssignmentUserId] = useState('')
+  const [assignmentReason, setAssignmentReason] = useState('')
+  const [assignmentKey, setAssignmentKey] = useState(
+    () => createReviewIdempotencyKey('admin-review-assignment', reviewCaseId),
+  )
+  const [reopenReason, setReopenReason] = useState('')
+  const [reopenKey, setReopenKey] = useState(
+    () => createReviewIdempotencyKey('admin-review-reopen', reviewCaseId),
+  )
+  const [mergeDestinationId, setMergeDestinationId] = useState('')
+  const [mergeReason, setMergeReason] = useState('')
+  const [mergeKey, setMergeKey] = useState(
+    () => createReviewIdempotencyKey('admin-review-merge', reviewCaseId),
+  )
+  const [adminChoices, setAdminChoices] = useState([])
+  const [compatibleCases, setCompatibleCases] = useState([])
+  const [assignmentOptionsState, setAssignmentOptionsState] = useState({
+    error: '',
+    loading: true,
+  })
+  const [mergeOptionsState, setMergeOptionsState] = useState({
+    error: '',
+    loading: true,
+  })
   const [formStatus, setFormStatus] = useState({ message: '', type: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [conflictRecoveryBlocked, setConflictRecoveryBlocked] = useState(false)
   const [showNotesModal, setShowNotesModal] = useState(false)
+
+  const fetchReviewCase = useCallback(() => getAdminReviewCase({
+    firebaseUser: currentUser,
+    reviewCaseId,
+  }), [currentUser, reviewCaseId])
 
   useEffect(() => {
     let isMounted = true
@@ -492,16 +623,16 @@ function AdminReviewCasePage() {
       setPageError('')
 
       try {
-        const response = await getAdminReviewCase({
-          firebaseUser: currentUser,
-          reviewCaseId,
-        })
+        const response = await fetchReviewCase()
         if (!isMounted) return
         setDetail(response)
+        setAssignmentUserId(response.assigned_to_user_id ?? '')
+        setConflictRecoveryBlocked(false)
         setLoadState('ready')
       } catch (error) {
         if (!isMounted) return
         setDetail(null)
+        setAssignmentUserId('')
         setPageError(error.message || 'Review case could not be loaded.')
         setLoadState('error')
       }
@@ -511,18 +642,163 @@ function AdminReviewCasePage() {
     return () => {
       isMounted = false
     }
-  }, [currentUser, reviewCaseId])
+  }, [currentUser, fetchReviewCase, reviewCaseId])
+
+  useEffect(() => {
+    let isMounted = true
+    if (!currentUser || !detail) return () => {}
+
+    async function loadAssignmentChoices() {
+      await Promise.resolve()
+      if (!isMounted) return
+      setAdminChoices([])
+      setAssignmentOptionsState({ error: '', loading: true })
+      try {
+        const users = await collectCursorPages(
+          (cursor) => listAdminUsers({
+            accountStatus: 'active',
+            cursor,
+            firebaseUser: currentUser,
+            limit: 100,
+            role: 'admin',
+          }),
+          'users',
+        )
+        if (!isMounted) return
+        setAdminChoices(users)
+        setAssignmentOptionsState({ error: '', loading: false })
+      } catch {
+        if (!isMounted) return
+        setAdminChoices([])
+        setAssignmentOptionsState({
+          error: 'Assignment choices could not be loaded.',
+          loading: false,
+        })
+      }
+    }
+
+    async function loadMergeChoices() {
+      await Promise.resolve()
+      if (!isMounted) return
+      setCompatibleCases([])
+      if (!canMergeReviewCaseSource(detail)) {
+        setMergeOptionsState({ error: '', loading: false })
+        return
+      }
+      setMergeOptionsState({ error: '', loading: true })
+      try {
+        const cases = await collectCursorPages(
+          (cursor) => listAdminReviewCases({
+            assignment: 'all',
+            caseCategory: detail.case_category,
+            caseStatus: 'open',
+            cursor,
+            firebaseUser: currentUser,
+            limit: 100,
+            targetType: detail.case_type,
+          }),
+          'cases',
+        )
+        if (!isMounted) return
+        setCompatibleCases(
+          cases.filter((candidate) => isCompatibleMergeDestination(detail, candidate)),
+        )
+        setMergeOptionsState({ error: '', loading: false })
+      } catch {
+        if (!isMounted) return
+        setCompatibleCases([])
+        setMergeOptionsState({
+          error: 'Merge destinations could not be loaded.',
+          loading: false,
+        })
+      }
+    }
+
+    loadAssignmentChoices()
+    loadMergeChoices()
+
+    return () => {
+      isMounted = false
+    }
+  }, [currentUser, detail])
+
+  async function handleMutationError(error, fallbackMessage) {
+    const snapshot = getReviewCaseConflictSnapshot(error)
+    if (snapshot) {
+      setConflictRecoveryBlocked(true)
+      if (reviewCaseConflictSnapshotMatchesCase(snapshot, reviewCaseId)) {
+        setDetail((current) => ({ ...current, ...snapshot }))
+        setAssignmentUserId(snapshot.assigned_to_user_id ?? '')
+      }
+      setFormStatus({
+        message: 'This case changed. Reloading the complete current state.',
+        type: 'error',
+      })
+      try {
+        const currentDetail = await fetchReviewCase()
+        setDetail(currentDetail)
+        setAssignmentUserId(currentDetail.assigned_to_user_id ?? '')
+        setPageError('')
+        setConflictRecoveryBlocked(false)
+        setFormStatus({
+          message: 'This case changed. The latest state has been loaded.',
+          type: 'error',
+        })
+        resetMutationKeys()
+      } catch {
+        setPageError('The latest review case could not be loaded.')
+        setFormStatus({
+          message: 'Lifecycle actions are blocked until the latest case reload succeeds.',
+          type: 'error',
+        })
+      }
+      return
+    }
+    setFormStatus({ message: error.message || fallbackMessage, type: 'error' })
+  }
 
   function applyActionResult(result, successMessage) {
     setDetail(result.review_case)
+    setAssignmentUserId(result.review_case.assigned_to_user_id ?? '')
     setFormStatus({ message: successMessage, type: 'success' })
   }
+
+  function resetMutationKeys() {
+    setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
+    setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
+    setAssignmentKey(createReviewIdempotencyKey('admin-review-assignment', reviewCaseId))
+    setReopenKey(createReviewIdempotencyKey('admin-review-reopen', reviewCaseId))
+    setMergeKey(createReviewIdempotencyKey('admin-review-merge', reviewCaseId))
+  }
+
+  async function retryConflictRecovery() {
+    if (!conflictRecoveryBlocked || isSubmitting) return
+    setIsSubmitting(true)
+    try {
+      const currentDetail = await fetchReviewCase()
+      setDetail(currentDetail)
+      setAssignmentUserId(currentDetail.assigned_to_user_id ?? '')
+      setPageError('')
+      setConflictRecoveryBlocked(false)
+      setFormStatus({ message: 'The latest case state has been loaded.', type: 'success' })
+      resetMutationKeys()
+    } catch (error) {
+      setPageError(error.message || 'The latest review case could not be loaded.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const actionsBlocked = areReviewLifecycleActionsBlocked({
+    conflictRecoveryBlocked,
+    isSubmitting,
+  })
 
   async function handleAddNote(event) {
     event.preventDefault()
     if (
       !noteBody.trim()
-      || isSubmitting
+      || actionsBlocked
       || (detail?.notes ?? []).length >= NOTE_CASE_LIMIT
     ) {
       return
@@ -536,12 +812,16 @@ function AdminReviewCasePage() {
         firebaseUser: currentUser,
         idempotencyKey: noteKey,
         reviewCaseId,
+        correctsNoteId: correctsNoteId || null,
+        expectedCaseVersion: detail.case_version,
       })
       setDetail(result.review_case)
+      setAssignmentUserId(result.review_case.assigned_to_user_id ?? '')
       setNoteBody('')
+      setCorrectsNoteId('')
       setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
     } catch (error) {
-      setFormStatus({ message: error.message || 'Note could not be added.', type: 'error' })
+      await handleMutationError(error, 'Note could not be added.')
     } finally {
       setIsSubmitting(false)
     }
@@ -549,7 +829,7 @@ function AdminReviewCasePage() {
 
   async function handleClose(event) {
     event.preventDefault()
-    if (!closureReason.trim() || isSubmitting) return
+    if (!closureReason.trim() || actionsBlocked) return
 
     setIsSubmitting(true)
     setFormStatus({ message: '', type: '' })
@@ -560,12 +840,89 @@ function AdminReviewCasePage() {
         outcome: closureOutcome,
         reason: closureReason.trim(),
         reviewCaseId,
+        expectedCaseVersion: detail.case_version,
       })
       applyActionResult(result, 'Review case closed.')
       setClosureReason('')
       setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
     } catch (error) {
-      setFormStatus({ message: error.message || 'Review case could not be closed.', type: 'error' })
+      await handleMutationError(error, 'Review case could not be closed.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleAssignment(event) {
+    event.preventDefault()
+    if (!assignmentReason.trim() || actionsBlocked) return
+    setIsSubmitting(true)
+    setFormStatus({ message: '', type: '' })
+    try {
+      const result = await assignAdminReviewCase({
+        assigneeUserId: assignmentUserId || null,
+        expectedCaseVersion: detail.case_version,
+        firebaseUser: currentUser,
+        idempotencyKey: assignmentKey,
+        reason: assignmentReason.trim(),
+        reviewCaseId,
+      })
+      applyActionResult(result, assignmentUserId ? 'Assignment updated.' : 'Assignment released.')
+      setAssignmentReason('')
+      setAssignmentKey(createReviewIdempotencyKey('admin-review-assignment', reviewCaseId))
+    } catch (error) {
+      await handleMutationError(error, 'Assignment could not be changed.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleReopen(event) {
+    event.preventDefault()
+    if (!reopenReason.trim() || actionsBlocked) return
+    setIsSubmitting(true)
+    setFormStatus({ message: '', type: '' })
+    try {
+      const result = await reopenAdminReviewCase({
+        expectedCaseVersion: detail.case_version,
+        firebaseUser: currentUser,
+        idempotencyKey: reopenKey,
+        reason: reopenReason.trim(),
+        reviewCaseId,
+      })
+      applyActionResult(result, 'Review case reopened.')
+      setReopenReason('')
+      setReopenKey(createReviewIdempotencyKey('admin-review-reopen', reviewCaseId))
+    } catch (error) {
+      await handleMutationError(error, 'Review case could not be reopened.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleMerge(event) {
+    event.preventDefault()
+    const destination = compatibleCases.find((item) => item.id === mergeDestinationId)
+    if (!destination || !mergeReason.trim() || actionsBlocked) return
+    setIsSubmitting(true)
+    setFormStatus({ message: '', type: '' })
+    try {
+      const result = await mergeAdminReviewCase({
+        destinationCaseId: destination.id,
+        expectedDestinationVersion: destination.case_version,
+        expectedSourceVersion: detail.case_version,
+        firebaseUser: currentUser,
+        idempotencyKey: mergeKey,
+        reason: mergeReason.trim(),
+        reviewCaseId,
+      })
+      setDetail(result.source_case)
+      setAssignmentUserId(result.source_case.assigned_to_user_id ?? '')
+      setFormStatus({ message: 'Review cases merged.', type: 'success' })
+      setMergeDestinationId('')
+      setMergeReason('')
+      setMergeKey(createReviewIdempotencyKey('admin-review-merge', reviewCaseId))
+    } catch (error) {
+      await handleMutationError(error, 'Review cases could not be merged.')
     } finally {
       setIsSubmitting(false)
     }
@@ -573,6 +930,11 @@ function AdminReviewCasePage() {
 
   function handleNoteChange(event) {
     setNoteBody(event.target.value)
+    setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
+  }
+
+  function handleCorrectionChange(event) {
+    setCorrectsNoteId(event.target.value)
     setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
   }
 
@@ -584,6 +946,11 @@ function AdminReviewCasePage() {
   function handleClosureOutcomeChange(event) {
     setClosureOutcome(event.target.value)
     setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
+  }
+
+  function handleAssignmentSelection(event) {
+    setAssignmentUserId(event.target.value)
+    setAssignmentKey(createReviewIdempotencyKey('admin-review-assignment', reviewCaseId))
   }
 
   const isClosed = detail?.case_status === 'closed'
@@ -611,9 +978,20 @@ function AdminReviewCasePage() {
     >
       <div className="admin-review-layout">
         {pageError && (
-          <FormErrorMessage className="admin-review-page-error">
-            {pageError}
-          </FormErrorMessage>
+          <div className="admin-review-page-error">
+            <FormErrorMessage>{pageError}</FormErrorMessage>
+            {conflictRecoveryBlocked && (
+              <button
+                className="admin-review-button"
+                disabled={isSubmitting}
+                type="button"
+                onClick={retryConflictRecovery}
+              >
+                <RefreshCcw />
+                Reload current case
+              </button>
+            )}
+          </div>
         )}
         {loadState === 'loading' && <p className="admin-review-empty">Loading review case.</p>}
         {loadState === 'ready' && detail && (
@@ -626,36 +1004,190 @@ function AdminReviewCasePage() {
               </p>
             )}
 
-            <ReviewSection
-              count={findings.current.length}
-              countText={`${findings.current.length} ${
-                findings.current.length === 1 ? 'finding' : 'findings'
-              }`}
-              icon={ClipboardList}
-              title="Current Findings"
-            >
-              <ContentModerationFindingRows findings={findings.current} />
+            {detail.case_category === 'content_moderation' ? (
+              <>
+                <ReviewSection
+                  count={findings.current.length}
+                  countText={`${findings.current.length} ${
+                    findings.current.length === 1 ? 'finding' : 'findings'
+                  }`}
+                  icon={ClipboardList}
+                  title="Current Findings"
+                >
+                  <ContentModerationFindingRows findings={findings.current} />
+                </ReviewSection>
+
+                <ReviewSection
+                  count={findings.previous.length}
+                  countText={`${findings.previous.length} ${
+                    findings.previous.length === 1 ? 'finding' : 'findings'
+                  }`}
+                  icon={FileClock}
+                  title="Previous Findings"
+                >
+                  <ContentModerationFindingRows findings={findings.previous} />
+                </ReviewSection>
+              </>
+            ) : (
+              <ReviewSection
+                count={(detail.signals ?? []).length}
+                icon={MessagesSquare}
+                title="Chat Signals"
+              >
+                <ChatSignalRows signals={detail.signals ?? []} />
+              </ReviewSection>
+            )}
+
+            <ReviewSection icon={UserRound} title="Case Workflow">
+              <div className="admin-review-action-forms">
+                {!isClosed && (
+                  <form className="admin-review-form" onSubmit={handleAssignment}>
+                    <label>
+                      <span>Assignment</span>
+                      <select
+                        disabled={actionsBlocked || assignmentOptionsState.loading || Boolean(assignmentOptionsState.error)}
+                        value={assignmentUserId}
+                        onChange={handleAssignmentSelection}
+                      >
+                        <option value="">Unassigned</option>
+                        {adminChoices.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.display_name || user.email || shortAdminReviewId(user.id)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Reason</span>
+                      <input
+                        maxLength={1000}
+                        disabled={actionsBlocked}
+                        value={assignmentReason}
+                        onChange={(event) => {
+                          setAssignmentReason(event.target.value)
+                          setAssignmentKey(createReviewIdempotencyKey('admin-review-assignment', reviewCaseId))
+                        }}
+                      />
+                    </label>
+                    <button
+                      className="admin-review-button"
+                      disabled={actionsBlocked || assignmentOptionsState.loading || Boolean(assignmentOptionsState.error) || !assignmentReason.trim()}
+                      type="submit"
+                    >
+                      <UserRound />
+                      Update assignment
+                    </button>
+                  </form>
+                )}
+
+                {assignmentOptionsState.error && (
+                  <p className="admin-review-form-status admin-review-form-status--error">
+                    {assignmentOptionsState.error}
+                  </p>
+                )}
+
+                {isClosed && !detail.merged_into_case_id && (
+                  <form className="admin-review-form" onSubmit={handleReopen}>
+                    <label>
+                      <span>Reopen reason</span>
+                      <input
+                        maxLength={1000}
+                        disabled={actionsBlocked}
+                        value={reopenReason}
+                        onChange={(event) => {
+                          setReopenReason(event.target.value)
+                          setReopenKey(createReviewIdempotencyKey('admin-review-reopen', reviewCaseId))
+                        }}
+                      />
+                    </label>
+                    <button
+                      className="admin-review-button"
+                      disabled={actionsBlocked || !reopenReason.trim()}
+                      type="submit"
+                    >
+                      <RefreshCcw />
+                      Reopen case
+                    </button>
+                  </form>
+                )}
+
+                {canMergeReviewCaseSource(detail) && compatibleCases.length > 0 && (
+                  <form className="admin-review-form" onSubmit={handleMerge}>
+                    <label>
+                      <span>Merge into</span>
+                      <select
+                        value={mergeDestinationId}
+                        disabled={actionsBlocked || mergeOptionsState.loading || Boolean(mergeOptionsState.error)}
+                        onChange={(event) => {
+                          setMergeDestinationId(event.target.value)
+                          setMergeKey(createReviewIdempotencyKey('admin-review-merge', reviewCaseId))
+                        }}
+                      >
+                        <option value="">Select case</option>
+                        {compatibleCases.map((reviewCase) => (
+                          <option key={reviewCase.id} value={reviewCase.id}>
+                            {shortAdminReviewId(reviewCase.id)} · v{reviewCase.case_version}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Merge reason</span>
+                      <input
+                        maxLength={1000}
+                        disabled={actionsBlocked}
+                        value={mergeReason}
+                        onChange={(event) => {
+                          setMergeReason(event.target.value)
+                          setMergeKey(createReviewIdempotencyKey('admin-review-merge', reviewCaseId))
+                        }}
+                      />
+                    </label>
+                    <button
+                      className="admin-review-button"
+                      disabled={actionsBlocked || !mergeDestinationId || !mergeReason.trim()}
+                      type="submit"
+                    >
+                      <Link2 />
+                      Merge cases
+                    </button>
+                  </form>
+                )}
+                {mergeOptionsState.error && (
+                  <p className="admin-review-form-status admin-review-form-status--error">
+                    {mergeOptionsState.error}
+                  </p>
+                )}
+              </div>
+              {(detail.linked_cases ?? []).length > 0 && (
+                <div className="admin-review-linked-cases">
+                  {detail.linked_cases.map((linkedCase) => (
+                    <Link key={linkedCase.id} to={`/admin/review-cases/${linkedCase.id}`}>
+                      {formatAdminReviewStatus(linkedCase.relation)} · {shortAdminReviewId(linkedCase.id)}
+                    </Link>
+                  ))}
+                </div>
+              )}
             </ReviewSection>
 
             <ReviewSection
-              count={findings.previous.length}
-              countText={`${findings.previous.length} ${
-                findings.previous.length === 1 ? 'finding' : 'findings'
-              }`}
+              count={(detail.resolution_history ?? []).length}
               icon={FileClock}
-              title="Previous Findings"
+              title="Resolution History"
             >
-              <ContentModerationFindingRows findings={findings.previous} />
+              <ResolutionHistoryRows reviewCase={detail} />
             </ReviewSection>
 
             <div className="admin-review-work-grid">
               <ReviewNotesPanel
                 canAddNote={!isClosed}
                 className="admin-review-work-grid__notes"
-                isSubmitting={isSubmitting}
+                actionsBlocked={actionsBlocked}
                 noteBody={noteBody}
+                correctsNoteId={correctsNoteId}
                 notes={detail.notes ?? []}
                 onAddNote={handleAddNote}
+                onCorrectionChange={handleCorrectionChange}
                 onNoteChange={handleNoteChange}
                 onOpenHistory={() => setShowNotesModal(true)}
               />
@@ -670,6 +1202,7 @@ function AdminReviewCasePage() {
                     <label>
                       <span>Closure outcome</span>
                       <select
+                        disabled={actionsBlocked}
                         value={closureOutcome}
                         onChange={handleClosureOutcomeChange}
                       >
@@ -683,6 +1216,7 @@ function AdminReviewCasePage() {
                     <label>
                       <span>Closure reason</span>
                       <textarea
+                        disabled={actionsBlocked}
                         maxLength={REASON_MAX_LENGTH}
                         placeholder="Required closure reason"
                         value={closureReason}
@@ -692,7 +1226,7 @@ function AdminReviewCasePage() {
                     </label>
                     <button
                       className="admin-review-button admin-review-button--primary"
-                      disabled={isSubmitting || !closureReason.trim()}
+                      disabled={actionsBlocked || !closureReason.trim()}
                       type="submit"
                     >
                       <CheckCircle2 />
@@ -728,6 +1262,16 @@ function AdminReviewCasePage() {
         )}
       </div>
     </AdminWorkspaceLayout>
+  )
+}
+
+function AdminReviewCasePage() {
+  const { reviewCaseId } = useParams()
+  return (
+    <AdminReviewCasePageContent
+      key={reviewCaseStateScopeKey(reviewCaseId)}
+      reviewCaseId={reviewCaseId}
+    />
   )
 }
 

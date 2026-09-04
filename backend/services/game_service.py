@@ -35,15 +35,10 @@ from backend.schemas.game_schema import (
     MyGameCardRead,
     MyGamesListRead,
 )
-from backend.services.auth_service import user_is_active_admin
 from backend.services.admin_review_service import (
     close_open_content_moderation_case_for_game_lifecycle,
 )
-from backend.services.r2_storage_service import (
-    R2StorageConfigError,
-    R2StorageError,
-    create_object_read_url,
-)
+from backend.services.auth_service import user_is_active_admin
 from backend.services.game_notification_service import (
     capture_game_updated_structural_snapshot,
     game_updated_structural_snapshot_changed,
@@ -58,8 +53,8 @@ from backend.services.game_rules import (
     OPEN_GAME_STATUSES,
     build_game_conflict_detail,
     game_is_publicly_visible,
-    get_join_window_closes_at,
     get_default_host_guest_max,
+    get_join_window_closes_at,
     normalize_game_lifecycle_fields,
     normalize_official_game_invariants,
     reject_direct_official_host_change,
@@ -72,6 +67,11 @@ from backend.services.query_pagination import (
     MAX_COLLECTION_LIMIT,
     bounded_collection_limit,
     bounded_collection_offset,
+)
+from backend.services.r2_storage_service import (
+    R2StorageConfigError,
+    R2StorageError,
+    create_object_read_url,
 )
 
 BROWSE_GAME_CARD_DEFAULT_LIMIT = 40
@@ -1474,7 +1474,7 @@ def delete_game_workflow(
             close_open_content_moderation_case_for_game_lifecycle(
                 db,
                 game_id=db_game.id,
-                closure_outcome="enforcement_applied",
+                closure_outcome="no_action_needed",
                 closure_reason=(
                     "Community Game was deleted by an admin before moderation "
                     "review was completed."
@@ -1484,7 +1484,7 @@ def delete_game_workflow(
                 trigger_actor_user_id=admin_user.id,
                 closed_by_user_id=admin_user.id,
                 previous_game_status=old_game_status,
-                new_game_status=old_game_status,
+                new_game_status="soft_deleted",
                 closed_at=now,
             )
         db.commit()

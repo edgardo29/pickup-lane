@@ -250,8 +250,20 @@ RECENT_AUTH_NOT_REQUIRED_ADMIN_MUTATIONS: dict[tuple[str, str], str] = {
         "/admin/official-games/{game_id}/participants/{participant_id}/remove-preview",
     ): "official-player removal preview",
     ("POST", "/admin/official-games/{game_id}/players"): "roster add",
+    (
+        "POST",
+        "/admin/review-cases/{review_case_id}/assignment",
+    ): "review case assignment",
     ("POST", "/admin/review-cases/{review_case_id}/close"): "review case close",
+    (
+        "POST",
+        "/admin/review-cases/{review_case_id}/merge",
+    ): "review case merge",
     ("POST", "/admin/review-cases/{review_case_id}/notes"): "review note",
+    (
+        "POST",
+        "/admin/review-cases/{review_case_id}/reopen",
+    ): "review case reopen",
     (
         "POST",
         "/admin/support-flags/{support_flag_id}/resolve",
@@ -457,9 +469,9 @@ def test_complete_admin_access_mutation_partition_matches_current_routes() -> No
     retired = set(RETIRED_OR_NON_EXECUTING_ADMIN_MUTATIONS)
 
     assert len(required) == 22
-    assert len(not_required) == 38
+    assert len(not_required) == 41
     assert len(retired) == 47
-    assert len(discovered_admin_mutations) == 107
+    assert len(discovered_admin_mutations) == 110
     _assert_pairwise_disjoint(required, not_required, retired)
     assert required | not_required | retired == discovered_admin_mutations
 
@@ -490,7 +502,9 @@ def test_complete_admin_access_mutation_partition_matches_current_routes() -> No
 
 
 @pytest.mark.requirement("WS03-03A-R5", "WS03-03A-R6", "WS03-03A-R11")
-def test_admin_route_families_use_action_level_classification_without_wildcards() -> None:
+def test_admin_route_families_use_action_level_classification_without_wildcards() -> (
+    None
+):
     family_expectations = {
         "/admin/community-games": 11,
         "/admin/need-a-sub": 6,

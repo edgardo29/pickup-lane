@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS03-05B-R1",
+      "owning_pass": "WS03-05B",
+      "source_controls": ["ADM-012", "WS03-05A"],
+      "state": "required",
+      "scope": "workflows/conflict_safe_moderation_review_case_lifecycle",
+      "reason": "Community Game and Need a Sub content and chat moderation each require a distinct, category-aware open-case identity with a complete versioned current projection."
+    },
+    {
+      "id": "WS03-05B-R2",
+      "owning_pass": "WS03-05B",
+      "source_controls": ["ADM-012"],
+      "state": "required",
+      "scope": "workflows/conflict_safe_moderation_review_case_lifecycle",
+      "reason": "Assignment, internal note correction, manual closure, automatic closure, reopen, and merge must follow the frozen state machine without moving accepted child records or losing prior decisions."
+    },
+    {
+      "id": "WS03-05B-R3",
+      "owning_pass": "WS03-05B",
+      "source_controls": ["ADM-012", "ADM-009", "ADM-010"],
+      "state": "required",
+      "scope": "workflows/conflict_safe_moderation_review_case_lifecycle",
+      "reason": "Every material aggregate change must advance one gap-free version through finite attributed immutable events, with closure inputs retained as normalized immutable references."
+    },
+    {
+      "id": "WS03-05B-R4",
+      "owning_pass": "WS03-05B",
+      "source_controls": ["ADM-012", "WS04-02A", "WS04-02B"],
+      "state": "required",
+      "scope": "workflows/conflict_safe_moderation_review_case_lifecycle",
+      "reason": "Exact idempotency, expected-version checks, target-first locks, stable case locking, narrow retries, and atomic rollback must make concurrent case transitions converge without partial history."
+    },
+    {
+      "id": "WS03-05B-R5",
+      "owning_pass": "WS03-05B",
+      "source_controls": ["ADM-012", "WS03-05A"],
+      "state": "required",
+      "scope": "workflows/conflict_safe_moderation_review_case_lifecycle",
+      "reason": "Saved-content and chat source reconciliation plus accepted target-lifecycle closures must preserve historical findings and signals while selecting the exact case category and attribution."
+    },
+    {
+      "id": "WS03-05B-R6",
+      "owning_pass": "WS03-05B",
+      "source_controls": ["ADM-012", "WS03-04D"],
+      "state": "required",
+      "scope": "workflows/conflict_safe_moderation_review_case_lifecycle",
+      "reason": "The active-admin API and workspace must expose both moderation categories, assignment filters, versioned commands, linked history, and safe conflicts without exposing raw evidence or granting authority through assignment."
+    },
+    {
+      "id": "WS03-05B-R7",
+      "owning_pass": "WS03-05B",
+      "source_controls": ["ADM-012", "WS03-05A"],
+      "state": "required",
+      "scope": "workflows/conflict_safe_moderation_review_case_lifecycle",
+      "reason": "Models, canonical migrations, live PostgreSQL constraints and triggers, admin-action policy, and accepted moderation and authorization behavior must remain in parity."
+    }
+  ]
+}

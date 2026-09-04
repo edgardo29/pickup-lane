@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -50,6 +50,10 @@ _REVIEWED_RAW_SQL_FORMS = {
     "CREATE EXTENSION IF NOT EXISTS PG_TRGM": "extension_setup",
     "CREATE SEQUENCE PLATFORM_NOTICE_GLOBAL_SEQUENCE_SEQ": "sequence_setup",
 }
+_REVIEWED_TRIGGER_DDL = re.compile(
+    r"CREATE TRIGGER [A-Z0-9_]+ BEFORE (?:INSERT|UPDATE(?: OR DELETE)?) ON "
+    r"[A-Z0-9_]+ FOR EACH ROW EXECUTE FUNCTION [A-Z0-9_]+\(\)"
+)
 
 
 def load_migration_revisions(versions_dir: Path) -> tuple[MigrationRevision, ...]:
@@ -72,7 +76,9 @@ def load_migration_revisions(versions_dir: Path) -> tuple[MigrationRevision, ...
     return tuple(revisions)
 
 
-def build_migration_operation_inventory(versions_dir: Path) -> MigrationOperationInventory:
+def build_migration_operation_inventory(
+    versions_dir: Path,
+) -> MigrationOperationInventory:
     revisions = load_migration_revisions(versions_dir)
     operation_categories: set[str] = set()
     risky_findings: list[str] = []
@@ -163,12 +169,12 @@ def _base_revisions(revisions: tuple[MigrationRevision, ...]) -> tuple[str, ...]
 
 def _head_revisions(revisions: tuple[MigrationRevision, ...]) -> tuple[str, ...]:
     parent_ids = {
-        parent
-        for revision in revisions
-        for parent in _parents(revision.down_revision)
+        parent for revision in revisions for parent in _parents(revision.down_revision)
     }
     return tuple(
-        revision.revision for revision in revisions if revision.revision not in parent_ids
+        revision.revision
+        for revision in revisions
+        if revision.revision not in parent_ids
     )
 
 
@@ -206,7 +212,9 @@ def _classify_upgrade_operations(
                 categories.add("constraint_creation")
 
         if isinstance(node, ast.JoinedStr):
-            findings.append(f"{path.name}: upgrade contains f-string SQL or dynamic text")
+            findings.append(
+                f"{path.name}: upgrade contains f-string SQL or dynamic text"
+            )
 
     return categories, findings
 
@@ -228,6 +236,8 @@ def _unsafe_sql_findings(path: Path, node: ast.Call) -> tuple[str, ...]:
         return (f"{path.name}: op.execute uses non-literal SQL",)
     normalized = _normalized_sql(sql)
     if normalized in _REVIEWED_RAW_SQL_FORMS:
+        return ()
+    if _REVIEWED_TRIGGER_DDL.fullmatch(normalized):
         return ()
 
     findings = [

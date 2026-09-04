@@ -12,7 +12,7 @@
       ],
       "state": "required",
       "scope": "workflows/admin_route_list_high_risk_function_authorization",
-      "reason": "The accepted authorization matrix must remain the source of truth for the 40 admin/high-risk route families and 187 D-owned route keys."
+      "reason": "The accepted authorization matrix must remain the source of truth for the 40 admin/high-risk route families and 190 D-owned route keys."
     },
     {
       "id": "WS03-04D-R2",

@@ -57,8 +57,8 @@ from backend.services.admin_action_policy import (
     TARGET_GAME_ID,
     TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
     TARGET_HOST_PUBLISH_FEE_ID,
-    TARGET_MONEY_ISSUE_ID,
     TARGET_MESSAGE_ID,
+    TARGET_MONEY_ISSUE_ID,
     TARGET_NOTIFICATION_ID,
     TARGET_PARTICIPANT_ID,
     TARGET_PAYMENT_ID,
@@ -118,12 +118,7 @@ def normalize_optional_exact_filter(value: str | None) -> str | None:
 
 
 def label_from_token(value: str | None) -> str:
-    return (
-        str(value or "")
-        .replace("_", " ")
-        .replace("-", " ")
-        .title()
-    )
+    return str(value or "").replace("_", " ").replace("-", " ").title()
 
 
 def type_key_from_label(label: str) -> str:
@@ -223,7 +218,11 @@ def sub_chat_message_label(message: SubPostChatMessage) -> str:
 
 
 def sub_post_label(post: SubPost) -> str:
-    return post.team_name or post.location_name or full_id_label("Need a Sub post", post.id)
+    return (
+        post.team_name
+        or post.location_name
+        or full_id_label("Need a Sub post", post.id)
+    )
 
 
 def venue_image_label(image: VenueImage) -> str:
@@ -231,9 +230,13 @@ def venue_image_label(image: VenueImage) -> str:
 
 
 def notification_label(notification: Notification) -> str:
-    return notification.title or notification.subject_label or full_id_label(
-        "Notification",
-        notification.id,
+    return (
+        notification.title
+        or notification.subject_label
+        or full_id_label(
+            "Notification",
+            notification.id,
+        )
     )
 
 
@@ -430,7 +433,9 @@ TARGET_DISPLAY_RULES: dict[str, TargetDisplayRule] = {
         field_name=TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
         fallback_type_label="Publish entitlement",
         model=HostPublishEntitlement,
-        label_builder=lambda entitlement: label_from_token(entitlement.entitlement_type),
+        label_builder=lambda entitlement: label_from_token(
+            entitlement.entitlement_type
+        ),
         destination_builder=no_destination,
     ),
 }
@@ -712,6 +717,21 @@ ACTION_DISPLAY_RULES: dict[str, AdminActionDisplayRule] = {
         "Review case note added",
         (PrimaryTargetRule(TARGET_REVIEW_CASE_ID, "Review case"),),
     ),
+    "assign_review_case": AdminActionDisplayRule(
+        "assign_review_case",
+        "Review case assignment changed",
+        (PrimaryTargetRule(TARGET_REVIEW_CASE_ID, "Review case"),),
+    ),
+    "reopen_review_case": AdminActionDisplayRule(
+        "reopen_review_case",
+        "Review case reopened",
+        (PrimaryTargetRule(TARGET_REVIEW_CASE_ID, "Review case"),),
+    ),
+    "merge_review_case": AdminActionDisplayRule(
+        "merge_review_case",
+        "Review cases merged",
+        (PrimaryTargetRule(TARGET_REVIEW_CASE_ID, "Review case"),),
+    ),
     "update_notification": AdminActionDisplayRule(
         "update_notification",
         "Notification updated",
@@ -920,7 +940,9 @@ def selected_target_rules(action: AdminAction) -> tuple[PrimaryTargetRule, ...]:
     display_rule = ACTION_DISPLAY_RULES.get(action.action_type)
     if display_rule is None:
         return tuple(
-            PrimaryTargetRule(field_name, TARGET_DISPLAY_RULES[field_name].fallback_type_label)
+            PrimaryTargetRule(
+                field_name, TARGET_DISPLAY_RULES[field_name].fallback_type_label
+            )
             for field_name in TARGET_DISPLAY_RULES
         )
     return display_rule.primary_targets
@@ -1115,7 +1137,9 @@ def serialize_admin_action_log_item(
         admin_label=user_label(admin_user, fallback_user_id=action.admin_user_id),
         admin_email=admin_user.email if admin_user is not None else None,
         primary_target=target_summary,
-        target_label=target_summary.label if target_summary is not None else "No target",
+        target_label=target_summary.label
+        if target_summary is not None
+        else "No target",
         target_type_label=(
             target_summary.target_type_label if target_summary is not None else "Target"
         ),

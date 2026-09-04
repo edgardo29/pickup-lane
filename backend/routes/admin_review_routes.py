@@ -7,17 +7,24 @@ from backend.database import get_db
 from backend.models import User
 from backend.schemas import (
     AdminReviewCaseActionResultRead,
+    AdminReviewCaseAssignment,
+    AdminReviewCaseClose,
     AdminReviewCaseDetailRead,
     AdminReviewCaseListRead,
+    AdminReviewCaseMerge,
+    AdminReviewCaseMergeResultRead,
     AdminReviewCaseNoteCreate,
     AdminReviewCaseNoteResultRead,
-    AdminReviewCaseClose,
+    AdminReviewCaseReopen,
 )
 from backend.services.admin_review_service import (
     add_review_case_note,
+    assign_review_case,
+    close_review_case,
     get_review_case_detail,
     list_review_cases,
-    close_review_case,
+    merge_review_case,
+    reopen_review_case,
 )
 from backend.services.auth_service import require_active_admin
 
@@ -32,6 +39,7 @@ def list_admin_review_cases_route(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=24, ge=1, le=100),
     cursor: str | None = Query(default=None, max_length=2000),
+    assignment: str = Query(default="all"),
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> AdminReviewCaseListRead:
@@ -44,6 +52,7 @@ def list_admin_review_cases_route(
         offset=offset,
         limit=limit,
         cursor=cursor,
+        assignment=assignment,
     )
 
 
@@ -85,6 +94,60 @@ def close_admin_review_case_route(
     return close_review_case(
         db,
         review_case_id=review_case_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{review_case_id}/assignment",
+    response_model=AdminReviewCaseActionResultRead,
+)
+def assign_admin_review_case_route(
+    review_case_id: uuid.UUID,
+    payload: AdminReviewCaseAssignment,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminReviewCaseActionResultRead:
+    return assign_review_case(
+        db,
+        review_case_id=review_case_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{review_case_id}/reopen",
+    response_model=AdminReviewCaseActionResultRead,
+)
+def reopen_admin_review_case_route(
+    review_case_id: uuid.UUID,
+    payload: AdminReviewCaseReopen,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminReviewCaseActionResultRead:
+    return reopen_review_case(
+        db,
+        review_case_id=review_case_id,
+        admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/{review_case_id}/merge",
+    response_model=AdminReviewCaseMergeResultRead,
+)
+def merge_admin_review_case_route(
+    review_case_id: uuid.UUID,
+    payload: AdminReviewCaseMerge,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminReviewCaseMergeResultRead:
+    return merge_review_case(
+        db,
+        source_case_id=review_case_id,
         admin_user=current_admin,
         payload=payload,
     )
