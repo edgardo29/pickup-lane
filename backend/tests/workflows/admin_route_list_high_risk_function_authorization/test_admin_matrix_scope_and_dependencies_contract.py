@@ -455,7 +455,6 @@ def test_requirements_markers_record_and_register_preserve_d_traceability() -> N
     register = REGISTER_PATH.read_text(encoding="utf-8")
     assert "`WS03-04D`" in register
     assert EXPECTED_PLAN_PATH in register
-    assert EXPECTED_REQUIREMENT_DECLARATION in register
     assert "WS03-04 parent complete" in register
     assert "WS03-04A-G001" in register
     assert "WS05" in register

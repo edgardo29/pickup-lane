@@ -95,6 +95,7 @@
 }
 
 .admin-review-form label,
+.admin-review-list-filters label,
 .admin-review-action-forms label {
   min-width: 0;
   display: grid;
@@ -102,6 +103,7 @@
 }
 
 .admin-review-form label > span,
+.admin-review-list-filters label > span,
 .admin-review-action-forms label > span {
   color: var(--pl-text-secondary, rgba(248, 250, 252, 0.64));
   font-size: 0.78rem;
@@ -123,6 +125,7 @@
 .admin-review-form input,
 .admin-review-form select,
 .admin-review-form textarea,
+.admin-review-list-filters select,
 .admin-review-action-forms input,
 .admin-review-action-forms textarea {
   width: 100%;
@@ -155,7 +158,8 @@
   resize: vertical;
 }
 
-.admin-review-form select {
+.admin-review-form select,
+.admin-review-list-filters select {
   padding-right: 32px;
   background:
     #071019
@@ -168,6 +172,7 @@
 .admin-review-form input:focus,
 .admin-review-form select:focus,
 .admin-review-form textarea:focus,
+.admin-review-list-filters select:focus,
 .admin-review-action-forms input:focus,
 .admin-review-action-forms textarea:focus {
   border-color: rgba(184, 255, 36, 0.42);
@@ -184,6 +189,23 @@
 
 .admin-review-case-board {
   min-width: 0;
+}
+
+.admin-review-list-controls {
+  min-width: 0;
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.admin-review-list-filters {
+  width: min(100%, 410px);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .admin-review-tabs {
@@ -490,6 +512,22 @@
   color: inherit;
   font: inherit;
   overflow-wrap: anywhere;
+}
+
+.admin-review-signal-row__meta {
+  min-width: 0;
+  display: flex;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.admin-review-signal-row__meta span {
+  color: var(--pl-text-muted, rgba(248, 250, 252, 0.5));
+  font-size: 0.77rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .admin-review-empty {
@@ -992,6 +1030,11 @@
 }
 
 @media (max-width: 720px) {
+  .admin-review-list-filters {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
   .admin-review-modal-backdrop {
     padding: 14px;
   }

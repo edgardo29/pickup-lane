@@ -41,8 +41,8 @@ def test_current_authority_preserves_provider_independent_c_and_mandatory_d() ->
         assert "final production" in source
 
     assert "WS04-01" in blueprint
-    assert "mandatory deferred follow-up" in blueprint
-    assert "Final production hosting and database-hosting infrastructure" in blueprint
+    assert "WS04-01D — Final PostgreSQL topology, connection budget and roles" in blueprint
+    assert "No final numeric values may be invented before the provider/topology is selected" in blueprint
     assert "provider-independent production-verification framework" in register
     assert "### Mandatory deferred follow-up" in intake
     assert "D is mandatory before `CLOSE-01`" in plan

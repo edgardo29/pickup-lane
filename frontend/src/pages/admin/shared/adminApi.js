@@ -1,4 +1,8 @@
 import { apiRequest } from '../../../lib/apiClient.js'
+import {
+  buildReviewCaseClosePayload,
+  buildReviewCaseNotePayload,
+} from '../review-cases/adminReviewLifecycle.js'
 
 export async function getAdminHeaders(firebaseUser, includeJson = false) {
   if (!firebaseUser) {
@@ -80,14 +84,12 @@ export async function addAdminReviewCaseNote({
   return apiRequest(`/admin/review-cases/${reviewCaseId}/notes`, {
     method: 'POST',
     headers: await getAdminHeaders(firebaseUser, true),
-    body: JSON.stringify({
-      body,
-      idempotency_key: idempotencyKey,
-    }),
+    body: JSON.stringify(buildReviewCaseNotePayload({ body, idempotencyKey })),
   })
 }
 
 export async function closeAdminReviewCase({
+  expectedCaseVersion,
   firebaseUser,
   idempotencyKey,
   outcome,
@@ -97,11 +99,12 @@ export async function closeAdminReviewCase({
   return apiRequest(`/admin/review-cases/${reviewCaseId}/close`, {
     method: 'POST',
     headers: await getAdminHeaders(firebaseUser, true),
-    body: JSON.stringify({
+    body: JSON.stringify(buildReviewCaseClosePayload({
+      caseVersion: expectedCaseVersion,
+      idempotencyKey,
       outcome,
       reason,
-      idempotency_key: idempotencyKey,
-    }),
+    })),
   })
 }
 

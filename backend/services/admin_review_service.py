@@ -1,16 +1,16 @@
 """Admin review signal and case workflow services."""
 
-from base64 import urlsafe_b64decode, urlsafe_b64encode
-from binascii import Error as BinasciiError
 import hashlib
 import uuid
-from datetime import datetime, timedelta, timezone
+from base64 import urlsafe_b64decode, urlsafe_b64encode
+from binascii import Error as BinasciiError
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from json import JSONDecodeError, dumps, loads
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
@@ -28,8 +28,10 @@ from backend.models import (
     User,
 )
 from backend.schemas.admin_review_schema import (
+    MAX_REVIEW_CASE_NOTE_BODY_LENGTH,
     AdminContentModerationFindingRead,
     AdminReviewCaseActionResultRead,
+    AdminReviewCaseClose,
     AdminReviewCaseDetailRead,
     AdminReviewCaseEventRead,
     AdminReviewCaseFindingSummaryRead,
@@ -38,18 +40,18 @@ from backend.schemas.admin_review_schema import (
     AdminReviewCaseNoteRead,
     AdminReviewCaseNoteResultRead,
     AdminReviewCaseRead,
-    AdminReviewCaseClose,
     AdminReviewCaseTargetSummaryRead,
     AdminReviewSignalRead,
-    MAX_REVIEW_CASE_NOTE_BODY_LENGTH,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_review_actionability_service import (
-    build_open_content_review_case_actionable_condition,
-)
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_metadata_value,
+)
+from backend.services.admin_review_actionability_service import (
+    build_open_content_review_case_actionable_condition,
+    is_game_content_review_actionable,
+    is_sub_post_content_review_actionable,
 )
 from backend.services.auth_service import require_active_admin_user
 from backend.services.user_service import get_user_display_name
@@ -57,6 +59,7 @@ from backend.services.user_service import get_user_display_name
 CASE_ACTIVE_STATUSES = ("open",)
 VALID_CASE_STATUSES = ("open", "closed")
 CONTENT_MODERATION_CASE_CATEGORY = "content_moderation"
+CHAT_MODERATION_CASE_CATEGORY = "chat_moderation"
 REVIEW_CASE_LIST_CURSOR_SORT = "updated_at_desc"
 REVIEW_CASE_LIST_CONTENT_TARGETS = "content_targets"
 MAX_REVIEW_CASE_NOTES = 100
@@ -81,6 +84,87 @@ VALID_CLOSURE_OUTCOMES = {
     "enforcement_applied",
     "no_action_needed",
     "invalid_signal",
+}
+RESTRICTIVE_MODERATION_ENFORCEMENT_TARGET_FIELDS = {
+    "admin_cancel_community_game": "target_game_id",
+    "hide_community_game": "target_game_id",
+    "hide_need_sub_post": "target_sub_post_id",
+    "hide_unsafe_community_payment_text": "target_game_id",
+    "pause_community_game_joining": "target_game_id",
+    "remove_sub_post": "target_sub_post_id",
+}
+
+
+@dataclass(frozen=True)
+class AutomaticContentLifecycleTransition:
+    previous_state: str
+    new_state: str
+    trigger_actor_types: frozenset[str]
+    closure_outcome: str
+    linked_action_type: str | None = None
+
+
+AUTOMATIC_CONTENT_LIFECYCLE_TRANSITIONS = {
+    ("community_game", "host_cancelled"): AutomaticContentLifecycleTransition(
+        "active", "cancelled", frozenset({"host"}), "no_action_needed"
+    ),
+    (
+        "community_game",
+        "admin_operational_cancelled",
+    ): AutomaticContentLifecycleTransition(
+        "active",
+        "cancelled",
+        frozenset({"admin"}),
+        "no_action_needed",
+        "cancel_game",
+    ),
+    (
+        "community_game",
+        "admin_moderation_cancelled",
+    ): AutomaticContentLifecycleTransition(
+        "active",
+        "cancelled",
+        frozenset({"admin"}),
+        "enforcement_applied",
+        "admin_cancel_community_game",
+    ),
+    (
+        "community_game",
+        "host_account_deleted",
+    ): AutomaticContentLifecycleTransition(
+        "active", "cancelled", frozenset({"admin", "owner"}), "no_action_needed"
+    ),
+    ("community_game", "game_completed"): AutomaticContentLifecycleTransition(
+        "active",
+        "completed",
+        frozenset({"admin", "system"}),
+        "no_action_needed",
+    ),
+    ("community_game", "game_expired"): AutomaticContentLifecycleTransition(
+        "active", "expired", frozenset({"admin", "system"}), "no_action_needed"
+    ),
+    ("community_game", "admin_soft_deleted"): AutomaticContentLifecycleTransition(
+        "active", "soft_deleted", frozenset({"admin"}), "no_action_needed"
+    ),
+    ("need_a_sub", "owner_cancelled"): AutomaticContentLifecycleTransition(
+        "active", "cancelled", frozenset({"owner"}), "no_action_needed"
+    ),
+    ("need_a_sub", "owner_account_deleted"): AutomaticContentLifecycleTransition(
+        "active", "cancelled", frozenset({"admin", "owner"}), "no_action_needed"
+    ),
+    ("need_a_sub", "admin_removed"): AutomaticContentLifecycleTransition(
+        "active",
+        "removed",
+        frozenset({"admin"}),
+        "enforcement_applied",
+        "remove_sub_post",
+    ),
+    ("need_a_sub", "post_completed"): AutomaticContentLifecycleTransition(
+        "active", "completed", frozenset({"scheduled_job"}), "no_action_needed"
+    ),
+    ("need_a_sub", "post_expired"): AutomaticContentLifecycleTransition(
+        "active", "expired", frozenset({"scheduled_job"}), "no_action_needed"
+    ),
 }
 REVIEW_TARGET_FIELDS = (
     "target_user_id",
@@ -354,13 +438,13 @@ def target_data_from_object(source: object) -> dict[str, uuid.UUID | None]:
 
 def provided_target_fields(target_data: dict[str, uuid.UUID | None]) -> set[str]:
     return {
-        field_name
-        for field_name, value in target_data.items()
-        if value is not None
+        field_name for field_name, value in target_data.items() if value is not None
     }
 
 
-def primary_target(target_data: dict[str, uuid.UUID | None]) -> tuple[str, uuid.UUID] | None:
+def primary_target(
+    target_data: dict[str, uuid.UUID | None],
+) -> tuple[str, uuid.UUID] | None:
     for field_name in PRIMARY_TARGET_FIELDS:
         value = target_data.get(field_name)
         if value is not None:
@@ -409,17 +493,18 @@ def infer_case_type(db: Session, target_data: dict[str, uuid.UUID | None]) -> st
     return "system"
 
 
-def copy_targets(target_data: dict[str, uuid.UUID | None]) -> dict[str, uuid.UUID | None]:
+def copy_targets(
+    target_data: dict[str, uuid.UUID | None],
+) -> dict[str, uuid.UUID | None]:
     return {
-        field_name: target_data.get(field_name)
-        for field_name in REVIEW_TARGET_FIELDS
+        field_name: target_data.get(field_name) for field_name in REVIEW_TARGET_FIELDS
     }
 
 
 def create_case_event(
     db: Session,
     *,
-    review_case_id: uuid.UUID,
+    review_case: AdminReviewCase,
     event_type: str,
     actor_user_id: uuid.UUID | None = None,
     admin_action_id: uuid.UUID | None = None,
@@ -429,17 +514,45 @@ def create_case_event(
     event_metadata: dict[str, Any] | None = None,
     created_at: datetime | None = None,
 ) -> AdminReviewCaseEvent:
+    if event_type == "case_created":
+        if review_case.case_version != 1:
+            raise ValueError("Case creation must initialize case_version 1.")
+    else:
+        review_case.case_version += 1
+
+    normalized_metadata = normalize_metadata(event_metadata)
+    if event_type != "closed" and normalized_metadata is not None:
+        raise ValueError("Only automatic closure events accept metadata.")
+    if event_type == "closed" and normalized_metadata is not None:
+        expected_keys = {
+            "closure_source",
+            "lifecycle_action",
+            "previous_target_state",
+            "new_target_state",
+            "trigger_actor_type",
+        }
+        if set(normalized_metadata) != expected_keys or any(
+            not isinstance(normalized_metadata[key], str)
+            or not normalized_metadata[key].strip()
+            for key in expected_keys
+        ):
+            raise ValueError("Automatic closure event metadata is invalid.")
+
+    event_time = created_at or datetime.now(timezone.utc)
+    review_case.updated_at = event_time
+    db.add(review_case)
     event = AdminReviewCaseEvent(
         id=uuid.uuid4(),
-        review_case_id=review_case_id,
+        review_case_id=review_case.id,
+        case_version=review_case.case_version,
         event_type=event_type,
         actor_user_id=actor_user_id,
         admin_action_id=admin_action_id,
         signal_id=signal_id,
         content_moderation_finding_id=content_moderation_finding_id,
         note_id=note_id,
-        event_metadata=normalize_metadata(event_metadata),
-        created_at=created_at or datetime.now(timezone.utc),
+        event_metadata=normalized_metadata,
+        created_at=event_time,
     )
     db.add(event)
     return event
@@ -465,6 +578,7 @@ def get_review_case_for_update_or_404(
     review_case = db.scalar(
         select(AdminReviewCase)
         .where(AdminReviewCase.id == review_case_id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
     if review_case is None:
@@ -473,6 +587,140 @@ def get_review_case_for_update_or_404(
             detail="Review case not found.",
         )
     return review_case
+
+
+def review_case_conflict(code: str, review_case: AdminReviewCase) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": code,
+            "current": {
+                "case_status": review_case.case_status,
+                "case_version": review_case.case_version,
+            },
+        },
+    )
+
+
+def review_case_request_fingerprint(payload: dict[str, object]) -> str:
+    serialized = dumps(payload, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def review_case_primary_target(
+    review_case: AdminReviewCase,
+) -> tuple[str, uuid.UUID]:
+    expected_field = {
+        "community_game": "target_game_id",
+        "need_a_sub": "target_sub_post_id",
+    }.get(review_case.case_type)
+    targets = target_data_from_object(review_case)
+    if expected_field is not None:
+        if provided_target_fields(targets) != {expected_field}:
+            raise review_case_conflict("review_case_transition_conflict", review_case)
+        target_id = targets[expected_field]
+        if target_id is None:
+            raise review_case_conflict("review_case_transition_conflict", review_case)
+        return expected_field, target_id
+
+    existing_primary = primary_target(targets)
+    if existing_primary is None:
+        raise review_case_conflict("review_case_transition_conflict", review_case)
+    return existing_primary
+
+
+def admin_action_matches_review_case_target(
+    admin_action: AdminAction,
+    review_case: AdminReviewCase,
+    *,
+    require_linked_case: bool,
+) -> bool:
+    target_field_name, target_id = review_case_primary_target(review_case)
+    supplied_moderation_targets = {
+        field_name
+        for field_name in ("target_game_id", "target_sub_post_id")
+        if getattr(admin_action, field_name) is not None
+    }
+    if supplied_moderation_targets != {target_field_name}:
+        return False
+    if getattr(admin_action, target_field_name) != target_id:
+        return False
+    if require_linked_case:
+        return admin_action.target_review_case_id == review_case.id
+    return admin_action.target_review_case_id in {None, review_case.id}
+
+
+def is_restrictive_moderation_enforcement_for_case(
+    admin_action: AdminAction,
+    review_case: AdminReviewCase,
+    *,
+    require_linked_case: bool,
+) -> bool:
+    expected_target_field = RESTRICTIVE_MODERATION_ENFORCEMENT_TARGET_FIELDS.get(
+        admin_action.action_type
+    )
+    if (
+        expected_target_field is None
+        or review_case.case_category != CONTENT_MODERATION_CASE_CATEGORY
+    ):
+        return False
+    target_field_name, _target_id = review_case_primary_target(review_case)
+    return expected_target_field == target_field_name and (
+        admin_action_matches_review_case_target(
+            admin_action,
+            review_case,
+            require_linked_case=require_linked_case,
+        )
+    )
+
+
+def lock_primary_target(
+    db: Session,
+    *,
+    target_field_name: str,
+    target_id: uuid.UUID,
+) -> object | None:
+    target_model = TARGET_MODEL_BY_FIELD.get(target_field_name)
+    if target_model is None:
+        raise ValueError("Review-case target is not supported.")
+    tracked_target = db.identity_map.get(db.identity_key(target_model, target_id))
+    if tracked_target is not None and db.is_modified(
+        tracked_target, include_collections=False
+    ):
+        db.flush([tracked_target])
+    return db.scalar(
+        select(target_model)
+        .where(target_model.id == target_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+
+
+def lock_review_case_with_target(
+    db: Session,
+    review_case_id: uuid.UUID,
+) -> tuple[AdminReviewCase, object]:
+    discovered_case = get_review_case_or_404(db, review_case_id)
+    target_field_name, target_id = review_case_primary_target(discovered_case)
+    target = lock_primary_target(
+        db,
+        target_field_name=target_field_name,
+        target_id=target_id,
+    )
+    locked_case = get_review_case_for_update_or_404(db, review_case_id)
+    if review_case_primary_target(locked_case) != (target_field_name, target_id):
+        raise review_case_conflict("review_case_transition_conflict", locked_case)
+    if target is None:
+        raise review_case_conflict("review_case_transition_conflict", locked_case)
+    return locked_case, target
+
+
+def require_expected_case_version(
+    review_case: AdminReviewCase,
+    expected_case_version: int,
+) -> None:
+    if review_case.case_version != expected_case_version:
+        raise review_case_conflict("review_case_version_conflict", review_case)
 
 
 def signal_issue_labels(signal: AdminReviewSignal) -> list[str]:
@@ -594,7 +842,10 @@ def build_sub_post_review_target_summary(
 def build_unavailable_review_target_summary(
     review_case: AdminReviewCase,
 ) -> AdminReviewCaseTargetSummaryRead | None:
-    if review_case.case_type == "community_game" or review_case.target_game_id is not None:
+    if (
+        review_case.case_type == "community_game"
+        or review_case.target_game_id is not None
+    ):
         return AdminReviewCaseTargetSummaryRead(
             label="Community Game",
             title="Game unavailable",
@@ -746,7 +997,7 @@ def serialize_review_case_detail(
             select(AdminReviewCaseEvent)
             .where(AdminReviewCaseEvent.review_case_id == review_case.id)
             .order_by(
-                AdminReviewCaseEvent.created_at.asc(),
+                AdminReviewCaseEvent.case_version.asc(),
                 AdminReviewCaseEvent.id.asc(),
             )
         ).all()
@@ -776,16 +1027,13 @@ def serialize_review_case_detail(
                 for finding in findings
             ],
             "signals": [
-                AdminReviewSignalRead.model_validate(signal)
-                for signal in signals
+                AdminReviewSignalRead.model_validate(signal) for signal in signals
             ],
             "events": [
-                AdminReviewCaseEventRead.model_validate(event)
-                for event in events
+                AdminReviewCaseEventRead.model_validate(event) for event in events
             ],
             "notes": [
-                serialize_review_case_note_read(note, author_by_id)
-                for note in notes
+                serialize_review_case_note_read(note, author_by_id) for note in notes
             ],
         }
     )
@@ -875,7 +1123,9 @@ def list_review_cases(
         statement = statement.where(AdminReviewCase.case_status == normalized_status)
     if case_category is not None:
         normalized_category = normalize_case_category(case_category)
-        statement = statement.where(AdminReviewCase.case_category == normalized_category)
+        statement = statement.where(
+            AdminReviewCase.case_category == normalized_category
+        )
     if normalized_target_type == REVIEW_CASE_LIST_CONTENT_TARGETS:
         statement = statement.where(
             AdminReviewCase.case_type.in_(("community_game", "need_a_sub"))
@@ -951,16 +1201,29 @@ def find_open_case_for_signal(
     *,
     target_data: dict[str, uuid.UUID | None],
     case_category: str,
-    allow_reference_inserts: bool = False,
 ) -> AdminReviewCase | None:
     primary = primary_target(target_data)
     if primary is None:
         return None
     field_name, target_id = primary
+    case_type = {
+        "target_game_id": "community_game",
+        "target_sub_post_id": "need_a_sub",
+    }.get(field_name)
+    if case_type is None:
+        return None
+    target = lock_primary_target(
+        db,
+        target_field_name=field_name,
+        target_id=target_id,
+    )
+    if target is None or getattr(target, "deleted_at", None) is not None:
+        return None
     statement = (
         select(AdminReviewCase)
         .where(
             AdminReviewCase.case_status.in_(CASE_ACTIVE_STATUSES),
+            AdminReviewCase.case_type == case_type,
             AdminReviewCase.case_category == case_category,
             getattr(AdminReviewCase, field_name) == target_id,
         )
@@ -968,7 +1231,7 @@ def find_open_case_for_signal(
         .limit(1)
     )
     active_case = db.scalar(
-        statement.with_for_update(key_share=allow_reference_inserts)
+        statement.execution_options(populate_existing=True).with_for_update()
     )
     if active_case is not None:
         return active_case
@@ -979,21 +1242,104 @@ def find_open_case_for_signal(
 def find_open_case_for_admin_action(
     db: Session,
     admin_action: AdminAction,
+    *,
+    case_category: str,
 ) -> AdminReviewCase | None:
     target_data = target_data_from_object(admin_action)
     primary = primary_target(target_data)
     if primary is None:
         return None
     field_name, target_id = primary
+    case_type = {
+        "target_game_id": "community_game",
+        "target_sub_post_id": "need_a_sub",
+    }.get(field_name)
+    if case_type is None:
+        return None
+    if (
+        lock_primary_target(
+            db,
+            target_field_name=field_name,
+            target_id=target_id,
+        )
+        is None
+    ):
+        return None
     return db.scalar(
         select(AdminReviewCase)
         .where(
             AdminReviewCase.case_status.in_(CASE_ACTIVE_STATUSES),
+            AdminReviewCase.case_type == case_type,
+            AdminReviewCase.case_category == normalize_case_category(case_category),
             getattr(AdminReviewCase, field_name) == target_id,
         )
         .order_by(AdminReviewCase.created_at.asc(), AdminReviewCase.id.asc())
+        .execution_options(populate_existing=True)
+        .with_for_update()
         .limit(1)
     )
+
+
+def validate_automatic_content_lifecycle_transition(
+    *,
+    target_type: str,
+    lifecycle_action: str,
+    previous_target_state: str | None,
+    new_target_state: str | None,
+    trigger_actor_type: str,
+    trigger_actor_user_id: uuid.UUID | None,
+    closed_by_user_id: uuid.UUID | None,
+    closure_outcome: str,
+    admin_action: AdminAction | None,
+) -> None:
+    transition = AUTOMATIC_CONTENT_LIFECYCLE_TRANSITIONS.get(
+        (target_type, lifecycle_action)
+    )
+    if transition is None or (
+        previous_target_state != transition.previous_state
+        or new_target_state != transition.new_state
+        or trigger_actor_type not in transition.trigger_actor_types
+        or closure_outcome != transition.closure_outcome
+    ):
+        raise ValueError("Automatic closure lifecycle transition is invalid.")
+
+    actor_requires_user = trigger_actor_type in {"admin", "host", "owner"}
+    if actor_requires_user != (trigger_actor_user_id is not None):
+        raise ValueError("Automatic closure trigger actor attribution is invalid.")
+    expected_closed_by = (
+        trigger_actor_user_id if trigger_actor_type == "admin" else None
+    )
+    if closed_by_user_id != expected_closed_by:
+        raise ValueError("Automatic closure resolver attribution is invalid.")
+
+    if transition.linked_action_type is None:
+        if admin_action is not None:
+            raise ValueError("Automatic closure does not accept a linked action.")
+    elif (
+        admin_action is None
+        or admin_action.action_type != transition.linked_action_type
+        or admin_action.admin_user_id != trigger_actor_user_id
+    ):
+        raise ValueError("Automatic closure linked action is invalid.")
+
+
+def validate_automatic_content_lifecycle_target_state(
+    *,
+    target: object,
+    target_type: str,
+    new_target_state: str,
+) -> None:
+    if target_type == "community_game":
+        if not isinstance(target, Game) or target.game_type != "community":
+            raise ValueError("Automatic closure requires a Community Game target.")
+        if new_target_state == "soft_deleted":
+            if target.deleted_at is None:
+                raise ValueError("Automatic closure target state is not applied.")
+        elif target.game_status != new_target_state:
+            raise ValueError("Automatic closure target state is not applied.")
+        return
+    if not isinstance(target, SubPost) or target.post_status != new_target_state:
+        raise ValueError("Automatic closure target state is not applied.")
 
 
 def close_open_content_moderation_case_for_lifecycle(
@@ -1013,31 +1359,76 @@ def close_open_content_moderation_case_for_lifecycle(
     new_target_state: str | None = None,
     closed_at: datetime | None = None,
 ) -> AdminReviewCase | None:
-    if target_field_name not in REVIEW_TARGET_FIELDS:
-        raise ValueError("target_field_name is not a review target field.")
-    if closure_outcome not in VALID_CLOSURE_OUTCOMES:
-        raise ValueError("closure_outcome is not supported.")
+    case_type = {
+        "target_game_id": "community_game",
+        "target_sub_post_id": "need_a_sub",
+    }.get(target_field_name)
+    if case_type is None or target_type != case_type:
+        raise ValueError("Automatic closure target identity is invalid.")
+    target = lock_primary_target(
+        db,
+        target_field_name=target_field_name,
+        target_id=target_id,
+    )
+    if target is None or new_target_state is None:
+        return None
+    validate_automatic_content_lifecycle_target_state(
+        target=target,
+        target_type=target_type,
+        new_target_state=new_target_state,
+    )
+    if isinstance(target, Game) and is_game_content_review_actionable(target):
+        return None
+    if isinstance(target, SubPost) and is_sub_post_content_review_actionable(target):
+        return None
 
     review_case = db.scalar(
         select(AdminReviewCase)
         .where(
             AdminReviewCase.case_status.in_(CASE_ACTIVE_STATUSES),
+            AdminReviewCase.case_type == case_type,
             AdminReviewCase.case_category == CONTENT_MODERATION_CASE_CATEGORY,
             getattr(AdminReviewCase, target_field_name) == target_id,
         )
         .order_by(AdminReviewCase.created_at.asc(), AdminReviewCase.id.asc())
-        .limit(1)
+        .execution_options(populate_existing=True)
         .with_for_update()
+        .limit(1)
     )
     if review_case is None:
         return None
 
+    validate_automatic_content_lifecycle_transition(
+        target_type=target_type,
+        lifecycle_action=lifecycle_action,
+        previous_target_state=previous_target_state,
+        new_target_state=new_target_state,
+        trigger_actor_type=trigger_actor_type,
+        trigger_actor_user_id=trigger_actor_user_id,
+        closed_by_user_id=closed_by_user_id,
+        closure_outcome=closure_outcome,
+        admin_action=admin_action,
+    )
+    reason = normalize_limited_text(closure_reason, "closure_reason", 1000)
+
+    if admin_action is not None and not admin_action_matches_review_case_target(
+        admin_action,
+        review_case,
+        require_linked_case=False,
+    ):
+        raise ValueError("Automatic closure linked action target is invalid.")
+    if (
+        admin_action is not None
+        and closure_outcome == "enforcement_applied"
+        and not is_restrictive_moderation_enforcement_for_case(
+            admin_action,
+            review_case,
+            require_linked_case=False,
+        )
+    ):
+        raise ValueError("Automatic closure linked action is not eligible enforcement.")
+
     now = closed_at or datetime.now(timezone.utc)
-    reason = normalize_limited_text(closure_reason, "closure_reason", 2000)
-    before = {
-        "case_status": review_case.case_status,
-        "closure_outcome": review_case.closure_outcome,
-    }
     review_case.case_status = "closed"
     review_case.closure_outcome = closure_outcome
     review_case.closure_reason = reason
@@ -1049,31 +1440,21 @@ def close_open_content_moderation_case_for_lifecycle(
     if admin_action is not None and admin_action.target_review_case_id is None:
         admin_action.target_review_case_id = review_case.id
         db.add(admin_action)
+    if admin_action is not None:
+        db.flush([admin_action])
 
     create_case_event(
         db,
-        review_case_id=review_case.id,
+        review_case=review_case,
         event_type="closed",
         actor_user_id=trigger_actor_user_id,
         admin_action_id=admin_action.id if admin_action is not None else None,
         event_metadata={
-            "closure_mode": "automatic",
             "closure_source": "target_lifecycle",
             "lifecycle_action": lifecycle_action,
-            "target_type": target_type,
             "previous_target_state": previous_target_state,
             "new_target_state": new_target_state,
             "trigger_actor_type": trigger_actor_type,
-            "trigger_actor_user_id": trigger_actor_user_id,
-            "closed_by_user_id": closed_by_user_id,
-            "linked_admin_action_id": (
-                admin_action.id if admin_action is not None else None
-            ),
-            "before": before,
-            "after": {
-                "case_status": "closed",
-                "closure_outcome": closure_outcome,
-            },
         },
         created_at=now,
     )
@@ -1223,7 +1604,7 @@ def create_internal_review_signal(
     target_data: dict[str, uuid.UUID | None],
     metadata: dict[str, Any] | None,
     idempotency_key: str,
-    _retrying_after_conflict: bool = False,
+    commit_changes: bool = True,
 ) -> tuple[AdminReviewCase, AdminReviewSignal, bool, bool]:
     category = normalize_signal_category(signal_category)
     normalized_source = normalize_source(source)
@@ -1244,144 +1625,128 @@ def create_internal_review_signal(
     )
     created_case = review_case is None
 
-    try:
-        if review_case is None:
-            case_type = infer_case_type(db, normalized_targets)
-            review_case = AdminReviewCase(
-                id=uuid.uuid4(),
-                case_type=case_type,
-                case_status="open",
-                case_category=case_category,
-                priority=normalized_priority,
-                title=build_internal_signal_case_title(case_category, case_type),
-                summary=build_internal_signal_case_summary(case_category, case_type),
-                opened_by_user_id=None,
-                created_at=now,
-                updated_at=now,
-                **copy_targets(normalized_targets),
+    if review_case is None:
+        case_type = infer_case_type(db, normalized_targets)
+        if case_type not in {"community_game", "need_a_sub"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Chat moderation requires a Community Game or Need a Sub target.",
             )
-            db.add(review_case)
-            db.flush()
-
-        scoped_idempotency_key = build_case_scoped_signal_idempotency_key(
-            base_idempotency_key,
-            review_case.id,
-        )
-        existing_signal = get_existing_signal_by_idempotency_key(
-            db,
-            source=normalized_source,
-            idempotency_key=scoped_idempotency_key,
-        )
-        if existing_signal is not None:
-            existing_targets = target_data_from_object(existing_signal)
-            if (
-                existing_signal.signal_category != category
-                or existing_signal.source != normalized_source
-                or existing_targets != normalized_targets
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="idempotency_key was already used for a different signal.",
-                )
-            previous_metadata = dict(existing_signal.metadata_ or {})
-            was_current_match = previous_metadata.get("current_match") is True
-            becomes_current_match = (
-                normalized_metadata is not None
-                and normalized_metadata.get("current_match") is True
-            )
-            if normalized_metadata is not None:
-                existing_signal.metadata_ = normalized_metadata
-                existing_signal.updated_at = now
-                db.add(existing_signal)
-            if (
-                not was_current_match
-                and becomes_current_match
-                and review_case.case_status in CASE_ACTIVE_STATUSES
-            ):
-                review_case.updated_at = now
-                if (
-                    PRIORITY_RANK[normalized_priority]
-                    > PRIORITY_RANK[review_case.priority]
-                ):
-                    review_case.priority = normalized_priority
-                db.add(review_case)
-            db.commit()
-            db.refresh(review_case)
-            db.refresh(existing_signal)
-            return review_case, existing_signal, False, True
-
-        if not created_case:
-            review_case.updated_at = now
-            if PRIORITY_RANK[normalized_priority] > PRIORITY_RANK[review_case.priority]:
-                review_case.priority = normalized_priority
-            db.add(review_case)
-
-        signal = AdminReviewSignal(
+        review_case = AdminReviewCase(
             id=uuid.uuid4(),
-            review_case_id=review_case.id,
-            signal_category=category,
-            source=normalized_source,
-            signal_status="attached",
+            case_type=case_type,
+            case_status="open",
+            case_category=case_category,
+            case_version=1,
             priority=normalized_priority,
-            title=normalized_title,
-            summary=normalized_summary,
-            metadata_=normalized_metadata,
-            idempotency_key=scoped_idempotency_key,
-            created_by_user_id=None,
+            title=build_internal_signal_case_title(case_category, case_type),
+            summary=build_internal_signal_case_summary(case_category, case_type),
+            opened_by_user_id=None,
             created_at=now,
             updated_at=now,
             **copy_targets(normalized_targets),
         )
-        db.add(signal)
+        db.add(review_case)
         db.flush()
-
-        if created_case:
-            create_case_event(
-                db,
-                review_case_id=review_case.id,
-                event_type="case_created",
-                actor_user_id=None,
-                signal_id=signal.id,
-                event_metadata={"source": normalized_source},
-                created_at=now,
-            )
-
         create_case_event(
             db,
-            review_case_id=review_case.id,
-            event_type="signal_attached",
-            actor_user_id=None,
-            signal_id=signal.id,
-            event_metadata={
-                "created_case": created_case,
-                "source": normalized_source,
-            },
-            created_at=now + timedelta(microseconds=1) if created_case else now,
+            review_case=review_case,
+            event_type="case_created",
+            created_at=now,
         )
+        db.flush()
 
+    scoped_idempotency_key = build_case_scoped_signal_idempotency_key(
+        base_idempotency_key,
+        review_case.id,
+    )
+    existing_signal = get_existing_signal_by_idempotency_key(
+        db,
+        source=normalized_source,
+        idempotency_key=scoped_idempotency_key,
+    )
+    if existing_signal is not None:
+        existing_targets = target_data_from_object(existing_signal)
+        if (
+            existing_signal.signal_category != category
+            or existing_signal.source != normalized_source
+            or existing_targets != normalized_targets
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="idempotency_key was already used for a different signal.",
+            )
+        previous_metadata = dict(existing_signal.metadata_ or {})
+        was_current_match = previous_metadata.get("current_match") is True
+        becomes_current_match = (
+            normalized_metadata is not None
+            and normalized_metadata.get("current_match") is True
+        )
+        if normalized_metadata is not None:
+            existing_signal.metadata_ = normalized_metadata
+            existing_signal.updated_at = now
+            db.add(existing_signal)
+        if not was_current_match and becomes_current_match:
+            if review_case.case_status not in CASE_ACTIVE_STATUSES:
+                raise review_case_conflict(
+                    "review_case_transition_conflict", review_case
+                )
+            create_case_event(
+                db,
+                review_case=review_case,
+                event_type="signal_reactivated",
+                signal_id=existing_signal.id,
+                created_at=now,
+            )
+            if PRIORITY_RANK[normalized_priority] > PRIORITY_RANK[review_case.priority]:
+                review_case.priority = normalized_priority
+        if commit_changes:
+            db.commit()
+            db.refresh(review_case)
+            db.refresh(existing_signal)
+        else:
+            db.flush()
+        return review_case, existing_signal, False, True
+
+    if (
+        not created_case
+        and PRIORITY_RANK[normalized_priority] > PRIORITY_RANK[review_case.priority]
+    ):
+        review_case.priority = normalized_priority
+
+    signal = AdminReviewSignal(
+        id=uuid.uuid4(),
+        review_case_id=review_case.id,
+        signal_category=category,
+        source=normalized_source,
+        signal_status="attached",
+        priority=normalized_priority,
+        title=normalized_title,
+        summary=normalized_summary,
+        metadata_=normalized_metadata,
+        idempotency_key=scoped_idempotency_key,
+        created_by_user_id=None,
+        created_at=now,
+        updated_at=now,
+        **copy_targets(normalized_targets),
+    )
+    db.add(signal)
+    db.flush()
+
+    create_case_event(
+        db,
+        review_case=review_case,
+        event_type="signal_attached",
+        signal_id=signal.id,
+        created_at=now,
+    )
+
+    if commit_changes:
         db.commit()
         db.refresh(review_case)
         db.refresh(signal)
-    except IntegrityError as exc:
-        db.rollback()
-        if not _retrying_after_conflict:
-            return create_internal_review_signal(
-                db,
-                signal_category=signal_category,
-                source=source,
-                priority=priority,
-                title=title,
-                summary=summary,
-                target_data=target_data,
-                metadata=metadata,
-                idempotency_key=idempotency_key,
-                _retrying_after_conflict=True,
-            )
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Review signal could not be created.",
-        ) from exc
-
+    else:
+        db.flush()
     return review_case, signal, created_case, False
 
 
@@ -1406,10 +1771,6 @@ def get_existing_review_action(
     )
 
 
-def note_hash(body: str) -> str:
-    return hashlib.sha256(body.encode("utf-8")).hexdigest()
-
-
 def add_review_case_note(
     db: Session,
     *,
@@ -1424,8 +1785,9 @@ def add_review_case_note(
         MAX_REVIEW_CASE_NOTE_BODY_LENGTH,
     )
     idempotency_key = normalize_required_idempotency_key(payload.idempotency_key)
-    body_hash = note_hash(body)
+    request_fingerprint = review_case_request_fingerprint({"body": body})
 
+    review_case, _target = lock_review_case_with_target(db, review_case_id)
     existing_action = get_existing_review_action(
         db,
         action_type="add_review_case_note",
@@ -1435,18 +1797,16 @@ def add_review_case_note(
     )
     if existing_action is not None:
         metadata = existing_action.metadata_ or {}
-        if metadata.get("note_hash") != body_hash:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="idempotency_key was already used for a different note.",
-            )
-        note = db.get(AdminReviewCaseNote, uuid.UUID(metadata["note_id"]))
+        if metadata.get("request_fingerprint") != request_fingerprint:
+            raise review_case_conflict("review_case_idempotency_conflict", review_case)
+        note_id = metadata.get("note_id")
+        try:
+            note_uuid = uuid.UUID(note_id) if isinstance(note_id, str) else None
+        except ValueError:
+            note_uuid = None
+        note = db.get(AdminReviewCaseNote, note_uuid) if note_uuid else None
         if note is None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Review note audit exists but note is missing.",
-            )
-        review_case = get_review_case_or_404(db, review_case_id)
+            raise review_case_conflict("review_case_transition_conflict", review_case)
         return AdminReviewCaseNoteResultRead(
             review_case=serialize_review_case_detail(db, review_case),
             note=serialize_review_case_note_read(note, {admin_user.id: admin_user}),
@@ -1454,12 +1814,8 @@ def add_review_case_note(
             idempotent_replay=True,
         )
 
-    review_case = get_review_case_for_update_or_404(db, review_case_id)
     if review_case.case_status == "closed":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Closed review cases cannot receive notes.",
-        )
+        raise review_case_conflict("review_case_transition_conflict", review_case)
     note_count = db.scalar(
         select(func.count(AdminReviewCaseNote.id)).where(
             AdminReviewCaseNote.review_case_id == review_case.id
@@ -1478,7 +1834,6 @@ def add_review_case_note(
         author_user_id=admin_user.id,
         body=body,
         created_at=now,
-        updated_at=now,
     )
     db.add(note)
     db.flush()
@@ -1491,22 +1846,22 @@ def add_review_case_note(
         metadata={
             "source": "review_case",
             "note_id": str(note.id),
-            "note_hash": body_hash,
+            "request_fingerprint": request_fingerprint,
             "note_length": len(body),
         },
         idempotency_key=idempotency_key,
         created_at=now,
         **copy_targets(target_data_from_object(review_case)),
     )
+    db.flush([admin_action])
     event = create_case_event(
         db,
-        review_case_id=review_case.id,
+        review_case=review_case,
         event_type="note_added",
         actor_user_id=admin_user.id,
         admin_action_id=admin_action.id,
         note_id=note.id,
     )
-    review_case.updated_at = now
     db.flush()
     metadata = dict(admin_action.metadata_ or {})
     metadata["event_id"] = str(event.id)
@@ -1552,9 +1907,17 @@ def close_review_case(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="outcome is not supported.",
         )
-    reason = normalize_limited_text(payload.reason, "reason", 2000)
+    reason = normalize_limited_text(payload.reason, "reason", 1000)
     idempotency_key = normalize_required_idempotency_key(payload.idempotency_key)
+    request_fingerprint = review_case_request_fingerprint(
+        {
+            "expected_case_version": payload.expected_case_version,
+            "outcome": outcome,
+            "reason": reason,
+        }
+    )
 
+    review_case, _target = lock_review_case_with_target(db, review_case_id)
     existing_action = get_existing_review_action(
         db,
         action_type="close_review_case",
@@ -1564,45 +1927,51 @@ def close_review_case(
     )
     if existing_action is not None:
         metadata = existing_action.metadata_ or {}
-        if (
-            metadata.get("closure_outcome") != outcome
-            or existing_action.reason != reason
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "idempotency_key was already used for a different "
-                    "review closure."
-                ),
-            )
+        if metadata.get("request_fingerprint") != request_fingerprint:
+            raise review_case_conflict("review_case_idempotency_conflict", review_case)
         return build_review_case_action_replay(
             db,
             review_case_id=review_case_id,
             action=existing_action,
         )
 
-    review_case = get_review_case_for_update_or_404(db, review_case_id)
+    require_expected_case_version(review_case, payload.expected_case_version)
     if review_case.case_status == "closed":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Review case is already closed.",
+        raise review_case_conflict("review_case_transition_conflict", review_case)
+    if outcome == "enforcement_applied":
+        enforcement_actions = list(
+            db.scalars(
+                select(AdminAction)
+                .join(
+                    AdminReviewCaseEvent,
+                    AdminReviewCaseEvent.admin_action_id == AdminAction.id,
+                )
+                .where(
+                    AdminAction.target_review_case_id == review_case.id,
+                    AdminAction.action_type.in_(
+                        RESTRICTIVE_MODERATION_ENFORCEMENT_TARGET_FIELDS
+                    ),
+                    AdminReviewCaseEvent.review_case_id == review_case.id,
+                    AdminReviewCaseEvent.event_type == "enforcement_action_linked",
+                )
+            ).all()
         )
+        if not any(
+            is_restrictive_moderation_enforcement_for_case(
+                action,
+                review_case,
+                require_linked_case=True,
+            )
+            for action in enforcement_actions
+        ):
+            raise review_case_conflict("review_case_transition_conflict", review_case)
 
     now = datetime.now(timezone.utc)
-    before = {
-        "case_status": review_case.case_status,
-        "closure_outcome": review_case.closure_outcome,
-    }
     review_case.case_status = "closed"
     review_case.closure_outcome = outcome
     review_case.closure_reason = reason
     review_case.closed_by_user_id = admin_user.id
     review_case.closed_at = now
-    review_case.updated_at = now
-    after = {
-        "case_status": review_case.case_status,
-        "closure_outcome": outcome,
-    }
     admin_action = record_admin_action(
         db,
         admin_user_id=admin_user.id,
@@ -1611,21 +1980,21 @@ def close_review_case(
         reason=reason,
         metadata={
             "source": "review_case_closure",
-            "before": before,
-            "after": after,
             "closure_outcome": outcome,
+            "request_fingerprint": request_fingerprint,
         },
         idempotency_key=idempotency_key,
         created_at=now,
         **copy_targets(target_data_from_object(review_case)),
     )
+    db.flush([admin_action])
     event = create_case_event(
         db,
-        review_case_id=review_case.id,
+        review_case=review_case,
         event_type="closed",
         actor_user_id=admin_user.id,
         admin_action_id=admin_action.id,
-        event_metadata=after,
+        event_metadata=None,
     )
     db.flush()
     metadata = dict(admin_action.metadata_ or {})
@@ -1646,19 +2015,33 @@ def link_admin_action_to_open_review_case(
     db: Session,
     admin_action: AdminAction,
 ) -> AdminReviewCase | None:
-    if admin_action.target_review_case_id is not None:
+    if (
+        admin_action.target_review_case_id is not None
+        or admin_action.action_type
+        not in RESTRICTIVE_MODERATION_ENFORCEMENT_TARGET_FIELDS
+    ):
         return None
-    review_case = find_open_case_for_admin_action(db, admin_action)
+    review_case = find_open_case_for_admin_action(
+        db,
+        admin_action,
+        case_category=CONTENT_MODERATION_CASE_CATEGORY,
+    )
     if review_case is None:
         return None
+    if not is_restrictive_moderation_enforcement_for_case(
+        admin_action,
+        review_case,
+        require_linked_case=False,
+    ):
+        return None
     admin_action.target_review_case_id = review_case.id
+    db.add(admin_action)
+    db.flush([admin_action])
     create_case_event(
         db,
-        review_case_id=review_case.id,
+        review_case=review_case,
         event_type="enforcement_action_linked",
         actor_user_id=admin_action.admin_user_id,
         admin_action_id=admin_action.id,
-        event_metadata={"action_type": admin_action.action_type},
     )
-    review_case.updated_at = datetime.now(timezone.utc)
     return review_case

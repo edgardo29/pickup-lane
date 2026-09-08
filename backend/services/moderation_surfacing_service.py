@@ -7,7 +7,6 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
@@ -55,38 +54,6 @@ from backend.services.moderation_taxonomy import (
 )
 
 logger = logging.getLogger(__name__)
-
-RETRYABLE_MODERATION_CONSTRAINTS = frozenset(
-    {
-        "uq_admin_review_cases_open_community_game_content_moderation",
-        "uq_admin_review_cases_open_need_sub_content_moderation",
-        "uq_admin_content_moderation_findings_current_identity",
-    }
-)
-
-
-def integrity_error_constraint_name(error: IntegrityError) -> str | None:
-    diagnostic = getattr(getattr(error, "orig", None), "diag", None)
-    constraint_name = getattr(diagnostic, "constraint_name", None)
-    return constraint_name if isinstance(constraint_name, str) else None
-
-
-def is_retryable_moderation_creation_race(error: IntegrityError) -> bool:
-    return integrity_error_constraint_name(error) in RETRYABLE_MODERATION_CONSTRAINTS
-
-
-def log_moderation_integrity_failure(
-    *,
-    operation: str,
-    target_id: uuid.UUID,
-    error: IntegrityError,
-) -> None:
-    logger.error(
-        "%s failed for target %s (constraint=%s).",
-        operation,
-        target_id,
-        integrity_error_constraint_name(error) or "unknown",
-    )
 
 
 def compact_snapshot_text(value: Any) -> str | None:
@@ -171,47 +138,34 @@ def surface_community_game_text(
     *,
     game_id: uuid.UUID,
 ) -> None:
-    for attempt in range(2):
-        try:
-            game = db.scalar(select(Game).where(Game.id == game_id).with_for_update())
-            if (
-                game is None
-                or game.game_type != "community"
-                or not is_game_content_review_actionable(game)
-            ):
-                db.rollback()
-                return
-            detail = get_community_game_detail(db, game.id)
-            fields = build_community_game_moderation_fields(game, detail)
-            scan_result = build_content_moderation_findings(
-                fields,
-                target_context=TARGET_CONTEXT_COMMUNITY_GAME,
-            )
-            reconcile_content_moderation_findings(
-                db,
-                target_data={"target_game_id": game.id},
-                scan_result=scan_result,
-            )
-            return
-        except IntegrityError as exc:
+    try:
+        game = db.scalar(select(Game).where(Game.id == game_id).with_for_update())
+        if (
+            game is None
+            or game.game_type != "community"
+            or not is_game_content_review_actionable(game)
+        ):
             db.rollback()
-            if attempt == 0 and is_retryable_moderation_creation_race(exc):
-                continue
-            log_moderation_integrity_failure(
-                operation="Community game moderation reconciliation",
-                target_id=game_id,
-                error=exc,
-            )
             return
-        except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
-            db.rollback()
-            logger.error(
-                "Community game moderation reconciliation failed for game %s "
-                "(error_type=%s).",
-                game_id,
-                type(exc).__name__,
-            )
-            return
+        detail = get_community_game_detail(db, game.id)
+        fields = build_community_game_moderation_fields(game, detail)
+        scan_result = build_content_moderation_findings(
+            fields,
+            target_context=TARGET_CONTEXT_COMMUNITY_GAME,
+        )
+        reconcile_content_moderation_findings(
+            db,
+            target_data={"target_game_id": game.id},
+            scan_result=scan_result,
+        )
+    except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
+        db.rollback()
+        logger.error(
+            "Community game moderation reconciliation failed for game %s "
+            "(error_type=%s).",
+            game_id,
+            type(exc).__name__,
+        )
 
 
 def build_need_a_sub_moderation_fields(sub_post: SubPost) -> list[ModerationTextField]:
@@ -254,44 +208,30 @@ def surface_need_a_sub_post_text(
     *,
     sub_post_id: uuid.UUID,
 ) -> None:
-    for attempt in range(2):
-        try:
-            sub_post = db.scalar(
-                select(SubPost).where(SubPost.id == sub_post_id).with_for_update()
-            )
-            if not is_sub_post_content_review_actionable(sub_post):
-                db.rollback()
-                return
-            fields = build_need_a_sub_moderation_fields(sub_post)
-            scan_result = build_content_moderation_findings(
-                fields,
-                target_context=TARGET_CONTEXT_NEED_A_SUB,
-            )
-            reconcile_content_moderation_findings(
-                db,
-                target_data={"target_sub_post_id": sub_post.id},
-                scan_result=scan_result,
-            )
-            return
-        except IntegrityError as exc:
+    try:
+        sub_post = db.scalar(
+            select(SubPost).where(SubPost.id == sub_post_id).with_for_update()
+        )
+        if not is_sub_post_content_review_actionable(sub_post):
             db.rollback()
-            if attempt == 0 and is_retryable_moderation_creation_race(exc):
-                continue
-            log_moderation_integrity_failure(
-                operation="Need a Sub moderation reconciliation",
-                target_id=sub_post_id,
-                error=exc,
-            )
             return
-        except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
-            db.rollback()
-            logger.error(
-                "Need a Sub moderation reconciliation failed for post %s "
-                "(error_type=%s).",
-                sub_post_id,
-                type(exc).__name__,
-            )
-            return
+        fields = build_need_a_sub_moderation_fields(sub_post)
+        scan_result = build_content_moderation_findings(
+            fields,
+            target_context=TARGET_CONTEXT_NEED_A_SUB,
+        )
+        reconcile_content_moderation_findings(
+            db,
+            target_data={"target_sub_post_id": sub_post.id},
+            scan_result=scan_result,
+        )
+    except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
+        db.rollback()
+        logger.error(
+            "Need a Sub moderation reconciliation failed for post %s (error_type=%s).",
+            sub_post_id,
+            type(exc).__name__,
+        )
 
 
 def detection_priority(severity: str) -> str:

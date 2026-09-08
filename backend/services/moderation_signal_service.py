@@ -11,8 +11,16 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import AdminReviewCase, AdminReviewSignal
-from backend.services.admin_review_service import create_internal_review_signal
+from backend.models import AdminReviewSignal
+from backend.services.admin_review_service import (
+    CHAT_MODERATION_CASE_CATEGORY,
+    PRIORITY_RANK,
+    create_case_event,
+    create_internal_review_signal,
+    find_open_case_for_signal,
+    is_current_signal,
+    lock_primary_target,
+)
 from backend.services.content_moderation_scanner_service import (
     ModerationFinding,
     scanner_timestamp,
@@ -21,7 +29,6 @@ from backend.services.content_moderation_scanner_service import (
 logger = logging.getLogger(__name__)
 
 CHAT_MODERATION_SOURCE = "chat_moderation"
-ACTIVE_REVIEW_CASE_STATUSES = ("open",)
 
 
 def build_signal_idempotency_key(
@@ -124,21 +131,25 @@ def mark_superseded_signals(
     current_keys: set[tuple[str, str, str, str]],
     scanned_at: str,
     metadata_filters: dict[str, str] | None = None,
+    commit_changes: bool = True,
 ) -> None:
     primary_target = primary_target_from_data(target_data)
     if primary_target is None:
         return
 
     target_field, target_id = primary_target
+    review_case = find_open_case_for_signal(
+        db,
+        target_data=target_data,
+        case_category=CHAT_MODERATION_CASE_CATEGORY,
+    )
+    if review_case is None:
+        return
     signals = list(
         db.scalars(
             select(AdminReviewSignal)
-            .join(
-                AdminReviewCase,
-                AdminReviewCase.id == AdminReviewSignal.review_case_id,
-            )
             .where(
-                AdminReviewCase.case_status.in_(ACTIVE_REVIEW_CASE_STATUSES),
+                AdminReviewSignal.review_case_id == review_case.id,
                 AdminReviewSignal.source == source,
                 AdminReviewSignal.signal_category.in_(signal_categories),
                 getattr(AdminReviewSignal, target_field) == target_id,
@@ -181,6 +192,12 @@ def mark_superseded_signals(
                 metadata["latest_content_hash"] = latest_hash
                 metadata["last_scanned_at"] = scanned_at
                 signal.metadata_ = metadata
+                create_case_event(
+                    db,
+                    review_case=review_case,
+                    event_type="signal_reactivated",
+                    signal_id=signal.id,
+                )
                 changed = True
             continue
 
@@ -195,10 +212,31 @@ def mark_superseded_signals(
         metadata["latest_content_hash"] = latest_hash
         metadata["last_scanned_at"] = scanned_at
         signal.metadata_ = metadata
+        create_case_event(
+            db,
+            review_case=review_case,
+            event_type="signal_superseded",
+            signal_id=signal.id,
+        )
         changed = True
 
-    if changed:
-        db.commit()
+    current_priorities = [
+        signal.priority for signal in signals if is_current_signal(signal)
+    ]
+    reconciled_priority = (
+        max(current_priorities, key=lambda value: PRIORITY_RANK[value])
+        if current_priorities
+        else "attention"
+    )
+    priority_changed = review_case.priority != reconciled_priority
+    if priority_changed:
+        review_case.priority = reconciled_priority
+
+    if changed or priority_changed:
+        if commit_changes:
+            db.commit()
+        else:
+            db.flush()
 
 
 def surface_moderation_findings(
@@ -216,62 +254,80 @@ def surface_moderation_findings(
     if primary_target is None:
         return
 
-    _target_field, target_id = primary_target
-    scanned_at = scanner_timestamp()
-    current_keys: set[tuple[str, str, str, str]] = set()
-    signal_categories = {"chat_moderation"}
-    signal_categories.update(finding.signal_category for finding in findings)
-    for finding in findings:
-        finding_scanned_at = finding.provenance.scanned_at.isoformat()
-        current_keys.add(
-            (
-                finding.signal_category,
-                finding.field_name,
-                finding.moderation_domain,
-                finding.content_hash,
-            )
-        )
-        metadata = build_signal_metadata(
-            finding,
-            target_type=target_type,
-            scanned_at=finding_scanned_at,
-            extra_metadata=extra_metadata,
-        )
-        create_internal_review_signal(
-            db,
-            signal_category=finding.signal_category,
-            source=source,
-            priority=finding.priority,
-            title=build_signal_title(finding),
-            summary=build_signal_summary(finding),
-            target_data=target_data,
-            metadata=metadata,
-            idempotency_key=build_signal_idempotency_key(
-                source=source,
-                target_type=target_type,
+    target_field, target_id = primary_target
+    try:
+        if (
+            lock_primary_target(
+                db,
+                target_field_name=target_field,
                 target_id=target_id,
-                signal_category=finding.signal_category,
-                field_name=finding.field_name,
-                moderation_domain=finding.moderation_domain,
-                content_hash_value=finding.content_hash,
-                extra_key=(
-                    str(extra_metadata.get("message_id"))
-                    if extra_metadata and extra_metadata.get("message_id")
-                    else None
-                ),
-            ),
-        )
+            )
+            is None
+        ):
+            db.rollback()
+            return
 
-    mark_superseded_signals(
-        db,
-        target_data=target_data,
-        source=source,
-        signal_categories=signal_categories,
-        scanned_field_hashes=scanned_field_hashes,
-        current_keys=current_keys,
-        scanned_at=scanned_at,
-        metadata_filters=metadata_filters,
-    )
+        scanned_at = scanner_timestamp()
+        current_keys: set[tuple[str, str, str, str]] = set()
+        signal_categories = {"chat_moderation"}
+        signal_categories.update(finding.signal_category for finding in findings)
+        for finding in findings:
+            finding_scanned_at = finding.provenance.scanned_at.isoformat()
+            current_keys.add(
+                (
+                    finding.signal_category,
+                    finding.field_name,
+                    finding.moderation_domain,
+                    finding.content_hash,
+                )
+            )
+            metadata = build_signal_metadata(
+                finding,
+                target_type=target_type,
+                scanned_at=finding_scanned_at,
+                extra_metadata=extra_metadata,
+            )
+            create_internal_review_signal(
+                db,
+                signal_category=finding.signal_category,
+                source=source,
+                priority=finding.priority,
+                title=build_signal_title(finding),
+                summary=build_signal_summary(finding),
+                target_data=target_data,
+                metadata=metadata,
+                idempotency_key=build_signal_idempotency_key(
+                    source=source,
+                    target_type=target_type,
+                    target_id=target_id,
+                    signal_category=finding.signal_category,
+                    field_name=finding.field_name,
+                    moderation_domain=finding.moderation_domain,
+                    content_hash_value=finding.content_hash,
+                    extra_key=(
+                        str(extra_metadata.get("message_id"))
+                        if extra_metadata and extra_metadata.get("message_id")
+                        else None
+                    ),
+                ),
+                commit_changes=False,
+            )
+
+        mark_superseded_signals(
+            db,
+            target_data=target_data,
+            source=source,
+            signal_categories=signal_categories,
+            scanned_field_hashes=scanned_field_hashes,
+            current_keys=current_keys,
+            scanned_at=scanned_at,
+            metadata_filters=metadata_filters,
+            commit_changes=False,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def run_moderation_surfacing_safely(
