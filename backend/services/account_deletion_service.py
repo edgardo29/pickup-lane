@@ -23,6 +23,10 @@ from backend.models import (
 )
 from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
 from backend.schemas.auth_schema import AuthDeleteAccountRequest
+from backend.services.admin_review_service import (
+    close_open_content_moderation_case_for_game_lifecycle,
+    close_open_content_moderation_case_for_sub_post_lifecycle,
+)
 from backend.services.auth_service import get_authenticated_user_from_token
 from backend.services.game_rules import (
     ACTIVE_BOOKING_STATUSES,
@@ -762,6 +766,7 @@ def cancel_future_community_hosted_games(
     db: Session,
     *,
     user: User,
+    changed_by_user_id: uuid.UUID | None = None,
     now: datetime,
 ) -> None:
     from backend.services.game_cancellation_service import (
@@ -785,6 +790,14 @@ def cancel_future_community_hosted_games(
         .with_for_update()
     ).all()
 
+    trigger_actor_user_id = changed_by_user_id or user.id
+    trigger_actor_type = (
+        "admin" if trigger_actor_user_id != user.id else "owner"
+    )
+    closed_by_user_id = (
+        trigger_actor_user_id if trigger_actor_type == "admin" else None
+    )
+
     for game in games:
         old_game_status = game.game_status
         notified_user_ids = cancel_game_participants(
@@ -792,6 +805,8 @@ def cancel_future_community_hosted_games(
             game,
             now,
             "host_cancelled",
+            user.id,
+            "system",
         )
         cancel_game_waitlist_entries(db, game, now)
         cancel_game_bookings(db, game, user, now, "host_cancelled")
@@ -820,6 +835,22 @@ def cancel_future_community_hosted_games(
         game.completed_by_user_id = None
         game.updated_at = now
         db.add(game)
+        close_open_content_moderation_case_for_game_lifecycle(
+            db,
+            game_id=game.id,
+            closure_outcome="no_action_needed",
+            closure_reason=(
+                "Community Game was cancelled because its host account was deleted "
+                "before moderation review was completed."
+            ),
+            lifecycle_action="host_account_deleted",
+            trigger_actor_type=trigger_actor_type,
+            trigger_actor_user_id=trigger_actor_user_id,
+            closed_by_user_id=closed_by_user_id,
+            previous_game_status=old_game_status,
+            new_game_status="cancelled",
+            closed_at=now,
+        )
 
 
 def cancel_owned_need_a_sub_posts(
@@ -851,6 +882,14 @@ def cancel_owned_need_a_sub_posts(
         .with_for_update()
     ).all()
 
+    trigger_actor_user_id = changed_by_user_id or user_id
+    trigger_actor_type = (
+        "admin" if trigger_actor_user_id != user_id else "owner"
+    )
+    closed_by_user_id = (
+        trigger_actor_user_id if trigger_actor_type == "admin" else None
+    )
+
     for sub_post in posts:
         old_status = sub_post.post_status
         sub_post.post_status = "cancelled"
@@ -867,6 +906,22 @@ def cancel_owned_need_a_sub_posts(
             changed_by_user_id,
             "system",
             "Owner account deleted.",
+        )
+        close_open_content_moderation_case_for_sub_post_lifecycle(
+            db,
+            sub_post_id=sub_post.id,
+            closure_outcome="no_action_needed",
+            closure_reason=(
+                "Need a Sub post was cancelled because its owner account was "
+                "deleted before moderation review was completed."
+            ),
+            lifecycle_action="owner_account_deleted",
+            trigger_actor_type=trigger_actor_type,
+            trigger_actor_user_id=trigger_actor_user_id,
+            closed_by_user_id=closed_by_user_id,
+            previous_post_status=old_status,
+            new_post_status="cancelled",
+            closed_at=now,
         )
         close_sub_post_chat_for_post(
             db,
@@ -1060,7 +1115,12 @@ def cancel_future_user_activity(
     changed_by_user_id: uuid.UUID | None = None,
 ) -> AccountDeletionCleanupResult:
     clear_future_official_host_assignments(db, user_id=user.id, now=now)
-    cancel_future_community_hosted_games(db, user=user, now=now)
+    cancel_future_community_hosted_games(
+        db,
+        user=user,
+        changed_by_user_id=changed_by_user_id,
+        now=now,
+    )
     cancel_future_roster_activity(
         db,
         user_id=user.id,

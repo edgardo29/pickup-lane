@@ -17,10 +17,16 @@ import {
   formatAdminReviewUpdated,
   getAdminReviewFindingCountParts,
 } from './adminReviewFormatters.js'
+import {
+  REVIEW_CASE_CATEGORY_FILTERS,
+  REVIEW_CASE_TARGET_FILTERS,
+  requestAdminReviewCaseListPage,
+} from './adminReviewList.js'
 
 const PAGE_SIZE = 24
 const DEFAULT_CASE_STATUS = 'open'
-const DEFAULT_TARGET_TYPE = 'content_targets'
+const DEFAULT_CASE_CATEGORY = ''
+const DEFAULT_TARGET_TYPE = ''
 const CASE_STATUS_TABS = [
   { label: 'Open', value: 'open' },
   { label: 'Closed', value: 'closed' },
@@ -66,97 +72,21 @@ function ReviewCaseCard({ reviewCase }) {
   )
 }
 
-function AdminReviewCasesPage() {
-  const { currentUser } = useAuth()
-  const [cases, setCases] = useState([])
-  const [nextCursor, setNextCursor] = useState('')
-  const [hasMoreCases, setHasMoreCases] = useState(false)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [loadState, setLoadState] = useState('loading')
-  const [pageError, setPageError] = useState('')
-  const [loadMoreError, setLoadMoreError] = useState('')
-  const [caseStatus, setCaseStatus] = useState(DEFAULT_CASE_STATUS)
-  const requestIdRef = useRef(0)
-
-  useEffect(() => {
-    let isMounted = true
-    const requestId = requestIdRef.current + 1
-    requestIdRef.current = requestId
-
-    async function loadCases() {
-      if (!currentUser) return
-      setLoadState('loading')
-      setCases([])
-      setPageError('')
-      setLoadMoreError('')
-      setNextCursor('')
-      setHasMoreCases(false)
-
-      try {
-        const response = await listAdminReviewCases({
-          caseCategory: 'content_moderation',
-          caseStatus,
-          firebaseUser: currentUser,
-          limit: PAGE_SIZE,
-          targetType: DEFAULT_TARGET_TYPE,
-        })
-        if (!isMounted || requestId !== requestIdRef.current) return
-        const nextCases = response.cases ?? []
-        setCases(nextCases)
-        setNextCursor(response.next_cursor ?? '')
-        setHasMoreCases(Boolean(response.has_more))
-        setLoadState('ready')
-      } catch (error) {
-        if (!isMounted || requestId !== requestIdRef.current) return
-        setCases([])
-        setNextCursor('')
-        setHasMoreCases(false)
-        setPageError(error.message || 'Review cases could not be loaded.')
-        setLoadState('error')
-      }
-    }
-
-    loadCases()
-    return () => {
-      isMounted = false
-    }
-  }, [caseStatus, currentUser])
-
-  async function loadMoreCases() {
-    if (!currentUser || isLoadingMore || !hasMoreCases || !nextCursor) {
-      return
-    }
-
-    setIsLoadingMore(true)
-    setLoadMoreError('')
-    const requestId = requestIdRef.current
-
-    try {
-      const response = await listAdminReviewCases({
-        caseCategory: 'content_moderation',
-        caseStatus,
-        cursor: nextCursor,
-        firebaseUser: currentUser,
-        limit: PAGE_SIZE,
-        targetType: DEFAULT_TARGET_TYPE,
-      })
-
-      if (requestId !== requestIdRef.current) return
-
-      const nextCases = response.cases ?? []
-      setCases((currentCases) => [...currentCases, ...nextCases])
-      setNextCursor(response.next_cursor ?? '')
-      setHasMoreCases(Boolean(response.has_more))
-    } catch (error) {
-      if (requestId !== requestIdRef.current) return
-      setLoadMoreError(error.message || 'More review cases could not be loaded.')
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setIsLoadingMore(false)
-      }
-    }
-  }
-
+export function AdminReviewCasesPageView({
+  caseCategory,
+  cases,
+  caseStatus,
+  hasMoreCases,
+  isLoadingMore,
+  loadMoreError,
+  loadState,
+  onCaseCategoryChange,
+  onCaseStatusChange,
+  onLoadMore,
+  onTargetTypeChange,
+  pageError,
+  targetType,
+}) {
   return (
     <AdminWorkspaceLayout
       breadcrumbs={['Admin', 'Review Cases']}
@@ -171,19 +101,56 @@ function AdminReviewCasesPage() {
           </FormErrorMessage>
         )}
 
-        <div className="admin-review-tabs" role="tablist" aria-label="Review case status">
-          {CASE_STATUS_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              aria-selected={caseStatus === tab.value}
-              className="admin-review-tabs__button"
-              role="tab"
-              type="button"
-              onClick={() => setCaseStatus(tab.value)}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="admin-review-list-controls">
+          <div className="admin-review-tabs" role="tablist" aria-label="Review case status">
+            {CASE_STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                aria-selected={caseStatus === tab.value}
+                className="admin-review-tabs__button"
+                role="tab"
+                type="button"
+                onClick={() => onCaseStatusChange(tab.value)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div
+            aria-label="Review case filters"
+            className="admin-review-list-filters"
+            role="group"
+          >
+            <label>
+              <span>Category</span>
+              <select
+                name="case-category"
+                value={caseCategory}
+                onChange={(event) => onCaseCategoryChange(event.target.value)}
+              >
+                {REVIEW_CASE_CATEGORY_FILTERS.map((option) => (
+                  <option key={option.value || 'all'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Target</span>
+              <select
+                name="target-type"
+                value={targetType}
+                onChange={(event) => onTargetTypeChange(event.target.value)}
+              >
+                {REVIEW_CASE_TARGET_FILTERS.map((option) => (
+                  <option key={option.value || 'all'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
         <section className="admin-review-case-board" aria-label="Review cases">
@@ -216,7 +183,7 @@ function AdminReviewCasesPage() {
               className="admin-review-button"
               disabled={isLoadingMore}
               type="button"
-              onClick={loadMoreCases}
+              onClick={onLoadMore}
             >
               {isLoadingMore ? 'Loading more' : 'Load more'}
             </button>
@@ -224,6 +191,119 @@ function AdminReviewCasesPage() {
         )}
       </div>
     </AdminWorkspaceLayout>
+  )
+}
+
+function AdminReviewCasesPage() {
+  const { currentUser } = useAuth()
+  const [cases, setCases] = useState([])
+  const [nextCursor, setNextCursor] = useState('')
+  const [hasMoreCases, setHasMoreCases] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [loadState, setLoadState] = useState('loading')
+  const [pageError, setPageError] = useState('')
+  const [loadMoreError, setLoadMoreError] = useState('')
+  const [caseStatus, setCaseStatus] = useState(DEFAULT_CASE_STATUS)
+  const [caseCategory, setCaseCategory] = useState(DEFAULT_CASE_CATEGORY)
+  const [targetType, setTargetType] = useState(DEFAULT_TARGET_TYPE)
+  const requestIdRef = useRef(0)
+
+  useEffect(() => {
+    let isMounted = true
+    const requestId = requestIdRef.current + 1
+    requestIdRef.current = requestId
+
+    async function loadCases() {
+      if (!currentUser) return
+      setLoadState('loading')
+      setCases([])
+      setPageError('')
+      setLoadMoreError('')
+      setNextCursor('')
+      setHasMoreCases(false)
+      setIsLoadingMore(false)
+
+      try {
+        const response = await requestAdminReviewCaseListPage({
+          caseCategory,
+          caseStatus,
+          firebaseUser: currentUser,
+          limit: PAGE_SIZE,
+          listReviewCases: listAdminReviewCases,
+          targetType,
+        })
+        if (!isMounted || requestId !== requestIdRef.current) return
+        setCases(response.cases)
+        setNextCursor(response.nextCursor)
+        setHasMoreCases(response.hasMore)
+        setLoadState('ready')
+      } catch (error) {
+        if (!isMounted || requestId !== requestIdRef.current) return
+        setCases([])
+        setNextCursor('')
+        setHasMoreCases(false)
+        setPageError(error.message || 'Review cases could not be loaded.')
+        setLoadState('error')
+      }
+    }
+
+    loadCases()
+    return () => {
+      isMounted = false
+    }
+  }, [caseCategory, caseStatus, currentUser, targetType])
+
+  async function loadMoreCases() {
+    if (!currentUser || isLoadingMore || !hasMoreCases || !nextCursor) {
+      return
+    }
+
+    setIsLoadingMore(true)
+    setLoadMoreError('')
+    const requestId = requestIdRef.current
+
+    try {
+      const response = await requestAdminReviewCaseListPage({
+        caseCategory,
+        caseStatus,
+        cursor: nextCursor,
+        firebaseUser: currentUser,
+        limit: PAGE_SIZE,
+        listReviewCases: listAdminReviewCases,
+        targetType,
+      })
+
+      if (requestId !== requestIdRef.current) return
+
+      setCases((currentCases) => [...currentCases, ...response.cases])
+      setNextCursor(response.nextCursor)
+      setHasMoreCases(response.hasMore)
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return
+      setLoadMoreError(error.message || 'More review cases could not be loaded.')
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setIsLoadingMore(false)
+      }
+    }
+  }
+
+  return (
+    <AdminReviewCasesPageView
+      caseCategory={caseCategory}
+      cases={cases}
+      caseStatus={caseStatus}
+      hasMoreCases={hasMoreCases}
+      isLoadingMore={isLoadingMore}
+      loadMoreError={loadMoreError}
+      loadState={loadState}
+      pageError={pageError}
+      targetType={targetType}
+      onCaseCategoryChange={setCaseCategory}
+      onCaseStatusChange={setCaseStatus}
+      onLoadMore={loadMoreCases}
+      onTargetTypeChange={setTargetType}
+    />
   )
 }
 

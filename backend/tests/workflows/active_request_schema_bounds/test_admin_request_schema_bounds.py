@@ -23,7 +23,10 @@ from backend.schemas.admin_review_schema import (
     AdminReviewCaseNoteCreate,
     AdminReviewClosureOutcome,
 )
-from backend.schemas.support_flag_schema import SupportFlagResolve, SupportResolutionOutcome
+from backend.schemas.support_flag_schema import (
+    SupportFlagResolve,
+    SupportResolutionOutcome,
+)
 
 pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
 
@@ -123,18 +126,57 @@ def test_admin_money_literals_reason_note_and_amount_request_bounds() -> None:
 
 @pytest.mark.requirement("WS02-04B2A2A-R4")
 def test_admin_review_literals_and_text_bounds() -> None:
+    close_fields = {
+        "expected_case_version": 1,
+        "idempotency_key": "close-key",
+    }
     for outcome in get_args(AdminReviewClosureOutcome):
-        accepted = AdminReviewCaseClose(outcome=outcome, reason="x")
+        accepted = AdminReviewCaseClose(outcome=outcome, reason="x", **close_fields)
         assert accepted.outcome == outcome
 
-    _assert_rejected(AdminReviewCaseClose, outcome="invented_outcome", reason="x")
-    assert AdminReviewCaseClose(outcome="no_action_needed", reason="x").reason == "x"
-    assert AdminReviewCaseClose(outcome="no_action_needed", reason="x" * 1000).reason == "x" * 1000
-    _assert_rejected(AdminReviewCaseClose, outcome="no_action_needed", reason="")
-    _assert_rejected(AdminReviewCaseClose, outcome="no_action_needed", reason="x" * 1001)
+    _assert_rejected(
+        AdminReviewCaseClose,
+        outcome="invented_outcome",
+        reason="x",
+        **close_fields,
+    )
+    assert (
+        AdminReviewCaseClose(
+            outcome="no_action_needed", reason="x", **close_fields
+        ).reason
+        == "x"
+    )
+    assert (
+        AdminReviewCaseClose(
+            outcome="no_action_needed", reason="x" * 1000, **close_fields
+        ).reason
+        == "x" * 1000
+    )
+    _assert_rejected(
+        AdminReviewCaseClose,
+        outcome="no_action_needed",
+        reason="",
+        **close_fields,
+    )
+    _assert_rejected(
+        AdminReviewCaseClose,
+        outcome="no_action_needed",
+        reason="x" * 1001,
+        **close_fields,
+    )
 
-    assert AdminReviewCaseNoteCreate(body="x" * 1000).body == "x" * 1000
-    _assert_rejected(AdminReviewCaseNoteCreate, body="x" * 1001)
+    assert (
+        AdminReviewCaseNoteCreate(
+            body="x" * 1000,
+            idempotency_key="note-key",
+        ).body
+        == "x" * 1000
+    )
+    _assert_rejected(
+        AdminReviewCaseNoteCreate,
+        body="x" * 1001,
+        idempotency_key="note-key",
+    )
 
 
 @pytest.mark.requirement("WS02-04B2A2A-R4")
@@ -145,6 +187,9 @@ def test_support_resolution_literals_and_reason_bounds() -> None:
 
     _assert_rejected(SupportFlagResolve, outcome="invented_outcome", reason="x")
     assert SupportFlagResolve(outcome="no_action_needed", reason="x").reason == "x"
-    assert SupportFlagResolve(outcome="no_action_needed", reason="x" * 1000).reason == "x" * 1000
+    assert (
+        SupportFlagResolve(outcome="no_action_needed", reason="x" * 1000).reason
+        == "x" * 1000
+    )
     _assert_rejected(SupportFlagResolve, outcome="no_action_needed", reason="")
     _assert_rejected(SupportFlagResolve, outcome="no_action_needed", reason="x" * 1001)

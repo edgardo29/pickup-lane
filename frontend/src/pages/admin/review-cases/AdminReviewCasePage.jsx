@@ -29,10 +29,18 @@ import {
   getAdminReviewTargetPath,
   shortAdminReviewId,
 } from './adminReviewFormatters.js'
+import {
+  buildReviewSignalGroups,
+  createAdminReviewCaseCloseHandler,
+  createReviewCaseDetailState,
+  reduceReviewCaseDetailState,
+  requestReviewCaseDetail,
+  sortReviewCaseEvents,
+} from './adminReviewLifecycle.js'
 
 const NOTE_MAX_LENGTH = 1000
 const NOTE_CASE_LIMIT = 100
-const REASON_MAX_LENGTH = 2000
+const REASON_MAX_LENGTH = 1000
 const CLOSURE_OUTCOMES = [
   { label: 'Enforcement applied', value: 'enforcement_applied' },
   { label: 'No action needed', value: 'no_action_needed' },
@@ -145,39 +153,6 @@ function ClosedReviewSummary({ reviewCase }) {
   )
 }
 
-const TIMELINE_EVENT_PRIORITY = {
-  case_created: 0,
-  signal_attached: 1,
-  finding_attached: 2,
-  finding_cleared: 3,
-  note_added: 4,
-  enforcement_action_linked: 5,
-  closed: 6,
-}
-
-function getTimelineEventTime(item) {
-  const timestamp = new Date(item.created_at).getTime()
-  return Number.isNaN(timestamp) ? 0 : timestamp
-}
-
-function getTimelineEventPriority(item) {
-  return TIMELINE_EVENT_PRIORITY[item.event_type] ?? 99
-}
-
-function sortTimelineEvents(items) {
-  return [...items].sort((first, second) => {
-    const firstTime = getTimelineEventTime(first)
-    const secondTime = getTimelineEventTime(second)
-    if (firstTime !== secondTime) return firstTime - secondTime
-
-    const firstPriority = getTimelineEventPriority(first)
-    const secondPriority = getTimelineEventPriority(second)
-    if (firstPriority !== secondPriority) return firstPriority - secondPriority
-
-    return String(first.id).localeCompare(String(second.id))
-  })
-}
-
 function buildFindingById(findings = []) {
   return new Map(findings.map((finding) => [String(finding.id), finding]))
 }
@@ -215,6 +190,10 @@ function formatTimelineEventTitle(item, findingById) {
       return item.event_metadata?.source
         ? `${formatAdminReviewStatus(item.event_metadata.source)} signal added`
         : 'Signal added'
+    case 'signal_superseded':
+      return 'Signal superseded'
+    case 'signal_reactivated':
+      return 'Signal reactivated'
     default:
       return formatAdminReviewStatus(item.event_type)
   }
@@ -226,7 +205,7 @@ function ReviewTimelineRows({ findings, items }) {
   }
 
   const findingById = buildFindingById(findings)
-  const timelineItems = sortTimelineEvents(items)
+  const timelineItems = sortReviewCaseEvents(items)
 
   return (
     <div className="admin-review-timeline">
@@ -292,6 +271,66 @@ function ContentModerationFindingRows({ findings }) {
         )
       })}
     </div>
+  )
+}
+
+function ReviewSignalRows({ emptyText, signals }) {
+  if (!signals.length) {
+    return <p className="admin-review-empty">{emptyText}</p>
+  }
+
+  return (
+    <div className="admin-review-list admin-review-list--compact">
+      {signals.map((signal) => (
+        <article className="admin-review-finding-row" key={signal.id}>
+          <div className="admin-review-finding-row__summary">
+            <strong>Signal {signal.identity}</strong>
+          </div>
+          <p className="admin-review-finding-row__excerpt">{signal.summary}</p>
+          <div className="admin-review-signal-row__meta">
+            <span>{formatAdminReviewStatus(signal.priority)} priority</span>
+            <span>{signal.state}</span>
+          </div>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+export function ReviewCaseSignalSections({ reviewCase }) {
+  if (reviewCase.case_category !== 'chat_moderation') return null
+  const signals = buildReviewSignalGroups(reviewCase.signals ?? [])
+
+  return (
+    <>
+      <ReviewSection
+        count={signals.current.length}
+        countText={`${signals.current.length} ${
+          signals.current.length === 1 ? 'signal' : 'signals'
+        }`}
+        icon={MessageSquareText}
+        title="Current Signals"
+      >
+        <ReviewSignalRows
+          emptyText="No current signals."
+          signals={signals.current}
+        />
+      </ReviewSection>
+
+      <ReviewSection
+        count={signals.historical.length}
+        countText={`${signals.historical.length} ${
+          signals.historical.length === 1 ? 'signal' : 'signals'
+        }`}
+        icon={FileClock}
+        title="Previous Signals"
+      >
+        <ReviewSignalRows
+          emptyText="No previous signals."
+          signals={signals.historical}
+        />
+      </ReviewSection>
+    </>
   )
 }
 
@@ -436,6 +475,7 @@ function ReviewNotesPanel({
             <div className="admin-review-note-form__textarea-shell">
               <textarea
                 className="pl-scrollbar pl-scrollbar--stable"
+                disabled={isSubmitting}
                 maxLength={NOTE_MAX_LENGTH}
                 placeholder="Add a private admin note..."
                 spellCheck="false"
@@ -464,128 +504,25 @@ function ReviewNotesPanel({
   )
 }
 
-function AdminReviewCasePage() {
-  const { reviewCaseId } = useParams()
-  const { currentUser } = useAuth()
-  const [detail, setDetail] = useState(null)
-  const [loadState, setLoadState] = useState('loading')
-  const [pageError, setPageError] = useState('')
-  const [noteBody, setNoteBody] = useState('')
-  const [noteKey, setNoteKey] = useState(
-    () => createReviewIdempotencyKey('admin-review-note', reviewCaseId),
-  )
-  const [closureOutcome, setClosureOutcome] = useState('enforcement_applied')
-  const [closureReason, setClosureReason] = useState('')
-  const [closureKey, setClosureKey] = useState(
-    () => createReviewIdempotencyKey('admin-review-close', reviewCaseId),
-  )
-  const [formStatus, setFormStatus] = useState({ message: '', type: '' })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showNotesModal, setShowNotesModal] = useState(false)
-
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadCase() {
-      if (!currentUser || !reviewCaseId) return
-      setLoadState('loading')
-      setPageError('')
-
-      try {
-        const response = await getAdminReviewCase({
-          firebaseUser: currentUser,
-          reviewCaseId,
-        })
-        if (!isMounted) return
-        setDetail(response)
-        setLoadState('ready')
-      } catch (error) {
-        if (!isMounted) return
-        setDetail(null)
-        setPageError(error.message || 'Review case could not be loaded.')
-        setLoadState('error')
-      }
-    }
-
-    loadCase()
-    return () => {
-      isMounted = false
-    }
-  }, [currentUser, reviewCaseId])
-
-  function applyActionResult(result, successMessage) {
-    setDetail(result.review_case)
-    setFormStatus({ message: successMessage, type: 'success' })
-  }
-
-  async function handleAddNote(event) {
-    event.preventDefault()
-    if (
-      !noteBody.trim()
-      || isSubmitting
-      || (detail?.notes ?? []).length >= NOTE_CASE_LIMIT
-    ) {
-      return
-    }
-
-    setIsSubmitting(true)
-    setFormStatus({ message: '', type: '' })
-    try {
-      const result = await addAdminReviewCaseNote({
-        body: noteBody.trim(),
-        firebaseUser: currentUser,
-        idempotencyKey: noteKey,
-        reviewCaseId,
-      })
-      setDetail(result.review_case)
-      setNoteBody('')
-      setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
-    } catch (error) {
-      setFormStatus({ message: error.message || 'Note could not be added.', type: 'error' })
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function handleClose(event) {
-    event.preventDefault()
-    if (!closureReason.trim() || isSubmitting) return
-
-    setIsSubmitting(true)
-    setFormStatus({ message: '', type: '' })
-    try {
-      const result = await closeAdminReviewCase({
-        firebaseUser: currentUser,
-        idempotencyKey: closureKey,
-        outcome: closureOutcome,
-        reason: closureReason.trim(),
-        reviewCaseId,
-      })
-      applyActionResult(result, 'Review case closed.')
-      setClosureReason('')
-      setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
-    } catch (error) {
-      setFormStatus({ message: error.message || 'Review case could not be closed.', type: 'error' })
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  function handleNoteChange(event) {
-    setNoteBody(event.target.value)
-    setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
-  }
-
-  function handleClosureReasonChange(event) {
-    setClosureReason(event.target.value)
-    setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
-  }
-
-  function handleClosureOutcomeChange(event) {
-    setClosureOutcome(event.target.value)
-    setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
-  }
-
+export function AdminReviewCasePageView({
+  closeConflictBlocked,
+  closureOutcome,
+  closureReason,
+  detail,
+  formStatus,
+  isSubmitting,
+  loadState,
+  noteBody,
+  onAddNote,
+  onClose,
+  onClosureOutcomeChange,
+  onClosureReasonChange,
+  onNoteChange,
+  onOpenNotes,
+  onCloseNotes,
+  pageError,
+  showNotesModal,
+}) {
   const isClosed = detail?.case_status === 'closed'
   const findings = splitReviewFindings(detail?.findings ?? [])
   const events = detail?.events ?? []
@@ -648,6 +585,8 @@ function AdminReviewCasePage() {
               <ContentModerationFindingRows findings={findings.previous} />
             </ReviewSection>
 
+            <ReviewCaseSignalSections reviewCase={detail} />
+
             <div className="admin-review-work-grid">
               <ReviewNotesPanel
                 canAddNote={!isClosed}
@@ -655,9 +594,9 @@ function AdminReviewCasePage() {
                 isSubmitting={isSubmitting}
                 noteBody={noteBody}
                 notes={detail.notes ?? []}
-                onAddNote={handleAddNote}
-                onNoteChange={handleNoteChange}
-                onOpenHistory={() => setShowNotesModal(true)}
+                onAddNote={onAddNote}
+                onNoteChange={onNoteChange}
+                onOpenHistory={onOpenNotes}
               />
 
               <ReviewSection
@@ -666,12 +605,13 @@ function AdminReviewCasePage() {
                 title="Close Review"
               >
                 {!isClosed ? (
-                  <form className="admin-review-form" onSubmit={handleClose}>
+                  <form className="admin-review-form" onSubmit={onClose}>
                     <label>
                       <span>Closure outcome</span>
                       <select
+                        disabled={isSubmitting || closeConflictBlocked}
                         value={closureOutcome}
-                        onChange={handleClosureOutcomeChange}
+                        onChange={onClosureOutcomeChange}
                       >
                         {CLOSURE_OUTCOMES.map((outcome) => (
                           <option key={outcome.value} value={outcome.value}>
@@ -683,16 +623,17 @@ function AdminReviewCasePage() {
                     <label>
                       <span>Closure reason</span>
                       <textarea
+                        disabled={isSubmitting || closeConflictBlocked}
                         maxLength={REASON_MAX_LENGTH}
                         placeholder="Required closure reason"
                         value={closureReason}
-                        onChange={handleClosureReasonChange}
+                        onChange={onClosureReasonChange}
                       />
                       <small>{closureReason.length}/{REASON_MAX_LENGTH}</small>
                     </label>
                     <button
                       className="admin-review-button admin-review-button--primary"
-                      disabled={isSubmitting || !closureReason.trim()}
+                      disabled={isSubmitting || closeConflictBlocked || !closureReason.trim()}
                       type="submit"
                     >
                       <CheckCircle2 />
@@ -721,13 +662,194 @@ function AdminReviewCasePage() {
             {showNotesModal && (
               <ReviewNotesModal
                 notes={detail.notes ?? []}
-                onClose={() => setShowNotesModal(false)}
+                onClose={onCloseNotes}
               />
             )}
           </>
         )}
       </div>
     </AdminWorkspaceLayout>
+  )
+}
+
+export function AdminReviewCasePageContent({ reviewCaseId }) {
+  const { currentUser } = useAuth()
+  const [reviewCaseState, setReviewCaseState] = useState(
+    () => createReviewCaseDetailState(reviewCaseId),
+  )
+  const [loadState, setLoadState] = useState('loading')
+  const [pageError, setPageError] = useState('')
+  const [noteBody, setNoteBody] = useState('')
+  const [noteKey, setNoteKey] = useState(
+    () => createReviewIdempotencyKey('admin-review-note', reviewCaseId),
+  )
+  const [closureOutcome, setClosureOutcome] = useState('enforcement_applied')
+  const [closureReason, setClosureReason] = useState('')
+  const [closureKey, setClosureKey] = useState(
+    () => createReviewIdempotencyKey('admin-review-close', reviewCaseId),
+  )
+  const [formStatus, setFormStatus] = useState({ message: '', type: '' })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showNotesModal, setShowNotesModal] = useState(false)
+  const detail = reviewCaseState.detail
+  const closeConflictBlocked = reviewCaseState.requiresFreshDetail
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadCase() {
+      if (!currentUser || !reviewCaseId) return
+      setLoadState('loading')
+      setPageError('')
+      setReviewCaseState((state) => reduceReviewCaseDetailState(
+        state,
+        { type: 'reload_started' },
+      ))
+
+      const loadResult = await requestReviewCaseDetail({
+        getReviewCase: getAdminReviewCase,
+        request: { firebaseUser: currentUser, reviewCaseId },
+        reviewCaseId,
+      })
+      if (!isMounted) return
+      setReviewCaseState((state) => reduceReviewCaseDetailState(
+        state,
+        loadResult.action,
+      ))
+      if (loadResult.status === 'succeeded') {
+        setLoadState('ready')
+      } else {
+        setPageError(loadResult.error.message || 'Review case could not be loaded.')
+        setLoadState('error')
+      }
+    }
+
+    loadCase()
+    return () => {
+      isMounted = false
+    }
+  }, [currentUser, reviewCaseId])
+
+  function applyActionResult(result, successMessage) {
+    setReviewCaseState((state) => reduceReviewCaseDetailState(
+      state,
+      {
+        detail: result.review_case,
+        reviewCaseId,
+        type: 'reload_succeeded',
+      },
+    ))
+    setFormStatus({ message: successMessage, type: 'success' })
+  }
+
+  async function handleAddNote(event) {
+    event.preventDefault()
+    if (
+      !noteBody.trim()
+      || isSubmitting
+      || (detail?.notes ?? []).length >= NOTE_CASE_LIMIT
+    ) {
+      return
+    }
+
+    setIsSubmitting(true)
+    setFormStatus({ message: '', type: '' })
+    try {
+      const result = await addAdminReviewCaseNote({
+        body: noteBody.trim(),
+        firebaseUser: currentUser,
+        idempotencyKey: noteKey,
+        reviewCaseId,
+      })
+      setReviewCaseState((state) => reduceReviewCaseDetailState(
+        state,
+        {
+          detail: result.review_case,
+          reviewCaseId,
+          type: 'reload_succeeded',
+        },
+      ))
+      setNoteBody('')
+      setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
+    } catch (error) {
+      setFormStatus({ message: error.message || 'Note could not be added.', type: 'error' })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleClose = createAdminReviewCaseCloseHandler({
+    closeReviewCase: closeAdminReviewCase,
+    currentUser,
+    getCloseInput: () => ({
+      idempotencyKey: closureKey,
+      outcome: closureOutcome,
+      reason: closureReason,
+    }),
+    getIsSubmitting: () => isSubmitting,
+    getReviewCase: getAdminReviewCase,
+    getReviewCaseState: () => reviewCaseState,
+    onCloseSucceeded: (result) => {
+      applyActionResult(result, 'Review case closed.')
+      setClosureReason('')
+      setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
+    },
+    onFormStatus: setFormStatus,
+    onLoadState: setLoadState,
+    onPageError: setPageError,
+    onReviewCaseAction: (action) => {
+      setReviewCaseState((state) => reduceReviewCaseDetailState(state, action))
+    },
+    onSubmitting: setIsSubmitting,
+    reviewCaseId,
+  })
+
+  function handleNoteChange(event) {
+    setNoteBody(event.target.value)
+    setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
+  }
+
+  function handleClosureReasonChange(event) {
+    setClosureReason(event.target.value)
+    setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
+  }
+
+  function handleClosureOutcomeChange(event) {
+    setClosureOutcome(event.target.value)
+    setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
+  }
+
+  return (
+    <AdminReviewCasePageView
+      closeConflictBlocked={closeConflictBlocked}
+      closureOutcome={closureOutcome}
+      closureReason={closureReason}
+      detail={detail}
+      formStatus={formStatus}
+      isSubmitting={isSubmitting}
+      loadState={loadState}
+      noteBody={noteBody}
+      onAddNote={handleAddNote}
+      onClose={handleClose}
+      onCloseNotes={() => setShowNotesModal(false)}
+      onClosureOutcomeChange={handleClosureOutcomeChange}
+      onClosureReasonChange={handleClosureReasonChange}
+      onNoteChange={handleNoteChange}
+      onOpenNotes={() => setShowNotesModal(true)}
+      pageError={pageError}
+      showNotesModal={showNotesModal}
+    />
+  )
+}
+
+function AdminReviewCasePage() {
+  const { reviewCaseId } = useParams()
+
+  return (
+    <AdminReviewCasePageContent
+      key={reviewCaseId}
+      reviewCaseId={reviewCaseId}
+    />
   )
 }
 

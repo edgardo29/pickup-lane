@@ -40,7 +40,6 @@ try:
     from backend.services import (
         game_chat_service,
         moderation_signal_service,
-        moderation_surfacing_service,
         sub_post_chat_service,
     )
     from backend.services.chat_moderation_admin_service import serialize_detections
@@ -806,17 +805,12 @@ def test_need_a_sub_chat_integrity_failure_is_sanitized_and_rolls_back(
 
 
 @pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R6")
-def test_integrity_error_logging_never_renders_evidence_canary(
+def test_chat_signal_integrity_error_log_excludes_evidence_canary(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     error = _canary_integrity_error()
     target_id = uuid.uuid4()
-    moderation_surfacing_service.log_moderation_integrity_failure(
-        operation="Synthetic moderation reconciliation",
-        target_id=target_id,
-        error=error,
-    )
 
     class FakeSession:
         def rollback(self) -> None:

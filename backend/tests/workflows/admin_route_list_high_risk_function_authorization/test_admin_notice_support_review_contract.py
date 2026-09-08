@@ -204,9 +204,7 @@ def test_platform_notice_create_requires_recent_admin_and_scopes_recipients(
         headers=_auth_headers("admin-token"),
     )
     assert list_response.status_code == 200
-    assert [item["id"] for item in list_response.json()["notices"]] == [
-        str(notice_id)
-    ]
+    assert [item["id"] for item in list_response.json()["notices"]] == [str(notice_id)]
     detail_response = client.get(
         f"/admin/platform-notices/{notice_id}",
         headers=_auth_headers("admin-token"),
@@ -302,9 +300,7 @@ def test_support_review_and_admin_action_reads_are_admin_only(
         headers=_auth_headers("admin-token"),
     )
     assert review_list.status_code == 200
-    assert [item["id"] for item in review_list.json()["cases"]] == [
-        str(review_case_id)
-    ]
+    assert [item["id"] for item in review_list.json()["cases"]] == [str(review_case_id)]
     assert review_list.json()["limit"] == 1
     review_detail = client.get(
         f"/admin/review-cases/{review_case_id}",
@@ -331,8 +327,7 @@ def test_support_review_and_admin_action_reads_are_admin_only(
     assert action_detail.json()["id"] == str(admin_action_id)
     assert action_detail.json()["target_support_flag_id"] == str(support_flag_id)
     assert {
-        detail["target_field"]
-        for detail in action_detail.json()["target_details"]
+        detail["target_field"] for detail in action_detail.json()["target_details"]
     } >= {"target_user_id", "target_support_flag_id"}
 
     unsupported_log = client.get(
@@ -446,6 +441,7 @@ def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
         json={
             "outcome": "no_action_needed",
             "reason": "Close local review case after admin review.",
+            "expected_case_version": 2,
             "idempotency_key": f"ws03d-review-close-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),

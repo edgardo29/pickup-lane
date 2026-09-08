@@ -35,15 +35,10 @@ from backend.schemas.game_schema import (
     MyGameCardRead,
     MyGamesListRead,
 )
-from backend.services.auth_service import user_is_active_admin
 from backend.services.admin_review_service import (
     close_open_content_moderation_case_for_game_lifecycle,
 )
-from backend.services.r2_storage_service import (
-    R2StorageConfigError,
-    R2StorageError,
-    create_object_read_url,
-)
+from backend.services.auth_service import user_is_active_admin
 from backend.services.game_notification_service import (
     capture_game_updated_structural_snapshot,
     game_updated_structural_snapshot_changed,
@@ -58,8 +53,8 @@ from backend.services.game_rules import (
     OPEN_GAME_STATUSES,
     build_game_conflict_detail,
     game_is_publicly_visible,
-    get_join_window_closes_at,
     get_default_host_guest_max,
+    get_join_window_closes_at,
     normalize_game_lifecycle_fields,
     normalize_official_game_invariants,
     reject_direct_official_host_change,
@@ -72,6 +67,11 @@ from backend.services.query_pagination import (
     MAX_COLLECTION_LIMIT,
     bounded_collection_limit,
     bounded_collection_offset,
+)
+from backend.services.r2_storage_service import (
+    R2StorageConfigError,
+    R2StorageError,
+    create_object_read_url,
 )
 
 BROWSE_GAME_CARD_DEFAULT_LIMIT = 40
@@ -479,7 +479,9 @@ def list_browse_game_cards(
     statement = select(Game).where(*eligibility_conditions)
 
     if cursor_payload is not None:
-        statement = statement.where(build_browse_game_card_cursor_filter(cursor_payload))
+        statement = statement.where(
+            build_browse_game_card_cursor_filter(cursor_payload)
+        )
 
     statement = statement.order_by(
         Game.starts_at.asc(),
@@ -1093,7 +1095,9 @@ def load_my_games_user_participants(
     return participants_by_game_id
 
 
-def get_my_games_participant_priority(participant: GameParticipant) -> tuple[int, datetime]:
+def get_my_games_participant_priority(
+    participant: GameParticipant,
+) -> tuple[int, datetime]:
     if participant.participant_status == "confirmed":
         return (0, participant.created_at)
     if (
@@ -1128,8 +1132,12 @@ def build_my_game_card_read(
         ),
         is_host=is_host,
         participant_id=participant.id if participant is not None else None,
-        participant_status=participant.participant_status if participant is not None else None,
-        cancellation_type=participant.cancellation_type if participant is not None else None,
+        participant_status=participant.participant_status
+        if participant is not None
+        else None,
+        cancellation_type=participant.cancellation_type
+        if participant is not None
+        else None,
         status_label=status_label,
         status_tone=status_tone,
     )
@@ -1350,9 +1358,7 @@ def update_game_workflow(
         "waitlist_enabled": update_data.get(
             "waitlist_enabled", db_game.waitlist_enabled
         ),
-        "is_chat_enabled": update_data.get(
-            "is_chat_enabled", db_game.is_chat_enabled
-        ),
+        "is_chat_enabled": update_data.get("is_chat_enabled", db_game.is_chat_enabled),
         "policy_mode": update_data.get("policy_mode", db_game.policy_mode),
         "custom_rules_text": update_data.get(
             "custom_rules_text", db_game.custom_rules_text
@@ -1474,7 +1480,7 @@ def delete_game_workflow(
             close_open_content_moderation_case_for_game_lifecycle(
                 db,
                 game_id=db_game.id,
-                closure_outcome="enforcement_applied",
+                closure_outcome="no_action_needed",
                 closure_reason=(
                     "Community Game was deleted by an admin before moderation "
                     "review was completed."
@@ -1484,7 +1490,7 @@ def delete_game_workflow(
                 trigger_actor_user_id=admin_user.id,
                 closed_by_user_id=admin_user.id,
                 previous_game_status=old_game_status,
-                new_game_status=old_game_status,
+                new_game_status="soft_deleted",
                 closed_at=now,
             )
         db.commit()
@@ -1502,15 +1508,18 @@ def delete_game_workflow(
 def count_non_host_participants(
     db: Session, game_id: uuid.UUID, participant_statuses: set[str]
 ) -> int:
-    return db.scalar(
-        select(func.count())
-        .select_from(GameParticipant)
-        .where(
-            GameParticipant.game_id == game_id,
-            GameParticipant.participant_type != "host",
-            GameParticipant.participant_status.in_(participant_statuses),
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(GameParticipant)
+            .where(
+                GameParticipant.game_id == game_id,
+                GameParticipant.participant_type != "host",
+                GameParticipant.participant_status.in_(participant_statuses),
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
 def game_has_paid_booking_payment(db: Session, game_id: uuid.UUID) -> bool:
@@ -1550,15 +1559,18 @@ def count_roster_players(
     now: datetime | None = None,
 ) -> int:
     captured_now = now or datetime.now(timezone.utc)
-    return db.scalar(
-        select(func.count())
-        .select_from(GameParticipant)
-        .outerjoin(Booking, GameParticipant.booking_id == Booking.id)
-        .where(
-            GameParticipant.game_id == game_id,
-            build_capacity_holding_participant_condition(captured_now),
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(GameParticipant)
+            .outerjoin(Booking, GameParticipant.booking_id == Booking.id)
+            .where(
+                GameParticipant.game_id == game_id,
+                build_capacity_holding_participant_condition(captured_now),
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
 def get_next_roster_order(db: Session, game_id: uuid.UUID) -> int:

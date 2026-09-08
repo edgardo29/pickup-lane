@@ -1,7 +1,16 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,10 +33,7 @@ class AdminReviewCase(Base):
             name="ck_admin_review_cases_priority",
         ),
         CheckConstraint(
-            (
-                "case_category IN ("
-                "'content_moderation', 'chat_moderation')"
-            ),
+            ("case_category IN ('content_moderation', 'chat_moderation')"),
             name="ck_admin_review_cases_case_category",
         ),
         CheckConstraint(
@@ -53,15 +59,33 @@ class AdminReviewCase(Base):
         ),
         CheckConstraint(
             (
-                "case_status = 'closed' "
-                "OR target_user_id IS NOT NULL "
+                "(case_type = 'community_game' "
+                "AND target_game_id IS NOT NULL "
+                "AND target_user_id IS NULL "
+                "AND target_sub_post_id IS NULL "
+                "AND target_sub_post_request_id IS NULL "
+                "AND target_payment_id IS NULL "
+                "AND target_financial_outcome_id IS NULL) "
+                "OR (case_type = 'need_a_sub' "
+                "AND target_sub_post_id IS NOT NULL "
+                "AND target_user_id IS NULL "
+                "AND target_game_id IS NULL "
+                "AND target_sub_post_request_id IS NULL "
+                "AND target_payment_id IS NULL "
+                "AND target_financial_outcome_id IS NULL) "
+                "OR (case_type NOT IN ('community_game', 'need_a_sub') "
+                "AND (target_user_id IS NOT NULL "
                 "OR target_game_id IS NOT NULL "
                 "OR target_sub_post_id IS NOT NULL "
                 "OR target_sub_post_request_id IS NOT NULL "
                 "OR target_payment_id IS NOT NULL "
-                "OR target_financial_outcome_id IS NOT NULL"
+                "OR target_financial_outcome_id IS NOT NULL))"
             ),
-            name="ck_admin_review_cases_target_required",
+            name="ck_admin_review_cases_target_shape",
+        ),
+        CheckConstraint(
+            "case_version > 0",
+            name="ck_admin_review_cases_case_version_positive",
         ),
         Index("ix_admin_review_cases_case_status", "case_status"),
         Index("ix_admin_review_cases_case_type", "case_type"),
@@ -88,24 +112,26 @@ class AdminReviewCase(Base):
             "target_financial_outcome_id",
         ),
         Index(
-            "uq_admin_review_cases_open_community_game_content_moderation",
+            "uq_admin_review_cases_open_community_game_moderation",
             "target_game_id",
+            "case_category",
             unique=True,
             postgresql_where=text(
                 "target_game_id IS NOT NULL "
                 "AND case_type = 'community_game' "
-                "AND case_category = 'content_moderation' "
+                "AND case_category IN ('content_moderation', 'chat_moderation') "
                 "AND case_status = 'open'"
             ),
         ),
         Index(
-            "uq_admin_review_cases_open_need_sub_content_moderation",
+            "uq_admin_review_cases_open_need_sub_moderation",
             "target_sub_post_id",
+            "case_category",
             unique=True,
             postgresql_where=text(
                 "target_sub_post_id IS NOT NULL "
                 "AND case_type = 'need_a_sub' "
-                "AND case_category = 'content_moderation' "
+                "AND case_category IN ('content_moderation', 'chat_moderation') "
                 "AND case_status = 'open'"
             ),
         ),
@@ -119,6 +145,12 @@ class AdminReviewCase(Base):
         server_default=text("'open'"),
     )
     case_category: Mapped[str] = mapped_column(String(60), nullable=False)
+    case_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+    )
     priority: Mapped[str] = mapped_column(
         String(30),
         nullable=False,
@@ -134,12 +166,12 @@ class AdminReviewCase(Base):
     )
     target_game_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("games.id", ondelete="SET NULL"),
+        ForeignKey("games.id", ondelete="RESTRICT"),
         nullable=True,
     )
     target_sub_post_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("sub_posts.id", ondelete="SET NULL"),
+        ForeignKey("sub_posts.id", ondelete="RESTRICT"),
         nullable=True,
     )
     target_sub_post_request_id: Mapped[uuid.UUID | None] = mapped_column(

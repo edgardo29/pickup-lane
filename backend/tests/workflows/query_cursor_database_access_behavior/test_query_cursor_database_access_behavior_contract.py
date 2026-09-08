@@ -294,7 +294,7 @@ def _sub_post(*, owner_id: uuid.UUID):
     from backend.models import SubPost
 
     city = f"WS04B City {uuid.uuid4().hex[:8]}"
-    starts_at = datetime(2026, 9, 2, 18, tzinfo=timezone.utc)
+    starts_at = datetime.now(timezone.utc) + timedelta(days=30)
     return SubPost(
         id=uuid.uuid4(),
         owner_user_id=owner_id,
@@ -498,7 +498,9 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
         RefundEvent,
     )
     from backend.services.admin_money_credit_service import list_admin_money_credits
-    from backend.services.admin_money_issue_query_service import list_admin_money_issues_page
+    from backend.services.admin_money_issue_query_service import (
+        list_admin_money_issues_page,
+    )
     from backend.services.admin_money_payment_service import list_admin_money_payments
     from backend.services.admin_money_refund_query_service import (
         list_admin_money_refunds,
@@ -821,7 +823,6 @@ def test_need_a_sub_request_list_response_batches_related_database_reads() -> No
         if normalized.startswith("select"):
             statements.append(normalized)
 
-    now = datetime(2026, 8, 22, 12, tzinfo=timezone.utc)
     with _session() as db:
         owner = _user(20)
         requesters = [_user(index) for index in range(21, 29)]
@@ -927,9 +928,10 @@ def test_need_a_sub_post_lists_batch_positions_and_request_counts() -> None:
         posts = []
         city = None
         requester_index = 0
+        first_starts_at = datetime.now(timezone.utc) + timedelta(days=30)
         for post_index in range(3):
             post = _sub_post(owner_id=owner.id)
-            starts_at = datetime(2026, 9, 2 + post_index, 18, tzinfo=timezone.utc)
+            starts_at = first_starts_at + timedelta(days=post_index)
             city = city or post.city
             post.city = city
             post.starts_at = starts_at

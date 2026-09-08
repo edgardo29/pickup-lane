@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 MAX_REVIEW_CASE_NOTE_BODY_LENGTH = 1000
@@ -71,14 +71,15 @@ class AdminReviewCaseClose(BaseModel):
 
     outcome: AdminReviewClosureOutcome
     reason: str = Field(min_length=1, max_length=1000)
-    idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)
+    expected_case_version: StrictInt = Field(gt=0)
+    idempotency_key: str = Field(min_length=8, max_length=160)
 
 
 class AdminReviewCaseNoteCreate(BaseModel):
     model_config = REQUEST_MODEL_CONFIG
 
-    body: str = Field(max_length=MAX_REVIEW_CASE_NOTE_BODY_LENGTH)
-    idempotency_key: str | None = Field(default=None, min_length=8, max_length=160)
+    body: str = Field(min_length=1, max_length=MAX_REVIEW_CASE_NOTE_BODY_LENGTH)
+    idempotency_key: str = Field(min_length=8, max_length=160)
 
 
 class AdminReviewSignalRead(BaseModel):
@@ -113,6 +114,7 @@ class AdminReviewCaseEventRead(BaseModel):
 
     id: UUID
     review_case_id: UUID
+    case_version: int
     event_type: str
     actor_user_id: UUID | None
     admin_action_id: UUID | None
@@ -131,11 +133,7 @@ class AdminReviewCaseNoteRead(BaseModel):
     author_user_id: UUID
     author_display_name: str | None = None
     body: str
-    note_status: str
-    edited_at: datetime | None
-    deleted_at: datetime | None
     created_at: datetime
-    updated_at: datetime
 
 
 class AdminReviewCaseFindingSummaryRead(BaseModel):
@@ -162,6 +160,7 @@ class AdminReviewCaseRead(BaseModel):
     case_type: str
     case_status: str
     case_category: str
+    case_version: int
     priority: str
     title: str
     summary: str

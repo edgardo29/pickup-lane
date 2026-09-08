@@ -63,7 +63,6 @@ def get_or_create_open_content_moderation_case(
         db,
         target_data=target_data,
         case_category=CONTENT_MODERATION_CASE_CATEGORY,
-        allow_reference_inserts=True,
     )
     if review_case is not None:
         validate_content_moderation_case_for_findings(review_case)
@@ -81,6 +80,7 @@ def get_or_create_open_content_moderation_case(
         case_type=case_type,
         case_status="open",
         case_category=CONTENT_MODERATION_CASE_CATEGORY,
+        case_version=1,
         priority=priority,
         title=build_content_moderation_case_title(case_type),
         summary=build_content_moderation_case_summary(case_type),
@@ -93,10 +93,8 @@ def get_or_create_open_content_moderation_case(
     db.flush()
     create_case_event(
         db,
-        review_case_id=review_case.id,
+        review_case=review_case,
         event_type="case_created",
-        actor_user_id=None,
-        event_metadata={"source": "content_moderation_scanner"},
         created_at=now,
     )
     return review_case, True
@@ -233,14 +231,9 @@ def apply_content_moderation_findings(
         existing_findings.append(created)
         create_case_event(
             db,
-            review_case_id=review_case.id,
+            review_case=review_case,
             event_type="finding_attached",
             content_moderation_finding_id=created.id,
-            event_metadata={
-                "finding_type": created.finding_type,
-                "risk_area": created.risk_area,
-                "source_field": created.source_field,
-            },
             created_at=now,
         )
         changed_case = True
@@ -259,14 +252,9 @@ def apply_content_moderation_findings(
         db.add(existing)
         create_case_event(
             db,
-            review_case_id=review_case.id,
+            review_case=review_case,
             event_type="finding_cleared",
             content_moderation_finding_id=existing.id,
-            event_metadata={
-                "finding_type": existing.finding_type,
-                "risk_area": existing.risk_area,
-                "source_field": existing.source_field,
-            },
             created_at=now,
         )
         changed_case = True
@@ -276,7 +264,6 @@ def apply_content_moderation_findings(
         review_case.priority = recalculated_priority
         changed_case = True
     if changed_case:
-        review_case.updated_at = now
         db.add(review_case)
 
 
@@ -304,7 +291,6 @@ def reconcile_content_moderation_findings(
         db,
         target_data=normalized_targets,
         case_category=CONTENT_MODERATION_CASE_CATEGORY,
-        allow_reference_inserts=True,
     )
     if review_case is None and not scan_result.findings:
         db.commit()
