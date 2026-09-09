@@ -3,6 +3,7 @@ import { ShieldCheck } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
 import { useStepUp } from '../../../hooks/useStepUp.js'
 import { restoreAdminUserHosting } from '../shared/adminApi.js'
+import { runAdminEnforcementMutation } from '../shared/adminEnforcementLifecycle.js'
 import { formatAdminUserDateTime } from './adminUserFormatters.js'
 
 function createIdempotencyKey(userId) {
@@ -13,6 +14,7 @@ function createIdempotencyKey(userId) {
 function AdminUserHostingRestorationModal({
   firebaseUser,
   onClose,
+  onConflict,
   onRestored,
   user,
 }) {
@@ -48,27 +50,32 @@ function AdminUserHostingRestorationModal({
       return
     }
 
-    setIsSubmitting(true)
     setExecutionError('')
 
-    try {
-      const executeRestoration = () => restoreAdminUserHosting({
-        firebaseUser,
-        idempotencyKey,
-        reason: reason.trim(),
-        userId: user.id,
-      })
-      const nextResult = await runWithStepUp(
-        executeRestoration,
-        { actionLabel: 'restore hosting for this user' },
-      )
-      setResult(nextResult)
-      onRestored(nextResult)
-    } catch (error) {
-      setExecutionError(error.message || 'Hosting access could not be restored.')
-    } finally {
-      setIsSubmitting(false)
-    }
+    await runAdminEnforcementMutation({
+      clearStaleState: onClose,
+      execute: async () => {
+        const executeRestoration = () => restoreAdminUserHosting({
+          firebaseUser,
+          idempotencyKey,
+          reason: reason.trim(),
+          userId: user.id,
+        })
+        return runWithStepUp(
+          executeRestoration,
+          { actionLabel: 'restore hosting for this user' },
+        )
+      },
+      onError: (error) => {
+        setExecutionError(error.message || 'Hosting access could not be restored.')
+      },
+      onPendingChange: setIsSubmitting,
+      onSuccess: (nextResult) => {
+        setResult(nextResult)
+        onRestored(nextResult)
+      },
+      reloadAuthoritativeState: onConflict,
+    })
   }
 
   function handleBackdropClick() {

@@ -7,6 +7,7 @@ import {
   previewAdminUserSuspension,
   suspendAdminUser,
 } from '../shared/adminApi.js'
+import { runAdminEnforcementMutation } from '../shared/adminEnforcementLifecycle.js'
 import {
   formatAdminUserDateTime,
   formatAdminUserStatus,
@@ -25,6 +26,7 @@ function AdminUserSuspensionModal({
   canOpenOfficialGames,
   firebaseUser,
   onClose,
+  onConflict,
   onSuspended,
   user,
 }) {
@@ -90,11 +92,11 @@ function AdminUserSuspensionModal({
       return
     }
 
-    setIsSubmitting(true)
     setExecutionError('')
 
-    try {
-      const nextResult = await runWithStepUp(
+    await runAdminEnforcementMutation({
+      clearStaleState: onClose,
+      execute: () => runWithStepUp(
         () => suspendAdminUser({
           firebaseUser,
           idempotencyKey,
@@ -103,14 +105,17 @@ function AdminUserSuspensionModal({
           userId: user.id,
         }),
         { actionLabel: 'suspend this account' },
-      )
-      setResult(nextResult)
-      onSuspended(nextResult)
-    } catch (error) {
-      setExecutionError(error.message || 'The account could not be suspended.')
-    } finally {
-      setIsSubmitting(false)
-    }
+      ),
+      onError: (error) => {
+        setExecutionError(error.message || 'The account could not be suspended.')
+      },
+      onPendingChange: setIsSubmitting,
+      onSuccess: (nextResult) => {
+        setResult(nextResult)
+        onSuspended(nextResult)
+      },
+      reloadAuthoritativeState: onConflict,
+    })
   }
 
   async function handleRefreshPreview() {

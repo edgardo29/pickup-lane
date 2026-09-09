@@ -6,6 +6,7 @@ import {
   previewAdminUserHostingRestriction,
   restrictAdminUserHosting,
 } from '../shared/adminApi.js'
+import { runAdminEnforcementMutation } from '../shared/adminEnforcementLifecycle.js'
 import {
   formatAdminUserDateTime,
   formatAdminUserStatus,
@@ -19,6 +20,7 @@ function createIdempotencyKey(userId) {
 function AdminUserHostingRestrictionModal({
   firebaseUser,
   onClose,
+  onConflict,
   onRestricted,
   user,
 }) {
@@ -108,28 +110,33 @@ function AdminUserHostingRestrictionModal({
       return
     }
 
-    setIsSubmitting(true)
     setExecutionError('')
 
-    try {
-      const executeRestriction = () => restrictAdminUserHosting({
-        firebaseUser,
-        idempotencyKey,
-        previewToken: preview.preview_token,
-        reason: reason.trim(),
-        userId: user.id,
-      })
-      const nextResult = await runWithStepUp(
-        executeRestriction,
-        { actionLabel: 'restrict hosting for this user' },
-      )
-      setResult(nextResult)
-      onRestricted(nextResult)
-    } catch (error) {
-      setExecutionError(error.message || 'Hosting could not be restricted.')
-    } finally {
-      setIsSubmitting(false)
-    }
+    await runAdminEnforcementMutation({
+      clearStaleState: onClose,
+      execute: async () => {
+        const executeRestriction = () => restrictAdminUserHosting({
+          firebaseUser,
+          idempotencyKey,
+          previewToken: preview.preview_token,
+          reason: reason.trim(),
+          userId: user.id,
+        })
+        return runWithStepUp(
+          executeRestriction,
+          { actionLabel: 'restrict hosting for this user' },
+        )
+      },
+      onError: (error) => {
+        setExecutionError(error.message || 'Hosting could not be restricted.')
+      },
+      onPendingChange: setIsSubmitting,
+      onSuccess: (nextResult) => {
+        setResult(nextResult)
+        onRestricted(nextResult)
+      },
+      reloadAuthoritativeState: onConflict,
+    })
   }
 
   function handleReasonChange(event) {

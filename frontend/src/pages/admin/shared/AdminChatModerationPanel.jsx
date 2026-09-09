@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import '../../../styles/admin/AdminChatModerationPanel.css'
+import { runAdminEnforcementMutation } from './adminEnforcementLifecycle.js'
 
 const PAGE_SIZE = 20
 const LIST_BADGE_LIMIT = 2
@@ -277,27 +278,35 @@ function AdminChatModerationPanel({
       submitting: true,
     })
 
-    try {
-      await moderateMessage({
+    await runAdminEnforcementMutation({
+      clearStaleState: () => {
+        setActiveAction(null)
+        setSelectedMessage(null)
+      },
+      execute: () => moderateMessage({
         action,
         firebaseUser,
         idempotencyKey: makeIdempotencyKey(action, message.id),
         messageId: message.id,
         ...(needsReason ? { reason: trimmedReason } : {}),
-      })
-      setActiveAction(null)
-      if (selectedMessage?.message.id === message.id) {
-        setSelectedMessage(null)
-      }
-      onAfterAction?.()
-    } catch (error) {
-      setActiveAction({
-        action,
-        error: error.message || 'Chat moderation action failed.',
-        messageId: message.id,
-        reason,
-      })
-    }
+      }),
+      onError: (error) => {
+        setActiveAction({
+          action,
+          error: error.message || 'Chat moderation action failed.',
+          messageId: message.id,
+          reason,
+        })
+      },
+      onSuccess: () => {
+        setActiveAction(null)
+        if (selectedMessage?.message.id === message.id) {
+          setSelectedMessage(null)
+        }
+        onAfterAction?.()
+      },
+      reloadAuthoritativeState: onAfterAction,
+    })
   }
 
   if (!firebaseUser) {
@@ -312,6 +321,7 @@ function AdminChatModerationPanel({
   )
   const detailNeedsReview = detailMessage?.review_status === 'needs_review'
   const detailIsRemoved = detailMessage?.visibility_status === 'removed'
+  const detailCanRestore = detailIsRemoved && detailMessage?.removed_source === 'admin'
   const detailFlagText = detailMessage
     ? getDetectionLabels(detailMessage).join(' · ') || 'None'
     : ''
@@ -526,7 +536,7 @@ function AdminChatModerationPanel({
                   Remove
                 </button>
               )}
-              {detailIsRemoved && (
+              {detailCanRestore && (
                 <button
                   className="admin-chat-moderation__button"
                   disabled={detailDraft?.submitting}

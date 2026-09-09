@@ -20,6 +20,7 @@ import {
   restoreAdminCommunityGamePaymentText,
   resumeAdminCommunityGameJoining,
 } from '../shared/adminApi.js'
+import { runAdminEnforcementMutation } from '../shared/adminEnforcementLifecycle.js'
 
 const REASON_MAX_LENGTH = 100
 
@@ -165,6 +166,7 @@ function AdminCommunityGameActionModal({
   firebaseUser,
   onClose,
   onCompleted,
+  onConflict,
 }) {
   const { runWithStepUp } = useStepUp()
   const config = ACTION_CONFIG[action]
@@ -221,55 +223,61 @@ function AdminCommunityGameActionModal({
     }
 
     const normalizedReason = reason.trim()
-    setIsSubmitting(true)
     setExecutionError('')
 
-    try {
-      const executeAction = () => config.api({
-        firebaseUser,
-        gameId: detail.game.id,
-        idempotencyKey,
-        reason: normalizedReason,
-      })
-      const actionResult = action === 'cancel'
-        ? await runWithStepUp(
-          executeAction,
-          { actionLabel: 'cancel this community game' },
-        )
-        : await executeAction()
+    await runAdminEnforcementMutation({
+      clearStaleState: onClose,
+      execute: async () => {
+        const executeAction = () => config.api({
+          firebaseUser,
+          gameId: detail.game.id,
+          idempotencyKey,
+          reason: normalizedReason,
+        })
+        const actionResult = action === 'cancel'
+          ? await runWithStepUp(
+            executeAction,
+            { actionLabel: 'cancel this community game' },
+          )
+          : await executeAction()
 
-      if (shouldRecordFinancialOutcome) {
-        try {
-          await runWithStepUp(
-            () => createAdminFinancialOutcome({
-              firebaseUser,
-              payload: buildFinancialOutcomePayload({
-                detail,
-                financialOutcome,
-                financialOutcomeIdempotencyKey,
-                reason: normalizedReason,
+        if (shouldRecordFinancialOutcome) {
+          try {
+            await runWithStepUp(
+              () => createAdminFinancialOutcome({
+                firebaseUser,
+                payload: buildFinancialOutcomePayload({
+                  detail,
+                  financialOutcome,
+                  financialOutcomeIdempotencyKey,
+                  reason: normalizedReason,
+                }),
               }),
-            }),
-            { actionLabel: 'record this financial outcome' },
-          )
-        } catch (error) {
-          onCompleted(actionResult, { keepOpen: true })
-          throw new Error(
-            error.message
-              ? `Game action saved, but the publish-fee outcome failed: ${error.message}`
-              : 'Game action saved, but the publish-fee outcome failed.',
-            { cause: error },
-          )
+              { actionLabel: 'record this financial outcome' },
+            )
+          } catch (error) {
+            onCompleted(actionResult, { keepOpen: true })
+            throw new Error(
+              error.message
+                ? `Game action saved, but the publish-fee outcome failed: ${error.message}`
+                : 'Game action saved, but the publish-fee outcome failed.',
+              { cause: error },
+            )
+          }
         }
-      }
 
-      onCompleted(actionResult)
-      onClose()
-    } catch (error) {
-      setExecutionError(error.message || 'Community game action could not be completed.')
-    } finally {
-      setIsSubmitting(false)
-    }
+        return actionResult
+      },
+      onError: (error) => {
+        setExecutionError(error.message || 'Community game action could not be completed.')
+      },
+      onPendingChange: setIsSubmitting,
+      onSuccess: (actionResult) => {
+        onCompleted(actionResult)
+        onClose()
+      },
+      reloadAuthoritativeState: onConflict,
+    })
   }
 
   function resetActionKeys(nextReason = reason) {

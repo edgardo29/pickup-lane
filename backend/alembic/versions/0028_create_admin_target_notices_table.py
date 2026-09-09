@@ -1,7 +1,7 @@
 """create admin_target_notices table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0028_admin_target_notices'
@@ -32,8 +32,11 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.CheckConstraint("notice_status IN ('active', 'dismissed')", name='ck_admin_target_notices_notice_status'),
-        sa.CheckConstraint("notice_type IN ('community_game_hidden', 'community_game_restored', 'community_game_joining_paused', 'community_game_joining_resumed', 'community_game_payment_info_hidden', 'community_game_payment_info_restored', 'community_game_cancelled', 'need_sub_post_hidden', 'need_sub_post_restored', 'need_sub_post_removed', 'publish_fee_refunded', 'publish_credit_added')", name='ck_admin_target_notices_notice_type'),
+        sa.CheckConstraint("notice_type IN ('community_game_hidden', 'community_game_restored', 'community_game_joining_paused', 'community_game_joining_resumed', 'community_game_payment_info_hidden', 'community_game_payment_info_restored', 'community_game_cancelled', 'need_sub_post_hidden', 'need_sub_post_restored', 'need_sub_post_removed', 'game_chat_message_removed', 'game_chat_message_restored', 'need_sub_chat_message_removed', 'need_sub_chat_message_restored', 'publish_fee_refunded', 'publish_credit_added')", name='ck_admin_target_notices_notice_type'),
         sa.CheckConstraint('target_game_id IS NOT NULL OR target_sub_post_id IS NOT NULL OR target_sub_post_request_id IS NOT NULL OR target_user_id IS NOT NULL', name='ck_admin_target_notices_target_required'),
+        sa.CheckConstraint("notice_type NOT IN ('community_game_hidden', 'community_game_restored', 'community_game_joining_paused', 'community_game_joining_resumed', 'community_game_payment_info_hidden', 'community_game_payment_info_restored', 'community_game_cancelled', 'game_chat_message_removed', 'game_chat_message_restored') OR (target_game_id IS NOT NULL AND target_sub_post_id IS NULL AND target_sub_post_request_id IS NULL)", name='ck_admin_target_notices_game_enforcement_target'),
+        sa.CheckConstraint("notice_type NOT IN ('need_sub_post_hidden', 'need_sub_post_restored', 'need_sub_chat_message_removed', 'need_sub_chat_message_restored') OR (target_sub_post_id IS NOT NULL AND target_game_id IS NULL AND target_sub_post_request_id IS NULL)", name='ck_admin_target_notices_sub_enforcement_target'),
+        sa.CheckConstraint("notice_type != 'need_sub_post_removed' OR (target_sub_post_id IS NOT NULL AND target_game_id IS NULL)", name='ck_admin_target_notices_sub_removal_target'),
         sa.ForeignKeyConstraint(['admin_action_id'], ['admin_actions.id'], ondelete='SET NULL'),
         sa.ForeignKeyConstraint(['created_by_user_id'], ['users.id'], ondelete='SET NULL'),
         sa.ForeignKeyConstraint(['recipient_user_id'], ['users.id'], ondelete='SET NULL'),

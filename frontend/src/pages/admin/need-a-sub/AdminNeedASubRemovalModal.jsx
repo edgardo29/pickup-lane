@@ -7,6 +7,7 @@ import {
   removeAdminNeedASubPost,
   restoreAdminNeedASubPost,
 } from '../shared/adminApi.js'
+import { runAdminEnforcementMutation } from '../shared/adminEnforcementLifecycle.js'
 
 const REASON_MAX_LENGTH = 100
 
@@ -54,6 +55,7 @@ function AdminNeedASubRemovalModal({
   firebaseUser,
   onClose,
   onCompleted,
+  onConflict,
 }) {
   const { runWithStepUp } = useStepUp()
   const config = ACTION_CONFIG[action]
@@ -88,30 +90,35 @@ function AdminNeedASubRemovalModal({
       return
     }
 
-    setIsSubmitting(true)
     setExecutionError('')
 
-    try {
-      const normalizedReason = reason.trim()
-      const executeAction = () => config.api({
-        firebaseUser,
-        idempotencyKey,
-        postId: detail.post.id,
-        reason: normalizedReason,
-      })
-      const result = action === 'remove'
-        ? await runWithStepUp(
-          executeAction,
-          { actionLabel: 'remove this Need a Sub post' },
-        )
-        : await executeAction()
-      onCompleted(result)
-      onClose()
-    } catch (error) {
-      setExecutionError(error.message || 'Need a Sub post action could not be completed.')
-    } finally {
-      setIsSubmitting(false)
-    }
+    await runAdminEnforcementMutation({
+      clearStaleState: onClose,
+      execute: async () => {
+        const normalizedReason = reason.trim()
+        const executeAction = () => config.api({
+          firebaseUser,
+          idempotencyKey,
+          postId: detail.post.id,
+          reason: normalizedReason,
+        })
+        return action === 'remove'
+          ? await runWithStepUp(
+            executeAction,
+            { actionLabel: 'remove this Need a Sub post' },
+          )
+          : await executeAction()
+      },
+      onError: (error) => {
+        setExecutionError(error.message || 'Need a Sub post action could not be completed.')
+      },
+      onPendingChange: setIsSubmitting,
+      onSuccess: (result) => {
+        onCompleted(result)
+        onClose()
+      },
+      reloadAuthoritativeState: onConflict,
+    })
   }
 
   function handleReasonChange(event) {

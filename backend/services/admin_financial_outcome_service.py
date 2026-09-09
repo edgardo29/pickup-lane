@@ -33,13 +33,15 @@ from backend.services.admin_record_rules import (
 )
 from backend.services.admin_review_service import link_admin_action_to_open_review_case
 from backend.services.admin_target_notice_service import create_admin_target_notice
+from backend.services.refund_event_service import record_refund_event
 from backend.services.refund_service import (
     build_refund_conflict_detail,
     validate_refund_amount_available,
 )
-from backend.services.refund_event_service import record_refund_event
 from backend.services.stripe_service import (
     StripeConfigError,
+)
+from backend.services.stripe_service import (
     create_refund as create_stripe_refund,
 )
 
@@ -945,7 +947,6 @@ def create_financial_outcome_notice_if_needed(
         target_game_id=financial_outcome.target_game_id,
         admin_action=admin_action,
         created_by_user_id=created_by_user_id or financial_outcome.created_by_user_id,
-        user_safe_reason=None,
         notice_metadata={
             "financial_outcome_id": str(financial_outcome.id),
             "host_publish_fee_id": (

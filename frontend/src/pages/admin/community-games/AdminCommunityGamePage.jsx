@@ -50,6 +50,7 @@ import {
 } from './adminCommunityGameFormatters.js'
 import AdminCommunityGameActionModal from './AdminCommunityGameActionModal.jsx'
 import AdminCommunityGameHidePaymentTextModal from './AdminCommunityGameHidePaymentTextModal.jsx'
+import { canCancelAdminCommunityGame } from './adminCommunityEnforcementState.js'
 import AdminCommunityGameReviewModal from './AdminCommunityGameReviewModal.jsx'
 
 const DETAIL_PAGE_SIZE = 50
@@ -747,16 +748,17 @@ function CommunityTargetState({
     enforcementState.public_visibility_status === 'hidden',
   )
   const canPauseJoining = Boolean(
-    !isTerminalGame &&
+    gameStatus === 'active' &&
     enforcementState.join_enforcement_status === 'open',
   )
   const canResumeJoining = Boolean(
-    !isTerminalGame &&
+    gameStatus === 'active' &&
     enforcementState.join_enforcement_status === 'paused',
   )
-  const canCancelGame = Boolean(
-    !isTerminalGame,
-  )
+  const canCancelGame = canCancelAdminCommunityGame({
+    ...game,
+    game_status: gameStatus,
+  })
   const hasTargetActions = (
     canFlagForReview ||
     canHidePaymentText ||
@@ -1129,6 +1131,7 @@ function AdminCommunityGamePage() {
           detail={detail}
           firebaseUser={currentUser}
           onClose={() => setIsHidePaymentModalOpen(false)}
+          onConflict={() => setRefreshCount((count) => count + 1)}
           onHidden={handlePaymentTextHidden}
         />
       )}
@@ -1140,6 +1143,7 @@ function AdminCommunityGamePage() {
           firebaseUser={currentUser}
           onClose={() => setCommunityAction(null)}
           onCompleted={handleCommunityActionCompleted}
+          onConflict={() => setRefreshCount((count) => count + 1)}
         />
       )}
       {detail && reviewModalFlag !== undefined && (

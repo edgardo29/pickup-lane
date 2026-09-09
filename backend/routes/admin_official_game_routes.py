@@ -9,13 +9,17 @@ from backend.database import get_db
 from backend.models import Booking, User, WaitlistEntry
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
+    AdminChatMessageListRead,
+    AdminChatModerationActionCreate,
+    AdminChatModerationActionResultRead,
+    AdminChatSummaryRead,
     AdminOfficialGameCancelExecute,
     AdminOfficialGameCancellationPreviewRead,
     AdminOfficialGameCancellationResultRead,
     AdminOfficialGameCreate,
     AdminOfficialGameHostAssign,
-    AdminOfficialGameHostRemove,
     AdminOfficialGameHostRemovalExecute,
+    AdminOfficialGameHostRemove,
     AdminOfficialGameListRead,
     AdminOfficialGameMoneyRead,
     AdminOfficialGameParticipantRead,
@@ -26,17 +30,25 @@ from backend.schemas import (
     AdminOfficialGameRead,
     AdminOfficialGameUpdate,
     AdminOfficialGameUserSearchRead,
-    AdminChatMessageListRead,
-    AdminChatModerationActionCreate,
-    AdminChatModerationActionResultRead,
-    AdminChatSummaryRead,
     BookingRead,
     CurrentUserWaitlistEntryRead,
     GameParticipantRead,
 )
-from backend.services.auth_service import require_active_admin, require_recent_active_admin
+from backend.services.auth_service import (
+    require_active_admin,
+    require_recent_active_admin,
+)
+from backend.services.chat_moderation_admin_service import (
+    get_admin_game_chat_summary,
+    list_admin_game_chat_messages,
+    mark_game_chat_message_reviewed,
+    remove_game_chat_message,
+    restore_game_chat_message,
+)
 from backend.services.game_cancellation_service import (
     build_official_game_cancellation_preview as preview_official_game_cancellation,
+)
+from backend.services.game_cancellation_service import (
     execute_official_game_cancellation,
 )
 from backend.services.official_game_player_removal_service import (
@@ -64,13 +76,6 @@ from backend.services.official_game_service import (
 from backend.services.query_pagination import (
     DEFAULT_COLLECTION_LIMIT,
     MAX_COLLECTION_LIMIT,
-)
-from backend.services.chat_moderation_admin_service import (
-    get_admin_game_chat_summary,
-    list_admin_game_chat_messages,
-    mark_game_chat_message_reviewed,
-    remove_game_chat_message,
-    restore_game_chat_message,
 )
 
 router = APIRouter(prefix="/admin/official-games", tags=["admin_official_games"])
@@ -179,6 +184,7 @@ def mark_admin_official_game_chat_message_reviewed_route(
         message_id=message_id,
         admin_user=current_admin,
         payload=payload,
+        expected_game_type="official",
     )
 
 
@@ -201,6 +207,7 @@ def remove_admin_official_game_chat_message_route(
         message_id=message_id,
         admin_user=current_admin,
         payload=payload,
+        expected_game_type="official",
     )
 
 
@@ -223,6 +230,7 @@ def restore_admin_official_game_chat_message_route(
         message_id=message_id,
         admin_user=current_admin,
         payload=payload,
+        expected_game_type="official",
     )
 
 
