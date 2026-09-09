@@ -34,6 +34,13 @@ from backend.schemas.admin_user_schema import (
     AdminUserDeleteImpactPreviewRead,
     AdminUserDeleteResultRead,
 )
+from backend.services.account_deletion_service import (
+    anonymize_user,
+    cancel_future_user_activity,
+    detach_account_saved_payment_methods,
+    lock_user_and_active_admins_for_account_removal,
+    record_account_delete_partial_failure,
+)
 from backend.services.admin_action_service import record_admin_action
 from backend.services.admin_rejected_attempt_policy import (
     ATTEMPT_TYPE_DELETE_USER_REJECTED,
@@ -45,13 +52,6 @@ from backend.services.admin_rejected_attempt_service import (
 from backend.services.admin_user_service import (
     count_active_admins,
     get_admin_user_or_404,
-)
-from backend.services.account_deletion_service import (
-    anonymize_user,
-    cancel_future_user_activity,
-    detach_account_saved_payment_methods,
-    lock_user_and_active_admins_for_account_removal,
-    record_account_delete_partial_failure,
 )
 from backend.services.game_rules import (
     ACTIVE_BOOKING_STATUSES,
@@ -492,9 +492,7 @@ def delete_impact_preview_snapshot_token(
         },
         "active_admin_count": active_admin_count,
         "metrics": {
-            snapshot_field.name: metric_snapshot(
-                getattr(snapshot, snapshot_field.name)
-            )
+            snapshot_field.name: metric_snapshot(getattr(snapshot, snapshot_field.name))
             for snapshot_field in fields(snapshot)
         },
         "future_official_host_assignments": [
@@ -573,16 +571,13 @@ def build_admin_user_delete_impact_preview(
         ],
         future_community_hosted_game_count=snapshot.future_community_hosted_games.count,
         future_community_hosted_games=[
-            serialize_delete_impact_game(game)
-            for game in future_community_hosted_games
+            serialize_delete_impact_game(game) for game in future_community_hosted_games
         ],
         active_future_booking_count=snapshot.active_future_bookings.count,
         active_future_official_booking_count=(
             snapshot.active_future_official_bookings.count
         ),
-        active_future_participation_count=(
-            snapshot.active_future_participations.count
-        ),
+        active_future_participation_count=(snapshot.active_future_participations.count),
         active_future_guest_count=snapshot.active_future_guests.count,
         active_waitlist_entry_count=snapshot.active_waitlist_entries.count,
         active_owned_sub_post_count=snapshot.active_owned_sub_posts.count,
@@ -1110,6 +1105,7 @@ def delete_admin_user(
             db,
             admin_user_id=admin_user.id,
             action_type="delete_user",
+            outcome="succeeded",
             target_user_id=target_user.id,
             reason=reason,
             metadata={
@@ -1123,7 +1119,6 @@ def delete_admin_user(
                 "reviewed": reviewed,
             },
             idempotency_key=idempotency_key,
-            created_at=now,
         )
         anonymize_user(target_user, now)
         db.add(target_user)

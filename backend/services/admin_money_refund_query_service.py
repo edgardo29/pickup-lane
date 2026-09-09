@@ -29,8 +29,8 @@ from backend.schemas.admin_money_context_schema import (
 from backend.schemas.admin_money_refund_schema import (
     AdminMoneyRefundActionRead,
     AdminMoneyRefundCreditContextRead,
-    AdminMoneyRefundDetailRead,
     AdminMoneyRefundDetailItemRead,
+    AdminMoneyRefundDetailRead,
     AdminMoneyRefundEventListResponseRead,
     AdminMoneyRefundListRead,
     AdminMoneyRefundListResponseRead,
@@ -47,17 +47,17 @@ from backend.services.admin_money_issue_query_service import list_related_money_
 from backend.services.admin_money_payment_service import (
     build_payment_summary,
     get_payment_game,
-    load_by_id,
     list_payment_credit_grants,
     list_payment_credit_usages,
+    load_by_id,
 )
 from backend.services.admin_money_refund_rules import (
     RETRYABLE_PAYMENT_STATUSES,
     RETRYABLE_REFUND_STATUSES,
     UNCERTAIN_PROVIDER_REFUND_STATUSES,
 )
+from backend.services.auth_service import require_active_admin_user
 from backend.services.refund_service import VALID_REFUND_STATUSES
-
 
 ADMIN_MONEY_DETAIL_RELATED_LIMIT = 100
 ADMIN_MONEY_REFUND_STATUSES = VALID_REFUND_STATUSES | {"all"}
@@ -204,9 +204,7 @@ def build_refund_summaries(
     )
     bookings = load_by_id(db, Booking, booking_ids)
     payer_ids = {
-        payment.payer_user_id
-        for payment in payments.values()
-        if payment is not None
+        payment.payer_user_id for payment in payments.values() if payment is not None
     }
     users = load_by_id(db, User, payer_ids)
     game_ids = {
@@ -224,7 +222,9 @@ def build_refund_summaries(
         MoneyIssue.target_refund_id.in_(refund_ids)
     )
     if linked_issue_status is not None:
-        issue_statement = issue_statement.where(MoneyIssue.status == linked_issue_status)
+        issue_statement = issue_statement.where(
+            MoneyIssue.status == linked_issue_status
+        )
     issue_rows = list(
         db.scalars(
             issue_statement.order_by(
@@ -423,9 +423,9 @@ def list_refund_events(
     )
     rows = list(
         db.scalars(
-            statement
-            .order_by(RefundEvent.occurred_at.desc(), RefundEvent.id.desc())
-            .limit(limit + 1)
+            statement.order_by(
+                RefundEvent.occurred_at.desc(), RefundEvent.id.desc()
+            ).limit(limit + 1)
         ).all()
     )
     return AdminMoneyRefundEventListResponseRead(
@@ -470,7 +470,9 @@ def get_refund_host_publish_fee(db: Session, refund: Refund) -> HostPublishFee |
     return db.get(HostPublishFee, refund.host_publish_fee_id)
 
 
-def build_refund_provider_snapshot(refund: Refund) -> AdminMoneyRefundProviderSnapshotRead:
+def build_refund_provider_snapshot(
+    refund: Refund,
+) -> AdminMoneyRefundProviderSnapshotRead:
     return AdminMoneyRefundProviderSnapshotRead(
         provider=refund.provider,
         provider_status=refund.provider_status,
@@ -487,6 +489,7 @@ def list_refund_admin_activity(
     refund: Refund,
     linked_money_issue: MoneyIssue | None,
 ) -> list[AdminAction]:
+    require_active_admin_user(viewer_user)
     filters = [AdminAction.target_refund_id == refund.id]
     if linked_money_issue is not None:
         filters.append(AdminAction.target_money_issue_id == linked_money_issue.id)
@@ -498,9 +501,7 @@ def list_refund_admin_activity(
         .limit(ADMIN_MONEY_DETAIL_RELATED_LIMIT)
     ).all()
     return [
-        action
-        for action in actions
-        if user_can_read_admin_action(viewer_user, action)
+        action for action in actions if user_can_read_admin_action(viewer_user, action)
     ]
 
 
@@ -534,7 +535,9 @@ def refund_available_actions(
     ):
         pass
     else:
-        check_provider_blockers.append("Refund has no provider state that can be checked.")
+        check_provider_blockers.append(
+            "Refund has no provider state that can be checked."
+        )
 
     open_provider_blockers: list[str] = []
     if not refund.provider_refund_id:
@@ -578,6 +581,7 @@ def get_admin_money_refund_detail(
     refund_id: uuid.UUID,
     viewer_user: User,
 ) -> AdminMoneyRefundDetailRead:
+    require_active_admin_user(viewer_user)
     refund = get_refund_or_404(db, refund_id)
     payment = get_refund_payment(db, refund)
     booking = get_refund_booking(db, refund=refund, payment=payment)
@@ -609,9 +613,7 @@ def get_admin_money_refund_detail(
     )
     linked_money_issue = linked_issues[0] if linked_issues else None
     payment_summary = (
-        build_payment_summary(db, payment, detail=True)
-        if payment is not None
-        else None
+        build_payment_summary(db, payment, detail=True) if payment is not None else None
     )
     recent_refund_events = list_refund_events(
         db,
@@ -647,9 +649,7 @@ def get_admin_money_refund_detail(
             else None
         ),
         game_summary=(
-            AdminMoneyGameContextRead.model_validate(game)
-            if game is not None
-            else None
+            AdminMoneyGameContextRead.model_validate(game) if game is not None else None
         ),
         publish_fee_summary=(
             AdminMoneyHostPublishFeeContextRead.model_validate(host_publish_fee)

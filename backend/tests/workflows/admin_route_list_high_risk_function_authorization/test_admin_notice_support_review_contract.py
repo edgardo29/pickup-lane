@@ -86,6 +86,8 @@ def _persist_admin_action_fixture(
             id=uuid.uuid4(),
             admin_user_id=admin.id,
             action_type="resolve_support_flag",
+            outcome="succeeded",
+            correlation_id=uuid.uuid4(),
             target_user_id=target.id,
             target_support_flag_id=support_flag_id,
             target_review_case_id=review_case_id,

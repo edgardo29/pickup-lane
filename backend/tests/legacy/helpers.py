@@ -1,6 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
@@ -162,11 +161,15 @@ def authenticate_as(user_id: str, target_app=None) -> None:
                 authenticated_at=datetime.now(UTC),
             )
 
-    app_with_overrides.dependency_overrides[get_current_app_user] = override_current_user
+    app_with_overrides.dependency_overrides[get_current_app_user] = (
+        override_current_user
+    )
     app_with_overrides.dependency_overrides[get_verified_firebase_identity] = (
         override_firebase_identity
     )
-    app_with_overrides.dependency_overrides[require_verified_user] = override_current_user
+    app_with_overrides.dependency_overrides[require_verified_user] = (
+        override_current_user
+    )
 
 
 def run_as_temporary_admin(client: TestClient, request_fn):
@@ -177,8 +180,12 @@ def run_as_temporary_admin(client: TestClient, request_fn):
     )
 
     app_with_overrides = client.app
-    had_previous_override = get_current_app_user in app_with_overrides.dependency_overrides
-    previous_override = app_with_overrides.dependency_overrides.get(get_current_app_user)
+    had_previous_override = (
+        get_current_app_user in app_with_overrides.dependency_overrides
+    )
+    previous_override = app_with_overrides.dependency_overrides.get(
+        get_current_app_user
+    )
     had_previous_identity_override = (
         get_verified_firebase_identity in app_with_overrides.dependency_overrides
     )
@@ -209,7 +216,9 @@ def run_as_temporary_admin(client: TestClient, request_fn):
                 previous_identity_override
             )
         else:
-            app_with_overrides.dependency_overrides.pop(get_verified_firebase_identity, None)
+            app_with_overrides.dependency_overrides.pop(
+                get_verified_firebase_identity, None
+            )
         if had_previous_verified_override and previous_verified_override is not None:
             app_with_overrides.dependency_overrides[require_verified_user] = (
                 previous_verified_override
@@ -395,10 +404,14 @@ def create_game(
         "is_chat_enabled": True,
     }
     request_overrides = {
-        key: value for key, value in overrides.items() if key in GAME_CREATE_REQUEST_FIELDS
+        key: value
+        for key, value in overrides.items()
+        if key in GAME_CREATE_REQUEST_FIELDS
     }
     seeded_overrides = {
-        key: value for key, value in overrides.items() if key not in GAME_CREATE_REQUEST_FIELDS
+        key: value
+        for key, value in overrides.items()
+        if key not in GAME_CREATE_REQUEST_FIELDS
     }
     payload.update(request_overrides)
     if "total_spots" in overrides and "format_label" not in overrides:
@@ -406,7 +419,11 @@ def create_game(
         if total_spots < 10:
             side_size = max(3, total_spots // 2)
             payload["format_label"] = f"{side_size}v{side_size}"
-    payload = {key: value for key, value in payload.items() if key in GAME_CREATE_REQUEST_FIELDS}
+    payload = {
+        key: value
+        for key, value in payload.items()
+        if key in GAME_CREATE_REQUEST_FIELDS
+    }
 
     response = run_as_temporary_admin(
         client,
@@ -466,11 +483,9 @@ def apply_seeded_game_overrides(game_id: str, overrides: dict[str, object]) -> d
 
 
 def build_sub_post_payload(**overrides: object) -> dict:
-    starts_at = (
-        datetime.now(UTC)
-        .replace(hour=18, minute=0, second=0, microsecond=0)
-        + timedelta(days=7)
-    )
+    starts_at = datetime.now(UTC).replace(
+        hour=18, minute=0, second=0, microsecond=0
+    ) + timedelta(days=7)
     ends_at = starts_at + timedelta(hours=2)
     payload = {
         "sport_type": "soccer",
@@ -513,9 +528,13 @@ def build_sub_post_payload(**overrides: object) -> dict:
     return payload
 
 
-def create_sub_post(client: TestClient, owner_user_id: str, **overrides: object) -> dict:
+def create_sub_post(
+    client: TestClient, owner_user_id: str, **overrides: object
+) -> dict:
     authenticate_as(owner_user_id)
-    response = client.post("/need-a-sub/posts", json=build_sub_post_payload(**overrides))
+    response = client.post(
+        "/need-a-sub/posts", json=build_sub_post_payload(**overrides)
+    )
 
     assert response.status_code == 201, response.text
     return response.json()
@@ -544,7 +563,10 @@ def create_booking(
         "platform_fee_snapshot_cents": 100,
     }
     payload.update(overrides)
-    if payload["booking_status"] == "pending_payment" and payload.get("expires_at") is None:
+    if (
+        payload["booking_status"] == "pending_payment"
+        and payload.get("expires_at") is None
+    ):
         payload["expires_at"] = (datetime.now(UTC) + timedelta(minutes=2)).isoformat()
 
     with SessionLocal() as db:
@@ -787,7 +809,9 @@ def create_game_status_history(
     del client
     from backend.database import SessionLocal
     from backend.schemas import GameStatusHistoryCreate, GameStatusHistoryRead
-    from backend.services.status_history_service import create_game_status_history_record
+    from backend.services.status_history_service import (
+        create_game_status_history_record,
+    )
 
     payload = {
         "game_id": game_id,
@@ -916,7 +940,7 @@ def create_admin_action(
     from backend.models import User
     from backend.schemas import AdminActionCreate
     from backend.services.admin_action_service import (
-        create_admin_action as create_admin_action_record,
+        record_admin_action,
         serialize_admin_action_reads,
     )
 
@@ -930,11 +954,17 @@ def create_admin_action(
     with SessionLocal() as db:
         admin_user = db.get(User, UUID(admin_user_id))
         assert admin_user is not None
-        admin_action = create_admin_action_record(
+        action_data = AdminActionCreate.model_validate(payload).model_dump()
+        action_type = action_data.pop("action_type")
+        admin_action = record_admin_action(
             db,
-            admin_user=admin_user,
-            payload=AdminActionCreate.model_validate(payload),
+            admin_user_id=admin_user.id,
+            action_type=action_type,
+            outcome="succeeded",
+            **action_data,
         )
+        db.commit()
+        db.refresh(admin_action)
         return serialize_admin_action_reads(db, [admin_action])[0].model_dump(
             mode="json"
         )

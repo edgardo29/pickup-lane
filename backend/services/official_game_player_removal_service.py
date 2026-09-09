@@ -116,9 +116,7 @@ def list_booking_participants_for_removal_preview(
     if for_update:
         statement = statement.with_for_update()
 
-    return list(
-        db.scalars(statement).all()
-    )
+    return list(db.scalars(statement).all())
 
 
 def build_removal_preview_participant(
@@ -317,9 +315,7 @@ def preview_official_game_player_removal(
         if for_update:
             refund_statement = refund_statement.with_for_update()
     refunds = (
-        list(db.scalars(refund_statement).all())
-        if refund_statement is not None
-        else []
+        list(db.scalars(refund_statement).all()) if refund_statement is not None else []
     )
     credit_usage_statement = None
     if booking is not None:
@@ -350,9 +346,7 @@ def preview_official_game_player_removal(
         if payment.payment_status in COLLECTED_PAYMENT_STATUSES
     )
     cash_refunded_cents = sum(
-        refund.amount_cents
-        for refund in refunds
-        if refund.refund_status == "succeeded"
+        refund.amount_cents for refund in refunds if refund.refund_status == "succeeded"
     )
     cash_refund_pending_cents = sum(
         refund.amount_cents
@@ -361,8 +355,7 @@ def preview_official_game_player_removal(
     )
     cash_refundable_cents = sum(
         max(
-            payment.amount_cents
-            - refund_holds_by_payment_id.get(payment.id, 0),
+            payment.amount_cents - refund_holds_by_payment_id.get(payment.id, 0),
             0,
         )
         for payment in payments
@@ -396,9 +389,7 @@ def preview_official_game_player_removal(
         db.scalar(
             select(func.count(GameParticipant.id)).where(
                 GameParticipant.game_id == game.id,
-                GameParticipant.participant_status.in_(
-                    ADMIN_REMOVABLE_PLAYER_STATUSES
-                ),
+                GameParticipant.participant_status.in_(ADMIN_REMOVABLE_PLAYER_STATUSES),
             )
         )
         or 0
@@ -411,9 +402,7 @@ def preview_official_game_player_removal(
         select(WaitlistEntry)
         .where(
             WaitlistEntry.game_id == game.id,
-            WaitlistEntry.waitlist_status.in_(
-                REMOVAL_PREVIEW_ACTIVE_WAITLIST_STATUSES
-            ),
+            WaitlistEntry.waitlist_status.in_(REMOVAL_PREVIEW_ACTIVE_WAITLIST_STATUSES),
         )
         .order_by(WaitlistEntry.position.asc(), WaitlistEntry.created_at.asc())
     )
@@ -434,10 +423,7 @@ def preview_official_game_player_removal(
     blocking_reasons: list[str] = []
     allowed_outcomes = ["remove_only"]
 
-    if (
-        game.publish_status != "published"
-        or game.game_status not in OPEN_GAME_STATUSES
-    ):
+    if game.publish_status != "published" or game.game_status not in OPEN_GAME_STATUSES:
         classification = "blocked_game_state"
         blocking_reasons.append(
             "Players can only be removed from published active official games."
@@ -447,12 +433,8 @@ def preview_official_game_player_removal(
         blocking_reasons.append(
             "Only pending or confirmed roster participants can be removed here."
         )
-    elif (
-        participant.participant_type == "host"
-        or (
-            participant.user_id is not None
-            and participant.user_id == game.host_user_id
-        )
+    elif participant.participant_type == "host" or (
+        participant.user_id is not None and participant.user_id == game.host_user_id
     ):
         classification = "blocked_host"
         blocking_reasons.append(
@@ -481,13 +463,8 @@ def preview_official_game_player_removal(
         blocking_reasons.append(
             "A refund is already pending or processing for this booking."
         )
-    elif (
-        removal_scope == "single_participant"
-        and (
-            cash_collected_cents > 0
-            or credit_totals["redeemed"] > 0
-            or bool(refunds)
-        )
+    elif removal_scope == "single_participant" and (
+        cash_collected_cents > 0 or credit_totals["redeemed"] > 0 or bool(refunds)
     ):
         classification = "manual_review_required"
         blocking_reasons.append(
@@ -504,10 +481,7 @@ def preview_official_game_player_removal(
         blocking_reasons.append(
             "Existing restored or reversed credit requires money support review."
         )
-    elif (
-        credit_totals["reserved"] > 0
-        and booking.booking_status != "pending_payment"
-    ):
+    elif credit_totals["reserved"] > 0 and booking.booking_status != "pending_payment":
         classification = "manual_review_required"
         blocking_reasons.append(
             "Reserved credit exists outside a pending checkout and requires money support review."
@@ -585,9 +559,7 @@ def preview_official_game_player_removal(
         booking_payment_status=booking.payment_status if booking is not None else None,
         booking_total_cents=booking.total_cents if booking is not None else 0,
         currency=booking.currency if booking is not None else participant.currency,
-        payment_statuses=sorted(
-            {payment.payment_status for payment in payments}
-        ),
+        payment_statuses=sorted({payment.payment_status for payment in payments}),
         refund_statuses=sorted({refund.refund_status for refund in refunds}),
         cash_collected_cents=cash_collected_cents,
         cash_refunded_cents=cash_refunded_cents,
@@ -639,7 +611,9 @@ def create_admin_removal_refund_record(
     provider_status = (
         "unknown"
         if provider_refund_id is None and reason_code == "stripe_refund_timeout_unknown"
-        else refund_status if provider_refund_id is not None else None
+        else refund_status
+        if provider_refund_id is not None
+        else None
     )
     refund = Refund(
         id=uuid.uuid4(),
@@ -661,9 +635,7 @@ def create_admin_removal_refund_record(
         approved_by_user_id=admin_user.id,
         requested_at=now,
         approved_at=(
-            now
-            if refund_status in {"approved", "processing", "succeeded"}
-            else None
+            now if refund_status in {"approved", "processing", "succeeded"} else None
         ),
         refunded_at=now if refund_status == "succeeded" else None,
         created_at=now,
@@ -759,9 +731,7 @@ def execute_admin_removal_refunds(
                     "admin_user_id": str(admin_user.id),
                 },
             )
-            refund_status = map_admin_removal_refund_status(
-                provider_refund.status
-            )
+            refund_status = map_admin_removal_refund_status(provider_refund.status)
             refund, money_issue_id = create_admin_removal_refund_record(
                 db,
                 admin_user=admin_user,
@@ -850,7 +820,9 @@ def record_credit_return_failure(
             db,
             credit_usage=credit_usage,
             game_credit=game_credit,
-            issue_type="credit_release_failed" if is_release else "credit_restore_failed",
+            issue_type="credit_release_failed"
+            if is_release
+            else "credit_restore_failed",
             origin_workflow="player_removal",
             reason_code=f"credit_{operation}_failed",
             summary=(
@@ -1027,14 +999,10 @@ def execute_official_game_player_removal(
     successful_refunds = [
         refund for refund in refunds if refund.refund_status == "succeeded"
     ]
-    credit_restored_cents = sum(
-        usage.amount_cents for usage in restored_credit_usages
-    )
+    credit_restored_cents = sum(usage.amount_cents for usage in restored_credit_usages)
     booking.booking_status = "cancelled"
     booking.reservation_status = (
-        "not_required"
-        if booking.reservation_status == "not_required"
-        else "released"
+        "not_required" if booking.reservation_status == "not_required" else "released"
     )
     booking.expires_at = None
     if execute_request.outcome == "release_pending_hold_and_remove_party":
@@ -1090,6 +1058,7 @@ def execute_official_game_player_removal(
         db,
         admin_user_id=admin_user.id,
         action_type="admin_remove_player",
+        outcome="succeeded",
         target_game_id=game.id,
         target_user_id=participant.user_id,
         target_booking_id=booking.id,
@@ -1098,16 +1067,13 @@ def execute_official_game_player_removal(
         target_refund_id=refunds[0].id if refunds else None,
         reason=reason,
         metadata={
-            "removed_participant_ids": [
-                item.id for item in participants_to_remove
-            ],
+            "removed_participant_ids": [item.id for item in participants_to_remove],
             "removed_count": len(participants_to_remove),
             "payment_refund_created": bool(refunds),
             "removal_outcome": execute_request.outcome,
             "refund_created_count": len(refunds),
             "refund_failed_count": sum(
-                refund.refund_status in {"failed", "cancelled"}
-                for refund in refunds
+                refund.refund_status in {"failed", "cancelled"} for refund in refunds
             ),
             "refund_processing_count": sum(
                 refund.refund_status == "processing" for refund in refunds
@@ -1130,9 +1096,7 @@ def execute_official_game_player_removal(
         now=now,
     )
     for refund in successful_refunds:
-        payment = next(
-            item for item in payments if item.id == refund.payment_id
-        )
+        payment = next(item for item in payments if item.id == refund.payment_id)
         create_or_reopen_booking_refunded_notification(
             db,
             db_game=game,

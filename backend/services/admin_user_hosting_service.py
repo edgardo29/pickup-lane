@@ -490,6 +490,7 @@ def restrict_admin_user_hosting(
             db,
             admin_user_id=admin_user.id,
             action_type="restrict_hosting",
+            outcome="succeeded",
             target_user_id=target_user.id,
             target_notification_id=notification.id,
             reason=reason,
@@ -506,7 +507,6 @@ def restrict_admin_user_hosting(
                 },
             },
             idempotency_key=idempotency_key,
-            created_at=now,
         )
         target_user.hosting_status = HOSTING_STATUS_RESTRICTED
         target_user.updated_at = now
@@ -623,6 +623,7 @@ def restore_admin_user_hosting(
             db,
             admin_user_id=admin_user.id,
             action_type="restore_hosting",
+            outcome="succeeded",
             target_user_id=target_user.id,
             target_notification_id=notification.id,
             reason=reason,
@@ -635,7 +636,6 @@ def restore_admin_user_hosting(
                 },
             },
             idempotency_key=idempotency_key,
-            created_at=now,
         )
         target_user.hosting_status = HOSTING_STATUS_ELIGIBLE
         target_user.updated_at = now

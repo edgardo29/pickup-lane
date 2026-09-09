@@ -37,6 +37,7 @@ from backend.schemas.admin_notification_schema import (
     AdminNotificationRecipientRead,
     AdminNotificationRelatedRecordRead,
 )
+from backend.services.auth_service import require_active_admin_user
 from backend.services.notification_display_service import (
     format_row_subject,
     serialize_notification,
@@ -212,7 +213,10 @@ def build_admin_notification_filters(
 def list_admin_notification_audit_actions(
     db: Session,
     notification_ids: list[uuid.UUID],
+    *,
+    viewer_user: User,
 ) -> dict[uuid.UUID, list[AdminAction]]:
+    require_active_admin_user(viewer_user)
     if not notification_ids:
         return {}
 
@@ -247,9 +251,7 @@ def user_display_name(user: User | None) -> str:
     if user is None:
         return "Unknown user"
 
-    name = " ".join(
-        part for part in (user.first_name, user.last_name) if part
-    ).strip()
+    name = " ".join(part for part in (user.first_name, user.last_name) if part).strip()
     return name or user.email or str(user.id)
 
 
@@ -285,9 +287,10 @@ def related_records_for_notification(
     include_exists: bool = False,
 ) -> list[AdminNotificationRelatedRecordRead]:
     related_records: list[AdminNotificationRelatedRecordRead] = []
-    for related_type, (field_name, display_label) in (
-        NOTIFICATION_LOOKUP_RELATED_FIELDS.items()
-    ):
+    for related_type, (
+        field_name,
+        display_label,
+    ) in NOTIFICATION_LOOKUP_RELATED_FIELDS.items():
         related_id = getattr(notification, field_name)
         if related_id is None:
             continue
@@ -313,9 +316,10 @@ def compact_related_records_for_notification(
     notification: Notification,
 ) -> list[AdminNotificationCompactRelatedRecordRead]:
     related_records: list[AdminNotificationCompactRelatedRecordRead] = []
-    for related_type, (field_name, display_label) in (
-        NOTIFICATION_LOOKUP_RELATED_FIELDS.items()
-    ):
+    for related_type, (
+        field_name,
+        display_label,
+    ) in NOTIFICATION_LOOKUP_RELATED_FIELDS.items():
         related_id = getattr(notification, field_name)
         if related_id is None:
             continue
@@ -604,6 +608,7 @@ def get_admin_notification_lookup_detail(
     notification_id: uuid.UUID,
     viewer_user: User,
 ) -> AdminNotificationLookupDetailRead:
+    require_active_admin_user(viewer_user)
     notification = db.get(Notification, notification_id)
     if notification is None:
         raise HTTPException(
@@ -611,7 +616,11 @@ def get_admin_notification_lookup_detail(
             detail="Notification not found.",
         )
 
-    audit_actions = list_admin_notification_audit_actions(db, [notification.id])
+    audit_actions = list_admin_notification_audit_actions(
+        db,
+        [notification.id],
+        viewer_user=viewer_user,
+    )
     return serialize_admin_notification_lookup_detail(
         db,
         notification,

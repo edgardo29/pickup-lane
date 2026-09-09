@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS09-02A-R1",
+      "owning_pass": "WS09-02A",
+      "source_controls": ["OPP-11", "WS09-02"],
+      "state": "required",
+      "scope": "platform/administrative_audit",
+      "reason": "AdminAction persistence requires a registered action, explicit finite outcome, canonical correlation UUID, valid typed target, authenticated actor, and database-owned time."
+    },
+    {
+      "id": "WS09-02A-R2",
+      "owning_pass": "WS09-02A",
+      "source_controls": ["OPP-11"],
+      "state": "required",
+      "scope": "platform/administrative_audit",
+      "reason": "PostgreSQL must reject row updates and deletes for both administrative audit tables with one stable append-only error while schema-owner truncation remains available for test cleanup."
+    },
+    {
+      "id": "WS09-02A-R3",
+      "owning_pass": "WS09-02A",
+      "source_controls": ["OPP-11"],
+      "state": "required",
+      "scope": "platform/administrative_audit",
+      "reason": "Corrections append an immutable self-linked action in a private transaction, replay idempotently, and cannot form correction chains."
+    },
+    {
+      "id": "WS09-02A-R4",
+      "owning_pass": "WS09-02A",
+      "source_controls": ["OPP-11"],
+      "state": "required",
+      "scope": "platform/administrative_audit",
+      "reason": "The ordinary writer never commits and its failure rolls back the privileged mutation in the caller-owned transaction."
+    },
+    {
+      "id": "WS09-02A-R5",
+      "owning_pass": "WS09-02A",
+      "source_controls": ["OPP-11", "WS03-05D"],
+      "state": "required",
+      "scope": "platform/administrative_audit",
+      "reason": "The reusable sensitive-read recorder reauthorizes in a private session, validates only minimal target projections, commits before disclosure, accepts no protected payload, and fails closed without disturbing caller state."
+    },
+    {
+      "id": "WS09-02A-R6",
+      "owning_pass": "WS09-02A",
+      "source_controls": ["EN-02", "OPP-11"],
+      "state": "required",
+      "scope": "platform/administrative_audit",
+      "reason": "Audit correlation is copied from trusted context and legitimate non-request recording generates and installs a fresh canonical UUIDv4."
+    },
+    {
+      "id": "WS09-02A-R7",
+      "owning_pass": "WS09-02A",
+      "source_controls": ["OPP-11"],
+      "state": "required",
+      "scope": "platform/administrative_audit",
+      "reason": "All audit read surfaces and service entry points enforce binary active-admin access, preserve private no-store behavior and retired mutations, and expose additive outcome/correlation data safely."
+    },
+    {
+      "id": "WS09-02A-R8",
+      "owning_pass": "WS09-02A",
+      "source_controls": ["OPP-11", "WS09-02"],
+      "state": "required",
+      "scope": "platform/administrative_audit",
+      "reason": "Every existing production writer uses the explicit outcome and database-time contract, and commit-owning checkpoint workflows use immutable typed relationships instead of rewriting audit rows."
+    }
+  ]
+}

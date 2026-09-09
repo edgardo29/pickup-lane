@@ -240,6 +240,86 @@ MIGRATION_RAW_SQL_ALLOWLIST: tuple[RawSqlAllowance, ...] = (
         expression="DROP SEQUENCE platform_notice_global_sequence_seq",
         safety_basis="fixed sequence teardown in downgrade",
     ),
+    RawSqlAllowance(
+        source_path="backend/alembic/versions/0004_create_admin_actions_table.py",
+        constructor="op.execute",
+        expression="""
+        CREATE FUNCTION prevent_admin_actions_mutation()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            RAISE EXCEPTION USING
+                ERRCODE = '55000',
+                MESSAGE = 'admin audit rows are immutable';
+        END;
+        $$
+        """,
+        safety_basis="fixed append-only guard function for administrative audit rows",
+    ),
+    RawSqlAllowance(
+        source_path="backend/alembic/versions/0004_create_admin_actions_table.py",
+        constructor="op.execute",
+        expression="""
+        CREATE TRIGGER trg_admin_actions_immutable
+        BEFORE UPDATE OR DELETE ON admin_actions
+        FOR EACH ROW
+        EXECUTE FUNCTION prevent_admin_actions_mutation()
+        """,
+        safety_basis="fixed append-only trigger for administrative audit rows",
+    ),
+    RawSqlAllowance(
+        source_path="backend/alembic/versions/0004_create_admin_actions_table.py",
+        constructor="op.execute",
+        expression="DROP TRIGGER trg_admin_actions_immutable ON admin_actions",
+        safety_basis="fixed append-only trigger teardown in downgrade",
+    ),
+    RawSqlAllowance(
+        source_path="backend/alembic/versions/0004_create_admin_actions_table.py",
+        constructor="op.execute",
+        expression="DROP FUNCTION prevent_admin_actions_mutation()",
+        safety_basis="fixed append-only guard teardown in downgrade",
+    ),
+    RawSqlAllowance(
+        source_path="backend/alembic/versions/0045_create_admin_rejected_attempts_table.py",
+        constructor="op.execute",
+        expression="""
+        CREATE FUNCTION prevent_admin_rejected_attempts_mutation()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            RAISE EXCEPTION USING
+                ERRCODE = '55000',
+                MESSAGE = 'admin audit rows are immutable';
+        END;
+        $$
+        """,
+        safety_basis="fixed append-only guard function for rejected audit attempts",
+    ),
+    RawSqlAllowance(
+        source_path="backend/alembic/versions/0045_create_admin_rejected_attempts_table.py",
+        constructor="op.execute",
+        expression="""
+        CREATE TRIGGER trg_admin_rejected_attempts_immutable
+        BEFORE UPDATE OR DELETE ON admin_rejected_attempts
+        FOR EACH ROW
+        EXECUTE FUNCTION prevent_admin_rejected_attempts_mutation()
+        """,
+        safety_basis="fixed append-only trigger for rejected audit attempts",
+    ),
+    RawSqlAllowance(
+        source_path="backend/alembic/versions/0045_create_admin_rejected_attempts_table.py",
+        constructor="op.execute",
+        expression="DROP TRIGGER trg_admin_rejected_attempts_immutable ON admin_rejected_attempts",
+        safety_basis="fixed rejected-attempt trigger teardown in downgrade",
+    ),
+    RawSqlAllowance(
+        source_path="backend/alembic/versions/0045_create_admin_rejected_attempts_table.py",
+        constructor="op.execute",
+        expression="DROP FUNCTION prevent_admin_rejected_attempts_mutation()",
+        safety_basis="fixed rejected-attempt guard teardown in downgrade",
+    ),
 )
 
 LATER_OWNED_EVIDENCE: dict[str, str] = {

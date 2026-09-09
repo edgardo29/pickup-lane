@@ -17,12 +17,12 @@ when durable authority leaves multiple equally valid choices.
 | Field | Value |
 |---|---|
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes and record accepted progression state. |
-| Current reconciliation point | 39 passes are accepted in `develop`, including `WS03-05A` and accepted WS04/WS05 work; `WS03-05B` is implemented in open PR #176 but unmerged and requires the correction defined by the corrected master before it may merge. |
-| Current accepted develop SHA at reconciliation | `662c4ae4536e1fb266e5a25b88ae48681f5a9bab`. |
+| Current reconciliation point | Proposed state that becomes factual atomically when the substantive `WS09-02A` PR merges: 42 executable passes are accepted, including corrected `WS03-05B`, `WS03-05C`, and `WS09-02A`; no executable pass is implemented but unmerged; 27 executable units remain. |
+| Accepted pre-`WS09-02A` reconciliation anchor | `31d3db4b2320a5656a081ac8f7bdc206c0b3cf7e`; this historical SHA contains the accepted `WS03-05B` and `WS03-05C` merges and is not a guessed future merge SHA. |
 | Historical blueprint register | 42 original parent-level planned entries, retained as provenance. |
-| Accepted implemented passes | 39 merged/accepted passes. |
-| Implemented but unmerged | `WS03-05B` in PR #176; correction required before merge. |
-| Remaining roadmap | 27 genuinely unimplemented units under section 8 of the corrected master. |
+| Accepted implemented passes | 42 merged/accepted executable passes in the proposed post-merge state. |
+| Implemented but unmerged | None in the proposed post-merge state. |
+| Remaining roadmap | 27 genuinely unimplemented executable units after replacing the `WS09-02` umbrella with its accepted child decomposition and accepting A. |
 | Next unit selected by this register? | Not by itself. Use the corrected master, applicable prerequisites, current `develop`, and owner selection when more than one unit is valid. |
 
 The recorded accepted `develop` SHA is a historical reconciliation basis for
@@ -36,9 +36,9 @@ production-readiness run instruction.
 | Metric | Count | Meaning |
 |---|---:|---|
 | Historical parent-level entries | 42 | Original planning inventory retained as provenance. |
-| Merged/accepted implemented passes | 39 | Current authoritative audit status from the corrected master. |
-| Implemented but unmerged passes | 1 | `WS03-05B` in PR #176; not accepted or merge-ready. |
-| Genuinely unimplemented remaining units | 27 | Corrected roadmap units in master section 8. |
+| Merged/accepted implemented passes | 42 | Post-merge state: 41 accepted at the reconciliation anchor plus accepted `WS09-02A`. |
+| Implemented but unmerged passes | 0 | None in the post-merge state. |
+| Genuinely unimplemented remaining units | 27 | `26 - 1` decomposed `WS09-02` umbrella `+ 2` remaining WS09-02 children. |
 
 Count magnitude is not production-readiness proof. Completion depends on the
 actual surviving safety obligations and final evidence required by the corrected
@@ -96,7 +96,7 @@ navigation. It does not replace the master blueprint.
 | `WS03-02` | Provisioning, account-state lifecycle, and concurrent first login | Accepted executable pass. |
 | `WS03-03` | High-risk authentication and Firebase control verification | Decomposed into accepted executable child passes `WS03-03A` and `WS03-03B`. |
 | `WS03-04` | Complete authorization matrix and negative proof | Decomposed into accepted executable child passes `WS03-04A`, `WS03-04B`, `WS03-04C`, and `WS03-04D`; WS03-04 parent complete, with the Stripe webhook lifecycle gap explicitly covered elsewhere by `WS05`. |
-| `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | `WS03-05A` is accepted. `WS03-05B` is implemented but unmerged and must be reduced to the corrected master target before merge. Corrected `WS03-05C` and `WS03-05D` scope remains in master section 8.1. |
+| `WS03-05` | Moderation states, safe notices, and minimum-necessary admin data | Children A, B, and C are accepted. D is the only remaining child, remains defined by corrected master section 8.1, and depends on the accepted reusable audit foundation in `WS09-02A`. Parent `WS03-05` remains incomplete. |
 | `WS04-01` | Database engine/session lifecycle, connection budget, and least-privilege roles | Structurally revised after accepted `WS04-01A` and `WS04-01B`: revised `WS04-01C` accepted the provider-independent production-verification framework; final production topology/budget/role proof is preserved for mandatory later `WS04-01D` after final infrastructure is selected. |
 | `WS04-02` | Transactions, invariants, locks, and deterministic concurrency | Accepted children `WS04-02A`, `WS04-02B`, and `WS04-02C`; later-owned corrected-master work remains outside this historical parent. |
 | `WS04-03` | Migration policy, compatibility, interruption, and production-like rehearsal | `WS04-03A` is accepted; corrected `WS04-03B` final migration/runtime rehearsal remains deferred. |
@@ -116,7 +116,7 @@ navigation. It does not replace the master blueprint.
 | `WS08-02` | Critical risk-based suites | Not implemented. Corrected scope is governed by master section 8.6; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
 | `WS08-03` | CI and supply-chain hardening | Not implemented. Corrected scope is governed by master section 8.6; no default SBOM or custom provenance/signing framework. |
 | `WS09-01` | Structured logging | Not implemented. Corrected scope is governed by master section 8.7; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
-| `WS09-02` | Administrative auditability | Not implemented. Corrected scope is governed by master section 8.7; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
+| `WS09-02` | Administrative auditability | Accepted three-child decomposition. `WS09-02A` is accepted in the post-merge state; `WS09-02B` and `WS09-02C` remain. Parent `WS09-02` is incomplete. |
 | `WS09-03` | Metrics, alerts and capacity | Not implemented. Corrected scope is governed by master section 8.7; no formal SLO/error-budget bureaucracy. |
 | `WS10-01` | Privacy/data lifecycle | Not implemented. Corrected scope is governed by master section 8.8; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
 | `WS10-02` | Secrets and control-plane access | Not implemented. Corrected scope is governed by master section 8.8; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
@@ -127,7 +127,7 @@ navigation. It does not replace the master blueprint.
 
 ## 5. Accepted Executable Passes
 
-The following 39 executable passes are merged and accepted in the current
+The following 42 executable passes are merged and accepted in the proposed post-merge
 repository. Plan paths are retained as implementation provenance, not current
 scope authority. Every path is relative to `docs/production-readiness/planning/`.
 
@@ -163,6 +163,8 @@ scope authority. Every path is relative to `docs/production-readiness/planning/`
 | `WS03-04C` | `WS03-04` | `passes/ws03/ws03-04c-game-community-roster-chat-need-a-sub-relationship-authorization.md` | Accepted |
 | `WS03-04D` | `WS03-04` | `passes/ws03/ws03-04d-admin-route-list-high-risk-function-authorization.md` | Accepted |
 | `WS03-05A` | `WS03-05` | `passes/ws03/ws03-05a-versioned-moderation-taxonomy-finding-evidence-lifecycle.md` | Accepted |
+| `WS03-05B` | `WS03-05` | `passes/ws03/ws03-05b-conflict-safe-moderation-review-case-lifecycle.md` | Accepted |
+| `WS03-05C` | `WS03-05` | `passes/ws03/ws03-05c-moderation-enforcement-safe-notices.md` | Accepted |
 | `WS04-01A` | `WS04-01` | `passes/ws04/ws04-01a-application-database-lifecycle-pool-settings-role-credential-boundaries.md` | Accepted |
 | `WS04-01B` | `WS04-01` | `passes/ws04/ws04-01b-query-cursor-database-access-behavior.md` | Accepted |
 | `WS04-01C` | `WS04-01` | `passes/ws04/ws04-01c-production-postgresql-topology-connection-budget-role-verification.md` | Accepted |
@@ -172,6 +174,7 @@ scope authority. Every path is relative to `docs/production-readiness/planning/`
 | `WS04-03A` | `WS04-03` | `passes/ws04/ws04-03a-provider-independent-migration-policy-compatibility-graph-drift-controlled-rehearsal.md` | Accepted |
 | `WS05-01A` | `WS05-01` | `passes/ws05/ws05-01a-provider-independent-durable-job-model-claim-lease-lifecycle-portable-worker-runtime.md` | Accepted |
 | `WS05-02` | `WS05-02` | `passes/ws05/ws05-02-payment-booking-state-machines-webhook-authority.md` | Accepted |
+| `WS09-02A` | `WS09-02` | `passes/ws09/ws09-02a-reusable-append-only-administrative-audit-foundation.md` | Accepted |
 
 ## 6. Historical Decomposition And Intake Records
 
@@ -181,12 +184,13 @@ SHAs are provenance only; future work does not require a frozen intake artifact.
 | Parent pass | Intake record | Historical SHA-256 | Accepted by executable pass | Accepted state |
 |---|---|---|---|---|
 | `WS03-04` | `docs/production-readiness/planning/passes/ws03/ws03-04-intake.md` | `e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4` | `WS03-04A`, `WS03-04B`, `WS03-04C`, `WS03-04D` | Historical four-child decomposition; all four children are accepted in `develop`. |
-| `WS03-05` | `docs/production-readiness/planning/passes/ws03/ws03-05-intake.md` | `4c255545449a085591f412175253f0b0207abcfc53c61f0c4cd60c89125a1a02` | `WS03-05A` | Historical four-child decomposition. A is accepted; B is implemented but unmerged and requires corrected-master correction; current C/D scope comes from master section 8.1. |
+| `WS03-05` | `docs/production-readiness/planning/passes/ws03/ws03-05-intake.md` | `4c255545449a085591f412175253f0b0207abcfc53c61f0c4cd60c89125a1a02` | `WS03-05A`, `WS03-05B`, `WS03-05C` | Historical four-child decomposition. A, corrected B, and C are accepted; D is the only remaining child and depends on `WS09-02A`. Parent `WS03-05` is incomplete. |
 | `WS04-01` | `docs/production-readiness/planning/passes/ws04/ws04-01-intake.md` | `cb26606f6bca7dbc304a07e172771eeeebcece5312f73627fe8c67738a960ced` | `WS04-01A`, `WS04-01B`, `WS04-01C` | Accepted A/B/C structure preserved; mandatory later `WS04-01D` remains deferred until final production infrastructure is selected. |
 | `WS04-02` | `docs/production-readiness/planning/passes/ws04/ws04-02-intake.md` | `bbcea141dec04890be5c0812131996548f86f82f6bc80ad66ce7f700e6ba3701` | `WS04-02A`, `WS04-02B`, `WS04-02C` | Accepted three-child structure: `WS04-02A -> WS04-02B -> WS04-02C`; all three children are accepted. |
 | `WS04-03` | `docs/production-readiness/planning/passes/ws04/ws04-03-intake.md` | `ffc3e81d2d55ce9cca60d6ae40390d8ae9df2d8f8d3995b4b9c8464c101cfb48` | `WS04-03A` | Accepted split: `WS04-03A` is the current provider-independent migration-policy/rehearsal child; mandatory `WS04-03B` remains deferred until final production database provider, deployment topology, migration runner, and production-equivalent rehearsal inputs are selected and evidenced. |
 | `WS05-01` | `docs/production-readiness/planning/passes/ws05/ws05-01-intake.md` | `1cfa5be5898cf0e53730c7841e5c5c89d9a824c8e10b644b0fcb835e50890720` | `WS05-01A` | Accepted split: `WS05-01A` is the current provider-independent durable-job foundation child; mandatory `WS05-01B` remains deferred until final worker platform, service topology, process/instance model, scaling/resource settings, provider deployment path, and runtime verification environment are selected and evidenced. |
 | `WS05-02` | `docs/production-readiness/planning/passes/ws05/ws05-02-intake.md` | `4450d47c4bd44678b7f9ccd07a229740aad5fdec443153a0d8677dd3491f8ab1` | `WS05-02` | Accepted direct executable pass; surviving later payment, provider/runtime, observability, and operations work is governed by the corrected master. |
+| `WS09-02` | `docs/production-readiness/planning/passes/ws09/ws09-02-intake.md` | `c40b06efc13518fcf2345392eb6636a516179f3b1d34543713fc5808f9d901c5` | `WS09-02A` | Accepted three-child decomposition. A is accepted; B and C remain. Parent `WS09-02` is incomplete. |
 
 Historical WS02-04, WS02-05, and WS03-03 decompositions remain accepted
 provenance. Do not fabricate retroactive intake records for them. For future
@@ -328,16 +332,29 @@ with historical SHA-256
 `WS03-05A` is accepted in `develop`. It does not expand review-case state,
 enforcement, notices, or sensitive administrative access.
 
-`WS03-05B` was implemented under the historical `ADM-012` review-case lifecycle
-scope. Its canonical plan is
+`WS03-05B` was first implemented under the historical `ADM-012` review-case
+lifecycle scope. Its canonical plan is
 `docs/production-readiness/planning/passes/ws03/ws03-05b-conflict-safe-moderation-review-case-lifecycle.md`
 with historical SHA-256
 `7fc296334af820bff3e24adbda47cd0450782c271ed2ea539c546789eaa94a28`.
-PR #176 is unmerged and must not merge as currently implemented. The corrected
-master requires retaining only the necessary review-case safety behavior and
-removing assignment, reopen, merge, formal note-correction, expanded history UI,
-and duplicate PL/pgSQL workflow machinery. Current `WS03-05C` and `WS03-05D`
-scope is defined only by corrected-master section 8.1.
+PR #176 is superseded historical provenance and did not become the accepted
+state. The corrected implementation commit
+`8acf26f6b79da3e3312c595a544354dad6e56859` retained the corrected-master
+review-case target, was accepted through PR #177, and merged as
+`1fcd8c6cd06b6d70a9231d7cc423ef5bf9b13a9d`.
+
+`WS03-05C` implementation commit
+`320a36961ab9dabcc07f8bb42c8f168f3ab89d79` was accepted through PR #178 and
+merged as `31d3db4b2320a5656a081ac8f7bdc206c0b3cf7e`. C owns the accepted
+moderation-enforcement action preconditions, idempotency/reversal behavior, and
+safe target notices.
+
+Children A, B, and C are accepted. `WS03-05D` is the only remaining child; its
+minimum-necessary admin-data and sensitive-read behavior remains defined by
+corrected master section 8.1 and depends on the accepted reusable append-only
+audit foundation in `WS09-02A`. `WS03-05A -> WS03-05B -> {WS03-05C,
+WS03-05D}` remains historical dependency provenance. Parent `WS03-05` remains
+incomplete until D is accepted.
 
 No final-infrastructure follow-up is created by this parent. Durable notice
 delivery/reconciliation remains `WS05-03`-owned and minimum necessary
@@ -607,9 +624,52 @@ alerts, runbooks, or other final infrastructure evidence. Those obligations
 remain deferred exactly as declared by `WS05-02-R8` to `WS05-01B`, `WS05-03`,
 `WS05-04`, `WS09`, and `WS10`.
 
+### WS09-02
+
+Original parent: `WS09-02 - Administrative auditability`.
+
+Accepted Stage 0 intake:
+`docs/production-readiness/planning/passes/ws09/ws09-02-intake.md`
+
+Historical intake SHA-256:
+`c40b06efc13518fcf2345392eb6636a516179f3b1d34543713fc5808f9d901c5`
+
+Accepted executable-child plan:
+
+1. `WS09-02A - Reusable append-only administrative audit foundation`
+2. `WS09-02B - Important privileged-mutation audit coverage`
+3. `WS09-02C - Sensitive administrative-read audit coverage`
+
+Accepted dependency graph:
+`WS09-02A -> WS09-02B` and `WS09-02A -> WS03-05D -> WS09-02C`.
+
+`WS09-02A` is accepted in the proposed post-merge state. It supplies the
+reusable audit foundation and unblocks `WS03-05D`; it does not accept or
+complete D. `WS09-02B` remains unimplemented and becomes dependency-eligible
+after A without being automatically selected. `WS09-02C` remains unimplemented
+and waits for accepted A and `WS03-05D`. Parent `WS09-02` remains incomplete
+until B and C are accepted.
+
 ## 8. Remaining Work And Progression
 
-The corrected master defines the 27 remaining units and their surviving scope.
+The proposed post-merge state has 27 remaining executable units. Starting from
+the 26 units remaining after the accepted `WS03-05B/C` reconciliation, the
+accepted WS09 intake replaces the one executable `WS09-02` umbrella with three
+children, and accepting A leaves two of those children: `26 - 1 + 2 = 27`.
+The remaining composition is:
+
+- `WS03-05D`;
+- `WS04-01D`, `WS04-03B`, `WS05-01B`, `WS05-03`, and `WS05-04`;
+- `WS06-01`, `WS06-02`, and `WS06-03`;
+- `WS07-01`, `WS07-02`, `WS07-03`, `WS07-04`, and `WS07-05`;
+- `WS08-01`, `WS08-02`, and `WS08-03`;
+- `WS09-01`, `WS09-02B`, `WS09-02C`, and `WS09-03`;
+- `WS10-01`, `WS10-02`, `WS10-03`, and `WS10-04`; and
+- `CLOSE-01` and `CLOSE-02`.
+
+`WS03-05D` is unblocked by accepted A but remains unimplemented. `WS09-02B`
+is dependency-eligible after A; `WS09-02C` still waits for D. The `WS09-02`
+umbrella is not counted as an executable remaining unit and remains incomplete.
 This register records state but does not select or expand that work.
 
 For each selected unit:

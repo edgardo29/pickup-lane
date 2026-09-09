@@ -1017,6 +1017,7 @@ def hide_admin_community_game_payment_text(
         db,
         admin_user_id=admin_user.id,
         action_type=HIDE_PAYMENT_TEXT_ACTION_TYPE,
+        outcome="succeeded",
         target_game_id=game.id,
         target_user_id=game.host_user_id,
         reason=reason,
@@ -1026,7 +1027,6 @@ def hide_admin_community_game_payment_text(
             new_status=PAYMENT_TEXT_STATUS_HIDDEN,
         ),
         idempotency_key=idempotency_key,
-        created_at=now,
     )
     try:
         link_admin_action_to_open_review_case(db, audit_action)
@@ -1188,6 +1188,7 @@ def restore_admin_community_game_payment_text(
         db,
         admin_user_id=admin_user.id,
         action_type=RESTORE_PAYMENT_TEXT_ACTION_TYPE,
+        outcome="succeeded",
         target_game_id=game.id,
         target_user_id=game.host_user_id,
         reason=reason,
@@ -1197,7 +1198,6 @@ def restore_admin_community_game_payment_text(
             new_status=PAYMENT_TEXT_STATUS_VISIBLE,
         ),
         idempotency_key=idempotency_key,
-        created_at=now,
     )
     try:
         link_admin_action_to_open_review_case(db, audit_action)

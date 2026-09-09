@@ -1,7 +1,6 @@
 """Admin audit action workflows."""
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -9,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.database import SessionLocal
 from backend.models import (
     AdminAction,
     AdminFinancialOutcome,
@@ -35,11 +35,13 @@ from backend.models import (
     Venue,
     VenueImage,
 )
-from backend.schemas.admin_action_schema import (
-    AdminActionCreate,
-    AdminActionNoteCreate,
-    AdminActionRead,
+from backend.observability.correlation import (
+    get_correlation_id,
+    reset_correlation_id,
+    resolve_correlation_id,
+    set_correlation_id,
 )
+from backend.schemas.admin_action_schema import AdminActionNoteCreate, AdminActionRead
 from backend.services.admin_action_policy import (
     ADMIN_ACTION_TARGET_FIELDS,
     TARGET_ADMIN_ACTION_ID,
@@ -77,6 +79,7 @@ from backend.services.admin_record_rules import (
     normalize_metadata_value,
     normalize_optional_text,
 )
+from backend.services.auth_service import require_active_admin_user
 from backend.services.user_service import (
     build_user_conflict_detail,
     get_user_display_name,
@@ -229,7 +232,6 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
             "source",
             "signal_id",
             "note_id",
-            "event_id",
             "created_case",
             "note_hash",
             "note_length",
@@ -240,6 +242,27 @@ METADATA_TOP_LEVEL_KEYS_BY_BUILDER: dict[str, frozenset[str] | None] = {
         }
     ),
 }
+
+ADMIN_ACTION_OUTCOMES = frozenset({"succeeded", "failed", "pending"})
+AUDIT_UNAVAILABLE_DETAIL = "Administrative audit recording is unavailable."
+
+
+def rollback_audit_session_quietly(db: Session) -> None:
+    try:
+        db.rollback()
+    except Exception:  # noqa: BLE001, S110 - preserve the stable safe audit error.
+        pass
+
+
+def open_audit_session_or_503() -> Session:
+    try:
+        return SessionLocal()
+    except Exception:  # noqa: BLE001 - fail closed on audit infrastructure failure.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=AUDIT_UNAVAILABLE_DETAIL,
+        ) from None
+
 
 TARGET_MODEL_BY_FIELD = {
     TARGET_USER_ID: User,
@@ -338,10 +361,7 @@ def integrity_error_matches_constraint(
 ) -> bool:
     """Return whether PostgreSQL identified one exact expected constraint."""
     diagnostic = getattr(exc.orig, "diag", None)
-    return (
-        getattr(diagnostic, "constraint_name", None)
-        == expected_constraint_name
-    )
+    return getattr(diagnostic, "constraint_name", None) == expected_constraint_name
 
 
 def unsupported_action_type_response() -> HTTPException:
@@ -451,6 +471,33 @@ def validate_target_references(db: Session, action_data: dict[str, Any]) -> None
             validate_reference_exists(db, field_name, target_id)
 
 
+def validate_sensitive_read_target_references(
+    db: Session,
+    action_data: dict[str, Any],
+) -> None:
+    """Validate references without hydrating protected target payload columns."""
+    for field_name in ADMIN_ACTION_TARGET_FIELDS:
+        target_id = action_data.get(field_name)
+        model = TARGET_MODEL_BY_FIELD.get(field_name)
+        if target_id is None or model is None:
+            continue
+
+        selected_columns = [model.id]
+        deleted_at = getattr(model, "deleted_at", None)
+        if deleted_at is not None:
+            selected_columns.append(deleted_at)
+        projection = db.execute(
+            select(*selected_columns).where(model.id == target_id)
+        ).one_or_none()
+        if projection is None or (
+            deleted_at is not None and projection._mapping[deleted_at] is not None
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=TARGET_NOT_FOUND_DETAIL[field_name],
+            )
+
+
 def build_action_metadata(
     policy: AdminActionPolicy,
     metadata: dict[str, Any] | None,
@@ -498,17 +545,19 @@ def validate_note_text(note: str) -> str:
     return normalized_note
 
 
-def action_data_from_payload(payload: AdminActionCreate) -> dict[str, Any]:
-    return payload.model_dump()
-
-
 def build_admin_action_instance(
     *,
     admin_user_id: uuid.UUID,
     policy: AdminActionPolicy,
     action_data: dict[str, Any],
-    created_at: datetime | None = None,
+    outcome: str,
+    correlation_id: uuid.UUID | None = None,
 ) -> AdminAction:
+    if outcome not in ADMIN_ACTION_OUTCOMES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="outcome is not supported.",
+        )
     normalized_reason = normalize_optional_text(action_data.get("reason"), "reason")
     validate_required_reason(policy, normalized_reason)
     metadata = build_action_metadata(policy, action_data.get("metadata"))
@@ -516,6 +565,8 @@ def build_admin_action_instance(
         "id": uuid.uuid4(),
         "admin_user_id": admin_user_id,
         "action_type": policy.action_type,
+        "outcome": outcome,
+        "correlation_id": correlation_id or current_correlation_uuid(),
         "reason": normalized_reason,
         "metadata_": metadata,
         "idempotency_key": normalize_idempotency_key(
@@ -526,47 +577,20 @@ def build_admin_action_instance(
             for field_name in ADMIN_ACTION_TARGET_FIELDS
         },
     }
-    if created_at is not None:
-        admin_action_data["created_at"] = created_at
-
     return AdminAction(**admin_action_data)
 
 
-def create_admin_action(
-    db: Session,
-    *,
-    admin_user: User,
-    payload: AdminActionCreate,
-) -> AdminAction:
-    action_data = action_data_from_payload(payload)
-    policy = get_policy_or_400(action_data["action_type"])
+def current_correlation_uuid() -> uuid.UUID:
+    correlation_id = get_correlation_id()
+    if correlation_id is not None:
+        return uuid.UUID(correlation_id)
 
-    if policy.action_type == "append_audit_note":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Use the audit note endpoint to append audit notes.",
-        )
-
-    validate_target_policy(policy, action_data, client_targets_only=True)
-    validate_target_references(db, action_data)
-    admin_action = build_admin_action_instance(
-        admin_user_id=admin_user.id,
-        policy=policy,
-        action_data=action_data,
-    )
-
+    correlation_id = resolve_correlation_id()
+    token = set_correlation_id(correlation_id)
     try:
-        db.add(admin_action)
-        db.commit()
-        db.refresh(admin_action)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_admin_action_conflict_detail(exc),
-        ) from exc
-
-    return admin_action
+        return uuid.UUID(correlation_id)
+    finally:
+        reset_correlation_id(token)
 
 
 def record_admin_action(
@@ -574,13 +598,18 @@ def record_admin_action(
     *,
     admin_user_id: uuid.UUID,
     action_type: str,
+    outcome: str,
     reason: str | None = None,
     metadata: dict[str, Any] | None = None,
     idempotency_key: str | None = None,
-    created_at: datetime | None = None,
     **targets: uuid.UUID | None,
 ) -> AdminAction:
     policy = get_policy_or_400(action_type)
+    if policy.category == "sensitive_read":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sensitive reads must use the dedicated audit recorder.",
+        )
     unknown_targets = set(targets) - set(ADMIN_ACTION_TARGET_FIELDS)
     if unknown_targets:
         raise ValueError(
@@ -602,7 +631,7 @@ def record_admin_action(
         admin_user_id=admin_user_id,
         policy=policy,
         action_data=action_data,
-        created_at=created_at,
+        outcome=outcome,
     )
     db.add(admin_action)
     return admin_action
@@ -621,7 +650,7 @@ def get_admin_action_or_404(db: Session, admin_action_id: uuid.UUID) -> AdminAct
 
 
 def user_can_read_admin_action(user: User, admin_action: AdminAction) -> bool:
-    del user
+    require_active_admin_user(user)
     policy = get_admin_action_policy(admin_action.action_type)
     return policy is not None
 
@@ -631,6 +660,7 @@ def get_admin_action_for_viewer_or_404(
     admin_action_id: uuid.UUID,
     viewer_user: User,
 ) -> AdminAction:
+    require_active_admin_user(viewer_user)
     admin_action = get_admin_action_or_404(db, admin_action_id)
 
     if not user_can_read_admin_action(viewer_user, admin_action):
@@ -673,64 +703,176 @@ def get_existing_audit_note_by_idempotency_key(
 
 
 def append_admin_action_note(
-    db: Session,
     *,
-    admin_user: User,
+    authenticated_admin_id: uuid.UUID,
     target_admin_action_id: uuid.UUID,
     payload: AdminActionNoteCreate,
-) -> AdminAction:
-    original_action = get_admin_action_or_404(db, target_admin_action_id)
-    original_policy = get_policy_or_400(original_action.action_type)
-    if original_action.action_type == "append_audit_note":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Audit notes cannot target another audit note.",
-        )
-    if not original_policy.allows_audit_note:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Audit notes are not allowed for this action.",
-        )
-
+) -> uuid.UUID:
     note_text = validate_note_text(payload.note)
     idempotency_key = normalize_idempotency_key(payload.idempotency_key)
-    if idempotency_key is not None:
-        existing_note = get_existing_audit_note_by_idempotency_key(
-            db,
-            admin_user_id=admin_user.id,
-            target_admin_action_id=target_admin_action_id,
-            idempotency_key=idempotency_key,
-        )
-        if existing_note is not None:
-            return existing_note
+    with open_audit_session_or_503() as db:
+        try:
+            admin_user = db.get(User, authenticated_admin_id)
+            if admin_user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin access required.",
+                )
+            require_active_admin_user(admin_user)
+            original_action = get_admin_action_or_404(db, target_admin_action_id)
+            original_policy = get_policy_or_400(original_action.action_type)
+            if original_action.action_type == "append_audit_note":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Audit notes cannot target another audit note.",
+                )
+            if not original_policy.allows_audit_note:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Audit notes are not allowed for this action.",
+                )
 
-    note_policy = get_policy_or_400("append_audit_note")
-    action_data = {
-        "action_type": "append_audit_note",
-        "reason": note_text,
-        "metadata": {"note_length": len(note_text)},
-        "idempotency_key": idempotency_key,
-        **build_copied_note_targets(original_action, note_policy),
-    }
-    validate_target_policy(note_policy, action_data, client_targets_only=False)
-    admin_action = build_admin_action_instance(
-        admin_user_id=admin_user.id,
-        policy=note_policy,
-        action_data=action_data,
-    )
+            if idempotency_key is not None:
+                existing_note = get_existing_audit_note_by_idempotency_key(
+                    db,
+                    admin_user_id=authenticated_admin_id,
+                    target_admin_action_id=target_admin_action_id,
+                    idempotency_key=idempotency_key,
+                )
+                if existing_note is not None:
+                    if existing_note.reason != note_text:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Audit note idempotency key was reused.",
+                        )
+                    return existing_note.id
 
-    try:
-        db.add(admin_action)
-        db.commit()
-        db.refresh(admin_action)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_admin_action_conflict_detail(exc),
-        ) from exc
+            note_policy = get_policy_or_400("append_audit_note")
+            action_data = {
+                "action_type": "append_audit_note",
+                "reason": note_text,
+                "metadata": {"note_length": len(note_text)},
+                "idempotency_key": idempotency_key,
+                **build_copied_note_targets(original_action, note_policy),
+            }
+            validate_target_policy(note_policy, action_data, client_targets_only=False)
+            admin_action = build_admin_action_instance(
+                admin_user_id=authenticated_admin_id,
+                policy=note_policy,
+                action_data=action_data,
+                outcome="succeeded",
+            )
+            db.add(admin_action)
+            db.commit()
+            return admin_action.id
+        except HTTPException:
+            rollback_audit_session_quietly(db)
+            raise
+        except IntegrityError as exc:
+            rollback_audit_session_quietly(db)
+            if idempotency_key is not None and integrity_error_matches_constraint(
+                exc,
+                "uq_admin_actions_audit_note_idempotency",
+            ):
+                try:
+                    existing_note = get_existing_audit_note_by_idempotency_key(
+                        db,
+                        admin_user_id=authenticated_admin_id,
+                        target_admin_action_id=target_admin_action_id,
+                        idempotency_key=idempotency_key,
+                    )
+                except Exception:  # noqa: BLE001 - do not expose audit DB detail.
+                    rollback_audit_session_quietly(db)
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=AUDIT_UNAVAILABLE_DETAIL,
+                    ) from None
+                if existing_note is not None and existing_note.reason == note_text:
+                    return existing_note.id
+                if existing_note is not None:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Audit note idempotency key was reused.",
+                    ) from None
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
+        except Exception:  # noqa: BLE001 - fail closed on any audit DB failure.
+            rollback_audit_session_quietly(db)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
 
-    return admin_action
+
+def record_sensitive_admin_read(
+    *,
+    authenticated_admin_id: uuid.UUID,
+    action_type: str,
+    reason: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    **targets: uuid.UUID | None,
+) -> uuid.UUID:
+    """Durably record an authorized sensitive read before disclosure."""
+    correlation_id = current_correlation_uuid()
+    with open_audit_session_or_503() as db:
+        try:
+            admin_user = db.get(User, authenticated_admin_id)
+            if admin_user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin access required.",
+                )
+            require_active_admin_user(admin_user)
+            policy = get_policy_or_400(action_type)
+            if policy.category != "sensitive_read":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="action_type is not a sensitive-read action.",
+                )
+            unknown_targets = set(targets) - set(ADMIN_ACTION_TARGET_FIELDS)
+            if unknown_targets:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Unknown admin action target(s): "
+                        f"{describe_fields(unknown_targets)}"
+                    ),
+                )
+            action_data = {
+                "action_type": action_type,
+                "reason": reason,
+                "metadata": metadata,
+                "idempotency_key": None,
+                **{
+                    field_name: targets.get(field_name)
+                    for field_name in ADMIN_ACTION_TARGET_FIELDS
+                },
+            }
+            validate_target_policy(policy, action_data, client_targets_only=False)
+            validate_sensitive_read_target_references(db, action_data)
+            admin_action = build_admin_action_instance(
+                admin_user_id=authenticated_admin_id,
+                policy=policy,
+                action_data=action_data,
+                outcome="succeeded",
+                correlation_id=correlation_id,
+            )
+            db.add(admin_action)
+            db.flush()
+            admin_action_id = admin_action.id
+            db.commit()
+            return admin_action_id
+        except HTTPException:
+            rollback_audit_session_quietly(db)
+            raise
+        except Exception:  # noqa: BLE001 - fail closed on any audit DB failure.
+            rollback_audit_session_quietly(db)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
 
 
 def list_admin_actions(
@@ -742,6 +884,7 @@ def list_admin_actions(
     target_filters: dict[str, uuid.UUID | None] | None = None,
     limit: int | None = None,
 ) -> list[AdminAction]:
+    require_active_admin_user(viewer_user)
     statement = select(AdminAction)
 
     if admin_user_id is not None:

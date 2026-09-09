@@ -225,6 +225,7 @@ def create_game_chat_record(
             db,
             admin_user_id=current_admin.id,
             action_type="create_game_chat",
+            outcome="succeeded",
             target_game_id=new_game_chat.game_id,
             metadata={
                 "after": {
@@ -329,6 +330,7 @@ def update_game_chat_record(
             db,
             admin_user_id=current_admin.id,
             action_type="update_game_chat",
+            outcome="succeeded",
             target_game_id=db_game_chat.game_id,
             metadata={
                 "before": before_state,

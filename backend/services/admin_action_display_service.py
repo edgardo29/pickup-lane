@@ -5,9 +5,10 @@ import binascii
 import hashlib
 import json
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, or_, select
@@ -57,8 +58,8 @@ from backend.services.admin_action_policy import (
     TARGET_GAME_ID,
     TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
     TARGET_HOST_PUBLISH_FEE_ID,
-    TARGET_MONEY_ISSUE_ID,
     TARGET_MESSAGE_ID,
+    TARGET_MONEY_ISSUE_ID,
     TARGET_NOTIFICATION_ID,
     TARGET_PARTICIPANT_ID,
     TARGET_PAYMENT_ID,
@@ -79,6 +80,7 @@ from backend.services.admin_action_service import (
     serialize_admin_action_reads,
     user_can_read_admin_action,
 )
+from backend.services.auth_service import require_active_admin_user
 from backend.services.user_service import get_user_display_name
 
 ADMIN_ACTION_LOG_CURSOR_VERSION = 1
@@ -118,12 +120,7 @@ def normalize_optional_exact_filter(value: str | None) -> str | None:
 
 
 def label_from_token(value: str | None) -> str:
-    return (
-        str(value or "")
-        .replace("_", " ")
-        .replace("-", " ")
-        .title()
-    )
+    return str(value or "").replace("_", " ").replace("-", " ").title()
 
 
 def type_key_from_label(label: str) -> str:
@@ -223,7 +220,11 @@ def sub_chat_message_label(message: SubPostChatMessage) -> str:
 
 
 def sub_post_label(post: SubPost) -> str:
-    return post.team_name or post.location_name or full_id_label("Need a Sub post", post.id)
+    return (
+        post.team_name
+        or post.location_name
+        or full_id_label("Need a Sub post", post.id)
+    )
 
 
 def venue_image_label(image: VenueImage) -> str:
@@ -231,15 +232,18 @@ def venue_image_label(image: VenueImage) -> str:
 
 
 def notification_label(notification: Notification) -> str:
-    return notification.title or notification.subject_label or full_id_label(
-        "Notification",
-        notification.id,
+    return (
+        notification.title
+        or notification.subject_label
+        or full_id_label(
+            "Notification",
+            notification.id,
+        )
     )
 
 
 def no_destination(record: Any) -> None:
     del record
-    return None
 
 
 def id_destination(prefix: str) -> Callable[[Any], str]:
@@ -430,7 +434,9 @@ TARGET_DISPLAY_RULES: dict[str, TargetDisplayRule] = {
         field_name=TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
         fallback_type_label="Publish entitlement",
         model=HostPublishEntitlement,
-        label_builder=lambda entitlement: label_from_token(entitlement.entitlement_type),
+        label_builder=lambda entitlement: label_from_token(
+            entitlement.entitlement_type
+        ),
         destination_builder=no_destination,
     ),
 }
@@ -920,7 +926,9 @@ def selected_target_rules(action: AdminAction) -> tuple[PrimaryTargetRule, ...]:
     display_rule = ACTION_DISPLAY_RULES.get(action.action_type)
     if display_rule is None:
         return tuple(
-            PrimaryTargetRule(field_name, TARGET_DISPLAY_RULES[field_name].fallback_type_label)
+            PrimaryTargetRule(
+                field_name, TARGET_DISPLAY_RULES[field_name].fallback_type_label
+            )
             for field_name in TARGET_DISPLAY_RULES
         )
     return display_rule.primary_targets
@@ -1081,7 +1089,10 @@ def serialize_admin_action_target_details(
 def serialize_admin_action_detail_read(
     db: Session,
     action: AdminAction,
+    *,
+    viewer_user: User,
 ) -> AdminActionDetailRead:
+    require_active_admin_user(viewer_user)
     action_read = serialize_admin_action_reads(db, [action])[0].model_dump()
     return AdminActionDetailRead(
         **action_read,
@@ -1111,11 +1122,14 @@ def serialize_admin_action_log_item(
         id=action.id,
         action_type=action.action_type,
         action_label=admin_action_label(action.action_type),
+        outcome=action.outcome,
         admin_user_id=action.admin_user_id,
         admin_label=user_label(admin_user, fallback_user_id=action.admin_user_id),
         admin_email=admin_user.email if admin_user is not None else None,
         primary_target=target_summary,
-        target_label=target_summary.label if target_summary is not None else "No target",
+        target_label=target_summary.label
+        if target_summary is not None
+        else "No target",
         target_type_label=(
             target_summary.target_type_label if target_summary is not None else "Target"
         ),
@@ -1135,6 +1149,7 @@ def list_admin_action_log(
     action_type: str | None = None,
     cursor: str | None = None,
 ) -> AdminActionLogListRead:
+    require_active_admin_user(viewer_user)
     filters, context_hash, _normalized_action_type = build_admin_action_log_filters(
         admin_user_id=admin_user_id,
         action_type=action_type,

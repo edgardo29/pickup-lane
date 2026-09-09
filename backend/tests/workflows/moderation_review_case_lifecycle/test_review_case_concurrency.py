@@ -65,9 +65,7 @@ def build_concurrent_chat_finding(content_hash: str) -> ModerationFinding:
         excerpt="Synthetic concurrent moderation evidence.",
         content_hash=content_hash,
         matched_rule_ids=("chat-harassment",),
-        matched_rule_versions=(
-            {"rule_id": "chat-harassment", "rule_version": "1"},
-        ),
+        matched_rule_versions=({"rule_id": "chat-harassment", "rule_version": "1"},),
         provenance=ScanProvenance(
             scanner_id="moderation-taxonomy",
             scanner_version="1",
@@ -279,16 +277,22 @@ def test_concurrent_different_notes_both_append_in_serial_version_order() -> Non
             )
             == 0
         )
-        assert row_count(
-            db,
-            AdminContentModerationFinding,
-            AdminContentModerationFinding.review_case_id == case_id,
-        ) == 1
-        assert row_count(
-            db,
-            AdminReviewSignal,
-            AdminReviewSignal.review_case_id == case_id,
-        ) == 0
+        assert (
+            row_count(
+                db,
+                AdminContentModerationFinding,
+                AdminContentModerationFinding.review_case_id == case_id,
+            )
+            == 1
+        )
+        assert (
+            row_count(
+                db,
+                AdminReviewSignal,
+                AdminReviewSignal.review_case_id == case_id,
+            )
+            == 0
+        )
 
 
 @pytest.mark.parametrize("winner", ("note", "close"))
@@ -370,16 +374,22 @@ def test_note_and_manual_close_have_one_serial_winner(winner: str) -> None:
             AdminAction.target_review_case_id == case_id,
             AdminAction.action_type == "close_review_case",
         ) == (0 if winner == "note" else 1)
-        assert row_count(
-            db,
-            AdminContentModerationFinding,
-            AdminContentModerationFinding.review_case_id == case_id,
-        ) == 1
-        assert row_count(
-            db,
-            AdminReviewSignal,
-            AdminReviewSignal.review_case_id == case_id,
-        ) == 0
+        assert (
+            row_count(
+                db,
+                AdminContentModerationFinding,
+                AdminContentModerationFinding.review_case_id == case_id,
+            )
+            == 1
+        )
+        assert (
+            row_count(
+                db,
+                AdminReviewSignal,
+                AdminReviewSignal.review_case_id == case_id,
+            )
+            == 0
+        )
         if winner == "note":
             assert review_case.closed_at is None
         else:
@@ -455,16 +465,22 @@ def test_finding_change_and_manual_close_preserve_historical_case(winner: str) -
                 3,
                 4,
             ]
-            assert row_count(
-                db,
-                AdminContentModerationFinding,
-                AdminContentModerationFinding.review_case_id == old_case_id,
-            ) == 2
-            assert row_count(
-                db,
-                AdminAction,
-                AdminAction.target_review_case_id == old_case_id,
-            ) == 0
+            assert (
+                row_count(
+                    db,
+                    AdminContentModerationFinding,
+                    AdminContentModerationFinding.review_case_id == old_case_id,
+                )
+                == 2
+            )
+            assert (
+                row_count(
+                    db,
+                    AdminAction,
+                    AdminAction.target_review_case_id == old_case_id,
+                )
+                == 0
+            )
         else:
             assert old_case.case_status == "closed"
             assert old_case.case_version == 3
@@ -499,27 +515,39 @@ def test_finding_change_and_manual_close_preserve_historical_case(winner: str) -
                 1,
                 2,
             ]
-            assert row_count(
+            assert (
+                row_count(
+                    db,
+                    AdminContentModerationFinding,
+                    AdminContentModerationFinding.review_case_id == old_case_id,
+                )
+                == 1
+            )
+            assert (
+                row_count(
+                    db,
+                    AdminContentModerationFinding,
+                    AdminContentModerationFinding.review_case_id == new_case.id,
+                )
+                == 1
+            )
+            assert (
+                row_count(
+                    db,
+                    AdminAction,
+                    AdminAction.target_review_case_id == old_case_id,
+                    AdminAction.action_type == "close_review_case",
+                )
+                == 1
+            )
+        assert (
+            row_count(
                 db,
-                AdminContentModerationFinding,
-                AdminContentModerationFinding.review_case_id == old_case_id,
-            ) == 1
-            assert row_count(
-                db,
-                AdminContentModerationFinding,
-                AdminContentModerationFinding.review_case_id == new_case.id,
-            ) == 1
-            assert row_count(
-                db,
-                AdminAction,
-                AdminAction.target_review_case_id == old_case_id,
-                AdminAction.action_type == "close_review_case",
-            ) == 1
-        assert row_count(
-            db,
-            AdminReviewSignal,
-            AdminReviewSignal.review_case_id.in_([old_case_id]),
-        ) == 0
+                AdminReviewSignal,
+                AdminReviewSignal.review_case_id.in_([old_case_id]),
+            )
+            == 0
+        )
 
 
 @pytest.mark.parametrize("winner", ("signal", "close"))
@@ -595,11 +623,14 @@ def test_signal_change_and_manual_close_preserve_category_and_history(
                 2,
                 3,
             ]
-            assert row_count(
-                db,
-                AdminAction,
-                AdminAction.target_review_case_id == old_case_id,
-            ) == 0
+            assert (
+                row_count(
+                    db,
+                    AdminAction,
+                    AdminAction.target_review_case_id == old_case_id,
+                )
+                == 0
+            )
         else:
             assert old_case.case_status == "closed"
             assert old_case.case_version == 3
@@ -624,11 +655,14 @@ def test_signal_change_and_manual_close_preserve_category_and_history(
                 )
                 == 1
             )
-            assert row_count(
-                db,
-                AdminReviewSignal,
-                AdminReviewSignal.review_case_id == new_case.id,
-            ) == 1
+            assert (
+                row_count(
+                    db,
+                    AdminReviewSignal,
+                    AdminReviewSignal.review_case_id == new_case.id,
+                )
+                == 1
+            )
             assert event_types(db, old_case_id) == [
                 "case_created",
                 "signal_attached",
@@ -647,17 +681,23 @@ def test_signal_change_and_manual_close_preserve_category_and_history(
                 1,
                 2,
             ]
-            assert row_count(
+            assert (
+                row_count(
+                    db,
+                    AdminAction,
+                    AdminAction.target_review_case_id == old_case_id,
+                    AdminAction.action_type == "close_review_case",
+                )
+                == 1
+            )
+        assert (
+            row_count(
                 db,
-                AdminAction,
-                AdminAction.target_review_case_id == old_case_id,
-                AdminAction.action_type == "close_review_case",
-            ) == 1
-        assert row_count(
-            db,
-            AdminContentModerationFinding,
-            AdminContentModerationFinding.review_case_id == old_case_id,
-        ) == 0
+                AdminContentModerationFinding,
+                AdminContentModerationFinding.review_case_id == old_case_id,
+            )
+            == 0
+        )
 
 
 @pytest.mark.parametrize("winner", ("manual", "automatic"))
@@ -738,21 +778,30 @@ def test_manual_and_automatic_close_commit_exactly_one_closure(winner: str) -> N
         ]
         assert [event.case_version for event in events] == [1, 2, 3]
         assert review_case.case_category == "content_moderation"
-        assert row_count(
-            db,
-            AdminReviewCaseNote,
-            AdminReviewCaseNote.review_case_id == case_id,
-        ) == 0
-        assert row_count(
-            db,
-            AdminContentModerationFinding,
-            AdminContentModerationFinding.review_case_id == case_id,
-        ) == 1
-        assert row_count(
-            db,
-            AdminReviewSignal,
-            AdminReviewSignal.review_case_id == case_id,
-        ) == 0
+        assert (
+            row_count(
+                db,
+                AdminReviewCaseNote,
+                AdminReviewCaseNote.review_case_id == case_id,
+            )
+            == 0
+        )
+        assert (
+            row_count(
+                db,
+                AdminContentModerationFinding,
+                AdminContentModerationFinding.review_case_id == case_id,
+            )
+            == 1
+        )
+        assert (
+            row_count(
+                db,
+                AdminReviewSignal,
+                AdminReviewSignal.review_case_id == case_id,
+            )
+            == 0
+        )
         assert row_count(
             db,
             AdminAction,
@@ -776,28 +825,27 @@ def test_enforcement_link_and_close_never_cross_case_or_append_after_close(
         admin = seed_admin(db, f"link-close-{winner}")
         case_id = create_content_case(db, game).id
         chat_case_id = create_chat_case(db, game).id
-        action = record_admin_action(
-            db,
-            admin_user_id=admin.id,
-            action_type="hide_community_game",
-            target_game_id=game.id,
-            target_user_id=game.host_user_id,
-            reason="Concurrent enforcement.",
-            metadata={"source": "concurrency-test"},
-            idempotency_key=f"link-action-{winner}",
-        )
         db.commit()
-        action_id = action.id
         admin_id = admin.id
+        game_id = game.id
+        host_user_id = game.host_user_id
 
     def link_action():
         with session() as db:
-            linked = link_admin_action_to_open_review_case(
+            action = record_admin_action(
                 db,
-                db.get(AdminAction, action_id),
+                admin_user_id=admin_id,
+                action_type="hide_community_game",
+                outcome="succeeded",
+                target_game_id=game_id,
+                target_user_id=host_user_id,
+                reason="Concurrent enforcement.",
+                metadata={"source": "concurrency-test"},
+                idempotency_key=f"link-action-{winner}",
             )
+            linked = link_admin_action_to_open_review_case(db, action)
             db.commit()
-            return linked.id if linked is not None else None
+            return linked.id if linked is not None else None, action.id
 
     def close_case():
         with session() as db:
@@ -824,28 +872,36 @@ def test_enforcement_link_and_close_never_cross_case_or_append_after_close(
     )
     first, second = run_with_target_lock_barrier(first_op, second_op)
     if winner == "link":
-        assert first == case_id
+        linked_case_id, action_id = first
+        assert linked_case_id == case_id
         assert isinstance(second, HTTPException)
         assert second.detail["code"] == "review_case_version_conflict"
     else:
         assert not isinstance(first, HTTPException)
-        assert second is None
+        linked_case_id, action_id = second
+        assert linked_case_id is None
 
     with session() as db:
         review_case = db.get(AdminReviewCase, case_id)
         action = db.get(AdminAction, action_id)
         assert db.get(AdminReviewCase, chat_case_id).case_version == 2
         assert event_types(db, chat_case_id) == ["case_created", "signal_attached"]
-        assert row_count(
-            db,
-            AdminReviewSignal,
-            AdminReviewSignal.review_case_id == chat_case_id,
-        ) == 1
-        assert row_count(
-            db,
-            AdminReviewCaseNote,
-            AdminReviewCaseNote.review_case_id == case_id,
-        ) == 0
+        assert (
+            row_count(
+                db,
+                AdminReviewSignal,
+                AdminReviewSignal.review_case_id == chat_case_id,
+            )
+            == 1
+        )
+        assert (
+            row_count(
+                db,
+                AdminReviewCaseNote,
+                AdminReviewCaseNote.review_case_id == case_id,
+            )
+            == 0
+        )
         if winner == "link":
             assert review_case.case_status == "open"
             assert review_case.case_version == 3
@@ -855,18 +911,24 @@ def test_enforcement_link_and_close_never_cross_case_or_append_after_close(
                 "finding_attached",
                 "enforcement_action_linked",
             ]
-            assert row_count(
-                db,
-                AdminAction,
-                AdminAction.target_review_case_id == case_id,
-                AdminAction.action_type == "hide_community_game",
-            ) == 1
-            assert row_count(
-                db,
-                AdminAction,
-                AdminAction.target_review_case_id == case_id,
-                AdminAction.action_type == "close_review_case",
-            ) == 0
+            assert (
+                row_count(
+                    db,
+                    AdminAction,
+                    AdminAction.target_review_case_id == case_id,
+                    AdminAction.action_type == "hide_community_game",
+                )
+                == 1
+            )
+            assert (
+                row_count(
+                    db,
+                    AdminAction,
+                    AdminAction.target_review_case_id == case_id,
+                    AdminAction.action_type == "close_review_case",
+                )
+                == 0
+            )
         else:
             assert review_case.case_status == "closed"
             assert review_case.case_version == 3
@@ -876,23 +938,32 @@ def test_enforcement_link_and_close_never_cross_case_or_append_after_close(
                 "finding_attached",
                 "closed",
             ]
-            assert row_count(
-                db,
-                AdminAction,
-                AdminAction.target_review_case_id == case_id,
-                AdminAction.action_type == "hide_community_game",
-            ) == 0
-            assert row_count(
-                db,
-                AdminAction,
-                AdminAction.target_review_case_id == case_id,
-                AdminAction.action_type == "close_review_case",
-            ) == 1
+            assert (
+                row_count(
+                    db,
+                    AdminAction,
+                    AdminAction.target_review_case_id == case_id,
+                    AdminAction.action_type == "hide_community_game",
+                )
+                == 0
+            )
+            assert (
+                row_count(
+                    db,
+                    AdminAction,
+                    AdminAction.target_review_case_id == case_id,
+                    AdminAction.action_type == "close_review_case",
+                )
+                == 1
+            )
         events = event_rows(db, case_id)
         assert [event.case_version for event in events] == [1, 2, 3]
         assert review_case.case_category == "content_moderation"
-        assert row_count(
-            db,
-            AdminContentModerationFinding,
-            AdminContentModerationFinding.review_case_id == case_id,
-        ) == 1
+        assert (
+            row_count(
+                db,
+                AdminContentModerationFinding,
+                AdminContentModerationFinding.review_case_id == case_id,
+            )
+            == 1
+        )

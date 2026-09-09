@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -25,7 +25,10 @@ from backend.models import (
 )
 from backend.schemas.notification_schema import NotificationCreate, NotificationUpdate
 from backend.services.admin_action_service import record_admin_action
-from backend.services.auth_service import require_active_admin_user, user_is_active_admin
+from backend.services.auth_service import (
+    require_active_admin_user,
+    user_is_active_admin,
+)
 from backend.services.notification_display_service import (
     serialize_notification,
     serialize_notifications_for_list,
@@ -53,7 +56,6 @@ from backend.services.query_pagination import (
     bounded_collection_limit,
     bounded_collection_offset,
 )
-
 
 GAME_RELATED_FIELDS = {
     "related_game_id",
@@ -360,12 +362,10 @@ def validate_notification_business_rules(
         )
 
     has_game_relation = any(
-        notification_data[field_name] is not None
-        for field_name in GAME_RELATED_FIELDS
+        notification_data[field_name] is not None for field_name in GAME_RELATED_FIELDS
     )
     has_sub_relation = any(
-        notification_data[field_name] is not None
-        for field_name in SUB_RELATED_FIELDS
+        notification_data[field_name] is not None for field_name in SUB_RELATED_FIELDS
     )
 
     if has_game_relation and has_sub_relation:
@@ -507,7 +507,9 @@ def validate_notification_references(
             )
 
         if notification_data["related_game_id"] is not None:
-            payment_game_matches = db_payment.game_id == notification_data["related_game_id"]
+            payment_game_matches = (
+                db_payment.game_id == notification_data["related_game_id"]
+            )
             payment_booking_game_matches = (
                 db_booking is not None
                 and db_payment.booking_id == db_booking.id
@@ -651,10 +653,7 @@ def validate_notification_references(
                 detail="Related Need a Sub chat not found.",
             )
 
-        if (
-            db_sub_post is not None
-            and db_sub_post_chat.sub_post_id != db_sub_post.id
-        ):
+        if db_sub_post is not None and db_sub_post_chat.sub_post_id != db_sub_post.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="related_sub_post_chat_id must belong to related_sub_post_id.",
@@ -712,10 +711,7 @@ def validate_notification_references(
                 detail="Related Need a Sub position not found.",
             )
 
-        if (
-            db_sub_post is not None
-            and db_sub_position.sub_post_id != db_sub_post.id
-        ):
+        if db_sub_post is not None and db_sub_position.sub_post_id != db_sub_post.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="related_sub_post_position_id must belong to related_sub_post_id.",
@@ -842,9 +838,7 @@ def query_notifications(
         )
 
     if related_refund_id is not None:
-        statement = statement.where(
-            Notification.related_refund_id == related_refund_id
-        )
+        statement = statement.where(Notification.related_refund_id == related_refund_id)
 
     if related_participant_id is not None:
         statement = statement.where(
@@ -914,6 +908,7 @@ def create_notification_workflow(
             db,
             admin_user_id=current_user.id,
             action_type="create_notification",
+            outcome="succeeded",
             target_notification_id=new_notification.id,
             target_user_id=new_notification.user_id,
             metadata={
@@ -1152,6 +1147,7 @@ def apply_notification_update(
                 db,
                 admin_user_id=admin_user_id,
                 action_type="update_notification",
+                outcome="succeeded",
                 target_notification_id=db_notification.id,
                 target_user_id=db_notification.user_id,
                 metadata={

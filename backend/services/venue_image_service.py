@@ -19,6 +19,15 @@ from backend.schemas.venue_image_schema import (
     VenueImageUploadRead,
 )
 from backend.services.admin_action_service import record_admin_action
+from backend.services.image_rules import VALID_IMAGE_ROLES
+from backend.services.query_pagination import (
+    DEFAULT_ADMIN_COLLECTION_LIMIT,
+    DEFAULT_COLLECTION_LIMIT,
+    MAX_ADMIN_COLLECTION_LIMIT,
+    MAX_COLLECTION_LIMIT,
+    bounded_collection_limit,
+    bounded_collection_offset,
+)
 from backend.services.r2_storage_service import (
     R2ObjectNotFoundError,
     R2StorageConfigError,
@@ -28,15 +37,6 @@ from backend.services.r2_storage_service import (
     get_content_type_extension,
     get_object_properties,
     get_r2_storage_config,
-)
-from backend.services.image_rules import VALID_IMAGE_ROLES
-from backend.services.query_pagination import (
-    DEFAULT_ADMIN_COLLECTION_LIMIT,
-    DEFAULT_COLLECTION_LIMIT,
-    MAX_ADMIN_COLLECTION_LIMIT,
-    MAX_COLLECTION_LIMIT,
-    bounded_collection_limit,
-    bounded_collection_offset,
 )
 
 VALID_IMAGE_STATUSES = {"pending_upload", "active", "hidden", "removed"}
@@ -310,15 +310,15 @@ def list_venue_images_statement(
         validate_image_status(image_status)
         statement = statement.where(VenueImage.image_status == image_status)
 
-    return statement.order_by(
-        VenueImage.is_primary.desc(),
-        VenueImage.sort_order.asc(),
-        VenueImage.created_at.asc(),
-        VenueImage.id.asc(),
-    ).offset(
-        bounded_collection_offset(offset)
-    ).limit(
-        bounded_collection_limit(limit, max_limit=max_limit)
+    return (
+        statement.order_by(
+            VenueImage.is_primary.desc(),
+            VenueImage.sort_order.asc(),
+            VenueImage.created_at.asc(),
+            VenueImage.id.asc(),
+        )
+        .offset(bounded_collection_offset(offset))
+        .limit(bounded_collection_limit(limit, max_limit=max_limit))
     )
 
 
@@ -438,6 +438,7 @@ def create_venue_image_upload(
             db,
             admin_user_id=current_admin.id,
             action_type="create_venue_image",
+            outcome="succeeded",
             target_venue_id=venue_id,
             target_venue_image_id=venue_image.id,
             metadata={
@@ -544,6 +545,7 @@ def complete_venue_image_upload(
             db,
             admin_user_id=current_admin.id,
             action_type="update_venue_image",
+            outcome="succeeded",
             target_venue_id=venue_image.venue_id,
             target_venue_image_id=venue_image.id,
             metadata={
@@ -622,6 +624,7 @@ def update_venue_image(
             db,
             admin_user_id=current_admin.id,
             action_type=action_type,
+            outcome="succeeded",
             target_venue_id=venue_image.venue_id,
             target_venue_image_id=venue_image.id,
             reason=reason,

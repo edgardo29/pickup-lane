@@ -297,6 +297,7 @@ def test_linked_enforcement_is_category_correct_and_allows_enforcement_closure()
             db,
             admin_user_id=admin.id,
             action_type="hide_community_game",
+            outcome="succeeded",
             target_game_id=game.id,
             target_user_id=game.host_user_id,
             reason="Hide unsafe content.",
@@ -338,6 +339,7 @@ def test_enforcement_linking_rejects_financial_restorative_and_wrong_targets() -
                 db,
                 admin_user_id=admin.id,
                 action_type="issue_credit",
+                outcome="succeeded",
                 target_user_id=game.host_user_id,
                 target_game_id=game.id,
                 reason="Financial remedy is not moderation enforcement.",
@@ -347,6 +349,7 @@ def test_enforcement_linking_rejects_financial_restorative_and_wrong_targets() -
                 db,
                 admin_user_id=admin.id,
                 action_type="restore_community_game",
+                outcome="succeeded",
                 target_game_id=game.id,
                 target_user_id=game.host_user_id,
                 reason="Restoration is not restrictive enforcement.",
@@ -356,6 +359,7 @@ def test_enforcement_linking_rejects_financial_restorative_and_wrong_targets() -
                 db,
                 admin_user_id=admin.id,
                 action_type="hide_community_game",
+                outcome="succeeded",
                 target_game_id=other_game.id,
                 target_user_id=other_game.host_user_id,
                 reason="Action belongs to another game.",
@@ -400,6 +404,7 @@ def test_need_sub_restrictive_enforcement_links_only_to_content_case() -> None:
             db,
             admin_user_id=admin.id,
             action_type="hide_need_sub_post",
+            outcome="succeeded",
             target_sub_post_id=post.id,
             target_user_id=post.owner_user_id,
             reason="Hide unsafe post content.",
@@ -516,8 +521,10 @@ def test_automatic_enforcement_closure_requires_exact_action_target_and_case() -
             db,
             admin_user_id=admin.id,
             action_type="admin_cancel_community_game",
+            outcome="succeeded",
             target_game_id=game.id,
             target_user_id=game.host_user_id,
+            target_review_case_id=content_case.id,
             reason="Moderation cancellation.",
             idempotency_key="automatic-enforcement",
         )
@@ -553,6 +560,7 @@ def test_automatic_enforcement_closure_requires_exact_action_target_and_case() -
             db,
             admin_user_id=admin.id,
             action_type="admin_cancel_community_game",
+            outcome="succeeded",
             target_game_id=other_game.id,
             target_user_id=other_game.host_user_id,
             reason="Different game cancellation.",
@@ -589,12 +597,13 @@ def test_automatic_enforcement_closure_requires_exact_action_target_and_case() -
             db,
             admin_user_id=admin.id,
             action_type="admin_cancel_community_game",
+            outcome="succeeded",
             target_game_id=game.id,
             target_user_id=game.host_user_id,
+            target_review_case_id=chat_case.id,
             reason="Wrong review-case relationship.",
             idempotency_key="automatic-wrong-case",
         )
-        action.target_review_case_id = chat_case.id
         game.game_status = "cancelled"
         game.cancelled_at = datetime.now(timezone.utc)
         game.cancellation_source = "admin"

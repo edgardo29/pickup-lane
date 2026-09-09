@@ -683,25 +683,25 @@ def record_chat_moderation_action(
             db,
             admin_user_id=admin_user.id,
             action_type=action_type,
+            outcome="succeeded",
             target_user_id=message.sender_user_id,
             target_game_id=parent.id,
             target_message_id=message.id,
             reason=reason,
             metadata=metadata,
             idempotency_key=idempotency_key,
-            created_at=created_at,
         )
     return record_admin_action(
         db,
         admin_user_id=admin_user.id,
         action_type=action_type,
+        outcome="succeeded",
         target_user_id=message.sender_user_id,
         target_sub_post_id=parent.id,
         target_sub_chat_message_id=message.id,
         reason=reason,
         metadata=metadata,
         idempotency_key=idempotency_key,
-        created_at=created_at,
     )
 
 

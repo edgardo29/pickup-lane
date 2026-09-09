@@ -11,11 +11,11 @@ from backend.schemas import (
     AdminActionLogListRead,
     AdminActionRead,
 )
-from backend.services.admin_action_policy import ADMIN_ACTION_TARGET_FIELDS
 from backend.services.admin_action_display_service import (
     list_admin_action_log,
     serialize_admin_action_detail_read,
 )
+from backend.services.admin_action_policy import ADMIN_ACTION_TARGET_FIELDS
 from backend.services.admin_action_service import (
     get_admin_action_for_viewer_or_404,
     list_admin_actions,
@@ -94,7 +94,11 @@ def get_admin_action_route(
         admin_action_id,
         current_user,
     )
-    return serialize_admin_action_detail_read(db, admin_action)
+    return serialize_admin_action_detail_read(
+        db,
+        admin_action,
+        viewer_user=current_user,
+    )
 
 
 @router.post(
