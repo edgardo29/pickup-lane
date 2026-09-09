@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from backend.models import (
     AdminAction,
+    AdminTargetNotice,
     ChatMessage,
     Game,
     GameChat,
@@ -24,17 +25,21 @@ from backend.models import (
 )
 from backend.schemas.admin_chat_moderation_schema import (
     AdminChatDetectionRead,
-    AdminChatModerationActionCreate,
-    AdminChatModerationActionResultRead,
     AdminChatMessageListRead,
     AdminChatMessageRead,
+    AdminChatModerationActionCreate,
+    AdminChatModerationActionResultRead,
     AdminChatSummaryRead,
 )
-from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_action_service import (
+    integrity_error_matches_constraint,
+    record_admin_action,
+)
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
 )
+from backend.services.admin_target_notice_service import create_admin_target_notice
 from backend.services.auth_service import require_active_admin_user
 from backend.services.game_chat_service import (
     reconcile_game_chat_notifications_after_moderation,
@@ -46,13 +51,66 @@ from backend.services.sub_post_chat_service import (
 )
 from backend.services.user_service import get_user_display_name
 
-
 CHAT_SCOPE_GAME = "game"
 CHAT_SCOPE_NEED_A_SUB = "need_a_sub"
 VALID_CHAT_SCOPES = {CHAT_SCOPE_GAME, CHAT_SCOPE_NEED_A_SUB}
+VALID_GAME_CHAT_PARENT_TYPES = {"official", "community"}
+TERMINAL_GAME_CHAT_RESTORATION_STATUSES = {"cancelled", "removed"}
+TERMINAL_SUB_CHAT_RESTORATION_STATUSES = {"cancelled", "removed"}
 VALID_REVIEW_VIEWS = {"needs_review", "removed", "all"}
 DEFAULT_REVIEW_PAGE_SIZE = 20
 MAX_REVIEW_PAGE_SIZE = 20
+CHAT_NOTICE_COPY = {
+    (CHAT_SCOPE_GAME, "remove_chat_message"): (
+        "game_chat_message_removed",
+        "Game chat message removed",
+        (
+            "A message you posted in a game chat was removed for safety or "
+            "policy reasons. Contact support if you believe this was a mistake."
+        ),
+    ),
+    (CHAT_SCOPE_GAME, "restore_chat_message"): (
+        "game_chat_message_restored",
+        "Game chat message restored",
+        "A message you posted in a game chat was restored and is visible again.",
+    ),
+    (CHAT_SCOPE_NEED_A_SUB, "remove_chat_message"): (
+        "need_sub_chat_message_removed",
+        "Need a Sub chat message removed",
+        (
+            "A message you posted in a Need a Sub chat was removed for safety "
+            "or policy reasons. Contact support if you believe this was a mistake."
+        ),
+    ),
+    (CHAT_SCOPE_NEED_A_SUB, "restore_chat_message"): (
+        "need_sub_chat_message_restored",
+        "Need a Sub chat message restored",
+        (
+            "A message you posted in a Need a Sub chat was restored and is "
+            "visible again."
+        ),
+    ),
+}
+CHAT_IDEMPOTENCY_CONSTRAINTS = {
+    (CHAT_SCOPE_GAME, "mark_chat_message_reviewed"): (
+        "uq_admin_actions_mark_reviewed_chat_message_idempotency"
+    ),
+    (CHAT_SCOPE_GAME, "remove_chat_message"): (
+        "uq_admin_actions_remove_chat_message_idempotency"
+    ),
+    (CHAT_SCOPE_GAME, "restore_chat_message"): (
+        "uq_admin_actions_restore_chat_message_idempotency"
+    ),
+    (CHAT_SCOPE_NEED_A_SUB, "mark_chat_message_reviewed"): (
+        "uq_admin_actions_mark_reviewed_sub_chat_message_idempotency"
+    ),
+    (CHAT_SCOPE_NEED_A_SUB, "remove_chat_message"): (
+        "uq_admin_actions_remove_sub_chat_message_idempotency"
+    ),
+    (CHAT_SCOPE_NEED_A_SUB, "restore_chat_message"): (
+        "uq_admin_actions_restore_sub_chat_message_idempotency"
+    ),
+}
 
 
 def now_utc() -> datetime:
@@ -178,9 +236,7 @@ def serialize_game_chat_message(
         removed_source=message.removed_source,
         restored_at=message.restored_at,
         restored_by_user_id=message.restored_by_user_id,
-        detections=serialize_detections(
-            get_game_message_detections(db, message.id)
-        ),
+        detections=serialize_detections(get_game_message_detections(db, message.id)),
     )
 
 
@@ -400,7 +456,6 @@ def list_admin_need_a_sub_chat_messages(
     )
 
 
-
 def get_admin_game_chat_summary(
     db: Session,
     *,
@@ -410,7 +465,9 @@ def get_admin_game_chat_summary(
     require_active_admin_user(viewer_user)
     game = db.get(Game, game_id)
     if game is None or game.deleted_at is not None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Game not found."
+        )
     chat = db.scalar(select(GameChat).where(GameChat.game_id == game.id))
     if chat is None:
         return AdminChatSummaryRead(
@@ -503,6 +560,38 @@ def validate_existing_action(
         )
 
 
+def get_chat_notices_for_action(
+    db: Session,
+    action_id: uuid.UUID,
+) -> list[AdminTargetNotice]:
+    return list(
+        db.scalars(
+            select(AdminTargetNotice)
+            .where(AdminTargetNotice.admin_action_id == action_id)
+            .order_by(AdminTargetNotice.created_at.asc(), AdminTargetNotice.id.asc())
+        ).all()
+    )
+
+
+def validate_chat_replay_communication(
+    db: Session,
+    action: AdminAction,
+) -> None:
+    if action.action_type == "mark_chat_message_reviewed":
+        return
+    notices = get_chat_notices_for_action(db, action.id)
+    suppression_reason = (action.metadata_ or {}).get("notice_suppression_reason")
+    if suppression_reason == "recipient_unavailable":
+        valid = action.target_user_id is None and not notices
+    else:
+        valid = suppression_reason is None and len(notices) == 1
+    if not valid:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The prior chat moderation result is incomplete.",
+        )
+
+
 def get_game_message_context(
     db: Session,
     message_id: uuid.UUID,
@@ -579,6 +668,16 @@ def record_chat_moderation_action(
     before: dict[str, object],
     after: dict[str, object],
 ) -> AdminAction:
+    metadata = {
+        "source": "chat_moderation",
+        "before": before,
+        "after": after,
+    }
+    if (
+        action_type in {"remove_chat_message", "restore_chat_message"}
+        and message.sender_user_id is None
+    ):
+        metadata["notice_suppression_reason"] = "recipient_unavailable"
     if chat_scope == CHAT_SCOPE_GAME:
         return record_admin_action(
             db,
@@ -588,11 +687,7 @@ def record_chat_moderation_action(
             target_game_id=parent.id,
             target_message_id=message.id,
             reason=reason,
-            metadata={
-                "source": "chat_moderation",
-                "before": before,
-                "after": after,
-            },
+            metadata=metadata,
             idempotency_key=idempotency_key,
             created_at=created_at,
         )
@@ -604,11 +699,7 @@ def record_chat_moderation_action(
         target_sub_post_id=parent.id,
         target_sub_chat_message_id=message.id,
         reason=reason,
-        metadata={
-            "source": "chat_moderation",
-            "before": before,
-            "after": after,
-        },
+        metadata=metadata,
         idempotency_key=idempotency_key,
         created_at=created_at,
     )
@@ -655,6 +746,11 @@ def apply_chat_action(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Only removed chat messages can be restored.",
             )
+        if message.removed_source != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only messages removed by an admin can be restored.",
+            )
         message.visibility_status = "visible"
         message.review_status = "reviewed"
         message.reviewed_at = action_at
@@ -670,6 +766,73 @@ def apply_chat_action(
         "review_status": message.review_status,
     }
     return before, after
+
+
+def create_chat_enforcement_notice(
+    db: Session,
+    *,
+    action_type: str,
+    chat_scope: str,
+    message: ChatMessage | SubPostChatMessage,
+    parent: Game | SubPost,
+    admin_user: User,
+    audit_action: AdminAction,
+) -> AdminTargetNotice | None:
+    copy = CHAT_NOTICE_COPY.get((chat_scope, action_type))
+    if copy is None or message.sender_user_id is None:
+        return None
+    notice_type, title, body = copy
+    return create_admin_target_notice(
+        db,
+        notice_type=notice_type,
+        title=title,
+        body=body,
+        recipient_user_id=message.sender_user_id,
+        target_user_id=message.sender_user_id,
+        target_game_id=parent.id if chat_scope == CHAT_SCOPE_GAME else None,
+        target_sub_post_id=(parent.id if chat_scope == CHAT_SCOPE_NEED_A_SUB else None),
+        admin_action=audit_action,
+        created_by_user_id=admin_user.id,
+    )
+
+
+def build_chat_action_replay(
+    db: Session,
+    *,
+    action: AdminAction,
+    chat_scope: str,
+    parent_id: uuid.UUID,
+    message_id: uuid.UUID,
+) -> AdminChatModerationActionResultRead:
+    if chat_scope == CHAT_SCOPE_GAME:
+        message, chat, parent = get_game_message_context(
+            db,
+            message_id,
+            lock_message=False,
+        )
+    else:
+        message, chat, parent = get_sub_message_context(
+            db,
+            message_id,
+            lock_message=False,
+        )
+    validate_message_parent(
+        parent,
+        expected_parent_id=parent_id,
+        chat_scope=chat_scope,
+    )
+    validate_chat_replay_communication(db, action)
+    return AdminChatModerationActionResultRead(
+        message=serialize_action_message(
+            db,
+            chat_scope=chat_scope,
+            message=message,
+            chat=chat,
+            parent=parent,
+        ),
+        audit_action_id=action.id,
+        idempotent_replay=True,
+    )
 
 
 def validate_message_parent(
@@ -689,6 +852,65 @@ def validate_message_parent(
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 
+def lock_chat_action_parent(
+    db: Session,
+    *,
+    chat_scope: str,
+    parent_id: uuid.UUID,
+    action_type: str,
+    expected_game_type: str | None,
+) -> Game | SubPost:
+    if chat_scope == CHAT_SCOPE_GAME:
+        if expected_game_type not in VALID_GAME_CHAT_PARENT_TYPES:
+            raise ValueError("expected_game_type is required for game chat actions.")
+        parent = db.scalar(
+            select(Game)
+            .where(Game.id == parent_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        )
+        if parent is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Game not found.",
+            )
+        if parent.deleted_at is not None or parent.game_type != expected_game_type:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Game is no longer available for this chat action.",
+            )
+        if (
+            action_type == "restore_chat_message"
+            and parent.game_status in TERMINAL_GAME_CHAT_RESTORATION_STATUSES
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Chat messages cannot be restored for this game.",
+            )
+        return parent
+
+    parent = db.scalar(
+        select(SubPost)
+        .where(SubPost.id == parent_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if parent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub post not found.",
+        )
+    if (
+        action_type == "restore_chat_message"
+        and parent.post_status in TERMINAL_SUB_CHAT_RESTORATION_STATUSES
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Chat messages cannot be restored for this Need a Sub post.",
+        )
+    return parent
+
+
 def run_chat_moderation_action(
     db: Session,
     *,
@@ -699,6 +921,7 @@ def run_chat_moderation_action(
     payload: AdminChatModerationActionCreate,
     action_type: str,
     require_reason: bool,
+    expected_game_type: str | None = None,
 ) -> AdminChatModerationActionResultRead:
     require_active_admin_user(admin_user)
     normalized_scope = normalize_chat_scope(chat_scope)
@@ -716,36 +939,21 @@ def run_chat_moderation_action(
     )
     if existing_action is not None:
         validate_existing_action(existing_action, expected_reason=reason)
-        if normalized_scope == CHAT_SCOPE_GAME:
-            message, chat, parent = get_game_message_context(
-                db,
-                message_id,
-                lock_message=False,
-            )
-        else:
-            message, chat, parent = get_sub_message_context(
-                db,
-                message_id,
-                lock_message=False,
-            )
-        validate_message_parent(
-            parent,
-            expected_parent_id=parent_id,
+        return build_chat_action_replay(
+            db,
+            action=existing_action,
             chat_scope=normalized_scope,
-        )
-        return AdminChatModerationActionResultRead(
-            message=serialize_action_message(
-                db,
-                chat_scope=normalized_scope,
-                message=message,
-                chat=chat,
-                parent=parent,
-            ),
-            audit_action_id=existing_action.id,
-            idempotent_replay=True,
+            parent_id=parent_id,
+            message_id=message_id,
         )
 
-    action_at = now_utc()
+    lock_chat_action_parent(
+        db,
+        chat_scope=normalized_scope,
+        parent_id=parent_id,
+        action_type=action_type,
+        expected_game_type=expected_game_type,
+    )
     if normalized_scope == CHAT_SCOPE_GAME:
         message, chat, parent = get_game_message_context(
             db,
@@ -763,7 +971,25 @@ def run_chat_moderation_action(
         expected_parent_id=parent_id,
         chat_scope=normalized_scope,
     )
+    existing_action = get_existing_chat_moderation_action(
+        db,
+        action_type=action_type,
+        admin_user_id=admin_user.id,
+        chat_scope=normalized_scope,
+        message_id=message_id,
+        idempotency_key=idempotency_key,
+    )
+    if existing_action is not None:
+        validate_existing_action(existing_action, expected_reason=reason)
+        return build_chat_action_replay(
+            db,
+            action=existing_action,
+            chat_scope=normalized_scope,
+            parent_id=parent_id,
+            message_id=message_id,
+        )
 
+    action_at = now_utc()
     before, after = apply_chat_action(
         action_type=action_type,
         message=message,
@@ -786,6 +1012,15 @@ def run_chat_moderation_action(
         after=after,
     )
     try:
+        create_chat_enforcement_notice(
+            db,
+            action_type=action_type,
+            chat_scope=normalized_scope,
+            message=message,
+            parent=parent,
+            admin_user=admin_user,
+            audit_action=audit_action,
+        )
         db.add(message)
         db.flush()
         if normalized_scope == CHAT_SCOPE_GAME:
@@ -808,48 +1043,35 @@ def run_chat_moderation_action(
         db.refresh(audit_action)
     except IntegrityError as exc:
         db.rollback()
-        existing_action = get_existing_chat_moderation_action(
-            db,
-            action_type=action_type,
-            admin_user_id=admin_user.id,
-            chat_scope=normalized_scope,
-            message_id=message_id,
-            idempotency_key=idempotency_key,
-        )
+        existing_action = None
+        expected_constraint = CHAT_IDEMPOTENCY_CONSTRAINTS[
+            (normalized_scope, action_type)
+        ]
+        if integrity_error_matches_constraint(exc, expected_constraint):
+            existing_action = get_existing_chat_moderation_action(
+                db,
+                action_type=action_type,
+                admin_user_id=admin_user.id,
+                chat_scope=normalized_scope,
+                message_id=message_id,
+                idempotency_key=idempotency_key,
+            )
         if existing_action is not None:
             validate_existing_action(existing_action, expected_reason=reason)
-            if normalized_scope == CHAT_SCOPE_GAME:
-                message, chat, parent = get_game_message_context(
-                    db,
-                    message_id,
-                    lock_message=False,
-                )
-            else:
-                message, chat, parent = get_sub_message_context(
-                    db,
-                    message_id,
-                    lock_message=False,
-                )
-            validate_message_parent(
-                parent,
-                expected_parent_id=parent_id,
+            return build_chat_action_replay(
+                db,
+                action=existing_action,
                 chat_scope=normalized_scope,
-            )
-            return AdminChatModerationActionResultRead(
-                message=serialize_action_message(
-                    db,
-                    chat_scope=normalized_scope,
-                    message=message,
-                    chat=chat,
-                    parent=parent,
-                ),
-                audit_action_id=existing_action.id,
-                idempotent_replay=True,
+                parent_id=parent_id,
+                message_id=message_id,
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Chat moderation action could not be saved.",
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
     return AdminChatModerationActionResultRead(
         message=serialize_action_message(
@@ -871,6 +1093,7 @@ def mark_game_chat_message_reviewed(
     message_id: uuid.UUID,
     admin_user: User,
     payload: AdminChatModerationActionCreate,
+    expected_game_type: str,
 ) -> AdminChatModerationActionResultRead:
     return run_chat_moderation_action(
         db,
@@ -881,6 +1104,7 @@ def mark_game_chat_message_reviewed(
         payload=payload,
         action_type="mark_chat_message_reviewed",
         require_reason=False,
+        expected_game_type=expected_game_type,
     )
 
 
@@ -891,6 +1115,7 @@ def remove_game_chat_message(
     message_id: uuid.UUID,
     admin_user: User,
     payload: AdminChatModerationActionCreate,
+    expected_game_type: str,
 ) -> AdminChatModerationActionResultRead:
     return run_chat_moderation_action(
         db,
@@ -901,6 +1126,7 @@ def remove_game_chat_message(
         payload=payload,
         action_type="remove_chat_message",
         require_reason=True,
+        expected_game_type=expected_game_type,
     )
 
 
@@ -911,6 +1137,7 @@ def restore_game_chat_message(
     message_id: uuid.UUID,
     admin_user: User,
     payload: AdminChatModerationActionCreate,
+    expected_game_type: str,
 ) -> AdminChatModerationActionResultRead:
     return run_chat_moderation_action(
         db,
@@ -921,6 +1148,7 @@ def restore_game_chat_message(
         payload=payload,
         action_type="restore_chat_message",
         require_reason=True,
+        expected_game_type=expected_game_type,
     )
 
 

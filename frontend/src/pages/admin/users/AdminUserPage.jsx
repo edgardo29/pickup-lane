@@ -703,6 +703,7 @@ function AdminUserPage() {
           firebaseUser={currentUser}
           user={detail.user}
           onClose={() => setIsSuspensionModalOpen(false)}
+          onConflict={() => setRefreshCount((count) => count + 1)}
           onSuspended={refreshSelfAdminAccess}
         />
       )}
@@ -720,6 +721,7 @@ function AdminUserPage() {
           firebaseUser={currentUser}
           user={detail.user}
           onClose={() => setIsHostingRestrictionModalOpen(false)}
+          onConflict={() => setRefreshCount((count) => count + 1)}
           onRestricted={() => setRefreshCount((count) => count + 1)}
         />
       )}
@@ -728,6 +730,7 @@ function AdminUserPage() {
           firebaseUser={currentUser}
           user={detail.user}
           onClose={() => setIsHostingRestorationModalOpen(false)}
+          onConflict={() => setRefreshCount((count) => count + 1)}
           onRestored={() => setRefreshCount((count) => count + 1)}
         />
       )}
@@ -736,6 +739,7 @@ function AdminUserPage() {
           firebaseUser={currentUser}
           user={detail.user}
           onClose={() => setIsUnsuspensionModalOpen(false)}
+          onConflict={() => setRefreshCount((count) => count + 1)}
           onUnsuspended={() => setRefreshCount((count) => count + 1)}
         />
       )}

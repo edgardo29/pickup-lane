@@ -39,6 +39,7 @@ from backend.schemas.admin_community_schema import (
     AdminCommunityGameSupportFlagSummaryRead,
 )
 from backend.services.admin_action_service import (
+    integrity_error_matches_constraint,
     list_admin_actions,
     record_admin_action,
 )
@@ -261,7 +262,11 @@ def build_admin_community_game_list_cursor_filter(
 
 
 def get_admin_community_game_list_sort(view: str) -> str:
-    return "starts_at_asc" if view in COMMUNITY_GAME_LIST_ASCENDING_VIEWS else "starts_at_desc"
+    return (
+        "starts_at_asc"
+        if view in COMMUNITY_GAME_LIST_ASCENDING_VIEWS
+        else "starts_at_desc"
+    )
 
 
 def build_community_game_active_roster_count_subquery():
@@ -271,9 +276,7 @@ def build_community_game_active_roster_count_subquery():
             func.count(GameParticipant.id).label("roster_count"),
         )
         .where(
-            GameParticipant.participant_status.in_(
-                ACTIVE_ROSTER_PARTICIPANT_STATUSES
-            ),
+            GameParticipant.participant_status.in_(ACTIVE_ROSTER_PARTICIPANT_STATUSES),
         )
         .group_by(GameParticipant.game_id)
         .subquery()
@@ -329,6 +332,29 @@ def get_community_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Community game not found.",
+        )
+    return game
+
+
+def lock_community_game_for_enforcement(
+    db: Session,
+    game_id: uuid.UUID,
+) -> Game:
+    game = db.scalar(
+        select(Game)
+        .where(Game.id == game_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if game is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Community game not found.",
+        )
+    if game.deleted_at is not None or game.game_type != "community":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Community game is no longer available for this action.",
         )
     return game
 
@@ -433,9 +459,9 @@ def summarize_game_participants_by_game(
         select(
             GameParticipant.game_id.label("game_id"),
             func.count(GameParticipant.id).label("total_count"),
-            func.sum(
-                case((confirmed_participant, 1), else_=0)
-            ).label("confirmed_count"),
+            func.sum(case((confirmed_participant, 1), else_=0)).label(
+                "confirmed_count"
+            ),
             func.sum(
                 case(
                     (GameParticipant.participant_status == "waitlisted", 1),
@@ -621,9 +647,7 @@ def flag_admin_community_game_for_review(
     require_active_admin_user(admin_user)
     reason, idempotency_key = normalize_review_flag_request(payload)
     game = get_community_game_or_404(db, game_id)
-    db.execute(
-        select(Game.id).where(Game.id == game.id).with_for_update()
-    ).scalar_one()
+    db.execute(select(Game.id).where(Game.id == game.id).with_for_update()).scalar_one()
 
     existing_flag = get_existing_support_flag_by_idempotency_key(
         db,
@@ -803,16 +827,18 @@ def create_payment_text_notice(
     audit_action: AdminAction,
     admin_user: User,
     notice_type: str,
-    reason: str,
-) -> AdminTargetNotice | None:
+) -> AdminTargetNotice:
     if game.host_user_id is None:
-        return None
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Community game host is unavailable.",
+        )
 
     if notice_type == "community_game_payment_info_hidden":
         title = "Payment information hidden"
         body = (
-            "Payment information on your community game is hidden while "
-            "an admin review is active."
+            "Payment information on your community game was hidden for safety "
+            "or policy reasons. Contact support if you believe this was a mistake."
         )
     else:
         title = "Payment information restored"
@@ -828,7 +854,6 @@ def create_payment_text_notice(
         target_game_id=game.id,
         admin_action=audit_action,
         created_by_user_id=admin_user.id,
-        user_safe_reason=reason,
     )
 
 
@@ -876,6 +901,12 @@ def build_hide_payment_text_result(
             detail="No host payment text is available to hide.",
         )
 
+    notice_ids = get_payment_text_notice_ids_for_action(db, audit_action.id)
+    if len(notice_ids) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The prior payment-text moderation result is incomplete.",
+        )
     return AdminCommunityGameHidePaymentTextResultRead(
         game_id=game_id,
         payment_snapshot=payment_snapshot,
@@ -884,7 +915,7 @@ def build_hide_payment_text_result(
             review_flag_status=get_community_review_flag_status(db, game_id),
         ),
         audit_action_id=audit_action.id,
-        notice_ids=get_payment_text_notice_ids_for_action(db, audit_action.id),
+        notice_ids=notice_ids,
         idempotent_replay=idempotent_replay,
     )
 
@@ -925,9 +956,11 @@ def hide_admin_community_game_payment_text(
             idempotent_replay=True,
         )
 
+    game = lock_community_game_for_enforcement(db, game.id)
     snapshot = db.scalar(
         select(CommunityGameDetail)
         .where(CommunityGameDetail.game_id == game.id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
 
@@ -955,15 +988,21 @@ def hide_admin_community_game_payment_text(
             idempotent_replay=True,
         )
 
+    if game.host_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Community game host is unavailable.",
+        )
+
     if snapshot is None or not payment_snapshot_present(snapshot):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="No host payment text is available to hide.",
         )
 
     if snapshot.payment_text_moderation_status == PAYMENT_TEXT_STATUS_HIDDEN:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Host payment text is already hidden.",
         )
 
@@ -989,35 +1028,34 @@ def hide_admin_community_game_payment_text(
         idempotency_key=idempotency_key,
         created_at=now,
     )
-    link_admin_action_to_open_review_case(db, audit_action)
-    notice = create_payment_text_notice(
-        db,
-        game=game,
-        audit_action=audit_action,
-        admin_user=admin_user,
-        notice_type="community_game_payment_info_hidden",
-        reason=reason,
-    )
-    db.flush()
-    notice_ids = [str(notice.id)] if notice is not None else []
-    metadata = dict(audit_action.metadata_ or {})
-    metadata["notice_ids"] = notice_ids
-    audit_action.metadata_ = metadata
-
     try:
+        link_admin_action_to_open_review_case(db, audit_action)
+        create_payment_text_notice(
+            db,
+            game=game,
+            audit_action=audit_action,
+            admin_user=admin_user,
+            notice_type="community_game_payment_info_hidden",
+        )
         db.add(snapshot)
         db.add(audit_action)
+        db.flush()
         db.commit()
         db.refresh(snapshot)
         db.refresh(audit_action)
     except IntegrityError as exc:
         db.rollback()
-        existing_action = get_existing_hide_payment_text_action(
-            db,
-            admin_user_id=admin_user.id,
-            game_id=game.id,
-            idempotency_key=idempotency_key,
-        )
+        existing_action = None
+        if integrity_error_matches_constraint(
+            exc,
+            "uq_admin_actions_hide_unsafe_community_payment_text_idempotency",
+        ):
+            existing_action = get_existing_hide_payment_text_action(
+                db,
+                admin_user_id=admin_user.id,
+                game_id=game.id,
+                idempotency_key=idempotency_key,
+            )
         if existing_action is not None:
             validate_existing_hide_payment_text_action(
                 existing_action,
@@ -1040,6 +1078,9 @@ def hide_admin_community_game_payment_text(
             status_code=status.HTTP_409_CONFLICT,
             detail="Host payment text could not be hidden.",
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
     return build_hide_payment_text_result(
         db,
@@ -1086,9 +1127,11 @@ def restore_admin_community_game_payment_text(
             idempotent_replay=True,
         )
 
+    game = lock_community_game_for_enforcement(db, game.id)
     snapshot = db.scalar(
         select(CommunityGameDetail)
         .where(CommunityGameDetail.game_id == game.id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
 
@@ -1116,15 +1159,21 @@ def restore_admin_community_game_payment_text(
             idempotent_replay=True,
         )
 
+    if game.host_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Community game host is unavailable.",
+        )
+
     if snapshot is None or not payment_snapshot_present(snapshot):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="No host payment text is available to restore.",
         )
 
     if snapshot.payment_text_moderation_status != PAYMENT_TEXT_STATUS_HIDDEN:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Host payment text is already visible.",
         )
 
@@ -1150,35 +1199,34 @@ def restore_admin_community_game_payment_text(
         idempotency_key=idempotency_key,
         created_at=now,
     )
-    link_admin_action_to_open_review_case(db, audit_action)
-    notice = create_payment_text_notice(
-        db,
-        game=game,
-        audit_action=audit_action,
-        admin_user=admin_user,
-        notice_type="community_game_payment_info_restored",
-        reason=reason,
-    )
-    db.flush()
-    notice_ids = [str(notice.id)] if notice is not None else []
-    metadata = dict(audit_action.metadata_ or {})
-    metadata["notice_ids"] = notice_ids
-    audit_action.metadata_ = metadata
-
     try:
+        link_admin_action_to_open_review_case(db, audit_action)
+        create_payment_text_notice(
+            db,
+            game=game,
+            audit_action=audit_action,
+            admin_user=admin_user,
+            notice_type="community_game_payment_info_restored",
+        )
         db.add(snapshot)
         db.add(audit_action)
+        db.flush()
         db.commit()
         db.refresh(snapshot)
         db.refresh(audit_action)
     except IntegrityError as exc:
         db.rollback()
-        existing_action = get_existing_restore_payment_text_action(
-            db,
-            admin_user_id=admin_user.id,
-            game_id=game.id,
-            idempotency_key=idempotency_key,
-        )
+        existing_action = None
+        if integrity_error_matches_constraint(
+            exc,
+            "uq_admin_actions_community_game_enforcement_idempotency",
+        ):
+            existing_action = get_existing_restore_payment_text_action(
+                db,
+                admin_user_id=admin_user.id,
+                game_id=game.id,
+                idempotency_key=idempotency_key,
+            )
         if existing_action is not None:
             validate_existing_hide_payment_text_action(
                 existing_action,
@@ -1201,6 +1249,9 @@ def restore_admin_community_game_payment_text(
             status_code=status.HTTP_409_CONFLICT,
             detail="Host payment text could not be restored.",
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
     return build_hide_payment_text_result(
         db,
@@ -1423,9 +1474,7 @@ def list_admin_community_games(
     if cursor_payload is None:
         statement = statement.offset(offset)
 
-    rows = db.execute(
-        statement.limit(limit + 1)
-    ).all()
+    rows = db.execute(statement.limit(limit + 1)).all()
     page_rows = rows[:limit]
     has_more = len(rows) > limit
     review_statuses = get_community_review_flag_statuses(

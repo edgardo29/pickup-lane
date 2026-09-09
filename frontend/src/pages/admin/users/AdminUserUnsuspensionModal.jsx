@@ -3,6 +3,7 @@ import { ShieldCheck } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
 import { useStepUp } from '../../../hooks/useStepUp.js'
 import { unsuspendAdminUser } from '../shared/adminApi.js'
+import { runAdminEnforcementMutation } from '../shared/adminEnforcementLifecycle.js'
 import { formatAdminUserDateTime } from './adminUserFormatters.js'
 
 function createIdempotencyKey(userId) {
@@ -13,6 +14,7 @@ function createIdempotencyKey(userId) {
 function AdminUserUnsuspensionModal({
   firebaseUser,
   onClose,
+  onConflict,
   onUnsuspended,
   user,
 }) {
@@ -48,11 +50,11 @@ function AdminUserUnsuspensionModal({
       return
     }
 
-    setIsSubmitting(true)
     setExecutionError('')
 
-    try {
-      const nextResult = await runWithStepUp(
+    await runAdminEnforcementMutation({
+      clearStaleState: onClose,
+      execute: () => runWithStepUp(
         () => unsuspendAdminUser({
           firebaseUser,
           idempotencyKey,
@@ -60,14 +62,17 @@ function AdminUserUnsuspensionModal({
           userId: user.id,
         }),
         { actionLabel: 'unsuspend this account' },
-      )
-      setResult(nextResult)
-      onUnsuspended(nextResult)
-    } catch (error) {
-      setExecutionError(error.message || 'The account could not be unsuspended.')
-    } finally {
-      setIsSubmitting(false)
-    }
+      ),
+      onError: (error) => {
+        setExecutionError(error.message || 'The account could not be unsuspended.')
+      },
+      onPendingChange: setIsSubmitting,
+      onSuccess: (nextResult) => {
+        setResult(nextResult)
+        onUnsuspended(nextResult)
+      },
+      reloadAuthoritativeState: onConflict,
+    })
   }
 
   function handleBackdropClick() {

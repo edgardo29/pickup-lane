@@ -21,6 +21,10 @@ class AdminTargetNotice(Base):
                 "'community_game_payment_info_restored', "
                 "'community_game_cancelled', 'need_sub_post_hidden', "
                 "'need_sub_post_restored', 'need_sub_post_removed', "
+                "'game_chat_message_removed', "
+                "'game_chat_message_restored', "
+                "'need_sub_chat_message_removed', "
+                "'need_sub_chat_message_restored', "
                 "'publish_fee_refunded', 'publish_credit_added'"
                 ")"
             ),
@@ -38,6 +42,42 @@ class AdminTargetNotice(Base):
                 "OR target_user_id IS NOT NULL"
             ),
             name="ck_admin_target_notices_target_required",
+        ),
+        CheckConstraint(
+            (
+                "notice_type NOT IN ("
+                "'community_game_hidden', 'community_game_restored', "
+                "'community_game_joining_paused', "
+                "'community_game_joining_resumed', "
+                "'community_game_payment_info_hidden', "
+                "'community_game_payment_info_restored', "
+                "'community_game_cancelled', "
+                "'game_chat_message_removed', "
+                "'game_chat_message_restored'"
+                ") OR (target_game_id IS NOT NULL "
+                "AND target_sub_post_id IS NULL "
+                "AND target_sub_post_request_id IS NULL)"
+            ),
+            name="ck_admin_target_notices_game_enforcement_target",
+        ),
+        CheckConstraint(
+            (
+                "notice_type NOT IN ("
+                "'need_sub_post_hidden', 'need_sub_post_restored', "
+                "'need_sub_chat_message_removed', "
+                "'need_sub_chat_message_restored'"
+                ") OR (target_sub_post_id IS NOT NULL "
+                "AND target_game_id IS NULL "
+                "AND target_sub_post_request_id IS NULL)"
+            ),
+            name="ck_admin_target_notices_sub_enforcement_target",
+        ),
+        CheckConstraint(
+            (
+                "notice_type != 'need_sub_post_removed' "
+                "OR (target_sub_post_id IS NOT NULL AND target_game_id IS NULL)"
+            ),
+            name="ck_admin_target_notices_sub_removal_target",
         ),
         Index("ix_admin_target_notices_recipient_user_id", "recipient_user_id"),
         Index("ix_admin_target_notices_target_user_id", "target_user_id"),

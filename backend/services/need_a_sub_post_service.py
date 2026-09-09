@@ -29,7 +29,10 @@ from backend.schemas.sub_post_schema import (
     SubPostListRead,
     SubPostUpdate,
 )
-from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_action_service import (
+    integrity_error_matches_constraint,
+    record_admin_action,
+)
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
@@ -39,6 +42,7 @@ from backend.services.admin_review_service import (
 )
 from backend.services.admin_target_notice_service import create_admin_target_notice
 from backend.services.auth_service import require_active_admin_user
+from backend.services.moderation_surfacing_service import surface_need_a_sub_post_text
 from backend.services.need_a_sub_lifecycle_service import (
     add_post_status_history,
     change_request_status,
@@ -46,14 +50,12 @@ from backend.services.need_a_sub_lifecycle_service import (
     recalculate_filled_status,
 )
 from backend.services.need_a_sub_notification_service import (
-    add_need_a_sub_notification,
     capture_sub_post_structural_snapshot,
     notify_active_requesters_sub_post_updated,
     notify_requester_sub_status,
     resolve_owner_request_activity_notification,
     sub_post_structural_snapshot_changed,
 )
-from backend.services.moderation_surfacing_service import surface_need_a_sub_post_text
 from backend.services.need_a_sub_rules import (
     ACTIVE_REQUEST_STATUSES,
     ACTIVE_VISIBLE_POST_STATUSES,
@@ -79,6 +81,10 @@ from backend.services.query_pagination import (
 from backend.services.sub_post_chat_service import (
     close_sub_post_chat_for_post,
     resolve_sub_chat_notifications_for_post,
+)
+
+ADMIN_SUB_POST_REMOVAL_PUBLIC_REASON = (
+    "Removed by Pickup Lane for safety or policy reasons."
 )
 
 SUB_POST_CARD_DEFAULT_LIMIT = 40
@@ -108,6 +114,7 @@ def get_sub_post_for_update_or_404(db: Session, sub_post_id: uuid.UUID) -> SubPo
     sub_post = db.scalar(
         select(SubPost)
         .where(SubPost.id == sub_post_id)
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
 
@@ -165,9 +172,7 @@ def validate_post_creation(post_create: SubPostCreate) -> None:
     if starts_at > current_time + timedelta(days=MAX_SUB_POST_SCHEDULE_DAYS_AHEAD):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Need a Sub posts can be scheduled up to 14 days in advance."
-            ),
+            detail=("Need a Sub posts can be scheduled up to 14 days in advance."),
         )
 
     if ends_at <= starts_at:
@@ -325,9 +330,7 @@ def validate_owner_live_post_date_limit(
     if existing_post is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "You already have an active Need a Sub post for this date."
-            ),
+            detail=("You already have an active Need a Sub post for this date."),
         )
 
 
@@ -416,14 +419,17 @@ def serialize_sub_post_position(db: Session, position: SubPostPosition) -> dict:
 
 
 def count_position_attached_requests(db: Session, position_id: uuid.UUID) -> int:
-    return db.scalar(
-        select(func.count())
-        .select_from(SubPostRequest)
-        .where(
-            SubPostRequest.sub_post_position_id == position_id,
-            SubPostRequest.request_status.notin_(TERMINAL_REQUEST_STATUSES),
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(SubPostRequest)
+            .where(
+                SubPostRequest.sub_post_position_id == position_id,
+                SubPostRequest.request_status.notin_(TERMINAL_REQUEST_STATUSES),
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
 def list_positions(db: Session, sub_post_id: uuid.UUID) -> list[SubPostPosition]:
@@ -446,7 +452,9 @@ def build_effective_post_create(
     post_update: SubPostUpdate,
 ) -> SubPostCreate:
     update_data = post_update.model_dump(exclude_unset=True, exclude={"positions"})
-    positions = post_update.positions if "positions" in post_update.model_fields_set else None
+    positions = (
+        post_update.positions if "positions" in post_update.model_fields_set else None
+    )
 
     current_data = {
         field: getattr(sub_post, field)
@@ -475,18 +483,24 @@ def build_effective_post_create(
         )
     }
     current_data.update(update_data)
-    current_data["positions"] = positions if positions is not None else [
-        {
-            "position_label": position.position_label,
-            "player_group": position.player_group,
-            "spots_needed": position.spots_needed,
-            "sort_order": position.sort_order,
-        }
-        for position in list_positions(db, sub_post.id)
-    ]
+    current_data["positions"] = (
+        positions
+        if positions is not None
+        else [
+            {
+                "position_label": position.position_label,
+                "player_group": position.player_group,
+                "spots_needed": position.spots_needed,
+                "sort_order": position.sort_order,
+            }
+            for position in list_positions(db, sub_post.id)
+        ]
+    )
 
     if positions is not None:
-        current_data["subs_needed"] = sum(position.spots_needed for position in positions)
+        current_data["subs_needed"] = sum(
+            position.spots_needed for position in positions
+        )
 
     return SubPostCreate(**current_data)
 
@@ -562,8 +576,7 @@ def apply_position_updates(
         for position in existing_positions
     }
     new_keys = {
-        (position.position_label, position.player_group)
-        for position in new_positions
+        (position.position_label, position.player_group) for position in new_positions
     }
 
     for existing_position in existing_positions:
@@ -629,7 +642,9 @@ def update_sub_post(
         exclude_sub_post_id=sub_post.id,
     )
     update_data = post_update.model_dump(exclude_unset=True, exclude={"positions"})
-    new_positions = post_update.positions if "positions" in post_update.model_fields_set else None
+    new_positions = (
+        post_update.positions if "positions" in post_update.model_fields_set else None
+    )
 
     current_time = now_utc()
     structural_snapshot_before = capture_sub_post_structural_snapshot(sub_post)
@@ -1019,10 +1034,7 @@ def list_my_need_a_sub_cards(
         SubPostRequest.request_status == "canceled_by_owner",
         SubPostRequest.canceled_at == SubPost.canceled_at,
         exists().where(
-            (
-                SubPostRequestStatusHistory.sub_post_request_id
-                == SubPostRequest.id
-            ),
+            (SubPostRequestStatusHistory.sub_post_request_id == SubPostRequest.id),
             SubPostRequestStatusHistory.old_status == "confirmed",
             SubPostRequestStatusHistory.new_status == "canceled_by_owner",
             SubPostRequestStatusHistory.change_source == "owner",
@@ -1470,9 +1482,9 @@ def _load_sub_post_list_related_data(
                 SubPostRequest.request_status,
             )
         ).all():
-            request_counts_by_position.setdefault(position_id, {})[
-                request_status
-            ] = count
+            request_counts_by_position.setdefault(position_id, {})[request_status] = (
+                count
+            )
 
     for position in positions:
         counts = request_counts_by_position.get(position.id, {})
@@ -1707,7 +1719,9 @@ def cancel_sub_post(
             detail="Only active posts can be cancelled.",
         )
 
-    require_before_post_start(sub_post, "Posts cannot be cancelled after the game starts.")
+    require_before_post_start(
+        sub_post, "Posts cannot be cancelled after the game starts."
+    )
 
     current_time = now_utc()
     old_status = sub_post.post_status
@@ -1717,7 +1731,9 @@ def cancel_sub_post(
     sub_post.cancel_reason = reason
     sub_post.updated_at = current_time
     db.add(sub_post)
-    add_post_status_history(db, sub_post, old_status, "cancelled", owner.id, "owner", reason)
+    add_post_status_history(
+        db, sub_post, old_status, "cancelled", owner.id, "owner", reason
+    )
     close_open_content_moderation_case_for_sub_post_lifecycle(
         db,
         sub_post_id=sub_post.id,
@@ -1858,6 +1874,141 @@ def get_notice_ids_for_admin_action(
     )
 
 
+def apply_admin_sub_post_removal(
+    db: Session,
+    *,
+    sub_post: SubPost,
+    admin_user: User,
+    normalized_reason: str,
+    idempotency_key: str,
+) -> SubPost:
+    old_status = sub_post.post_status
+    current_time = now_utc()
+    audit_action = record_admin_action(
+        db,
+        admin_user_id=admin_user.id,
+        action_type="remove_sub_post",
+        target_user_id=sub_post.owner_user_id,
+        target_sub_post_id=sub_post.id,
+        reason=normalized_reason,
+        metadata={
+            "source": "need_a_sub",
+            "old_status": old_status,
+            "new_status": "removed",
+            "removed_by": "admin",
+        },
+        idempotency_key=idempotency_key,
+        created_at=current_time,
+    )
+    sub_post.post_status = "removed"
+    sub_post.removed_at = current_time
+    sub_post.removed_by_user_id = admin_user.id
+    sub_post.remove_reason = ADMIN_SUB_POST_REMOVAL_PUBLIC_REASON
+    sub_post.updated_at = current_time
+    db.add(sub_post)
+    add_post_status_history(
+        db,
+        sub_post,
+        old_status,
+        "removed",
+        admin_user.id,
+        "admin",
+        ADMIN_SUB_POST_REMOVAL_PUBLIC_REASON,
+    )
+    close_open_content_moderation_case_for_sub_post_lifecycle(
+        db,
+        sub_post_id=sub_post.id,
+        closure_outcome="enforcement_applied",
+        closure_reason=(
+            "Need a Sub post was removed by an admin before moderation "
+            "review was completed."
+        ),
+        lifecycle_action="admin_removed",
+        trigger_actor_type="admin",
+        trigger_actor_user_id=admin_user.id,
+        closed_by_user_id=admin_user.id,
+        admin_action=audit_action,
+        previous_post_status=old_status,
+        new_post_status="removed",
+        closed_at=current_time,
+    )
+    close_sub_post_chat_for_post(
+        db,
+        sub_post_id=sub_post.id,
+        closed_at=current_time,
+    )
+    resolve_sub_chat_notifications_for_post(
+        db,
+        sub_post_id=sub_post.id,
+        read_at=current_time,
+    )
+    create_admin_target_notice(
+        db,
+        notice_type="need_sub_post_removed",
+        title="Need a Sub post removed",
+        body=(
+            "Your Need a Sub post was removed by Pickup Lane for safety or policy "
+            "reasons. Contact support if you believe this was a mistake."
+        ),
+        recipient_user_id=sub_post.owner_user_id,
+        target_user_id=sub_post.owner_user_id,
+        target_sub_post_id=sub_post.id,
+        admin_action=audit_action,
+        created_by_user_id=admin_user.id,
+    )
+
+    active_requests = db.scalars(
+        select(SubPostRequest).where(
+            SubPostRequest.sub_post_id == sub_post.id,
+            SubPostRequest.request_status.in_(ACTIVE_REQUEST_STATUSES),
+        )
+    ).all()
+    closed_request_ids: list[str] = []
+    for sub_request in active_requests:
+        previous_status = sub_request.request_status
+        change_request_status(
+            db,
+            sub_request,
+            "closed_by_admin",
+            admin_user.id,
+            "admin",
+            ADMIN_SUB_POST_REMOVAL_PUBLIC_REASON,
+            current_time,
+        )
+        closed_request_ids.append(str(sub_request.id))
+        if previous_status == "pending":
+            resolve_owner_request_activity_notification(
+                db,
+                sub_post=sub_post,
+                sub_request=sub_request,
+                read_at=current_time,
+            )
+        create_admin_target_notice(
+            db,
+            notice_type="need_sub_post_removed",
+            title="Need a Sub request closed",
+            body=(
+                "A Need a Sub post you requested was removed by Pickup Lane for "
+                "safety or policy reasons. Contact support if you need help."
+            ),
+            recipient_user_id=sub_request.requester_user_id,
+            target_user_id=sub_request.requester_user_id,
+            target_sub_post_id=sub_post.id,
+            target_sub_post_request_id=sub_request.id,
+            admin_action=audit_action,
+            created_by_user_id=admin_user.id,
+        )
+    metadata = dict(audit_action.metadata_ or {})
+    metadata["closed_request_ids"] = closed_request_ids
+    audit_action.metadata_ = metadata
+
+    db.add(audit_action)
+    db.flush()
+    db.commit()
+    db.refresh(sub_post)
+    return sub_post
+
+
 def remove_sub_post(
     db: Session,
     admin_user: User,
@@ -1910,163 +2061,31 @@ def remove_sub_post(
 
     if sub_post.post_status == "removed":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="This post is already removed.",
         )
 
-    old_status = sub_post.post_status
-    current_time = now_utc()
-    audit_action = record_admin_action(
-        db,
-        admin_user_id=admin_user.id,
-        action_type="remove_sub_post",
-        target_user_id=sub_post.owner_user_id,
-        target_sub_post_id=sub_post.id,
-        reason=normalized_reason,
-        metadata={
-            "source": "need_a_sub",
-            "old_status": old_status,
-            "new_status": "removed",
-            "removed_by": "admin",
-        },
-        idempotency_key=idempotency_key,
-        created_at=current_time,
-    )
-    sub_post.post_status = "removed"
-    sub_post.removed_at = current_time
-    sub_post.removed_by_user_id = admin_user.id
-    sub_post.remove_reason = normalized_reason
-    sub_post.updated_at = current_time
-    db.add(sub_post)
-    add_post_status_history(
-        db,
-        sub_post,
-        old_status,
-        "removed",
-        admin_user.id,
-        "admin",
-        normalized_reason,
-    )
-    close_open_content_moderation_case_for_sub_post_lifecycle(
-        db,
-        sub_post_id=sub_post.id,
-        closure_outcome="enforcement_applied",
-        closure_reason=(
-            "Need a Sub post was removed by an admin before moderation "
-            "review was completed."
-        ),
-        lifecycle_action="admin_removed",
-        trigger_actor_type="admin",
-        trigger_actor_user_id=admin_user.id,
-        closed_by_user_id=admin_user.id,
-        admin_action=audit_action,
-        previous_post_status=old_status,
-        new_post_status="removed",
-        closed_at=current_time,
-    )
-    close_sub_post_chat_for_post(
-        db,
-        sub_post_id=sub_post.id,
-        closed_at=current_time,
-    )
-    resolve_sub_chat_notifications_for_post(
-        db,
-        sub_post_id=sub_post.id,
-        read_at=current_time,
-    )
-    add_need_a_sub_notification(
-        db,
-        recipient_user_id=sub_post.owner_user_id,
-        notification_type="sub_post_removed",
-        sub_post=sub_post,
-        actor_user_id=admin_user.id,
-        event_at=current_time,
-    )
-    owner_notice = create_admin_target_notice(
-        db,
-        notice_type="need_sub_post_removed",
-        title="Need a Sub post removed",
-        body="Your Need a Sub post was removed by Pickup Lane admin.",
-        recipient_user_id=sub_post.owner_user_id,
-        target_user_id=sub_post.owner_user_id,
-        target_sub_post_id=sub_post.id,
-        admin_action=audit_action,
-        created_by_user_id=admin_user.id,
-        user_safe_reason=normalized_reason,
-    )
-
-    active_requests = db.scalars(
-        select(SubPostRequest).where(
-            SubPostRequest.sub_post_id == sub_post.id,
-            SubPostRequest.request_status.in_(ACTIVE_REQUEST_STATUSES),
-        )
-    ).all()
-    closed_request_ids: list[str] = []
-    requester_notices: list[AdminTargetNotice] = []
-    for sub_request in active_requests:
-        previous_status = sub_request.request_status
-        change_request_status(
-            db,
-            sub_request,
-            "closed_by_admin",
-            admin_user.id,
-            "admin",
-            normalized_reason,
-            current_time,
-        )
-        closed_request_ids.append(str(sub_request.id))
-        if previous_status == "pending":
-            resolve_owner_request_activity_notification(
-                db,
-                sub_post=sub_post,
-                sub_request=sub_request,
-                read_at=current_time,
-            )
-        notify_requester_sub_status(
+    try:
+        return apply_admin_sub_post_removal(
             db,
             sub_post=sub_post,
-            sub_request=sub_request,
-            notification_type="sub_post_removed",
-            title=None,
-            body=None,
-            actor_user_id=admin_user.id,
-            event_at=current_time,
-        )
-        requester_notices.append(
-            create_admin_target_notice(
-                db,
-                notice_type="need_sub_post_removed",
-                title="Need a Sub request closed",
-                body="A Need a Sub post you requested was removed by Pickup Lane admin.",
-                recipient_user_id=sub_request.requester_user_id,
-                target_user_id=sub_request.requester_user_id,
-                target_sub_post_id=sub_post.id,
-                target_sub_post_request_id=sub_request.id,
-                admin_action=audit_action,
-                created_by_user_id=admin_user.id,
-                user_safe_reason=normalized_reason,
-            )
-        )
-    db.flush()
-    notice_ids = [owner_notice.id, *(notice.id for notice in requester_notices)]
-    metadata = dict(audit_action.metadata_ or {})
-    metadata["notice_ids"] = [str(notice_id) for notice_id in notice_ids]
-    metadata["closed_request_ids"] = closed_request_ids
-    audit_action.metadata_ = metadata
-
-    try:
-        db.add(audit_action)
-        db.commit()
-        db.refresh(sub_post)
-        return sub_post
-    except IntegrityError as exc:
-        db.rollback()
-        existing_action = get_existing_remove_sub_post_action(
-            db,
-            admin_user_id=admin_user.id,
-            sub_post_id=sub_post_id,
+            admin_user=admin_user,
+            normalized_reason=normalized_reason,
             idempotency_key=idempotency_key,
         )
+    except IntegrityError as exc:
+        db.rollback()
+        existing_action = None
+        if integrity_error_matches_constraint(
+            exc,
+            "uq_admin_actions_remove_sub_post_idempotency",
+        ):
+            existing_action = get_existing_remove_sub_post_action(
+                db,
+                admin_user_id=admin_user.id,
+                sub_post_id=sub_post_id,
+                idempotency_key=idempotency_key,
+            )
         if existing_action is not None:
             return get_removed_sub_post_replay_result(
                 db,
@@ -2078,6 +2097,9 @@ def remove_sub_post(
             status_code=status.HTTP_409_CONFLICT,
             detail="Need a Sub post could not be removed.",
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 def remove_sub_post_workflow(

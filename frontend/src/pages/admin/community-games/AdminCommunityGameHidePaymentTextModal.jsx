@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { EyeOff, X } from 'lucide-react'
 import { FormErrorMessage } from '../../../components/FormErrorMessage.jsx'
 import { hideAdminCommunityGamePaymentText } from '../shared/adminApi.js'
+import { runAdminEnforcementMutation } from '../shared/adminEnforcementLifecycle.js'
 
 const REASON_MAX_LENGTH = 100
 
@@ -14,6 +15,7 @@ function AdminCommunityGameHidePaymentTextModal({
   detail,
   firebaseUser,
   onClose,
+  onConflict,
   onHidden,
 }) {
   const [reason, setReason] = useState('')
@@ -46,23 +48,26 @@ function AdminCommunityGameHidePaymentTextModal({
       return
     }
 
-    setIsSubmitting(true)
     setExecutionError('')
 
-    try {
-      const result = await hideAdminCommunityGamePaymentText({
+    await runAdminEnforcementMutation({
+      clearStaleState: onClose,
+      execute: () => hideAdminCommunityGamePaymentText({
         firebaseUser,
         gameId: detail.game.id,
         idempotencyKey,
         reason: reason.trim(),
-      })
-      onHidden(result)
-      onClose()
-    } catch (error) {
-      setExecutionError(error.message || 'Payment text could not be hidden.')
-    } finally {
-      setIsSubmitting(false)
-    }
+      }),
+      onError: (error) => {
+        setExecutionError(error.message || 'Payment text could not be hidden.')
+      },
+      onPendingChange: setIsSubmitting,
+      onSuccess: (result) => {
+        onHidden(result)
+        onClose()
+      },
+      reloadAuthoritativeState: onConflict,
+    })
   }
 
   function handleReasonChange(event) {

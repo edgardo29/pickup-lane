@@ -15,23 +15,28 @@ from backend.models import AdminAction, Game, Notification, User
 from backend.schemas.admin_user_schema import (
     AdminUserHostingRestrictionGameImpactRead,
     AdminUserHostingRestrictionPreviewRead,
-    AdminUserRestrictHostingCreate,
-    AdminUserRestrictHostingResultRead,
     AdminUserRestoreHostingCreate,
     AdminUserRestoreHostingResultRead,
+    AdminUserRestrictHostingCreate,
+    AdminUserRestrictHostingResultRead,
 )
-from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_action_service import (
+    integrity_error_matches_constraint,
+    record_admin_action,
+)
 from backend.services.admin_user_service import get_admin_user_or_404
+from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.hosting_access_service import (
     HOSTING_STATUS_ELIGIBLE,
     HOSTING_STATUS_NOT_ELIGIBLE,
     HOSTING_STATUS_RESTRICTED,
 )
-from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.notification_event_service import build_app_notification_fields
-from backend.services.user_service import build_user_conflict_detail
 
 HOSTING_RESTRICTION_PREVIEW_GAME_LIMIT = 100
+HOSTING_ENFORCEMENT_SAVE_CONFLICT_DETAIL = (
+    "Hosting enforcement action could not be saved."
+)
 HOSTING_RESTRICTION_BLOCKING_MESSAGES = {
     "deleted": "Deleted accounts cannot have hosting restricted.",
     "pending_deletion": "Accounts pending deletion cannot have hosting restricted.",
@@ -319,7 +324,7 @@ def build_restrict_hosting_result(
 
     return AdminUserRestrictHostingResultRead(
         user_id=user.id,
-        hosting_status="restricted",
+        hosting_status=user.hosting_status,
         restricted_at=action.created_at,
         admin_action_id=action.id,
         notification_id=notification.id,
@@ -350,7 +355,7 @@ def build_restore_hosting_result(
 
     return AdminUserRestoreHostingResultRead(
         user_id=user.id,
-        hosting_status="eligible",
+        hosting_status=user.hosting_status,
         restored_at=action.created_at,
         admin_action_id=action.id,
         notification_id=notification.id,
@@ -363,7 +368,10 @@ def get_locked_admin_user_or_404(
     user_id: uuid.UUID,
 ) -> User:
     user = db.scalar(
-        select(User).where(User.id == user_id).with_for_update()
+        select(User)
+        .where(User.id == user_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
     )
     if user is None:
         raise HTTPException(
@@ -463,48 +471,46 @@ def restrict_admin_user_hosting(
             summary="Pickup Lane restricted your hosting access.",
             body=(
                 "Your Pickup Lane account cannot publish new community games "
-                "right now. Existing hosted games remain available to manage. "
-                "Contact support if you need help."
+                "right now for safety or policy reasons. Existing hosted games "
+                "remain available to manage. Contact support if you believe this "
+                "was a mistake."
             ),
             action_key="view_profile",
         ),
-        actor_user_id=(
-            None if admin_user.id == target_user.id else admin_user.id
-        ),
+        actor_user_id=(None if admin_user.id == target_user.id else admin_user.id),
         is_read=False,
         read_at=None,
         created_at=now,
         updated_at=now,
     )
-    db.add(notification)
-    db.flush()
-    audit_action = record_admin_action(
-        db,
-        admin_user_id=admin_user.id,
-        action_type="restrict_hosting",
-        target_user_id=target_user.id,
-        target_notification_id=notification.id,
-        reason=reason,
-        metadata={
-            "before": {
-                "hosting_status": target_user.hosting_status,
-            },
-            "after": {
-                "hosting_status": HOSTING_STATUS_RESTRICTED,
-            },
-            "reviewed": {
-                "future_community_game_count": len(future_games),
-                "preview_snapshot_hash": preview.preview_token,
-            },
-        },
-        idempotency_key=idempotency_key,
-        created_at=now,
-    )
-    target_user.hosting_status = HOSTING_STATUS_RESTRICTED
-    target_user.updated_at = now
-    db.add(target_user)
-
     try:
+        db.add(notification)
+        db.flush()
+        audit_action = record_admin_action(
+            db,
+            admin_user_id=admin_user.id,
+            action_type="restrict_hosting",
+            target_user_id=target_user.id,
+            target_notification_id=notification.id,
+            reason=reason,
+            metadata={
+                "before": {
+                    "hosting_status": target_user.hosting_status,
+                },
+                "after": {
+                    "hosting_status": HOSTING_STATUS_RESTRICTED,
+                },
+                "reviewed": {
+                    "future_community_game_count": len(future_games),
+                    "preview_snapshot_hash": preview.preview_token,
+                },
+            },
+            idempotency_key=idempotency_key,
+            created_at=now,
+        )
+        target_user.hosting_status = HOSTING_STATUS_RESTRICTED
+        target_user.updated_at = now
+        db.add(target_user)
         db.commit()
         db.refresh(target_user)
         return AdminUserRestrictHostingResultRead(
@@ -516,12 +522,17 @@ def restrict_admin_user_hosting(
         )
     except IntegrityError as exc:
         db.rollback()
-        existing_action = get_existing_restrict_hosting_action(
-            db,
-            admin_user_id=admin_user.id,
-            user_id=user_id,
-            idempotency_key=idempotency_key,
-        )
+        existing_action = None
+        if integrity_error_matches_constraint(
+            exc,
+            "uq_admin_actions_restrict_hosting_idempotency",
+        ):
+            existing_action = get_existing_restrict_hosting_action(
+                db,
+                admin_user_id=admin_user.id,
+                user_id=user_id,
+                idempotency_key=idempotency_key,
+            )
         if existing_action is not None:
             return build_restrict_hosting_result(
                 db,
@@ -531,8 +542,11 @@ def restrict_admin_user_hosting(
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_conflict_detail(exc),
+            detail=HOSTING_ENFORCEMENT_SAVE_CONFLICT_DETAIL,
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 def restore_admin_user_hosting(
@@ -574,9 +588,7 @@ def restore_admin_user_hosting(
     if blocking_reason_codes:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=HOSTING_RESTORATION_BLOCKING_MESSAGES[
-                blocking_reason_codes[0]
-            ],
+            detail=HOSTING_RESTORATION_BLOCKING_MESSAGES[blocking_reason_codes[0]],
         )
 
     now = datetime.now(timezone.utc)
@@ -598,39 +610,36 @@ def restore_admin_user_hosting(
             ),
             action_key="view_profile",
         ),
-        actor_user_id=(
-            None if admin_user.id == target_user.id else admin_user.id
-        ),
+        actor_user_id=(None if admin_user.id == target_user.id else admin_user.id),
         is_read=False,
         read_at=None,
         created_at=now,
         updated_at=now,
     )
-    db.add(notification)
-    db.flush()
-    audit_action = record_admin_action(
-        db,
-        admin_user_id=admin_user.id,
-        action_type="restore_hosting",
-        target_user_id=target_user.id,
-        target_notification_id=notification.id,
-        reason=reason,
-        metadata={
-            "before": {
-                "hosting_status": target_user.hosting_status,
-            },
-            "after": {
-                "hosting_status": HOSTING_STATUS_ELIGIBLE,
-            },
-        },
-        idempotency_key=idempotency_key,
-        created_at=now,
-    )
-    target_user.hosting_status = HOSTING_STATUS_ELIGIBLE
-    target_user.updated_at = now
-    db.add(target_user)
-
     try:
+        db.add(notification)
+        db.flush()
+        audit_action = record_admin_action(
+            db,
+            admin_user_id=admin_user.id,
+            action_type="restore_hosting",
+            target_user_id=target_user.id,
+            target_notification_id=notification.id,
+            reason=reason,
+            metadata={
+                "before": {
+                    "hosting_status": target_user.hosting_status,
+                },
+                "after": {
+                    "hosting_status": HOSTING_STATUS_ELIGIBLE,
+                },
+            },
+            idempotency_key=idempotency_key,
+            created_at=now,
+        )
+        target_user.hosting_status = HOSTING_STATUS_ELIGIBLE
+        target_user.updated_at = now
+        db.add(target_user)
         db.commit()
         db.refresh(target_user)
         return AdminUserRestoreHostingResultRead(
@@ -642,12 +651,17 @@ def restore_admin_user_hosting(
         )
     except IntegrityError as exc:
         db.rollback()
-        existing_action = get_existing_restore_hosting_action(
-            db,
-            admin_user_id=admin_user.id,
-            user_id=user_id,
-            idempotency_key=idempotency_key,
-        )
+        existing_action = None
+        if integrity_error_matches_constraint(
+            exc,
+            "uq_admin_actions_restore_hosting_idempotency",
+        ):
+            existing_action = get_existing_restore_hosting_action(
+                db,
+                admin_user_id=admin_user.id,
+                user_id=user_id,
+                idempotency_key=idempotency_key,
+            )
         if existing_action is not None:
             return build_restore_hosting_result(
                 db,
@@ -656,5 +670,8 @@ def restore_admin_user_hosting(
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_conflict_detail(exc),
+            detail=HOSTING_ENFORCEMENT_SAVE_CONFLICT_DETAIL,
         ) from exc
+    except Exception:
+        db.rollback()
+        raise

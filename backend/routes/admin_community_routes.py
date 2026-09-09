@@ -27,13 +27,6 @@ from backend.services.admin_community_service import (
     list_admin_community_games,
     restore_admin_community_game_payment_text,
 )
-from backend.services.community_game_enforcement_service import (
-    admin_cancel_community_game,
-    hide_community_game,
-    pause_community_game_joining,
-    restore_community_game,
-    resume_community_game_joining,
-)
 from backend.services.auth_service import (
     require_active_admin,
     require_recent_active_admin,
@@ -44,6 +37,13 @@ from backend.services.chat_moderation_admin_service import (
     mark_game_chat_message_reviewed,
     remove_game_chat_message,
     restore_game_chat_message,
+)
+from backend.services.community_game_enforcement_service import (
+    admin_cancel_community_game,
+    hide_community_game,
+    pause_community_game_joining,
+    restore_community_game,
+    resume_community_game_joining,
 )
 
 router = APIRouter(prefix="/admin/community-games", tags=["admin_community_games"])
@@ -196,6 +196,7 @@ def mark_admin_community_game_chat_message_reviewed_route(
         message_id=message_id,
         admin_user=current_admin,
         payload=payload,
+        expected_game_type="community",
     )
 
 
@@ -218,6 +219,7 @@ def remove_admin_community_game_chat_message_route(
         message_id=message_id,
         admin_user=current_admin,
         payload=payload,
+        expected_game_type="community",
     )
 
 
@@ -240,6 +242,7 @@ def restore_admin_community_game_chat_message_route(
         message_id=message_id,
         admin_user=current_admin,
         payload=payload,
+        expected_game_type="community",
     )
 
 

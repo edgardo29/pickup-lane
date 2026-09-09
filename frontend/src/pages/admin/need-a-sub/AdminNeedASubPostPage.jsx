@@ -729,6 +729,7 @@ function AdminNeedASubPostPage() {
           firebaseUser={currentUser}
           onClose={() => setPostAction(null)}
           onCompleted={handlePostActionCompleted}
+          onConflict={() => setRefreshCount((count) => count + 1)}
         />
       )}
     </>

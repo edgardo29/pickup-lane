@@ -19,7 +19,10 @@ from backend.schemas.admin_user_schema import (
     AdminUserUnsuspendCreate,
     AdminUserUnsuspendResultRead,
 )
-from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_action_service import (
+    integrity_error_matches_constraint,
+    record_admin_action,
+)
 from backend.services.admin_rejected_attempt_policy import (
     ATTEMPT_TYPE_SUSPEND_USER_REJECTED,
     REJECTION_DOMAIN_REJECTED_POSTLOAD,
@@ -33,9 +36,11 @@ from backend.services.admin_user_service import (
 )
 from backend.services.game_rules import OPEN_GAME_STATUSES
 from backend.services.notification_event_service import build_app_notification_fields
-from backend.services.user_service import build_user_conflict_detail
 
 SUSPENSION_PREVIEW_HOST_ASSIGNMENT_LIMIT = 100
+ACCOUNT_ENFORCEMENT_SAVE_CONFLICT_DETAIL = (
+    "Account enforcement action could not be saved."
+)
 SUSPEND_USER_ROUTE_PATH = "/admin/users/{user_id}/suspend"
 SUSPENSION_BLOCKING_MESSAGES = {
     "deleted": "Deleted accounts cannot be suspended.",
@@ -272,14 +277,13 @@ def build_suspend_result(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "idempotency_key was already used for a different "
-                "suspension request."
+                "idempotency_key was already used for a different suspension request."
             ),
         )
 
     return AdminUserSuspendResultRead(
         user_id=user.id,
-        account_status="suspended",
+        account_status=user.account_status,
         suspended_at=action.created_at,
         admin_action_id=action.id,
         notification_id=notification.id,
@@ -305,6 +309,7 @@ def lock_suspension_users(
                 )
             )
             .order_by(User.id.asc())
+            .execution_options(populate_existing=True)
             .with_for_update()
         ).all()
     )
@@ -350,9 +355,7 @@ def reject_guarded_suspension(
             "reason_codes": reason_codes,
             "role": target_user.role,
             "account_status": target_user.account_status,
-            "future_official_host_assignment_count": (
-                official_host_assignment_count
-            ),
+            "future_official_host_assignment_count": (official_host_assignment_count),
         },
     )
     raise HTTPException(
@@ -458,42 +461,40 @@ def suspend_admin_user(
             title="Account suspended",
             summary="Pickup Lane suspended your account.",
             body=(
-                "Your Pickup Lane account was suspended. Product and staff "
-                "actions are unavailable while the suspension is active. "
-                "Contact support if you need help."
+                "Your Pickup Lane account was suspended for safety or policy "
+                "reasons. Product and staff actions are unavailable while the "
+                "suspension is active. Contact support if you believe this was a "
+                "mistake."
             ),
             action_key="view_profile",
         ),
-        actor_user_id=(
-            None if admin_user.id == target_user.id else admin_user.id
-        ),
+        actor_user_id=(None if admin_user.id == target_user.id else admin_user.id),
         is_read=False,
         read_at=None,
         created_at=now,
         updated_at=now,
     )
-    db.add(notification)
-    db.flush()
-    audit_action = record_admin_action(
-        db,
-        admin_user_id=admin_user.id,
-        action_type="suspend_user",
-        target_user_id=target_user.id,
-        target_notification_id=notification.id,
-        reason=reason,
-        metadata={
-            "before": {"account_status": target_user.account_status},
-            "after": {"account_status": "suspended"},
-            "reviewed": {"preview_snapshot_hash": preview.preview_token},
-        },
-        idempotency_key=idempotency_key,
-        created_at=now,
-    )
-    target_user.account_status = "suspended"
-    target_user.updated_at = now
-    db.add(target_user)
-
     try:
+        db.add(notification)
+        db.flush()
+        audit_action = record_admin_action(
+            db,
+            admin_user_id=admin_user.id,
+            action_type="suspend_user",
+            target_user_id=target_user.id,
+            target_notification_id=notification.id,
+            reason=reason,
+            metadata={
+                "before": {"account_status": target_user.account_status},
+                "after": {"account_status": "suspended"},
+                "reviewed": {"preview_snapshot_hash": preview.preview_token},
+            },
+            idempotency_key=idempotency_key,
+            created_at=now,
+        )
+        target_user.account_status = "suspended"
+        target_user.updated_at = now
+        db.add(target_user)
         db.commit()
         db.refresh(target_user)
         return AdminUserSuspendResultRead(
@@ -505,12 +506,17 @@ def suspend_admin_user(
         )
     except IntegrityError as exc:
         db.rollback()
-        existing_action = get_existing_suspend_action(
-            db,
-            admin_user_id=admin_user.id,
-            user_id=user_id,
-            idempotency_key=idempotency_key,
-        )
+        existing_action = None
+        if integrity_error_matches_constraint(
+            exc,
+            "uq_admin_actions_suspend_user_idempotency",
+        ):
+            existing_action = get_existing_suspend_action(
+                db,
+                admin_user_id=admin_user.id,
+                user_id=user_id,
+                idempotency_key=idempotency_key,
+            )
         if existing_action is not None:
             return build_suspend_result(
                 db,
@@ -520,8 +526,11 @@ def suspend_admin_user(
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_conflict_detail(exc),
+            detail=ACCOUNT_ENFORCEMENT_SAVE_CONFLICT_DETAIL,
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 def normalize_unsuspend_request(
@@ -578,14 +587,13 @@ def build_unsuspend_result(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "idempotency_key was already used for a different "
-                "unsuspension request."
+                "idempotency_key was already used for a different unsuspension request."
             ),
         )
 
     return AdminUserUnsuspendResultRead(
         user_id=user.id,
-        account_status="active",
+        account_status=user.account_status,
         unsuspended_at=action.created_at,
         admin_action_id=action.id,
         notification_id=notification.id,
@@ -598,7 +606,10 @@ def get_user_for_unsuspend_or_404(
     user_id: uuid.UUID,
 ) -> User:
     user = db.scalar(
-        select(User).where(User.id == user_id).with_for_update()
+        select(User)
+        .where(User.id == user_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
     )
     if user is None:
         raise HTTPException(
@@ -686,27 +697,26 @@ def unsuspend_admin_user(
         created_at=now,
         updated_at=now,
     )
-    db.add(notification)
-    db.flush()
-    audit_action = record_admin_action(
-        db,
-        admin_user_id=admin_user.id,
-        action_type="unsuspend_user",
-        target_user_id=target_user.id,
-        target_notification_id=notification.id,
-        reason=reason,
-        metadata={
-            "before": {"account_status": target_user.account_status},
-            "after": {"account_status": "active"},
-        },
-        idempotency_key=idempotency_key,
-        created_at=now,
-    )
-    target_user.account_status = "active"
-    target_user.updated_at = now
-    db.add(target_user)
-
     try:
+        db.add(notification)
+        db.flush()
+        audit_action = record_admin_action(
+            db,
+            admin_user_id=admin_user.id,
+            action_type="unsuspend_user",
+            target_user_id=target_user.id,
+            target_notification_id=notification.id,
+            reason=reason,
+            metadata={
+                "before": {"account_status": target_user.account_status},
+                "after": {"account_status": "active"},
+            },
+            idempotency_key=idempotency_key,
+            created_at=now,
+        )
+        target_user.account_status = "active"
+        target_user.updated_at = now
+        db.add(target_user)
         db.commit()
         db.refresh(target_user)
         return AdminUserUnsuspendResultRead(
@@ -718,12 +728,17 @@ def unsuspend_admin_user(
         )
     except IntegrityError as exc:
         db.rollback()
-        existing_action = get_existing_unsuspend_action(
-            db,
-            admin_user_id=admin_user.id,
-            user_id=user_id,
-            idempotency_key=idempotency_key,
-        )
+        existing_action = None
+        if integrity_error_matches_constraint(
+            exc,
+            "uq_admin_actions_unsuspend_user_idempotency",
+        ):
+            existing_action = get_existing_unsuspend_action(
+                db,
+                admin_user_id=admin_user.id,
+                user_id=user_id,
+                idempotency_key=idempotency_key,
+            )
         if existing_action is not None:
             return build_unsuspend_result(
                 db,
@@ -732,5 +747,8 @@ def unsuspend_admin_user(
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=build_user_conflict_detail(exc),
+            detail=ACCOUNT_ENFORCEMENT_SAVE_CONFLICT_DETAIL,
         ) from exc
+    except Exception:
+        db.rollback()
+        raise

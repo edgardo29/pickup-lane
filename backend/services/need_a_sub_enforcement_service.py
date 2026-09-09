@@ -1,7 +1,7 @@
 """Admin enforcement workflows for Need a Sub posts."""
 
 import uuid
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -13,7 +13,10 @@ from backend.schemas.admin_need_a_sub_schema import (
     AdminNeedASubEnforcementActionCreate,
     AdminNeedASubEnforcementActionResultRead,
 )
-from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_action_service import (
+    integrity_error_matches_constraint,
+    record_admin_action,
+)
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
@@ -98,12 +101,23 @@ def build_result(
         for value in metadata.get("closed_request_ids", [])
         if isinstance(value, str)
     ]
+    notice_ids = get_notice_ids_for_admin_action(db, audit_action.id)
+    expected_notice_count = (
+        1 + len(closed_request_ids)
+        if audit_action.action_type == "remove_sub_post"
+        else 1
+    )
+    if len(notice_ids) != expected_notice_count:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The prior Need a Sub action result is incomplete.",
+        )
     return AdminNeedASubEnforcementActionResultRead(
         post_id=post.id,
         post_status=post.post_status,
         public_visibility_status=post.public_visibility_status,
         audit_action_id=audit_action.id,
-        notice_ids=get_notice_ids_for_admin_action(db, audit_action.id),
+        notice_ids=notice_ids,
         closed_request_ids=closed_request_ids,
         idempotent_replay=idempotent_replay,
     )
@@ -118,7 +132,6 @@ def create_owner_notice(
     notice_type: str,
     title: str,
     body: str,
-    reason: str,
 ) -> AdminTargetNotice:
     return create_admin_target_notice(
         db,
@@ -130,7 +143,6 @@ def create_owner_notice(
         target_sub_post_id=post.id,
         admin_action=audit_action,
         created_by_user_id=admin_user.id,
-        user_safe_reason=reason,
     )
 
 
@@ -204,37 +216,37 @@ def apply_need_sub_visibility_action(
         idempotency_key=idempotency_key,
         created_at=current_time,
     )
-    link_admin_action_to_open_review_case(db, audit_action)
-    notice = create_owner_notice(
-        db,
-        post=post,
-        audit_action=audit_action,
-        admin_user=admin_user,
-        notice_type=notice_type,
-        title=notice_title,
-        body=notice_body,
-        reason=reason,
-    )
-    db.flush()
-    metadata = dict(audit_action.metadata_ or {})
-    metadata["notice_ids"] = [str(notice.id)]
-    audit_action.metadata_ = metadata
-
     try:
+        link_admin_action_to_open_review_case(db, audit_action)
+        create_owner_notice(
+            db,
+            post=post,
+            audit_action=audit_action,
+            admin_user=admin_user,
+            notice_type=notice_type,
+            title=notice_title,
+            body=notice_body,
+        )
         db.add(post)
         db.add(audit_action)
+        db.flush()
         db.commit()
         db.refresh(post)
         db.refresh(audit_action)
     except IntegrityError as exc:
         db.rollback()
-        existing_action = get_existing_need_sub_action(
-            db,
-            action_type=action_type,
-            admin_user_id=admin_user.id,
-            post_id=post_id,
-            idempotency_key=idempotency_key,
-        )
+        existing_action = None
+        if integrity_error_matches_constraint(
+            exc,
+            "uq_admin_actions_need_sub_enforcement_idempotency",
+        ):
+            existing_action = get_existing_need_sub_action(
+                db,
+                action_type=action_type,
+                admin_user_id=admin_user.id,
+                post_id=post_id,
+                idempotency_key=idempotency_key,
+            )
         if existing_action is not None:
             validate_existing_action(existing_action, expected_reason=reason)
             post = get_sub_post_or_404(db, post_id)
@@ -248,6 +260,9 @@ def apply_need_sub_visibility_action(
             status_code=status.HTTP_409_CONFLICT,
             detail="Need a Sub action could not be applied.",
         ) from exc
+    except Exception:
+        db.rollback()
+        raise
 
     return build_result(
         db,
@@ -267,13 +282,13 @@ def hide_need_a_sub_post(
     def validate_state(post: SubPost) -> None:
         if post.post_status == "removed":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Removed Need a Sub posts cannot be hidden.",
             )
-        if post.public_visibility_status == HIDDEN:
+        if post.public_visibility_status != VISIBLE:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Need a Sub post is already hidden.",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only visible Need a Sub posts can be hidden.",
             )
 
     return apply_need_sub_visibility_action(
@@ -286,8 +301,8 @@ def hide_need_a_sub_post(
         notice_type="need_sub_post_hidden",
         notice_title="Need a Sub post hidden",
         notice_body=(
-            "Your Need a Sub post is hidden from public browsing while "
-            "an admin review is active."
+            "Your Need a Sub post was hidden from public browsing for safety "
+            "or policy reasons. Contact support if you believe this was a mistake."
         ),
         state_validator=validate_state,
     )
@@ -303,13 +318,13 @@ def restore_need_a_sub_post(
     def validate_state(post: SubPost) -> None:
         if post.post_status == "removed":
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Removed Need a Sub posts cannot be restored.",
             )
-        if post.public_visibility_status == VISIBLE:
+        if post.public_visibility_status != HIDDEN:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Need a Sub post is already visible.",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only hidden Need a Sub posts can be restored.",
             )
 
     return apply_need_sub_visibility_action(

@@ -425,7 +425,7 @@ def test_already_removed_sub_post_retains_existing_removal_rejection() -> None:
                 idempotency_key_value="remove-already-removed",
             )
 
-        assert rejected.value.status_code == 400
+        assert rejected.value.status_code == 409
         assert count_rows(
             db,
             AdminAction,
