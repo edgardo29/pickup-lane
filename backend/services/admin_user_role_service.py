@@ -169,8 +169,7 @@ def validate_last_active_admin_protection(
         return
 
     target_is_active_admin = (
-        target_user.account_status == "active"
-        and target_user.deleted_at is None
+        target_user.account_status == "active" and target_user.deleted_at is None
     )
     if target_is_active_admin and len(active_admin_users) <= 1:
         raise HTTPException(
@@ -230,6 +229,7 @@ def change_user_role(
         db,
         admin_user_id=admin_user.id,
         action_type=USER_ROLE_CHANGED_ACTION,
+        outcome="succeeded",
         target_user_id=target_user.id,
         reason=reason,
         metadata={
@@ -237,7 +237,6 @@ def change_user_role(
             "after": {"role": next_role},
         },
         idempotency_key=idempotency_key,
-        created_at=now,
     )
     target_user.role = next_role
     target_user.updated_at = now

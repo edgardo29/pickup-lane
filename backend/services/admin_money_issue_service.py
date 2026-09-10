@@ -30,7 +30,9 @@ from backend.services.admin_action_service import (
     build_admin_action_conflict_detail,
     record_admin_action,
 )
-from backend.services.admin_money_issue_query_service import get_admin_money_issue_detail
+from backend.services.admin_money_issue_query_service import (
+    get_admin_money_issue_detail,
+)
 from backend.services.admin_money_issue_rules import (
     ISSUE_DEFAULTS,
     ISSUE_RESOLUTION_REASONS,
@@ -48,6 +50,7 @@ from backend.services.game_credit_service import (
     release_reserved_game_credit_usage,
     restore_redeemed_game_credit_usage,
 )
+
 
 def get_money_issue_for_update_or_404(
     db: Session,
@@ -153,14 +156,18 @@ def stage_refund_money_issue(
     detected_at = now or datetime.now(timezone.utc)
     value_kind, recommended_action_code = ISSUE_DEFAULTS[issue_type]
     operation_key = build_refund_issue_operation_key(refund.id)
-    target_booking_id = refund.booking_id or (payment.booking_id if payment is not None else None)
+    target_booking_id = refund.booking_id or (
+        payment.booking_id if payment is not None else None
+    )
     target_game_id = payment.game_id if payment is not None else None
     if target_game_id is None:
         if target_booking_id is not None:
             booking = db.get(Booking, target_booking_id)
             target_game_id = booking.game_id if booking is not None else None
     money_issue = db.scalars(
-        select(MoneyIssue).where(MoneyIssue.operation_key == operation_key).with_for_update()
+        select(MoneyIssue)
+        .where(MoneyIssue.operation_key == operation_key)
+        .with_for_update()
     ).first()
 
     if money_issue is None:
@@ -198,7 +205,9 @@ def stage_refund_money_issue(
             money_issue=money_issue,
             event_type="issue_opened",
             event_source="system",
-            actor_user_id=admin_action.admin_user_id if admin_action is not None else None,
+            actor_user_id=admin_action.admin_user_id
+            if admin_action is not None
+            else None,
             admin_action_id=admin_action.id if admin_action is not None else None,
             refund_event_id=refund_event.id if refund_event is not None else None,
             reason_code=reason_code,
@@ -288,7 +297,9 @@ def stage_credit_money_issue(
         else build_credit_restore_issue_operation_key(credit_usage.id)
     )
     money_issue = db.scalars(
-        select(MoneyIssue).where(MoneyIssue.operation_key == operation_key).with_for_update()
+        select(MoneyIssue)
+        .where(MoneyIssue.operation_key == operation_key)
+        .with_for_update()
     ).first()
     target_user_id = game_credit.user_id if game_credit is not None else None
 
@@ -327,7 +338,9 @@ def stage_credit_money_issue(
             money_issue=money_issue,
             event_type="issue_opened",
             event_source="system",
-            actor_user_id=admin_action.admin_user_id if admin_action is not None else None,
+            actor_user_id=admin_action.admin_user_id
+            if admin_action is not None
+            else None,
             admin_action_id=admin_action.id if admin_action is not None else None,
             reason_code=reason_code,
             summary=summary,
@@ -390,7 +403,9 @@ def stage_credit_money_issue(
     return money_issue
 
 
-def money_issue_has_successful_credit_retry(db: Session, money_issue: MoneyIssue) -> bool:
+def money_issue_has_successful_credit_retry(
+    db: Session, money_issue: MoneyIssue
+) -> bool:
     if money_issue.target_credit_usage_id is None:
         return False
 
@@ -551,6 +566,7 @@ def resolve_admin_money_issue(
         db,
         admin_user_id=admin_user.id,
         action_type="resolve_money_issue",
+        outcome="succeeded",
         target_user_id=money_issue.target_user_id,
         target_game_id=money_issue.target_game_id,
         target_booking_id=money_issue.target_booking_id,
@@ -672,7 +688,10 @@ def retry_admin_money_issue_credit(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Money issue is not a credit retry issue.",
         )
-    if money_issue.target_credit_usage_id is None or money_issue.target_booking_id is None:
+    if (
+        money_issue.target_credit_usage_id is None
+        or money_issue.target_booking_id is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Credit retry issue is missing usage or booking context.",
@@ -695,15 +714,20 @@ def retry_admin_money_issue_credit(
         .with_for_update()
     ).first()
     if target_credit is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game credit not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Game credit not found."
+        )
 
     now = datetime.now(timezone.utc)
-    retry_kind = "release" if money_issue.issue_type == "credit_release_failed" else "restore"
+    retry_kind = (
+        "release" if money_issue.issue_type == "credit_release_failed" else "restore"
+    )
     try:
         admin_action = record_admin_action(
             db,
             admin_user_id=admin_user.id,
             action_type="retry_money_issue_credit",
+            outcome="succeeded",
             target_user_id=money_issue.target_user_id,
             target_game_id=money_issue.target_game_id,
             target_booking_id=money_issue.target_booking_id,
@@ -793,6 +817,7 @@ def retry_admin_money_issue_credit(
             db,
             admin_user_id=admin_user.id,
             action_type="retry_money_issue_credit",
+            outcome="failed",
             target_user_id=failed_issue.target_user_id,
             target_game_id=failed_issue.target_game_id,
             target_booking_id=failed_issue.target_booking_id,
@@ -806,7 +831,7 @@ def retry_admin_money_issue_credit(
                 "issue_type": failed_issue.issue_type,
                 "operation_key": failed_issue.operation_key,
                 "retry_kind": retry_kind,
-                "failure": str(exc),
+                "failure": "game_credit_ledger_error",
                 "source": "admin_money_issue_credit_retry",
             },
         )
@@ -860,6 +885,8 @@ def retry_admin_money_issue_credit(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=build_admin_action_conflict_detail(integrity_exc),
             ) from integrity_exc
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
 
     return get_admin_money_issue_detail(db, money_issue_id=money_issue.id)

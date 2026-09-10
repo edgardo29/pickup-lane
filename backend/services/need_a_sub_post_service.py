@@ -1884,10 +1884,23 @@ def apply_admin_sub_post_removal(
 ) -> SubPost:
     old_status = sub_post.post_status
     current_time = now_utc()
+    active_requests = list(
+        db.scalars(
+            select(SubPostRequest)
+            .where(
+                SubPostRequest.sub_post_id == sub_post.id,
+                SubPostRequest.request_status.in_(ACTIVE_REQUEST_STATUSES),
+            )
+            .order_by(SubPostRequest.id.asc())
+            .with_for_update()
+        ).all()
+    )
+    closed_request_ids = [str(sub_request.id) for sub_request in active_requests]
     audit_action = record_admin_action(
         db,
         admin_user_id=admin_user.id,
         action_type="remove_sub_post",
+        outcome="succeeded",
         target_user_id=sub_post.owner_user_id,
         target_sub_post_id=sub_post.id,
         reason=normalized_reason,
@@ -1896,9 +1909,9 @@ def apply_admin_sub_post_removal(
             "old_status": old_status,
             "new_status": "removed",
             "removed_by": "admin",
+            "closed_request_ids": closed_request_ids,
         },
         idempotency_key=idempotency_key,
-        created_at=current_time,
     )
     sub_post.post_status = "removed"
     sub_post.removed_at = current_time
@@ -1957,13 +1970,6 @@ def apply_admin_sub_post_removal(
         created_by_user_id=admin_user.id,
     )
 
-    active_requests = db.scalars(
-        select(SubPostRequest).where(
-            SubPostRequest.sub_post_id == sub_post.id,
-            SubPostRequest.request_status.in_(ACTIVE_REQUEST_STATUSES),
-        )
-    ).all()
-    closed_request_ids: list[str] = []
     for sub_request in active_requests:
         previous_status = sub_request.request_status
         change_request_status(
@@ -1975,7 +1981,6 @@ def apply_admin_sub_post_removal(
             ADMIN_SUB_POST_REMOVAL_PUBLIC_REASON,
             current_time,
         )
-        closed_request_ids.append(str(sub_request.id))
         if previous_status == "pending":
             resolve_owner_request_activity_notification(
                 db,
@@ -1998,10 +2003,6 @@ def apply_admin_sub_post_removal(
             admin_action=audit_action,
             created_by_user_id=admin_user.id,
         )
-    metadata = dict(audit_action.metadata_ or {})
-    metadata["closed_request_ids"] = closed_request_ids
-    audit_action.metadata_ = metadata
-
     db.add(audit_action)
     db.flush()
     db.commit()

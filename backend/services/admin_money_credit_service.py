@@ -26,6 +26,7 @@ from backend.schemas.admin_money_credit_schema import (
 from backend.schemas.admin_money_refund_schema import (
     AdminMoneyRefundDetailItemRead,
 )
+from backend.services.admin_action_service import user_can_read_admin_action
 from backend.services.admin_money_cursor import (
     apply_desc_cursor,
     next_cursor_for_rows,
@@ -35,7 +36,7 @@ from backend.services.admin_money_display import admin_money_display, compact_id
 from backend.services.admin_money_issue_query_service import list_related_money_issues
 from backend.services.admin_money_payment_service import build_payment_summaries
 from backend.services.admin_money_refund_query_service import build_refund_summaries
-from backend.services.admin_action_service import user_can_read_admin_action
+from backend.services.auth_service import require_active_admin_user
 
 ADMIN_MONEY_DETAIL_RELATED_LIMIT = 100
 ADMIN_MONEY_CREDIT_USAGE_DETAIL_LIMIT = 100
@@ -65,8 +66,7 @@ def load_by_id(db: Session, model, ids: set[uuid.UUID]) -> dict[uuid.UUID, objec
     if not ids:
         return {}
     return {
-        row.id: row
-        for row in db.scalars(select(model).where(model.id.in_(ids))).all()
+        row.id: row for row in db.scalars(select(model).where(model.id.in_(ids))).all()
     }
 
 
@@ -197,9 +197,7 @@ def build_credit_summaries(
     users = load_by_id(db, User, user_ids)
     bookings = load_by_id(db, Booking, booking_ids)
     game_ids = {
-        credit.source_game_id
-        for credit in credits
-        if credit.source_game_id is not None
+        credit.source_game_id for credit in credits if credit.source_game_id is not None
     }
     game_ids.update(
         booking.game_id for booking in bookings.values() if booking is not None
@@ -345,7 +343,9 @@ def list_admin_money_credits(
 
     credits = list(
         db.scalars(
-            query.order_by(GameCredit.created_at.desc(), GameCredit.id.desc()).limit(limit + 1)
+            query.order_by(GameCredit.created_at.desc(), GameCredit.id.desc()).limit(
+                limit + 1
+            )
         ).all()
     )
     return AdminMoneyCreditListResponseRead(
@@ -511,6 +511,7 @@ def list_credit_audit_actions(
     credit: GameCredit,
     credit_usages: list[GameCreditUsage],
 ) -> list[AdminAction]:
+    require_active_admin_user(viewer_user)
     usage_ids = [usage.id for usage in credit_usages]
     filters = [AdminAction.target_game_credit_id == credit.id]
     if usage_ids:
@@ -536,6 +537,7 @@ def get_admin_money_credit_detail(
     game_credit_id: uuid.UUID,
     viewer_user: User,
 ) -> AdminMoneyCreditDetailRead:
+    require_active_admin_user(viewer_user)
     credit = get_credit_or_404(db, game_credit_id)
     credit_usage_count = count_credit_usages(db, credit.id)
     credit_usages = list_credit_usages(db, credit.id)

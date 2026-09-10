@@ -151,7 +151,9 @@ def get_official_host_roster_participant(
     )
 
     if len(participants) != 1:
-        detail = "Selected host must already be a confirmed roster player for this game."
+        detail = (
+            "Selected host must already be a confirmed roster player for this game."
+        )
         if len(participants) > 1:
             detail = "Selected host has multiple active roster rows for this game."
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
@@ -170,10 +172,7 @@ def get_official_host_roster_participant(
 
 
 def require_official_host_change_allowed(game: Game, *, action: str) -> None:
-    if (
-        game.publish_status != "published"
-        or game.game_status not in OPEN_GAME_STATUSES
-    ):
+    if game.publish_status != "published" or game.game_status not in OPEN_GAME_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Host can only be {action} for published active official games.",
@@ -192,9 +191,7 @@ def escape_like_search_term(value: str) -> str:
 
 def normalize_user_search_terms(query: str) -> list[str]:
     return [
-        term
-        for term in query.strip().split()[:USER_SEARCH_MAX_TERMS]
-        if len(term) >= 3
+        term for term in query.strip().split()[:USER_SEARCH_MAX_TERMS] if len(term) >= 3
     ]
 
 
@@ -215,10 +212,7 @@ def get_add_player_eligibility_reason(
     roster_count: int,
     now: datetime,
 ) -> str | None:
-    if (
-        game.publish_status != "published"
-        or game.game_status not in OPEN_GAME_STATUSES
-    ):
+    if game.publish_status != "published" or game.game_status not in OPEN_GAME_STATUSES:
         return "game_not_addable"
 
     if now >= ensure_timezone(game.starts_at):
@@ -332,10 +326,7 @@ def add_official_game_player(
     add_request: AdminOfficialGamePlayerAdd,
 ) -> GameParticipant:
     game = get_official_game_or_404(db, game_id, for_update=True)
-    if (
-        game.publish_status != "published"
-        or game.game_status not in OPEN_GAME_STATUSES
-    ):
+    if game.publish_status != "published" or game.game_status not in OPEN_GAME_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Players can only be added to published active official games.",
@@ -438,6 +429,7 @@ def add_official_game_player(
         db,
         admin_user_id=admin_user.id,
         action_type="admin_add_player",
+        outcome="succeeded",
         target_game_id=game.id,
         target_user_id=player.id,
         target_booking_id=booking.id,
@@ -509,9 +501,7 @@ def require_immediate_official_player_removal_is_safe(
 
     payments = list(
         db.scalars(
-            select(Payment)
-            .where(Payment.booking_id == booking.id)
-            .with_for_update()
+            select(Payment).where(Payment.booking_id == booking.id).with_for_update()
         ).all()
     )
     payment_ids = [payment.id for payment in payments]
@@ -521,10 +511,7 @@ def require_immediate_official_player_removal_is_safe(
     if participant_ids:
         refund_conditions.append(Refund.participant_id.in_(participant_ids))
     refunds_exist = db.scalar(
-        select(Refund.id)
-        .where(or_(*refund_conditions))
-        .with_for_update()
-        .limit(1)
+        select(Refund.id).where(or_(*refund_conditions)).with_for_update().limit(1)
     )
     credit_usages = list(
         db.scalars(
@@ -578,10 +565,7 @@ def remove_official_game_player(
     remove_request: AdminOfficialGamePlayerRemove,
 ) -> GameParticipant:
     game = get_official_game_or_404(db, game_id, for_update=True)
-    if (
-        game.publish_status != "published"
-        or game.game_status not in OPEN_GAME_STATUSES
-    ):
+    if game.publish_status != "published" or game.game_status not in OPEN_GAME_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Players can only be removed from published active official games.",
@@ -673,8 +657,8 @@ def remove_official_game_player(
             booking.reservation_status = "confirmed"
             booking.expires_at = None
             booking.participant_count = len(remaining_participants)
-            booking.subtotal_cents = (
-                booking.price_per_player_snapshot_cents * len(remaining_participants)
+            booking.subtotal_cents = booking.price_per_player_snapshot_cents * len(
+                remaining_participants
             )
             booking.discount_cents = min(booking.discount_cents, booking.subtotal_cents)
             booking.total_cents = (
@@ -729,6 +713,7 @@ def remove_official_game_player(
         db,
         admin_user_id=admin_user.id,
         action_type="admin_remove_player",
+        outcome="succeeded",
         target_game_id=game.id,
         target_user_id=participant.user_id,
         target_booking_id=booking.id if booking is not None else None,
@@ -825,6 +810,7 @@ def assign_official_game_host(
         db,
         admin_user_id=admin_user.id,
         action_type="assign_official_host",
+        outcome="succeeded",
         target_game_id=game.id,
         target_user_id=host.id,
         target_participant_id=host_participant.id,
@@ -889,6 +875,7 @@ def remove_official_game_host(
         db,
         admin_user_id=admin_user.id,
         action_type="remove_official_host",
+        outcome="succeeded",
         target_game_id=game.id,
         target_user_id=old_host_user_id,
         target_participant_id=(

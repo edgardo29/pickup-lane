@@ -481,6 +481,7 @@ def suspend_admin_user(
             db,
             admin_user_id=admin_user.id,
             action_type="suspend_user",
+            outcome="succeeded",
             target_user_id=target_user.id,
             target_notification_id=notification.id,
             reason=reason,
@@ -490,7 +491,6 @@ def suspend_admin_user(
                 "reviewed": {"preview_snapshot_hash": preview.preview_token},
             },
             idempotency_key=idempotency_key,
-            created_at=now,
         )
         target_user.account_status = "suspended"
         target_user.updated_at = now
@@ -704,6 +704,7 @@ def unsuspend_admin_user(
             db,
             admin_user_id=admin_user.id,
             action_type="unsuspend_user",
+            outcome="succeeded",
             target_user_id=target_user.id,
             target_notification_id=notification.id,
             reason=reason,
@@ -712,7 +713,6 @@ def unsuspend_admin_user(
                 "after": {"account_status": "active"},
             },
             idempotency_key=idempotency_key,
-            created_at=now,
         )
         target_user.account_status = "active"
         target_user.updated_at = now

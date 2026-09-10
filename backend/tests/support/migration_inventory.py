@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -49,6 +48,26 @@ RISKY_SQL_TOKENS = (
 _REVIEWED_RAW_SQL_FORMS = {
     "CREATE EXTENSION IF NOT EXISTS PG_TRGM": "extension_setup",
     "CREATE SEQUENCE PLATFORM_NOTICE_GLOBAL_SEQUENCE_SEQ": "sequence_setup",
+    (
+        "CREATE FUNCTION PREVENT_ADMIN_ACTIONS_MUTATION() RETURNS TRIGGER "
+        "LANGUAGE PLPGSQL AS $$ BEGIN RAISE EXCEPTION USING ERRCODE = '55000', "
+        "MESSAGE = 'ADMIN AUDIT ROWS ARE IMMUTABLE'; END; $$"
+    ): "raw_sql_expression",
+    (
+        "CREATE TRIGGER TRG_ADMIN_ACTIONS_IMMUTABLE BEFORE UPDATE OR DELETE ON "
+        "ADMIN_ACTIONS FOR EACH ROW EXECUTE FUNCTION "
+        "PREVENT_ADMIN_ACTIONS_MUTATION()"
+    ): "raw_sql_expression",
+    (
+        "CREATE FUNCTION PREVENT_ADMIN_REJECTED_ATTEMPTS_MUTATION() RETURNS "
+        "TRIGGER LANGUAGE PLPGSQL AS $$ BEGIN RAISE EXCEPTION USING ERRCODE = "
+        "'55000', MESSAGE = 'ADMIN AUDIT ROWS ARE IMMUTABLE'; END; $$"
+    ): "raw_sql_expression",
+    (
+        "CREATE TRIGGER TRG_ADMIN_REJECTED_ATTEMPTS_IMMUTABLE BEFORE UPDATE OR "
+        "DELETE ON ADMIN_REJECTED_ATTEMPTS FOR EACH ROW EXECUTE FUNCTION "
+        "PREVENT_ADMIN_REJECTED_ATTEMPTS_MUTATION()"
+    ): "raw_sql_expression",
 }
 
 
@@ -72,7 +91,9 @@ def load_migration_revisions(versions_dir: Path) -> tuple[MigrationRevision, ...
     return tuple(revisions)
 
 
-def build_migration_operation_inventory(versions_dir: Path) -> MigrationOperationInventory:
+def build_migration_operation_inventory(
+    versions_dir: Path,
+) -> MigrationOperationInventory:
     revisions = load_migration_revisions(versions_dir)
     operation_categories: set[str] = set()
     risky_findings: list[str] = []
@@ -163,12 +184,12 @@ def _base_revisions(revisions: tuple[MigrationRevision, ...]) -> tuple[str, ...]
 
 def _head_revisions(revisions: tuple[MigrationRevision, ...]) -> tuple[str, ...]:
     parent_ids = {
-        parent
-        for revision in revisions
-        for parent in _parents(revision.down_revision)
+        parent for revision in revisions for parent in _parents(revision.down_revision)
     }
     return tuple(
-        revision.revision for revision in revisions if revision.revision not in parent_ids
+        revision.revision
+        for revision in revisions
+        if revision.revision not in parent_ids
     )
 
 
@@ -206,7 +227,9 @@ def _classify_upgrade_operations(
                 categories.add("constraint_creation")
 
         if isinstance(node, ast.JoinedStr):
-            findings.append(f"{path.name}: upgrade contains f-string SQL or dynamic text")
+            findings.append(
+                f"{path.name}: upgrade contains f-string SQL or dynamic text"
+            )
 
     return categories, findings
 

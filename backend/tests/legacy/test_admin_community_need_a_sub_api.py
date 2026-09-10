@@ -151,9 +151,7 @@ def test_admin_community_games_search_supports_email_for_admin(
 
     assert admin_actor_response.status_code == 200, admin_actor_response.text
     assert admin_actor_response.json()["total_count"] == 1
-    assert [item["id"] for item in admin_actor_response.json()["games"]] == [
-        game["id"]
-    ]
+    assert [item["id"] for item in admin_actor_response.json()["games"]] == [game["id"]]
     assert admin_response.status_code == 200, admin_response.text
     assert admin_response.json()["total_count"] == 1
     assert [item["id"] for item in admin_response.json()["games"]] == [game["id"]]
@@ -392,9 +390,7 @@ def test_admin_support_flag_limit_counts_all_flags(
     )
 
     assert response.status_code == 200, response.text
-    assert [flag["id"] for flag in response.json()["support_flags"]] == [
-        newer_flag_id
-    ]
+    assert [flag["id"] for flag in response.json()["support_flags"]] == [newer_flag_id]
     assert response.json()["support_flag_total_count"] == 2
     assert generic_response.status_code == 200, generic_response.text
     assert [flag["id"] for flag in generic_response.json()] == [newer_flag_id]
@@ -590,8 +586,9 @@ def test_community_game_review_flag_is_idempotent_and_blocks_open_duplicate(
     assert first_response.status_code == 200, first_response.text
     assert replay_response.status_code == 200, replay_response.text
     assert replay_response.json()["idempotent_replay"] is True
-    assert replay_response.json()["support_flag"]["id"] == (
-        first_response.json()["support_flag"]["id"]
+    assert (
+        replay_response.json()["support_flag"]["id"]
+        == (first_response.json()["support_flag"]["id"])
     )
     assert mismatch_response.status_code == 409, mismatch_response.text
     assert duplicate_response.status_code == 409, duplicate_response.text
@@ -688,8 +685,9 @@ def test_only_admin_can_resolve_community_game_review_flag(
         if action["action_type"] == "resolve_support_flag"
     ]
     assert len(resolution_actions) == 1
-    assert resolution_actions[0]["idempotency_key"] == (
-        resolution_payload["idempotency_key"]
+    assert (
+        resolution_actions[0]["idempotency_key"]
+        == (resolution_payload["idempotency_key"])
     )
 
 
@@ -729,7 +727,9 @@ def test_admin_community_game_hide_payment_text_hides_public_snapshot_and_audits
     )
     assert body["payment_snapshot"]["payment_text_moderation_status"] == "hidden"
     assert body["payment_snapshot"]["payment_text_hidden_at"] is not None
-    assert body["payment_snapshot"]["payment_text_hidden_by_user_id"] == admin_actor["id"]
+    assert (
+        body["payment_snapshot"]["payment_text_hidden_by_user_id"] == admin_actor["id"]
+    )
     assert body["payment_snapshot"]["payment_text_hidden_reason"] == (
         "Unsafe external payment text."
     )
@@ -825,8 +825,9 @@ def test_admin_community_game_hide_payment_text_is_idempotent(
     assert first_response.status_code == 200, first_response.text
     assert replay_response.status_code == 200, replay_response.text
     assert replay_response.json()["idempotent_replay"] is True
-    assert replay_response.json()["audit_action_id"] == (
-        first_response.json()["audit_action_id"]
+    assert (
+        replay_response.json()["audit_action_id"]
+        == (first_response.json()["audit_action_id"])
     )
     assert mismatch_response.status_code == 409, mismatch_response.text
 
@@ -856,9 +857,7 @@ def test_admin_community_game_hide_payment_text_rechecks_replay_after_lock(
     )
     assert first_response.status_code == 200, first_response.text
 
-    original_lookup = (
-        admin_community_service.get_existing_hide_payment_text_action
-    )
+    original_lookup = admin_community_service.get_existing_hide_payment_text_action
     lookup_count = 0
 
     def miss_before_lock_then_find(*args, **kwargs):
@@ -880,8 +879,9 @@ def test_admin_community_game_hide_payment_text_rechecks_replay_after_lock(
 
     assert replay_response.status_code == 200, replay_response.text
     assert replay_response.json()["idempotent_replay"] is True
-    assert replay_response.json()["audit_action_id"] == (
-        first_response.json()["audit_action_id"]
+    assert (
+        replay_response.json()["audit_action_id"]
+        == (first_response.json()["audit_action_id"])
     )
     assert lookup_count == 2
 
@@ -938,8 +938,8 @@ def test_admin_community_game_enforcement_hides_restores_and_pauses_joining(
     assert hide_body["notice_ids"]
     assert replay_hide_response.status_code == 200, replay_hide_response.text
     assert replay_hide_response.json()["idempotent_replay"] is True
-    assert replay_hide_response.json()["audit_action_id"] == (
-        hide_body["audit_action_id"]
+    assert (
+        replay_hide_response.json()["audit_action_id"] == (hide_body["audit_action_id"])
     )
 
     with SessionLocal() as db:
@@ -974,13 +974,15 @@ def test_admin_community_game_enforcement_hides_restores_and_pauses_joining(
     )
 
     assert restore_response.status_code == 200, restore_response.text
-    assert restore_response.json()["enforcement_state"][
-        "public_visibility_status"
-    ] == "visible"
+    assert (
+        restore_response.json()["enforcement_state"]["public_visibility_status"]
+        == "visible"
+    )
     assert pause_response.status_code == 200, pause_response.text
-    assert pause_response.json()["enforcement_state"][
-        "join_enforcement_status"
-    ] == "paused"
+    assert (
+        pause_response.json()["enforcement_state"]["join_enforcement_status"]
+        == "paused"
+    )
 
     public_restored_response = client.get(f"/games/{game['id']}")
     authenticate_as(player["id"])
@@ -1002,9 +1004,9 @@ def test_admin_community_game_enforcement_hides_restores_and_pauses_joining(
     )
 
     assert resume_response.status_code == 200, resume_response.text
-    assert resume_response.json()["enforcement_state"][
-        "join_enforcement_status"
-    ] == "open"
+    assert (
+        resume_response.json()["enforcement_state"]["join_enforcement_status"] == "open"
+    )
 
     authenticate_as(player["id"])
     joined_response = client.post(f"/games/{game['id']}/join", json={})
@@ -1154,9 +1156,7 @@ def test_admin_community_game_chat_moderation_is_scoped_to_game_detail(
     )
 
     authenticate_as(admin_actor["id"])
-    summary_response = client.get(
-        f"/admin/community-games/{game['id']}/chat/summary"
-    )
+    summary_response = client.get(f"/admin/community-games/{game['id']}/chat/summary")
     assert summary_response.status_code == 200, summary_response.text
     assert summary_response.json()["message_count"] == 1
     assert summary_response.json()["removed_count"] == 0
@@ -1208,9 +1208,7 @@ def test_admin_need_a_sub_list_and_detail_include_removed_history(
     request = request_response.json()
 
     authenticate_as(owner["id"])
-    accept_response = client.patch(
-        f"/need-a-sub/requests/{request['id']}/accept"
-    )
+    accept_response = client.patch(f"/need-a-sub/requests/{request['id']}/accept")
     assert accept_response.status_code == 200, accept_response.text
 
     authenticate_as(admin_actor["id"])
@@ -1314,9 +1312,7 @@ def test_admin_need_a_sub_search_supports_email_for_admin(
 
     assert admin_actor_response.status_code == 200, admin_actor_response.text
     assert admin_actor_response.json()["total_count"] == 1
-    assert [item["id"] for item in admin_actor_response.json()["posts"]] == [
-        post["id"]
-    ]
+    assert [item["id"] for item in admin_actor_response.json()["posts"]] == [post["id"]]
     assert admin_response.status_code == 200, admin_response.text
     assert admin_response.json()["total_count"] == 1
     assert [item["id"] for item in admin_response.json()["posts"]] == [post["id"]]
@@ -1352,6 +1348,8 @@ def test_admin_need_a_sub_list_and_detail_are_paginated(
                     id=uuid4(),
                     admin_user_id=UUID(admin_actor["id"]),
                     action_type="remove_sub_post",
+                    outcome="succeeded",
+                    correlation_id=uuid4(),
                     target_sub_post_id=UUID(first_post["id"]),
                     reason="First support audit row.",
                 ),
@@ -1359,6 +1357,8 @@ def test_admin_need_a_sub_list_and_detail_are_paginated(
                     id=uuid4(),
                     admin_user_id=UUID(admin_actor["id"]),
                     action_type="remove_sub_post",
+                    outcome="succeeded",
+                    correlation_id=uuid4(),
                     target_sub_post_id=UUID(first_post["id"]),
                     reason="Second support audit row.",
                 ),
@@ -1520,8 +1520,8 @@ def test_admin_need_a_sub_enforcement_hides_restores_and_removes_with_notices(
     assert hide_body["notice_ids"]
     assert replay_hide_response.status_code == 200, replay_hide_response.text
     assert replay_hide_response.json()["idempotent_replay"] is True
-    assert replay_hide_response.json()["audit_action_id"] == (
-        hide_body["audit_action_id"]
+    assert (
+        replay_hide_response.json()["audit_action_id"] == (hide_body["audit_action_id"])
     )
 
     with SessionLocal() as db:
@@ -1586,8 +1586,9 @@ def test_admin_need_a_sub_enforcement_hides_restores_and_removes_with_notices(
     assert len(remove_body["notice_ids"]) == 2
     assert replay_remove_response.status_code == 200, replay_remove_response.text
     assert replay_remove_response.json()["idempotent_replay"] is True
-    assert replay_remove_response.json()["audit_action_id"] == (
-        remove_body["audit_action_id"]
+    assert (
+        replay_remove_response.json()["audit_action_id"]
+        == (remove_body["audit_action_id"])
     )
 
     with SessionLocal() as db:
@@ -1623,9 +1624,7 @@ def test_admin_need_a_sub_removal_notifies_and_preserves_support_history(
     request = request_response.json()
 
     authenticate_as(owner["id"])
-    accept_response = client.patch(
-        f"/need-a-sub/requests/{request['id']}/accept"
-    )
+    accept_response = client.patch(f"/need-a-sub/requests/{request['id']}/accept")
     assert accept_response.status_code == 200, accept_response.text
 
     authenticate_as(terminal_requester["id"])
@@ -1676,9 +1675,7 @@ def test_admin_need_a_sub_removal_notifies_and_preserves_support_history(
     public_detail_response = client.get(f"/need-a-sub/posts/{post['id']}")
 
     assert public_list_response.status_code == 200, public_list_response.text
-    assert post["id"] not in {
-        item["id"] for item in public_list_response.json()
-    }
+    assert post["id"] not in {item["id"] for item in public_list_response.json()}
     assert public_detail_response.status_code == 404, public_detail_response.text
 
     for recipient in (owner, requester):
@@ -1694,9 +1691,7 @@ def test_admin_need_a_sub_removal_notifies_and_preserves_support_history(
             if notification["notification_type"] == "sub_post_removed"
         )
         assert removal_notification["title"] == "Post removed"
-        assert removal_notification["summary"] == (
-            "This Need a Sub post was removed."
-        )
+        assert removal_notification["summary"] == ("This Need a Sub post was removed.")
         assert removal_notification["body"] == (
             "This Need a Sub post was removed by Pickup Lane."
         )
@@ -1789,9 +1784,7 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     removed_message = removed_message_response.json()
 
     authenticate_as(admin_actor["id"])
-    summary_response = client.get(
-        f"/admin/need-a-sub/{post['id']}/chat/summary"
-    )
+    summary_response = client.get(f"/admin/need-a-sub/{post['id']}/chat/summary")
     assert summary_response.status_code == 200, summary_response.text
     assert summary_response.json()["message_count"] == 2
     assert summary_response.json()["needs_review_count"] == 2
@@ -1823,9 +1816,9 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     )
     assert older_history_response.status_code == 200, older_history_response.text
     assert older_history_response.json()["offset"] == 1
-    assert [
-        message["id"] for message in older_history_response.json()["messages"]
-    ] == [review_message["id"]]
+    assert [message["id"] for message in older_history_response.json()["messages"]] == [
+        review_message["id"]
+    ]
 
     review_payload = {
         "idempotency_key": "admin-sub-chat-moderation-test",
@@ -1856,9 +1849,9 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
         "/notifications/me",
         params={"notification_domain": "need_a_sub"},
     )
-    assert (
-        requester_notifications_response.status_code == 200
-    ), requester_notifications_response.text
+    assert requester_notifications_response.status_code == 200, (
+        requester_notifications_response.text
+    )
     chat_notification = next(
         notification
         for notification in requester_notifications_response.json()
@@ -1867,8 +1860,7 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     assert chat_notification["is_read"] is False
     assert chat_notification["aggregate_count"] == 2
     assert (
-        chat_notification["related_sub_post_chat_message_id"]
-        == removed_message["id"]
+        chat_notification["related_sub_post_chat_message_id"] == removed_message["id"]
     )
 
     authenticate_as(admin_actor["id"])
@@ -1933,9 +1925,9 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
         "/notifications/me",
         params={"notification_domain": "need_a_sub"},
     )
-    assert (
-        requester_notifications_response.status_code == 200
-    ), requester_notifications_response.text
+    assert requester_notifications_response.status_code == 200, (
+        requester_notifications_response.text
+    )
     chat_notification = next(
         notification
         for notification in requester_notifications_response.json()
@@ -1946,9 +1938,7 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     assert chat_notification["aggregate_count"] is None
 
     authenticate_as(admin_actor["id"])
-    summary_after_response = client.get(
-        f"/admin/need-a-sub/{post['id']}/chat/summary"
-    )
+    summary_after_response = client.get(f"/admin/need-a-sub/{post['id']}/chat/summary")
     assert summary_after_response.status_code == 200, summary_after_response.text
     assert summary_after_response.json()["message_count"] == 1
     assert summary_after_response.json()["needs_review_count"] == 0
@@ -2004,14 +1994,13 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
     assert cancel_response.status_code == 200, cancel_response.text
 
     authenticate_as(admin_actor["id"])
-    closed_chat_response = client.get(
-        f"/admin/need-a-sub/{post['id']}/chat/summary"
-    )
+    closed_chat_response = client.get(f"/admin/need-a-sub/{post['id']}/chat/summary")
     assert closed_chat_response.status_code == 200, closed_chat_response.text
     assert closed_chat_response.json()["chat_status"] == "closed"
-    assert closed_chat_response.json()["closed_at"] == cancel_response.json()[
-        "canceled_at"
-    ]
+    assert (
+        closed_chat_response.json()["closed_at"]
+        == cancel_response.json()["canceled_at"]
+    )
 
     authenticate_as(regular_user["id"])
     denied_history_response = client.get(
@@ -2028,4 +2017,6 @@ def test_admin_need_a_sub_chat_moderation_retains_rows_and_redacts_audit(
         },
     )
     assert denied_history_response.status_code == 403, denied_history_response.text
-    assert denied_moderation_response.status_code == 403, denied_moderation_response.text
+    assert denied_moderation_response.status_code == 403, (
+        denied_moderation_response.text
+    )

@@ -19,7 +19,10 @@ from backend.models import (
 )
 from backend.schemas.refund_schema import RefundCreate, RefundUpdate
 from backend.services.admin_action_service import record_admin_action
-from backend.services.auth_service import require_active_admin_user, user_is_active_admin
+from backend.services.auth_service import (
+    require_active_admin_user,
+    user_is_active_admin,
+)
 from backend.services.payment_rules import COLLECTED_PAYMENT_STATUSES
 from backend.services.query_pagination import (
     DEFAULT_COLLECTION_LIMIT,
@@ -114,9 +117,7 @@ def get_booking_or_404(db: Session, booking_id: uuid.UUID) -> Booking:
     return db_booking
 
 
-def get_participant_or_404(
-    db: Session, participant_id: uuid.UUID
-) -> GameParticipant:
+def get_participant_or_404(db: Session, participant_id: uuid.UUID) -> GameParticipant:
     db_participant = db.get(GameParticipant, participant_id)
 
     if db_participant is None:
@@ -143,9 +144,7 @@ def get_host_publish_fee_or_404(
     return db_host_publish_fee
 
 
-def get_active_user_or_404(
-    db: Session, user_id: uuid.UUID, detail: str
-) -> User:
+def get_active_user_or_404(db: Session, user_id: uuid.UUID, detail: str) -> User:
     db_user = db.get(User, user_id)
 
     if db_user is None or db_user.deleted_at is not None:
@@ -525,6 +524,7 @@ def create_refund_record(
             db,
             admin_user_id=admin_user.id,
             action_type="create_refund",
+            outcome="succeeded",
             target_user_id=db_payment.payer_user_id,
             target_booking_id=new_refund.booking_id,
             target_participant_id=new_refund.participant_id,
@@ -764,6 +764,7 @@ def update_refund_record(
             db,
             admin_user_id=admin_user.id,
             action_type="update_refund",
+            outcome="succeeded",
             target_user_id=db_payment.payer_user_id,
             target_booking_id=db_refund.booking_id,
             target_participant_id=db_refund.participant_id,

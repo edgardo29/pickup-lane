@@ -13,7 +13,6 @@ from backend.models import (
     Booking,
     Game,
     HostPublishFee,
-    MoneyIssue,
     Payment,
     Refund,
     RefundEvent,
@@ -29,11 +28,11 @@ from backend.services.admin_action_service import (
     build_admin_action_conflict_detail,
     record_admin_action,
 )
+from backend.services.admin_money_issue_query_service import list_related_money_issues
 from backend.services.admin_money_issue_service import (
     append_money_issue_event,
     stage_refund_money_issue,
 )
-from backend.services.admin_money_issue_query_service import list_related_money_issues
 from backend.services.admin_money_refund_query_service import (
     get_admin_money_refund_detail,
 )
@@ -52,17 +51,23 @@ from backend.services.game_notification_service import (
     create_or_reopen_booking_refunded_notification,
     game_allows_inbox_action,
 )
+from backend.services.refund_event_service import (
+    get_refund_event_by_idempotency_key,
+    record_refund_event,
+)
 from backend.services.refund_service import (
     build_refund_conflict_detail,
     refund_audit_metadata,
-    refund_audit_snapshot,
     validate_refund_amount_available,
 )
-from backend.services.refund_event_service import record_refund_event
 from backend.services.stripe_service import (
     StripeConfigError,
     StripeRefundResult,
+)
+from backend.services.stripe_service import (
     create_refund as create_stripe_refund,
+)
+from backend.services.stripe_service import (
     retrieve_refund as retrieve_stripe_refund,
 )
 
@@ -239,7 +244,10 @@ def validate_refund_retry(
             ),
         )
 
-    if payment.payment_status not in RETRYABLE_PAYMENT_STATUSES or payment.paid_at is None:
+    if (
+        payment.payment_status not in RETRYABLE_PAYMENT_STATUSES
+        or payment.paid_at is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Refund retry requires a succeeded payment.",
@@ -386,8 +394,7 @@ def maybe_notify_refund_processed(
         return
 
     force_action_null = (
-        refund.refund_reason == "game_cancelled"
-        or not game_allows_inbox_action(game)
+        refund.refund_reason == "game_cancelled" or not game_allows_inbox_action(game)
     )
     create_or_reopen_booking_refunded_notification(
         db,
@@ -411,10 +418,9 @@ def apply_refund_retry_result(
     booking: Booking | None,
     host_publish_fee: HostPublishFee | None,
     admin_action: AdminAction,
-    before_snapshot: dict,
+    refund_event: RefundEvent,
     admin_user: User,
     reason: str,
-    provider_refund_id: str | None,
     refund_status: str,
     now: datetime,
 ) -> None:
@@ -440,37 +446,6 @@ def apply_refund_retry_result(
             reason_code="admin_retry_initiated",
             summary=reason,
         )
-
-    refund_event = record_refund_event(
-        db,
-        refund=refund,
-        event_type="provider_result_recorded",
-        event_source="admin",
-        actor_user_id=admin_user.id,
-        admin_action_id=admin_action.id,
-        provider=refund.provider,
-        provider_refund_id=provider_refund_id,
-        provider_charge_id=payment.provider_charge_id,
-        provider_status=refund_status,
-        new_refund_status=refund_status,
-        reason_code=f"admin_retry_{refund_status}",
-        summary="Admin refund retry provider result recorded.",
-        occurred_at=now,
-    )
-    admin_action.metadata_ = {
-        **refund_audit_metadata(
-            refund,
-            source="admin_money_refund_retry",
-            before=before_snapshot,
-        ),
-        "provider_result": {
-            "provider": refund.provider,
-            "provider_refund_id": provider_refund_id,
-            "provider_status": refund_status,
-            "recorded_at": now.isoformat(),
-        },
-    }
-    db.add(admin_action)
 
     if refund_status == "succeeded":
         for money_issue in existing_open_issues:
@@ -571,10 +546,13 @@ def record_admin_refund_retry_provider_result_checkpoint(
     db: Session,
     *,
     admin_action_id: uuid.UUID,
+    admin_user_id: uuid.UUID,
+    refund_id: uuid.UUID,
+    provider_charge_id: str | None,
     provider_refund_id: str | None,
     refund_status: str,
     now: datetime,
-) -> None:
+) -> uuid.UUID:
     admin_action = db.get(AdminAction, admin_action_id)
     if admin_action is None:
         raise HTTPException(
@@ -582,18 +560,36 @@ def record_admin_refund_retry_provider_result_checkpoint(
             detail=ADMIN_REFUND_RETRY_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
         )
 
-    admin_action.metadata_ = {
-        **(admin_action.metadata_ or {}),
-        "provider_result": {
-            "provider": "stripe",
-            "provider_refund_id": provider_refund_id,
-            "provider_status": refund_status,
-            "recorded_at": now.isoformat(),
-            "recording_state": "pending_local_refund_state",
-        },
-    }
-    db.add(admin_action)
+    checkpoint_key = f"admin_refund_retry_provider_result:{admin_action_id}"
+    existing_event = get_refund_event_by_idempotency_key(db, checkpoint_key)
+    if existing_event is not None:
+        return existing_event.id
+
+    refund = db.scalar(select(Refund).where(Refund.id == refund_id).with_for_update())
+    if refund is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ADMIN_REFUND_RETRY_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+        )
+    refund_event = record_refund_event(
+        db,
+        refund=refund,
+        event_type="provider_result_recorded",
+        event_source="admin",
+        actor_user_id=admin_user_id,
+        admin_action_id=admin_action_id,
+        idempotency_key=checkpoint_key,
+        provider=refund.provider,
+        provider_refund_id=provider_refund_id,
+        provider_charge_id=provider_charge_id,
+        provider_status=refund_status,
+        new_refund_status=refund_status,
+        reason_code=f"admin_retry_{refund_status}",
+        summary="Admin refund retry provider result recorded.",
+        occurred_at=now,
+    )
     db.commit()
+    return refund_event.id
 
 
 def retry_admin_money_refund(
@@ -649,7 +645,6 @@ def retry_admin_money_refund(
         payment=payment,
         host_publish_fee=host_publish_fee,
     )
-    before_snapshot = refund_audit_snapshot(refund)
     payment_provider_charge_id = payment.provider_charge_id
     payment_id = payment.id
     refund_amount_cents = refund.amount_cents
@@ -660,6 +655,7 @@ def retry_admin_money_refund(
             db,
             admin_user_id=admin_user.id,
             action_type="update_refund",
+            outcome="pending",
             target_user_id=payment.payer_user_id,
             target_booking_id=refund.booking_id or payment.booking_id,
             target_participant_id=refund.participant_id,
@@ -734,9 +730,12 @@ def retry_admin_money_refund(
 
     now = datetime.now(timezone.utc)
     try:
-        record_admin_refund_retry_provider_result_checkpoint(
+        refund_event_id = record_admin_refund_retry_provider_result_checkpoint(
             db,
             admin_action_id=admin_action_id,
+            admin_user_id=admin_user_id,
+            refund_id=refund_id,
+            provider_charge_id=payment_provider_charge_id,
             provider_refund_id=provider_refund_id,
             refund_status=refund_status,
             now=now,
@@ -764,6 +763,12 @@ def retry_admin_money_refund(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Refund retry checkpoint was not found.",
             )
+        refund_event = db.get(RefundEvent, refund_event_id)
+        if refund_event is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=ADMIN_REFUND_RETRY_PROVIDER_RESULT_RECORDING_FAILED_DETAIL,
+            )
         apply_refund_retry_result(
             db,
             refund=refund,
@@ -771,10 +776,9 @@ def retry_admin_money_refund(
             booking=booking,
             host_publish_fee=host_publish_fee,
             admin_action=admin_action,
-            before_snapshot=before_snapshot,
+            refund_event=refund_event,
             admin_user=admin_user,
             reason=reason,
-            provider_refund_id=provider_refund_id,
             refund_status=refund_status,
             now=now,
         )
@@ -812,7 +816,8 @@ def stage_refund_issue_for_terminal_or_unknown(
     if refund.refund_status == "failed":
         issue_type = (
             "refund_missing_provider_reference"
-            if reason_code in {"provider_charge_id_missing", "missing_provider_refund_id"}
+            if reason_code
+            in {"provider_charge_id_missing", "missing_provider_refund_id"}
             else "refund_failed"
         )
     elif refund.refund_status == "cancelled":
@@ -909,6 +914,7 @@ def reconcile_admin_money_refund(
             db,
             admin_user_id=admin_user.id,
             action_type="reconcile_refund",
+            outcome="succeeded",
             target_user_id=payment.payer_user_id,
             target_booking_id=refund.booking_id or payment.booking_id,
             target_participant_id=refund.participant_id,

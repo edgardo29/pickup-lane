@@ -19,6 +19,7 @@ from backend.services.admin_rejected_attempt_policy import (
     AdminRejectedAttemptPolicy,
     get_admin_rejected_attempt_policy,
 )
+from backend.services.auth_service import require_active_admin_user
 from backend.services.user_service import build_user_conflict_detail
 
 MAX_ROUTE_METHOD_LENGTH = 10
@@ -204,7 +205,7 @@ def user_can_read_rejected_attempt(
     user: User,
     rejected_attempt: AdminRejectedAttempt,
 ) -> bool:
-    del user
+    require_active_admin_user(user)
     policy = get_admin_rejected_attempt_policy(rejected_attempt.attempt_type)
     return policy is not None
 
@@ -217,6 +218,7 @@ def list_admin_rejected_attempts(
     rejection_mode: str | None = None,
     limit: int = 100,
 ) -> list[AdminRejectedAttempt]:
+    require_active_admin_user(viewer_user)
     if attempt_type is not None:
         get_policy_or_400(attempt_type)
 
@@ -248,6 +250,7 @@ def get_admin_rejected_attempt_for_viewer_or_404(
     admin_rejected_attempt_id: uuid.UUID,
     viewer_user: User,
 ) -> AdminRejectedAttempt:
+    require_active_admin_user(viewer_user)
     rejected_attempt = db.get(AdminRejectedAttempt, admin_rejected_attempt_id)
 
     if rejected_attempt is None or not user_can_read_rejected_attempt(

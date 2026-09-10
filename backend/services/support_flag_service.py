@@ -123,7 +123,9 @@ def validate_required_rule(
                 ),
             )
 
-    if rule.one_of and not any(data.get(field_name) is not None for field_name in rule.one_of):
+    if rule.one_of and not any(
+        data.get(field_name) is not None for field_name in rule.one_of
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -198,7 +200,9 @@ def normalize_limited_text(
     return normalized
 
 
-def normalize_support_flag_metadata(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+def normalize_support_flag_metadata(
+    metadata: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     if metadata is None:
         return None
 
@@ -219,10 +223,7 @@ def user_can_read_support_flag(user: User, support_flag: SupportFlag) -> bool:
 
 def readable_support_flag_types(user: User) -> tuple[str, ...]:
     del user
-    return tuple(
-        flag_type
-        for flag_type in SUPPORT_FLAG_POLICIES
-    )
+    return tuple(flag_type for flag_type in SUPPORT_FLAG_POLICIES)
 
 
 def get_support_flag_or_404(db: Session, support_flag_id: uuid.UUID) -> SupportFlag:
@@ -274,9 +275,7 @@ def list_support_flags(
     if not readable_flag_types:
         return []
 
-    query = select(SupportFlag).where(
-        SupportFlag.flag_type.in_(readable_flag_types)
-    )
+    query = select(SupportFlag).where(SupportFlag.flag_type.in_(readable_flag_types))
     if flag_status != "all":
         query = query.where(SupportFlag.flag_status == flag_status)
     if flag_type:
@@ -356,7 +355,9 @@ def stage_support_flag(
     policy = get_policy_or_400(flag_type)
     unknown_targets = set(targets) - set(SUPPORT_FLAG_TARGET_FIELDS)
     if unknown_targets:
-        raise ValueError(f"Unknown support flag target(s): {describe_fields(unknown_targets)}")
+        raise ValueError(
+            f"Unknown support flag target(s): {describe_fields(unknown_targets)}"
+        )
 
     normalized_idempotency_key = normalize_idempotency_key(idempotency_key)
     if normalized_idempotency_key is not None:
@@ -396,7 +397,9 @@ def stage_support_flag(
         severity=severity,
         source=source,
         title=normalize_limited_text(title, "title", MAX_SUPPORT_FLAG_TITLE_LENGTH),
-        summary=normalize_limited_text(summary, "summary", MAX_SUPPORT_FLAG_SUMMARY_LENGTH),
+        summary=normalize_limited_text(
+            summary, "summary", MAX_SUPPORT_FLAG_SUMMARY_LENGTH
+        ),
         metadata_=normalize_support_flag_metadata(metadata),
         idempotency_key=normalized_idempotency_key,
         source_admin_action_id=source_admin_action_id,
@@ -453,7 +456,9 @@ def create_support_flag(
     return support_flag
 
 
-def build_support_flag_audit_targets(support_flag: SupportFlag) -> dict[str, uuid.UUID | None]:
+def build_support_flag_audit_targets(
+    support_flag: SupportFlag,
+) -> dict[str, uuid.UUID | None]:
     return {
         field_name: getattr(support_flag, field_name)
         for field_name in SUPPORT_FLAG_TARGET_FIELDS
@@ -487,9 +492,7 @@ def validate_existing_support_flag_resolution_action(
     expected_reason: str,
 ) -> None:
     after_metadata = (
-        action.metadata_.get("after")
-        if isinstance(action.metadata_, dict)
-        else None
+        action.metadata_.get("after") if isinstance(action.metadata_, dict) else None
     )
     recorded_outcome = (
         after_metadata.get("resolution_outcome")
@@ -531,9 +534,7 @@ def resolve_support_flag(
         )
 
     support_flag = db.scalar(
-        select(SupportFlag)
-        .where(SupportFlag.id == support_flag_id)
-        .with_for_update()
+        select(SupportFlag).where(SupportFlag.id == support_flag_id).with_for_update()
     )
     if support_flag is None:
         raise HTTPException(
@@ -574,6 +575,7 @@ def resolve_support_flag(
         db,
         admin_user_id=resolver_user.id,
         action_type="resolve_support_flag",
+        outcome="succeeded",
         reason=resolution_reason,
         metadata={
             "before": {

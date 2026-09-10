@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy import inspect as sqlalchemy_inspect
 from sqlalchemy.orm import Session
 
 from backend.models import (
@@ -1437,6 +1438,12 @@ def close_open_content_moderation_case_for_lifecycle(
     review_case.updated_at = now
     db.add(review_case)
 
+    if (
+        admin_action is not None
+        and admin_action.target_review_case_id is None
+        and sqlalchemy_inspect(admin_action).persistent
+    ):
+        raise ValueError("Automatic closure cannot amend a persisted audit action.")
     if admin_action is not None and admin_action.target_review_case_id is None:
         admin_action.target_review_case_id = review_case.id
         db.add(admin_action)
@@ -1841,6 +1848,7 @@ def add_review_case_note(
         db,
         admin_user_id=admin_user.id,
         action_type="add_review_case_note",
+        outcome="succeeded",
         target_review_case_id=review_case.id,
         reason="Internal review note added.",
         metadata={
@@ -1850,11 +1858,10 @@ def add_review_case_note(
             "note_length": len(body),
         },
         idempotency_key=idempotency_key,
-        created_at=now,
         **copy_targets(target_data_from_object(review_case)),
     )
     db.flush([admin_action])
-    event = create_case_event(
+    create_case_event(
         db,
         review_case=review_case,
         event_type="note_added",
@@ -1863,9 +1870,6 @@ def add_review_case_note(
         note_id=note.id,
     )
     db.flush()
-    metadata = dict(admin_action.metadata_ or {})
-    metadata["event_id"] = str(event.id)
-    admin_action.metadata_ = metadata
 
     db.commit()
     db.refresh(review_case)
@@ -1976,6 +1980,7 @@ def close_review_case(
         db,
         admin_user_id=admin_user.id,
         action_type="close_review_case",
+        outcome="succeeded",
         target_review_case_id=review_case.id,
         reason=reason,
         metadata={
@@ -1984,11 +1989,10 @@ def close_review_case(
             "request_fingerprint": request_fingerprint,
         },
         idempotency_key=idempotency_key,
-        created_at=now,
         **copy_targets(target_data_from_object(review_case)),
     )
     db.flush([admin_action])
-    event = create_case_event(
+    create_case_event(
         db,
         review_case=review_case,
         event_type="closed",
@@ -1997,9 +2001,6 @@ def close_review_case(
         event_metadata=None,
     )
     db.flush()
-    metadata = dict(admin_action.metadata_ or {})
-    metadata["event_id"] = str(event.id)
-    admin_action.metadata_ = metadata
 
     db.commit()
     db.refresh(review_case)
@@ -2034,6 +2035,8 @@ def link_admin_action_to_open_review_case(
         require_linked_case=False,
     ):
         return None
+    if sqlalchemy_inspect(admin_action).persistent:
+        raise ValueError("Review cases cannot be linked to persisted audit actions.")
     admin_action.target_review_case_id = review_case.id
     db.add(admin_action)
     db.flush([admin_action])

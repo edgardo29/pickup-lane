@@ -255,6 +255,7 @@ def apply_community_game_state_action(
         db,
         admin_user_id=admin_user.id,
         action_type=action_type,
+        outcome="succeeded",
         target_game_id=game.id,
         target_user_id=game.host_user_id,
         reason=reason,
@@ -264,7 +265,6 @@ def apply_community_game_state_action(
             "after": after,
         },
         idempotency_key=idempotency_key,
-        created_at=now,
     )
     try:
         link_admin_action_to_open_review_case(db, audit_action)

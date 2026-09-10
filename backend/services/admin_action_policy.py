@@ -1,6 +1,9 @@
 """Central policy for admin audit action types and target requirements."""
 
 from dataclasses import dataclass
+from typing import Literal
+
+AdminActionCategory = Literal["mutation", "correction", "sensitive_read"]
 
 TARGET_USER_ID = "target_user_id"
 TARGET_GAME_ID = "target_game_id"
@@ -54,6 +57,7 @@ ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
 )
 
+
 @dataclass(frozen=True)
 class TargetRule:
     all_of: tuple[str, ...] = ()
@@ -66,11 +70,11 @@ class AdminActionPolicy:
     required_target_rules: tuple[TargetRule, ...]
     allowed_target_fields: frozenset[str]
     metadata_builder_key: str
+    category: AdminActionCategory = "mutation"
     client_allowed_target_fields: frozenset[str] | None = None
     server_copied_target_fields: frozenset[str] = frozenset()
     allows_audit_note: bool = True
     requires_reason: bool = False
-
 
 
 def target_set(*fields: str) -> frozenset[str]:
@@ -127,9 +131,7 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "create_financial_outcome": AdminActionPolicy(
         action_type="create_financial_outcome",
-        required_target_rules=(
-            TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),
-        ),
+        required_target_rules=(TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),),
         allowed_target_fields=target_set(
             TARGET_USER_ID,
             TARGET_GAME_ID,
@@ -143,9 +145,7 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "apply_financial_outcome": AdminActionPolicy(
         action_type="apply_financial_outcome",
-        required_target_rules=(
-            TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),
-        ),
+        required_target_rules=(TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),),
         allowed_target_fields=target_set(
             TARGET_USER_ID,
             TARGET_GAME_ID,
@@ -419,7 +419,9 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "admin_add_player": AdminActionPolicy(
         action_type="admin_add_player",
-        required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID, TARGET_PARTICIPANT_ID)),),
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_GAME_ID, TARGET_PARTICIPANT_ID)),
+        ),
         allowed_target_fields=target_set(
             TARGET_GAME_ID,
             TARGET_USER_ID,
@@ -431,7 +433,9 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "admin_remove_player": AdminActionPolicy(
         action_type="admin_remove_player",
-        required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID, TARGET_PARTICIPANT_ID)),),
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_GAME_ID, TARGET_PARTICIPANT_ID)),
+        ),
         allowed_target_fields=target_set(
             TARGET_GAME_ID,
             TARGET_USER_ID,
@@ -444,7 +448,9 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
     "waive_payment": AdminActionPolicy(
         action_type="waive_payment",
-        required_target_rules=(TargetRule(one_of=(TARGET_BOOKING_ID, TARGET_PAYMENT_ID)),),
+        required_target_rules=(
+            TargetRule(one_of=(TARGET_BOOKING_ID, TARGET_PAYMENT_ID)),
+        ),
         allowed_target_fields=target_set(
             TARGET_USER_ID,
             TARGET_GAME_ID,
@@ -458,14 +464,22 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     "remove_sub_post": AdminActionPolicy(
         action_type="remove_sub_post",
         required_target_rules=(TargetRule(all_of=(TARGET_SUB_POST_ID,)),),
-        allowed_target_fields=target_set(TARGET_USER_ID, TARGET_SUB_POST_ID),
+        allowed_target_fields=target_set(
+            TARGET_USER_ID,
+            TARGET_SUB_POST_ID,
+            TARGET_REVIEW_CASE_ID,
+        ),
         metadata_builder_key="moderation",
         requires_reason=True,
     ),
     "hide_need_sub_post": AdminActionPolicy(
         action_type="hide_need_sub_post",
         required_target_rules=(TargetRule(all_of=(TARGET_SUB_POST_ID,)),),
-        allowed_target_fields=target_set(TARGET_USER_ID, TARGET_SUB_POST_ID),
+        allowed_target_fields=target_set(
+            TARGET_USER_ID,
+            TARGET_SUB_POST_ID,
+            TARGET_REVIEW_CASE_ID,
+        ),
         metadata_builder_key="moderation",
         requires_reason=True,
     ),
@@ -479,7 +493,11 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     "hide_community_game": AdminActionPolicy(
         action_type="hide_community_game",
         required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID,)),),
-        allowed_target_fields=target_set(TARGET_GAME_ID, TARGET_USER_ID),
+        allowed_target_fields=target_set(
+            TARGET_GAME_ID,
+            TARGET_USER_ID,
+            TARGET_REVIEW_CASE_ID,
+        ),
         metadata_builder_key="moderation",
         requires_reason=True,
     ),
@@ -493,7 +511,11 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     "pause_community_game_joining": AdminActionPolicy(
         action_type="pause_community_game_joining",
         required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID,)),),
-        allowed_target_fields=target_set(TARGET_GAME_ID, TARGET_USER_ID),
+        allowed_target_fields=target_set(
+            TARGET_GAME_ID,
+            TARGET_USER_ID,
+            TARGET_REVIEW_CASE_ID,
+        ),
         metadata_builder_key="moderation",
         requires_reason=True,
     ),
@@ -507,14 +529,22 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     "admin_cancel_community_game": AdminActionPolicy(
         action_type="admin_cancel_community_game",
         required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID,)),),
-        allowed_target_fields=target_set(TARGET_GAME_ID, TARGET_USER_ID),
+        allowed_target_fields=target_set(
+            TARGET_GAME_ID,
+            TARGET_USER_ID,
+            TARGET_REVIEW_CASE_ID,
+        ),
         metadata_builder_key="game_cancellation",
         requires_reason=True,
     ),
     "hide_unsafe_community_payment_text": AdminActionPolicy(
         action_type="hide_unsafe_community_payment_text",
         required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID,)),),
-        allowed_target_fields=target_set(TARGET_GAME_ID, TARGET_USER_ID),
+        allowed_target_fields=target_set(
+            TARGET_GAME_ID,
+            TARGET_USER_ID,
+            TARGET_REVIEW_CASE_ID,
+        ),
         metadata_builder_key="moderation",
         requires_reason=True,
     ),
@@ -608,10 +638,13 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     "append_audit_note": AdminActionPolicy(
         action_type="append_audit_note",
         required_target_rules=(TargetRule(all_of=(TARGET_ADMIN_ACTION_ID,)),),
-        allowed_target_fields=target_set(TARGET_ADMIN_ACTION_ID, *ADMIN_ACTION_TARGET_FIELDS),
+        allowed_target_fields=target_set(
+            TARGET_ADMIN_ACTION_ID, *ADMIN_ACTION_TARGET_FIELDS
+        ),
         client_allowed_target_fields=target_set(TARGET_ADMIN_ACTION_ID),
         server_copied_target_fields=target_set(*ADMIN_ACTION_TARGET_FIELDS),
         metadata_builder_key="audit_note",
+        category="correction",
         allows_audit_note=False,
         requires_reason=True,
     ),

@@ -124,7 +124,9 @@ def _source_between(source: str, start_snippet: str, end_snippet: str) -> str:
 @pytest.mark.requirement("WS03-03A-R7")
 def test_email_password_and_google_step_up_use_firebase_reauthentication() -> None:
     reauth = _read("frontend/src/lib/reauthentication.js")
-    provider_actions = _read("frontend/src/context/authProviderReauthenticationActions.js")
+    provider_actions = _read(
+        "frontend/src/context/authProviderReauthenticationActions.js"
+    )
 
     assert "EMAIL_PASSWORD_PROVIDER_ID = 'password'" in reauth
     assert "GOOGLE_PROVIDER_ID = 'google.com'" in reauth
@@ -199,7 +201,9 @@ def test_current_high_risk_frontend_callers_opt_into_step_up() -> None:
 
 
 @pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
-def test_admin_community_cancel_uses_caller_owned_step_up_without_rekeying_or_merging_financial_outcome() -> None:
+def test_admin_community_cancel_uses_caller_owned_step_up_without_rekeying_or_merging_financial_outcome() -> (
+    None
+):
     modal_source = _read(
         "frontend/src/pages/admin/community-games/AdminCommunityGameActionModal.jsx"
     )
@@ -243,12 +247,16 @@ def test_admin_community_cancel_uses_caller_owned_step_up_without_rekeying_or_me
     assert "cancelAdminCommunityGame" not in financial_outcome_section
 
     reset_section = modal_source[modal_source.index("function resetActionKeys") :]
-    assert "setIdempotencyKey(createActionIdempotencyKey(config.keyPrefix" in reset_section
+    assert (
+        "setIdempotencyKey(createActionIdempotencyKey(config.keyPrefix" in reset_section
+    )
     assert action_section.count("idempotencyKey") == 1
 
 
 @pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
-def test_need_a_sub_remove_uses_step_up_without_wrapping_reversible_actions_or_rekeying() -> None:
+def test_need_a_sub_remove_uses_step_up_without_wrapping_reversible_actions_or_rekeying() -> (
+    None
+):
     modal_source = _read(
         "frontend/src/pages/admin/need-a-sub/AdminNeedASubRemovalModal.jsx"
     )
@@ -263,16 +271,23 @@ def test_need_a_sub_remove_uses_step_up_without_wrapping_reversible_actions_or_r
     assert "createActionIdempotencyKey(" not in submit_body
     _assert_ordered(
         submit_body,
-        "const result = action === 'remove'",
-        "await runWithStepUp(",
+        "await runAdminEnforcementMutation({",
+        "execute: async () => {",
+        "const executeAction = () => config.api({",
+        "return action === 'remove'",
+        "? await runWithStepUp(",
         "executeAction,",
         "{ actionLabel: 'remove this Need a Sub post' }",
         ": await executeAction()",
+        "onPendingChange: setIsSubmitting",
+        "onSuccess: (result) => {",
     )
 
 
 @pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
-def test_hosting_restriction_wraps_execution_only_and_preserves_preview_and_idempotency() -> None:
+def test_hosting_restriction_wraps_execution_only_and_preserves_preview_and_idempotency() -> (
+    None
+):
     modal_source = _read(
         "frontend/src/pages/admin/users/AdminUserHostingRestrictionModal.jsx"
     )
@@ -295,11 +310,15 @@ def test_hosting_restriction_wraps_execution_only_and_preserves_preview_and_idem
     assert "createIdempotencyKey(" not in submit_body
     _assert_ordered(
         submit_body,
+        "await runAdminEnforcementMutation({",
+        "execute: async () => {",
         "const executeRestriction = () => restrictAdminUserHosting({",
         "previewToken: preview.preview_token",
-        "const nextResult = await runWithStepUp(",
+        "return runWithStepUp(",
         "executeRestriction,",
         "{ actionLabel: 'restrict hosting for this user' }",
+        "onPendingChange: setIsSubmitting",
+        "onSuccess: (nextResult) => {",
     )
 
 
@@ -319,15 +338,21 @@ def test_hosting_restoration_wraps_execution_only_and_preserves_idempotency() ->
     assert "createIdempotencyKey(" not in submit_body
     _assert_ordered(
         submit_body,
+        "await runAdminEnforcementMutation({",
+        "execute: async () => {",
         "const executeRestoration = () => restoreAdminUserHosting({",
-        "const nextResult = await runWithStepUp(",
+        "return runWithStepUp(",
         "executeRestoration,",
         "{ actionLabel: 'restore hosting for this user' }",
+        "onPendingChange: setIsSubmitting",
+        "onSuccess: (nextResult) => {",
     )
 
 
 @pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
-def test_official_player_removal_wraps_execution_only_and_preserves_preview_decision() -> None:
+def test_official_player_removal_wraps_execution_only_and_preserves_preview_decision() -> (
+    None
+):
     page_source = _read(
         "frontend/src/pages/admin/official-games/manage/AdminOfficialGamePage.jsx"
     )
@@ -344,7 +369,10 @@ def test_official_player_removal_wraps_execution_only_and_preserves_preview_deci
 
     assert "runWithStepUp(" not in preview_section
     assert "previewAdminOfficialGamePlayerRemoval({" in preview_section
-    assert "const executeRemoval = () => executeAdminOfficialGamePlayerRemoval({" in execute_section
+    assert (
+        "const executeRemoval = () => executeAdminOfficialGamePlayerRemoval({"
+        in execute_section
+    )
     assert "participantId: previewParticipant.id" in execute_section
     assert "previewToken: removalPreview.preview_token" in execute_section
     assert "outcome," in execute_section
@@ -430,9 +458,13 @@ def test_add_password_linking_requires_step_up_before_firebase_linking() -> None
 
 
 @pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8", "WS03-03A-R9")
-def test_step_up_source_does_not_forward_passwords_or_provider_credentials_to_backend() -> None:
+def test_step_up_source_does_not_forward_passwords_or_provider_credentials_to_backend() -> (
+    None
+):
     step_up_related_sources = {
-        "frontend/src/lib/reauthentication.js": _read("frontend/src/lib/reauthentication.js"),
+        "frontend/src/lib/reauthentication.js": _read(
+            "frontend/src/lib/reauthentication.js"
+        ),
         "frontend/src/lib/stepUpAction.js": _read("frontend/src/lib/stepUpAction.js"),
         "frontend/src/context/StepUpProvider.jsx": _read(
             "frontend/src/context/StepUpProvider.jsx"

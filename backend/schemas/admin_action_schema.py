@@ -51,6 +51,8 @@ class AdminActionRead(BaseModel):
     admin_user_display_name: str | None = None
     admin_user_email: str | None = None
     action_type: str
+    outcome: str
+    correlation_id: UUID
     target_user_id: UUID | None
     target_user_display_name: str | None = None
     target_user_email: str | None = None
@@ -125,6 +127,7 @@ class AdminActionLogItemRead(BaseModel):
     id: UUID
     action_type: str
     action_label: str
+    outcome: str
     admin_user_id: UUID
     admin_label: str
     admin_email: str | None = None

@@ -205,6 +205,7 @@ def apply_need_sub_visibility_action(
         db,
         admin_user_id=admin_user.id,
         action_type=action_type,
+        outcome="succeeded",
         target_user_id=post.owner_user_id,
         target_sub_post_id=post.id,
         reason=reason,
@@ -214,7 +215,6 @@ def apply_need_sub_visibility_action(
             "after": {"public_visibility_status": new_visibility},
         },
         idempotency_key=idempotency_key,
-        created_at=current_time,
     )
     try:
         link_admin_action_to_open_review_case(db, audit_action)

@@ -76,8 +76,7 @@ def test_admin_action_create_get_list_and_append_note(client: TestClient):
     list_by_action_type_response = client.get("/admin/actions?action_type=suspend_user")
     assert list_by_action_type_response.status_code == 200
     assert any(
-        item["id"] == admin_action["id"]
-        for item in list_by_action_type_response.json()
+        item["id"] == admin_action["id"] for item in list_by_action_type_response.json()
     )
 
     note_response = client.post(
@@ -124,9 +123,7 @@ def test_admin_actions_list_contract_stays_plain_array(client: TestClient):
 def test_admin_action_log_model_indexes_match_cursor_contract():
     def index_expression_labels(index_name: str) -> list[str]:
         index = next(
-            index
-            for index in AdminAction.__table__.indexes
-            if index.name == index_name
+            index for index in AdminAction.__table__.indexes if index.name == index_name
         )
         return [
             getattr(expression, "name", None) or str(expression)
@@ -177,7 +174,9 @@ def test_admin_action_log_route_returns_paginated_display_rows(client: TestClien
         option == {"action_type": "suspend_user", "label": "User suspended"}
         for option in body["action_type_options"]
     )
-    row = next(action for action in body["actions"] if action["id"] == admin_action["id"])
+    row = next(
+        action for action in body["actions"] if action["id"] == admin_action["id"]
+    )
     assert row["action_label"] == "User suspended"
     assert row["admin_label"] == "Test User"
     assert row["admin_email"] == admin_user["email"]
@@ -206,15 +205,16 @@ def test_admin_action_log_rejects_cursor_when_filter_changes(client: TestClient)
     set_user_role(other_admin["id"], "admin")
     with SessionLocal() as db:
         for index in range(51):
-            record_admin_action(
+            action = record_admin_action(
                 db,
                 admin_user_id=uuid.UUID(admin_user["id"]),
                 action_type="suspend_user",
+                outcome="succeeded",
                 target_user_id=uuid.UUID(target_user["id"]),
                 reason=f"Cursor fixture {index}",
                 metadata={"source": "ci"},
-                created_at=datetime(2026, 1, 1, 12, index, tzinfo=timezone.utc),
             )
+            action.created_at = datetime(2026, 1, 1, 12, index, tzinfo=timezone.utc)
         db.commit()
 
     authenticate_as(admin_user["id"])
@@ -255,6 +255,8 @@ def test_admin_action_log_orders_created_at_ties_by_id_desc(client: TestClient):
                     id=lower_id,
                     admin_user_id=uuid.UUID(admin_user["id"]),
                     action_type="suspend_user",
+                    outcome="succeeded",
+                    correlation_id=uuid.uuid4(),
                     target_user_id=uuid.UUID(target_user["id"]),
                     reason="Lower id",
                     metadata_={"source": "ci"},
@@ -264,6 +266,8 @@ def test_admin_action_log_orders_created_at_ties_by_id_desc(client: TestClient):
                     id=higher_id,
                     admin_user_id=uuid.UUID(admin_user["id"]),
                     action_type="suspend_user",
+                    outcome="succeeded",
+                    correlation_id=uuid.uuid4(),
                     target_user_id=uuid.UUID(target_user["id"]),
                     reason="Higher id",
                     metadata_={"source": "ci"},
@@ -293,6 +297,7 @@ def test_admin_action_log_uses_missing_target_fallback(client: TestClient):
             db,
             admin_user_id=uuid.UUID(admin_user["id"]),
             action_type="create_official_game",
+            outcome="succeeded",
             target_game_id=uuid.UUID(game["id"]),
             reason="Created for fallback check.",
         )
@@ -320,6 +325,7 @@ def test_admin_action_log_batch_loads_primary_targets(client: TestClient):
                 db,
                 admin_user_id=uuid.UUID(admin_user["id"]),
                 action_type="create_official_game",
+                outcome="succeeded",
                 target_game_id=uuid.UUID(game["id"]),
                 reason="Batch load check.",
             )
@@ -329,7 +335,9 @@ def test_admin_action_log_batch_loads_primary_targets(client: TestClient):
     with SessionLocal() as db:
         engine = db.get_bind()
 
-        def collect_game_selects(conn, cursor, statement, parameters, context, executemany):
+        def collect_game_selects(
+            conn, cursor, statement, parameters, context, executemany
+        ):
             del conn, cursor, parameters, context, executemany
             if "FROM games" in statement:
                 game_selects.append(statement)
@@ -433,9 +441,7 @@ def test_admin_action_read_includes_all_admin_actions(client: TestClient):
 
     money_filter_response = client.get("/admin/actions?action_type=issue_credit")
     assert money_filter_response.status_code == 200, money_filter_response.text
-    assert [item["id"] for item in money_filter_response.json()] == [
-        money_action["id"]
-    ]
+    assert [item["id"] for item in money_filter_response.json()] == [money_action["id"]]
 
 
 def test_player_cannot_use_generic_audit_write_routes(client: TestClient):
@@ -639,9 +645,7 @@ def test_admin_action_reject_sensitive_metadata_value(client: TestClient):
             "target_user_id": target_user["id"],
             "reason": "Bad metadata value.",
             "metadata": {
-                "before": {
-                    "summary": "Support pasted client_secret test value."
-                }
+                "before": {"summary": "Support pasted client_secret test value."}
             },
         },
     )

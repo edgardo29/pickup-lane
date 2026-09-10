@@ -316,10 +316,12 @@ def resolve_outcome_context(
                 detail="target_game_id must match the host publish fee game.",
             )
 
-        if (
-            host_publish_fee.payment_id is not None
-            and outcome in {"refund", "credit", "forfeit", "manual_review"}
-        ):
+        if host_publish_fee.payment_id is not None and outcome in {
+            "refund",
+            "credit",
+            "forfeit",
+            "manual_review",
+        }:
             payment = get_locked_payment_or_404(db, host_publish_fee.payment_id)
 
         amount_cents = (
@@ -378,7 +380,9 @@ def get_existing_active_financial_decision(
 ) -> AdminFinancialOutcome | None:
     statement = (
         select(AdminFinancialOutcome)
-        .where(AdminFinancialOutcome.applied_status.in_(ACTIVE_FINANCIAL_DECISION_STATUSES))
+        .where(
+            AdminFinancialOutcome.applied_status.in_(ACTIVE_FINANCIAL_DECISION_STATUSES)
+        )
         .order_by(
             AdminFinancialOutcome.created_at.desc(),
             AdminFinancialOutcome.id.desc(),
@@ -896,19 +900,6 @@ def find_existing_financial_outcome_notice(
     )
 
 
-def add_notice_id_to_action_metadata(
-    admin_action: AdminAction,
-    notice: AdminTargetNotice,
-) -> None:
-    metadata = dict(admin_action.metadata_ or {})
-    notice_ids = list(metadata.get("notice_ids") or [])
-    notice_id = str(notice.id)
-    if notice_id not in notice_ids:
-        notice_ids.append(notice_id)
-    metadata["notice_ids"] = notice_ids
-    admin_action.metadata_ = metadata
-
-
 def create_financial_outcome_notice_if_needed(
     db: Session,
     *,
@@ -926,11 +917,6 @@ def create_financial_outcome_notice_if_needed(
         notice_type=notice_type,
     )
     if existing_notice is not None:
-        if admin_action is None and financial_outcome.admin_action_id is not None:
-            admin_action = db.get(AdminAction, financial_outcome.admin_action_id)
-        if admin_action is not None:
-            add_notice_id_to_action_metadata(admin_action, existing_notice)
-            db.add(admin_action)
         return existing_notice
 
     if admin_action is None and financial_outcome.admin_action_id is not None:
@@ -966,9 +952,6 @@ def create_financial_outcome_notice_if_needed(
             ),
         },
     )
-    if admin_action is not None:
-        add_notice_id_to_action_metadata(admin_action, notice)
-        db.add(admin_action)
     return notice
 
 
@@ -985,6 +968,7 @@ def record_financial_outcome_actions(
         db,
         admin_user_id=admin_user.id,
         action_type="create_financial_outcome",
+        outcome="succeeded",
         reason=financial_outcome.reason,
         idempotency_key=idempotency_key,
         metadata=financial_outcome_audit_metadata(
@@ -1016,6 +1000,7 @@ def record_financial_outcome_actions(
             db,
             admin_user_id=admin_user.id,
             action_type="apply_financial_outcome",
+            outcome="succeeded",
             reason=financial_outcome.reason,
             metadata=financial_outcome_audit_metadata(
                 financial_outcome,

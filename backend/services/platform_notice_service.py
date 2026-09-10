@@ -237,9 +237,7 @@ def canonical_request_fingerprint(
         "selected_user_ids": [str(user_id) for user_id in selected_user_ids],
         "title": title,
     }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
-        "utf-8"
-    )
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -313,11 +311,14 @@ def platform_notice_status(notice: PlatformNotice) -> str:
 
 
 def selected_recipient_count(db: Session, notice_id: uuid.UUID) -> int:
-    return db.scalar(
-        select(func.count())
-        .select_from(PlatformNoticeRecipient)
-        .where(PlatformNoticeRecipient.notice_id == notice_id)
-    ) or 0
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(PlatformNoticeRecipient)
+            .where(PlatformNoticeRecipient.notice_id == notice_id)
+        )
+        or 0
+    )
 
 
 def selected_recipient_counts(
@@ -390,7 +391,9 @@ def get_notice_by_admin_idempotency_key(
     )
 
 
-def build_publish_metadata(notice: PlatformNotice, selected_count: int) -> dict[str, Any]:
+def build_publish_metadata(
+    notice: PlatformNotice, selected_count: int
+) -> dict[str, Any]:
     return {
         "audience_type": notice.audience_type,
         "selected_recipient_count": selected_count,
@@ -477,20 +480,23 @@ def create_platform_notice(
         db.add(notice)
         db.flush()
         if audience_type == AUDIENCE_TYPE_SELECTED:
-            db.add_all([
-                PlatformNoticeRecipient(
-                    notice_id=notice.id,
-                    user_id=user_id,
-                    created_at=published_at,
-                )
-                for user_id in selected_user_ids
-            ])
+            db.add_all(
+                [
+                    PlatformNoticeRecipient(
+                        notice_id=notice.id,
+                        user_id=user_id,
+                        created_at=published_at,
+                    )
+                    for user_id in selected_user_ids
+                ]
+            )
 
         selected_count = len(selected_user_ids)
         record_admin_action(
             db,
             admin_user_id=creator_user.id,
             action_type="publish_platform_notice",
+            outcome="succeeded",
             target_platform_notice_id=notice.id,
             metadata=build_publish_metadata(notice, selected_count),
         )
@@ -849,9 +855,7 @@ def cancel_platform_notice(
     payload: PlatformNoticeCancel,
 ) -> PlatformNoticeRead:
     notice = db.scalar(
-        select(PlatformNotice)
-        .where(PlatformNotice.id == notice_id)
-        .with_for_update()
+        select(PlatformNotice).where(PlatformNotice.id == notice_id).with_for_update()
     )
     if notice is None:
         raise HTTPException(
@@ -875,6 +879,7 @@ def cancel_platform_notice(
             db,
             admin_user_id=admin_user.id,
             action_type="cancel_platform_notice",
+            outcome="succeeded",
             reason=cancellation_reason,
             target_platform_notice_id=notice.id,
             metadata={
@@ -903,21 +908,27 @@ def cancel_platform_notice(
 
 
 def active_global_notice_count(db: Session) -> int:
-    return db.scalar(
-        select(func.count())
-        .select_from(PlatformNotice)
-        .where(
-            PlatformNotice.audience_type == AUDIENCE_TYPE_ALL_ELIGIBLE,
-            PlatformNotice.cancelled_at.is_(None),
-            PlatformNotice.published_at <= now_utc(),
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(PlatformNotice)
+            .where(
+                PlatformNotice.audience_type == AUDIENCE_TYPE_ALL_ELIGIBLE,
+                PlatformNotice.cancelled_at.is_(None),
+                PlatformNotice.published_at <= now_utc(),
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
 def current_eligible_user_count(db: Session) -> int:
-    return db.scalar(
-        select(func.count()).select_from(User).where(account_eligible_condition())
-    ) or 0
+    return (
+        db.scalar(
+            select(func.count()).select_from(User).where(account_eligible_condition())
+        )
+        or 0
+    )
 
 
 def admin_platform_notice_summary(db: Session) -> dict[str, int]:

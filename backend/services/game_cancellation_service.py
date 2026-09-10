@@ -1271,6 +1271,7 @@ def create_game_cancellation_admin_action(
         db,
         admin_user_id=current_user.id,
         action_type=action_type,
+        outcome="succeeded",
         target_game_id=db_game.id,
         target_user_id=db_game.host_user_id,
         reason=cancel_reason,
@@ -1283,7 +1284,6 @@ def create_game_cancellation_admin_action(
             **payment_summary,
         },
         idempotency_key=idempotency_key,
-        created_at=now,
     )
 
 

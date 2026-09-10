@@ -53,6 +53,10 @@ class AdminAction(Base):
             name="ck_admin_actions_action_type",
         ),
         CheckConstraint(
+            "outcome IN ('succeeded', 'failed', 'pending')",
+            name="ck_admin_actions_outcome",
+        ),
+        CheckConstraint(
             (
                 "target_user_id IS NOT NULL "
                 "OR target_game_id IS NOT NULL "
@@ -83,6 +87,7 @@ class AdminAction(Base):
         ),
         Index("ix_admin_actions_admin_user_id", "admin_user_id"),
         Index("ix_admin_actions_action_type", "action_type"),
+        Index("ix_admin_actions_correlation_id", "correlation_id"),
         Index(
             "ix_admin_actions_log_created_id",
             text("created_at DESC"),
@@ -414,6 +419,12 @@ class AdminAction(Base):
 
     action_type: Mapped[str] = mapped_column(String(60), nullable=False)
 
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    correlation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
+
     target_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
@@ -483,7 +494,9 @@ class AdminAction(Base):
     )
 
     target_admin_action_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("admin_actions.id", ondelete="RESTRICT"),
+        nullable=True,
     )
 
     target_support_flag_id: Mapped[uuid.UUID | None] = mapped_column(

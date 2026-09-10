@@ -14,8 +14,8 @@ from backend.schemas.game_credit_schema import (
 )
 from backend.services.admin_action_service import record_admin_action
 from backend.services.game_credit_service import (
-    REVERSED_USAGE_STATUS,
     REVERSE_USAGE_TYPE,
+    REVERSED_USAGE_STATUS,
     has_reserved_usage_for_credit,
 )
 from backend.services.user_service import build_user_conflict_detail
@@ -54,7 +54,9 @@ def get_active_credit_user_or_404(db: Session, user_id: uuid.UUID) -> User:
     return user
 
 
-def validate_official_source_game(db: Session, source_game_id: uuid.UUID | None) -> None:
+def validate_official_source_game(
+    db: Session, source_game_id: uuid.UUID | None
+) -> None:
     if source_game_id is None:
         return
 
@@ -344,7 +346,10 @@ def source_context_booking_ids(context: CreditSourceContext) -> set[uuid.UUID]:
         booking_ids.add(context.source_booking.id)
     if context.payment_booking is not None:
         booking_ids.add(context.payment_booking.id)
-    if context.source_payment is not None and context.source_payment.booking_id is not None:
+    if (
+        context.source_payment is not None
+        and context.source_payment.booking_id is not None
+    ):
         booking_ids.add(context.source_payment.booking_id)
     return booking_ids
 
@@ -465,7 +470,9 @@ def issue_admin_game_credit(
         source_payment_id=payload.source_payment_id,
     )
 
-    explicit_idempotency_key = normalize_optional_operation_text(payload.idempotency_key)
+    explicit_idempotency_key = normalize_optional_operation_text(
+        payload.idempotency_key
+    )
     note = normalize_optional_operation_text(payload.note)
     require_credit_issue_idempotency_key_available(db, explicit_idempotency_key)
     validate_source_eligible_credit_amount(
@@ -504,6 +511,7 @@ def issue_admin_game_credit(
             db,
             admin_user_id=admin_user.id,
             action_type="issue_credit",
+            outcome="succeeded",
             target_user_id=payload.user_id,
             target_game_id=payload.source_game_id,
             target_booking_id=payload.source_booking_id,
@@ -538,9 +546,7 @@ def reverse_admin_game_credit(
     payload: GameCreditReverseCreate,
 ) -> GameCredit:
     game_credit = db.scalars(
-        select(GameCredit)
-        .where(GameCredit.id == game_credit_id)
-        .with_for_update()
+        select(GameCredit).where(GameCredit.id == game_credit_id).with_for_update()
     ).first()
 
     if game_credit is None:
@@ -568,7 +574,9 @@ def reverse_admin_game_credit(
             detail="Only active credit with available value can be reversed.",
         )
 
-    explicit_idempotency_key = normalize_optional_operation_text(payload.idempotency_key)
+    explicit_idempotency_key = normalize_optional_operation_text(
+        payload.idempotency_key
+    )
     note = normalize_optional_operation_text(payload.note)
     require_credit_usage_idempotency_key_available(db, explicit_idempotency_key)
     idempotency_key = explicit_idempotency_key or (
@@ -600,6 +608,7 @@ def reverse_admin_game_credit(
             db,
             admin_user_id=admin_user.id,
             action_type="reverse_credit",
+            outcome="succeeded",
             target_user_id=game_credit.user_id,
             target_game_id=game_credit.source_game_id,
             target_booking_id=game_credit.source_booking_id,

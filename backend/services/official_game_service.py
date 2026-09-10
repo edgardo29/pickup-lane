@@ -74,9 +74,7 @@ def build_address_snapshot(venue: Venue) -> str:
     state_line = " ".join(
         value for value in [venue.state.strip(), venue.postal_code.strip()] if value
     )
-    city_line = ", ".join(
-        value for value in [venue.city.strip(), state_line] if value
-    )
+    city_line = ", ".join(value for value in [venue.city.strip(), state_line] if value)
     return ", ".join(
         value for value in [venue.address_line_1.strip(), city_line] if value
     )
@@ -361,6 +359,7 @@ def create_official_game(
         db,
         admin_user_id=admin_user.id,
         action_type="create_official_game",
+        outcome="succeeded",
         target_game_id=game.id,
         target_venue_id=venue.id,
         reason=create_request.reason,
@@ -386,17 +385,11 @@ def get_official_game_or_404(
     for_update: bool = False,
 ) -> Game:
     if for_update:
-        game = db.scalar(
-            select(Game).where(Game.id == game_id).with_for_update()
-        )
+        game = db.scalar(select(Game).where(Game.id == game_id).with_for_update())
     else:
         game = db.get(Game, game_id)
 
-    if (
-        game is None
-        or game.deleted_at is not None
-        or game.game_type != "official"
-    ):
+    if game is None or game.deleted_at is not None or game.game_type != "official":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Official game not found.",
@@ -435,9 +428,7 @@ def build_effective_official_game_data(
             "game_player_group", game.game_player_group
         ),
         "skill_level": update_data.get("skill_level", game.skill_level),
-        "environment_type": update_data.get(
-            "environment_type", game.environment_type
-        ),
+        "environment_type": update_data.get("environment_type", game.environment_type),
         "total_spots": update_data.get("total_spots", game.total_spots),
         "price_per_player_cents": update_data.get(
             "price_per_player_cents", game.price_per_player_cents
@@ -449,9 +440,7 @@ def build_effective_official_game_data(
             "max_guests_per_booking", game.max_guests_per_booking
         ),
         "host_guest_max": game.host_guest_max,
-        "waitlist_enabled": update_data.get(
-            "waitlist_enabled", game.waitlist_enabled
-        ),
+        "waitlist_enabled": update_data.get("waitlist_enabled", game.waitlist_enabled),
         "is_chat_enabled": update_data.get("is_chat_enabled", game.is_chat_enabled),
         "policy_mode": game.policy_mode,
         "custom_rules_text": game.custom_rules_text,
@@ -572,7 +561,9 @@ def expire_pending_checkouts_for_admin_edit(
     for payment in pending_payments:
         payment.payment_status = "failed"
         payment.failure_code = "admin_game_updated"
-        payment.failure_message = "Checkout invalidated after official game details changed."
+        payment.failure_message = (
+            "Checkout invalidated after official game details changed."
+        )
         payment.updated_at = now
         db.add(payment)
 
@@ -587,10 +578,7 @@ def update_official_game(
     update_request: AdminOfficialGameUpdate,
 ) -> Game:
     game = get_official_game_or_404(db, game_id, for_update=True)
-    if (
-        game.publish_status != "published"
-        or game.game_status not in OPEN_GAME_STATUSES
-    ):
+    if game.publish_status != "published" or game.game_status not in OPEN_GAME_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only published active official games can be edited.",
@@ -683,6 +671,7 @@ def update_official_game(
         db,
         admin_user_id=admin_user.id,
         action_type="update_official_game",
+        outcome="succeeded",
         target_game_id=game.id,
         reason=reason,
         metadata={

@@ -24,7 +24,9 @@ from backend.schemas.admin_money_context_schema import (
     AdminMoneyHostPublishFeeContextRead,
     AdminMoneyPaymentUserContextRead,
 )
-from backend.schemas.admin_money_payment_detail_schema import AdminMoneyPaymentDetailRead
+from backend.schemas.admin_money_payment_detail_schema import (
+    AdminMoneyPaymentDetailRead,
+)
 from backend.schemas.admin_money_payment_schema import (
     AdminMoneyPaymentDetailItemRead,
     AdminMoneyPaymentListRead,
@@ -44,6 +46,7 @@ from backend.services.admin_money_issue_query_service import (
     list_related_money_issues,
     sort_money_issues_open_first,
 )
+from backend.services.auth_service import require_active_admin_user
 from backend.services.payment_rules import VALID_PAYMENT_STATUSES, VALID_PAYMENT_TYPES
 
 ADMIN_MONEY_DETAIL_RELATED_LIMIT = 100
@@ -181,7 +184,9 @@ def list_admin_money_payments(
 
     payments = list(
         db.scalars(
-            query.order_by(Payment.created_at.desc(), Payment.id.desc()).limit(limit + 1)
+            query.order_by(Payment.created_at.desc(), Payment.id.desc()).limit(
+                limit + 1
+            )
         ).all()
     )
     return AdminMoneyPaymentListResponseRead(
@@ -254,8 +259,7 @@ def load_by_id(db: Session, model, ids: set[uuid.UUID]) -> dict[uuid.UUID, objec
     if not ids:
         return {}
     return {
-        row.id: row
-        for row in db.scalars(select(model).where(model.id.in_(ids))).all()
+        row.id: row for row in db.scalars(select(model).where(model.id.in_(ids))).all()
     }
 
 
@@ -431,7 +435,9 @@ def build_payment_summaries(
 ) -> list[AdminMoneyPaymentListRead | AdminMoneyPaymentDetailItemRead]:
     payment_ids = {payment.id for payment in payments}
     payer_ids = {payment.payer_user_id for payment in payments}
-    booking_ids = {payment.booking_id for payment in payments if payment.booking_id is not None}
+    booking_ids = {
+        payment.booking_id for payment in payments if payment.booking_id is not None
+    }
     users = load_by_id(db, User, payer_ids)
     bookings = load_by_id(db, Booking, booking_ids)
     game_ids = {payment.game_id for payment in payments if payment.game_id is not None}
@@ -449,7 +455,9 @@ def build_payment_summaries(
 
     summaries = []
     for payment in payments:
-        booking = bookings.get(payment.booking_id) if payment.booking_id is not None else None
+        booking = (
+            bookings.get(payment.booking_id) if payment.booking_id is not None else None
+        )
         game_id = payment.game_id or (booking.game_id if booking is not None else None)
         reserved_credit_cents = direct_credit_totals.get((payment.id, "reserved"), 0)
         redeemed_credit_cents = direct_credit_totals.get((payment.id, "redeemed"), 0)
@@ -687,6 +695,7 @@ def list_payment_audit_actions(
     credit_grants: list[GameCredit],
     money_issues: list,
 ) -> list[AdminAction]:
+    require_active_admin_user(viewer_user)
     audit_actions = db.scalars(
         select(AdminAction)
         .where(AdminAction.target_payment_id == payment.id)
@@ -707,6 +716,7 @@ def get_admin_money_payment_detail(
     payment_id: uuid.UUID,
     viewer_user: User,
 ) -> AdminMoneyPaymentDetailRead:
+    require_active_admin_user(viewer_user)
     from backend.services.admin_money_credit_service import build_credit_summaries
     from backend.services.admin_money_refund_query_service import (
         build_refund_summaries,

@@ -143,7 +143,10 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
             detail="Booking payments require booking_id.",
         )
 
-    if payment_data["payment_type"] == "booking" and payment_data["game_id"] is not None:
+    if (
+        payment_data["payment_type"] == "booking"
+        and payment_data["game_id"] is not None
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Booking payments cannot include game_id.",
@@ -163,9 +166,7 @@ def validate_payment_business_rules(payment_data: dict[str, object]) -> None:
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Admin charge payments cannot include booking_id or game_id."
-            ),
+            detail=("Admin charge payments cannot include booking_id or game_id."),
         )
 
     if (
@@ -308,6 +309,7 @@ def create_payment_record(
             db,
             admin_user_id=admin_user.id,
             action_type="create_payment",
+            outcome="succeeded",
             target_user_id=new_payment.payer_user_id,
             target_game_id=new_payment.game_id,
             target_booking_id=new_payment.booking_id,
@@ -469,6 +471,7 @@ def update_payment_record(
             db,
             admin_user_id=admin_user.id,
             action_type="update_payment",
+            outcome="succeeded",
             target_user_id=db_payment.payer_user_id,
             target_game_id=db_payment.game_id,
             target_booking_id=db_payment.booking_id,

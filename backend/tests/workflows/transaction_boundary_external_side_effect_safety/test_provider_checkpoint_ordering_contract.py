@@ -975,7 +975,6 @@ def test_admin_refund_retry_timeout_preserves_committed_retry_intent(
     monkeypatch.setattr(refund_service, "get_booking_for_retry", lambda *args, **kwargs: None)
     monkeypatch.setattr(refund_service, "get_host_publish_fee_for_retry", lambda *args, **kwargs: None)
     monkeypatch.setattr(refund_service, "validate_refund_retry", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "refund_audit_snapshot", lambda refund: {"status": "failed"})
     monkeypatch.setattr(refund_service, "refund_audit_metadata", lambda *args, **kwargs: {"source": "admin_money_refund_retry"})
     monkeypatch.setattr(refund_service, "record_admin_action", lambda *args, **kwargs: admin_action)
 
@@ -1004,7 +1003,7 @@ def test_admin_refund_retry_timeout_preserves_committed_retry_intent(
 
 
 @pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
-def test_admin_refund_retry_provider_success_records_metadata_before_local_failure(
+def test_admin_refund_retry_provider_success_records_typed_event_before_local_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from sqlalchemy.exc import IntegrityError
@@ -1035,7 +1034,9 @@ def test_admin_refund_retry_provider_success_records_metadata_before_local_failu
         currency="USD",
     )
     admin_action = SimpleNamespace(id=uuid.uuid4(), metadata_=None)
+    refund_event = SimpleNamespace(id=uuid.uuid4())
     provider_events: list[tuple[str, int]] = []
+    checkpoint_events: list[tuple[dict[str, object], int]] = []
 
     monkeypatch.setattr(refund_service, "get_existing_retry_action", lambda *args, **kwargs: None)
     monkeypatch.setattr(refund_service, "get_refund_for_retry_or_404", lambda *args, **kwargs: refund)
@@ -1043,7 +1044,6 @@ def test_admin_refund_retry_provider_success_records_metadata_before_local_failu
     monkeypatch.setattr(refund_service, "get_booking_for_retry", lambda *args, **kwargs: None)
     monkeypatch.setattr(refund_service, "get_host_publish_fee_for_retry", lambda *args, **kwargs: None)
     monkeypatch.setattr(refund_service, "validate_refund_retry", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "refund_audit_snapshot", lambda refund: {"status": "failed"})
     monkeypatch.setattr(refund_service, "refund_audit_metadata", lambda *args, **kwargs: {"source": "admin_money_refund_retry"})
 
     def record_admin_action(*args, **kwargs):
@@ -1062,8 +1062,19 @@ def test_admin_refund_retry_provider_success_records_metadata_before_local_failu
         del kwargs
         raise IntegrityError("stmt", "params", Exception("local result failed"))
 
+    def record_provider_result_checkpoint(db, **kwargs):
+        checkpoint_events.append((kwargs, db.commit_calls))
+        db.add(refund_event)
+        db.commit()
+        return refund_event.id
+
     monkeypatch.setattr(refund_service, "record_admin_action", record_admin_action)
     monkeypatch.setattr(refund_service, "create_stripe_refund", create_stripe_refund)
+    monkeypatch.setattr(
+        refund_service,
+        "record_admin_refund_retry_provider_result_checkpoint",
+        record_provider_result_checkpoint,
+    )
     monkeypatch.setattr(
         refund_service,
         "map_admin_money_retry_refund_status",
@@ -1090,12 +1101,16 @@ def test_admin_refund_retry_provider_success_records_metadata_before_local_failu
     assert "Stripe returned a refund result" in exc_info.value.detail
     assert "refund reconciliation before retrying" in exc_info.value.detail
     assert provider_events == [("ws04-02a-admin-refund", 1)]
-    provider_result = admin_action.metadata_["provider_result"]
-    assert provider_result["provider"] == "stripe"
-    assert provider_result["provider_refund_id"] == "re_ws04_02a_retry_recording_failed"
-    assert provider_result["provider_status"] == "succeeded"
-    assert provider_result["recording_state"] == "pending_local_refund_state"
-    assert provider_result["recorded_at"]
+    assert len(checkpoint_events) == 1
+    checkpoint, prior_commit_count = checkpoint_events[0]
+    assert prior_commit_count == 1
+    assert checkpoint["admin_action_id"] == admin_action.id
+    assert checkpoint["admin_user_id"] == admin_user.id
+    assert checkpoint["refund_id"] == refund_id
+    assert checkpoint["provider_charge_id"] == payment.provider_charge_id
+    assert checkpoint["provider_refund_id"] == "re_ws04_02a_retry_recording_failed"
+    assert checkpoint["refund_status"] == "succeeded"
+    assert admin_action.metadata_ is None
     assert db.commit_calls == 2
     assert db.rollback_calls == 1
 
