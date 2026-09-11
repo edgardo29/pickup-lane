@@ -390,7 +390,8 @@ def test_admin_miscellaneous_read_families_are_admin_only_and_preserve_lookup_sh
         "disabled",
         "enabled",
     }
-    assert detail_body["audit_action_count"] == 0
+    assert "audit_action_count" not in detail_body
+    assert "audit_actions" not in detail_body
 
     unsupported_notification_query = client.get(
         f"/admin/notifications?user_id={target.id}&limit=10",

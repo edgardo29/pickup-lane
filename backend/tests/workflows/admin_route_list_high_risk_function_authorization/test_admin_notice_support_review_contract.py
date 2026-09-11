@@ -276,7 +276,6 @@ def test_support_review_and_admin_action_reads_are_admin_only(
     for route in (
         "/admin/support-flags",
         "/admin/review-cases",
-        "/admin/actions",
         "/admin/actions/log",
         "/admin/platform-notices",
     ):
@@ -312,25 +311,30 @@ def test_support_review_and_admin_action_reads_are_admin_only(
     assert review_detail.json()["id"] == str(review_case_id)
     assert review_detail.json()["target_user_id"] == str(target.id)
 
-    action_list = client.get(
+    retired_action_list = client.get(
         (
             "/admin/actions"
             f"?target_support_flag_id={support_flag_id}&action_type=resolve_support_flag"
         ),
         headers=_auth_headers("admin-token"),
     )
-    assert action_list.status_code == 200
-    assert [item["id"] for item in action_list.json()] == [str(admin_action_id)]
+    assert retired_action_list.status_code == 405
     action_detail = client.get(
         f"/admin/actions/{admin_action_id}",
         headers=_auth_headers("admin-token"),
     )
     assert action_detail.status_code == 200
     assert action_detail.json()["id"] == str(admin_action_id)
-    assert action_detail.json()["target_support_flag_id"] == str(support_flag_id)
-    assert {
-        detail["target_field"] for detail in action_detail.json()["target_details"]
-    } >= {"target_user_id", "target_support_flag_id"}
+    assert set(action_detail.json()) == {
+        "id",
+        "action_type",
+        "action_label",
+        "admin_label",
+        "admin_email",
+        "created_at",
+        "reason",
+        "primary_target",
+    }
 
     unsupported_log = client.get(
         "/admin/actions/log?unsupported=1",
@@ -435,7 +439,14 @@ def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
         headers=_auth_headers("admin-token"),
     )
     assert note_response.status_code == 200
-    assert note_response.json()["note"]["author_user_id"] == str(admin.id)
+    assert set(note_response.json()) == {
+        "review_case_id",
+        "case_version",
+        "note_id",
+        "audit_action_id",
+        "idempotent_replay",
+    }
+    assert note_response.json()["review_case_id"] == str(review_case_id)
     assert _count_model_rows(AdminReviewCaseNote) == before_notes + 1
 
     close_response = client.post(
@@ -449,6 +460,14 @@ def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
         headers=_auth_headers("admin-token"),
     )
     assert close_response.status_code == 200
+    assert set(close_response.json()) == {
+        "review_case_id",
+        "case_version",
+        "case_status",
+        "closure_outcome",
+        "audit_action_id",
+        "idempotent_replay",
+    }
     case_state = _review_case_state(review_case_id)
     assert case_state["case_status"] == "closed"
     assert case_state["closed_by_user_id"] == admin.id

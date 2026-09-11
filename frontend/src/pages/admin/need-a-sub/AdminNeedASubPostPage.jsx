@@ -484,8 +484,8 @@ function AuditActions({
         <div className="admin-sub-audit-list">
           {actions.map((action) => (
             <div key={action.id}>
-              <strong>{formatAdminNeedASubStatus(action.action_type)}</strong>
-              <span>{action.reason || 'No reason recorded'}</span>
+              <strong>{action.action_label}</strong>
+              <span>{action.reason_preview || 'No reason recorded'}</span>
               <span>{formatAdminNeedASubDateTime(action.created_at, timeZone)}</span>
             </div>
           ))}
@@ -688,7 +688,8 @@ function AdminNeedASubPostPage() {
                   {canViewChat ? (
                     <AdminNeedASubChatPanel
                       firebaseUser={currentUser}
-                      postId={detail.post.id}
+                      key={postId}
+                      postId={postId}
                       timeZone={detail.post.timezone}
                     />
                   ) : (

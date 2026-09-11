@@ -44,7 +44,10 @@ from backend.schemas.admin_review_schema import (
     AdminReviewCaseTargetSummaryRead,
     AdminReviewSignalRead,
 )
-from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_action_service import (
+    record_admin_action,
+    record_sensitive_admin_read,
+)
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_metadata_value,
@@ -1194,6 +1197,21 @@ def get_review_case_detail(
     viewer_user: User,
 ) -> AdminReviewCaseDetailRead:
     require_review_read_access(viewer_user)
+    review_case_identity = db.scalar(
+        select(AdminReviewCase.id).where(AdminReviewCase.id == review_case_id)
+    )
+    if review_case_identity is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Review case not found.",
+        )
+    record_sensitive_admin_read(
+        authenticated_admin_id=viewer_user.id,
+        action_type="read_review_case_sensitive_detail",
+        target_review_case_id=review_case_id,
+        reason=None,
+        metadata=None,
+    )
     return serialize_review_case_detail(db, get_review_case_or_404(db, review_case_id))
 
 
@@ -1812,11 +1830,16 @@ def add_review_case_note(
         except ValueError:
             note_uuid = None
         note = db.get(AdminReviewCaseNote, note_uuid) if note_uuid else None
-        if note is None:
+        if (
+            note is None
+            or note.review_case_id != review_case.id
+            or note.author_user_id != admin_user.id
+        ):
             raise review_case_conflict("review_case_transition_conflict", review_case)
         return AdminReviewCaseNoteResultRead(
-            review_case=serialize_review_case_detail(db, review_case),
-            note=serialize_review_case_note_read(note, {admin_user.id: admin_user}),
+            review_case_id=review_case.id,
+            case_version=review_case.case_version,
+            note_id=note.id,
             audit_action_id=existing_action.id,
             idempotent_replay=True,
         )
@@ -1876,8 +1899,9 @@ def add_review_case_note(
     db.refresh(note)
     db.refresh(admin_action)
     return AdminReviewCaseNoteResultRead(
-        review_case=serialize_review_case_detail(db, review_case),
-        note=serialize_review_case_note_read(note, {admin_user.id: admin_user}),
+        review_case_id=review_case.id,
+        case_version=review_case.case_version,
+        note_id=note.id,
         audit_action_id=admin_action.id,
         idempotent_replay=False,
     )
@@ -1890,8 +1914,20 @@ def build_review_case_action_replay(
     action: AdminAction,
 ) -> AdminReviewCaseActionResultRead:
     review_case = get_review_case_or_404(db, review_case_id)
+    action_metadata = action.metadata_ or {}
+    if (
+        action.action_type != "close_review_case"
+        or action.target_review_case_id != review_case.id
+        or review_case.case_status != "closed"
+        or review_case.closure_outcome not in VALID_CLOSURE_OUTCOMES
+        or action_metadata.get("closure_outcome") != review_case.closure_outcome
+    ):
+        raise review_case_conflict("review_case_transition_conflict", review_case)
     return AdminReviewCaseActionResultRead(
-        review_case=serialize_review_case_detail(db, review_case),
+        review_case_id=review_case.id,
+        case_version=review_case.case_version,
+        case_status="closed",
+        closure_outcome=review_case.closure_outcome,
         audit_action_id=action.id,
         idempotent_replay=True,
     )
@@ -2006,7 +2042,10 @@ def close_review_case(
     db.refresh(review_case)
     db.refresh(admin_action)
     return AdminReviewCaseActionResultRead(
-        review_case=serialize_review_case_detail(db, review_case),
+        review_case_id=review_case.id,
+        case_version=review_case.case_version,
+        case_status="closed",
+        closure_outcome=review_case.closure_outcome,
         audit_action_id=admin_action.id,
         idempotent_replay=False,
     )

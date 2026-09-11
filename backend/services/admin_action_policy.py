@@ -599,6 +599,53 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         metadata_builder_key="review_workflow",
         requires_reason=True,
     ),
+    "read_game_chat_moderation": AdminActionPolicy(
+        action_type="read_game_chat_moderation",
+        required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID,)),),
+        allowed_target_fields=target_set(TARGET_GAME_ID),
+        metadata_builder_key="none",
+        category="sensitive_read",
+        allows_audit_note=False,
+    ),
+    "reveal_game_chat_message_content": AdminActionPolicy(
+        action_type="reveal_game_chat_message_content",
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_GAME_ID, TARGET_MESSAGE_ID)),
+        ),
+        allowed_target_fields=target_set(TARGET_GAME_ID, TARGET_MESSAGE_ID),
+        metadata_builder_key="none",
+        category="sensitive_read",
+        allows_audit_note=False,
+    ),
+    "read_need_sub_chat_moderation": AdminActionPolicy(
+        action_type="read_need_sub_chat_moderation",
+        required_target_rules=(TargetRule(all_of=(TARGET_SUB_POST_ID,)),),
+        allowed_target_fields=target_set(TARGET_SUB_POST_ID),
+        metadata_builder_key="none",
+        category="sensitive_read",
+        allows_audit_note=False,
+    ),
+    "reveal_need_sub_chat_message_content": AdminActionPolicy(
+        action_type="reveal_need_sub_chat_message_content",
+        required_target_rules=(
+            TargetRule(all_of=(TARGET_SUB_POST_ID, TARGET_SUB_CHAT_MESSAGE_ID)),
+        ),
+        allowed_target_fields=target_set(
+            TARGET_SUB_POST_ID,
+            TARGET_SUB_CHAT_MESSAGE_ID,
+        ),
+        metadata_builder_key="none",
+        category="sensitive_read",
+        allows_audit_note=False,
+    ),
+    "read_review_case_sensitive_detail": AdminActionPolicy(
+        action_type="read_review_case_sensitive_detail",
+        required_target_rules=(TargetRule(all_of=(TARGET_REVIEW_CASE_ID,)),),
+        allowed_target_fields=target_set(TARGET_REVIEW_CASE_ID),
+        metadata_builder_key="none",
+        category="sensitive_read",
+        allows_audit_note=False,
+    ),
     "update_notification": AdminActionPolicy(
         action_type="update_notification",
         required_target_rules=(TargetRule(all_of=(TARGET_NOTIFICATION_ID,)),),

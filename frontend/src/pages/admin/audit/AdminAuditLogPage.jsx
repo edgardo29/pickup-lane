@@ -17,7 +17,6 @@ import {
   listAdminActionLog,
   listAdminLookupUsers,
 } from '../shared/adminApi.js'
-import { selectAdminActionPrimaryTarget } from './adminAuditLogTargets.js'
 
 const ADMIN_SEARCH_DEBOUNCE_MS = 300
 const ADMIN_SEARCH_LIMIT = 10
@@ -153,12 +152,8 @@ function AdminActionDetailField({
   )
 }
 
-function AdminActionTargets({ action, logAction }) {
-  const targets = Array.isArray(action?.target_details) ? action.target_details : []
-  const primaryTarget = selectAdminActionPrimaryTarget({
-    detailTargets: targets,
-    listPrimaryTarget: logAction?.primary_target,
-  })
+function AdminActionTargets({ action }) {
+  const primaryTarget = action?.primary_target
 
   if (!primaryTarget) {
     return null
@@ -186,7 +181,6 @@ function AdminActionTargets({ action, logAction }) {
 function AdminActionDetail({
   action,
   loadState,
-  logAction,
 }) {
   if (loadState === 'loading') {
     return <p className="admin-audit-empty">Loading action detail.</p>
@@ -200,21 +194,14 @@ function AdminActionDetail({
     return null
   }
 
-  const adminLabel = (
-    logAction?.admin_label
-    || action.admin_user_display_name
-    || action.admin_user_email
-    || action.admin_user_id
-  )
-
   return (
     <div className="admin-audit-detail">
       <section className="admin-audit-detail-section">
         <h3>Action</h3>
         <div className="admin-audit-detail-facts">
-          <AdminActionDetailField label="Admin" value={adminLabel} />
-          {action.admin_user_email && (
-            <AdminActionDetailField label="Admin email" value={action.admin_user_email} />
+          <AdminActionDetailField label="Admin" value={action.admin_label} />
+          {action.admin_email && (
+            <AdminActionDetailField label="Admin email" value={action.admin_email} />
           )}
           <AdminActionDetailField
             label="Created"
@@ -226,7 +213,7 @@ function AdminActionDetail({
         </div>
       </section>
 
-      <AdminActionTargets action={action} logAction={logAction} />
+      <AdminActionTargets action={action} />
     </div>
   )
 }
@@ -286,7 +273,6 @@ function AdminActionDetailModal({
           <AdminActionDetail
             action={action}
             loadState={loadState}
-            logAction={logAction}
           />
         </div>
       </section>

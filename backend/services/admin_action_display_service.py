@@ -46,7 +46,7 @@ from backend.schemas.admin_action_schema import (
     AdminActionLogItemRead,
     AdminActionLogListRead,
     AdminActionLogTargetSummaryRead,
-    AdminActionTargetDetailRead,
+    AdminActionTargetSummaryRead,
 )
 from backend.services.admin_action_policy import (
     ADMIN_ACTION_TYPES,
@@ -77,11 +77,9 @@ from backend.services.admin_action_policy import (
 )
 from backend.services.admin_action_service import (
     get_policy_or_400,
-    serialize_admin_action_reads,
     user_can_read_admin_action,
 )
 from backend.services.auth_service import require_active_admin_user
-from backend.services.user_service import get_user_display_name
 
 ADMIN_ACTION_LOG_CURSOR_VERSION = 1
 ADMIN_ACTION_LOG_SORT_VERSION = "created_at_desc_id_desc"
@@ -140,10 +138,24 @@ def format_money_cents(amount_cents: int | None) -> str | None:
 
 
 def user_label(user: User | None, *, fallback_user_id: uuid.UUID | None = None) -> str:
-    if user is None:
-        return str(fallback_user_id) if fallback_user_id is not None else "Unknown user"
+    full_name = (
+        f"{user.first_name or ''} {user.last_name or ''}".strip()
+        if user is not None
+        else ""
+    )
+    if full_name:
+        return full_name
+    user_id = user.id if user is not None else fallback_user_id
+    return f"User {str(user_id)[:8]}" if user_id is not None else "Unknown user"
 
-    return get_user_display_name(user) or user.email or str(user.id)
+
+def admin_label(user: User | None, *, fallback_admin_id: uuid.UUID) -> str:
+    full_name = (
+        f"{user.first_name or ''} {user.last_name or ''}".strip()
+        if user is not None
+        else ""
+    )
+    return full_name or f"Admin {str(fallback_admin_id)[:8]}"
 
 
 def game_label(game: Game) -> str:
@@ -805,10 +817,12 @@ def build_admin_action_log_context(
     *,
     admin_user_id: uuid.UUID | None,
     action_type: str | None,
+    target_game_id: uuid.UUID | None,
 ) -> dict[str, object]:
     return {
         "admin_user_id": str(admin_user_id) if admin_user_id is not None else None,
         "action_type": action_type,
+        "target_game_id": str(target_game_id) if target_game_id is not None else None,
         "sort_version": ADMIN_ACTION_LOG_SORT_VERSION,
     }
 
@@ -880,6 +894,7 @@ def build_admin_action_log_filters(
     *,
     admin_user_id: uuid.UUID | None = None,
     action_type: str | None = None,
+    target_game_id: uuid.UUID | None = None,
 ) -> tuple[list[object], str, str | None]:
     normalized_action_type = normalize_optional_exact_filter(action_type)
     filters: list[object] = []
@@ -891,9 +906,13 @@ def build_admin_action_log_filters(
         get_policy_or_400(normalized_action_type)
         filters.append(AdminAction.action_type == normalized_action_type)
 
+    if target_game_id is not None:
+        filters.append(AdminAction.target_game_id == target_game_id)
+
     context = build_admin_action_log_context(
         admin_user_id=admin_user_id,
         action_type=normalized_action_type,
+        target_game_id=target_game_id,
     )
     return filters, query_context_hash(context), normalized_action_type
 
@@ -954,14 +973,6 @@ def collect_primary_target_ids(
     }
 
 
-def collect_all_target_ids(action: AdminAction) -> dict[str, set[uuid.UUID]]:
-    return {
-        field_name: {target_id}
-        for field_name in TARGET_DISPLAY_RULES
-        if (target_id := getattr(action, field_name, None)) is not None
-    }
-
-
 def load_records_by_field(
     db: Session,
     ids_by_field: dict[str, set[uuid.UUID]],
@@ -1001,12 +1012,17 @@ def build_target_summary(
     record = records_by_field.get(target_rule.field_name, {}).get(target_id)
     if record is None or getattr(record, "deleted_at", None) is not None:
         type_label = target_rule.fallback_type_label
+        label = (
+            f"User {str(target_id)[:8]}"
+            if target_rule.field_name == TARGET_USER_ID
+            else full_id_label(type_label, target_id)
+        )
         return AdminActionLogTargetSummaryRead(
             target_field=target_rule.field_name,
             target_type=type_key_from_label(type_label),
             target_type_label=type_label,
             target_id=target_id,
-            label=full_id_label(type_label, target_id),
+            label=label,
             destination_path=None,
         )
 
@@ -1037,55 +1053,6 @@ def primary_target_summary(
     return None
 
 
-def serialize_admin_action_target_detail(
-    summary: AdminActionLogTargetSummaryRead,
-    *,
-    primary_summary: AdminActionLogTargetSummaryRead | None,
-) -> AdminActionTargetDetailRead:
-    return AdminActionTargetDetailRead(
-        target_field=summary.target_field,
-        target_type=summary.target_type,
-        target_type_label=summary.target_type_label,
-        target_id=summary.target_id,
-        label=summary.label,
-        destination_path=summary.destination_path,
-        is_primary=(
-            primary_summary is not None
-            and summary.target_field == primary_summary.target_field
-            and summary.target_id == primary_summary.target_id
-        ),
-    )
-
-
-def serialize_admin_action_target_details(
-    db: Session,
-    action: AdminAction,
-) -> list[AdminActionTargetDetailRead]:
-    records_by_field = load_records_by_field(db, collect_all_target_ids(action))
-    primary_summary = primary_target_summary(action, records_by_field)
-    target_details: list[AdminActionTargetDetailRead] = []
-
-    for field_name, display_rule in TARGET_DISPLAY_RULES.items():
-        target_id = getattr(action, field_name, None)
-        if target_id is None:
-            continue
-
-        summary = build_target_summary(
-            action,
-            PrimaryTargetRule(field_name, display_rule.fallback_type_label),
-            records_by_field,
-        )
-        if summary is not None:
-            target_details.append(
-                serialize_admin_action_target_detail(
-                    summary,
-                    primary_summary=primary_summary,
-                )
-            )
-
-    return target_details
-
-
 def serialize_admin_action_detail_read(
     db: Session,
     action: AdminAction,
@@ -1093,10 +1060,28 @@ def serialize_admin_action_detail_read(
     viewer_user: User,
 ) -> AdminActionDetailRead:
     require_active_admin_user(viewer_user)
-    action_read = serialize_admin_action_reads(db, [action])[0].model_dump()
+    admin_user = users_by_id(db, [action.admin_user_id]).get(action.admin_user_id)
+    target_summary = primary_target_summary(
+        action,
+        load_target_records(db, [action]),
+    )
     return AdminActionDetailRead(
-        **action_read,
-        target_details=serialize_admin_action_target_details(db, action),
+        id=action.id,
+        action_type=action.action_type,
+        action_label=admin_action_label(action.action_type),
+        admin_label=admin_label(admin_user, fallback_admin_id=action.admin_user_id),
+        admin_email=admin_user.email if admin_user is not None else None,
+        created_at=action.created_at,
+        reason=action.reason,
+        primary_target=(
+            AdminActionTargetSummaryRead(
+                target_type_label=target_summary.target_type_label,
+                label=target_summary.label,
+                destination_path=target_summary.destination_path,
+            )
+            if target_summary is not None
+            else None
+        ),
     )
 
 
@@ -1120,22 +1105,11 @@ def serialize_admin_action_log_item(
 
     return AdminActionLogItemRead(
         id=action.id,
-        action_type=action.action_type,
         action_label=admin_action_label(action.action_type),
-        outcome=action.outcome,
-        admin_user_id=action.admin_user_id,
-        admin_label=user_label(admin_user, fallback_user_id=action.admin_user_id),
-        admin_email=admin_user.email if admin_user is not None else None,
-        primary_target=target_summary,
+        admin_label=admin_label(admin_user, fallback_admin_id=action.admin_user_id),
         target_label=target_summary.label
         if target_summary is not None
         else "No target",
-        target_type_label=(
-            target_summary.target_type_label if target_summary is not None else "Target"
-        ),
-        destination_path=(
-            target_summary.destination_path if target_summary is not None else None
-        ),
         reason_preview=reason_preview(action.reason),
         created_at=action.created_at,
     )
@@ -1147,12 +1121,14 @@ def list_admin_action_log(
     viewer_user: User,
     admin_user_id: uuid.UUID | None = None,
     action_type: str | None = None,
+    target_game_id: uuid.UUID | None = None,
     cursor: str | None = None,
 ) -> AdminActionLogListRead:
     require_active_admin_user(viewer_user)
     filters, context_hash, _normalized_action_type = build_admin_action_log_filters(
         admin_user_id=admin_user_id,
         action_type=action_type,
+        target_game_id=target_game_id,
     )
 
     cursor_filter = build_cursor_filter(
@@ -1202,7 +1178,7 @@ def list_admin_action_log(
             )
             for action in page_actions
         ],
-        action_type_options=admin_action_type_options(),
+        action_type_options=([] if target_game_id is not None else admin_action_type_options()),
         limit=query_limit,
         next_cursor=next_cursor,
         has_more=has_more,

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.schemas import (
+    AdminChatMessageContentRead,
     AdminChatMessageListRead,
     AdminChatModerationActionCreate,
     AdminChatModerationActionResultRead,
@@ -37,6 +38,7 @@ from backend.services.chat_moderation_admin_service import (
     mark_game_chat_message_reviewed,
     remove_game_chat_message,
     restore_game_chat_message,
+    reveal_admin_game_chat_message_content,
 )
 from backend.services.community_game_enforcement_service import (
     admin_cancel_community_game,
@@ -174,6 +176,26 @@ def list_admin_community_game_chat_messages_route(
         view=view,
         offset=offset,
         limit=limit,
+        expected_game_type="community",
+    )
+
+
+@router.get(
+    "/{game_id}/chat/messages/{message_id}/content",
+    response_model=AdminChatMessageContentRead,
+)
+def reveal_admin_community_game_chat_message_content_route(
+    game_id: uuid.UUID,
+    message_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminChatMessageContentRead:
+    return reveal_admin_game_chat_message_content(
+        db,
+        game_id=game_id,
+        message_id=message_id,
+        viewer_user=current_admin,
+        expected_game_type="community",
     )
 
 

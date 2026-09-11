@@ -47,7 +47,12 @@ class AdminAction(Base):
                 "'retry_money_issue_credit', "
                 "'reconcile_refund', "
                 "'create_review_case', 'close_review_case', "
-                "'add_review_case_note'"
+                "'add_review_case_note', "
+                "'read_game_chat_moderation', "
+                "'reveal_game_chat_message_content', "
+                "'read_need_sub_chat_moderation', "
+                "'reveal_need_sub_chat_message_content', "
+                "'read_review_case_sensitive_detail'"
                 ")"
             ),
             name="ck_admin_actions_action_type",

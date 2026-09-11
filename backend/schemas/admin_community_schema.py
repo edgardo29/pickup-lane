@@ -115,9 +115,8 @@ class AdminCommunityGameSupportFlagSummaryRead(BaseModel):
 
 class AdminCommunityGameAuditActionSummaryRead(BaseModel):
     id: UUID
-    admin_user_id: UUID
-    action_type: str
-    reason: str | None = None
+    action_label: str
+    reason_preview: str | None = None
     created_at: datetime
 
 

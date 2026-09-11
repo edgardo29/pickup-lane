@@ -29,7 +29,6 @@ from backend.schemas.game_chat_schema import (
     GameChatRead as GameChatReadSchema,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.auth_service import user_is_active_admin
 from backend.services.chat_moderation_service import (
     CHAT_MESSAGE_CONFLICT_DETAIL,
     ContextPredicateFact,
@@ -1037,10 +1036,6 @@ def get_chat_message_or_404(
     return db_chat_message
 
 
-def can_moderate_chat_messages(user: User) -> bool:
-    return user_is_active_admin(user)
-
-
 def create_chat_message_record(
     db: Session,
     chat_message: ChatMessageCreate,
@@ -1120,9 +1115,6 @@ def get_chat_message_record(
     db_chat_message = get_chat_message_or_404(db, chat_message_id)
     db_game_chat = get_game_chat_or_404(db, db_chat_message.chat_id)
 
-    if can_moderate_chat_messages(current_user):
-        return db_chat_message
-
     require_chat_member(db, db_game_chat, current_user)
     if db_chat_message.visibility_status != "visible":
         raise HTTPException(
@@ -1152,14 +1144,12 @@ def list_chat_message_records(
         )
 
     db_game_chat = get_game_chat_or_404(db, chat_id)
-    can_moderate = can_moderate_chat_messages(current_user)
-    if not can_moderate:
-        require_chat_member(db, db_game_chat, current_user)
-        if visibility_status not in {None, "visible"} or review_status is not None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin access required.",
-            )
+    require_chat_member(db, db_game_chat, current_user)
+    if visibility_status not in {None, "visible"} or review_status is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        )
 
     if (
         visibility_status is not None
@@ -1177,8 +1167,7 @@ def list_chat_message_records(
         )
 
     if (
-        not can_moderate
-        and sender_user_id is None
+        sender_user_id is None
         and visibility_status in {None, "visible"}
         and review_status is None
         and is_pinned is None
@@ -1188,13 +1177,7 @@ def list_chat_message_records(
 
     statement = select(ChatMessage).where(ChatMessage.chat_id == chat_id)
 
-    if not can_moderate:
-        statement = statement.where(ChatMessage.visibility_status == "visible")
-    elif visibility_status is not None:
-        statement = statement.where(ChatMessage.visibility_status == visibility_status)
-
-    if can_moderate and review_status is not None:
-        statement = statement.where(ChatMessage.review_status == review_status)
+    statement = statement.where(ChatMessage.visibility_status == "visible")
 
     if after_created_at is not None:
         statement = statement.where(ChatMessage.created_at > after_created_at)

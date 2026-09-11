@@ -9,22 +9,23 @@ from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
     AdminActionDetailRead,
     AdminActionLogListRead,
-    AdminActionRead,
 )
 from backend.services.admin_action_display_service import (
     list_admin_action_log,
     serialize_admin_action_detail_read,
 )
-from backend.services.admin_action_policy import ADMIN_ACTION_TARGET_FIELDS
 from backend.services.admin_action_service import (
     get_admin_action_for_viewer_or_404,
-    list_admin_actions,
-    serialize_admin_action_reads,
 )
 from backend.services.auth_service import require_active_admin
 
 router = APIRouter(prefix="/admin/actions", tags=["admin_actions"])
-ADMIN_ACTION_LOG_QUERY_PARAMS = {"admin_user_id", "action_type", "cursor"}
+ADMIN_ACTION_LOG_QUERY_PARAMS = {
+    "admin_user_id",
+    "action_type",
+    "target_game_id",
+    "cursor",
+}
 
 
 def reject_unsupported_log_params(request: Request) -> None:
@@ -36,7 +37,7 @@ def reject_unsupported_log_params(request: Request) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "admin_action_log_unsupported_query_param",
-                "message": "Admin Action Log only supports admin and action filters.",
+                "message": "Admin Action Log only supports its documented filters.",
                 "params": unsupported_params,
             },
         )
@@ -65,6 +66,7 @@ def list_admin_action_log_route(
     request: Request,
     admin_user_id: uuid.UUID | None = None,
     action_type: str | None = Query(default=None, max_length=60),
+    target_game_id: uuid.UUID | None = None,
     cursor: str | None = None,
     current_user: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
@@ -75,6 +77,7 @@ def list_admin_action_log_route(
         viewer_user=current_user,
         admin_user_id=admin_user_id,
         action_type=action_type,
+        target_game_id=target_game_id,
         cursor=cursor,
     )
 
@@ -117,76 +120,3 @@ def append_admin_action_note_route(
             "history is recorded by product-owned workflows."
         ),
     )
-
-
-@router.get("", response_model=list[AdminActionRead], status_code=status.HTTP_200_OK)
-def list_admin_actions_route(
-    admin_user_id: uuid.UUID | None = None,
-    action_type: str | None = None,
-    target_user_id: uuid.UUID | None = None,
-    target_game_id: uuid.UUID | None = None,
-    target_booking_id: uuid.UUID | None = None,
-    target_participant_id: uuid.UUID | None = None,
-    target_payment_id: uuid.UUID | None = None,
-    target_refund_id: uuid.UUID | None = None,
-    target_game_credit_id: uuid.UUID | None = None,
-    target_credit_usage_id: uuid.UUID | None = None,
-    target_money_issue_id: uuid.UUID | None = None,
-    target_venue_id: uuid.UUID | None = None,
-    target_venue_image_id: uuid.UUID | None = None,
-    target_message_id: uuid.UUID | None = None,
-    target_sub_post_id: uuid.UUID | None = None,
-    target_sub_post_request_id: uuid.UUID | None = None,
-    target_sub_post_position_id: uuid.UUID | None = None,
-    target_sub_chat_message_id: uuid.UUID | None = None,
-    target_notification_id: uuid.UUID | None = None,
-    target_platform_notice_id: uuid.UUID | None = None,
-    target_admin_action_id: uuid.UUID | None = None,
-    target_support_flag_id: uuid.UUID | None = None,
-    target_review_case_id: uuid.UUID | None = None,
-    target_financial_outcome_id: uuid.UUID | None = None,
-    target_host_publish_fee_id: uuid.UUID | None = None,
-    target_host_publish_entitlement_id: uuid.UUID | None = None,
-    limit: int = Query(default=100, ge=1, le=200),
-    current_user: User = Depends(require_active_admin),
-    db: Session = Depends(get_db),
-) -> list[AdminActionRead]:
-    target_filter_values = {
-        "target_user_id": target_user_id,
-        "target_game_id": target_game_id,
-        "target_booking_id": target_booking_id,
-        "target_participant_id": target_participant_id,
-        "target_payment_id": target_payment_id,
-        "target_refund_id": target_refund_id,
-        "target_game_credit_id": target_game_credit_id,
-        "target_credit_usage_id": target_credit_usage_id,
-        "target_money_issue_id": target_money_issue_id,
-        "target_venue_id": target_venue_id,
-        "target_venue_image_id": target_venue_image_id,
-        "target_message_id": target_message_id,
-        "target_sub_post_id": target_sub_post_id,
-        "target_sub_post_request_id": target_sub_post_request_id,
-        "target_sub_post_position_id": target_sub_post_position_id,
-        "target_sub_chat_message_id": target_sub_chat_message_id,
-        "target_notification_id": target_notification_id,
-        "target_platform_notice_id": target_platform_notice_id,
-        "target_admin_action_id": target_admin_action_id,
-        "target_support_flag_id": target_support_flag_id,
-        "target_review_case_id": target_review_case_id,
-        "target_financial_outcome_id": target_financial_outcome_id,
-        "target_host_publish_fee_id": target_host_publish_fee_id,
-        "target_host_publish_entitlement_id": target_host_publish_entitlement_id,
-    }
-    target_filters = {
-        field_name: target_filter_values[field_name]
-        for field_name in ADMIN_ACTION_TARGET_FIELDS
-    }
-    admin_actions = list_admin_actions(
-        db,
-        viewer_user=current_user,
-        admin_user_id=admin_user_id,
-        action_type=action_type,
-        target_filters=target_filters,
-        limit=limit,
-    )
-    return serialize_admin_action_reads(db, admin_actions)

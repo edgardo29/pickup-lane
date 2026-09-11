@@ -29,6 +29,10 @@ from backend.schemas.admin_need_a_sub_schema import (
     AdminNeedASubStatusHistoryRead,
     AdminNeedASubUserRead,
 )
+from backend.services.admin_action_display_service import (
+    admin_action_label,
+    reason_preview,
+)
 from backend.services.admin_action_service import list_admin_actions
 from backend.services.need_a_sub_lifecycle_service import expire_due_posts_and_requests
 from backend.services.need_a_sub_post_service import serialize_sub_post
@@ -716,9 +720,8 @@ def get_admin_need_a_sub_post_detail(
         audit_actions=[
             AdminNeedASubAuditActionRead(
                 id=action.id,
-                admin_user_id=action.admin_user_id,
-                action_type=action.action_type,
-                reason=action.reason,
+                action_label=admin_action_label(action.action_type),
+                reason_preview=reason_preview(action.reason),
                 created_at=action.created_at,
             )
             for action in audit_actions

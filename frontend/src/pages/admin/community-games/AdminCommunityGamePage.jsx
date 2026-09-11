@@ -41,6 +41,7 @@ import {
   getAdminCommunityGameChatSummary,
   listAdminCommunityGameChatModerationMessages,
   moderateAdminCommunityGameChatMessage,
+  revealAdminCommunityGameChatMessage,
 } from '../shared/adminApi.js'
 import { useAdminAccess } from '../shared/useAdminAccess.js'
 import {
@@ -128,6 +129,13 @@ function AdminCommunityChatSummary({ firebaseUser, gameId }) {
     })
   ), [gameId])
 
+  const revealChatMessage = useCallback((options) => (
+    revealAdminCommunityGameChatMessage({
+      ...options,
+      gameId,
+    })
+  ), [gameId])
+
   const refreshChatSummary = useCallback(() => {
     setRefreshCount((count) => count + 1)
   }, [])
@@ -190,6 +198,9 @@ function AdminCommunityChatSummary({ firebaseUser, gameId }) {
             formatDateTime={formatAdminCommunityDateTime}
             loadMessages={loadChatMessages}
             moderateMessage={moderateChatMessage}
+            parentId={gameId}
+            parentKind="community_game"
+            revealMessage={revealChatMessage}
             needsReviewCount={summary.needs_review_count}
             onAfterAction={refreshChatSummary}
             refreshToken={refreshCount}
@@ -395,25 +406,6 @@ function formatPublishFeeResult(publishFee) {
   if (publishFee.fee_status === 'paid') return 'Paid'
   if (publishFee.fee_status === 'waived') return 'Waived'
   return formatAdminCommunityStatus(publishFee.fee_status)
-}
-
-function formatAdminCommunityActionLabel(value) {
-  const labels = {
-    admin_cancel_community_game: 'Admin cancel game',
-    append_audit_note: 'Audit note',
-    cancel_game: 'Cancel game',
-    create_financial_outcome: 'Financial outcome',
-    forfeit_publish_fee: 'Forfeit publish fee',
-    hide_community_game: 'Hide community game',
-    hide_unsafe_community_payment_text: 'Hide payment info',
-    pause_community_game_joining: 'Pause joining',
-    refund_publish_fee: 'Refund publish fee',
-    restore_community_game: 'Restore community game',
-    restore_community_payment_text: 'Restore payment info',
-    resume_community_game_joining: 'Resume joining',
-    resolve_support_flag: 'Resolve review flag',
-  }
-  return labels[value] || formatAdminCommunityStatus(value)
 }
 
 function formatCommunityOverviewStatus(game) {
@@ -686,8 +678,8 @@ function AuditActions({
             <div className="admin-community-activity-row admin-community-activity-row--audit" key={action.id}>
               <div className="admin-community-activity-row__main">
                 <span>Action</span>
-                <strong>{formatAdminCommunityActionLabel(action.action_type)}</strong>
-                <p>{action.reason || 'No reason recorded'}</p>
+                <strong>{action.action_label}</strong>
+                <p>{action.reason_preview || 'No reason recorded'}</p>
               </div>
               <div className="admin-community-activity-facts">
                 <div>
@@ -1103,7 +1095,8 @@ function AdminCommunityGamePage() {
                   {canViewChat ? (
                     <AdminCommunityChatSummary
                       firebaseUser={currentUser}
-                      gameId={detail.game.id}
+                      gameId={gameId}
+                      key={gameId}
                     />
                   ) : (
                     <AdminCommunityChatLocked isLoading={isAdminAccessLoading} />

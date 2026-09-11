@@ -24,12 +24,18 @@ from backend.schemas.admin_user_schema import (
     AdminUserDetailRead,
     AdminUserGameActivityItemRead,
     AdminUserGameActivityRead,
-    AdminUserListRead,
     AdminUserListPageRead,
+    AdminUserListRead,
     AdminUserNeedASubActivityItemRead,
     AdminUserNeedASubActivityRead,
     AdminUserProfileRead,
     AdminUserStatsSummaryRead,
+)
+from backend.services.admin_action_display_service import (
+    admin_action_label,
+    admin_label,
+    reason_preview,
+    users_by_id,
 )
 from backend.services.admin_action_service import list_admin_actions
 from backend.services.auth_service import ADMIN_ROLE
@@ -645,12 +651,19 @@ def list_admin_user_audit_actions(
         target_filters={"target_user_id": user_id},
         limit=limit,
     )
+    admin_users = users_by_id(
+        db,
+        sorted({action.admin_user_id for action in actions}, key=str),
+    )
     return [
         AdminUserAuditActionSummaryRead(
             id=action.id,
-            admin_user_id=action.admin_user_id,
-            action_type=action.action_type,
-            reason=action.reason,
+            action_label=admin_action_label(action.action_type),
+            admin_label=admin_label(
+                admin_users.get(action.admin_user_id),
+                fallback_admin_id=action.admin_user_id,
+            ),
+            reason_preview=reason_preview(action.reason),
             created_at=action.created_at,
         )
         for action in actions

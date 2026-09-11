@@ -3,7 +3,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
 
@@ -105,9 +104,9 @@ class AdminUserNeedASubActivityRead(BaseModel):
 
 class AdminUserAuditActionSummaryRead(BaseModel):
     id: UUID
-    admin_user_id: UUID
-    action_type: str
-    reason: str | None
+    action_label: str
+    admin_label: str
+    reason_preview: str | None
     created_at: datetime
 
 

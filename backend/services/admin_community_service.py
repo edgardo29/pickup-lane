@@ -38,6 +38,10 @@ from backend.schemas.admin_community_schema import (
     AdminCommunityGameReviewFlagResultRead,
     AdminCommunityGameSupportFlagSummaryRead,
 )
+from backend.services.admin_action_display_service import (
+    admin_action_label,
+    reason_preview,
+)
 from backend.services.admin_action_service import (
     integrity_error_matches_constraint,
     list_admin_actions,
@@ -1346,9 +1350,8 @@ def list_community_game_audit_actions(
     return [
         AdminCommunityGameAuditActionSummaryRead(
             id=action.id,
-            admin_user_id=action.admin_user_id,
-            action_type=action.action_type,
-            reason=action.reason,
+            action_label=admin_action_label(action.action_type),
+            reason_preview=reason_preview(action.reason),
             created_at=action.created_at,
         )
         for action in actions

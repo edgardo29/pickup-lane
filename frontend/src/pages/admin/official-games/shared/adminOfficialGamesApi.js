@@ -284,27 +284,6 @@ export async function listAdminOfficialGameParticipants({ firebaseUser, gameId }
   })
 }
 
-export async function listAdminOfficialGameChatRooms({ firebaseUser, gameId }) {
-  return apiRequest(`/game-chats?game_id=${encodeURIComponent(gameId)}`, {
-    headers: await getAdminHeaders(firebaseUser),
-  })
-}
-
-export async function listAdminOfficialGameChatMessages({
-  chatId,
-  firebaseUser,
-  limit = 50,
-}) {
-  const searchParams = new URLSearchParams({
-    chat_id: chatId,
-    limit: String(limit),
-  })
-
-  return apiRequest(`/chat-messages?${searchParams.toString()}`, {
-    headers: await getAdminHeaders(firebaseUser),
-  })
-}
-
 export async function listAdminOfficialGameBookings({ firebaseUser, gameId }) {
   return apiRequest(`/admin/official-games/${gameId}/bookings`, {
     headers: await getAdminHeaders(firebaseUser),

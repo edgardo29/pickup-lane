@@ -165,8 +165,8 @@ export function AuditSection({ auditActions }) {
           {auditActions.map((action) => (
             <div className="admin-money-row" key={action.id}>
               <div>
-                <strong>{formatStatus(action.action_type)}</strong>
-                <span>{action.reason || 'No reason recorded'}</span>
+                <strong>{action.action_label}</strong>
+                <span>{action.reason_preview || 'No reason recorded'}</span>
               </div>
               <div>
                 <span>{formatDateTime(action.created_at)}</span>
@@ -174,7 +174,7 @@ export function AuditSection({ auditActions }) {
               </div>
               <div>
                 <span>Admin</span>
-                <code>{shortId(action.admin_user_id)}</code>
+                <strong>{action.admin_label}</strong>
               </div>
             </div>
           ))}

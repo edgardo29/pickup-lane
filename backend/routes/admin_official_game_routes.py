@@ -9,6 +9,7 @@ from backend.database import get_db
 from backend.models import Booking, User, WaitlistEntry
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
+    AdminChatMessageContentRead,
     AdminChatMessageListRead,
     AdminChatModerationActionCreate,
     AdminChatModerationActionResultRead,
@@ -44,6 +45,7 @@ from backend.services.chat_moderation_admin_service import (
     mark_game_chat_message_reviewed,
     remove_game_chat_message,
     restore_game_chat_message,
+    reveal_admin_game_chat_message_content,
 )
 from backend.services.game_cancellation_service import (
     build_official_game_cancellation_preview as preview_official_game_cancellation,
@@ -162,6 +164,26 @@ def list_admin_official_game_chat_messages_route(
         view=view,
         offset=offset,
         limit=limit,
+        expected_game_type="official",
+    )
+
+
+@router.get(
+    "/{game_id}/chat/messages/{message_id}/content",
+    response_model=AdminChatMessageContentRead,
+)
+def reveal_admin_official_game_chat_message_content_route(
+    game_id: uuid.UUID,
+    message_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminChatMessageContentRead:
+    return reveal_admin_game_chat_message_content(
+        db,
+        game_id=game_id,
+        message_id=message_id,
+        viewer_user=current_admin,
+        expected_game_type="official",
     )
 
 

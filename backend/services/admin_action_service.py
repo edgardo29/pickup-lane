@@ -502,6 +502,14 @@ def build_action_metadata(
     policy: AdminActionPolicy,
     metadata: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
+    if policy.metadata_builder_key == "none":
+        if metadata is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{policy.action_type} does not allow metadata.",
+            )
+        return None
+
     if metadata is None:
         return None
 

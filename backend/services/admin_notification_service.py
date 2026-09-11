@@ -11,7 +11,6 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from backend.models import (
-    AdminAction,
     Booking,
     ChatMessage,
     Game,
@@ -29,7 +28,6 @@ from backend.models import (
 )
 from backend.schemas.admin_notification_schema import (
     AdminNotificationActionStateRead,
-    AdminNotificationAuditActionRead,
     AdminNotificationCompactRelatedRecordRead,
     AdminNotificationLookupDetailRead,
     AdminNotificationLookupItemRead,
@@ -208,33 +206,6 @@ def build_admin_notification_filters(
     }
 
     return [Notification.user_id == user_id], query_context_hash(context)
-
-
-def list_admin_notification_audit_actions(
-    db: Session,
-    notification_ids: list[uuid.UUID],
-    *,
-    viewer_user: User,
-) -> dict[uuid.UUID, list[AdminAction]]:
-    require_active_admin_user(viewer_user)
-    if not notification_ids:
-        return {}
-
-    audit_actions = db.scalars(
-        select(AdminAction)
-        .where(AdminAction.target_notification_id.in_(notification_ids))
-        .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
-    ).all()
-
-    actions_by_notification_id: dict[uuid.UUID, list[AdminAction]] = {}
-    for action in audit_actions:
-        if action.target_notification_id is None:
-            continue
-        actions_by_notification_id.setdefault(action.target_notification_id, []).append(
-            action
-        )
-
-    return actions_by_notification_id
 
 
 def users_by_id(db: Session, user_ids: list[uuid.UUID]) -> dict[uuid.UUID, User]:
@@ -456,17 +427,6 @@ def serialize_admin_notification_action_state(
     )
 
 
-def serialize_admin_notification_audit_action(
-    action: AdminAction,
-) -> AdminNotificationAuditActionRead:
-    return AdminNotificationAuditActionRead(
-        id=action.id,
-        action_type=action.action_type,
-        admin_user_id=action.admin_user_id,
-        created_at=action.created_at,
-    )
-
-
 def serialize_admin_notification_lookup_item(
     db: Session,
     notification: Notification,
@@ -506,8 +466,6 @@ def serialize_admin_notification_lookup_item(
 def serialize_admin_notification_lookup_detail(
     db: Session,
     notification: Notification,
-    *,
-    audit_actions: list[AdminAction] | None = None,
 ) -> AdminNotificationLookupDetailRead:
     notification_data = serialize_notification(db, notification)
     if (
@@ -515,11 +473,6 @@ def serialize_admin_notification_lookup_detail(
         not in MEANINGFUL_AGGREGATE_COUNT_NOTIFICATION_TYPES
     ):
         notification_data["aggregate_count"] = None
-    serialized_audit_actions = [
-        serialize_admin_notification_audit_action(action)
-        for action in (audit_actions or [])
-    ]
-
     return AdminNotificationLookupDetailRead(
         **notification_data,
         action_state=serialize_admin_notification_action_state(
@@ -533,8 +486,6 @@ def serialize_admin_notification_lookup_detail(
             notification,
             include_exists=True,
         ),
-        audit_actions=serialized_audit_actions,
-        audit_action_count=len(serialized_audit_actions),
     )
 
 
@@ -616,13 +567,4 @@ def get_admin_notification_lookup_detail(
             detail="Notification not found.",
         )
 
-    audit_actions = list_admin_notification_audit_actions(
-        db,
-        [notification.id],
-        viewer_user=viewer_user,
-    )
-    return serialize_admin_notification_lookup_detail(
-        db,
-        notification,
-        audit_actions=audit_actions.get(notification.id, []),
-    )
+    return serialize_admin_notification_lookup_detail(db, notification)

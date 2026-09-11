@@ -5,6 +5,7 @@ import AdminChatModerationPanel from '../../shared/AdminChatModerationPanel.jsx'
 import {
   listAdminOfficialGameChatModerationMessages,
   moderateAdminOfficialGameChatMessage,
+  revealAdminOfficialGameChatMessage,
 } from '../../shared/adminApi.js'
 import AdminOfficialGameEmptyState from './AdminOfficialGameEmptyState.jsx'
 import {
@@ -30,6 +31,13 @@ function AdminOfficialGameChatTab({
 
   const moderateChatMessage = useCallback((options) => (
     moderateAdminOfficialGameChatMessage({
+      ...options,
+      gameId: game.id,
+    })
+  ), [game.id])
+
+  const revealChatMessage = useCallback((options) => (
+    revealAdminOfficialGameChatMessage({
       ...options,
       gameId: game.id,
     })
@@ -96,6 +104,9 @@ function AdminOfficialGameChatTab({
             formatDateTime={formatAdminDateTime}
             loadMessages={loadChatMessages}
             moderateMessage={moderateChatMessage}
+            parentId={game.id}
+            parentKind="official_game"
+            revealMessage={revealChatMessage}
             needsReviewCount={chatSummary.needs_review_count}
             onAfterAction={onRetry}
             refreshToken={refreshToken}

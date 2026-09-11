@@ -482,11 +482,11 @@ function AuditSection({ actionControls = null, actions }) {
           {actions.map((action) => (
             <div className="admin-user-detail-list__row" key={action.id}>
               <div>
-                <strong>{formatAdminUserStatus(action.action_type)}</strong>
-                <span>{action.reason || 'No reason recorded.'}</span>
+                <strong>{action.action_label}</strong>
+                <span>{action.reason_preview || 'No reason recorded.'}</span>
               </div>
               <div>
-                <span>Admin {shortAdminUserId(action.admin_user_id)}</span>
+                <span>{action.admin_label}</span>
               </div>
               <div>
                 <span>{formatAdminUserDateTime(action.created_at)}</span>

@@ -1,9 +1,6 @@
 import { ClipboardListIcon } from '../../../../components/BrowseIcons.jsx'
 import AdminOfficialGameEmptyState from './AdminOfficialGameEmptyState.jsx'
-import {
-  formatAdminDateTime,
-  getTitleLabel,
-} from './adminOfficialGameManageDisplay.js'
+import { formatAdminDateTime } from './adminOfficialGameManageDisplay.js'
 
 function ActivityFact({ label, meta, value }) {
   return (
@@ -19,56 +16,7 @@ function getShortId(value, fallback = 'Unknown') {
   return value ? String(value).slice(0, 8) : fallback
 }
 
-function getParticipantEmail(participant) {
-  return participant?.user_email || participant?.guest_email || ''
-}
-
-function getParticipantByUserId(userId, participants) {
-  if (!userId) {
-    return null
-  }
-
-  return participants.find((item) => item.user_id === userId) || null
-}
-
-function getPlayerAffected(action, participants) {
-  if (action.target_user_id) {
-    const participant = getParticipantByUserId(action.target_user_id, participants)
-    return {
-      email: getParticipantEmail(participant) || action.target_user_email || '',
-      name:
-        participant?.display_name_snapshot ||
-        action.target_user_display_name ||
-        `User ${getShortId(action.target_user_id)}`,
-    }
-  }
-
-  if (action.target_participant_id) {
-    const participant = participants.find((item) => item.id === action.target_participant_id)
-    return {
-      email: getParticipantEmail(participant),
-      name: participant?.display_name_snapshot || `Participant ${getShortId(action.target_participant_id)}`,
-    }
-  }
-
-  return {
-    email: '',
-    name: 'No player target',
-  }
-}
-
-function getChangedBy(action, participants) {
-  const participant = getParticipantByUserId(action.admin_user_id, participants)
-  return {
-    email: action.admin_user_email || getParticipantEmail(participant),
-    name:
-      action.admin_user_display_name ||
-      participant?.display_name_snapshot ||
-      `Admin ${getShortId(action.admin_user_id)}`,
-  }
-}
-
-function AdminOfficialGameAuditTab({ actions, error, loadState, participants }) {
+function AdminOfficialGameAuditTab({ actions, error, loadState }) {
   return (
     <section className="admin-manage-tab-panel admin-bookings-panel" aria-label="Official game activity">
       <div className="admin-manage-panel-heading admin-bookings-heading">
@@ -100,8 +48,6 @@ function AdminOfficialGameAuditTab({ actions, error, loadState, participants }) 
           <div className="admin-booking-card-grid" aria-label="Activity actions">
             {actions.map((action) => {
               const actionId = getShortId(action.id)
-              const changedBy = getChangedBy(action, participants)
-              const playerAffected = getPlayerAffected(action, participants)
 
               return (
                 <article className="admin-booking-card admin-activity-card" key={action.id}>
@@ -110,21 +56,19 @@ function AdminOfficialGameAuditTab({ actions, error, loadState, participants }) 
                       <ClipboardListIcon />
                       <span>
                         <small>Action</small>
-                        <strong>{getTitleLabel(action.action_type)}</strong>
+                        <strong>{action.action_label}</strong>
                       </span>
                     </div>
                   </header>
 
                   <div className="admin-booking-card__facts">
                     <ActivityFact
-                      label="Player affected"
-                      meta={playerAffected.email}
-                      value={playerAffected.name}
+                      label="Target"
+                      value={action.target_label}
                     />
                     <ActivityFact
                       label="Changed by"
-                      meta={changedBy.email}
-                      value={changedBy.name}
+                      value={action.admin_label}
                     />
                     <ActivityFact
                       label="When"

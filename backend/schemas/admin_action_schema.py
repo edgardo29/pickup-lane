@@ -98,8 +98,21 @@ class AdminActionTargetDetailRead(BaseModel):
     is_primary: bool = False
 
 
-class AdminActionDetailRead(AdminActionRead):
-    target_details: list[AdminActionTargetDetailRead] = Field(default_factory=list)
+class AdminActionTargetSummaryRead(BaseModel):
+    target_type_label: str
+    label: str
+    destination_path: str | None = None
+
+
+class AdminActionDetailRead(BaseModel):
+    id: UUID
+    action_type: str
+    action_label: str
+    admin_label: str
+    admin_email: str | None = None
+    created_at: datetime
+    reason: str | None = None
+    primary_target: AdminActionTargetSummaryRead | None = None
 
 
 class AdminActionNoteCreate(BaseModel):
@@ -125,16 +138,9 @@ class AdminActionLogTargetSummaryRead(BaseModel):
 
 class AdminActionLogItemRead(BaseModel):
     id: UUID
-    action_type: str
     action_label: str
-    outcome: str
-    admin_user_id: UUID
     admin_label: str
-    admin_email: str | None = None
-    primary_target: AdminActionLogTargetSummaryRead | None = None
     target_label: str
-    target_type_label: str
-    destination_path: str | None = None
     reason_preview: str | None = None
     created_at: datetime
 
