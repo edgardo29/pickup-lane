@@ -6,6 +6,7 @@ import {
   getAdminNeedASubChatSummary,
   listAdminNeedASubChatModerationMessages,
   moderateAdminNeedASubChatMessage,
+  revealAdminNeedASubChatMessage,
 } from '../shared/adminApi.js'
 import {
   formatAdminNeedASubDateTime,
@@ -31,6 +32,13 @@ function AdminNeedASubChatPanel({
 
   const moderateChatMessage = useCallback((options) => (
     moderateAdminNeedASubChatMessage({
+      ...options,
+      postId,
+    })
+  ), [postId])
+
+  const revealChatMessage = useCallback((options) => (
+    revealAdminNeedASubChatMessage({
       ...options,
       postId,
     })
@@ -114,6 +122,9 @@ function AdminNeedASubChatPanel({
             formatDateTime={formatChatDateTime}
             loadMessages={loadChatMessages}
             moderateMessage={moderateChatMessage}
+            parentId={postId}
+            parentKind="need_a_sub_post"
+            revealMessage={revealChatMessage}
             needsReviewCount={summary.needs_review_count}
             onAfterAction={refreshChatSummary}
             refreshToken={refreshCount}

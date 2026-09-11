@@ -113,7 +113,7 @@ def test_audit_http_surfaces_are_active_admin_only_private_and_additive(
     deleted.deleted_at = datetime.now(timezone.utc)
     target = _user("audit-target")
     _add_users(admin, ordinary, suspended, pending_deletion, deleted, target)
-    action_id, rejected_id, correlation_id = _persist_audit_fixture(admin.id, target.id)
+    action_id, rejected_id, _correlation_id = _persist_audit_fixture(admin.id, target.id)
     _install_tokens_for_users(
         monkeypatch,
         {
@@ -126,7 +126,6 @@ def test_audit_http_surfaces_are_active_admin_only_private_and_additive(
     )
     client = _client()
     routes = (
-        "/admin/actions",
         "/admin/actions/log",
         f"/admin/actions/{action_id}",
         "/admin/rejected-attempts",
@@ -148,17 +147,39 @@ def test_audit_http_surfaces_are_active_admin_only_private_and_additive(
         assert allowed.status_code == 200, (route, allowed.text)
         assert allowed.headers["Cache-Control"] == "private, no-store"
 
+    retired_collection = client.get(
+        "/admin/actions",
+        headers=_auth_headers("admin-token"),
+    )
+    assert retired_collection.status_code == 405
+
     detail = client.get(
         f"/admin/actions/{action_id}",
         headers=_auth_headers("admin-token"),
     ).json()
-    assert detail["outcome"] == "succeeded"
-    assert detail["correlation_id"] == str(correlation_id)
+    assert set(detail) == {
+        "id",
+        "action_type",
+        "action_label",
+        "admin_label",
+        "admin_email",
+        "created_at",
+        "reason",
+        "primary_target",
+    }
+    assert detail["id"] == str(action_id)
     log = client.get(
         "/admin/actions/log",
         headers=_auth_headers("admin-token"),
     ).json()
-    assert log["actions"][0]["outcome"] == "succeeded"
+    assert set(log["actions"][0]) == {
+        "id",
+        "action_label",
+        "admin_label",
+        "target_label",
+        "reason_preview",
+        "created_at",
+    }
 
     missing_action = client.get(
         f"/admin/actions/{uuid.uuid4()}",
@@ -195,7 +216,6 @@ def test_direct_service_calls_cannot_bypass_binary_active_admin_access() -> None
     )
     from backend.services.admin_notification_service import (
         get_admin_notification_lookup_detail,
-        list_admin_notification_audit_actions,
     )
     from backend.services.admin_rejected_attempt_service import (
         get_admin_rejected_attempt_for_viewer_or_404,
@@ -212,7 +232,7 @@ def test_direct_service_calls_cannot_bypass_binary_active_admin_access() -> None
     action_id, rejected_id, _correlation_id = _persist_audit_fixture(
         admin.id, target.id
     )
-    notification_id, notification_action_id = _persist_notification_audit_fixture(
+    notification_id, _notification_action_id = _persist_notification_audit_fixture(
         admin.id,
         target.id,
     )
@@ -232,21 +252,13 @@ def test_direct_service_calls_cannot_bypass_binary_active_admin_access() -> None
             == action_id
         )
         assert list_admin_rejected_attempts(db, viewer_user=active_admin)
-        notification_actions = list_admin_notification_audit_actions(
-            db,
-            [notification_id],
-            viewer_user=active_admin,
-        )
-        assert [action.id for action in notification_actions[notification_id]] == [
-            notification_action_id
-        ]
         notification_detail = get_admin_notification_lookup_detail(
             db,
             notification_id=notification_id,
             viewer_user=active_admin,
         )
-        assert notification_detail.audit_action_count == 1
-        assert notification_detail.audit_actions[0].id == notification_action_id
+        assert "audit_actions" not in notification_detail.model_dump()
+        assert "audit_action_count" not in notification_detail.model_dump()
         assert (
             get_admin_rejected_attempt_for_viewer_or_404(
                 db,
@@ -273,11 +285,6 @@ def test_direct_service_calls_cannot_bypass_binary_active_admin_access() -> None
                     db,
                     rejected_id,
                     user,
-                ),
-                lambda user=denied_user: list_admin_notification_audit_actions(
-                    db,
-                    [notification_id],
-                    viewer_user=user,
                 ),
                 lambda user=denied_user: get_admin_notification_lookup_detail(
                     db,

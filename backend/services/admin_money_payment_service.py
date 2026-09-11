@@ -20,6 +20,7 @@ from backend.models import (
     User,
 )
 from backend.schemas.admin_money_context_schema import (
+    AdminMoneyAuditActionSummaryRead,
     AdminMoneyCommunityPublishAttemptContextRead,
     AdminMoneyHostPublishFeeContextRead,
     AdminMoneyPaymentUserContextRead,
@@ -34,6 +35,12 @@ from backend.schemas.admin_money_payment_schema import (
 )
 from backend.schemas.admin_money_refund_schema import (
     AdminMoneyRefundDetailItemRead,
+)
+from backend.services.admin_action_display_service import (
+    admin_action_label,
+    admin_label,
+    reason_preview,
+    users_by_id,
 )
 from backend.services.admin_action_service import user_can_read_admin_action
 from backend.services.admin_money_cursor import (
@@ -694,7 +701,7 @@ def list_payment_audit_actions(
     refunds: list[Refund],
     credit_grants: list[GameCredit],
     money_issues: list,
-) -> list[AdminAction]:
+) -> list[AdminMoneyAuditActionSummaryRead]:
     require_active_admin_user(viewer_user)
     audit_actions = db.scalars(
         select(AdminAction)
@@ -703,10 +710,27 @@ def list_payment_audit_actions(
         .limit(ADMIN_MONEY_DETAIL_RELATED_LIMIT)
     ).all()
 
-    return [
+    visible_actions = [
         audit_action
         for audit_action in audit_actions
         if user_can_read_admin_action(viewer_user, audit_action)
+    ]
+    admin_users = users_by_id(
+        db,
+        sorted({action.admin_user_id for action in visible_actions}, key=str),
+    )
+    return [
+        AdminMoneyAuditActionSummaryRead(
+            id=action.id,
+            action_label=admin_action_label(action.action_type),
+            admin_label=admin_label(
+                admin_users.get(action.admin_user_id),
+                fallback_admin_id=action.admin_user_id,
+            ),
+            reason_preview=reason_preview(action.reason),
+            created_at=action.created_at,
+        )
+        for action in visible_actions
     ]
 
 

@@ -216,7 +216,11 @@ def test_target_notice_families_are_safe_linked_and_replay_from_authoritative_ro
     game_remove_path, game_remove_key = calls[8]
     chat_replay = _post_action(client, game_remove_path, game_remove_key)
     assert chat_replay.json()["idempotent_replay"] is True
-    assert chat_replay.json()["message"]["visibility_status"] == "visible"
+    assert set(chat_replay.json()) == {
+        "message_id",
+        "audit_action_id",
+        "idempotent_replay",
+    }
     assert (
         chat_replay.json()["audit_action_id"]
         == responses[game_remove_key].json()["audit_action_id"]
@@ -421,7 +425,11 @@ def test_null_chat_senders_record_only_suppression_and_never_notify_on_replay(
         replay = _post_action(client, path, key)
         assert replay.json()["idempotent_replay"] is True
         assert replay.json()["audit_action_id"] == original.json()["audit_action_id"]
-        assert replay.json()["message"]["visibility_status"] == "visible"
+        assert set(replay.json()) == {
+            "message_id",
+            "audit_action_id",
+            "idempotent_replay",
+        }
 
     with _session() as db:
         assert (

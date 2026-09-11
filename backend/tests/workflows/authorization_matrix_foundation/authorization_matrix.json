@@ -710,7 +710,7 @@
   "route_families": [
     {
       "family_id": "admin_admin_actions_ws03_04d_ws03_04d",
-      "summary": "5 route(s) allocated to WS03-04D for later behavioral authorization proof.",
+      "summary": "4 route(s) allocated to WS03-04D for later behavioral authorization proof.",
       "primary_child_owner": "WS03-04D",
       "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
       "behavior_owner_detail": "WS03-04D",
@@ -723,53 +723,6 @@
       ],
       "gap_refs": [],
       "routes": [
-        {
-          "method": "GET",
-          "path": "/admin/actions",
-          "name": "list_admin_actions_route",
-          "tags": [
-            "admin_actions"
-          ],
-          "source_module": "backend.routes.admin_action_routes",
-          "auth_dependencies": [
-            "backend.services.auth_service:get_current_app_user",
-            "backend.services.auth_service:get_verified_firebase_identity",
-            "backend.services.auth_service:require_active_admin",
-            "backend.services.auth_service:require_active_user",
-            "backend.services.auth_service:require_verified_user"
-          ],
-          "route_disposition": "protected",
-          "disposition_reason": "Route has backend auth_service dependency classification: backend.services.auth_service:get_current_app_user, backend.services.auth_service:get_verified_firebase_identity, backend.services.auth_service:require_active_admin, backend.services.auth_service:require_active_user, backend.services.auth_service:require_verified_user.",
-          "child_owner": "WS03-04D",
-          "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
-          "behavior_owner_detail": "WS03-04D",
-          "actor_classes": [
-            "active_user",
-            "admin",
-            "current_user",
-            "verified_user"
-          ],
-          "resource_family": "admin_actions",
-          "resource_id_fields": [],
-          "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_actions; path identifiers: no path resource id.",
-          "workflow_state_rules": "admin_actions workflow state",
-          "list_query_rules": "WS03-04D must prove admin list/search/aggregate/export-like scope, filters, and stale-role behavior.",
-          "field_rules": "WS03-04D must prove readable-field and response-minimization boundaries for this read surface.",
-          "function_rules": "not_applicable",
-          "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
-          "concealment_policy": "403",
-          "negative_proof_owner": "WS03-04D",
-          "negative_proof_owner_detail": "WS03-04D",
-          "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",
-          "source_ids": [
-            "SRC-AUTH-SERVICE",
-            "SRC-CURRENT-ROUTE-TABLE",
-            "SRC-FROZEN-INTAKE",
-            "SRC-FROZEN-PLAN",
-            "SRC-SOURCE-ROUTES-ADMIN-ACTION-ROUTES"
-          ],
-          "gap_refs": []
-        },
         {
           "method": "POST",
           "path": "/admin/actions",
@@ -966,7 +919,7 @@
     },
     {
       "family_id": "admin_admin_community_games_ws03_04d_ws03_04d",
-      "summary": "15 route(s) allocated to WS03-04D for later behavioral authorization proof.",
+      "summary": "16 route(s) allocated to WS03-04D for later behavioral authorization proof.",
       "primary_child_owner": "WS03-04D",
       "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
       "behavior_owner_detail": "WS03-04D",
@@ -1165,6 +1118,58 @@
           "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_community_games; path identifiers: game_id.",
           "workflow_state_rules": "admin_community_games workflow state",
           "list_query_rules": "WS03-04D must prove admin list/search/aggregate/export-like scope, filters, and stale-role behavior.",
+          "field_rules": "WS03-04D must prove readable-field and response-minimization boundaries for this read surface.",
+          "function_rules": "not_applicable",
+          "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
+          "concealment_policy": "403",
+          "negative_proof_owner": "WS03-04D",
+          "negative_proof_owner_detail": "WS03-04D",
+          "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",
+          "source_ids": [
+            "SRC-AUTH-SERVICE",
+            "SRC-CURRENT-ROUTE-TABLE",
+            "SRC-FROZEN-INTAKE",
+            "SRC-FROZEN-PLAN",
+            "SRC-SOURCE-ROUTES-ADMIN-COMMUNITY-ROUTES"
+          ],
+          "gap_refs": []
+        },
+        {
+          "method": "GET",
+          "path": "/admin/community-games/{game_id}/chat/messages/{message_id}/content",
+          "name": "reveal_admin_community_game_chat_message_content_route",
+          "tags": [
+            "admin_community_games"
+          ],
+          "source_module": "backend.routes.admin_community_routes",
+          "auth_dependencies": [
+            "backend.services.auth_service:get_current_app_user",
+            "backend.services.auth_service:get_verified_firebase_identity",
+            "backend.services.auth_service:require_active_admin",
+            "backend.services.auth_service:require_active_user",
+            "backend.services.auth_service:require_verified_user"
+          ],
+          "route_disposition": "protected",
+          "disposition_reason": "Route has backend auth_service dependency classification: backend.services.auth_service:get_current_app_user, backend.services.auth_service:get_verified_firebase_identity, backend.services.auth_service:require_active_admin, backend.services.auth_service:require_active_user, backend.services.auth_service:require_verified_user.",
+          "child_owner": "WS03-04D",
+          "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
+          "behavior_owner_detail": "WS03-04D",
+          "actor_classes": [
+            "active_user",
+            "admin",
+            "current_user",
+            "host",
+            "participant",
+            "verified_user"
+          ],
+          "resource_family": "admin_community_games",
+          "resource_id_fields": [
+            "game_id",
+            "message_id"
+          ],
+          "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_community_games; path identifiers: game_id, message_id.",
+          "workflow_state_rules": "admin_community_games workflow state",
+          "list_query_rules": "not_applicable",
           "field_rules": "WS03-04D must prove readable-field and response-minimization boundaries for this read surface.",
           "function_rules": "not_applicable",
           "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
@@ -2892,7 +2897,7 @@
     },
     {
       "family_id": "admin_admin_need_a_sub_ws03_04d_ws03_04d",
-      "summary": "11 route(s) allocated to WS03-04D for later behavioral authorization proof.",
+      "summary": "12 route(s) allocated to WS03-04D for later behavioral authorization proof.",
       "primary_child_owner": "WS03-04D",
       "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
       "behavior_owner_detail": "WS03-04D",
@@ -3085,6 +3090,56 @@
           "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_need_a_sub; path identifiers: post_id.",
           "workflow_state_rules": "admin_need_a_sub workflow state",
           "list_query_rules": "WS03-04D must prove admin list/search/aggregate/export-like scope, filters, and stale-role behavior.",
+          "field_rules": "WS03-04D must prove readable-field and response-minimization boundaries for this read surface.",
+          "function_rules": "not_applicable",
+          "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
+          "concealment_policy": "403",
+          "negative_proof_owner": "WS03-04D",
+          "negative_proof_owner_detail": "WS03-04D",
+          "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",
+          "source_ids": [
+            "SRC-AUTH-SERVICE",
+            "SRC-CURRENT-ROUTE-TABLE",
+            "SRC-FROZEN-INTAKE",
+            "SRC-FROZEN-PLAN",
+            "SRC-SOURCE-ROUTES-ADMIN-NEED-A-SUB-ROUTES"
+          ],
+          "gap_refs": []
+        },
+        {
+          "method": "GET",
+          "path": "/admin/need-a-sub/{post_id}/chat/messages/{message_id}/content",
+          "name": "reveal_admin_need_a_sub_chat_message_content_route",
+          "tags": [
+            "admin_need_a_sub"
+          ],
+          "source_module": "backend.routes.admin_need_a_sub_routes",
+          "auth_dependencies": [
+            "backend.services.auth_service:get_current_app_user",
+            "backend.services.auth_service:get_verified_firebase_identity",
+            "backend.services.auth_service:require_active_admin",
+            "backend.services.auth_service:require_active_user",
+            "backend.services.auth_service:require_verified_user"
+          ],
+          "route_disposition": "protected",
+          "disposition_reason": "Route has backend auth_service dependency classification: backend.services.auth_service:get_current_app_user, backend.services.auth_service:get_verified_firebase_identity, backend.services.auth_service:require_active_admin, backend.services.auth_service:require_active_user, backend.services.auth_service:require_verified_user.",
+          "child_owner": "WS03-04D",
+          "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
+          "behavior_owner_detail": "WS03-04D",
+          "actor_classes": [
+            "active_user",
+            "admin",
+            "current_user",
+            "verified_user"
+          ],
+          "resource_family": "admin_need_a_sub",
+          "resource_id_fields": [
+            "post_id",
+            "message_id"
+          ],
+          "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_need_a_sub; path identifiers: post_id, message_id.",
+          "workflow_state_rules": "admin_need_a_sub workflow state",
+          "list_query_rules": "not_applicable",
           "field_rules": "WS03-04D must prove readable-field and response-minimization boundaries for this read surface.",
           "function_rules": "not_applicable",
           "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
@@ -3566,7 +3621,7 @@
     },
     {
       "family_id": "admin_admin_official_games_ws03_04d_ws03_04d",
-      "summary": "23 route(s) allocated to WS03-04D for later behavioral authorization proof.",
+      "summary": "24 route(s) allocated to WS03-04D for later behavioral authorization proof.",
       "primary_child_owner": "WS03-04D",
       "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
       "behavior_owner_detail": "WS03-04D",
@@ -3965,6 +4020,58 @@
           "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_official_games; path identifiers: game_id.",
           "workflow_state_rules": "admin_official_games workflow state",
           "list_query_rules": "WS03-04D must prove admin list/search/aggregate/export-like scope, filters, and stale-role behavior.",
+          "field_rules": "WS03-04D must prove readable-field and response-minimization boundaries for this read surface.",
+          "function_rules": "not_applicable",
+          "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
+          "concealment_policy": "403",
+          "negative_proof_owner": "WS03-04D",
+          "negative_proof_owner_detail": "WS03-04D",
+          "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",
+          "source_ids": [
+            "SRC-AUTH-SERVICE",
+            "SRC-CURRENT-ROUTE-TABLE",
+            "SRC-FROZEN-INTAKE",
+            "SRC-FROZEN-PLAN",
+            "SRC-SOURCE-ROUTES-ADMIN-OFFICIAL-GAME-ROUTES"
+          ],
+          "gap_refs": []
+        },
+        {
+          "method": "GET",
+          "path": "/admin/official-games/{game_id}/chat/messages/{message_id}/content",
+          "name": "reveal_admin_official_game_chat_message_content_route",
+          "tags": [
+            "admin_official_games"
+          ],
+          "source_module": "backend.routes.admin_official_game_routes",
+          "auth_dependencies": [
+            "backend.services.auth_service:get_current_app_user",
+            "backend.services.auth_service:get_verified_firebase_identity",
+            "backend.services.auth_service:require_active_admin",
+            "backend.services.auth_service:require_active_user",
+            "backend.services.auth_service:require_verified_user"
+          ],
+          "route_disposition": "protected",
+          "disposition_reason": "Route has backend auth_service dependency classification: backend.services.auth_service:get_current_app_user, backend.services.auth_service:get_verified_firebase_identity, backend.services.auth_service:require_active_admin, backend.services.auth_service:require_active_user, backend.services.auth_service:require_verified_user.",
+          "child_owner": "WS03-04D",
+          "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
+          "behavior_owner_detail": "WS03-04D",
+          "actor_classes": [
+            "active_user",
+            "admin",
+            "current_user",
+            "host",
+            "participant",
+            "verified_user"
+          ],
+          "resource_family": "admin_official_games",
+          "resource_id_fields": [
+            "game_id",
+            "message_id"
+          ],
+          "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for admin_official_games; path identifiers: game_id, message_id.",
+          "workflow_state_rules": "admin_official_games workflow state",
+          "list_query_rules": "not_applicable",
           "field_rules": "WS03-04D must prove readable-field and response-minimization boundaries for this read surface.",
           "function_rules": "not_applicable",
           "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
@@ -6732,7 +6839,7 @@
     },
     {
       "family_id": "admin_game_chats_ws03_04d_ws03_04d",
-      "summary": "4 route(s) allocated to WS03-04D for later behavioral authorization proof.",
+      "summary": "2 route(s) allocated to WS03-04D for later behavioral authorization proof.",
       "primary_child_owner": "WS03-04D",
       "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
       "behavior_owner_detail": "WS03-04D",
@@ -6745,53 +6852,6 @@
       ],
       "gap_refs": [],
       "routes": [
-        {
-          "method": "GET",
-          "path": "/game-chats",
-          "name": "list_game_chats",
-          "tags": [
-            "game_chats"
-          ],
-          "source_module": "backend.routes.game_chat_routes",
-          "auth_dependencies": [
-            "backend.services.auth_service:get_current_app_user",
-            "backend.services.auth_service:get_verified_firebase_identity",
-            "backend.services.auth_service:require_active_admin",
-            "backend.services.auth_service:require_active_user",
-            "backend.services.auth_service:require_verified_user"
-          ],
-          "route_disposition": "protected",
-          "disposition_reason": "Route has backend auth_service dependency classification: backend.services.auth_service:get_current_app_user, backend.services.auth_service:get_verified_firebase_identity, backend.services.auth_service:require_active_admin, backend.services.auth_service:require_active_user, backend.services.auth_service:require_verified_user.",
-          "child_owner": "WS03-04D",
-          "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
-          "behavior_owner_detail": "WS03-04D",
-          "actor_classes": [
-            "active_user",
-            "admin",
-            "current_user",
-            "verified_user"
-          ],
-          "resource_family": "game_chats",
-          "resource_id_fields": [],
-          "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for game_chats; path identifiers: no path resource id.",
-          "workflow_state_rules": "chat existence and read-state",
-          "list_query_rules": "WS03-04D must prove admin list/search/aggregate/export-like scope, filters, and stale-role behavior.",
-          "field_rules": "WS03-04D must prove readable-field and response-minimization boundaries for this read surface.",
-          "function_rules": "not_applicable",
-          "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
-          "concealment_policy": "403",
-          "negative_proof_owner": "WS03-04D",
-          "negative_proof_owner_detail": "WS03-04D",
-          "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",
-          "source_ids": [
-            "SRC-AUTH-SERVICE",
-            "SRC-CURRENT-ROUTE-TABLE",
-            "SRC-FROZEN-INTAKE",
-            "SRC-FROZEN-PLAN",
-            "SRC-SOURCE-ROUTES-GAME-CHAT-ROUTES"
-          ],
-          "gap_refs": []
-        },
         {
           "method": "POST",
           "path": "/game-chats",
@@ -6827,55 +6887,6 @@
           "function_rules": "Retired route must stay a stable 410 tombstone with no business mutation.",
           "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
           "concealment_policy": "410",
-          "negative_proof_owner": "WS03-04D",
-          "negative_proof_owner_detail": "WS03-04D",
-          "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",
-          "source_ids": [
-            "SRC-AUTH-SERVICE",
-            "SRC-CURRENT-ROUTE-TABLE",
-            "SRC-FROZEN-INTAKE",
-            "SRC-FROZEN-PLAN",
-            "SRC-SOURCE-ROUTES-GAME-CHAT-ROUTES"
-          ],
-          "gap_refs": []
-        },
-        {
-          "method": "GET",
-          "path": "/game-chats/{game_chat_id}",
-          "name": "get_game_chat",
-          "tags": [
-            "game_chats"
-          ],
-          "source_module": "backend.routes.game_chat_routes",
-          "auth_dependencies": [
-            "backend.services.auth_service:get_current_app_user",
-            "backend.services.auth_service:get_verified_firebase_identity",
-            "backend.services.auth_service:require_active_admin",
-            "backend.services.auth_service:require_active_user",
-            "backend.services.auth_service:require_verified_user"
-          ],
-          "route_disposition": "protected",
-          "disposition_reason": "Route has backend auth_service dependency classification: backend.services.auth_service:get_current_app_user, backend.services.auth_service:get_verified_firebase_identity, backend.services.auth_service:require_active_admin, backend.services.auth_service:require_active_user, backend.services.auth_service:require_verified_user.",
-          "child_owner": "WS03-04D",
-          "owner_reason": "Admin, privileged list, or high-risk route behavior is allocated to WS03-04D after B and C complete.",
-          "behavior_owner_detail": "WS03-04D",
-          "actor_classes": [
-            "active_user",
-            "admin",
-            "current_user",
-            "verified_user"
-          ],
-          "resource_family": "game_chats",
-          "resource_id_fields": [
-            "game_chat_id"
-          ],
-          "relationship_rules": "WS03-04D must prove admin reviewer or privileged target-record authority for game_chats; path identifiers: game_chat_id.",
-          "workflow_state_rules": "chat existence and read-state",
-          "list_query_rules": "not_applicable",
-          "field_rules": "WS03-04D must prove readable-field and response-minimization boundaries for this read surface.",
-          "function_rules": "not_applicable",
-          "role_rules": "Requires active admin; WS03-04D must prove stale-role and admin permission boundaries.",
-          "concealment_policy": "403",
           "negative_proof_owner": "WS03-04D",
           "negative_proof_owner_detail": "WS03-04D",
           "negative_proof_reason": "WS03-04D owns both behavioral and negative proof for this surface under the approved WS03-04 intake.",

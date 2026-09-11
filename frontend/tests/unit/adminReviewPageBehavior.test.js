@@ -303,6 +303,7 @@ test('actual page close handler blocks stale retries and keeps failed reload blo
 test('actual page close handler reloads fresh detail before allowing another close', async () => {
   const staleDetail = buildReviewCase()
   const freshDetail = buildReviewCase({ case_version: 3 })
+  const closedDetail = buildReviewCase({ case_status: 'closed', case_version: 4 })
   let state = {
     ...createReviewCaseDetailState(staleDetail.id),
     detail: staleDetail,
@@ -324,10 +325,12 @@ test('actual page close handler reloads fresh detail before allowing another clo
         }
       }
       return {
-        review_case: buildReviewCase({
-          case_status: 'closed',
-          case_version: 4,
-        }),
+        audit_action_id: 'action-1',
+        case_status: 'closed',
+        case_version: 4,
+        closure_outcome: 'no_action_needed',
+        idempotent_replay: false,
+        review_case_id: staleDetail.id,
       }
     },
     currentUser: { uid: 'admin-user' },
@@ -339,11 +342,11 @@ test('actual page close handler reloads fresh detail before allowing another clo
     getIsSubmitting: () => isSubmitting,
     getReviewCase: async () => {
       reloadRequestCount += 1
-      return freshDetail
+      return reloadRequestCount === 1 ? freshDetail : closedDetail
     },
     getReviewCaseState: () => state,
-    onCloseSucceeded: (result) => {
-      closeSuccess = result
+    onCloseSucceeded: (acknowledgement, refreshedDetail) => {
+      closeSuccess = { acknowledgement, refreshedDetail }
     },
     onFormStatus: () => {},
     onLoadState: () => {},
@@ -371,8 +374,11 @@ test('actual page close handler reloads fresh detail before allowing another clo
   assert.equal(closeRequests.length, 2)
   assert.equal(closeRequests[0].expectedCaseVersion, 2)
   assert.equal(closeRequests[1].expectedCaseVersion, 3)
-  assert.equal(closeSuccess.review_case.case_status, 'closed')
-  assert.equal(closeSuccess.review_case.case_version, 4)
+  assert.equal(reloadRequestCount, 2)
+  assert.equal(closeSuccess.acknowledgement.case_version, 4)
+  assert.equal(closeSuccess.acknowledgement.review_case, undefined)
+  assert.equal(closeSuccess.refreshedDetail.case_status, 'closed')
+  assert.equal(closeSuccess.refreshedDetail.case_version, 4)
 })
 
 test('page wires actual signal rendering and close conflict orchestration', () => {

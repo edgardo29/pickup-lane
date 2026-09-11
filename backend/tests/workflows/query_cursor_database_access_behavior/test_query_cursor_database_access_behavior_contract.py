@@ -44,7 +44,6 @@ _NEWLY_BOUNDED_OFFSET_PATHS = frozenset(
         "/bookings",
         "/bookings/me",
         "/community-game-details",
-        "/game-chats",
         "/game-credits",
         "/game-images",
         "/game-participants",
@@ -404,9 +403,9 @@ def _notification(
 @pytest.mark.no_db_cleanup
 @pytest.mark.requirement("WS04-01B-R1")
 def test_all_current_collection_routes_have_explicit_contracts() -> None:
-    assert len(PAGINATION_CONTRACTS) == 77
+    assert len(PAGINATION_CONTRACTS) == 76
     assert len(PAGINATION_HANDOFFS) == 0
-    assert len(pagination_contract_keys()) == 77
+    assert len(pagination_contract_keys()) == 76
     assert {contract.key for contract in PAGINATION_HANDOFFS} == set()
 
 
@@ -420,7 +419,7 @@ def test_newly_bounded_offset_routes_expose_limit_and_offset_contracts(
     route_by_key = _api_route_by_key(app)
     contract_by_path = {contract.path: contract for contract in PAGINATION_CONTRACTS}
 
-    assert len(_NEWLY_BOUNDED_OFFSET_PATHS) == 43
+    assert len(_NEWLY_BOUNDED_OFFSET_PATHS) == 42
     for path in _NEWLY_BOUNDED_OFFSET_PATHS:
         contract = contract_by_path[path]
         route = route_by_key[("GET", path)]

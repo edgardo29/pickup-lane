@@ -18,7 +18,7 @@ import '../../../../styles/admin/AdminOfficialGames.css'
 import AdminWorkspaceLayout from '../../shared/AdminWorkspaceLayout.jsx'
 import {
   getAdminOfficialGameChatSummary,
-  listAdminActions,
+  listAdminOfficialGameActivity,
 } from '../../shared/adminApi.js'
 import { useAdminAccess } from '../../shared/useAdminAccess.js'
 import AdminOfficialGameAuditTab from './AdminOfficialGameAuditTab.jsx'
@@ -726,10 +726,9 @@ function AdminOfficialGamePageContent({ gameId }) {
       setAuditLoadState('loading')
 
       try {
-        const nextActions = await listAdminActions({
+        const nextActions = await listAdminOfficialGameActivity({
           firebaseUser: currentUser,
-          limit: 100,
-          targetGameId: gameId,
+          gameId,
         })
         if (!isMounted) {
           return
@@ -1218,7 +1217,6 @@ function AdminOfficialGamePageContent({ gameId }) {
                   actions={visibleAuditActions}
                   error={visibleAuditError}
                   loadState={visibleAuditLoadState}
-                  participants={participants}
                 />
               ) : (
                 <AdminOfficialGameLockedTab

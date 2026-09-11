@@ -6,13 +6,6 @@ from pydantic import BaseModel, Field
 from backend.schemas.notification_schema import NotificationRead
 
 
-class AdminNotificationAuditActionRead(BaseModel):
-    id: UUID
-    action_type: str
-    admin_user_id: UUID
-    created_at: datetime
-
-
 class AdminNotificationRecipientRead(BaseModel):
     user_id: UUID
     display_name: str
@@ -70,8 +63,6 @@ class AdminNotificationLookupDetailRead(NotificationRead):
     related_records: list[AdminNotificationRelatedRecordRead] = Field(
         default_factory=list
     )
-    audit_actions: list[AdminNotificationAuditActionRead] = Field(default_factory=list)
-    audit_action_count: int = 0
 
 
 class AdminNotificationLookupListRead(BaseModel):

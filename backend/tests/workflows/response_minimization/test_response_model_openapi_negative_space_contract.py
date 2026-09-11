@@ -339,7 +339,6 @@ CLASSIFIED_RESPONSE_FAMILIES = {
     ("GET", "/admin/review-cases"): "Admin review response is an admin exception.",
     ("GET", "/admin/support-flags"): "Support flag response is an admin/support exception.",
     ("GET", "/admin/rejected-attempts"): "Rejected-attempt response is an admin exception.",
-    ("GET", "/admin/actions"): "Admin action/audit response is an admin exception.",
     ("GET", "/admin/platform-notices"): "Platform notice response is an admin exception.",
     ("GET", "/admin/notifications"): "Admin notification lookup response is an admin exception.",
     ("GET", "/notifications/me"): "Notification response uses an explicit user schema.",

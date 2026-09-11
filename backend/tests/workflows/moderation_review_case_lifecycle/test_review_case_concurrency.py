@@ -226,8 +226,8 @@ def test_concurrent_different_notes_both_append_in_serial_version_order() -> Non
             second_admin_id, "Second independent note.", "note-second-key"
         ),
     )
-    assert first.review_case.case_version == 3
-    assert second.review_case.case_version == 4
+    assert first.case_version == 3
+    assert second.case_version == 4
     with session() as db:
         review_case = db.get(AdminReviewCase, case_id)
         assert review_case.case_status == "open"

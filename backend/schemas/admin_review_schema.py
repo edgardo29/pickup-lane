@@ -200,13 +200,17 @@ class AdminReviewCaseListRead(BaseModel):
 
 
 class AdminReviewCaseNoteResultRead(BaseModel):
-    review_case: AdminReviewCaseDetailRead
-    note: AdminReviewCaseNoteRead
+    review_case_id: UUID
+    case_version: int = Field(gt=0)
+    note_id: UUID
     audit_action_id: UUID
     idempotent_replay: bool
 
 
 class AdminReviewCaseActionResultRead(BaseModel):
-    review_case: AdminReviewCaseDetailRead
+    review_case_id: UUID
+    case_version: int = Field(gt=0)
+    case_status: Literal["closed"]
+    closure_outcome: AdminReviewClosureOutcome
     audit_action_id: UUID
     idempotent_replay: bool

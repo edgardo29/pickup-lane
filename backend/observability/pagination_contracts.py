@@ -415,16 +415,6 @@ PAGINATION_CONTRACTS = (
     ),
     PaginationContract(
         "GET",
-        "/game-chats",
-        "offset",
-        100,
-        200,
-        "route+service",
-        "created_at/id",
-        offset_param="offset",
-    ),
-    PaginationContract(
-        "GET",
         "/game-credits",
         "offset",
         50,

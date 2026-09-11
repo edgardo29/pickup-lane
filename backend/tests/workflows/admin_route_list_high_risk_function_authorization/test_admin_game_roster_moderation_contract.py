@@ -958,7 +958,12 @@ def test_admin_official_game_reads_apply_filters_child_lookups_and_binding(
         headers=_auth_headers("admin-token"),
     )
     assert chat_summary.status_code == 200
-    assert chat_summary.json()["latest_message_id"] == str(chat_message_id)
+    assert set(chat_summary.json()) == {
+        "chat_status",
+        "message_count",
+        "needs_review_count",
+        "removed_count",
+    }
     chat_messages = client.get(
         f"/admin/official-games/{first_game_id}/chat/messages?view=needs_review",
         headers=_auth_headers("admin-token"),
@@ -1088,7 +1093,12 @@ def test_admin_community_game_reads_apply_filters_cursors_detail_chat_and_bindin
         headers=_auth_headers("admin-token"),
     )
     assert chat_summary.status_code == 200
-    assert chat_summary.json()["latest_message_id"] == str(chat_message_id)
+    assert set(chat_summary.json()) == {
+        "chat_status",
+        "message_count",
+        "needs_review_count",
+        "removed_count",
+    }
     chat_messages = client.get(
         f"/admin/community-games/{first_game_id}/chat/messages?view=needs_review",
         headers=_auth_headers("admin-token"),
@@ -1228,7 +1238,12 @@ def test_admin_need_a_sub_reads_apply_filters_cursors_detail_request_chat_and_bi
         headers=_auth_headers("admin-token"),
     )
     assert chat_summary.status_code == 200
-    assert chat_summary.json()["latest_message_id"] == str(chat_message_id)
+    assert set(chat_summary.json()) == {
+        "chat_status",
+        "message_count",
+        "needs_review_count",
+        "removed_count",
+    }
     chat_messages = client.get(
         f"/admin/need-a-sub/{first_post_id}/chat/messages?view=needs_review",
         headers=_auth_headers("admin-token"),
@@ -2349,10 +2364,10 @@ def test_admin_chat_moderation_enforces_parent_binding_and_records_removal_state
     )
 
     assert response.status_code == 200
-    body = response.json()["message"]
-    assert body["id"] == str(message_id)
-    assert body["visibility_status"] == "removed"
-    assert body["review_status"] == "reviewed"
+    body = response.json()
+    assert set(body) == {"message_id", "audit_action_id", "idempotent_replay"}
+    assert body["message_id"] == str(message_id)
+    assert body["idempotent_replay"] is False
     after_message = _chat_message_state(message_id)
     assert after_message["visibility_status"] == "removed"
     assert after_message["review_status"] == "reviewed"

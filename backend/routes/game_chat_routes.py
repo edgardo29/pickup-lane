@@ -1,10 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import GameChat, User
+from backend.models import User
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
     GameChatEnsureCreate,
@@ -17,15 +17,9 @@ from backend.services.auth_service import (
     require_verified_user,
 )
 from backend.services.game_chat_service import (
-    get_game_chat_or_404,
-    get_game_chat_read_state_record,
-    list_game_chat_records,
-    mark_game_chat_read_workflow,
     ensure_game_chat_for_game_workflow,
-)
-from backend.services.query_pagination import (
-    DEFAULT_ADMIN_COLLECTION_LIMIT,
-    MAX_ADMIN_COLLECTION_LIMIT,
+    get_game_chat_read_state_record,
+    mark_game_chat_read_workflow,
 )
 
 router = APIRouter(prefix="/game-chats", tags=["game_chats"])
@@ -61,17 +55,6 @@ def ensure_game_chat_for_game(
     return ensure_game_chat_for_game_workflow(db, game_id, payload, current_user)
 
 
-# This route fetches a single game chat room by its internal UUID.
-@router.get("/{game_chat_id}", response_model=GameChatRead, status_code=status.HTTP_200_OK)
-def get_game_chat(
-    game_chat_id: uuid.UUID,
-    current_staff: User = Depends(require_active_admin),
-    db: Session = Depends(get_db),
-) -> GameChat:
-    del current_staff
-    return get_game_chat_or_404(db, game_chat_id)
-
-
 @router.get(
     "/{game_chat_id}/read-state",
     response_model=GameChatReadStateRead,
@@ -103,30 +86,6 @@ def mark_game_chat_read(
     db: Session = Depends(get_db),
 ) -> GameChatReadStateRead:
     return mark_game_chat_read_workflow(db, game_chat_id, payload, current_user)
-
-
-# This route returns game chat room records currently stored in the app database.
-@router.get("", response_model=list[GameChatRead], status_code=status.HTTP_200_OK)
-def list_game_chats(
-    game_id: uuid.UUID | None = None,
-    chat_status: str | None = None,
-    offset: int = Query(default=0, ge=0),
-    limit: int = Query(
-        default=DEFAULT_ADMIN_COLLECTION_LIMIT,
-        ge=1,
-        le=MAX_ADMIN_COLLECTION_LIMIT,
-    ),
-    current_staff: User = Depends(require_active_admin),
-    db: Session = Depends(get_db),
-) -> list[GameChat]:
-    del current_staff
-    return list_game_chat_records(
-        db,
-        game_id=game_id,
-        chat_status=chat_status,
-        limit=limit,
-        offset=offset,
-    )
 
 
 # This route applies partial updates to an existing game chat while keeping the

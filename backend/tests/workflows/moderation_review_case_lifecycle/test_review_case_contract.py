@@ -201,8 +201,9 @@ def test_note_close_idempotency_stale_state_and_enforcement_precondition() -> No
             payload=note_payload,
         )
         assert replay.idempotent_replay is True
-        assert replay.note.id == first_note.note.id
-        assert replay.review_case.case_version == 3
+        assert replay.note_id == first_note.note_id
+        assert replay.audit_action_id == first_note.audit_action_id
+        assert replay.case_version == 3
 
         with pytest.raises(HTTPException) as mismatch:
             add_review_case_note(
@@ -271,7 +272,7 @@ def test_note_close_idempotency_stale_state_and_enforcement_precondition() -> No
         )
         assert close_replay.idempotent_replay is True
         assert close_replay.audit_action_id == closed.audit_action_id
-        assert close_replay.review_case.case_version == 4
+        assert close_replay.case_version == 4
         with pytest.raises(HTTPException) as closed_note:
             add_review_case_note(
                 db,
@@ -322,8 +323,8 @@ def test_linked_enforcement_is_category_correct_and_allows_enforcement_closure()
                 idempotency_key="enforcement-close",
             ),
         )
-        assert result.review_case.case_status == "closed"
-        assert result.review_case.case_version == 4
+        assert result.case_status == "closed"
+        assert result.case_version == 4
 
 
 def test_enforcement_linking_rejects_financial_restorative_and_wrong_targets() -> None:
@@ -430,8 +431,8 @@ def test_need_sub_restrictive_enforcement_links_only_to_content_case() -> None:
                 idempotency_key="sub-enforcement-close",
             ),
         )
-        assert result.review_case.case_status == "closed"
-        assert result.review_case.case_version == 4
+        assert result.case_status == "closed"
+        assert result.case_version == 4
 
 
 def test_automatic_closure_validates_transition_and_closes_only_content() -> None:
@@ -675,7 +676,9 @@ def test_postgresql_identity_uniqueness_versions_and_immutability() -> None:
                 body="Immutable note.",
                 idempotency_key="immutable-note",
             ),
-        ).note
+        )
+        note = db.get(AdminReviewCaseNote, note.note_id)
+        assert note is not None
         event = event_rows(db, content_case.id)[-1]
         for statement in (
             update(AdminReviewCaseNote)
@@ -702,11 +705,11 @@ def test_postgresql_identity_uniqueness_versions_and_immutability() -> None:
                 expected_case_version=3,
                 idempotency_key="seal-case",
             ),
-        ).review_case
+        )
         with pytest.raises(DBAPIError):
             db.execute(
                 update(AdminReviewCase)
-                .where(AdminReviewCase.id == closed.id)
+                .where(AdminReviewCase.id == closed.review_case_id)
                 .values(priority="critical")
             )
             db.flush()

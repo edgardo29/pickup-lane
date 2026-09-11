@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.schemas import (
+    AdminChatMessageContentRead,
     AdminChatMessageListRead,
     AdminChatModerationActionCreate,
     AdminChatModerationActionResultRead,
@@ -17,23 +18,27 @@ from backend.schemas import (
     AdminNeedASubRequestDetailRead,
 )
 from backend.services.admin_need_a_sub_service import (
-    get_admin_need_a_sub_request_detail,
     get_admin_need_a_sub_post_detail,
     get_admin_need_a_sub_post_or_404,
+    get_admin_need_a_sub_request_detail,
     list_admin_need_a_sub_posts,
 )
-from backend.services.need_a_sub_enforcement_service import (
-    hide_need_a_sub_post,
-    remove_need_a_sub_post_by_admin,
-    restore_need_a_sub_post,
+from backend.services.auth_service import (
+    require_active_admin,
+    require_recent_active_admin,
 )
-from backend.services.auth_service import require_active_admin, require_recent_active_admin
 from backend.services.chat_moderation_admin_service import (
     get_admin_need_a_sub_chat_summary,
     list_admin_need_a_sub_chat_messages,
     mark_need_a_sub_chat_message_reviewed,
     remove_need_a_sub_chat_message,
     restore_need_a_sub_chat_message,
+    reveal_admin_need_a_sub_chat_message_content,
+)
+from backend.services.need_a_sub_enforcement_service import (
+    hide_need_a_sub_post,
+    remove_need_a_sub_post_by_admin,
+    restore_need_a_sub_post,
 )
 
 VALID_NEED_A_SUB_LIST_VIEWS = {
@@ -201,6 +206,24 @@ def list_admin_need_a_sub_chat_messages_route(
         view=view,
         offset=offset,
         limit=limit,
+    )
+
+
+@router.get(
+    "/{post_id}/chat/messages/{message_id}/content",
+    response_model=AdminChatMessageContentRead,
+)
+def reveal_admin_need_a_sub_chat_message_content_route(
+    post_id: uuid.UUID,
+    message_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_active_admin),
+) -> AdminChatMessageContentRead:
+    return reveal_admin_need_a_sub_chat_message_content(
+        db,
+        post_id=post_id,
+        message_id=message_id,
+        viewer_user=current_admin,
     )
 
 

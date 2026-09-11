@@ -3,6 +3,7 @@ import {
   buildReviewCaseClosePayload,
   buildReviewCaseNotePayload,
 } from '../review-cases/adminReviewLifecycle.js'
+import { collectOfficialGameActivityPages } from '../official-games/manage/adminOfficialGameActivity.js'
 
 export async function getAdminHeaders(firebaseUser, includeJson = false) {
   if (!firebaseUser) {
@@ -480,6 +481,16 @@ async function listAdminScopedChatMessages({
   })
 }
 
+async function revealAdminScopedChatMessage({
+  endpointBase,
+  firebaseUser,
+  messageId,
+} = {}) {
+  return apiRequest(`${endpointBase}/messages/${messageId}/content`, {
+    headers: await getAdminHeaders(firebaseUser),
+  })
+}
+
 export async function listAdminOfficialGameChatModerationMessages({
   firebaseUser,
   gameId,
@@ -525,6 +536,42 @@ export async function listAdminNeedASubChatModerationMessages({
     limit,
     offset,
     view,
+  })
+}
+
+export async function revealAdminOfficialGameChatMessage({
+  firebaseUser,
+  gameId,
+  messageId,
+} = {}) {
+  return revealAdminScopedChatMessage({
+    endpointBase: `/admin/official-games/${gameId}/chat`,
+    firebaseUser,
+    messageId,
+  })
+}
+
+export async function revealAdminCommunityGameChatMessage({
+  firebaseUser,
+  gameId,
+  messageId,
+} = {}) {
+  return revealAdminScopedChatMessage({
+    endpointBase: `/admin/community-games/${gameId}/chat`,
+    firebaseUser,
+    messageId,
+  })
+}
+
+export async function revealAdminNeedASubChatMessage({
+  firebaseUser,
+  messageId,
+  postId,
+} = {}) {
+  return revealAdminScopedChatMessage({
+    endpointBase: `/admin/need-a-sub/${postId}/chat`,
+    firebaseUser,
+    messageId,
   })
 }
 
@@ -955,32 +1002,10 @@ export async function unsuspendAdminUser({
   })
 }
 
-export async function listAdminActions({
-  actionType = '',
-  firebaseUser,
-  limit = 100,
-  targetGameId = '',
-} = {}) {
-  const searchParams = new URLSearchParams()
-
-  if (actionType.trim()) {
-    searchParams.set('action_type', actionType.trim())
-  }
-
-  if (String(targetGameId).trim()) {
-    searchParams.set('target_game_id', String(targetGameId).trim())
-  }
-
-  searchParams.set('limit', String(limit))
-
-  return apiRequest(`/admin/actions?${searchParams.toString()}`, {
-    headers: await getAdminHeaders(firebaseUser),
-  })
-}
-
 const adminActionLogFilterParams = [
   'admin_user_id',
   'action_type',
+  'target_game_id',
 ]
 
 export async function listAdminActionLog({
@@ -1006,6 +1031,21 @@ export async function listAdminActionLog({
   return apiRequest(`/admin/actions/log?${searchParams.toString()}`, {
     headers: await getAdminHeaders(firebaseUser),
     signal,
+  })
+}
+
+export async function listAdminOfficialGameActivity({
+  firebaseUser,
+  gameId,
+  signal,
+} = {}) {
+  return collectOfficialGameActivityPages({
+    loadPage: (cursor) => listAdminActionLog({
+      cursor,
+      firebaseUser,
+      filters: { target_game_id: gameId },
+      signal,
+    }),
   })
 }
 

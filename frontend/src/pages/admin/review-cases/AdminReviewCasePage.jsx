@@ -730,11 +730,11 @@ export function AdminReviewCasePageContent({ reviewCaseId }) {
     }
   }, [currentUser, reviewCaseId])
 
-  function applyActionResult(result, successMessage) {
+  function applyActionResult(detailResult, successMessage) {
     setReviewCaseState((state) => reduceReviewCaseDetailState(
       state,
       {
-        detail: result.review_case,
+        detail: detailResult,
         reviewCaseId,
         type: 'reload_succeeded',
       },
@@ -755,7 +755,7 @@ export function AdminReviewCasePageContent({ reviewCaseId }) {
     setIsSubmitting(true)
     setFormStatus({ message: '', type: '' })
     try {
-      const result = await addAdminReviewCaseNote({
+      await addAdminReviewCaseNote({
         body: noteBody.trim(),
         firebaseUser: currentUser,
         idempotencyKey: noteKey,
@@ -763,14 +763,27 @@ export function AdminReviewCasePageContent({ reviewCaseId }) {
       })
       setReviewCaseState((state) => reduceReviewCaseDetailState(
         state,
-        {
-          detail: result.review_case,
-          reviewCaseId,
-          type: 'reload_succeeded',
-        },
+        { type: 'reload_started' },
       ))
-      setNoteBody('')
-      setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
+      setLoadState('loading')
+      const reloadResult = await requestReviewCaseDetail({
+        getReviewCase: getAdminReviewCase,
+        request: { firebaseUser: currentUser, reviewCaseId },
+        reviewCaseId,
+      })
+      setReviewCaseState((state) => reduceReviewCaseDetailState(
+        state,
+        reloadResult.action,
+      ))
+      if (reloadResult.status === 'succeeded') {
+        setLoadState('ready')
+        setNoteBody('')
+        setNoteKey(createReviewIdempotencyKey('admin-review-note', reviewCaseId))
+        setFormStatus({ message: 'Note added.', type: 'success' })
+      } else {
+        setPageError(reloadResult.error.message || 'Review case could not be reloaded.')
+        setLoadState('error')
+      }
     } catch (error) {
       setFormStatus({ message: error.message || 'Note could not be added.', type: 'error' })
     } finally {
@@ -789,8 +802,8 @@ export function AdminReviewCasePageContent({ reviewCaseId }) {
     getIsSubmitting: () => isSubmitting,
     getReviewCase: getAdminReviewCase,
     getReviewCaseState: () => reviewCaseState,
-    onCloseSucceeded: (result) => {
-      applyActionResult(result, 'Review case closed.')
+    onCloseSucceeded: (_acknowledgement, refreshedDetail) => {
+      applyActionResult(refreshedDetail, 'Review case closed.')
       setClosureReason('')
       setClosureKey(createReviewIdempotencyKey('admin-review-close', reviewCaseId))
     },

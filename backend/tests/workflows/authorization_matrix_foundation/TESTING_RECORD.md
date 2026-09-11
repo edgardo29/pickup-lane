@@ -40,7 +40,7 @@ The risk model covers skipped routes, stale routes, duplicate routes, owner over
 
 ## Scenario Discovery
 
-Scenario discovery used the current `backend.main.app` route table as derived current truth. The matrix enumerates 289 current route keys across 70 homogeneous families. Each route records registered method, FastAPI path format, route name, tags, endpoint module, backend auth-service dependency identities, route disposition, owner/disposition reasons, authorization dimensions, concealment posture, negative-proof owner/detail/reason, source references, and canonical gap references.
+Scenario discovery used the current `backend.main.app` route table as derived current truth. The matrix currently enumerates 289 route keys across 70 homogeneous families. Each route records registered method, FastAPI path format, route name, tags, endpoint module, backend auth-service dependency identities, route disposition, owner/disposition reasons, authorization dimensions, concealment posture, negative-proof owner/detail/reason, source references, and canonical gap references.
 
 Mixed high-level prefixes were split by route behavior and owner. Examples include `/auth/*` predecessor-owned account lifecycle versus B-owned self-account routes, `/users/*` self versus target/admin routes, `/venues/*` public discovery versus retired/admin operations, and `/admin/*` high-risk/admin families.
 

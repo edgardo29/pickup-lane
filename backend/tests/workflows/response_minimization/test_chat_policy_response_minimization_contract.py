@@ -407,15 +407,16 @@ def test_chat_and_policy_routes_declare_participant_public_and_admin_models() ->
     from backend.schemas.admin_chat_moderation_schema import AdminChatMessageRead
 
     admin_chat_fields = set(AdminChatMessageRead.model_fields)
-    assert {
+    assert admin_chat_fields == {
+        "id",
+        "sender_display_name",
+        "message_excerpt",
         "visibility_status",
         "review_status",
-        "reviewed_by_user_id",
-        "removed_by_user_id",
+        "created_at",
         "removed_source",
-        "restored_by_user_id",
         "detections",
-    }.issubset(admin_chat_fields)
+    }
 
     assert _route("GET", "/chat-messages").response_model == list[
         ChatMessageParticipantRead

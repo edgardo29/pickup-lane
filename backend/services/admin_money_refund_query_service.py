@@ -36,6 +36,12 @@ from backend.schemas.admin_money_refund_schema import (
     AdminMoneyRefundListResponseRead,
     AdminMoneyRefundProviderSnapshotRead,
 )
+from backend.services.admin_action_display_service import (
+    admin_action_label,
+    admin_label,
+    reason_preview,
+    users_by_id,
+)
 from backend.services.admin_action_service import user_can_read_admin_action
 from backend.services.admin_money_cursor import (
     apply_desc_cursor,
@@ -629,6 +635,11 @@ def get_admin_money_refund_detail(
 
     refund_summary = build_refund_summary(db, refund)
 
+    admin_users = users_by_id(
+        db,
+        sorted({action.admin_user_id for action in admin_activity}, key=str),
+    )
+
     return AdminMoneyRefundDetailRead(
         refund=AdminMoneyRefundDetailItemRead(**refund_summary.model_dump()),
         current_provider_snapshot=build_refund_provider_snapshot(refund),
@@ -662,7 +673,16 @@ def get_admin_money_refund_detail(
         ),
         recent_refund_events=recent_refund_events,
         admin_activity=[
-            AdminMoneyAuditActionSummaryRead.model_validate(action)
+            AdminMoneyAuditActionSummaryRead(
+                id=action.id,
+                action_label=admin_action_label(action.action_type),
+                admin_label=admin_label(
+                    admin_users.get(action.admin_user_id),
+                    fallback_admin_id=action.admin_user_id,
+                ),
+                reason_preview=reason_preview(action.reason),
+                created_at=action.created_at,
+            )
             for action in admin_activity
         ],
         linked_money_issue=linked_money_issue,

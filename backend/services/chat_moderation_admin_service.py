@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from backend.models import (
     AdminAction,
@@ -25,6 +25,7 @@ from backend.models import (
 )
 from backend.schemas.admin_chat_moderation_schema import (
     AdminChatDetectionRead,
+    AdminChatMessageContentRead,
     AdminChatMessageListRead,
     AdminChatMessageRead,
     AdminChatModerationActionCreate,
@@ -34,6 +35,7 @@ from backend.schemas.admin_chat_moderation_schema import (
 from backend.services.admin_action_service import (
     integrity_error_matches_constraint,
     record_admin_action,
+    record_sensitive_admin_read,
 )
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
@@ -41,6 +43,7 @@ from backend.services.admin_record_rules import (
 )
 from backend.services.admin_target_notice_service import create_admin_target_notice
 from backend.services.auth_service import require_active_admin_user
+from backend.services.chat_moderation_service import build_safe_message_preview
 from backend.services.game_chat_service import (
     reconcile_game_chat_notifications_after_moderation,
     refresh_game_chat_summary,
@@ -157,23 +160,13 @@ def normalize_action_payload(
     return reason, idempotency_key
 
 
-def build_initials(display_name: str) -> str:
-    parts = [part for part in display_name.replace("@", " ").split() if part]
-    initials = "".join(part[:1].upper() for part in parts[:2])
-    return initials or "PL"
-
-
 def serialize_detections(
     detections: list[GameChatMessageDetection | SubPostChatMessageDetection],
 ) -> list[AdminChatDetectionRead]:
     return [
         AdminChatDetectionRead(
-            id=detection.id,
             category=detection.category,
             severity=detection.severity,
-            rule_key=detection.rule_key,
-            matched_preview=detection.matched_preview,
-            created_at=detection.created_at,
         )
         for detection in detections
     ]
@@ -208,8 +201,6 @@ def get_sub_message_detections(
 def serialize_game_chat_message(
     db: Session,
     message: ChatMessage,
-    chat: GameChat,
-    game: Game,
 ) -> AdminChatMessageRead:
     sender = db.get(User, message.sender_user_id) if message.sender_user_id else None
     sender_display_name = (
@@ -219,23 +210,12 @@ def serialize_game_chat_message(
     )
     return AdminChatMessageRead(
         id=message.id,
-        chat_id=chat.id,
-        sender_user_id=message.sender_user_id,
         sender_display_name=sender_display_name,
-        sender_initials=build_initials(sender_display_name),
-        message_type=message.message_type,
-        message_body=message.message_body,
+        message_excerpt=build_safe_message_preview(message.message_body),
         visibility_status=message.visibility_status,
         review_status=message.review_status,
         created_at=message.created_at,
-        updated_at=message.updated_at,
-        reviewed_at=message.reviewed_at,
-        reviewed_by_user_id=message.reviewed_by_user_id,
-        removed_at=message.removed_at,
-        removed_by_user_id=message.removed_by_user_id,
         removed_source=message.removed_source,
-        restored_at=message.restored_at,
-        restored_by_user_id=message.restored_by_user_id,
         detections=serialize_detections(get_game_message_detections(db, message.id)),
     )
 
@@ -243,28 +223,15 @@ def serialize_game_chat_message(
 def serialize_need_a_sub_chat_message(
     db: Session,
     message: SubPostChatMessage,
-    chat: SubPostChat,
-    post: SubPost,
 ) -> AdminChatMessageRead:
     return AdminChatMessageRead(
         id=message.id,
-        chat_id=chat.id,
-        sender_user_id=message.sender_user_id,
         sender_display_name=message.sender_display_name_snapshot,
-        sender_initials=message.sender_initials_snapshot,
-        message_type=message.message_type,
-        message_body=message.message_body,
+        message_excerpt=build_safe_message_preview(message.message_body),
         visibility_status=message.visibility_status,
         review_status=message.review_status,
         created_at=message.created_at,
-        updated_at=message.updated_at,
-        reviewed_at=message.reviewed_at,
-        reviewed_by_user_id=message.reviewed_by_user_id,
-        removed_at=message.removed_at,
-        removed_by_user_id=message.removed_by_user_id,
         removed_source=message.removed_source,
-        restored_at=message.restored_at,
-        restored_by_user_id=message.restored_by_user_id,
         detections=serialize_detections(get_sub_message_detections(db, message.id)),
     )
 
@@ -337,6 +304,17 @@ def list_game_chat_messages(
 ) -> list[AdminChatMessageRead]:
     rows = db.execute(
         select(ChatMessage, GameChat, Game)
+        .options(
+            load_only(
+                ChatMessage.id,
+                ChatMessage.sender_user_id,
+                ChatMessage.message_body,
+                ChatMessage.visibility_status,
+                ChatMessage.review_status,
+                ChatMessage.created_at,
+                ChatMessage.removed_source,
+            )
+        )
         .join(GameChat, GameChat.id == ChatMessage.chat_id)
         .join(Game, Game.id == GameChat.game_id)
         .where(*game_message_filters(view, parent_id))
@@ -344,10 +322,7 @@ def list_game_chat_messages(
         .offset(offset)
         .limit(limit)
     ).all()
-    return [
-        serialize_game_chat_message(db, message, chat, game)
-        for message, chat, game in rows
-    ]
+    return [serialize_game_chat_message(db, message) for message, _, _ in rows]
 
 
 def list_need_a_sub_chat_messages(
@@ -360,6 +335,17 @@ def list_need_a_sub_chat_messages(
 ) -> list[AdminChatMessageRead]:
     rows = db.execute(
         select(SubPostChatMessage, SubPostChat, SubPost)
+        .options(
+            load_only(
+                SubPostChatMessage.id,
+                SubPostChatMessage.sender_display_name_snapshot,
+                SubPostChatMessage.message_body,
+                SubPostChatMessage.visibility_status,
+                SubPostChatMessage.review_status,
+                SubPostChatMessage.created_at,
+                SubPostChatMessage.removed_source,
+            )
+        )
         .join(SubPostChat, SubPostChat.id == SubPostChatMessage.chat_id)
         .join(SubPost, SubPost.id == SubPostChat.sub_post_id)
         .where(*sub_message_filters(view, parent_id))
@@ -367,10 +353,43 @@ def list_need_a_sub_chat_messages(
         .offset(offset)
         .limit(limit)
     ).all()
-    return [
-        serialize_need_a_sub_chat_message(db, message, chat, post)
-        for message, chat, post in rows
-    ]
+    return [serialize_need_a_sub_chat_message(db, message) for message, _, _ in rows]
+
+
+def game_chat_page_has_messages(
+    db: Session,
+    *,
+    view: str,
+    parent_id: uuid.UUID,
+    offset: int,
+    limit: int,
+) -> bool:
+    return db.scalar(
+        select(ChatMessage.id)
+        .join(GameChat, GameChat.id == ChatMessage.chat_id)
+        .where(*game_message_filters(view, parent_id))
+        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ) is not None
+
+
+def need_a_sub_chat_page_has_messages(
+    db: Session,
+    *,
+    view: str,
+    parent_id: uuid.UUID,
+    offset: int,
+    limit: int,
+) -> bool:
+    return db.scalar(
+        select(SubPostChatMessage.id)
+        .join(SubPostChat, SubPostChat.id == SubPostChatMessage.chat_id)
+        .where(*sub_message_filters(view, parent_id))
+        .order_by(SubPostChatMessage.created_at.desc(), SubPostChatMessage.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ) is not None
 
 
 def build_message_list_response(
@@ -398,8 +417,21 @@ def list_admin_game_chat_messages(
     view: str = "needs_review",
     offset: int = 0,
     limit: int = DEFAULT_REVIEW_PAGE_SIZE,
+    expected_game_type: str,
 ) -> AdminChatMessageListRead:
     require_active_admin_user(viewer_user)
+    game_identity = db.execute(
+        select(Game.id, Game.game_type, Game.deleted_at).where(Game.id == game_id)
+    ).one_or_none()
+    if (
+        game_identity is None
+        or game_identity.game_type != expected_game_type
+        or game_identity.deleted_at is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found.",
+        )
     normalized_view = normalize_review_view(view)
     page_offset = max(0, offset)
     page_limit = max(1, min(limit, MAX_REVIEW_PAGE_SIZE))
@@ -407,6 +439,26 @@ def list_admin_game_chat_messages(
         db,
         view=normalized_view,
         parent_id=game_id,
+    )
+    if not game_chat_page_has_messages(
+        db,
+        view=normalized_view,
+        parent_id=game_id,
+        offset=page_offset,
+        limit=page_limit,
+    ):
+        return build_message_list_response(
+            messages=[],
+            total_count=total_count,
+            offset=page_offset,
+            limit=page_limit,
+        )
+    record_sensitive_admin_read(
+        authenticated_admin_id=viewer_user.id,
+        action_type="read_game_chat_moderation",
+        target_game_id=game_id,
+        reason=None,
+        metadata=None,
     )
     messages = list_game_chat_messages(
         db,
@@ -441,6 +493,26 @@ def list_admin_need_a_sub_chat_messages(
         view=normalized_view,
         parent_id=post_id,
     )
+    if not need_a_sub_chat_page_has_messages(
+        db,
+        view=normalized_view,
+        parent_id=post_id,
+        offset=page_offset,
+        limit=page_limit,
+    ):
+        return build_message_list_response(
+            messages=[],
+            total_count=total_count,
+            offset=page_offset,
+            limit=page_limit,
+        )
+    record_sensitive_admin_read(
+        authenticated_admin_id=viewer_user.id,
+        action_type="read_need_sub_chat_moderation",
+        target_sub_post_id=post_id,
+        reason=None,
+        metadata=None,
+    )
     messages = list_need_a_sub_chat_messages(
         db,
         view=normalized_view,
@@ -474,17 +546,10 @@ def get_admin_game_chat_summary(
             chat_status="not_created",
         )
     return AdminChatSummaryRead(
-        chat_id=chat.id,
         chat_status=chat.chat_status,
         message_count=chat.message_count,
         needs_review_count=chat.needs_review_count,
         removed_count=chat.removed_count,
-        latest_message_id=chat.latest_message_id,
-        latest_message_preview=chat.latest_message_preview,
-        latest_message_at=chat.latest_message_at,
-        created_at=chat.created_at,
-        updated_at=chat.updated_at,
-        closed_at=chat.closed_at,
     )
 
 
@@ -507,18 +572,112 @@ def get_admin_need_a_sub_chat_summary(
             chat_status="not_created",
         )
     return AdminChatSummaryRead(
-        chat_id=chat.id,
         chat_status=chat.chat_status,
         message_count=chat.message_count,
         needs_review_count=chat.needs_review_count,
         removed_count=chat.removed_count,
-        latest_message_id=chat.latest_message_id,
-        latest_message_preview=chat.latest_message_preview,
-        latest_message_at=chat.latest_message_at,
-        created_at=chat.created_at,
-        updated_at=chat.updated_at,
-        closed_at=chat.closed_at,
     )
+
+
+def reveal_admin_game_chat_message_content(
+    db: Session,
+    *,
+    viewer_user: User,
+    game_id: uuid.UUID,
+    message_id: uuid.UUID,
+    expected_game_type: str,
+) -> AdminChatMessageContentRead:
+    require_active_admin_user(viewer_user)
+    identity = db.execute(
+        select(ChatMessage.id)
+        .join(GameChat, GameChat.id == ChatMessage.chat_id)
+        .join(Game, Game.id == GameChat.game_id)
+        .where(
+            ChatMessage.id == message_id,
+            GameChat.game_id == game_id,
+            Game.game_type == expected_game_type,
+            Game.deleted_at.is_(None),
+        )
+    ).one_or_none()
+    if identity is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat message not found.",
+        )
+
+    record_sensitive_admin_read(
+        authenticated_admin_id=viewer_user.id,
+        action_type="reveal_game_chat_message_content",
+        target_game_id=game_id,
+        target_message_id=message_id,
+        reason=None,
+        metadata=None,
+    )
+    message = db.execute(
+        select(ChatMessage.id, ChatMessage.message_body)
+        .join(GameChat, GameChat.id == ChatMessage.chat_id)
+        .join(Game, Game.id == GameChat.game_id)
+        .where(
+            ChatMessage.id == message_id,
+            GameChat.game_id == game_id,
+            Game.game_type == expected_game_type,
+            Game.deleted_at.is_(None),
+        )
+    ).one_or_none()
+    if message is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat message not found.",
+        )
+    return AdminChatMessageContentRead(id=message.id, message_body=message.message_body)
+
+
+def reveal_admin_need_a_sub_chat_message_content(
+    db: Session,
+    *,
+    viewer_user: User,
+    post_id: uuid.UUID,
+    message_id: uuid.UUID,
+) -> AdminChatMessageContentRead:
+    require_active_admin_user(viewer_user)
+    identity = db.execute(
+        select(SubPostChatMessage.id)
+        .join(SubPostChat, SubPostChat.id == SubPostChatMessage.chat_id)
+        .join(SubPost, SubPost.id == SubPostChat.sub_post_id)
+        .where(
+            SubPostChatMessage.id == message_id,
+            SubPostChat.sub_post_id == post_id,
+        )
+    ).one_or_none()
+    if identity is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub chat message not found.",
+        )
+
+    record_sensitive_admin_read(
+        authenticated_admin_id=viewer_user.id,
+        action_type="reveal_need_sub_chat_message_content",
+        target_sub_post_id=post_id,
+        target_sub_chat_message_id=message_id,
+        reason=None,
+        metadata=None,
+    )
+    message = db.execute(
+        select(SubPostChatMessage.id, SubPostChatMessage.message_body)
+        .join(SubPostChat, SubPostChat.id == SubPostChatMessage.chat_id)
+        .join(SubPost, SubPost.id == SubPostChat.sub_post_id)
+        .where(
+            SubPostChatMessage.id == message_id,
+            SubPostChat.sub_post_id == post_id,
+        )
+    ).one_or_none()
+    if message is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Need a Sub chat message not found.",
+        )
+    return AdminChatMessageContentRead(id=message.id, message_body=message.message_body)
 
 
 def get_existing_chat_moderation_action(
@@ -638,19 +797,6 @@ def get_sub_message_context(
         )
     message, chat, post = row
     return message, chat, post
-
-
-def serialize_action_message(
-    db: Session,
-    *,
-    chat_scope: str,
-    message: ChatMessage | SubPostChatMessage,
-    chat: GameChat | SubPostChat,
-    parent: Game | SubPost,
-) -> AdminChatMessageRead:
-    if chat_scope == CHAT_SCOPE_GAME:
-        return serialize_game_chat_message(db, message, chat, parent)
-    return serialize_need_a_sub_chat_message(db, message, chat, parent)
 
 
 def record_chat_moderation_action(
@@ -805,13 +951,13 @@ def build_chat_action_replay(
     message_id: uuid.UUID,
 ) -> AdminChatModerationActionResultRead:
     if chat_scope == CHAT_SCOPE_GAME:
-        message, chat, parent = get_game_message_context(
+        message, _chat, parent = get_game_message_context(
             db,
             message_id,
             lock_message=False,
         )
     else:
-        message, chat, parent = get_sub_message_context(
+        message, _chat, parent = get_sub_message_context(
             db,
             message_id,
             lock_message=False,
@@ -823,13 +969,7 @@ def build_chat_action_replay(
     )
     validate_chat_replay_communication(db, action)
     return AdminChatModerationActionResultRead(
-        message=serialize_action_message(
-            db,
-            chat_scope=chat_scope,
-            message=message,
-            chat=chat,
-            parent=parent,
-        ),
+        message_id=message.id,
         audit_action_id=action.id,
         idempotent_replay=True,
     )
@@ -1074,13 +1214,7 @@ def run_chat_moderation_action(
         raise
 
     return AdminChatModerationActionResultRead(
-        message=serialize_action_message(
-            db,
-            chat_scope=normalized_scope,
-            message=message,
-            chat=chat,
-            parent=parent,
-        ),
+        message_id=message.id,
         audit_action_id=audit_action.id,
         idempotent_replay=False,
     )

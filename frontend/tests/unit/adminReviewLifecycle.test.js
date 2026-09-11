@@ -210,7 +210,12 @@ test('close conflict executes API and reload workflow without duplicate submissi
       }
     }
     return {
-      review_case: { ...freshDetail, case_status: 'closed', case_version: 4 },
+      audit_action_id: 'action-1',
+      case_status: 'closed',
+      case_version: 4,
+      closure_outcome: 'no_action_needed',
+      idempotent_replay: false,
+      review_case_id: 'case-a',
     }
   }
   const buildCloseRequest = () => ({
@@ -284,7 +289,9 @@ test('close conflict executes API and reload workflow without duplicate submissi
   assert.equal(closed.status, 'closed')
   assert.equal(closeRequests.length, 2)
   assert.equal(closeRequests[1].expectedCaseVersion, 3)
-  assert.equal(closed.result.review_case.case_version, 4)
+  assert.equal(closed.result.case_version, 4)
+  assert.equal(closed.result.case_status, 'closed')
+  assert.equal(closed.result.review_case, undefined)
 
   const nextCase = createReviewCaseDetailState('case-b')
   assert.deepEqual(nextCase, {

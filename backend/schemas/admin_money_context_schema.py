@@ -1,8 +1,7 @@
 from datetime import date, datetime
-from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class AdminMoneyDisplayRead(BaseModel):
@@ -111,26 +110,8 @@ class AdminMoneyCommunityPublishAttemptContextRead(BaseModel):
     updated_at: datetime
 
 class AdminMoneyAuditActionSummaryRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
-
     id: UUID
-    admin_user_id: UUID
-    action_type: str
-    target_user_id: UUID | None
-    target_game_id: UUID | None
-    target_booking_id: UUID | None
-    target_participant_id: UUID | None
-    target_payment_id: UUID | None
-    target_refund_id: UUID | None
-    target_game_credit_id: UUID | None
-    target_credit_usage_id: UUID | None
-    target_financial_outcome_id: UUID | None
-    target_host_publish_fee_id: UUID | None
-    target_host_publish_entitlement_id: UUID | None
-    target_money_issue_id: UUID | None
-    reason: str | None
-    metadata: dict[str, Any] | None = Field(
-        validation_alias="metadata_",
-        serialization_alias="metadata",
-    )
+    action_label: str
+    admin_label: str
+    reason_preview: str | None
     created_at: datetime

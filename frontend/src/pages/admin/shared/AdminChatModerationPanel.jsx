@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   Check,
@@ -12,6 +12,11 @@ import {
 } from 'lucide-react'
 import '../../../styles/admin/AdminChatModerationPanel.css'
 import { runAdminEnforcementMutation } from './adminEnforcementLifecycle.js'
+import {
+  beginChatRevealRequest,
+  invalidateChatRevealRequest,
+  shouldApplyChatRevealResponse,
+} from './adminChatRevealState.js'
 
 const PAGE_SIZE = 20
 const LIST_BADGE_LIMIT = 2
@@ -129,7 +134,10 @@ function AdminChatModerationPanel({
   moderateMessage,
   needsReviewCount = 0,
   onAfterAction,
+  parentId,
+  parentKind,
   refreshToken = 0,
+  revealMessage,
   removedMessageCount = 0,
   visibleMessageCount = 0,
 }) {
@@ -141,6 +149,21 @@ function AdminChatModerationPanel({
   const [loadError, setLoadError] = useState('')
   const [activeAction, setActiveAction] = useState(null)
   const [selectedMessage, setSelectedMessage] = useState(null)
+  const revealRequestRef = useRef({ context: null, generation: 0 })
+  const currentRevealContextRef = useRef(null)
+
+  const currentRevealContext = {
+    offset,
+    parentId,
+    parentKind,
+    view,
+    viewerId: firebaseUser?.uid || '',
+  }
+  currentRevealContextRef.current = currentRevealContext
+
+  function invalidateRevealRequest() {
+    revealRequestRef.current = invalidateChatRevealRequest(revealRequestRef.current)
+  }
 
   const pageStart = messages.length ? offset + 1 : 0
   const pageEnd = messages.length ? Math.min(offset + messages.length, totalCount) : 0
@@ -208,6 +231,16 @@ function AdminChatModerationPanel({
     }
   }, [firebaseUser, knownCountForView, loadMessages, offset, refreshToken, view])
 
+  useLayoutEffect(() => () => {
+    invalidateRevealRequest()
+  }, [])
+
+  useLayoutEffect(() => {
+    invalidateRevealRequest()
+    setSelectedMessage(null)
+    setActiveAction(null)
+  }, [firebaseUser, parentId, parentKind])
+
   function selectView(nextView) {
     const nextKnownCount = getKnownCountForView({
       needsReviewCount,
@@ -222,16 +255,32 @@ function AdminChatModerationPanel({
     setLoadError('')
     setLoadState(nextKnownCount > 0 ? 'loading' : 'ready')
     setActiveAction(null)
+    invalidateRevealRequest()
     setSelectedMessage(null)
   }
 
-  function openMessageDetail(message, rowNumber, action = '') {
+  async function openMessageDetail(message, rowNumber, action = '') {
+    invalidateRevealRequest()
+    const isModerationConfirmation = action === 'remove' || action === 'restore'
+    const request = beginChatRevealRequest(revealRequestRef.current, {
+      messageId: message.id,
+      offset,
+      parentId,
+      parentKind,
+      view,
+      viewerId: firebaseUser?.uid || '',
+    })
+    revealRequestRef.current = request
     setSelectedMessage({
       message,
+      revealError: '',
+      revealState: isModerationConfirmation ? 'excerpt' : 'loading',
+      revealedBody: '',
+      revealRequest: request,
       rowNumber,
     })
 
-    if (action === 'remove' || action === 'restore') {
+    if (isModerationConfirmation) {
       setActiveAction({
         action,
         error: '',
@@ -242,15 +291,65 @@ function AdminChatModerationPanel({
     }
 
     setActiveAction(null)
+    try {
+      const response = await revealMessage({
+        firebaseUser,
+        messageId: message.id,
+      })
+      if (
+        !shouldApplyChatRevealResponse(
+          revealRequestRef.current,
+          request,
+          {
+            ...currentRevealContextRef.current,
+            messageId: message.id,
+          },
+        )
+        || response.id !== message.id
+      ) return
+      setSelectedMessage((current) => (
+        current?.message.id === message.id
+          ? {
+              ...current,
+              revealError: '',
+              revealState: 'ready',
+              revealedBody: response.message_body,
+            }
+          : current
+      ))
+    } catch (error) {
+      if (
+        !shouldApplyChatRevealResponse(
+          revealRequestRef.current,
+          request,
+          {
+            ...currentRevealContextRef.current,
+            messageId: message.id,
+          },
+        )
+      ) return
+      setSelectedMessage((current) => (
+        current?.message.id === message.id
+          ? {
+              ...current,
+              revealError: error.message || 'Message content could not be revealed.',
+              revealState: 'error',
+              revealedBody: '',
+            }
+          : current
+      ))
+    }
   }
 
   function closeMessageDetail() {
     if (activeAction?.submitting) return
+    invalidateRevealRequest()
     setSelectedMessage(null)
     setActiveAction(null)
   }
 
   function goToOffset(nextOffset) {
+    invalidateRevealRequest()
     setSelectedMessage(null)
     setActiveAction(null)
     setOffset(nextOffset)
@@ -313,7 +412,18 @@ function AdminChatModerationPanel({
     return null
   }
 
-  const detailMessage = selectedMessage?.message
+  const selectedMessageIsCurrent = Boolean(
+    selectedMessage
+    && shouldApplyChatRevealResponse(
+      revealRequestRef.current,
+      selectedMessage.revealRequest,
+      {
+        ...currentRevealContext,
+        messageId: selectedMessage.message.id,
+      },
+    ),
+  )
+  const detailMessage = selectedMessageIsCurrent ? selectedMessage.message : null
   const detailDraft = (
     detailMessage && activeAction?.messageId === detailMessage.id
       ? activeAction
@@ -388,7 +498,7 @@ function AdminChatModerationPanel({
                 </header>
 
                 <div className="admin-chat-moderation__message-content">
-                  <p className="admin-chat-moderation__body">{message.message_body}</p>
+                  <p className="admin-chat-moderation__body">{message.message_excerpt}</p>
                 </div>
 
                 <footer className="admin-chat-moderation__message-footer">
@@ -503,7 +613,20 @@ function AdminChatModerationPanel({
               <section className="admin-chat-moderation__modal-field-group admin-chat-moderation__modal-field-group--wide">
                 <span>Message</span>
                 <div className="admin-chat-moderation__modal-field admin-chat-moderation__modal-field--message">
-                  <p>{detailMessage.message_body}</p>
+                  {selectedMessage.revealState === 'loading' && (
+                    <p role="status">Loading full message.</p>
+                  )}
+                  {selectedMessage.revealState === 'excerpt' && (
+                    <p>{detailMessage.message_excerpt}</p>
+                  )}
+                  {selectedMessage.revealState === 'error' && (
+                    <p className="admin-chat-moderation__error" role="alert">
+                      {selectedMessage.revealError}
+                    </p>
+                  )}
+                  {selectedMessage.revealState === 'ready' && (
+                    <p>{selectedMessage.revealedBody}</p>
+                  )}
                 </div>
               </section>
             </div>

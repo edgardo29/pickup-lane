@@ -188,8 +188,24 @@ export function createAdminReviewCaseCloseHandler({
         },
       })
       if (closeResult.status === 'closed') {
-        onCloseSucceeded(closeResult.result)
-        return closeResult
+        onReviewCaseAction({ type: 'reload_started' })
+        onLoadState('loading')
+        const reloadResult = await requestReviewCaseDetail({
+          getReviewCase,
+          request: { firebaseUser: currentUser, reviewCaseId },
+          reviewCaseId,
+        })
+        onReviewCaseAction(reloadResult.action)
+        if (reloadResult.status === 'succeeded') {
+          onLoadState('ready')
+          onCloseSucceeded(closeResult.result, reloadResult.detail)
+        } else {
+          onPageError(
+            reloadResult.error.message || 'Review case could not be reloaded.',
+          )
+          onLoadState('error')
+        }
+        return { ...closeResult, reloadResult }
       }
 
       if (!closeResult.reloadRequired) {
