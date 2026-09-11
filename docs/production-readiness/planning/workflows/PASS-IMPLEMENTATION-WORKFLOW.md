@@ -26,11 +26,13 @@ STAGE 0: SCOPE, RECONCILIATION, AND DECOMPOSITION DECISION
 -> MANUAL MERGE
 ```
 
-Every first-time implementation performs the Stage 0 and Gate A
-responsibilities. Stage 0 may decide that no decomposition is required, and
-Gate A may use a concise plan for straightforward work. A durable intake or plan
-artifact is required only when the current instruction or the work itself needs
-one.
+Every first-time corrected-master unit receives Stage 0 scope and decomposition
+work before implementation begins. An accepted parent decomposition satisfies
+Stage 0 for its later children while current authority, dependencies, and
+repository truth still support it; each child still performs Gate A. Stage 0 may
+decide that no decomposition is required, and Gate A may use a concise plan for
+straightforward work. A durable intake or plan artifact is required only when
+the current instruction or the work itself needs one.
 
 This sequence does not create automatic orchestration. Each stage begins only
 under the current instruction and obeys its own edit, publication, and stop
@@ -138,6 +140,19 @@ Every stage must:
   ambiguous, when the current instruction cannot be followed exactly, or when it
   conflicts with authority or repository truth.
 
+A short assignment may identify only the selected work and its current stage or
+gate. Start at `docs/production-readiness/00-READ-ME-FIRST.md`, use
+`docs/production-readiness/01-PROGRAM-CONTEXT.md` as the navigation map, and use
+the applicable section below to find the additional documents needed for that
+stage. Individual prompts do not need to repeat this document stack.
+
+Do not routinely calculate, freeze, compare, record, or verify SHAs or other
+hashes for Git baselines, intakes, plans, or artifacts. Normal branch, worktree,
+index, HEAD, upstream, and merge-base safety checks remain required. Git commit
+identity continues to exist through ordinary repository work, and a current
+owner instruction may still require a specific integrity check, but artifact-
+hash bookkeeping is not part of this workflow.
+
 Before reporting completion, compare the actual work performed
 against the binding current instruction. Correct any in-scope mismatch before
 reporting, or report the mismatch and stop.
@@ -154,14 +169,14 @@ Required initialization:
 2. verify the worktree and index are clean or explicitly understood;
 3. switch to local `develop`;
 4. run a fast-forward-only update from `origin/develop`;
-5. verify local `develop` equals `origin/develop`;
-6. record the exact accepted baseline;
-7. create or switch to the local working branch specified by the user or current
+5. verify local `develop` equals `origin/develop`; this is the accepted starting
+   state, without separately recording a baseline hash;
+6. create or switch to the local working branch specified by the user or current
    task; when no different branch name is mandated, `pr/<EXECUTABLE-PASS-ID>`
    remains a useful convention;
-8. use that branch through implementation, review, and publication unless an
+7. use that branch through implementation, review, and publication unless an
    explicitly authorized change requires another branch;
-9. do not push merely for branch creation.
+8. do not push merely for branch creation.
 
 Unexpected local work, divergence, worktree conflict, or branch ambiguity causes
 a stop. Do not automatically reset, rebase, merge, stash, restore, clean, or
@@ -177,14 +192,17 @@ Publication remains Gate D work after independent review.
 
 ## 6. STAGE 0: Scope, Reconciliation, And Decomposition Decision
 
-Perform Stage 0 for every selected first-time corrected-master unit. It
-reconciles scope and repository truth, then decides whether the unit executes
-whole, decomposes into coherent children, or needs a provider-independent and
-deferred split. A no-decomposition decision is a valid Stage 0 result. Stage 0
-does not edit production code, tests, provider settings, migrations, or runtime
-configuration. A reusable intake document is optional; use the existing
-template only when the current instruction or the work requires a durable intake
-record.
+Perform Stage 0 before first executable work under a selected first-time
+corrected-master unit. It reconciles scope and repository truth, then decides
+whether the unit executes whole, decomposes into coherent children, or needs a
+provider-independent and deferred split. Do not repeat Stage 0 for a later child
+when an accepted parent decomposition still matches current authority,
+dependencies, and repository truth. Return to Stage 0 if those facts invalidate
+the decomposition or executable boundary. A no-decomposition decision is a
+valid Stage 0 result. Stage 0 does not edit production code, tests, provider
+settings, migrations, or runtime configuration. A reusable intake document is
+optional; use an existing intake template only when the current instruction or
+the work requires a durable intake record.
 
 ### 6.1 Inputs
 
@@ -428,8 +446,8 @@ Stage 0 returns:
 
 Stage 0 does not automatically start later work. The next action follows the
 corrected master, actual prerequisites, current repository truth, and owner
-direction. Do not rerun Stage 0 merely because a child merged when the accepted
-structure remains sound.
+direction. A later child whose accepted decomposition remains sound begins at
+Gate A; do not rerun Stage 0 merely because an earlier child merged.
 
 A mandatory deferred follow-up whose final-infrastructure trigger is false is
 not a current executable child. Keep it visible in the intake and execution
@@ -454,8 +472,17 @@ straightforward. A durable standalone plan document is required only when the
 current instruction or the work itself requires one, not merely because the unit
 has an old pass ID or historical plan.
 
-When the current instruction authorizes a durable planning document, Gate A may
-edit that document. It does not edit production code, tests, migrations,
+Start from the accepted Stage 0 result or intake, the corrected-master scope,
+the execution register, current repository truth, accepted prerequisite
+contracts, and the applicable engineering and testing standards routed through
+Program Context. For a later child of a still-valid accepted decomposition,
+Gate A is the starting stage and must re-evaluate the child plan against current
+`develop` without repeating Stage 0.
+
+When Gate A creates a durable planning document, use
+`docs/production-readiness/planning/templates/PASS-PLANNING-TEMPLATE.md` as the
+required plan structure. Gate A may edit only the planning artifacts authorized
+by the current instruction. It does not edit production code, tests, migrations,
 configuration, or provider state.
 
 ### 7.1 Planning Responsibilities
@@ -478,8 +505,10 @@ For finite or cross-cutting contracts, use a matrix or inventory when it
 materially reduces omission risk. Do not create one as process bookkeeping when
 the contract is already clear.
 
-A planning template may be used as a convenience. Plans and historical SHAs are
-supporting artifacts, not a separate source of production-readiness authority.
+The planning template defines structure and authoring quality for a durable
+plan; it does not define scope or override current authority. Existing plans and
+historical records remain supporting artifacts rather than a separate source of
+production-readiness authority.
 
 ### 7.2 Impact And Compatibility Review
 
@@ -515,6 +544,12 @@ does not automatically begin implementation.
 Gate B implements the selected corrected-master work. When a reviewed plan
 exists, follow it unless repository truth exposes a material design problem; in
 that case, return to planning rather than silently redesigning the work.
+
+Before editing, read the reviewed Gate A plan or current reviewed planning
+record, any accepted intake that defines the executable boundary, and the
+technical and testing standards Program Context routes to for the actual change.
+Recheck relevant current source and prerequisites rather than relying on a plan's
+predicted file list.
 
 Develop implementation and evidence together by coherent behavior or invariant:
 
@@ -579,6 +614,11 @@ unless the current owner instruction explicitly asks for the next step.
 
 Gate C is a read-only independent review of the complete change set. Passing
 tests do not replace semantic review.
+
+Read the current Gate A plan or reviewed planning record, any accepted intake
+that defines ownership, the applicable prerequisite contracts and standards,
+and the actual Gate B diff and validation report. Use the corrected master and
+current repository truth to resolve conflicts; the plan does not override them.
 
 ### 9.1 Review Boundary
 
@@ -657,6 +697,11 @@ focused reproduction only when a concrete semantic concern requires it.
 Gate D is mechanical Git and PR work after the change set has passed independent
 review and the owner has asked to publish it.
 
+Before drafting or updating the pull request, read and follow the current
+`docs/production-readiness/planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md`.
+Individual Gate D prompts do not need to restate its PR-body format or writing
+rules.
+
 Gate D must:
 
 - fetch remote metadata safely;
@@ -672,13 +717,9 @@ Gate D must:
   sensitive-content safety;
 - leave the PR open and unmerged.
 
-Use the normal PR structure:
-
-- Summary
-- Changes
-- Validation
-
-A reusable PR template is optional guidance, not a mandatory framework.
+Use exactly the PR-body structure and authoring rules required by the current PR
+guidance. Draft from the base, final diff, and validation that actually ran;
+plans and Gate reports do not prove implementation behavior.
 
 Gate D does not amend, squash, rebase, reset, cherry-pick, rewrite history,
 force-push, merge, or enable auto-merge unless the owner explicitly authorizes
@@ -741,14 +782,15 @@ open.
 After manual merge:
 
 1. verify the intended PR merged;
-2. fetch remote metadata;
-3. fast-forward local `develop` to `origin/develop`;
+2. verify the worktree is safe, switch back to local `develop`, and fetch remote
+   metadata;
+3. fast-forward local `develop` to `origin/develop` using the normal safe path;
 4. verify local and remote `develop` agree;
-5. update factual execution state when needed.
+5. reconcile factual execution-register state when needed.
 
 Select later work from the corrected master, current repository truth, real
-prerequisites, deferred-trigger state, and owner direction. Every selected
-first-time unit then begins with Stage 0 and proceeds through Gate A under
-separate authorization; neither stage starts automatically. If several units are
-valid and no real dependency selects one, ask the owner rather than inventing
-priority.
+prerequisites, deferred-trigger state, and owner direction. A later child of an
+accepted decomposition that remains valid begins at Gate A; new first-time scope
+without an accepted decomposition begins at Stage 0. Neither stage starts
+automatically. If several units are valid and no real dependency selects one,
+ask the owner rather than inventing priority.

@@ -121,9 +121,11 @@ They do not override the corrected master or restore rejected scope.
 
 For first-time implementation, Stage 0 through Gate D are retained execution
 responsibilities. Stage 0 may decide no decomposition is required, and Gate A's
-plan may be concise for straightforward work. The sequence does not create
-automatic transitions, does not require elaborate artifacts, and does not
-define production-readiness scope.
+plan may be concise for straightforward work. An accepted parent decomposition
+does not rerun Stage 0 for each later child while current authority, dependencies,
+and repository truth still support it; those children begin at Gate A. The
+sequence does not create automatic transitions, does not require elaborate
+artifacts, and does not define production-readiness scope.
 
 ## 5. Document Map And Routing Indexes
 
@@ -140,7 +142,9 @@ define production-readiness scope.
 | `docs/production-readiness/planning/program/pickup-lane-production-readiness-remediation-plan-final.md` | Historical remediation provenance; not current scope authority. |
 | `docs/production-readiness/decisions/` | Historical owner decisions and supporting context; current product authority only where the corrected master or current task still adopts it. |
 | `docs/production-readiness/governance/` | Supporting operational and ownership context; not authority for rejected scope. |
-| `docs/production-readiness/planning/templates/` | Optional legacy drafting aids; no template is mandatory merely because it exists. |
+| `docs/production-readiness/planning/templates/PASS-PLANNING-TEMPLATE.md` | Required plan structure whenever Gate A creates a durable implementation plan. |
+| `docs/production-readiness/planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md` | Current PR-authoring guidance used by implementation Gate D. |
+| `docs/production-readiness/planning/templates/` | Other templates are supporting aids unless the applicable workflow explicitly requires one. |
 | `docs/agent-notes/` | Repository engineering and testing guidance used when its technical scope applies. |
 | `backend/tests/README.md` | Backend test organization, execution, and safety guidance. |
 | `backend/tests/` | Current backend tests, evaluated by usefulness and correctness rather than trusted/legacy labels. |
@@ -180,13 +184,18 @@ truth.
 
 For first-time implementation:
 
-- perform Stage 0 scope reconciliation and decide whether the unit executes
-  whole, decomposes, or needs a deferred follow-up;
+- perform Stage 0 scope reconciliation before first work under a selected unit
+  and decide whether it executes whole, decomposes, or needs a deferred
+  follow-up;
+- when an accepted parent decomposition remains valid, start each later child at
+  Gate A instead of repeating Stage 0;
 - perform Gate A engineering planning and plan review, using a concise plan for
-  straightforward work;
+  straightforward work and the current `PASS-PLANNING-TEMPLATE.md` whenever the
+  plan is a durable document;
 - implement and test as Gate B work;
 - perform an independent read-only semantic review as Gate C work;
-- perform Git/PR publication as Gate D work only when requested;
+- perform Git/PR publication as Gate D work only when requested, using the
+  current `PASS-PR-DESCRIPTION-TEMPLATE.md` for the PR body;
 - keep PR merge manual.
 
 For an accepted-pass recheck, normally perform Gate A through Gate D. Return to
@@ -234,9 +243,14 @@ Deferred provider/runtime work must retain an owner, trigger, prerequisites, and
 required completion boundary. It does not count as evidence while deferred and
 blocks only work that actually depends on the missing fact.
 
-After merge, choose subsequent work from the corrected master, current
-repository truth, real prerequisites, deferred-trigger state, and owner
-direction. Do not use automatic progression.
+After merge, verify the intended merge, switch local `develop` back to the
+current `origin/develop` state using the normal safe fast-forward path, and
+reconcile factual execution-register state when needed. Then choose subsequent
+work from the corrected master, current repository truth, real prerequisites,
+deferred-trigger state, and owner direction. Do not use automatic progression.
+If the next unit is a later child of an accepted decomposition that remains
+valid, begin that child at Gate A; otherwise perform Stage 0 for new first-time
+scope.
 
 ## 10. Essential Terminology
 
@@ -262,12 +276,17 @@ direction. Do not use automatic progression.
 Before acting, identify:
 
 - the corrected-master unit and intended outcome;
-- current repository truth and accepted baseline;
+- current repository truth and the accepted `develop` starting state;
 - applicable prerequisites and ownership;
 - relevant technical and testing guidance;
 - provider-neutral versus late-bound facts;
 - requested edit, validation, review, and publication boundaries.
 
-Read an intake, plan, historical decision, remediation record, template, or
-external evidence artifact only when it materially helps answer one of those
-questions. No reusable artifact or document matrix is mandatory by default.
+Read an accepted intake or current plan when the selected work has one. When
+authoring a durable Gate A plan, use `PASS-PLANNING-TEMPLATE.md`; when publishing
+a first-time implementation at Gate D, use `PASS-PR-DESCRIPTION-TEMPLATE.md`.
+Read other historical decisions, remediation records, templates, or external
+evidence only when they materially help answer one of the questions above. Do
+not routinely calculate, freeze, compare, record, or verify hashes for
+baselines, intakes, plans, or artifacts; normal Git safety checks remain
+required.
