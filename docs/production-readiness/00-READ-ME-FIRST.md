@@ -30,25 +30,28 @@ Before production-readiness work:
    `planning/program/pickup-lane-master-production-readiness-blueprint.md`.
 4. Check `planning/program/PASS-EXECUTION-REGISTER.md` for factual accepted,
    unmerged, and remaining-work state.
-5. Select the implementation or recheck workflow.
-6. Inspect current repository truth and read only the plans, technical standards,
-   product documents, provider records, or historical material relevant to the
-   selected work.
-7. Verify current Git state, baseline, branch, intended scope, and staged state
-   before editing.
+5. Use the workflow-selection section below to enter the applicable workflow.
+6. Follow that workflow's stage-specific routing to the current plan, technical
+   standards, product documents, provider records, or historical material needed
+   for the selected work.
+7. Verify the current branch, its relationship to accepted `origin/develop`, the
+   worktree, intended scope, and staged state before editing.
 
-Historical plans, SHAs, audits, remediation documents, decisions, templates,
-and local session notes are optional context, not mandatory inputs or authority
-over the corrected master.
+Historical plans, SHAs, audits, remediation documents, decisions, and local
+session notes are optional context, not mandatory inputs or authority over the
+corrected master. Current templates required by the applicable workflow are
+used at the stage that workflow identifies.
 
 ## Workflow Selection
 
-Use `PASS-IMPLEMENTATION-WORKFLOW.md` when a pass is being implemented for the
-first time from current authority and current accepted `develop`.
+Use `planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md` when a pass is being
+implemented for the first time from current authority and current accepted
+`develop`.
 
-Use `PASS-RECHECK-WORKFLOW.md` when a pass already accepted into `develop`, or
-historical implementation that predates the current workflow, is being
-revalidated against current authority, source, and evidence standards.
+Use `planning/workflows/PASS-RECHECK-WORKFLOW.md` when a pass already accepted
+into `develop`, or historical implementation that predates the current
+workflow, is being revalidated against current authority, source, and evidence
+standards.
 
 When workflow selection is unclear, stop and report the ambiguity instead of
 inventing a hybrid process.
@@ -66,10 +69,18 @@ SCOPE, RECONCILIATION, AND DECOMPOSITION DECISION / STAGE 0
 -> MANUAL MERGE
 ```
 
-Stage 0 and Gate A responsibilities are part of every first-time implementation.
-Stage 0 may decide that no decomposition is needed, and Gate A may use a concise
-plan for straightforward work. Durable intake or plan documents are required
-only when the current instruction or the work itself requires them.
+Stage 0 is required before first-time work begins for a selected corrected-master
+unit. When an accepted Stage 0 result has already decomposed a parent, that result
+also satisfies Stage 0 for its later children while current authority,
+dependencies, and repository truth still support it; each child still performs
+Gate A. Return to Stage 0 only when those facts make the accepted decomposition
+invalid. Stage 0 may decide that no decomposition is needed, and Gate A may use a
+concise plan for straightforward work.
+
+Durable intake or plan documents are required only when the current instruction
+or the work itself requires them. When Gate A creates a durable plan, it must use
+`planning/templates/PASS-PLANNING-TEMPLATE.md`. Gate D uses
+`planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md` for the pull-request body.
 
 The sequence does not create automatic orchestration. A user instruction
 authorizes only the stage, work, and boundaries it actually states. The
@@ -181,8 +192,9 @@ Before acting, resolve the binding requirements of the current instruction.
 
 Treat explicit scope, editable files, requested validation, review or
 publication boundaries, stop conditions, and `must` / `must not` instructions
-as constraints. A path or SHA is binding when the current owner instruction
-specifically makes it so; neither is a universal workflow requirement.
+as constraints. A path or specifically requested integrity check is binding
+when the current owner instruction makes it so; neither is a universal workflow
+requirement.
 
 If an instruction conflicts with the corrected master, repository truth, or a
 required safety boundary, stop and report the issue. Never silently substitute
@@ -196,12 +208,16 @@ instruction. Correct an in-scope mismatch or report it honestly.
 Stage 0 scope/reconciliation/decomposition and Gate A engineering planning and
 plan review are required first-time workflow responsibilities. Durable intake
 and plan documents are optional unless the current instruction or the work
-requires them. When created, keep them current and route a material scope change
-back to Stage 0 or Gate A before implementation continues.
+requires them. When Gate A creates a durable plan, use the current
+`planning/templates/PASS-PLANNING-TEMPLATE.md` as its required structure. Keep
+the plan current and route a material scope change back to Stage 0 or Gate A
+before implementation continues.
 
-Historical artifact SHAs may be retained as provenance or used when a specific
-instruction requests an integrity check. They are not mandatory production-
-readiness infrastructure.
+Do not routinely calculate, freeze, compare, record, or verify SHAs or other
+hashes for baselines, intakes, plans, or artifacts. Normal Git commit identity
+continues to exist through ordinary repository work. Existing historical hashes
+may remain as provenance, and a current instruction may require a specific
+integrity check, but hash bookkeeping is not production-readiness workflow.
 
 ## Current Session Context
 
@@ -222,8 +238,9 @@ Tracked production-readiness documentation may contain:
 - requirements and technical identifiers;
 - sanitized evidence and validation summaries;
 - public provider names;
-- pass-specific branches, baselines, commits, or artifact hashes only when they
-  are genuinely useful.
+- normal Git branch or commit references when they are genuinely useful;
+- historical artifact hashes already retained as provenance, without adding
+  routine hash bookkeeping to new work.
 
 Tracked production-readiness documentation excludes:
 
@@ -249,14 +266,17 @@ Tracked production-readiness documentation excludes:
 - the corrected master blueprint;
 - this read-first entry point and Program Context;
 - the execution register;
-- implementation and recheck workflow guidance.
+- implementation and recheck workflow guidance;
+- `planning/templates/PASS-PLANNING-TEMPLATE.md` when Gate A creates a durable
+  plan;
+- `planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md` when implementation Gate
+  D publishes a production-readiness PR.
 
 ### Supporting Or Historical Context
 
 - `governance/`, `audit-research/`, and `decisions/`;
 - the old remediation plan;
-- existing pass intakes and plans;
-- optional planning and PR templates.
+- existing pass intakes and plans.
 
 Supporting or historical material remains useful when relevant, but it is not a
 second production-readiness scope authority.
@@ -280,6 +300,13 @@ staged files, protect sensitive information, avoid destructive history changes
 and force-pushes, and leave the PR open.
 
 PR merge remains a deliberate manual repository action.
+
+After a manual merge, follow the implementation workflow's post-merge sequence:
+verify the intended merge, return local `develop` to current `origin/develop`,
+reconcile factual execution state when needed, and then select the next eligible
+unit from current authority, dependencies, repository truth, and owner direction.
+If that unit is a later child of an accepted decomposition that remains valid, it
+begins at Gate A rather than repeating Stage 0.
 
 Separate explicit authorization is required for destructive or irreversible
 provider, runtime, database, deployment, credential, or real-data operations
