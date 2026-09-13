@@ -236,7 +236,15 @@ def test_community_hide_rejects_delete_committed_after_initial_resolution(
         game = db.get(Game, game_id)
         assert game.deleted_at is not None
         assert game.public_visibility_status == "visible"
-        assert _count(db, AdminAction, AdminAction.target_game_id == game_id) == 0
+        assert (
+            _count(
+                db,
+                AdminAction,
+                AdminAction.target_game_id == game_id,
+                AdminAction.action_type == "delete_game",
+            )
+            == 1
+        )
         assert (
             _count(db, AdminTargetNotice, AdminTargetNotice.target_game_id == game_id)
             == 0

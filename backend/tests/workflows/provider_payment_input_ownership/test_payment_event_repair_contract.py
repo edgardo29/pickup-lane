@@ -25,7 +25,7 @@ def _user():
     return User(
         id=uuid.uuid4(),
         auth_user_id=f"ws02-04b2a2b2-event-user-{unique}",
-        role="player",
+        role="admin",
         email=f"ws02-04b2a2b2-event-{unique}@example.invalid",
         first_name="Payment",
         last_name="Event",
@@ -112,6 +112,7 @@ def test_payment_event_repair_persists_allowed_fields_without_mutating_provider_
             PaymentEventUpdate(
                 payment_id=payment.id,
             ),
+            user,
         )
 
         assert result.payment_id == payment.id
@@ -143,8 +144,9 @@ def test_rejected_payment_event_repair_does_not_change_persisted_state() -> None
     from backend.services.payment_event_service import update_payment_event_record
 
     with _session() as db:
+        admin = _user()
         event = _payment_event()
-        db.add(event)
+        db.add_all([admin, event])
         db.commit()
 
         with pytest.raises(HTTPException):
@@ -152,6 +154,7 @@ def test_rejected_payment_event_repair_does_not_change_persisted_state() -> None
                 db,
                 event.id,
                 PaymentEventUpdate(payment_id=uuid.uuid4()),
+                admin,
             )
         db.rollback()
 

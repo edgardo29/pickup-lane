@@ -35,6 +35,11 @@ from backend.schemas.game_schema import (
     MyGameCardRead,
     MyGamesListRead,
 )
+from backend.services.admin_action_service import (
+    AUDIT_UNAVAILABLE_DETAIL,
+    integrity_error_matches_table,
+    record_admin_action,
+)
 from backend.services.admin_review_service import (
     close_open_content_moderation_case_for_game_lifecycle,
 )
@@ -178,6 +183,7 @@ def get_locked_game_or_404(
             Game.id == game_id,
             Game.deleted_at.is_(None),
         )
+        .execution_options(populate_existing=True)
         .with_for_update()
     )
 
@@ -1283,10 +1289,13 @@ def update_game_workflow(
     game_update: GameUpdate,
     admin_user: User | None = None,
 ) -> Game:
-    db_game = get_game_or_404(db, game_id)
+    db_game = get_locked_game_or_404(db, game_id)
     old_game_status = db_game.game_status
 
     update_data = game_update.model_dump(exclude_unset=True)
+    submitted_prior_values = {
+        field_name: getattr(db_game, field_name) for field_name in update_data
+    }
     reject_official_location_change(db_game, update_data)
     reject_direct_official_host_change(db_game, update_data)
 
@@ -1413,6 +1422,12 @@ def update_game_workflow(
     for field_name, field_value in update_data.items():
         setattr(db_game, field_name, field_value)
 
+    changed_fields = sorted(
+        field_name
+        for field_name, prior_value in submitted_prior_values.items()
+        if getattr(db_game, field_name) != prior_value
+    )
+
     db_game.updated_at = now
     if (
         db_game.game_type == "community"
@@ -1444,15 +1459,38 @@ def update_game_workflow(
 
     try:
         db.add(db_game)
+        if admin_user is not None:
+            try:
+                record_admin_action(
+                    db,
+                    admin_user_id=admin_user.id,
+                    action_type="update_game",
+                    outcome="succeeded",
+                    target_game_id=db_game.id,
+                    metadata={"changed_fields": changed_fields},
+                )
+            except (HTTPException, ValueError):
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=AUDIT_UNAVAILABLE_DETAIL,
+                ) from None
+        db.flush()
         db.commit()
-        db.refresh(db_game)
     except IntegrityError as exc:
+        audit_failure = integrity_error_matches_table(exc, "admin_actions")
         db.rollback()
+        if audit_failure:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_game_conflict_detail(exc),
         ) from exc
 
+    db.refresh(db_game)
     return db_game
 
 
@@ -1461,7 +1499,7 @@ def delete_game_workflow(
     game_id: uuid.UUID,
     admin_user: User,
 ) -> Game:
-    db_game = get_game_or_404(db, game_id)
+    db_game = get_locked_game_or_404(db, game_id)
 
     if db_game.game_type == "official":
         raise HTTPException(
@@ -1493,15 +1531,41 @@ def delete_game_workflow(
                 new_game_status="soft_deleted",
                 closed_at=now,
             )
+        try:
+            record_admin_action(
+                db,
+                admin_user_id=admin_user.id,
+                action_type="delete_game",
+                outcome="succeeded",
+                target_game_id=db_game.id,
+                metadata={
+                    "source": "admin_soft_delete",
+                    "before": {"deleted": False},
+                    "after": {"deleted": True},
+                },
+            )
+        except (HTTPException, ValueError):
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
+        db.flush()
         db.commit()
-        db.refresh(db_game)
     except IntegrityError as exc:
+        audit_failure = integrity_error_matches_table(exc, "admin_actions")
         db.rollback()
+        if audit_failure:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_game_conflict_detail(exc),
         ) from exc
 
+    db.refresh(db_game)
     return db_game
 
 

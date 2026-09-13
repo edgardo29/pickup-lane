@@ -7,15 +7,18 @@ from backend.database import get_db
 from backend.models import User, Venue
 from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import VenueRead
-from backend.services.auth_service import require_active_admin, require_recent_active_admin
-from backend.services.venue_service import (
-    delete_venue_record,
-    get_public_venue_or_404,
-    list_public_venue_records,
+from backend.services.auth_service import (
+    require_active_admin,
+    require_recent_active_admin,
 )
 from backend.services.query_pagination import (
     DEFAULT_COLLECTION_LIMIT,
     MAX_COLLECTION_LIMIT,
+)
+from backend.services.venue_service import (
+    delete_venue_record,
+    get_public_venue_or_404,
+    list_public_venue_records,
 )
 
 router = APIRouter(prefix="/venues", tags=["venues"])
@@ -76,5 +79,4 @@ def delete_venue(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_recent_active_admin),
 ) -> Venue:
-    del current_admin
-    return delete_venue_record(db, venue_id)
+    return delete_venue_record(db, venue_id, current_admin)

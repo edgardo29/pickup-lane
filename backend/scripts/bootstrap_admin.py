@@ -15,6 +15,9 @@ from backend.firebase_admin_client import (
 )
 from backend.models import User
 from backend.services.auth_account_service import add_missing_user_context_rows
+from backend.settings import AppEnvironment, build_settings
+
+PRODUCTION_UNAVAILABLE_MESSAGE = "Admin bootstrap is unavailable in production."
 
 
 class BootstrapAdminError(RuntimeError):
@@ -52,6 +55,10 @@ def verify_firebase_user(email: str, user: User) -> None:
 
 
 def bootstrap_admin(email: str) -> User:
+    settings = build_settings(load_dotenv_file=True, validate_full=False)
+    if settings.app_env is AppEnvironment.PRODUCTION:
+        raise BootstrapAdminError(PRODUCTION_UNAVAILABLE_MESSAGE)
+
     normalized_email = email.strip().lower()
 
     if not normalized_email or "@" not in normalized_email:

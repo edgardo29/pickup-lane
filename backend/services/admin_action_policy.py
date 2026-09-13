@@ -10,6 +10,7 @@ TARGET_GAME_ID = "target_game_id"
 TARGET_BOOKING_ID = "target_booking_id"
 TARGET_PARTICIPANT_ID = "target_participant_id"
 TARGET_PAYMENT_ID = "target_payment_id"
+TARGET_PAYMENT_EVENT_ID = "target_payment_event_id"
 TARGET_REFUND_ID = "target_refund_id"
 TARGET_GAME_CREDIT_ID = "target_game_credit_id"
 TARGET_CREDIT_USAGE_ID = "target_credit_usage_id"
@@ -36,6 +37,7 @@ ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_BOOKING_ID,
     TARGET_PARTICIPANT_ID,
     TARGET_PAYMENT_ID,
+    TARGET_PAYMENT_EVENT_ID,
     TARGET_REFUND_ID,
     TARGET_GAME_CREDIT_ID,
     TARGET_CREDIT_USAGE_ID,
@@ -322,6 +324,39 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID,)),),
         allowed_target_fields=target_set(TARGET_GAME_ID),
         metadata_builder_key="official_game",
+    ),
+    "create_community_game_detail": AdminActionPolicy(
+        action_type="create_community_game_detail",
+        required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID,)),),
+        allowed_target_fields=target_set(TARGET_GAME_ID),
+        metadata_builder_key="support",
+    ),
+    "update_community_game_detail": AdminActionPolicy(
+        action_type="update_community_game_detail",
+        required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID,)),),
+        allowed_target_fields=target_set(TARGET_GAME_ID),
+        metadata_builder_key="support",
+    ),
+    "delete_game": AdminActionPolicy(
+        action_type="delete_game",
+        required_target_rules=(TargetRule(all_of=(TARGET_GAME_ID,)),),
+        allowed_target_fields=target_set(TARGET_GAME_ID),
+        metadata_builder_key="support",
+    ),
+    "delete_venue": AdminActionPolicy(
+        action_type="delete_venue",
+        required_target_rules=(TargetRule(all_of=(TARGET_VENUE_ID,)),),
+        allowed_target_fields=target_set(TARGET_VENUE_ID),
+        metadata_builder_key="support",
+    ),
+    "update_payment_event": AdminActionPolicy(
+        action_type="update_payment_event",
+        required_target_rules=(TargetRule(all_of=(TARGET_PAYMENT_EVENT_ID,)),),
+        allowed_target_fields=target_set(
+            TARGET_PAYMENT_EVENT_ID,
+            TARGET_PAYMENT_ID,
+        ),
+        metadata_builder_key="money",
     ),
     "create_game_chat": AdminActionPolicy(
         action_type="create_game_chat",

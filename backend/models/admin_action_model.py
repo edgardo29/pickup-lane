@@ -52,7 +52,10 @@ class AdminAction(Base):
                 "'reveal_game_chat_message_content', "
                 "'read_need_sub_chat_moderation', "
                 "'reveal_need_sub_chat_message_content', "
-                "'read_review_case_sensitive_detail'"
+                "'read_review_case_sensitive_detail', "
+                "'create_community_game_detail', "
+                "'update_community_game_detail', 'delete_game', "
+                "'delete_venue', 'update_payment_event'"
                 ")"
             ),
             name="ck_admin_actions_action_type",
@@ -68,6 +71,7 @@ class AdminAction(Base):
                 "OR target_booking_id IS NOT NULL "
                 "OR target_participant_id IS NOT NULL "
                 "OR target_payment_id IS NOT NULL "
+                "OR target_payment_event_id IS NOT NULL "
                 "OR target_refund_id IS NOT NULL "
                 "OR target_game_credit_id IS NOT NULL "
                 "OR target_credit_usage_id IS NOT NULL "
@@ -103,6 +107,10 @@ class AdminAction(Base):
         Index("ix_admin_actions_target_booking_id", "target_booking_id"),
         Index("ix_admin_actions_target_participant_id", "target_participant_id"),
         Index("ix_admin_actions_target_payment_id", "target_payment_id"),
+        Index(
+            "ix_admin_actions_target_payment_event_id",
+            "target_payment_event_id",
+        ),
         Index("ix_admin_actions_target_refund_id", "target_refund_id"),
         Index("ix_admin_actions_target_game_credit_id", "target_game_credit_id"),
         Index("ix_admin_actions_target_credit_usage_id", "target_credit_usage_id"),
@@ -447,6 +455,10 @@ class AdminAction(Base):
     )
 
     target_payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
+    target_payment_event_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 

@@ -20,6 +20,7 @@ from backend.services.account_deletion_service import (
     cancel_future_user_activity,
     cancel_owned_need_a_sub_posts,
 )
+from backend.services.admin_action_service import AUDIT_UNAVAILABLE_DETAIL
 from backend.services.game_rules import VALID_GAME_STATUSES
 from backend.services.game_service import delete_game_workflow
 from backend.services.need_a_sub_post_service import remove_sub_post
@@ -304,9 +305,71 @@ def test_active_game_delete_closes_only_the_content_case() -> None:
             trigger_actor_type="admin",
             new_target_state="soft_deleted",
         )
+        delete_actions = list(
+            db.scalars(
+                select(AdminAction).where(
+                    AdminAction.action_type == "delete_game",
+                    AdminAction.target_game_id == game_id,
+                )
+            ).all()
+        )
+        assert len(delete_actions) == 1
+        assert delete_actions[0].admin_user_id == admin.id
+        assert event_rows(db, content_case_id)[-1].admin_action_id is None
         chat_case = db.get(AdminReviewCase, chat_case_id)
         assert chat_case.case_status == "open"
         assert chat_case.case_version == 2
+
+
+@pytest.mark.parametrize("audit_failure", ["validation", "constraint"])
+def test_game_delete_audit_failure_rolls_back_review_case_closure(
+    monkeypatch: pytest.MonkeyPatch,
+    audit_failure: str,
+) -> None:
+    from backend.services import game_service
+
+    with session() as db:
+        game = seed_game(db)
+        admin = seed_admin(db)
+        review_case = create_content_case(db, game)
+        game_id = game.id
+        review_case_id = review_case.id
+
+        def fail_recording(owner_db, **kwargs):
+            if audit_failure == "validation":
+                raise HTTPException(status_code=400, detail="private audit policy")
+            owner_db.add(
+                AdminAction(
+                    id=uuid.uuid4(),
+                    admin_user_id=kwargs["admin_user_id"],
+                    action_type="invalid_private_action",
+                    outcome="succeeded",
+                    correlation_id=uuid.uuid4(),
+                    target_game_id=game_id,
+                )
+            )
+
+        monkeypatch.setattr(game_service, "record_admin_action", fail_recording)
+        with pytest.raises(HTTPException) as exc_info:
+            delete_game_workflow(db, game_id, admin)
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail == AUDIT_UNAVAILABLE_DETAIL
+
+    with session() as db:
+        assert db.get(Game, game_id).deleted_at is None
+        persisted_case = db.get(AdminReviewCase, review_case_id)
+        assert persisted_case.case_status == "open"
+        assert persisted_case.case_version == 2
+        assert len(event_rows(db, review_case_id)) == 2
+        assert (
+            count_rows(
+                db,
+                AdminAction,
+                AdminAction.action_type == "delete_game",
+                AdminAction.target_game_id == game_id,
+            )
+            == 0
+        )
 
 
 @pytest.mark.parametrize("game_status", sorted(GAME_TERMINAL_DELETE_STATES))

@@ -398,11 +398,15 @@ def test_stable_chat_rule_keys_persist_and_serialize_in_both_chat_domains() -> N
             assert {
                 category: detection.rule_key for category, detection in selected.items()
             } == expected
-            assert {
-                item.category: item.rule_key
-                for item in serialize_detections(persisted)
+            serialized = [
+                item for item in serialize_detections(persisted)
                 if item.category in expected
-            } == expected
+            ]
+            assert {item.category for item in serialized} == set(expected)
+            assert all(
+                set(item.model_dump()) == {"category", "severity"}
+                for item in serialized
+            )
 
 
 @pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3")

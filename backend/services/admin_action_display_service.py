@@ -62,6 +62,7 @@ from backend.services.admin_action_policy import (
     TARGET_MONEY_ISSUE_ID,
     TARGET_NOTIFICATION_ID,
     TARGET_PARTICIPANT_ID,
+    TARGET_PAYMENT_EVENT_ID,
     TARGET_PAYMENT_ID,
     TARGET_PLATFORM_NOTICE_ID,
     TARGET_REFUND_ID,
@@ -453,6 +454,10 @@ TARGET_DISPLAY_RULES: dict[str, TargetDisplayRule] = {
     ),
 }
 
+ID_ONLY_TARGET_TYPE_LABELS = {
+    TARGET_PAYMENT_EVENT_ID: "Payment event",
+}
+
 
 ACTION_DISPLAY_RULES: dict[str, AdminActionDisplayRule] = {
     "cancel_game": AdminActionDisplayRule(
@@ -587,6 +592,34 @@ ACTION_DISPLAY_RULES: dict[str, AdminActionDisplayRule] = {
         "update_game",
         "Game updated",
         (PrimaryTargetRule(TARGET_GAME_ID, "Game"),),
+    ),
+    "create_community_game_detail": AdminActionDisplayRule(
+        "create_community_game_detail",
+        "Community game detail created",
+        (PrimaryTargetRule(TARGET_GAME_ID, "Community game"),),
+    ),
+    "update_community_game_detail": AdminActionDisplayRule(
+        "update_community_game_detail",
+        "Community game detail updated",
+        (PrimaryTargetRule(TARGET_GAME_ID, "Community game"),),
+    ),
+    "delete_game": AdminActionDisplayRule(
+        "delete_game",
+        "Game deleted",
+        (PrimaryTargetRule(TARGET_GAME_ID, "Game"),),
+    ),
+    "delete_venue": AdminActionDisplayRule(
+        "delete_venue",
+        "Venue deleted",
+        (PrimaryTargetRule(TARGET_VENUE_ID, "Venue"),),
+    ),
+    "update_payment_event": AdminActionDisplayRule(
+        "update_payment_event",
+        "Payment event updated",
+        (
+            PrimaryTargetRule(TARGET_PAYMENT_EVENT_ID, "Payment event"),
+            PrimaryTargetRule(TARGET_PAYMENT_ID, "Payment"),
+        ),
     ),
     "create_game_chat": AdminActionDisplayRule(
         "create_game_chat",
@@ -946,9 +979,14 @@ def selected_target_rules(action: AdminAction) -> tuple[PrimaryTargetRule, ...]:
     if display_rule is None:
         return tuple(
             PrimaryTargetRule(
-                field_name, TARGET_DISPLAY_RULES[field_name].fallback_type_label
+                field_name,
+                (
+                    TARGET_DISPLAY_RULES[field_name].fallback_type_label
+                    if field_name in TARGET_DISPLAY_RULES
+                    else ID_ONLY_TARGET_TYPE_LABELS[field_name]
+                ),
             )
-            for field_name in TARGET_DISPLAY_RULES
+            for field_name in (*TARGET_DISPLAY_RULES, *ID_ONLY_TARGET_TYPE_LABELS)
         )
     return display_rule.primary_targets
 
@@ -963,7 +1001,8 @@ def collect_primary_target_ids(
         for target_rule in selected_target_rules(action):
             target_id = getattr(action, target_rule.field_name, None)
             if target_id is not None:
-                ids_by_field[target_rule.field_name].add(target_id)
+                if target_rule.field_name in ids_by_field:
+                    ids_by_field[target_rule.field_name].add(target_id)
                 break
 
     return {
@@ -1004,6 +1043,17 @@ def build_target_summary(
     target_id = getattr(action, target_rule.field_name, None)
     if target_id is None:
         return None
+
+    id_only_type_label = ID_ONLY_TARGET_TYPE_LABELS.get(target_rule.field_name)
+    if id_only_type_label is not None:
+        return AdminActionLogTargetSummaryRead(
+            target_field=target_rule.field_name,
+            target_type=type_key_from_label(id_only_type_label),
+            target_type_label=id_only_type_label,
+            target_id=target_id,
+            label=full_id_label(id_only_type_label, target_id),
+            destination_path=None,
+        )
 
     display_rule = TARGET_DISPLAY_RULES.get(target_rule.field_name)
     if display_rule is None:
