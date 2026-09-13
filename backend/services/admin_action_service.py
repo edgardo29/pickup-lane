@@ -364,6 +364,15 @@ def integrity_error_matches_constraint(
     return getattr(diagnostic, "constraint_name", None) == expected_constraint_name
 
 
+def integrity_error_matches_table(
+    exc: IntegrityError,
+    expected_table_name: str,
+) -> bool:
+    """Return whether PostgreSQL identified one exact table for the failure."""
+    diagnostic = getattr(exc.orig, "diag", None)
+    return getattr(diagnostic, "table_name", None) == expected_table_name
+
+
 def unsupported_action_type_response() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,

@@ -32,7 +32,7 @@ def test_every_production_admin_action_writer_uses_explicit_outcome_and_database
             and node.func.id == "record_admin_action"
         )
 
-    assert len(calls) == 46
+    assert len(calls) == 52
     for path, call in calls:
         keyword_names = {keyword.arg for keyword in call.keywords}
         assert "outcome" in keyword_names, path

@@ -9,8 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.models import DurableJob, Payment, PaymentEvent
+from backend.models import DurableJob, Payment, PaymentEvent, User
 from backend.schemas.payment_event_schema import PaymentEventCreate, PaymentEventUpdate
+from backend.services.admin_action_service import (
+    AUDIT_UNAVAILABLE_DETAIL,
+    integrity_error_matches_table,
+    record_admin_action,
+)
 from backend.services.durable_job_service import requeue_exhausted_job
 from backend.services.payment_job_service import (
     PAYMENT_JOB_MAXIMUM_ATTEMPTS,
@@ -56,7 +61,7 @@ def build_payment_event_conflict_detail(exc: IntegrityError) -> str:
     if "ck_payment_events_event_type_not_empty" in error_text:
         return "event_type must not be empty."
 
-    return error_text
+    return "Payment event could not be saved."
 
 
 def get_payment_event_or_404(
@@ -254,17 +259,34 @@ def update_payment_event_record(
     db: Session,
     payment_event_id: uuid.UUID,
     payload: PaymentEventUpdate,
+    admin_user: User,
 ) -> PaymentEvent:
-    db_payment_event = get_payment_event_or_404(db, payment_event_id)
+    db_payment_event = db.scalar(
+        select(PaymentEvent)
+        .where(PaymentEvent.id == payment_event_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if db_payment_event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment event not found.",
+        )
 
     update_data = payload.model_dump(exclude_unset=True)
     validate_payment_event_update_fields(update_data)
 
+    prior_payment_id = db_payment_event.payment_id
+    prior_processing_status = db_payment_event.processing_status
+    prior_processed_at = db_payment_event.processed_at
+    prior_processing_error_code = db_payment_event.processing_error_code
     payment_id = update_data.get("payment_id", db_payment_event.payment_id)
     if payment_id is not None:
         get_payment_or_404(db, payment_id)
     db_payment_event.payment_id = payment_id
-    if update_data.get("reprocess"):
+    reprocess_requested = bool(update_data.get("reprocess"))
+    durable_work_action = "none"
+    if reprocess_requested:
         job = db.scalars(
             select(DurableJob)
             .where(
@@ -278,31 +300,91 @@ def update_payment_event_record(
         ).first()
         if job is None:
             enqueue_webhook_event_job(db, db_payment_event.id)
+            durable_work_action = "ensured"
         elif job.status == "exhausted":
-            requeue_exhausted_job(
+            was_requeued = requeue_exhausted_job(
                 db,
                 job_id=job.id,
                 maximum_attempts=PAYMENT_JOB_MAXIMUM_ATTEMPTS,
                 reason_code="payment_event_reprocess",
             )
+            if was_requeued:
+                durable_work_action = "requeued"
         elif job.status not in {"pending", "retry_waiting", "leased"}:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This payment event does not have requeueable durable work.",
             )
+        else:
+            durable_work_action = "already_active"
         db_payment_event.processing_status = "pending"
         db_payment_event.processed_at = None
         db_payment_event.processing_error_code = None
 
+    payment_link_changed = payment_id != prior_payment_id
+    lifecycle_changed = (
+        db_payment_event.processing_status != prior_processing_status
+        or db_payment_event.processed_at != prior_processed_at
+        or db_payment_event.processing_error_code != prior_processing_error_code
+    )
+    effective_change = (
+        payment_link_changed
+        or lifecycle_changed
+        or durable_work_action in {"ensured", "requeued"}
+    )
+
     try:
         db.add(db_payment_event)
+        if effective_change:
+            try:
+                record_admin_action(
+                    db,
+                    admin_user_id=admin_user.id,
+                    action_type="update_payment_event",
+                    outcome="succeeded",
+                    target_payment_event_id=db_payment_event.id,
+                    target_payment_id=db_payment_event.payment_id,
+                    metadata={
+                        "before": {
+                            "payment_id": (
+                                str(prior_payment_id)
+                                if prior_payment_id is not None
+                                else None
+                            ),
+                            "processing_status": prior_processing_status,
+                        },
+                        "after": {
+                            "payment_id": (
+                                str(db_payment_event.payment_id)
+                                if db_payment_event.payment_id is not None
+                                else None
+                            ),
+                            "processing_status": db_payment_event.processing_status,
+                            "reprocess_requested": reprocess_requested,
+                            "durable_work_action": durable_work_action,
+                        },
+                    },
+                )
+            except (HTTPException, ValueError):
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=AUDIT_UNAVAILABLE_DETAIL,
+                ) from None
+        db.flush()
         db.commit()
-        db.refresh(db_payment_event)
     except IntegrityError as exc:
+        audit_failure = integrity_error_matches_table(exc, "admin_actions")
         db.rollback()
+        if audit_failure:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_payment_event_conflict_detail(exc),
         ) from exc
 
+    db.refresh(db_payment_event)
     return db_payment_event

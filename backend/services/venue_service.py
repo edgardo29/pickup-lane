@@ -10,6 +10,11 @@ from sqlalchemy.orm import Session
 
 from backend.models import User, Venue
 from backend.schemas.venue_schema import VenueCreate, VenueUpdate
+from backend.services.admin_action_service import (
+    AUDIT_UNAVAILABLE_DETAIL,
+    integrity_error_matches_table,
+    record_admin_action,
+)
 from backend.services.query_pagination import (
     DEFAULT_COLLECTION_LIMIT,
     MAX_COLLECTION_LIMIT,
@@ -21,10 +26,8 @@ APPROVED_VENUE_STATUS = "approved"
 
 
 def build_venue_conflict_detail(exc: IntegrityError) -> str:
-    # The venues table does not currently have user-facing unique constraints,
-    # so fall back to the database error text for now if an integrity issue
-    # occurs.
-    return str(exc.orig)
+    del exc
+    return "Venue could not be saved."
 
 
 def normalize_venue_lookup_value(value: str | None) -> str:
@@ -273,8 +276,25 @@ def update_venue_record(
     return db_venue
 
 
-def delete_venue_record(db: Session, venue_id: uuid.UUID) -> Venue:
-    db_venue = get_existing_venue_or_404(db, venue_id)
+def delete_venue_record(
+    db: Session,
+    venue_id: uuid.UUID,
+    admin_user: User,
+) -> Venue:
+    db_venue = db.scalar(
+        select(Venue)
+        .where(Venue.id == venue_id, Venue.deleted_at.is_(None))
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+    if db_venue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Venue not found.",
+        )
+
+    prior_is_active = db_venue.is_active
+    prior_venue_status = db_venue.venue_status
     now = datetime.now(timezone.utc)
 
     db_venue.is_active = False
@@ -284,13 +304,47 @@ def delete_venue_record(db: Session, venue_id: uuid.UUID) -> Venue:
 
     try:
         db.add(db_venue)
+        try:
+            record_admin_action(
+                db,
+                admin_user_id=admin_user.id,
+                action_type="delete_venue",
+                outcome="succeeded",
+                target_venue_id=db_venue.id,
+                metadata={
+                    "source": "admin_soft_delete",
+                    "before": {
+                        "is_active": prior_is_active,
+                        "venue_status": prior_venue_status,
+                        "deleted": False,
+                    },
+                    "after": {
+                        "is_active": False,
+                        "venue_status": "inactive",
+                        "deleted": True,
+                    },
+                },
+            )
+        except (HTTPException, ValueError):
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
+        db.flush()
         db.commit()
-        db.refresh(db_venue)
     except IntegrityError as exc:
+        audit_failure = integrity_error_matches_table(exc, "admin_actions")
         db.rollback()
+        if audit_failure:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_venue_conflict_detail(exc),
         ) from exc
 
+    db.refresh(db_venue)
     return db_venue

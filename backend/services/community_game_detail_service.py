@@ -13,6 +13,11 @@ from backend.schemas.community_game_detail_schema import (
     CommunityGameDetailPublicRead,
     CommunityGameDetailUpdate,
 )
+from backend.services.admin_action_service import (
+    AUDIT_UNAVAILABLE_DETAIL,
+    integrity_error_matches_table,
+    record_admin_action,
+)
 from backend.services.game_rules import (
     HOST_EDITABLE_GAME_STATUSES,
     require_game_not_started,
@@ -33,7 +38,7 @@ def build_community_game_detail_conflict_detail(exc: IntegrityError) -> str:
     if "uq_community_game_details_game_id" in error_text:
         return "This game already has community game details."
 
-    return error_text
+    return "Community game details could not be saved."
 
 
 def get_community_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
@@ -92,7 +97,9 @@ def serialize_public_community_game_detail(
 
 
 def create_community_game_detail_workflow(
-    db: Session, community_game_detail: CommunityGameDetailCreate
+    db: Session,
+    community_game_detail: CommunityGameDetailCreate,
+    admin_user: User,
 ) -> CommunityGameDetail:
     detail_data = community_game_detail.model_dump()
     db_game = get_community_game_or_404(db, community_game_detail.game_id)
@@ -102,15 +109,43 @@ def create_community_game_detail_workflow(
 
     try:
         db.add(new_community_game_detail)
+        try:
+            record_admin_action(
+                db,
+                admin_user_id=admin_user.id,
+                action_type="create_community_game_detail",
+                outcome="succeeded",
+                target_game_id=new_community_game_detail.game_id,
+                metadata={
+                    "source": "admin_community_game_detail",
+                    "after": {
+                        "detail_present": True,
+                        "game_id": str(new_community_game_detail.game_id),
+                    },
+                },
+            )
+        except (HTTPException, ValueError):
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
+        db.flush()
         db.commit()
-        db.refresh(new_community_game_detail)
     except IntegrityError as exc:
+        audit_failure = integrity_error_matches_table(exc, "admin_actions")
         db.rollback()
+        if audit_failure:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_community_game_detail_conflict_detail(exc),
         ) from exc
 
+    db.refresh(new_community_game_detail)
     surface_community_game_text(db, game_id=new_community_game_detail.game_id)
     return new_community_game_detail
 
@@ -221,9 +256,13 @@ def update_community_game_detail_workflow(
     db: Session,
     community_game_detail_id: uuid.UUID,
     community_game_detail_update: CommunityGameDetailUpdate,
+    admin_user: User,
 ) -> CommunityGameDetail:
-    db_community_game_detail = db.get(
-        CommunityGameDetail, community_game_detail_id
+    db_community_game_detail = db.scalar(
+        select(CommunityGameDetail)
+        .where(CommunityGameDetail.id == community_game_detail_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
     )
 
     if db_community_game_detail is None:
@@ -233,6 +272,12 @@ def update_community_game_detail_workflow(
         )
 
     update_data = community_game_detail_update.model_dump(exclude_unset=True)
+    prior_game_id = db_community_game_detail.game_id
+    changed_fields = sorted(
+        field_name
+        for field_name, field_value in update_data.items()
+        if field_value != getattr(db_community_game_detail, field_name)
+    )
     effective_detail_data = {
         "game_id": update_data.get("game_id", db_community_game_detail.game_id),
         "payment_methods_snapshot": update_data.get(
@@ -254,15 +299,44 @@ def update_community_game_detail_workflow(
 
     try:
         db.add(db_community_game_detail)
+        try:
+            record_admin_action(
+                db,
+                admin_user_id=admin_user.id,
+                action_type="update_community_game_detail",
+                outcome="succeeded",
+                target_game_id=db_community_game_detail.game_id,
+                metadata={
+                    "source": "admin_community_game_detail",
+                    "before": {"game_id": str(prior_game_id)},
+                    "after": {
+                        "game_id": str(db_community_game_detail.game_id),
+                        "changed_fields": changed_fields,
+                    },
+                },
+            )
+        except (HTTPException, ValueError):
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
+        db.flush()
         db.commit()
-        db.refresh(db_community_game_detail)
     except IntegrityError as exc:
+        audit_failure = integrity_error_matches_table(exc, "admin_actions")
         db.rollback()
+        if audit_failure:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_community_game_detail_conflict_detail(exc),
         ) from exc
 
+    db.refresh(db_community_game_detail)
     surface_community_game_text(db, game_id=db_community_game_detail.game_id)
     return db_community_game_detail
 

@@ -147,7 +147,7 @@ def build_game_conflict_detail(exc: IntegrityError) -> str:
     if "ck_games_official_no_custom_cancellation" in error_text:
         return "Official games cannot use custom_cancellation_text."
 
-    return error_text
+    return "Game could not be saved."
 
 
 def game_requires_app_player_payment(db_game: Game) -> bool:

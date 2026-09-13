@@ -18,6 +18,7 @@ class AdminActionCreate(BaseModel):
     target_booking_id: UUID | None = None
     target_participant_id: UUID | None = None
     target_payment_id: UUID | None = None
+    target_payment_event_id: UUID | None = None
     target_refund_id: UUID | None = None
     target_game_credit_id: UUID | None = None
     target_credit_usage_id: UUID | None = None
@@ -60,6 +61,7 @@ class AdminActionRead(BaseModel):
     target_booking_id: UUID | None
     target_participant_id: UUID | None
     target_payment_id: UUID | None
+    target_payment_event_id: UUID | None
     target_refund_id: UUID | None
     target_game_credit_id: UUID | None
     target_credit_usage_id: UUID | None

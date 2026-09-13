@@ -15,8 +15,8 @@ from backend.schemas import (
 )
 from backend.services.auth_service import (
     get_optional_current_app_user,
-    require_active_user,
     require_active_admin,
+    require_active_user,
     require_verified_user,
 )
 from backend.services.community_game_detail_service import (
@@ -43,9 +43,13 @@ router = APIRouter(prefix="/community-game-details", tags=["community_game_detai
 def create_community_game_detail(
     community_game_detail: CommunityGameDetailCreate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_active_admin),
 ) -> CommunityGameDetail:
-    return create_community_game_detail_workflow(db, community_game_detail)
+    return create_community_game_detail_workflow(
+        db,
+        community_game_detail,
+        current_admin,
+    )
 
 
 @router.put(
@@ -131,8 +135,11 @@ def update_community_game_detail(
     community_game_detail_id: uuid.UUID,
     community_game_detail_update: CommunityGameDetailUpdate,
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_active_admin),
 ) -> CommunityGameDetail:
     return update_community_game_detail_workflow(
-        db, community_game_detail_id, community_game_detail_update
+        db,
+        community_game_detail_id,
+        community_game_detail_update,
+        current_admin,
     )

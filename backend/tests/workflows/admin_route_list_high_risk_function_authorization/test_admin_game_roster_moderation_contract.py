@@ -5,7 +5,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 
+from backend.models import Venue
 from backend.tests.workflows.admin_route_list_high_risk_function_authorization.test_admin_matrix_scope_and_dependencies_contract import (
     _add_users,
     _auth_headers,
@@ -1690,6 +1692,7 @@ def test_admin_generic_game_create_update_delete_preserves_admin_and_state_bound
     )
     assert update_response.status_code == 200
     assert update_response.json()["title"] == "WS03D Generic Game Updated"
+    assert _count_model_rows(AdminAction) == before_actions + 1
 
     before_delete_state = _game_state(game_id)
     stale_delete = client.delete(
@@ -1698,7 +1701,7 @@ def test_admin_generic_game_create_update_delete_preserves_admin_and_state_bound
     )
     assert stale_delete.status_code == 403
     assert _game_state(game_id) == before_delete_state
-    assert _count_model_rows(AdminAction) == before_actions
+    assert _count_model_rows(AdminAction) == before_actions + 1
 
     delete_response = client.delete(
         f"/games/{game_id}",
@@ -1709,6 +1712,17 @@ def test_admin_generic_game_create_update_delete_preserves_admin_and_state_bound
         deleted_game = db.get(Game, game_id)
         assert deleted_game is not None
         assert deleted_game.deleted_at is not None
+        actions = list(
+            db.scalars(
+                select(AdminAction)
+                .where(AdminAction.target_game_id == game_id)
+                .order_by(AdminAction.created_at, AdminAction.id)
+            ).all()
+        )
+        assert [action.action_type for action in actions] == [
+            "update_game",
+            "delete_game",
+        ]
 
 
 @pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R10")

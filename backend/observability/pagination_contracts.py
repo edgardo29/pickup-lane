@@ -35,7 +35,6 @@ class PaginationHandoff:
 
 
 PAGINATION_CONTRACTS = (
-    PaginationContract("GET", "/admin/actions", "limit", 100, 200, "route", "created_at/id"),
     PaginationContract(
         "GET",
         "/admin/actions/log",

@@ -9,14 +9,21 @@ from backend.scripts.demo_data.chats import MESSAGES_PER_CHAT, seed_game_chats
 from backend.scripts.demo_data.games import ALL_DEMO_GAMES, seed_games
 from backend.scripts.demo_data.images import seed_game_images
 from backend.scripts.demo_data.notifications import seed_notifications
-from backend.scripts.demo_data.payment_methods import seed_user_payment_methods
 from backend.scripts.demo_data.participants import seed_participants
+from backend.scripts.demo_data.payment_methods import seed_user_payment_methods
 from backend.scripts.demo_data.profile import seed_user_profile_context
 from backend.scripts.demo_data.users import seed_users
 from backend.scripts.demo_data.venues import seed_venues
+from backend.settings import AppEnvironment, build_settings
+
+PRODUCTION_UNAVAILABLE_MESSAGE = "Demo data seeding is unavailable in production."
 
 
 def seed_demo_browse() -> None:
+    settings = build_settings(load_dotenv_file=True, validate_full=False)
+    if settings.app_env is AppEnvironment.PRODUCTION:
+        raise RuntimeError(PRODUCTION_UNAVAILABLE_MESSAGE)
+
     with SessionLocal() as db:
         users = seed_users(db)
         db.flush()

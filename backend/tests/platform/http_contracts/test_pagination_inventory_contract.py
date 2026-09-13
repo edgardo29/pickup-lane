@@ -101,9 +101,9 @@ def test_pagination_contract_and_handoff_counts_are_current_live_and_disjoint(
     contract_keys = pagination_contract_keys()
     handoff_keys = pagination_handoff_keys()
 
-    assert len(PAGINATION_CONTRACTS) == 77
+    assert len(PAGINATION_CONTRACTS) == 75
     assert len(PAGINATION_HANDOFFS) == 0
-    assert len(contract_keys) == 77
+    assert len(contract_keys) == 75
     assert len(handoff_keys) == 0
     assert contract_keys.isdisjoint(handoff_keys)
     assert contract_keys <= live_keys
@@ -124,7 +124,7 @@ def test_every_relevant_current_collection_route_is_accounted_for(
         if _is_inventory_relevant_collection_route(route, inventory_paths=inventory_paths)
     }
 
-    assert len(relevant_collection_keys) == 77
+    assert len(relevant_collection_keys) == 75
     assert relevant_collection_keys == inventory_keys
 
 
