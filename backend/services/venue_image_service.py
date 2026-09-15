@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from backend.models import User, Venue, VenueImage
+from backend.observability.structured_logging import emit_event
 from backend.schemas.venue_image_schema import (
     VenueImageAdminRead,
     VenueImageCompleteUpload,
@@ -80,6 +81,28 @@ def storage_provider_error_response(exc: R2StorageError) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail=str(exc),
+    )
+
+
+def _emit_storage_failure(
+    *,
+    operation: str,
+    configuration_error: bool,
+    provider_code: str,
+) -> None:
+    emit_event(
+        "storage.operation_failed",
+        "error",
+        {
+            "provider_kind": "r2",
+            "operation": operation,
+            "result": "configuration_error"
+            if configuration_error
+            else "provider_error",
+            "stable_error_code": (
+                "STORAGE.CONFIG_UNAVAILABLE" if configuration_error else provider_code
+            ),
+        },
     )
 
 
@@ -160,6 +183,11 @@ def validate_upload_request(upload_request: VenueImageUploadCreate) -> None:
     try:
         config = get_r2_storage_config()
     except R2StorageConfigError as exc:
+        _emit_storage_failure(
+            operation="r2.upload.validate",
+            configuration_error=True,
+            provider_code="STORAGE.UPLOAD_URL_FAILED",
+        )
         raise storage_config_error_response(exc) from exc
 
     normalized_content_type = upload_request.content_type.strip().lower()
@@ -234,8 +262,18 @@ def build_venue_image_read(venue_image: VenueImage) -> VenueImageRead:
     try:
         image_url = create_object_read_url(venue_image.storage_object_key)
     except R2StorageConfigError as exc:
+        _emit_storage_failure(
+            operation="r2.read_url.create",
+            configuration_error=True,
+            provider_code="STORAGE.READ_URL_FAILED",
+        )
         raise storage_config_error_response(exc) from exc
     except R2StorageError as exc:
+        _emit_storage_failure(
+            operation="r2.read_url.create",
+            configuration_error=False,
+            provider_code="STORAGE.READ_URL_FAILED",
+        )
         raise storage_provider_error_response(exc) from exc
 
     return VenueImageRead(
@@ -268,8 +306,18 @@ def build_public_venue_image_read(venue_image: VenueImage) -> VenueImagePublicRe
     try:
         image_url = create_object_read_url(venue_image.storage_object_key)
     except R2StorageConfigError as exc:
+        _emit_storage_failure(
+            operation="r2.read_url.create",
+            configuration_error=True,
+            provider_code="STORAGE.READ_URL_FAILED",
+        )
         raise storage_config_error_response(exc) from exc
     except R2StorageError as exc:
+        _emit_storage_failure(
+            operation="r2.read_url.create",
+            configuration_error=False,
+            provider_code="STORAGE.READ_URL_FAILED",
+        )
         raise storage_provider_error_response(exc) from exc
 
     return VenueImagePublicRead(
@@ -347,6 +395,11 @@ def check_venue_image_upload_readiness(db: Session) -> dict[str, bool]:
         get_r2_storage_config()
         db.scalars(select(VenueImage.id).limit(1)).first()
     except R2StorageConfigError as exc:
+        _emit_storage_failure(
+            operation="r2.readiness.check",
+            configuration_error=True,
+            provider_code="STORAGE.CONFIG_UNAVAILABLE",
+        )
         raise storage_config_error_response(exc) from exc
     except ProgrammingError as exc:
         db.rollback()
@@ -391,6 +444,11 @@ def create_venue_image_upload(
     try:
         storage_config = get_r2_storage_config()
     except R2StorageConfigError as exc:
+        _emit_storage_failure(
+            operation="r2.upload_url.create",
+            configuration_error=True,
+            provider_code="STORAGE.UPLOAD_URL_FAILED",
+        )
         raise storage_config_error_response(exc) from exc
 
     venue_image_id = uuid.uuid4()
@@ -427,8 +485,18 @@ def create_venue_image_upload(
             content_type=content_type,
         )
     except R2StorageConfigError as exc:
+        _emit_storage_failure(
+            operation="r2.upload_url.create",
+            configuration_error=True,
+            provider_code="STORAGE.UPLOAD_URL_FAILED",
+        )
         raise storage_config_error_response(exc) from exc
     except R2StorageError as exc:
+        _emit_storage_failure(
+            operation="r2.upload_url.create",
+            configuration_error=False,
+            provider_code="STORAGE.UPLOAD_URL_FAILED",
+        )
         raise storage_provider_error_response(exc) from exc
 
     try:
@@ -487,6 +555,11 @@ def complete_venue_image_upload(
     try:
         object_properties = get_object_properties(venue_image.storage_object_key)
     except R2StorageConfigError as exc:
+        _emit_storage_failure(
+            operation="r2.metadata.head",
+            configuration_error=True,
+            provider_code="STORAGE.METADATA_LOOKUP_FAILED",
+        )
         raise storage_config_error_response(exc) from exc
     except R2ObjectNotFoundError as exc:
         raise HTTPException(
@@ -494,6 +567,11 @@ def complete_venue_image_upload(
             detail="Uploaded object was not found for this venue image.",
         ) from exc
     except R2StorageError as exc:
+        _emit_storage_failure(
+            operation="r2.metadata.head",
+            configuration_error=False,
+            provider_code="STORAGE.METADATA_LOOKUP_FAILED",
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Cloudflare R2 could not verify the uploaded image.",

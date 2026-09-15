@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -399,7 +400,8 @@ def test_stable_chat_rule_keys_persist_and_serialize_in_both_chat_domains() -> N
                 category: detection.rule_key for category, detection in selected.items()
             } == expected
             serialized = [
-                item for item in serialize_detections(persisted)
+                item
+                for item in serialize_detections(persisted)
                 if item.category in expected
             ]
             assert {item.category for item in serialized} == set(expected)
@@ -811,7 +813,7 @@ def test_need_a_sub_chat_integrity_failure_is_sanitized_and_rolls_back(
 @pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R6")
 def test_chat_signal_integrity_error_log_excludes_evidence_canary(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     error = _canary_integrity_error()
     target_id = uuid.uuid4()
@@ -837,13 +839,17 @@ def test_chat_signal_integrity_error_log_excludes_evidence_canary(
         scanned_field_hashes={"message_body": "0" * 64},
     )
 
-    assert "CANARY-MODERATION-EVIDENCE" not in caplog.text
+    output = capsys.readouterr()
+    assert "CANARY-MODERATION-EVIDENCE" not in output.out
+    assert output.err == ""
+    record = json.loads(output.out)
+    assert record["stable_error_code"] == "MODERATION.SURFACING_INTEGRITY"
 
 
 @pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R6")
 def test_chat_signal_exception_log_excludes_sensitive_evidence(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     class FakeSession:
         def rollback(self) -> None:
@@ -866,9 +872,12 @@ def test_chat_signal_exception_log_excludes_sensitive_evidence(
         scanned_field_hashes={"message_body": "0" * 64},
     )
 
-    assert _SENSITIVE_EXCEPTION_CANARY not in caplog.text
-    assert "OperationalError" in caplog.text
-    assert all(record.exc_info is None for record in caplog.records)
+    output = capsys.readouterr()
+    assert _SENSITIVE_EXCEPTION_CANARY not in output.out
+    assert "OperationalError" not in output.out
+    assert output.err == ""
+    record = json.loads(output.out)
+    assert record["stable_error_code"] == "MODERATION.SURFACING_FAILED"
 
 
 @pytest.mark.requirement("WS03-05A-R5", "WS03-05A-R6")

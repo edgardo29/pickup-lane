@@ -18,7 +18,11 @@ if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
 
 try:
     from backend.models import ChatMessage, SubPostChatMessage
-    from backend.services import chat_rate_limit_service, game_chat_service, sub_post_chat_service
+    from backend.services import (
+        chat_rate_limit_service,
+        game_chat_service,
+        sub_post_chat_service,
+    )
 finally:
     if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
         os.environ.pop("DATABASE_URL", None)
@@ -75,7 +79,9 @@ def _route_decorators(path: Path) -> list[tuple[str, str]]:
 
 
 @pytest.mark.requirement("WS02-04C3A-R9")
-def test_single_shared_limiter_owner_and_current_send_routes_are_the_only_authenticated_insert_owners() -> None:
+def test_single_shared_limiter_owner_and_current_send_routes_are_the_only_authenticated_insert_owners() -> (
+    None
+):
     game_source = inspect.getsource(game_chat_service)
     sub_source = inspect.getsource(sub_post_chat_service)
     limiter_source = inspect.getsource(chat_rate_limit_service)
@@ -88,7 +94,9 @@ def test_single_shared_limiter_owner_and_current_send_routes_are_the_only_authen
 
     assert 'limiter_category="game_chat"' in game_source
     assert 'limiter_category="need_a_sub_chat"' in sub_source
-    assert "validate_sender_rate_limit" in inspect.getsource(game_chat_service.create_chat_message_record)
+    assert "validate_sender_rate_limit" in inspect.getsource(
+        game_chat_service.create_chat_message_record
+    )
     assert "validate_sender_rate_limit" in inspect.getsource(
         sub_post_chat_service.create_sub_post_chat_message_workflow
     )
@@ -106,8 +114,12 @@ def test_single_shared_limiter_owner_and_current_send_routes_are_the_only_authen
 
 
 @pytest.mark.requirement("WS02-04C3A-R9")
-def test_no_duplicate_route_middleware_frontend_memory_redis_or_generic_limiter_replaces_c3a() -> None:
-    route_text = "\n".join(path.read_text() for path in (_BACKEND_ROOT / "routes").rglob("*.py"))
+def test_no_duplicate_route_middleware_frontend_memory_redis_or_generic_limiter_replaces_c3a() -> (
+    None
+):
+    route_text = "\n".join(
+        path.read_text() for path in (_BACKEND_ROOT / "routes").rglob("*.py")
+    )
     main_text = (_BACKEND_ROOT / "main.py").read_text()
     limiter_text = inspect.getsource(chat_rate_limit_service)
     backend_text = "\n".join(
@@ -134,7 +146,9 @@ def test_no_duplicate_route_middleware_frontend_memory_redis_or_generic_limiter_
 
 @pytest.mark.requirement("WS02-04C3A-R8")
 @pytest.mark.requirement("WS02-04C3A-R9")
-def test_ordinary_user_routes_do_not_expose_self_remove_restore_visibility_bypass() -> None:
+def test_ordinary_user_routes_do_not_expose_self_remove_restore_visibility_bypass() -> (
+    None
+):
     chat_routes = _route_decorators(_BACKEND_ROOT / "routes" / "chat_message_routes.py")
     sub_routes = _route_decorators(_BACKEND_ROOT / "routes" / "sub_post_routes.py")
 
@@ -165,7 +179,9 @@ def test_ordinary_user_routes_do_not_expose_self_remove_restore_visibility_bypas
 
 
 @pytest.mark.requirement("WS02-04C3A-R8")
-def test_model_metadata_supports_visible_text_boundary_without_claiming_query_plan_or_migration_proof() -> None:
+def test_model_metadata_supports_visible_text_boundary_without_claiming_query_plan_or_migration_proof() -> (
+    None
+):
     game_constraints = {
         constraint.name: str(constraint.sqltext)
         for constraint in ChatMessage.__table__.constraints
@@ -179,18 +195,22 @@ def test_model_metadata_supports_visible_text_boundary_without_claiming_query_pl
     game_indexes = {index.name for index in ChatMessage.__table__.indexes}
     sub_indexes = {index.name for index in SubPostChatMessage.__table__.indexes}
 
-    assert "message_type IN ('text', 'system', 'pinned_update')" in game_constraints[
-        "ck_chat_messages_message_type"
-    ]
-    assert "message_type IN ('text')" in sub_constraints[
-        "ck_sub_post_chat_messages_message_type"
-    ]
-    assert "visibility_status IN ('visible', 'removed')" in game_constraints[
-        "ck_chat_messages_visibility_status"
-    ]
-    assert "visibility_status IN ('visible', 'removed')" in sub_constraints[
-        "ck_sub_post_chat_messages_visibility_status"
-    ]
+    assert (
+        "message_type IN ('text', 'system', 'pinned_update')"
+        in game_constraints["ck_chat_messages_message_type"]
+    )
+    assert (
+        "message_type IN ('text')"
+        in sub_constraints["ck_sub_post_chat_messages_message_type"]
+    )
+    assert (
+        "visibility_status IN ('visible', 'removed')"
+        in game_constraints["ck_chat_messages_visibility_status"]
+    )
+    assert (
+        "visibility_status IN ('visible', 'removed')"
+        in sub_constraints["ck_sub_post_chat_messages_visibility_status"]
+    )
     assert "ix_chat_messages_chat_id_created_at" in game_indexes
     assert "ix_chat_messages_chat_id_visibility_status" in game_indexes
     assert "ix_sub_post_chat_messages_chat_id_created_at" in sub_indexes
@@ -201,11 +221,12 @@ def test_model_metadata_supports_visible_text_boundary_without_claiming_query_pl
 def test_c3a_event_source_has_no_sensitive_or_high_cardinality_runtime_fields() -> None:
     source = inspect.getsource(chat_rate_limit_service._log_rate_limit_event)
 
-    assert 'event_name="chat.rate_limit"' in source
-    assert 'actor_kind="authenticated_user"' in source
-    assert 'operation="chat_rate_limit.check"' in source
-    assert "resource_kind=limiter_category" in source
-    assert 'labels={"outcome": result, "route_template": _route_template(limiter_category)}' in source
+    assert '"chat.rate_limit"' in source
+    assert '"actor_kind": "authenticated_user"' in source
+    assert '"operation": "chat_rate_limit.check"' in source
+    assert '"resource_kind": limiter_category' in source
+    assert '"labels": {' in source
+    assert '"route_template": _route_template(limiter_category)' in source
     for forbidden in (
         "user_id",
         "chat_id",

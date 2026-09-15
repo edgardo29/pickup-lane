@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import re
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-import re
-import uuid
-
 
 CORRELATION_ID_HEADER = "X-Request-ID"
 _CANONICAL_UUID_TEXT_LENGTH = 36
@@ -95,3 +94,17 @@ def correlation_context(correlation_id: object) -> Iterator[str]:
         yield get_correlation_id() or ""
     finally:
         reset_correlation_id(token)
+
+
+@contextmanager
+def optional_correlation_context(correlation_id: object | None) -> Iterator[str | None]:
+    """Temporarily set canonical correlation or explicitly clear legacy context."""
+
+    validated = (
+        None if correlation_id is None else validate_correlation_id(correlation_id)
+    )
+    token = _correlation_id.set(validated)
+    try:
+        yield get_correlation_id()
+    finally:
+        _correlation_id.reset(token)

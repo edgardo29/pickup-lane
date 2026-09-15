@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 import math
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -12,10 +11,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from backend.observability.events import EventEnvelope
-from backend.observability.redaction import redact_value
-
-logger = logging.getLogger(__name__)
+from backend.observability.structured_logging import emit_event
 
 CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES = 5
 CHAT_RATE_LIMIT_WINDOW_SECONDS = 60
@@ -60,7 +56,7 @@ def enforce_visible_text_chat_rate_limit(
             limiter_category=limiter_category,
             result="store_error",
             occurred_at=now,
-            stable_error_code=None,
+            stable_error_code="CHAT.RATE_LIMIT_STORE_ERROR",
         )
         raise
 
@@ -176,19 +172,27 @@ def _log_rate_limit_event(
     occurred_at: datetime,
     stable_error_code: str | None,
 ) -> None:
-    envelope = EventEnvelope(
-        event_name="chat.rate_limit",
-        occurred_at=occurred_at,
-        actor_kind="authenticated_user",
-        operation="chat_rate_limit.check",
-        resource_kind=limiter_category,
-        result=result,
-        stable_error_code=stable_error_code,
-        labels={"outcome": result, "route_template": _route_template(limiter_category)},
-    )
-    logger.info(
-        "Chat rate-limit check completed.",
-        extra={"pickup_lane_event": redact_value(envelope.to_dict())},
+    del occurred_at
+    fields: dict[str, object] = {
+        "actor_kind": "authenticated_user",
+        "operation": "chat_rate_limit.check",
+        "resource_kind": limiter_category,
+        "result": result,
+        "labels": {
+            "outcome": result,
+            "route_template": _route_template(limiter_category),
+        },
+    }
+    if stable_error_code is not None:
+        fields["stable_error_code"] = stable_error_code
+    emit_event(
+        "chat.rate_limit",
+        "error"
+        if result == "store_error"
+        else "warning"
+        if result == "rejected"
+        else "info",
+        fields,
     )
 
 

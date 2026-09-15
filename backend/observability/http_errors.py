@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
 from http import HTTPStatus
-import logging
 from typing import Any
 
 from fastapi import Request, status
@@ -19,26 +19,32 @@ from backend.observability.correlation import (
     CorrelationIdError,
     generate_correlation_id,
     get_correlation_id,
+    optional_correlation_context,
     reset_correlation_id,
     set_correlation_id,
     validate_correlation_id,
 )
 from backend.observability.errors import PublicErrorDescriptor
+from backend.observability.events import EventEnvelope
 from backend.observability.redaction import (
     REDACTION_MARKER,
     contains_sensitive_text,
-    redact_value,
+)
+from backend.observability.structured_logging import (
+    RuntimeEventEmitter,
+    emit_event,
+    emit_event_with_correlation,
+    event_emitter_context,
 )
 from backend.observability.telemetry import TelemetryLabelError, validate_error_code
 from backend.observability.timeouts import public_timeout_contract
-
-logger = logging.getLogger(__name__)
 
 GENERIC_UNEXPECTED_DETAIL = "An unexpected error occurred."
 GENERIC_UNEXPECTED_MESSAGE = "Something went wrong. Please try again."
 VALIDATION_FAILED_MESSAGE = "Request validation failed."
 MALFORMED_JSON_MESSAGE = "Malformed JSON request body."
 HTTP_STATUS_UNPROCESSABLE_ENTITY = 422
+_REQUEST_LOGGING_STATE_KEY = "_pickup_lane_logging"
 
 _STATUS_ERROR_CODES: dict[int, str] = {
     status.HTTP_400_BAD_REQUEST: "API.BAD_REQUEST",
@@ -78,8 +84,9 @@ _APPROVED_HTTP_EXCEPTION_HEADERS: dict[int, dict[str, str]] = {
 class CorrelationIdMiddleware:
     """Set a safe request correlation ID and mirror it in HTTP responses."""
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, *, event_emitter: RuntimeEventEmitter) -> None:
         self.app = app
+        self._event_emitter = event_emitter
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -88,15 +95,42 @@ class CorrelationIdMiddleware:
 
         correlation_id = _resolve_request_correlation_id(scope)
         token = set_correlation_id(correlation_id)
+        logging_state = {
+            "correlation_id": correlation_id,
+            "event_emitter": self._event_emitter,
+            "http_method": _http_method(scope),
+            "http_status_code": None,
+            "response_started": False,
+            "route_template": "/{unmatched}",
+        }
+        state = scope.setdefault("state", {})
+        if isinstance(state, dict):
+            state[_REQUEST_LOGGING_STATE_KEY] = logging_state
 
         async def send_with_correlation_header(message: Message) -> None:
             if message["type"] == "http.response.start":
+                if not logging_state["response_started"]:
+                    logging_state["http_status_code"] = int(message["status"])
+                    logging_state["response_started"] = True
                 headers = MutableHeaders(scope=message)
                 headers.setdefault(CORRELATION_ID_HEADER, correlation_id)
             await send(message)
 
         try:
-            await self.app(scope, receive, send_with_correlation_header)
+            with event_emitter_context(self._event_emitter):
+                try:
+                    await self.app(scope, receive, send_with_correlation_header)
+                except BaseException:
+                    logging_state["route_template"] = _route_template(scope)
+                    raise
+                logging_state["route_template"] = _route_template(scope)
+                status_code = logging_state["http_status_code"]
+                if isinstance(status_code, int):
+                    _emit_http_completion(
+                        status_code=status_code,
+                        method=str(logging_state["http_method"]),
+                        route_template=str(logging_state["route_template"]),
+                    )
         finally:
             reset_correlation_id(token)
 
@@ -190,22 +224,29 @@ async def handle_unexpected_exception(
 ) -> JSONResponse:
     """Hide unhandled exception details behind the EN-02 public descriptor."""
 
-    del request
+    logging_state = _request_logging_state(request)
+    correlation_id = (
+        str(logging_state["correlation_id"])
+        if logging_state is not None
+        else _current_or_generated_correlation_id()
+    )
     timeout_contract = public_timeout_contract(exc)
     if timeout_contract is not None:
-        correlation_id = _current_or_generated_correlation_id()
-        logger.warning(
-            "Application operation timed out.",
-            extra={
-                "pickup_lane_error": redact_value(
-                    {
-                        **timeout_contract.telemetry_labels,
-                        "correlation_id": correlation_id,
-                    }
-                )
+        timeout_labels = timeout_contract.telemetry_labels
+        _emit_outer_request_event(
+            logging_state,
+            correlation_id,
+            "application.timeout",
+            "warning",
+            {
+                "operation": timeout_labels.get("operation", "application.timeout"),
+                "provider_kind": timeout_labels.get("provider_kind"),
+                "resource_kind": timeout_labels.get("resource_kind"),
+                "result": timeout_labels.get("outcome", "retry_later"),
+                "stable_error_code": timeout_contract.code,
             },
         )
-        return _public_error_response(
+        response = _public_error_response(
             status_code=timeout_contract.status_code,
             code=timeout_contract.code,
             message=timeout_contract.message,
@@ -213,27 +254,151 @@ async def handle_unexpected_exception(
             details=timeout_contract.details,
             correlation_id=correlation_id,
         )
+        _emit_outer_completion(
+            logging_state, correlation_id, timeout_contract.status_code
+        )
+        return response
 
     del exc
-    correlation_id = _current_or_generated_correlation_id()
-    logger.error(
-        "Unhandled application exception.",
-        extra={
-            "pickup_lane_error": redact_value(
-                {
-                    "error_code": "API.UNEXPECTED",
-                    "correlation_id": correlation_id,
-                }
-            )
+    _emit_outer_request_event(
+        logging_state,
+        correlation_id,
+        "application.unexpected_error",
+        "error",
+        {
+            "operation": "http.request",
+            "result": "failed",
+            "stable_error_code": "API.UNEXPECTED",
         },
     )
-    return _public_error_response(
+    response = _public_error_response(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         code="API.UNEXPECTED",
         message=GENERIC_UNEXPECTED_MESSAGE,
         detail=GENERIC_UNEXPECTED_DETAIL,
         correlation_id=correlation_id,
     )
+    _emit_outer_completion(
+        logging_state,
+        correlation_id,
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
+    return response
+
+
+def _request_logging_state(request: Request | None) -> dict[str, object] | None:
+    if request is None:
+        return None
+    scope = getattr(request, "scope", None)
+    if not isinstance(scope, dict):
+        return None
+    state = scope.get("state")
+    if not isinstance(state, dict):
+        return None
+    candidate = state.get(_REQUEST_LOGGING_STATE_KEY)
+    if not isinstance(candidate, dict):
+        return None
+    correlation_id = candidate.get("correlation_id")
+    emitter = candidate.get("event_emitter")
+    try:
+        validate_correlation_id(correlation_id)
+    except CorrelationIdError:
+        return None
+    if not isinstance(emitter, RuntimeEventEmitter):
+        return None
+    return candidate
+
+
+def _emit_outer_request_event(
+    logging_state: dict[str, object] | None,
+    correlation_id: str,
+    event_name: str,
+    severity: str,
+    fields: Mapping[str, object],
+) -> None:
+    clean_fields = {key: value for key, value in fields.items() if value is not None}
+    if logging_state is not None:
+        emit_event_with_correlation(
+            logging_state["event_emitter"],  # type: ignore[arg-type]
+            correlation_id,
+            event_name,
+            severity,
+            clean_fields,
+        )
+        return
+    with optional_correlation_context(correlation_id):
+        emit_event(event_name, severity, clean_fields)
+
+
+def _emit_outer_completion(
+    logging_state: dict[str, object] | None,
+    correlation_id: str,
+    fallback_status: int,
+) -> None:
+    if logging_state is None:
+        return
+    captured_status = logging_state.get("http_status_code")
+    status_code = (
+        captured_status if isinstance(captured_status, int) else fallback_status
+    )
+    route_template = str(logging_state.get("route_template") or "/{unmatched}")
+    method = str(logging_state.get("http_method") or "other")
+    emitter = logging_state["event_emitter"]
+    with optional_correlation_context(correlation_id), event_emitter_context(emitter):  # type: ignore[arg-type]
+        _emit_http_completion(
+            status_code=status_code,
+            method=method,
+            route_template=route_template,
+        )
+
+
+def _emit_http_completion(
+    *,
+    status_code: int,
+    method: str,
+    route_template: str,
+) -> None:
+    if status_code < 400:
+        severity, result = "info", "success"
+    elif status_code < 500:
+        severity, result = "warning", "client_error"
+    else:
+        severity, result = "error", "server_error"
+    emit_event(
+        "http.request",
+        severity,
+        {
+            "http_method": method,
+            "http_status_code": status_code,
+            "labels": {"route_template": route_template},
+            "result": result,
+        },
+    )
+
+
+def _http_method(scope: Scope) -> str:
+    method = str(scope.get("method") or "").lower()
+    return (
+        method
+        if method in {"delete", "get", "head", "options", "patch", "post", "put"}
+        else "other"
+    )
+
+
+def _route_template(scope: Scope) -> str:
+    route = scope.get("route")
+    candidate = getattr(route, "path", None)
+    if not isinstance(candidate, str):
+        return "/{unmatched}"
+    try:
+        EventEnvelope(
+            event_name="http.request",
+            occurred_at=datetime.now(timezone.utc),
+            labels={"route_template": candidate},
+        )
+    except Exception:  # noqa: BLE001 - unsafe paths collapse to one fixed route.
+        return "/{unmatched}"
+    return candidate
 
 
 def _resolve_request_correlation_id(scope: Scope) -> str:
@@ -335,7 +500,9 @@ def _message_from_detail(detail: Any, *, fallback: str) -> str:
     return fallback
 
 
-def _sanitize_validation_errors(errors: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _sanitize_validation_errors(
+    errors: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     return [_sanitize_validation_error(error) for error in errors]
 
 

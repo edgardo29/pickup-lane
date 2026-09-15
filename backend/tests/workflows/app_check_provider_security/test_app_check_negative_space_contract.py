@@ -24,7 +24,9 @@ def _source(path: Path) -> str:
 
 
 @pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R6", "WS03-03B-R7")
-def test_backend_verifier_does_not_accept_query_body_cookie_or_client_app_id_bypass() -> None:
+def test_backend_verifier_does_not_accept_query_body_cookie_or_client_app_id_bypass() -> (
+    None
+):
     source = _source(APP_CHECK_SERVICE)
 
     assert 'APP_CHECK_HEADER_NAME = "X-Firebase-AppCheck"' in source
@@ -42,10 +44,12 @@ def test_backend_verifier_does_not_accept_query_body_cookie_or_client_app_id_byp
 
 
 @pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R7")
-def test_backend_verifier_uses_central_provider_boundary_and_no_manual_jwt_decode() -> None:
+def test_backend_verifier_uses_central_provider_boundary_and_no_manual_jwt_decode() -> (
+    None
+):
     service_source = _source(APP_CHECK_SERVICE)
     firebase_client_source = _source(FIREBASE_CLIENT)
-    combined_source = "\n".join([service_source, firebase_client_source])
+    combined_source = f"{service_source}\n{firebase_client_source}"
 
     assert "from firebase_admin" not in service_source
     assert "app_check.verify_token" not in service_source
@@ -53,7 +57,10 @@ def test_backend_verifier_uses_central_provider_boundary_and_no_manual_jwt_decod
     assert "FirebaseAppCheckUnavailableError" in service_source
     assert "DependencyReadTimeoutError" in service_source
     assert "from firebase_admin import app_check" in firebase_client_source
-    assert "app_check.verify_token(app_check_token, app=firebase_app)" in firebase_client_source
+    assert (
+        "app_check.verify_token(app_check_token, app=firebase_app)"
+        in firebase_client_source
+    )
     assert "initialize_firebase_admin()" in firebase_client_source
     assert 'FIREBASE_APP_CHECK_VERIFY_OPERATION = "firebase.app_check.verify"' in (
         firebase_client_source
@@ -66,7 +73,9 @@ def test_backend_verifier_uses_central_provider_boundary_and_no_manual_jwt_decod
 
 
 @pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R6", "WS03-03B-R7")
-def test_verified_app_id_comparison_is_required_and_not_used_as_identity_or_authz() -> None:
+def test_verified_app_id_comparison_is_required_and_not_used_as_identity_or_authz() -> (
+    None
+):
     service_source = _source(APP_CHECK_SERVICE)
     middleware_source = _source(APP_CHECK_MIDDLEWARE)
 
@@ -82,14 +91,18 @@ def test_verified_app_id_comparison_is_required_and_not_used_as_identity_or_auth
 def test_local_defaults_do_not_leak_into_production_like_app_check_mode() -> None:
     source = _source(BACKEND_ROOT / "settings.py")
 
-    assert 'if app_env.is_production_like:' in source
+    assert "if app_env.is_production_like:" in source
     assert '_fail("FIREBASE_APP_CHECK_MODE"' in source
     assert "FirebaseAppCheckMode.DISABLED" in source
 
 
 @pytest.mark.requirement("WS03-03B-R2", "WS03-03B-R6", "WS03-03B-R7")
-def test_frontend_source_has_no_app_check_bypass_flag_persistence_or_token_leakage() -> None:
-    combined_source = "\n".join([_source(FRONTEND_APP_CHECK), _source(FRONTEND_API_CLIENT)])
+def test_frontend_source_has_no_app_check_bypass_flag_persistence_or_token_leakage() -> (
+    None
+):
+    combined_source = "\n".join(
+        [_source(FRONTEND_APP_CHECK), _source(FRONTEND_API_CLIENT)]
+    )
 
     for forbidden in (
         "appCheck: false",
@@ -106,12 +119,14 @@ def test_frontend_source_has_no_app_check_bypass_flag_persistence_or_token_leaka
 
 
 @pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R7")
-def test_app_check_observability_excludes_raw_provider_material_and_new_mode_label() -> None:
+def test_app_check_observability_excludes_raw_provider_material_and_new_mode_label() -> (
+    None
+):
     middleware_source = _source(APP_CHECK_MIDDLEWARE)
 
-    assert "EventEnvelope" in middleware_source
-    assert "labels={\"route_template\": event.route_template}" in middleware_source
-    assert "\"mode\"" not in middleware_source
+    assert "emit_event(" in middleware_source
+    assert '"labels": {"route_template": event.route_template}' in middleware_source
+    assert '"mode"' not in middleware_source
     assert "'mode'" not in middleware_source
     for forbidden in (
         "decoded_claims",
@@ -125,32 +140,42 @@ def test_app_check_observability_excludes_raw_provider_material_and_new_mode_lab
 
 
 @pytest.mark.requirement("WS03-03B-R5", "WS03-03B-R7")
-def test_route_policy_has_no_unknown_excluded_fallback_or_post_routing_dependency() -> None:
+def test_route_policy_has_no_unknown_excluded_fallback_or_post_routing_dependency() -> (
+    None
+):
     policy_source = _source(APP_CHECK_POLICY)
     middleware_source = _source(APP_CHECK_MIDDLEWARE)
 
     assert "SUPPORTED_BROWSER_API_ROUTE_TAGS" in policy_source
     assert "Unclassified API route" in policy_source
-    assert "scope[\"route\"]" not in middleware_source
-    assert "scope.get(\"route\")" not in middleware_source
+    assert 'scope["route"]' not in middleware_source
+    assert 'scope.get("route")' not in middleware_source
     assert "endpoint" not in middleware_source
     assert "unknown" not in policy_source.lower()
 
 
 @pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R6", "WS03-03B-R7")
-def test_recorder_failure_path_cannot_turn_enforced_denial_into_allow_or_retry() -> None:
+def test_recorder_failure_path_cannot_turn_enforced_denial_into_allow_or_retry() -> (
+    None
+):
     source = _source(APP_CHECK_MIDDLEWARE)
 
     assert "_record_best_effort(" in source
     assert "except Exception" in source
-    assert "return" in _function_source(source, "_record_best_effort", "_stable_error_code")
+    assert "return" in _function_source(
+        source, "_record_best_effort", "_stable_error_code"
+    )
     assert "retry" not in source.lower()
 
 
 @pytest.mark.requirement("WS03-03B-R6", "WS03-03B-R7")
 def test_ws03_03a_recent_auth_evidence_still_has_deferred_provider_boundaries() -> None:
-    declaration = (BACKEND_ROOT / "tests/support/requirements/ws03_03a.json").read_text()
-    recent_auth_sources = "\n".join(path.read_text() for path in RECENT_AUTH_ROOT.glob("*.py"))
+    declaration = (
+        BACKEND_ROOT / "tests/support/requirements/ws03_03a.json"
+    ).read_text()
+    recent_auth_sources = "\n".join(
+        path.read_text() for path in RECENT_AUTH_ROOT.glob("*.py")
+    )
 
     assert '"id": "WS03-03A-R12"' in declaration
     assert '"id": "WS03-03A-R13"' in declaration
