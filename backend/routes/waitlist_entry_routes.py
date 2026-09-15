@@ -11,16 +11,18 @@ from backend.schemas import (
     WaitlistEntryRead,
 )
 from backend.services.auth_service import get_current_app_user, require_active_admin
-from backend.services.waitlist_entry_service import (
-    get_waitlist_entry_for_user_or_404,
-    list_current_user_waitlist_entries,
-    list_waitlist_entries as list_waitlist_entries_workflow,
-)
 from backend.services.query_pagination import (
     DEFAULT_ADMIN_COLLECTION_LIMIT,
     DEFAULT_COLLECTION_LIMIT,
     MAX_ADMIN_COLLECTION_LIMIT,
     MAX_COLLECTION_LIMIT,
+)
+from backend.services.waitlist_entry_service import (
+    get_waitlist_entry_for_user_or_404,
+    list_current_user_waitlist_entries,
+)
+from backend.services.waitlist_entry_service import (
+    list_waitlist_entries as list_waitlist_entries_workflow,
 )
 
 router = APIRouter(prefix="/waitlist-entries", tags=["waitlist_entries"])
@@ -87,10 +89,11 @@ def list_waitlist_entries(
         le=MAX_ADMIN_COLLECTION_LIMIT,
     ),
     db: Session = Depends(get_db),
-    _current_admin: User = Depends(require_active_admin),
+    current_admin: User = Depends(require_active_admin),
 ) -> list[WaitlistEntry]:
     return list_waitlist_entries_workflow(
         db,
+        authenticated_admin_id=current_admin.id,
         game_id=game_id,
         user_id=user_id,
         waitlist_status=waitlist_status,

@@ -38,6 +38,7 @@ class AdminActionCreate(BaseModel):
     target_financial_outcome_id: UUID | None = None
     target_host_publish_fee_id: UUID | None = None
     target_host_publish_entitlement_id: UUID | None = None
+    target_waitlist_entry_id: UUID | None = None
     reason: str | None = None
     metadata: dict[str, Any] | None = None
     idempotency_key: str | None = None
@@ -81,6 +82,7 @@ class AdminActionRead(BaseModel):
     target_financial_outcome_id: UUID | None
     target_host_publish_fee_id: UUID | None
     target_host_publish_entitlement_id: UUID | None
+    target_waitlist_entry_id: UUID | None
     reason: str | None
     metadata: dict[str, Any] | None = Field(
         validation_alias="metadata_",

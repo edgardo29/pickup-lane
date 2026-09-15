@@ -50,6 +50,7 @@ from backend.schemas.admin_action_schema import (
 )
 from backend.services.admin_action_policy import (
     ADMIN_ACTION_TYPES,
+    SENSITIVE_FINANCIAL_READ_TARGETS,
     TARGET_ADMIN_ACTION_ID,
     TARGET_BOOKING_ID,
     TARGET_CREDIT_USAGE_ID,
@@ -75,6 +76,7 @@ from backend.services.admin_action_policy import (
     TARGET_USER_ID,
     TARGET_VENUE_ID,
     TARGET_VENUE_IMAGE_ID,
+    TARGET_WAITLIST_ENTRY_ID,
 )
 from backend.services.admin_action_service import (
     get_policy_or_400,
@@ -456,6 +458,7 @@ TARGET_DISPLAY_RULES: dict[str, TargetDisplayRule] = {
 
 ID_ONLY_TARGET_TYPE_LABELS = {
     TARGET_PAYMENT_EVENT_ID: "Payment event",
+    TARGET_WAITLIST_ENTRY_ID: "Waitlist entry",
 }
 
 
@@ -815,6 +818,63 @@ ACTION_DISPLAY_RULES: dict[str, AdminActionDisplayRule] = {
     ),
 }
 
+SENSITIVE_FINANCIAL_READ_LABELS = {
+    "read_admin_money_financial_outcome_detail": "Admin money financial outcome viewed",
+    "read_admin_money_user_detail": "Admin money user detail viewed",
+    "read_admin_money_issue_detail": "Admin money issue detail viewed",
+    "read_admin_money_credit_detail": "Admin money credit detail viewed",
+    "read_admin_money_payment_detail": "Admin money payment detail viewed",
+    "read_admin_money_refund_detail": "Admin money refund detail viewed",
+    "read_admin_money_refund_events": "Admin money refund events viewed",
+    "read_admin_money_issue_list_item": "Admin money issue list item viewed",
+    "read_admin_money_credit_list_item": "Admin money credit list item viewed",
+    "read_admin_money_payment_list_item": "Admin money payment list item viewed",
+    "read_admin_money_refund_list_item": "Admin money refund list item viewed",
+    "read_admin_official_game_money": "Official game money viewed",
+    "read_admin_official_game_bookings": "Official game bookings viewed",
+    "read_admin_official_game_waitlist": "Official game waitlist viewed",
+    "read_admin_official_game_cancel_preview": "Official game cancellation preview viewed",
+    "read_admin_official_game_remove_preview": "Official game player removal preview viewed",
+    "read_admin_community_game_payment_detail": "Community game payment detail viewed",
+    "read_staff_payment_detail": "Staff payment detail viewed",
+    "read_staff_refund_detail": "Staff refund detail viewed",
+    "read_staff_payment_list_item": "Staff payment list item viewed",
+    "read_staff_refund_list_item": "Staff refund list item viewed",
+    "read_staff_game_credit_list_item": "Staff game credit list item viewed",
+    "read_staff_booking_detail": "Staff booking detail viewed",
+    "read_staff_booking_list_item": "Staff booking list item viewed",
+    "read_staff_waitlist_entry_detail": "Staff waitlist entry detail viewed",
+    "read_staff_waitlist_entry_list_item": "Staff waitlist entry list item viewed",
+    "read_staff_host_publish_fee_detail": "Staff host publish fee detail viewed",
+    "read_staff_host_publish_fee_list_item": "Staff host publish fee list item viewed",
+    "read_staff_checkout_status": "Staff checkout status viewed",
+    "read_staff_hidden_community_payment_detail": "Staff hidden community payment detail viewed",
+    "read_staff_hidden_community_payment_list": "Staff hidden community payment list viewed",
+}
+
+SENSITIVE_FINANCIAL_TARGET_LABELS = {
+    TARGET_USER_ID: "User",
+    TARGET_GAME_ID: "Game",
+    TARGET_BOOKING_ID: "Booking",
+    TARGET_PARTICIPANT_ID: "Participant",
+    TARGET_PAYMENT_ID: "Payment",
+    TARGET_REFUND_ID: "Refund",
+    TARGET_GAME_CREDIT_ID: "Credit",
+    TARGET_MONEY_ISSUE_ID: "Money issue",
+    TARGET_FINANCIAL_OUTCOME_ID: "Financial outcome",
+    TARGET_HOST_PUBLISH_FEE_ID: "Publish fee",
+    TARGET_WAITLIST_ENTRY_ID: "Waitlist entry",
+}
+
+ACTION_DISPLAY_RULES.update({
+    action_type: AdminActionDisplayRule(
+        action_type,
+        SENSITIVE_FINANCIAL_READ_LABELS[action_type],
+        (PrimaryTargetRule(target_field, SENSITIVE_FINANCIAL_TARGET_LABELS[target_field]),),
+    )
+    for action_type, target_field in SENSITIVE_FINANCIAL_READ_TARGETS.items()
+})
+
 
 def admin_action_label(action_type: str) -> str:
     return ACTION_DISPLAY_RULES.get(
@@ -998,6 +1058,8 @@ def collect_primary_target_ids(
         field_name: set() for field_name in TARGET_DISPLAY_RULES
     }
     for action in actions:
+        if action.action_type in SENSITIVE_FINANCIAL_READ_TARGETS:
+            continue
         for target_rule in selected_target_rules(action):
             target_id = getattr(action, target_rule.field_name, None)
             if target_id is not None:
@@ -1043,6 +1105,42 @@ def build_target_summary(
     target_id = getattr(action, target_rule.field_name, None)
     if target_id is None:
         return None
+
+    if action.action_type in SENSITIVE_FINANCIAL_READ_TARGETS:
+        type_label = target_rule.fallback_type_label
+        destination_path = None
+        if action.action_type.startswith("read_admin_money_"):
+            destination_by_field = {
+                TARGET_FINANCIAL_OUTCOME_ID: "financial-outcomes",
+                TARGET_USER_ID: "users",
+                TARGET_MONEY_ISSUE_ID: "issues",
+                TARGET_GAME_CREDIT_ID: "credits",
+                TARGET_PAYMENT_ID: "payments",
+                TARGET_REFUND_ID: "refunds",
+            }
+            destination_part = destination_by_field.get(target_rule.field_name)
+            if destination_part is not None:
+                destination_path = f"/admin/money/{destination_part}/{target_id}"
+        elif target_rule.field_name in (TARGET_PAYMENT_ID, TARGET_REFUND_ID, TARGET_GAME_CREDIT_ID):
+            destination_part = {
+                TARGET_PAYMENT_ID: "payments",
+                TARGET_REFUND_ID: "refunds",
+                TARGET_GAME_CREDIT_ID: "credits",
+            }[target_rule.field_name]
+            destination_path = f"/admin/money/{destination_part}/{target_id}"
+        elif target_rule.field_name == TARGET_GAME_ID:
+            if action.action_type.startswith("read_admin_official_game_"):
+                destination_path = f"/admin/official-games/{target_id}"
+            else:
+                destination_path = f"/admin/community-games/{target_id}"
+        return AdminActionLogTargetSummaryRead(
+            target_field=target_rule.field_name,
+            target_type=type_key_from_label(type_label),
+            target_type_label=type_label,
+            target_id=target_id,
+            label=full_id_label(type_label, target_id),
+            destination_path=destination_path,
+        )
 
     id_only_type_label = ID_ONLY_TARGET_TYPE_LABELS.get(target_rule.field_name)
     if id_only_type_label is not None:

@@ -13,14 +13,12 @@ from backend.schemas.waitlist_entry_schema import (
     WaitlistEntryCreate,
     WaitlistEntryUpdate,
 )
-from backend.services.auth_service import require_active_admin_user
-from backend.services.waitlist_rules import (
-    build_waitlist_entry_conflict_detail,
-    normalize_waitlist_entry_lifecycle_fields,
-    validate_game_accepts_waitlist_status,
-    validate_waitlist_entry_business_rules,
-    validate_waitlist_status,
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    record_financial_sensitive_read,
+    record_sensitive_admin_read_batch,
 )
+from backend.services.auth_service import require_active_admin_user
 from backend.services.query_pagination import (
     DEFAULT_ADMIN_COLLECTION_LIMIT,
     DEFAULT_COLLECTION_LIMIT,
@@ -28,6 +26,13 @@ from backend.services.query_pagination import (
     MAX_COLLECTION_LIMIT,
     bounded_collection_limit,
     bounded_collection_offset,
+)
+from backend.services.waitlist_rules import (
+    build_waitlist_entry_conflict_detail,
+    normalize_waitlist_entry_lifecycle_fields,
+    validate_game_accepts_waitlist_status,
+    validate_waitlist_entry_business_rules,
+    validate_waitlist_status,
 )
 
 
@@ -152,23 +157,37 @@ def get_waitlist_entry_for_user_or_404(
     waitlist_entry_id: uuid.UUID,
     current_user: User,
 ) -> WaitlistEntry:
-    db_waitlist_entry = db.get(WaitlistEntry, waitlist_entry_id)
-
-    if db_waitlist_entry is None:
+    entry_ref = db.execute(
+        select(WaitlistEntry.id, WaitlistEntry.user_id)
+        .where(WaitlistEntry.id == waitlist_entry_id)
+    ).one_or_none()
+    if entry_ref is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Waitlist entry not found.",
         )
 
-    if db_waitlist_entry.user_id != current_user.id:
+    if entry_ref.user_id != current_user.id:
         require_active_admin_user(current_user)
+        record_financial_sensitive_read(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_waitlist_entry_detail",
+            target_id=waitlist_entry_id,
+        )
 
+    db_waitlist_entry = db.get(WaitlistEntry, waitlist_entry_id)
+    if db_waitlist_entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Waitlist entry not found.",
+        )
     return db_waitlist_entry
 
 
 def list_waitlist_entries(
     db: Session,
     *,
+    authenticated_admin_id: uuid.UUID,
     game_id: uuid.UUID | None = None,
     user_id: uuid.UUID | None = None,
     waitlist_status: str | None = None,
@@ -187,7 +206,7 @@ def list_waitlist_entries(
         validate_waitlist_status(waitlist_status)
         statement = statement.where(WaitlistEntry.waitlist_status == waitlist_status)
 
-    waitlist_entries = db.scalars(
+    page_query = (
         statement.order_by(
             WaitlistEntry.position.asc(),
             WaitlistEntry.joined_at.asc(),
@@ -201,8 +220,15 @@ def list_waitlist_entries(
                 max_limit=MAX_ADMIN_COLLECTION_LIMIT,
             )
         )
-    ).all()
-    return list(waitlist_entries)
+    )
+    selected_ids = list(db.scalars(page_query.with_only_columns(WaitlistEntry.id)).all())
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=authenticated_admin_id,
+            action_type="read_staff_waitlist_entry_list_item",
+            target_ids=selected_ids,
+        )
+    return load_frozen_audited_rows(db, model=WaitlistEntry, target_ids=selected_ids)
 
 
 def update_waitlist_entry_workflow(

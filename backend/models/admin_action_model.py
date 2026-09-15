@@ -53,6 +53,37 @@ class AdminAction(Base):
                 "'read_need_sub_chat_moderation', "
                 "'reveal_need_sub_chat_message_content', "
                 "'read_review_case_sensitive_detail', "
+                "'read_admin_money_financial_outcome_detail', "
+                "'read_admin_money_user_detail', "
+                "'read_admin_money_issue_detail', "
+                "'read_admin_money_credit_detail', "
+                "'read_admin_money_payment_detail', "
+                "'read_admin_money_refund_detail', "
+                "'read_admin_money_refund_events', "
+                "'read_admin_money_issue_list_item', "
+                "'read_admin_money_credit_list_item', "
+                "'read_admin_money_payment_list_item', "
+                "'read_admin_money_refund_list_item', "
+                "'read_admin_official_game_money', "
+                "'read_admin_official_game_bookings', "
+                "'read_admin_official_game_waitlist', "
+                "'read_admin_official_game_cancel_preview', "
+                "'read_admin_official_game_remove_preview', "
+                "'read_admin_community_game_payment_detail', "
+                "'read_staff_payment_detail', "
+                "'read_staff_refund_detail', "
+                "'read_staff_payment_list_item', "
+                "'read_staff_refund_list_item', "
+                "'read_staff_game_credit_list_item', "
+                "'read_staff_booking_detail', "
+                "'read_staff_booking_list_item', "
+                "'read_staff_waitlist_entry_detail', "
+                "'read_staff_waitlist_entry_list_item', "
+                "'read_staff_host_publish_fee_detail', "
+                "'read_staff_host_publish_fee_list_item', "
+                "'read_staff_checkout_status', "
+                "'read_staff_hidden_community_payment_detail', "
+                "'read_staff_hidden_community_payment_list', "
                 "'create_community_game_detail', "
                 "'update_community_game_detail', 'delete_game', "
                 "'delete_venue', 'update_payment_event'"
@@ -91,6 +122,7 @@ class AdminAction(Base):
                 "OR target_financial_outcome_id IS NOT NULL "
                 "OR target_host_publish_fee_id IS NOT NULL "
                 "OR target_host_publish_entitlement_id IS NOT NULL"
+                " OR target_waitlist_entry_id IS NOT NULL"
             ),
             name="ck_admin_actions_target_required",
         ),
@@ -151,6 +183,7 @@ class AdminAction(Base):
             "ix_admin_actions_target_host_publish_entitlement_id",
             "target_host_publish_entitlement_id",
         ),
+        Index("ix_admin_actions_target_waitlist_entry_id", "target_waitlist_entry_id"),
         Index("ix_admin_actions_idempotency_key", "idempotency_key"),
         Index(
             "uq_admin_actions_audit_note_idempotency",
@@ -537,6 +570,10 @@ class AdminAction(Base):
     )
 
     target_host_publish_entitlement_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
+    target_waitlist_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 

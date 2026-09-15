@@ -25,6 +25,7 @@ from backend.schemas.checkout_schema import (
     GameCheckoutPaymentIntentRead,
     GameCheckoutStatusRead,
 )
+from backend.services.admin_action_service import record_financial_sensitive_read
 from backend.services.auth_service import user_is_active_admin
 from backend.services.game_credit_service import (
     CONSUMING_REDEEM_STATUSES,
@@ -1438,6 +1439,26 @@ def get_game_checkout_status_workflow(
     booking_id: uuid.UUID,
     current_user: User,
 ) -> GameCheckoutStatusRead:
+    booking_ref = db.execute(
+        select(Booking.id, Booking.buyer_user_id).where(Booking.id == booking_id)
+    ).one_or_none()
+    if booking_ref is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking not found.",
+        )
+    if booking_ref.buyer_user_id != current_user.id:
+        if not user_is_active_admin(current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot view this checkout status.",
+            )
+        record_financial_sensitive_read(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_checkout_status",
+            target_id=booking_id,
+        )
+
     booking = db.get(Booking, booking_id)
     if booking is None:
         raise HTTPException(

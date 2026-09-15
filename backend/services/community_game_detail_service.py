@@ -17,7 +17,9 @@ from backend.services.admin_action_service import (
     AUDIT_UNAVAILABLE_DETAIL,
     integrity_error_matches_table,
     record_admin_action,
+    record_financial_sensitive_read,
 )
+from backend.services.auth_service import user_is_active_admin
 from backend.services.game_rules import (
     HOST_EDITABLE_GAME_STATUSES,
     require_game_not_started,
@@ -155,6 +157,37 @@ def get_public_community_game_detail(
     community_game_detail_id: uuid.UUID,
     current_user: User | None = None,
 ) -> CommunityGameDetailPublicRead:
+    detail_ref = db.execute(
+        select(
+            CommunityGameDetail.id,
+            CommunityGameDetail.game_id,
+            Game.game_type,
+            Game.public_visibility_status,
+            Game.deleted_at,
+        )
+        .join(Game, CommunityGameDetail.game_id == Game.id)
+        .where(CommunityGameDetail.id == community_game_detail_id)
+    ).one_or_none()
+    if (
+        detail_ref is not None
+        and detail_ref.deleted_at is None
+        and detail_ref.game_type == "community"
+        and detail_ref.public_visibility_status != "visible"
+        and current_user is not None
+        and user_is_active_admin(current_user)
+    ):
+        record_financial_sensitive_read(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_hidden_community_payment_detail",
+            target_id=detail_ref.game_id,
+        )
+    elif detail_ref is not None and (
+        detail_ref.deleted_at is not None or detail_ref.game_type != "community"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Community game details not found.",
+        )
     db_community_game_detail = db.get(
         CommunityGameDetail, community_game_detail_id
     )
@@ -224,12 +257,26 @@ def list_public_community_game_details(
         statement = statement.where(CommunityGameDetail.game_id == game_id)
 
     if game_id is not None:
-        db_game = db.get(Game, game_id)
-        if db_game is None or db_game.deleted_at is not None:
+        game_ref = db.execute(
+            select(Game.id, Game.game_type, Game.public_visibility_status, Game.deleted_at)
+            .where(Game.id == game_id)
+        ).one_or_none()
+        if game_ref is None or game_ref.deleted_at is not None or game_ref.game_type != "community":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Community game details not found.",
             )
+        if (
+            game_ref.public_visibility_status != "visible"
+            and current_user is not None
+            and user_is_active_admin(current_user)
+        ):
+            record_financial_sensitive_read(
+                authenticated_admin_id=current_user.id,
+                action_type="read_staff_hidden_community_payment_list",
+                target_id=game_id,
+            )
+        db_game = db.get(Game, game_id)
         if not user_can_view_community_game_details(db, db_game, current_user):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

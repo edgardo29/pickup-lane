@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import User
 from backend.schemas import (
-    AdminMoneyFinancialOutcomeCreate,
-    AdminMoneyFinancialOutcomeRead,
     AdminMoneyCreditDetailRead,
     AdminMoneyCreditListResponseRead,
+    AdminMoneyFinancialOutcomeCreate,
+    AdminMoneyFinancialOutcomeRead,
     AdminMoneyIssueCreditRetryCreate,
     AdminMoneyIssueDetailRead,
     AdminMoneyIssueListResponseRead,
@@ -23,39 +23,42 @@ from backend.schemas import (
     AdminMoneyRefundRetryCreate,
     AdminMoneyUserDetailRead,
 )
-from backend.services.admin_money_credit_service import (
-    get_admin_money_credit_detail,
-    list_admin_money_credits,
-)
 from backend.services.admin_financial_outcome_service import (
     create_admin_financial_outcome,
-    get_admin_financial_outcome_detail,
 )
-from backend.services.admin_money_payment_service import (
-    get_admin_money_payment_detail,
-    list_admin_money_payments,
-)
-from backend.services.admin_money_refund_query_service import (
-    list_refund_events,
-    get_admin_money_refund_detail,
-    list_admin_money_refunds,
-)
-from backend.services.admin_money_refund_service import (
-    reconcile_admin_money_refund,
-    retry_admin_money_refund,
+from backend.services.admin_money_credit_service import (
+    list_admin_money_credits,
 )
 from backend.services.admin_money_issue_query_service import (
-    get_admin_money_issue_detail,
     list_admin_money_issues_page,
 )
 from backend.services.admin_money_issue_service import (
     resolve_admin_money_issue,
     retry_admin_money_issue_credit,
 )
-from backend.services.admin_money_user_service import (
-    get_admin_money_user_detail,
+from backend.services.admin_money_payment_service import (
+    list_admin_money_payments,
 )
-from backend.services.auth_service import require_active_admin, require_recent_active_admin
+from backend.services.admin_money_refund_query_service import (
+    list_admin_money_refunds,
+)
+from backend.services.admin_money_refund_service import (
+    reconcile_admin_money_refund,
+    retry_admin_money_refund,
+)
+from backend.services.admin_money_sensitive_read_service import (
+    read_admin_money_credit_detail,
+    read_admin_money_financial_outcome_detail,
+    read_admin_money_issue_detail,
+    read_admin_money_payment_detail,
+    read_admin_money_refund_detail,
+    read_admin_money_refund_events,
+    read_admin_money_user_detail,
+)
+from backend.services.auth_service import (
+    require_active_admin,
+    require_recent_active_admin,
+)
 
 router = APIRouter(prefix="/admin/money", tags=["admin_money"])
 MONEY_ISSUE_LIST_QUERY_PARAMS = frozenset(
@@ -129,8 +132,9 @@ def get_admin_money_financial_outcome_route(
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyFinancialOutcomeRead:
-    return get_admin_financial_outcome_detail(
+    return read_admin_money_financial_outcome_detail(
         db,
+        admin=current_admin,
         financial_outcome_id=financial_outcome_id,
     )
 
@@ -147,10 +151,10 @@ def get_admin_money_user(
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyUserDetailRead:
-    return get_admin_money_user_detail(
+    return read_admin_money_user_detail(
         db,
         user_id=user_id,
-        viewer_user=current_admin,
+        admin=current_admin,
         include_inactive_payment_methods=include_inactive_payment_methods,
         saved_cards_cursor=saved_cards_cursor,
     )
@@ -185,6 +189,7 @@ def list_admin_money_issues_route(
         )
     return list_admin_money_issues_page(
         db,
+        authenticated_admin_id=current_admin.id,
         issue_status=status_filter or "open",
         issue_type=issue_type,
         user_id=user_id,
@@ -204,7 +209,9 @@ def get_admin_money_issue_route(
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyIssueDetailRead:
-    return get_admin_money_issue_detail(db, money_issue_id=money_issue_id)
+    return read_admin_money_issue_detail(
+        db, admin=current_admin, money_issue_id=money_issue_id
+    )
 
 
 @router.post(
@@ -276,6 +283,7 @@ def list_admin_money_credits_route(
         )
     return list_admin_money_credits(
         db,
+        authenticated_admin_id=current_admin.id,
         user_id=user_id,
         credit_status=credit_status,
         source_game_id=source_game_id,
@@ -297,10 +305,10 @@ def get_admin_money_credit(
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyCreditDetailRead:
-    return get_admin_money_credit_detail(
+    return read_admin_money_credit_detail(
         db,
         game_credit_id=game_credit_id,
-        viewer_user=current_admin,
+        admin=current_admin,
     )
 
 
@@ -333,6 +341,7 @@ def list_admin_money_payments_route(
         )
     return list_admin_money_payments(
         db,
+        authenticated_admin_id=current_admin.id,
         user_id=user_id,
         payment_status=payment_status,
         payment_type=payment_type,
@@ -352,10 +361,10 @@ def get_admin_money_payment(
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyPaymentDetailRead:
-    return get_admin_money_payment_detail(
+    return read_admin_money_payment_detail(
         db,
         payment_id=payment_id,
-        viewer_user=current_admin,
+        admin=current_admin,
     )
 
 
@@ -388,6 +397,7 @@ def list_admin_money_refunds_route(
         )
     return list_admin_money_refunds(
         db,
+        authenticated_admin_id=current_admin.id,
         user_id=user_id,
         refund_status=refund_status,
         payment_id=payment_id,
@@ -407,10 +417,10 @@ def get_admin_money_refund(
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyRefundDetailRead:
-    return get_admin_money_refund_detail(
+    return read_admin_money_refund_detail(
         db,
         refund_id=refund_id,
-        viewer_user=current_admin,
+        admin=current_admin,
     )
 
 
@@ -447,9 +457,10 @@ def list_admin_money_refund_events_route(
     current_admin: User = Depends(require_active_admin),
     db: Session = Depends(get_db),
 ) -> AdminMoneyRefundEventListResponseRead:
-    return list_refund_events(
+    return read_admin_money_refund_events(
         db,
-        refund_id,
+        refund_id=refund_id,
+        admin=current_admin,
         event_type=event_type,
         event_source=event_source,
         limit=limit,

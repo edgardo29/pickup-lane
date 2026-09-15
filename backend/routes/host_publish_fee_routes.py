@@ -9,7 +9,7 @@ from backend.routes.retired_route_helpers import raise_retired_mutation_route
 from backend.schemas import (
     HostPublishFeeRead,
 )
-from backend.services.auth_service import require_active_user, require_active_admin
+from backend.services.auth_service import require_active_admin, require_active_user
 from backend.services.host_publish_fee_service import (
     get_host_publish_fee_record,
     list_current_host_publish_fee_records,
@@ -71,8 +71,9 @@ def get_host_publish_fee(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> HostPublishFee:
-    del current_admin
-    return get_host_publish_fee_record(db, host_publish_fee_id)
+    return get_host_publish_fee_record(
+        db, host_publish_fee_id, authenticated_admin_id=current_admin.id
+    )
 
 
 @router.get(
@@ -93,9 +94,9 @@ def list_host_publish_fees(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[HostPublishFee]:
-    del current_admin
     return list_host_publish_fee_records(
         db,
+        authenticated_admin_id=current_admin.id,
         game_id=game_id,
         host_user_id=host_user_id,
         fee_status=fee_status,

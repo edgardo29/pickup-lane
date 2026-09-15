@@ -33,7 +33,12 @@ from backend.services.admin_action_display_service import (
     reason_preview,
     users_by_id,
 )
-from backend.services.admin_action_service import user_can_read_admin_action
+from backend.services.admin_action_policy import SENSITIVE_READ_ACTION_TYPES
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    record_sensitive_admin_read_batch,
+    user_can_read_admin_action,
+)
 from backend.services.admin_money_cursor import (
     apply_desc_cursor,
     next_cursor_for_rows,
@@ -271,6 +276,7 @@ def validate_admin_money_credit_status(credit_status: str) -> None:
 def list_admin_money_credits(
     db: Session,
     *,
+    authenticated_admin_id: uuid.UUID,
     user_id: uuid.UUID | None = None,
     credit_status: str = "all",
     source_game_id: uuid.UUID | None = None,
@@ -348,21 +354,29 @@ def list_admin_money_credits(
         context=cursor_context,
     )
 
-    credits = list(
-        db.scalars(
-            query.order_by(GameCredit.created_at.desc(), GameCredit.id.desc()).limit(
-                limit + 1
-            )
+    page_rows = list(
+        db.execute(
+            query.with_only_columns(GameCredit.id, GameCredit.created_at)
+            .order_by(GameCredit.created_at.desc(), GameCredit.id.desc())
+            .limit(limit + 1)
         ).all()
     )
+    selected_ids = [row.id for row in page_rows[:limit]]
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=authenticated_admin_id,
+            action_type="read_admin_money_credit_list_item",
+            target_ids=selected_ids,
+        )
+    credits = load_frozen_audited_rows(db, model=GameCredit, target_ids=selected_ids)
     return AdminMoneyCreditListResponseRead(
         items=[
             AdminMoneyCreditGrantListRead(**credit.model_dump())
-            for credit in build_credit_summaries(db, credits[:limit])
+            for credit in build_credit_summaries(db, credits)
         ],
-        has_more=page_has_more(credits, limit=limit),
+        has_more=page_has_more(page_rows, limit=limit),
         next_cursor=next_cursor_for_rows(
-            credits,
+            page_rows,
             limit=limit,
             sort_attr="created_at",
             context=cursor_context,
@@ -526,7 +540,10 @@ def list_credit_audit_actions(
 
     audit_actions = db.scalars(
         select(AdminAction)
-        .where(or_(*filters))
+        .where(
+            or_(*filters),
+            AdminAction.action_type.not_in(SENSITIVE_READ_ACTION_TYPES),
+        )
         .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
         .limit(ADMIN_MONEY_DETAIL_RELATED_LIMIT)
     ).all()

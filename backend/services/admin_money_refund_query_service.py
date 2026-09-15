@@ -42,7 +42,12 @@ from backend.services.admin_action_display_service import (
     reason_preview,
     users_by_id,
 )
-from backend.services.admin_action_service import user_can_read_admin_action
+from backend.services.admin_action_policy import SENSITIVE_READ_ACTION_TYPES
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    record_sensitive_admin_read_batch,
+    user_can_read_admin_action,
+)
 from backend.services.admin_money_cursor import (
     apply_desc_cursor,
     next_cursor_for_rows,
@@ -290,6 +295,7 @@ def parse_refund_query_uuid(query_text: str) -> uuid.UUID | None:
 def list_admin_money_refunds(
     db: Session,
     *,
+    authenticated_admin_id: uuid.UUID,
     user_id: uuid.UUID | None = None,
     refund_status: str = "all",
     payment_id: uuid.UUID | None = None,
@@ -374,20 +380,30 @@ def list_admin_money_refunds(
         context=cursor_context,
     )
 
-    refunds = list(
-        db.scalars(
-            query.order_by(Refund.created_at.desc(), Refund.id.desc()).limit(limit + 1)
+    page_rows = list(
+        db.execute(
+            query.with_only_columns(Refund.id, Refund.created_at)
+            .order_by(Refund.created_at.desc(), Refund.id.desc())
+            .limit(limit + 1)
         ).all()
     )
+    selected_ids = [row.id for row in page_rows[:limit]]
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=authenticated_admin_id,
+            action_type="read_admin_money_refund_list_item",
+            target_ids=selected_ids,
+        )
+    refunds = load_frozen_audited_rows(db, model=Refund, target_ids=selected_ids)
     return AdminMoneyRefundListResponseRead(
         items=build_refund_summaries(
             db,
-            refunds[:limit],
+            refunds,
             linked_issue_status="open",
         ),
-        has_more=page_has_more(refunds, limit=limit),
+        has_more=page_has_more(page_rows, limit=limit),
         next_cursor=next_cursor_for_rows(
-            refunds,
+            page_rows,
             limit=limit,
             sort_attr="created_at",
             context=cursor_context,
@@ -502,7 +518,10 @@ def list_refund_admin_activity(
 
     actions = db.scalars(
         select(AdminAction)
-        .where(or_(*filters))
+        .where(
+            or_(*filters),
+            AdminAction.action_type.not_in(SENSITIVE_READ_ACTION_TYPES),
+        )
         .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
         .limit(ADMIN_MONEY_DETAIL_RELATED_LIMIT)
     ).all()
