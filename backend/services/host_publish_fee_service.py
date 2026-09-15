@@ -13,6 +13,13 @@ from backend.schemas.host_publish_fee_schema import (
     HostPublishFeeCreate,
     HostPublishFeeUpdate,
 )
+from backend.services.admin_action_policy import TARGET_HOST_PUBLISH_FEE_ID
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    precheck_sensitive_read_target,
+    record_financial_sensitive_read,
+    record_sensitive_admin_read_batch,
+)
 from backend.services.query_pagination import (
     DEFAULT_ADMIN_COLLECTION_LIMIT,
     DEFAULT_COLLECTION_LIMIT,
@@ -267,13 +274,27 @@ def list_current_host_publish_fee_records(
 def get_host_publish_fee_record(
     db: Session,
     host_publish_fee_id: uuid.UUID,
+    *,
+    authenticated_admin_id: uuid.UUID,
 ) -> HostPublishFee:
+    precheck_sensitive_read_target(
+        db,
+        target_field=TARGET_HOST_PUBLISH_FEE_ID,
+        target_id=host_publish_fee_id,
+        not_found_detail="Host publish fee not found.",
+    )
+    record_financial_sensitive_read(
+        authenticated_admin_id=authenticated_admin_id,
+        action_type="read_staff_host_publish_fee_detail",
+        target_id=host_publish_fee_id,
+    )
     return get_host_publish_fee_or_404(db, host_publish_fee_id)
 
 
 def list_host_publish_fee_records(
     db: Session,
     *,
+    authenticated_admin_id: uuid.UUID,
     game_id: uuid.UUID | None = None,
     host_user_id: uuid.UUID | None = None,
     fee_status: str | None = None,
@@ -296,7 +317,7 @@ def list_host_publish_fee_records(
             )
         statement = statement.where(HostPublishFee.fee_status == fee_status)
 
-    host_publish_fees = db.scalars(
+    page_query = (
         statement.order_by(HostPublishFee.created_at.desc(), HostPublishFee.id.desc())
         .offset(bounded_collection_offset(offset))
         .limit(
@@ -305,8 +326,15 @@ def list_host_publish_fee_records(
                 max_limit=MAX_ADMIN_COLLECTION_LIMIT,
             )
         )
-    ).all()
-    return list(host_publish_fees)
+    )
+    selected_ids = list(db.scalars(page_query.with_only_columns(HostPublishFee.id)).all())
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=authenticated_admin_id,
+            action_type="read_staff_host_publish_fee_list_item",
+            target_ids=selected_ids,
+        )
+    return load_frozen_audited_rows(db, model=HostPublishFee, target_ids=selected_ids)
 
 
 def update_host_publish_fee_record(

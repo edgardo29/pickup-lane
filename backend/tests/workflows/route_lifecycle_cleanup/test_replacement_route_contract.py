@@ -150,7 +150,7 @@ def test_official_game_player_delete_is_retired_and_post_preview_execute_are_can
 
     assert retired.status_code == 410
     assert "raise_retired_mutation_route" in _call_names(retired.endpoint)
-    assert "preview_official_game_player_removal" in _call_names(preview.endpoint)
+    assert "read_official_game_removal_preview" in _call_names(preview.endpoint)
     assert "execute_official_game_player_removal" in _call_names(execute.endpoint)
 
 

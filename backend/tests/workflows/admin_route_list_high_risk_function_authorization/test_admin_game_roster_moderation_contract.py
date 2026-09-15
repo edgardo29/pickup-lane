@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -1836,7 +1836,18 @@ def test_admin_official_game_host_player_and_participant_actions_persist_state(
     assert _participant_state(participant_id) == before_remove_participant
     assert _booking_state(booking_id) == before_remove_booking
     assert _game_state(game_id) == before_remove_game
-    assert _count_model_rows(AdminAction) == before_remove_admin_actions
+    assert _count_model_rows(AdminAction) == before_remove_admin_actions + 1
+    with _session() as db:
+        read_action = db.scalar(
+            select(AdminAction).where(
+                AdminAction.action_type == "read_admin_official_game_remove_preview",
+                AdminAction.target_participant_id == participant_id,
+            )
+        )
+        assert read_action is not None
+        assert read_action.admin_user_id == admin.id
+        assert read_action.reason is None
+        assert read_action.metadata_ is None
     assert _count_model_rows(Notification) == before_remove_notifications
 
     remove = client.post(
@@ -1857,7 +1868,7 @@ def test_admin_official_game_host_player_and_participant_actions_persist_state(
     assert booking_after["booking_status"] == "cancelled"
     assert booking_after["payment_status"] == "not_required"
     assert booking_after["cancelled_by_user_id"] == admin.id
-    assert _count_model_rows(AdminAction) == before_remove_admin_actions + 1
+    assert _count_model_rows(AdminAction) == before_remove_admin_actions + 2
     assert _count_model_rows(Notification) == before_remove_notifications + 1
 
 

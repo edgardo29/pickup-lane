@@ -18,7 +18,12 @@ from backend.models import (
     User,
 )
 from backend.schemas.refund_schema import RefundCreate, RefundUpdate
-from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    record_admin_action,
+    record_financial_sensitive_read,
+    record_sensitive_admin_read_batch,
+)
 from backend.services.auth_service import (
     require_active_admin_user,
     user_is_active_admin,
@@ -575,18 +580,31 @@ def get_refund_for_user_or_404(
     refund_id: uuid.UUID,
     current_user: User,
 ) -> Refund:
-    db_refund = db.get(Refund, refund_id)
+    refund_ref = db.execute(
+        select(Refund.id, Payment.payer_user_id)
+        .join(Payment, Refund.payment_id == Payment.id)
+        .where(Refund.id == refund_id)
+    ).one_or_none()
+    if refund_ref is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Refund not found.",
+        )
+    if refund_ref.payer_user_id != current_user.id:
+        require_active_admin_user(current_user)
+        record_financial_sensitive_read(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_refund_detail",
+            target_id=refund_id,
+        )
 
+    db_refund = db.get(Refund, refund_id)
     if db_refund is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Refund not found.",
         )
-
-    db_payment = get_payment_or_404(db, db_refund.payment_id)
-    if db_payment.payer_user_id != current_user.id:
-        require_active_admin_user(current_user)
-
+    get_payment_or_404(db, db_refund.payment_id)
     return db_refund
 
 
@@ -637,12 +655,22 @@ def list_refunds(
     if approved_by_user_id is not None:
         statement = statement.where(Refund.approved_by_user_id == approved_by_user_id)
 
-    refunds = db.scalars(
+    page_query = (
         statement.order_by(Refund.created_at.desc(), Refund.id.desc())
         .offset(bounded_collection_offset(offset))
         .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
-    ).all()
-    return list(refunds)
+    )
+    if not can_read_all_money:
+        return list(db.scalars(page_query).all())
+
+    selected_ids = list(db.scalars(page_query.with_only_columns(Refund.id)).all())
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_refund_list_item",
+            target_ids=selected_ids,
+        )
+    return load_frozen_audited_rows(db, model=Refund, target_ids=selected_ids)
 
 
 def update_refund_record(

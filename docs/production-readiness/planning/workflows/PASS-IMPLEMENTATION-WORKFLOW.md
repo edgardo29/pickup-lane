@@ -362,7 +362,8 @@ When a parent is split:
 
 - the parent is an umbrella and is not implemented directly;
 - every child is an executable pass;
-- every child is planned and reviewed at a level appropriate to its complexity;
+- every child is planned at a level appropriate to its complexity and receives
+  the complete Gate C review required by Section 9;
 - each later child starts from current `develop` after earlier required
   children merge;
 - no later child blindly reuses a detailed plan designed against an older
@@ -612,57 +613,73 @@ unless the current owner instruction explicitly asks for the next step.
 
 ## 9. GATE C: Independent Semantic Review
 
-Gate C is a read-only independent review of the complete change set. Passing
-tests do not replace semantic review.
+Gate C is a read-only independent review of the complete change set.
+
+Every Gate C review must be a full, exhaustive semantic and adversarial review of the entire defined change boundary. Review rigor does not scale down because a change is small, appears simple, has green tests, passed Gate B validation, or inspires reviewer confidence. Only the amount of material inside the review boundary changes.
+
+Passing tests do not replace semantic review.
 
 Read the current Gate A plan or reviewed planning record, any accepted intake
 that defines ownership, the applicable prerequisite contracts and standards,
 and the actual Gate B diff and validation report. Use the corrected master and
 current repository truth to resolve conflicts; the plan does not override them.
 
+If any material required to complete the review cannot be inspected, Gate C must return blocked rather than approve through inference or partial visibility.
+
 ### 9.1 Review Boundary
+
+Review the complete implementation boundary required to establish whether the pass is correct, complete, safe, compatible, and faithful to its approved scope.
 
 Review:
 
 - the corrected-master obligation being implemented;
 - current repository truth and applicable prerequisites;
+- every requirement, invariant, acceptance criterion, failure case, compatibility obligation, and validation claim owned by the pass;
 - any current planning document used for the work;
-- every actual changed file and relevant surrounding code;
-- implementation, schema/migrations, interfaces, failure paths, and security or
-  privacy behavior;
+- every actual changed file;
+- every changed behavior in context, not only the edited lines;
+- all surrounding implementation necessary to establish correctness, including relevant callers, entry points, downstream consumers, sibling or equivalent paths, shared helpers and services, policies, registries, constants, schemas, serializers, display paths, models, migrations, constraints, indexes, defaults, transaction boundaries, authorization dependencies, asynchronous or provider boundaries, and tests;
+- implementation, schema and migration behavior, interfaces, failure paths, and security or privacy behavior;
 - tests and validation claims;
-- compatibility and scope.
+- compatibility with accepted prerequisite behavior and unaffected existing workflows;
+- scope omissions, accidental expansion, and unexplained behavior changes.
+
+Do not interpret relevant surrounding code as only immediately adjacent lines, functions, or files.
+
+Do not approve while any material part of the required review boundary remains uninspected.
 
 Gate C does not edit files, stage changes, commit, push, create or update a PR,
 merge, rebase, reset, apply a stash, or self-fix.
 
 ### 9.2 Semantic And Adversarial Sweep
 
-Trace each material requirement and invariant through the implementation and its
-appropriate proof. Scale the review to the change, deliberately considering
-applicable risks such as:
+Trace every pass-owned requirement and invariant through the implementation, every affected representation and path, applicable failure and edge behavior, and its appropriate proof.
+
+Systematically evaluate every category below against the actual change. A category may be determined inapplicable only after it has been considered against the implementation.
+
+Evaluate:
 
 - wrong types, coercion, nulls, blanks, malformed values, unexpected fields,
   lengths, caps, empty collections, and multiplicity;
-- identity, canonicalization, deduplication, replay, generated identifiers, and
-  collision boundaries;
+- identity, actor attribution, canonicalization, deduplication, replay, generated identifiers, and collision boundaries;
 - state transitions, stale state, terminal and historical behavior, required
-  effects, and prohibited effects;
-- ordering, tie-breaking, timestamps, time zones, pagination, and stale data;
+  effects, prohibited effects, and repeated operations;
+- ordering, tie-breaking, timestamps, time zones, pagination, stale data, and deterministic behavior;
 - SQL NULL semantics, constraints, foreign keys, indexes, defaults, and
-  model/migration/live-schema parity;
-- lock order, idempotency, retries, rollback, and competing transitions;
-- exception handling, logs, SQL parameters, conflict/error responses, and
-  sensitive-data leakage;
-- cross-domain, cross-representation, sibling-path, caller, API/UI, and
-  serialization parity;
-- provider failures, unknown outcomes, recovery, and compatibility;
-- evidence or documentation claims that exceed what was proved.
+  model, migration, and live-schema parity;
+- transaction ownership, lock order, idempotency, retries, rollback, commit uncertainty, and competing transitions;
+- exception handling, logs, SQL parameters, conflict and error responses, internal-detail leakage, and sensitive-data leakage;
+- authorization, privilege boundaries, denied operations, actor identity, and bypass paths;
+- cross-domain, cross-representation, sibling-path, caller, API, UI, persistence, serialization, and display parity;
+- provider failures, asynchronous outcomes, unknown outcomes, recovery, and compatibility;
+- no-op behavior, duplicate requests, partial progress, cleanup behavior, and repeated requests;
+- evidence, tests, comments, documentation, or completion claims that exceed what was actually proved.
 
-When a defect pattern is found, inspect equivalent paths within the relevant
-change boundary before concluding the review. Continue far enough to report all
-reasonably discoverable material findings together rather than stopping after
-the first few.
+Inspect sibling and equivalent paths proactively whenever they share an affected contract or invariant. Do not wait for a defect to be found first.
+
+When a defect pattern is found, expand the review across the complete affected invariant family and all equivalent paths within the relevant change boundary.
+
+Finding one or several defects does not end the review. Continue until the entire Gate C review boundary has been inspected and all reasonably discoverable material findings have been collected.
 
 ### 9.3 Outcomes And Corrections
 
@@ -672,10 +689,19 @@ Gate C returns one of:
 - corrections required;
 - blocked because the review cannot be completed safely or honestly.
 
-Approval requires a complete review at the level warranted by the change, no
-remaining material semantic defect, no unexplained scope expansion, and evidence
-claims that match actual proof. It does not require a permanent coverage ledger,
-visible appendix, universal matrix, requirement declaration, or testing record.
+Approval requires:
+
+- completion of the entire defined Gate C review;
+- every pass-owned requirement and invariant traced through implementation and proof;
+- every adversarial category evaluated against the change;
+- all affected sibling, equivalent, and cross-representation paths inspected;
+- no remaining material semantic defect;
+- no material omission;
+- no unexplained scope expansion;
+- evidence and validation claims that match actual proof;
+- no required review material remaining inaccessible or uninspected.
+
+It does not require a permanent coverage ledger, visible appendix, universal matrix, requirement declaration, or testing record.
 
 A material finding identifies the affected requirement or invariant, the
 conflicting behavior, its consequence, relevant files or paths, and the correct
@@ -683,14 +709,16 @@ route. Cosmetic preferences and harmless alternative designs are not material
 findings.
 
 Corrections are separate editing work followed by focused and affected
-validation and a new complete review of the corrected change set. Inspect the
-adjacent invariant family so a narrow fix does not leave sibling defects. There
-is no fixed automatic correction-cycle count; owner direction and the current
-task determine whether another correction or review occurs. Gate C itself
-remains read-only.
+validation and a new complete review of the corrected change set.
+
+After corrections, Gate C must review the corrected change set completely again. It must not limit the next review to only the lines changed during correction.
+
+Inspect the complete affected invariant family so a narrow fix does not leave sibling defects. There is no fixed automatic correction-cycle count; owner direction and the current task determine whether another correction or review occurs. Gate C itself remains read-only.
 
 Gate C does not automatically rerun successful broad suites. Run the smallest
 focused reproduction only when a concrete semantic concern requires it.
+
+Limiting test execution does not limit semantic review depth. Passing tests, prior validation, implementation notes, or reviewer confidence never substitute for complete inspection of the implementation, surrounding contracts, and evidence.
 
 ## 10. GATE D: Git And PR Finalization
 

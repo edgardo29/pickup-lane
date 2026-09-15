@@ -10,7 +10,15 @@ from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, User
 from backend.schemas.booking_schema import BookingCreate, BookingUpdate
-from backend.services.auth_service import require_active_admin_user, user_is_active_admin
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    record_financial_sensitive_read,
+    record_sensitive_admin_read_batch,
+)
+from backend.services.auth_service import (
+    require_active_admin_user,
+    user_is_active_admin,
+)
 from backend.services.booking_rules import (
     build_booking_conflict_detail,
     normalize_booking_lifecycle_fields,
@@ -86,17 +94,26 @@ def get_booking_for_user_or_404(
     booking_id: uuid.UUID,
     current_user: User,
 ) -> Booking:
-    db_booking = db.get(Booking, booking_id)
-
-    if db_booking is None:
+    booking_ref = db.execute(
+        select(Booking.id, Booking.buyer_user_id).where(Booking.id == booking_id)
+    ).one_or_none()
+    if booking_ref is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Booking not found.",
         )
 
-    if db_booking.buyer_user_id != current_user.id:
+    if booking_ref.buyer_user_id != current_user.id:
         require_active_admin_user(current_user)
+        record_financial_sensitive_read(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_booking_detail",
+            target_id=booking_id,
+        )
 
+    db_booking = db.get(Booking, booking_id)
+    if db_booking is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found.")
     return db_booking
 
 
@@ -153,12 +170,22 @@ def list_bookings(
         validate_booking_payment_status(payment_status)
         statement = statement.where(Booking.payment_status == payment_status)
 
-    bookings = db.scalars(
+    page_query = (
         statement.order_by(Booking.created_at.desc(), Booking.id.desc())
         .offset(bounded_collection_offset(offset))
         .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
-    ).all()
-    return list(bookings)
+    )
+    if not can_read_all_bookings:
+        return list(db.scalars(page_query).all())
+
+    selected_ids = list(db.scalars(page_query.with_only_columns(Booking.id)).all())
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_booking_list_item",
+            target_ids=selected_ids,
+        )
+    return load_frozen_audited_rows(db, model=Booking, target_ids=selected_ids)
 
 
 def update_booking_workflow(

@@ -42,7 +42,12 @@ from backend.services.admin_action_display_service import (
     reason_preview,
     users_by_id,
 )
-from backend.services.admin_action_service import user_can_read_admin_action
+from backend.services.admin_action_policy import SENSITIVE_READ_ACTION_TYPES
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    record_sensitive_admin_read_batch,
+    user_can_read_admin_action,
+)
 from backend.services.admin_money_cursor import (
     apply_desc_cursor,
     next_cursor_for_rows,
@@ -98,6 +103,7 @@ def maybe_uuid(value: str | None) -> uuid.UUID | None:
 def list_admin_money_payments(
     db: Session,
     *,
+    authenticated_admin_id: uuid.UUID,
     user_id: uuid.UUID | None = None,
     payment_status: str = "all",
     payment_type: str | None = None,
@@ -189,18 +195,26 @@ def list_admin_money_payments(
         context=cursor_context,
     )
 
-    payments = list(
-        db.scalars(
-            query.order_by(Payment.created_at.desc(), Payment.id.desc()).limit(
-                limit + 1
-            )
+    page_rows = list(
+        db.execute(
+            query.with_only_columns(Payment.id, Payment.created_at)
+            .order_by(Payment.created_at.desc(), Payment.id.desc())
+            .limit(limit + 1)
         ).all()
     )
+    selected_ids = [row.id for row in page_rows[:limit]]
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=authenticated_admin_id,
+            action_type="read_admin_money_payment_list_item",
+            target_ids=selected_ids,
+        )
+    payments = load_frozen_audited_rows(db, model=Payment, target_ids=selected_ids)
     return AdminMoneyPaymentListResponseRead(
-        items=build_payment_summaries(db, payments[:limit]),
-        has_more=page_has_more(payments, limit=limit),
+        items=build_payment_summaries(db, payments),
+        has_more=page_has_more(page_rows, limit=limit),
         next_cursor=next_cursor_for_rows(
-            payments,
+            page_rows,
             limit=limit,
             sort_attr="created_at",
             context=cursor_context,
@@ -705,7 +719,10 @@ def list_payment_audit_actions(
     require_active_admin_user(viewer_user)
     audit_actions = db.scalars(
         select(AdminAction)
-        .where(AdminAction.target_payment_id == payment.id)
+        .where(
+            AdminAction.target_payment_id == payment.id,
+            AdminAction.action_type.not_in(SENSITIVE_READ_ACTION_TYPES),
+        )
         .order_by(AdminAction.created_at.desc(), AdminAction.id.desc())
         .limit(ADMIN_MONEY_DETAIL_RELATED_LIMIT)
     ).all()

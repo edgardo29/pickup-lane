@@ -22,11 +22,13 @@ from backend.schemas import (
 )
 from backend.services.admin_community_service import (
     flag_admin_community_game_for_review,
-    get_admin_community_game_detail,
     get_community_game_or_404,
     hide_admin_community_game_payment_text,
     list_admin_community_games,
     restore_admin_community_game_payment_text,
+)
+from backend.services.admin_game_sensitive_read_service import (
+    read_admin_community_game_detail,
 )
 from backend.services.auth_service import (
     require_active_admin,
@@ -134,10 +136,10 @@ def get_admin_community_game_route(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> AdminCommunityGameDetailRead:
-    return get_admin_community_game_detail(
+    return read_admin_community_game_detail(
         db,
         game_id=game_id,
-        viewer_user=current_admin,
+        admin=current_admin,
         support_flag_offset=support_flag_offset,
         support_flag_limit=support_flag_limit,
         audit_offset=audit_offset,

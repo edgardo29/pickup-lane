@@ -11,7 +11,12 @@ from sqlalchemy.orm import Session
 
 from backend.models import Booking, Game, Payment, User
 from backend.schemas.payment_schema import PaymentCreate, PaymentUpdate
-from backend.services.admin_action_service import record_admin_action
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    record_admin_action,
+    record_financial_sensitive_read,
+    record_sensitive_admin_read_batch,
+)
 from backend.services.auth_service import (
     require_active_admin_user,
     user_is_active_admin,
@@ -339,17 +344,29 @@ def get_payment_for_user_or_404(
     payment_id: uuid.UUID,
     current_user: User,
 ) -> Payment:
-    db_payment = db.get(Payment, payment_id)
-
-    if db_payment is None:
+    payment_ref = db.execute(
+        select(Payment.id, Payment.payer_user_id).where(Payment.id == payment_id)
+    ).one_or_none()
+    if payment_ref is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Payment not found.",
         )
 
-    if db_payment.payer_user_id != current_user.id:
+    if payment_ref.payer_user_id != current_user.id:
         require_active_admin_user(current_user)
+        record_financial_sensitive_read(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_payment_detail",
+            target_id=payment_id,
+        )
 
+    db_payment = db.get(Payment, payment_id)
+    if db_payment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment not found.",
+        )
     return db_payment
 
 
@@ -392,12 +409,22 @@ def list_payments(
         validate_payment_status(payment_status)
         statement = statement.where(Payment.payment_status == payment_status)
 
-    payments = db.scalars(
+    page_query = (
         statement.order_by(Payment.created_at.desc(), Payment.id.desc())
         .offset(bounded_collection_offset(offset))
         .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
-    ).all()
-    return list(payments)
+    )
+    if not can_read_all_money:
+        return list(db.scalars(page_query).all())
+
+    selected_ids = list(db.scalars(page_query.with_only_columns(Payment.id)).all())
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_payment_list_item",
+            target_ids=selected_ids,
+        )
+    return load_frozen_audited_rows(db, model=Payment, target_ids=selected_ids)
 
 
 def update_payment_record(

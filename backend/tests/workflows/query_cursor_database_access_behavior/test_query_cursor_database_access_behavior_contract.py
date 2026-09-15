@@ -509,6 +509,7 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
     now = datetime(2026, 8, 22, 12, tzinfo=timezone.utc)
     with _session() as db:
         user = _user(10)
+        user.role = "admin"
         db.add(user)
         db.commit()
 
@@ -651,12 +652,14 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
                 "payments",
                 lambda cursor=None: list_admin_money_payments(
                     db,
+                    authenticated_admin_id=user.id,
                     payment_status="succeeded",
                     limit=1,
                     cursor=cursor,
                 ),
                 lambda cursor: list_admin_money_payments(
                     db,
+                    authenticated_admin_id=user.id,
                     payment_status="failed",
                     limit=1,
                     cursor=cursor,
@@ -666,12 +669,14 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
                 "refunds",
                 lambda cursor=None: list_admin_money_refunds(
                     db,
+                    authenticated_admin_id=user.id,
                     refund_status="pending",
                     limit=1,
                     cursor=cursor,
                 ),
                 lambda cursor: list_admin_money_refunds(
                     db,
+                    authenticated_admin_id=user.id,
                     refund_status="failed",
                     limit=1,
                     cursor=cursor,
@@ -698,12 +703,14 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
                 "credits",
                 lambda cursor=None: list_admin_money_credits(
                     db,
+                    authenticated_admin_id=user.id,
                     credit_status="active",
                     limit=1,
                     cursor=cursor,
                 ),
                 lambda cursor: list_admin_money_credits(
                     db,
+                    authenticated_admin_id=user.id,
                     credit_status="used",
                     limit=1,
                     cursor=cursor,
@@ -713,12 +720,14 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
                 "issues",
                 lambda cursor=None: list_admin_money_issues_page(
                     db,
+                    authenticated_admin_id=user.id,
                     issue_status="open",
                     limit=1,
                     cursor=cursor,
                 ),
                 lambda cursor: list_admin_money_issues_page(
                     db,
+                    authenticated_admin_id=user.id,
                     issue_status="open",
                     issue_type="refund_failed",
                     limit=1,

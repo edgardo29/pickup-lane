@@ -43,6 +43,7 @@ def upgrade() -> None:
         sa.Column("target_financial_outcome_id", postgresql.UUID(as_uuid=True)),
         sa.Column("target_host_publish_fee_id", postgresql.UUID(as_uuid=True)),
         sa.Column("target_host_publish_entitlement_id", postgresql.UUID(as_uuid=True)),
+        sa.Column("target_waitlist_entry_id", postgresql.UUID(as_uuid=True)),
         sa.Column("reason", sa.Text()),
         sa.Column("metadata", postgresql.JSONB(astext_type=sa.Text())),
         sa.Column("idempotency_key", sa.String(length=160)),
@@ -53,7 +54,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
         ),
         sa.CheckConstraint(
-            "action_type IN ('cancel_game', 'refund_booking', 'create_refund', 'update_refund', 'mark_no_show', 'create_payment', 'update_payment', 'reverse_no_show', 'suspend_user', 'unsuspend_user', 'restrict_hosting', 'restore_hosting', 'approve_venue', 'delete_user', 'reject_venue', 'create_venue_image', 'update_venue_image', 'remove_venue_image', 'mark_chat_message_reviewed', 'remove_chat_message', 'restore_chat_message', 'update_game', 'create_game_chat', 'update_game_chat', 'update_booking', 'update_participant', 'issue_credit', 'reverse_credit', 'create_financial_outcome', 'apply_financial_outcome', 'create_official_game', 'update_official_game', 'assign_official_host', 'remove_official_host', 'admin_add_player', 'admin_remove_player', 'waive_payment', 'remove_sub_post', 'hide_unsafe_community_payment_text', 'hide_need_sub_post', 'restore_need_sub_post', 'hide_community_game', 'restore_community_game', 'pause_community_game_joining', 'resume_community_game_joining', 'admin_cancel_community_game', 'restore_community_payment_text', 'create_notification', 'update_notification', 'publish_platform_notice', 'cancel_platform_notice', 'user_role_changed', 'append_audit_note', 'resolve_support_flag', 'resolve_money_issue', 'retry_money_issue_credit', 'reconcile_refund', 'create_review_case', 'close_review_case', 'add_review_case_note', 'read_game_chat_moderation', 'reveal_game_chat_message_content', 'read_need_sub_chat_moderation', 'reveal_need_sub_chat_message_content', 'read_review_case_sensitive_detail', 'create_community_game_detail', 'update_community_game_detail', 'delete_game', 'delete_venue', 'update_payment_event')",
+            "action_type IN ('cancel_game', 'refund_booking', 'create_refund', 'update_refund', 'mark_no_show', 'create_payment', 'update_payment', 'reverse_no_show', 'suspend_user', 'unsuspend_user', 'restrict_hosting', 'restore_hosting', 'approve_venue', 'delete_user', 'reject_venue', 'create_venue_image', 'update_venue_image', 'remove_venue_image', 'mark_chat_message_reviewed', 'remove_chat_message', 'restore_chat_message', 'update_game', 'create_game_chat', 'update_game_chat', 'update_booking', 'update_participant', 'issue_credit', 'reverse_credit', 'create_financial_outcome', 'apply_financial_outcome', 'create_official_game', 'update_official_game', 'assign_official_host', 'remove_official_host', 'admin_add_player', 'admin_remove_player', 'waive_payment', 'remove_sub_post', 'hide_unsafe_community_payment_text', 'hide_need_sub_post', 'restore_need_sub_post', 'hide_community_game', 'restore_community_game', 'pause_community_game_joining', 'resume_community_game_joining', 'admin_cancel_community_game', 'restore_community_payment_text', 'create_notification', 'update_notification', 'publish_platform_notice', 'cancel_platform_notice', 'user_role_changed', 'append_audit_note', 'resolve_support_flag', 'resolve_money_issue', 'retry_money_issue_credit', 'reconcile_refund', 'create_review_case', 'close_review_case', 'add_review_case_note', 'read_game_chat_moderation', 'reveal_game_chat_message_content', 'read_need_sub_chat_moderation', 'reveal_need_sub_chat_message_content', 'read_review_case_sensitive_detail', 'create_community_game_detail', 'update_community_game_detail', 'delete_game', 'delete_venue', 'update_payment_event', 'read_admin_money_financial_outcome_detail', 'read_admin_money_user_detail', 'read_admin_money_issue_detail', 'read_admin_money_credit_detail', 'read_admin_money_payment_detail', 'read_admin_money_refund_detail', 'read_admin_money_refund_events', 'read_admin_money_issue_list_item', 'read_admin_money_credit_list_item', 'read_admin_money_payment_list_item', 'read_admin_money_refund_list_item', 'read_admin_official_game_money', 'read_admin_official_game_bookings', 'read_admin_official_game_waitlist', 'read_admin_official_game_cancel_preview', 'read_admin_official_game_remove_preview', 'read_admin_community_game_payment_detail', 'read_staff_payment_detail', 'read_staff_refund_detail', 'read_staff_payment_list_item', 'read_staff_refund_list_item', 'read_staff_game_credit_list_item', 'read_staff_booking_detail', 'read_staff_booking_list_item', 'read_staff_waitlist_entry_detail', 'read_staff_waitlist_entry_list_item', 'read_staff_host_publish_fee_detail', 'read_staff_host_publish_fee_list_item', 'read_staff_checkout_status', 'read_staff_hidden_community_payment_detail', 'read_staff_hidden_community_payment_list')",
             name="ck_admin_actions_action_type",
         ),
         sa.CheckConstraint(
@@ -61,7 +62,7 @@ def upgrade() -> None:
             name="ck_admin_actions_outcome",
         ),
         sa.CheckConstraint(
-            "target_user_id IS NOT NULL OR target_game_id IS NOT NULL OR target_booking_id IS NOT NULL OR target_participant_id IS NOT NULL OR target_payment_id IS NOT NULL OR target_payment_event_id IS NOT NULL OR target_refund_id IS NOT NULL OR target_game_credit_id IS NOT NULL OR target_credit_usage_id IS NOT NULL OR target_venue_id IS NOT NULL OR target_venue_image_id IS NOT NULL OR target_message_id IS NOT NULL OR target_sub_post_id IS NOT NULL OR target_sub_post_request_id IS NOT NULL OR target_sub_post_position_id IS NOT NULL OR target_sub_chat_message_id IS NOT NULL OR target_notification_id IS NOT NULL OR target_platform_notice_id IS NOT NULL OR target_admin_action_id IS NOT NULL OR target_support_flag_id IS NOT NULL OR target_money_issue_id IS NOT NULL OR target_review_case_id IS NOT NULL OR target_financial_outcome_id IS NOT NULL OR target_host_publish_fee_id IS NOT NULL OR target_host_publish_entitlement_id IS NOT NULL",
+            "target_user_id IS NOT NULL OR target_game_id IS NOT NULL OR target_booking_id IS NOT NULL OR target_participant_id IS NOT NULL OR target_payment_id IS NOT NULL OR target_payment_event_id IS NOT NULL OR target_refund_id IS NOT NULL OR target_game_credit_id IS NOT NULL OR target_credit_usage_id IS NOT NULL OR target_venue_id IS NOT NULL OR target_venue_image_id IS NOT NULL OR target_message_id IS NOT NULL OR target_sub_post_id IS NOT NULL OR target_sub_post_request_id IS NOT NULL OR target_sub_post_position_id IS NOT NULL OR target_sub_chat_message_id IS NOT NULL OR target_notification_id IS NOT NULL OR target_platform_notice_id IS NOT NULL OR target_admin_action_id IS NOT NULL OR target_support_flag_id IS NOT NULL OR target_money_issue_id IS NOT NULL OR target_review_case_id IS NOT NULL OR target_financial_outcome_id IS NOT NULL OR target_host_publish_fee_id IS NOT NULL OR target_host_publish_entitlement_id IS NOT NULL OR target_waitlist_entry_id IS NOT NULL",
             name="ck_admin_actions_target_required",
         ),
         sa.ForeignKeyConstraint(["admin_user_id"], ["users.id"], ondelete="RESTRICT"),
@@ -256,6 +257,12 @@ def upgrade() -> None:
         "ix_admin_actions_target_user_id",
         "admin_actions",
         ["target_user_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_admin_actions_target_waitlist_entry_id",
+        "admin_actions",
+        ["target_waitlist_entry_id"],
         unique=False,
     )
     op.create_index(

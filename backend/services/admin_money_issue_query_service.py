@@ -19,15 +19,16 @@ from backend.models import (
     RefundEvent,
     User,
 )
-from backend.schemas.admin_money_credit_schema import (
-    AdminMoneyCreditGrantSummaryRead,
-)
 from backend.schemas.admin_money_issue_detail_schema import AdminMoneyIssueDetailRead
 from backend.schemas.admin_money_issue_schema import (
     AdminMoneyIssueListResponseRead,
     AdminMoneyIssueSummaryRead,
 )
 from backend.schemas.admin_money_refund_schema import AdminMoneyRefundDetailItemRead
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    record_sensitive_admin_read_batch,
+)
 from backend.services.admin_money_cursor import (
     apply_asc_cursor,
     apply_desc_cursor,
@@ -442,6 +443,7 @@ def list_admin_money_issues(
 def list_admin_money_issues_page(
     db: Session,
     *,
+    authenticated_admin_id: uuid.UUID,
     issue_status: str = "open",
     issue_type: str | None = None,
     user_id: uuid.UUID | None = None,
@@ -476,20 +478,26 @@ def list_admin_money_issues_page(
             cursor,
             context=cursor_context,
         )
-        rows = list(
-            db.scalars(
-                statement.order_by(
-                    MoneyIssue.first_detected_at.asc(),
-                    MoneyIssue.id.asc(),
-                )
+        page_rows = list(
+            db.execute(
+                statement.with_only_columns(MoneyIssue.id, MoneyIssue.first_detected_at)
+                .order_by(MoneyIssue.first_detected_at.asc(), MoneyIssue.id.asc())
                 .limit(limit + 1)
             ).all()
         )
+        selected_ids = [row.id for row in page_rows[:limit]]
+        if selected_ids:
+            record_sensitive_admin_read_batch(
+                authenticated_admin_id=authenticated_admin_id,
+                action_type="read_admin_money_issue_list_item",
+                target_ids=selected_ids,
+            )
+        rows = load_frozen_audited_rows(db, model=MoneyIssue, target_ids=selected_ids)
         return AdminMoneyIssueListResponseRead(
-            items=build_money_issue_summaries(db, rows[:limit]),
-            has_more=page_has_more(rows, limit=limit),
+            items=build_money_issue_summaries(db, rows),
+            has_more=page_has_more(page_rows, limit=limit),
             next_cursor=next_cursor_for_rows(
-                rows,
+                page_rows,
                 limit=limit,
                 sort_attr="first_detected_at",
                 context=cursor_context,
@@ -509,17 +517,26 @@ def list_admin_money_issues_page(
         cursor,
         context=cursor_context,
     )
-    rows = list(
-        db.scalars(
-            statement.order_by(sort_column.desc(), MoneyIssue.id.desc())
+    page_rows = list(
+        db.execute(
+            statement.with_only_columns(MoneyIssue.id, sort_column)
+            .order_by(sort_column.desc(), MoneyIssue.id.desc())
             .limit(limit + 1)
         ).all()
     )
+    selected_ids = [row.id for row in page_rows[:limit]]
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=authenticated_admin_id,
+            action_type="read_admin_money_issue_list_item",
+            target_ids=selected_ids,
+        )
+    rows = load_frozen_audited_rows(db, model=MoneyIssue, target_ids=selected_ids)
     return AdminMoneyIssueListResponseRead(
-        items=build_money_issue_summaries(db, rows[:limit]),
-        has_more=page_has_more(rows, limit=limit),
+        items=build_money_issue_summaries(db, rows),
+        has_more=page_has_more(page_rows, limit=limit),
         next_cursor=next_cursor_for_rows(
-            rows,
+            page_rows,
             limit=limit,
             sort_attr=sort_attr,
             context=cursor_context,

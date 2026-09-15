@@ -35,6 +35,13 @@ from backend.schemas import (
     CurrentUserWaitlistEntryRead,
     GameParticipantRead,
 )
+from backend.services.admin_game_sensitive_read_service import (
+    read_official_game_bookings,
+    read_official_game_cancellation_preview,
+    read_official_game_money,
+    read_official_game_removal_preview,
+    read_official_game_waitlist,
+)
 from backend.services.auth_service import (
     require_active_admin,
     require_recent_active_admin,
@@ -48,20 +55,13 @@ from backend.services.chat_moderation_admin_service import (
     reveal_admin_game_chat_message_content,
 )
 from backend.services.game_cancellation_service import (
-    build_official_game_cancellation_preview as preview_official_game_cancellation,
-)
-from backend.services.game_cancellation_service import (
     execute_official_game_cancellation,
 )
 from backend.services.official_game_player_removal_service import (
     execute_official_game_player_removal,
-    preview_official_game_player_removal,
 )
 from backend.services.official_game_query_service import (
-    get_official_game_money,
-    list_official_game_bookings,
     list_official_game_participants,
-    list_official_game_waitlist_entries,
     list_official_games,
 )
 from backend.services.official_game_roster_service import (
@@ -307,8 +307,9 @@ def list_admin_official_game_bookings(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[Booking]:
-    del current_admin
-    return list_official_game_bookings(db, game_id, limit=limit, offset=offset)
+    return read_official_game_bookings(
+        db, admin=current_admin, game_id=game_id, limit=limit, offset=offset
+    )
 
 
 @router.get(
@@ -322,12 +323,8 @@ def list_admin_official_game_waitlist(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> list[WaitlistEntry]:
-    del current_admin
-    return list_official_game_waitlist_entries(
-        db,
-        game_id,
-        limit=limit,
-        offset=offset,
+    return read_official_game_waitlist(
+        db, admin=current_admin, game_id=game_id, limit=limit, offset=offset
     )
 
 
@@ -340,8 +337,7 @@ def get_admin_official_game_money(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameMoneyRead:
-    del current_admin
-    return get_official_game_money(db, game_id)
+    return read_official_game_money(db, admin=current_admin, game_id=game_id)
 
 
 @router.get(
@@ -389,10 +385,8 @@ def preview_admin_official_game_cancellation(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGameCancellationPreviewRead:
-    return preview_official_game_cancellation(
-        db,
-        game_id=game_id,
-        admin_user=current_admin,
+    return read_official_game_cancellation_preview(
+        db, admin=current_admin, game_id=game_id
     )
 
 
@@ -479,11 +473,8 @@ def preview_admin_official_game_player_removal(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_active_admin),
 ) -> AdminOfficialGamePlayerRemovalPreviewRead:
-    del current_admin
-    return preview_official_game_player_removal(
-        db,
-        game_id=game_id,
-        participant_id=participant_id,
+    return read_official_game_removal_preview(
+        db, admin=current_admin, game_id=game_id, participant_id=participant_id
     )
 
 

@@ -30,6 +30,7 @@ TARGET_REVIEW_CASE_ID = "target_review_case_id"
 TARGET_FINANCIAL_OUTCOME_ID = "target_financial_outcome_id"
 TARGET_HOST_PUBLISH_FEE_ID = "target_host_publish_fee_id"
 TARGET_HOST_PUBLISH_ENTITLEMENT_ID = "target_host_publish_entitlement_id"
+TARGET_WAITLIST_ENTRY_ID = "target_waitlist_entry_id"
 
 ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_USER_ID,
@@ -57,6 +58,7 @@ ADMIN_ACTION_TARGET_FIELDS = (
     TARGET_FINANCIAL_OUTCOME_ID,
     TARGET_HOST_PUBLISH_FEE_ID,
     TARGET_HOST_PUBLISH_ENTITLEMENT_ID,
+    TARGET_WAITLIST_ENTRY_ID,
 )
 
 
@@ -77,6 +79,7 @@ class AdminActionPolicy:
     server_copied_target_fields: frozenset[str] = frozenset()
     allows_audit_note: bool = True
     requires_reason: bool = False
+    allows_deleted_user_target: bool = False
 
 
 def target_set(*fields: str) -> frozenset[str]:
@@ -800,7 +803,68 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
     ),
 }
 
+SENSITIVE_FINANCIAL_READ_TARGETS: dict[str, str] = {
+    "read_admin_money_financial_outcome_detail": TARGET_FINANCIAL_OUTCOME_ID,
+    "read_admin_money_user_detail": TARGET_USER_ID,
+    "read_admin_money_issue_detail": TARGET_MONEY_ISSUE_ID,
+    "read_admin_money_credit_detail": TARGET_GAME_CREDIT_ID,
+    "read_admin_money_payment_detail": TARGET_PAYMENT_ID,
+    "read_admin_money_refund_detail": TARGET_REFUND_ID,
+    "read_admin_money_refund_events": TARGET_REFUND_ID,
+    "read_admin_money_issue_list_item": TARGET_MONEY_ISSUE_ID,
+    "read_admin_money_credit_list_item": TARGET_GAME_CREDIT_ID,
+    "read_admin_money_payment_list_item": TARGET_PAYMENT_ID,
+    "read_admin_money_refund_list_item": TARGET_REFUND_ID,
+    "read_admin_official_game_money": TARGET_GAME_ID,
+    "read_admin_official_game_bookings": TARGET_GAME_ID,
+    "read_admin_official_game_waitlist": TARGET_GAME_ID,
+    "read_admin_official_game_cancel_preview": TARGET_GAME_ID,
+    "read_admin_official_game_remove_preview": TARGET_PARTICIPANT_ID,
+    "read_admin_community_game_payment_detail": TARGET_GAME_ID,
+    "read_staff_payment_detail": TARGET_PAYMENT_ID,
+    "read_staff_refund_detail": TARGET_REFUND_ID,
+    "read_staff_payment_list_item": TARGET_PAYMENT_ID,
+    "read_staff_refund_list_item": TARGET_REFUND_ID,
+    "read_staff_game_credit_list_item": TARGET_GAME_CREDIT_ID,
+    "read_staff_booking_detail": TARGET_BOOKING_ID,
+    "read_staff_booking_list_item": TARGET_BOOKING_ID,
+    "read_staff_waitlist_entry_detail": TARGET_WAITLIST_ENTRY_ID,
+    "read_staff_waitlist_entry_list_item": TARGET_WAITLIST_ENTRY_ID,
+    "read_staff_host_publish_fee_detail": TARGET_HOST_PUBLISH_FEE_ID,
+    "read_staff_host_publish_fee_list_item": TARGET_HOST_PUBLISH_FEE_ID,
+    "read_staff_checkout_status": TARGET_BOOKING_ID,
+    "read_staff_hidden_community_payment_detail": TARGET_GAME_ID,
+    "read_staff_hidden_community_payment_list": TARGET_GAME_ID,
+}
+
+SENSITIVE_READ_LIST_LIMITS: dict[str, int] = {
+    action_type: (200 if action_type in {
+        "read_staff_waitlist_entry_list_item",
+        "read_staff_host_publish_fee_list_item",
+    } else 100)
+    for action_type in SENSITIVE_FINANCIAL_READ_TARGETS
+    if action_type.endswith("_list_item")
+}
+
+ADMIN_ACTION_POLICIES.update({
+    action_type: AdminActionPolicy(
+        action_type=action_type,
+        required_target_rules=(TargetRule(all_of=(target_field,)),),
+        allowed_target_fields=target_set(target_field),
+        metadata_builder_key="none",
+        category="sensitive_read",
+        allows_audit_note=False,
+        allows_deleted_user_target=(action_type == "read_admin_money_user_detail"),
+    )
+    for action_type, target_field in SENSITIVE_FINANCIAL_READ_TARGETS.items()
+})
+
 ADMIN_ACTION_TYPES = tuple(ADMIN_ACTION_POLICIES)
+SENSITIVE_READ_ACTION_TYPES = frozenset(
+    action_type
+    for action_type, policy in ADMIN_ACTION_POLICIES.items()
+    if policy.category == "sensitive_read"
+)
 
 
 def get_admin_action_policy(action_type: str) -> AdminActionPolicy | None:

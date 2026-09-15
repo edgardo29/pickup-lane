@@ -34,6 +34,7 @@ from backend.models import (
     User,
     Venue,
     VenueImage,
+    WaitlistEntry,
 )
 from backend.observability.correlation import (
     get_correlation_id,
@@ -44,6 +45,8 @@ from backend.observability.correlation import (
 from backend.schemas.admin_action_schema import AdminActionNoteCreate, AdminActionRead
 from backend.services.admin_action_policy import (
     ADMIN_ACTION_TARGET_FIELDS,
+    SENSITIVE_FINANCIAL_READ_TARGETS,
+    SENSITIVE_READ_LIST_LIMITS,
     TARGET_ADMIN_ACTION_ID,
     TARGET_BOOKING_ID,
     TARGET_CREDIT_USAGE_ID,
@@ -68,6 +71,7 @@ from backend.services.admin_action_policy import (
     TARGET_USER_ID,
     TARGET_VENUE_ID,
     TARGET_VENUE_IMAGE_ID,
+    TARGET_WAITLIST_ENTRY_ID,
     AdminActionPolicy,
     TargetRule,
     get_admin_action_policy,
@@ -289,6 +293,7 @@ TARGET_MODEL_BY_FIELD = {
     TARGET_FINANCIAL_OUTCOME_ID: AdminFinancialOutcome,
     TARGET_HOST_PUBLISH_FEE_ID: HostPublishFee,
     TARGET_HOST_PUBLISH_ENTITLEMENT_ID: HostPublishEntitlement,
+    TARGET_WAITLIST_ENTRY_ID: WaitlistEntry,
 }
 
 TARGET_NOT_FOUND_DETAIL = {
@@ -316,6 +321,7 @@ TARGET_NOT_FOUND_DETAIL = {
     TARGET_FINANCIAL_OUTCOME_ID: "Target financial outcome not found.",
     TARGET_HOST_PUBLISH_FEE_ID: "Target host publish fee not found.",
     TARGET_HOST_PUBLISH_ENTITLEMENT_ID: "Target publish entitlement not found.",
+    TARGET_WAITLIST_ENTRY_ID: "Target waitlist entry not found.",
 }
 
 
@@ -483,6 +489,8 @@ def validate_target_references(db: Session, action_data: dict[str, Any]) -> None
 def validate_sensitive_read_target_references(
     db: Session,
     action_data: dict[str, Any],
+    *,
+    policy: AdminActionPolicy | None = None,
 ) -> None:
     """Validate references without hydrating protected target payload columns."""
     for field_name in ADMIN_ACTION_TARGET_FIELDS:
@@ -498,13 +506,46 @@ def validate_sensitive_read_target_references(
         projection = db.execute(
             select(*selected_columns).where(model.id == target_id)
         ).one_or_none()
-        if projection is None or (
-            deleted_at is not None and projection._mapping[deleted_at] is not None
-        ):
+        deleted_target = (
+            deleted_at is not None and projection is not None
+            and projection._mapping[deleted_at] is not None
+        )
+        allowed_deleted_user = (
+            field_name == TARGET_USER_ID
+            and policy is not None
+            and policy.allows_deleted_user_target
+        )
+        if projection is None or (deleted_target and not allowed_deleted_user):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=TARGET_NOT_FOUND_DETAIL[field_name],
             )
+
+
+def precheck_sensitive_read_target(
+    db: Session,
+    *,
+    target_field: str,
+    target_id: uuid.UUID,
+    allow_deleted_user: bool = False,
+    not_found_detail: str | None = None,
+) -> None:
+    """Reject a missing target using only its ID and optional deletion marker."""
+    model = TARGET_MODEL_BY_FIELD[target_field]
+    columns = [model.id]
+    deleted_at = getattr(model, "deleted_at", None)
+    if deleted_at is not None:
+        columns.append(deleted_at)
+    row = db.execute(select(*columns).where(model.id == target_id)).one_or_none()
+    if row is None or (
+        deleted_at is not None
+        and row._mapping[deleted_at] is not None
+        and not (allow_deleted_user and target_field == TARGET_USER_ID)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=not_found_detail or TARGET_NOT_FOUND_DETAIL[target_field],
+        )
 
 
 def build_action_metadata(
@@ -868,7 +909,7 @@ def record_sensitive_admin_read(
                 },
             }
             validate_target_policy(policy, action_data, client_targets_only=False)
-            validate_sensitive_read_target_references(db, action_data)
+            validate_sensitive_read_target_references(db, action_data, policy=policy)
             admin_action = build_admin_action_instance(
                 admin_user_id=authenticated_admin_id,
                 policy=policy,
@@ -890,6 +931,129 @@ def record_sensitive_admin_read(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=AUDIT_UNAVAILABLE_DETAIL,
             ) from None
+
+
+def record_financial_sensitive_read(
+    *,
+    authenticated_admin_id: uuid.UUID,
+    action_type: str,
+    target_id: uuid.UUID,
+) -> uuid.UUID:
+    """Keep C-owned policy/race errors private after a public precheck."""
+    target_field = SENSITIVE_FINANCIAL_READ_TARGETS.get(action_type)
+    if target_field is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=AUDIT_UNAVAILABLE_DETAIL,
+        )
+    try:
+        return record_sensitive_admin_read(
+            authenticated_admin_id=authenticated_admin_id,
+            action_type=action_type,
+            **{target_field: target_id},
+        )
+    except HTTPException as exc:
+        if exc.status_code in (status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
+        raise
+
+
+def record_sensitive_admin_read_batch(
+    *,
+    authenticated_admin_id: uuid.UUID,
+    action_type: str,
+    target_ids: list[uuid.UUID],
+) -> list[uuid.UUID]:
+    """Commit one bounded, resource-specific audit row per selected list item."""
+    target_field = SENSITIVE_FINANCIAL_READ_TARGETS.get(action_type)
+    max_items = SENSITIVE_READ_LIST_LIMITS.get(action_type)
+    if (
+        target_field is None
+        or max_items is None
+        or not 1 <= len(target_ids) <= max_items
+        or len(set(target_ids)) != len(target_ids)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=AUDIT_UNAVAILABLE_DETAIL,
+        )
+
+    correlation_id = current_correlation_uuid()
+    with open_audit_session_or_503() as db:
+        try:
+            admin_user = db.get(User, authenticated_admin_id)
+            if admin_user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin access required.",
+                )
+            require_active_admin_user(admin_user)
+            policy = get_policy_or_400(action_type)
+            if policy.category != "sensitive_read":
+                raise ValueError("Invalid sensitive-read batch action")
+
+            audit_rows: list[AdminAction] = []
+            for target_id in target_ids:
+                action_data = {
+                    "action_type": action_type,
+                    "reason": None,
+                    "metadata": None,
+                    "idempotency_key": None,
+                    target_field: target_id,
+                }
+                validate_target_policy(policy, action_data, client_targets_only=False)
+                validate_sensitive_read_target_references(
+                    db, action_data, policy=policy
+                )
+                row = build_admin_action_instance(
+                    admin_user_id=authenticated_admin_id,
+                    policy=policy,
+                    action_data=action_data,
+                    outcome="succeeded",
+                    correlation_id=correlation_id,
+                )
+                db.add(row)
+                audit_rows.append(row)
+            db.flush()
+            row_ids = [row.id for row in audit_rows]
+            db.commit()
+            return row_ids
+        except HTTPException as exc:
+            rollback_audit_session_quietly(db)
+            if exc.status_code == status.HTTP_403_FORBIDDEN:
+                raise
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
+        except Exception:  # noqa: BLE001 - no partial batch or database detail.
+            rollback_audit_session_quietly(db)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=AUDIT_UNAVAILABLE_DETAIL,
+            ) from None
+
+
+def load_frozen_audited_rows(
+    db: Session,
+    *,
+    model: type,
+    target_ids: list[uuid.UUID],
+) -> list[Any]:
+    """Hydrate only the IDs whose read actions have already committed."""
+    if not target_ids:
+        return []
+    records = db.scalars(select(model).where(model.id.in_(target_ids))).all()
+    records_by_id = {record.id: record for record in records}
+    if len(records_by_id) != len(target_ids):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=AUDIT_UNAVAILABLE_DETAIL,
+        )
+    return [records_by_id[target_id] for target_id in target_ids]
 
 
 def list_admin_actions(

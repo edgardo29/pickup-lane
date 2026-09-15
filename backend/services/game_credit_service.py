@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 
 from backend.models import GameCredit, GameCreditUsage, User
 from backend.schemas.game_credit_schema import GameCreditBalanceRead
+from backend.services.admin_action_service import (
+    load_frozen_audited_rows,
+    record_sensitive_admin_read_batch,
+)
 from backend.services.auth_service import require_active_admin_user
 from backend.services.query_pagination import (
     DEFAULT_COLLECTION_LIMIT,
@@ -156,7 +160,8 @@ def list_game_credits_for_user(
 ) -> list[GameCredit]:
     effective_user_id = user_id or current_user.id
 
-    if effective_user_id != current_user.id:
+    cross_user = effective_user_id != current_user.id
+    if cross_user:
         require_active_admin_user(current_user)
 
     statement = (
@@ -166,7 +171,17 @@ def list_game_credits_for_user(
         .offset(bounded_collection_offset(offset))
         .limit(bounded_collection_limit(limit, max_limit=MAX_COLLECTION_LIMIT))
     )
-    return list(db.scalars(statement).all())
+    if not cross_user:
+        return list(db.scalars(statement).all())
+
+    selected_ids = list(db.scalars(statement.with_only_columns(GameCredit.id)).all())
+    if selected_ids:
+        record_sensitive_admin_read_batch(
+            authenticated_admin_id=current_user.id,
+            action_type="read_staff_game_credit_list_item",
+            target_ids=selected_ids,
+        )
+    return load_frozen_audited_rows(db, model=GameCredit, target_ids=selected_ids)
 
 
 def get_ordered_available_credit_grants_for_update(
