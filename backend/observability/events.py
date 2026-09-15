@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import json
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-import json
 
-from backend.observability.correlation import get_correlation_id, validate_correlation_id
+from backend.observability.correlation import (
+    get_correlation_id,
+    validate_correlation_id,
+)
 from backend.observability.redaction import contains_sensitive_text
 from backend.observability.telemetry import (
     TelemetryLabelError,
@@ -17,8 +21,12 @@ from backend.observability.telemetry import (
     validate_telemetry_labels,
 )
 
-
 EVENT_SCHEMA_VERSION = "1"
+EVENT_SEVERITIES = frozenset({"debug", "info", "warning", "error", "critical"})
+HTTP_METHODS = frozenset(
+    {"delete", "get", "head", "options", "patch", "post", "put", "other"}
+)
+MAX_RUNTIME_INTEGER = 2_147_483_647
 
 
 class EventEnvelopeError(ValueError):
@@ -44,57 +52,145 @@ class EventEnvelope:
     stable_error_code: str | None = None
     provider_kind: str | None = None
     labels: Mapping[str, str] = field(default_factory=dict)
+    severity: str | None = None
+    resource_id: str | None = None
+    http_method: str | None = None
+    http_status_code: int | None = None
+    attempt_count: int | None = None
+    maximum_attempts: int | None = None
 
     def __post_init__(self) -> None:
         try:
             _validate_schema_version(self.schema_version)
             _validate_event_name(self.event_name)
             _validate_occurred_at(self.occurred_at)
-            object.__setattr__(self, "environment", _validate_optional_label(
+            object.__setattr__(
+                self,
                 "environment",
-                self.environment,
-            ))
-            object.__setattr__(self, "correlation_id", _validate_optional_id(
-                self.correlation_id if self.correlation_id is not None else get_correlation_id()
-            ))
+                _validate_optional_label(
+                    "environment",
+                    self.environment,
+                ),
+            )
+            object.__setattr__(
+                self,
+                "correlation_id",
+                _validate_optional_id(
+                    self.correlation_id
+                    if self.correlation_id is not None
+                    else get_correlation_id()
+                ),
+            )
             object.__setattr__(
                 self,
                 "request_id",
                 _validate_optional_id(self.request_id),
             )
-            object.__setattr__(self, "actor_kind", _validate_optional_label(
+            object.__setattr__(
+                self,
                 "actor_kind",
-                self.actor_kind,
-            ))
-            object.__setattr__(self, "operation", _validate_optional_label(
+                _validate_optional_label(
+                    "actor_kind",
+                    self.actor_kind,
+                ),
+            )
+            object.__setattr__(
+                self,
                 "operation",
-                self.operation,
-            ))
-            object.__setattr__(self, "resource_kind", _validate_optional_label(
+                _validate_optional_label(
+                    "operation",
+                    self.operation,
+                ),
+            )
+            object.__setattr__(
+                self,
                 "resource_kind",
-                self.resource_kind,
-            ))
-            object.__setattr__(self, "result", _validate_optional_label(
+                _validate_optional_label(
+                    "resource_kind",
+                    self.resource_kind,
+                ),
+            )
+            object.__setattr__(
+                self,
                 "result",
-                self.result,
-            ))
+                _validate_optional_label(
+                    "result",
+                    self.result,
+                ),
+            )
             object.__setattr__(
                 self,
                 "stable_error_code",
                 _validate_optional_error_code(self.stable_error_code),
             )
-            object.__setattr__(self, "provider_kind", _validate_optional_label(
+            object.__setattr__(
+                self,
                 "provider_kind",
-                self.provider_kind,
-            ))
-            object.__setattr__(self, "release", _validate_release_identity(self.release))
+                _validate_optional_label(
+                    "provider_kind",
+                    self.provider_kind,
+                ),
+            )
+            object.__setattr__(
+                self, "release", _validate_release_identity(self.release)
+            )
             object.__setattr__(
                 self,
                 "source_identity",
                 _validate_release_identity(self.source_identity),
             )
             object.__setattr__(self, "labels", validate_telemetry_labels(self.labels))
-        except (TelemetryLabelError, ValueError) as exc:
+            object.__setattr__(
+                self, "severity", _validate_optional_severity(self.severity)
+            )
+            object.__setattr__(
+                self,
+                "resource_id",
+                _validate_optional_resource_id(
+                    self.resource_id,
+                    resource_kind=self.resource_kind,
+                ),
+            )
+            object.__setattr__(
+                self, "http_method", _validate_optional_http_method(self.http_method)
+            )
+            object.__setattr__(
+                self,
+                "http_status_code",
+                _validate_optional_integer(
+                    "http_status_code",
+                    self.http_status_code,
+                    minimum=100,
+                    maximum=599,
+                ),
+            )
+            object.__setattr__(
+                self,
+                "attempt_count",
+                _validate_optional_integer(
+                    "attempt_count",
+                    self.attempt_count,
+                    minimum=0,
+                ),
+            )
+            object.__setattr__(
+                self,
+                "maximum_attempts",
+                _validate_optional_integer(
+                    "maximum_attempts",
+                    self.maximum_attempts,
+                    minimum=1,
+                ),
+            )
+            if (
+                self.attempt_count is not None
+                and self.maximum_attempts is not None
+                and self.attempt_count > self.maximum_attempts
+            ):
+                raise EventEnvelopeError(
+                    "Attempt count cannot exceed maximum attempts."
+                )
+        except (TelemetryLabelError, TypeError, ValueError) as exc:
             raise EventEnvelopeError(str(exc)) from exc
 
     def to_dict(self) -> dict[str, object]:
@@ -117,6 +213,12 @@ class EventEnvelope:
             "source_identity": self.source_identity,
             "stable_error_code": self.stable_error_code,
             "operation": self.operation,
+            "attempt_count": self.attempt_count,
+            "http_method": self.http_method,
+            "http_status_code": self.http_status_code,
+            "maximum_attempts": self.maximum_attempts,
+            "resource_id": self.resource_id,
+            "severity": self.severity,
         }
         payload.update(
             (key, value)
@@ -179,6 +281,60 @@ def _validate_release_identity(value: str | None) -> str | None:
         raise EventEnvelopeError("Release identity must not contain controls.")
     if contains_sensitive_text(value):
         raise EventEnvelopeError("Release identity must not contain sensitive data.")
+    if len(value) > 120:
+        raise EventEnvelopeError("Release identity must not exceed 120 characters.")
+    return value
+
+
+def _validate_optional_severity(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if value not in EVENT_SEVERITIES:
+        raise EventEnvelopeError("Event severity is not supported.")
+    return value
+
+
+def _validate_optional_resource_id(
+    value: str | None,
+    *,
+    resource_kind: str | None,
+) -> str | None:
+    if value is None:
+        return None
+    if resource_kind != "durable_job":
+        raise EventEnvelopeError("Resource ID is allowed only for durable jobs.")
+    if not isinstance(value, str) or value != value.strip():
+        raise EventEnvelopeError("Resource ID must be canonical UUID text.")
+    try:
+        parsed = uuid.UUID(value)
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise EventEnvelopeError("Resource ID must be canonical UUID text.") from exc
+    if str(parsed) != value:
+        raise EventEnvelopeError("Resource ID must be canonical UUID text.")
+    return value
+
+
+def _validate_optional_http_method(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if value not in HTTP_METHODS:
+        raise EventEnvelopeError("HTTP method is not supported.")
+    return value
+
+
+def _validate_optional_integer(
+    name: str,
+    value: int | None,
+    *,
+    minimum: int,
+    maximum: int = MAX_RUNTIME_INTEGER,
+) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise EventEnvelopeError(f"{name} must be an integer.")
+    if value < minimum or value > maximum:
+        raise EventEnvelopeError(f"{name} is outside the supported range.")
     return value
 
 

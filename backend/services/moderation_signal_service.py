@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 import uuid
 from typing import Any
 
@@ -12,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import AdminReviewSignal
+from backend.observability.structured_logging import emit_event
 from backend.services.admin_review_service import (
     CHAT_MODERATION_CASE_CATEGORY,
     PRIORITY_RANK,
@@ -25,8 +25,6 @@ from backend.services.content_moderation_scanner_service import (
     ModerationFinding,
     scanner_timestamp,
 )
-
-logger = logging.getLogger(__name__)
 
 CHAT_MODERATION_SOURCE = "chat_moderation"
 
@@ -354,16 +352,25 @@ def run_moderation_surfacing_safely(
         )
     except IntegrityError:
         db.rollback()
-        logger.error(
-            "Moderation surfacing database integrity failure for %s target %s.",
-            target_type,
-            target_data,
+        emit_event(
+            "moderation.surfacing_failed",
+            "error",
+            {
+                "operation": "moderation.surfacing.persist",
+                "resource_kind": "moderation_signal",
+                "result": "integrity_error",
+                "stable_error_code": "MODERATION.SURFACING_INTEGRITY",
+            },
         )
-    except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
+    except Exception:  # noqa: BLE001 - fail-safe moderation boundary
         db.rollback()
-        logger.error(
-            "Moderation surfacing failed for %s target %s (error_type=%s).",
-            target_type,
-            target_data,
-            type(exc).__name__,
+        emit_event(
+            "moderation.surfacing_failed",
+            "error",
+            {
+                "operation": "moderation.surfacing.persist",
+                "resource_kind": "moderation_signal",
+                "result": "failed",
+                "stable_error_code": "MODERATION.SURFACING_FAILED",
+            },
         )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import threading
 import uuid
@@ -578,7 +579,7 @@ def test_persistence_rejects_non_string_nested_evidence_identifiers(
 def test_saved_content_adapter_exception_logs_exclude_sensitive_evidence(
     adapter: str,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fail_with_sensitive_evidence(*args, **kwargs):
         del args, kwargs
@@ -603,15 +604,23 @@ def test_saved_content_adapter_exception_logs_exclude_sensitive_evidence(
             db.commit()
             surface_need_a_sub_post_text(db, sub_post_id=target.id)
 
-    assert _SENSITIVE_EXCEPTION_CANARY not in caplog.text
-    assert "OperationalError" in caplog.text
-    assert all(record.exc_info is None for record in caplog.records)
+    output = capsys.readouterr()
+    assert _SENSITIVE_EXCEPTION_CANARY not in output.out
+    assert "OperationalError" not in output.out
+    assert output.err == ""
+    record = json.loads(output.out)
+    expected_code = (
+        "MODERATION.COMMUNITY_GAME_RECONCILIATION_FAILED"
+        if adapter == "community_game"
+        else "MODERATION.NEED_A_SUB_RECONCILIATION_FAILED"
+    )
+    assert record["stable_error_code"] == expected_code
 
 
 @pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R6")
 def test_reconciliation_helper_exception_log_excludes_sensitive_evidence(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fail_with_sensitive_evidence(*args, **kwargs):
         del args, kwargs
@@ -635,9 +644,12 @@ def test_reconciliation_helper_exception_log_excludes_sensitive_evidence(
             scan_result=scan,
         )
 
-    assert _SENSITIVE_EXCEPTION_CANARY not in caplog.text
-    assert "OperationalError" in caplog.text
-    assert all(record.exc_info is None for record in caplog.records)
+    output = capsys.readouterr()
+    assert _SENSITIVE_EXCEPTION_CANARY not in output.out
+    assert "OperationalError" not in output.out
+    assert output.err == ""
+    record = json.loads(output.out)
+    assert record["stable_error_code"] == "MODERATION.FINDING_RECONCILIATION_FAILED"
 
 
 def _integrity_error_for_constraint(constraint_name: str) -> IntegrityError:

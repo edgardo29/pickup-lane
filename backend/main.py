@@ -1,9 +1,27 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from backend.observability.structured_logging import (
+    RuntimeEventEmitter,
+    build_event_emitter,
+    configure_process_logging,
+    prepare_api_logging,
+)
+from backend.settings import BackendSettings, get_settings
+
+prepare_api_logging()
+try:
+    _BOOTSTRAP_SETTINGS = get_settings()
+    configure_process_logging(
+        build_event_emitter(_BOOTSTRAP_SETTINGS, source_identity="api")
+    )
+except Exception as exc:  # noqa: BLE001 - startup must not expose configuration detail.
+    del exc
+    raise RuntimeError("Application logging bootstrap failed.") from None
+
 from fastapi import FastAPI, Response, status
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import MutableHeaders
@@ -27,8 +45,6 @@ from backend.observability.request_body_limits import (
 )
 from backend.routes import (
     admin_actions_router,
-    admin_rejected_attempts_router,
-    admin_review_cases_router,
     admin_community_games_router,
     admin_game_credits_router,
     admin_game_images_router,
@@ -37,6 +53,8 @@ from backend.routes import (
     admin_need_a_sub_router,
     admin_notifications_router,
     admin_official_games_router,
+    admin_rejected_attempts_router,
+    admin_review_cases_router,
     admin_router,
     admin_users_router,
     admin_venue_images_router,
@@ -51,9 +69,9 @@ from backend.routes import (
     game_chats_router,
     game_credits_router,
     game_images_router,
-    games_router,
     game_participants_router,
     game_status_history_router,
+    games_router,
     host_publish_fees_router,
     inbox_router,
     my_games_router,
@@ -61,9 +79,9 @@ from backend.routes import (
     participant_status_history_router,
     payment_events_router,
     payments_router,
+    platform_notices_router,
     policy_acceptances_router,
     policy_documents_router,
-    platform_notices_router,
     refunds_router,
     stripe_webhook_router,
     sub_post_positions_router,
@@ -82,9 +100,11 @@ from backend.routes import (
     waitlist_entries_router,
 )
 from backend.services.app_check_middleware import AppCheckMiddleware
-from backend.services.app_check_policy import AppCheckRoutePolicy, build_app_check_route_policy
+from backend.services.app_check_policy import (
+    AppCheckRoutePolicy,
+    build_app_check_route_policy,
+)
 from backend.services.app_check_service import APP_CHECK_HEADER_NAME
-from backend.settings import BackendSettings, get_settings
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -160,6 +180,8 @@ async def lifespan(app: FastAPI):
 
 def create_app(settings: BackendSettings | None = None) -> FastAPI:
     backend_settings = settings or get_settings()
+    event_emitter = build_event_emitter(backend_settings, source_identity="api")
+    configure_process_logging(event_emitter)
     api_docs_enabled = backend_settings.enable_api_docs
 
     app = FastAPI(
@@ -224,7 +246,12 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     install_openapi_contracts(app)
     app_check_route_policy = build_app_check_route_policy(app)
     app.state.app_check_route_policy = app_check_route_policy
-    _add_application_middleware(app, backend_settings, app_check_route_policy)
+    _add_application_middleware(
+        app,
+        backend_settings,
+        app_check_route_policy,
+        event_emitter,
+    )
     return app
 
 
@@ -260,6 +287,7 @@ def _add_application_middleware(
     app: FastAPI,
     backend_settings: BackendSettings,
     app_check_route_policy: AppCheckRoutePolicy,
+    event_emitter: RuntimeEventEmitter,
 ) -> None:
     app.add_middleware(
         AppCheckMiddleware,
@@ -295,7 +323,7 @@ def _add_application_middleware(
         ResponseSecurityHeadersMiddleware,
         private_routes=private_route_matches(app.routes),
     )
-    app.add_middleware(CorrelationIdMiddleware)
+    app.add_middleware(CorrelationIdMiddleware, event_emitter=event_emitter)
 
 
 def _ordinary_json_body_routes(app: FastAPI) -> tuple[RequestBodyLimitRoute, ...]:
@@ -307,9 +335,7 @@ def _ordinary_json_body_routes(app: FastAPI) -> tuple[RequestBodyLimitRoute, ...
             continue
 
         methods = frozenset(
-            method
-            for method in route.methods
-            if method.upper() not in BODYLESS_METHODS
+            method for method in route.methods if method.upper() not in BODYLESS_METHODS
         )
         if not methods or _is_special_body_route(route.path, methods):
             continue
@@ -346,7 +372,9 @@ def _apply_response_security_headers(
 
     cache_control = (
         PRIVATE_NO_STORE_CACHE_CONTROL
-        if _matches_private_route(method=method, path=path, private_routes=private_routes)
+        if _matches_private_route(
+            method=method, path=path, private_routes=private_routes
+        )
         else NO_STORE_CACHE_CONTROL
     )
     if _is_fastapi_owned_api_response(
@@ -383,13 +411,10 @@ def _is_static_path(path: str) -> bool:
 
 
 def _is_documentation_html_response(path: str, content_type: str) -> bool:
-    return (
-        any(
-            path == docs_path or path.startswith(f"{docs_path}/")
-            for docs_path in DOCUMENTATION_PATHS
-        )
-        and _is_html_response(content_type)
-    )
+    return any(
+        path == docs_path or path.startswith(f"{docs_path}/")
+        for docs_path in DOCUMENTATION_PATHS
+    ) and _is_html_response(content_type)
 
 
 def _is_fastapi_owned_api_response(
@@ -483,4 +508,4 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(support_flags_router)
 
 
-app = create_app()
+app = create_app(_BOOTSTRAP_SETTINGS)

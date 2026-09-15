@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import uuid
 from typing import Any
 
@@ -20,6 +19,7 @@ from backend.models import (
     SubPostChatMessage,
     SubPostChatMessageDetection,
 )
+from backend.observability.structured_logging import emit_event
 from backend.services.admin_review_actionability_service import (
     is_game_content_review_actionable,
     is_sub_post_content_review_actionable,
@@ -52,8 +52,6 @@ from backend.services.moderation_taxonomy import (
     TARGET_CONTEXT_NEED_A_SUB,
     TARGET_CONTEXT_NEED_A_SUB_CHAT,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def compact_snapshot_text(value: Any) -> str | None:
@@ -158,13 +156,17 @@ def surface_community_game_text(
             target_data={"target_game_id": game.id},
             scan_result=scan_result,
         )
-    except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
+    except Exception:  # noqa: BLE001 - fail-safe moderation boundary
         db.rollback()
-        logger.error(
-            "Community game moderation reconciliation failed for game %s "
-            "(error_type=%s).",
-            game_id,
-            type(exc).__name__,
+        emit_event(
+            "moderation.reconciliation_failed",
+            "error",
+            {
+                "operation": "moderation.community_game.reconcile",
+                "resource_kind": "community_game",
+                "result": "failed",
+                "stable_error_code": "MODERATION.COMMUNITY_GAME_RECONCILIATION_FAILED",
+            },
         )
 
 
@@ -225,12 +227,17 @@ def surface_need_a_sub_post_text(
             target_data={"target_sub_post_id": sub_post.id},
             scan_result=scan_result,
         )
-    except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
+    except Exception:  # noqa: BLE001 - fail-safe moderation boundary
         db.rollback()
-        logger.error(
-            "Need a Sub moderation reconciliation failed for post %s (error_type=%s).",
-            sub_post_id,
-            type(exc).__name__,
+        emit_event(
+            "moderation.reconciliation_failed",
+            "error",
+            {
+                "operation": "moderation.need_a_sub.reconcile",
+                "resource_kind": "need_a_sub",
+                "result": "failed",
+                "stable_error_code": "MODERATION.NEED_A_SUB_RECONCILIATION_FAILED",
+            },
         )
 
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import uuid
 from datetime import datetime
 
@@ -14,6 +13,7 @@ from backend.models import (
     AdminContentModerationFinding,
     AdminReviewCase,
 )
+from backend.observability.structured_logging import emit_event
 from backend.services.admin_review_service import (
     CASE_ACTIVE_STATUSES,
     CONTENT_MODERATION_CASE_CATEGORY,
@@ -34,8 +34,6 @@ from backend.services.content_moderation_evidence_service import (
 )
 from backend.services.content_moderation_scanner_service import ScanProvenance
 from backend.services.moderation_evidence_service import durable_identity_hash
-
-logger = logging.getLogger(__name__)
 
 VALID_CONTENT_REVIEW_CASE_TYPES = {"community_game", "need_a_sub"}
 
@@ -342,11 +340,15 @@ def run_content_moderation_finding_reconciliation_safely(
             target_data=target_data,
             scan_result=scan_result,
         )
-    except Exception as exc:  # noqa: BLE001 - fail-safe moderation boundary
+    except Exception:  # noqa: BLE001 - fail-safe moderation boundary
         db.rollback()
-        logger.error(
-            "Content moderation finding reconciliation failed for target %s "
-            "(error_type=%s).",
-            target_data,
-            type(exc).__name__,
+        emit_event(
+            "moderation.finding_reconciliation_failed",
+            "error",
+            {
+                "operation": "moderation.finding.reconcile",
+                "resource_kind": "moderation_finding",
+                "result": "failed",
+                "stable_error_code": "MODERATION.FINDING_RECONCILIATION_FAILED",
+            },
         )

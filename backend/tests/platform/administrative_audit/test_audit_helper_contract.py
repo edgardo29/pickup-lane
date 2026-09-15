@@ -1,16 +1,26 @@
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from backend.models import AdminAction, User
 from backend.observability.correlation import correlation_context, get_correlation_id
+from backend.observability.http_errors import (
+    CorrelationIdMiddleware,
+    register_exception_handlers,
+)
+from backend.observability.structured_logging import (
+    RuntimeEventEmitter,
+    configure_process_logging,
+)
 from backend.schemas.admin_action_schema import AdminActionNoteCreate
 
 pytestmark = pytest.mark.suite_type("ordinary")
@@ -78,6 +88,81 @@ def _record_original(actor_id: uuid.UUID, target_id: uuid.UUID) -> uuid.UUID:
         )
         db.commit()
         return action.id
+
+
+@pytest.mark.requirement("WS09-01A")
+def test_admin_request_audit_and_logging_share_correlation_without_audit_leakage(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    actor = _user("logging-actor", role="admin")
+    target = _user("logging-target")
+    _persist_users(actor, target)
+    private_reason = "Private support reason for user@example.invalid."
+    private_metadata = "support-console"
+    emitter = RuntimeEventEmitter("api", "test", "test-release")
+    configure_process_logging(emitter, configure_uvicorn=False)
+    app = FastAPI()
+    register_exception_handlers(app)
+
+    @app.post("/synthetic/admin/{outcome}")
+    def record(outcome: str) -> dict[str, bool]:
+        with _session() as db:
+            _service().record_admin_action(
+                db,
+                admin_user_id=actor.id,
+                action_type="suspend_user",
+                outcome="succeeded" if outcome == "success" else "failed",
+                target_user_id=target.id,
+                reason=private_reason,
+                metadata={"source": private_metadata},
+            )
+            db.commit()
+        if outcome != "success":
+            raise HTTPException(status_code=403, detail="Administrative action denied.")
+        return {"ok": True}
+
+    app.add_middleware(CorrelationIdMiddleware, event_emitter=emitter)
+    request_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+    with TestClient(app) as client:
+        succeeded = client.post(
+            "/synthetic/admin/success",
+            headers={"X-Request-ID": request_ids[0]},
+        )
+        denied = client.post(
+            "/synthetic/admin/denied",
+            headers={"X-Request-ID": request_ids[1]},
+        )
+
+    assert succeeded.status_code == 200
+    assert denied.status_code == 403
+    with _session() as db:
+        actions = list(
+            db.execute(
+                select(AdminAction)
+                .where(AdminAction.admin_user_id == actor.id)
+                .order_by(AdminAction.created_at)
+            ).scalars()
+        )
+    assert [str(action.correlation_id) for action in actions] == request_ids
+    assert [action.outcome for action in actions] == ["succeeded", "failed"]
+
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    completions = [
+        record for record in records if record["event_name"] == "http.request"
+    ]
+    assert [record["correlation_id"] for record in completions] == request_ids
+    assert [record["http_status_code"] for record in completions] == [200, 403]
+    serialized = json.dumps(records)
+    for prohibited in (
+        str(actor.id),
+        str(target.id),
+        actor.email,
+        target.email,
+        private_reason,
+        private_metadata,
+        "Administrative action denied.",
+    ):
+        assert prohibited not in serialized
 
 
 @pytest.mark.requirement("WS09-02A-R5")

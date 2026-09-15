@@ -4,6 +4,20 @@ Use this template to write the final pull-request description from the PR base, 
 
 Write for a competent software engineer who has never worked in this repository.
 
+## PR Title
+
+For an executable production-readiness pass, use:
+
+```text
+<PASS-ID>: <Concise descriptive title>
+```
+
+Use the exact executable pass ID, a colon, and a concise sentence-case description of the implemented outcome. Example: `WS09-01A: Provider-independent structured API and worker logging`.
+
+Do not use alternate executable-pass forms such as `<PASS-ID> - ...`, `Implement <PASS-ID> ...`, or `Add <PASS-ID> ...`.
+
+Non-pass repository-maintenance work may use an appropriate descriptive convention such as `Docs:` or `Program:`.
+
 When producing the PR-body artifact, include only the three required sections defined below. This restriction applies only to the PR body. It does not replace any surrounding Gate D or workflow report requested by the user, such as the commit SHA, PR URL, publication result, blockers, or next action.
 
 ## Required PR Body

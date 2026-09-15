@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 import pytest
 from fastapi.routing import APIRoute
@@ -76,7 +76,9 @@ def _source_files() -> tuple[Path, ...]:
     return tuple(
         path
         for path in files
-        if not any(part in _IGNORED_SOURCE_PARTS for part in path.relative_to(_REPO_ROOT).parts)
+        if not any(
+            part in _IGNORED_SOURCE_PARTS for part in path.relative_to(_REPO_ROOT).parts
+        )
     )
 
 
@@ -111,7 +113,10 @@ def _fastapi_constructor_locations() -> list[str]:
         direct_names: set[str] = set()
         module_names: set[str] = set()
         for node in tree.body:
-            if isinstance(node, ast.ImportFrom) and node.module in {"fastapi", "fastapi.applications"}:
+            if isinstance(node, ast.ImportFrom) and node.module in {
+                "fastapi",
+                "fastapi.applications",
+            }:
                 for alias in node.names:
                     if alias.name == "FastAPI":
                         direct_names.add(alias.asname or alias.name)
@@ -146,7 +151,9 @@ def test_invalid_host_remains_trusted_host_middleware_owned(
 ) -> None:
     app, _main_module = _create_app(monkeypatch, ALLOWED_HOSTS="testserver")
 
-    with TestClient(app, follow_redirects=False, raise_server_exceptions=False) as client:
+    with TestClient(
+        app, follow_redirects=False, raise_server_exceptions=False
+    ) as client:
         response = client.get("/live", headers={"Host": "evil.example.invalid"})
 
     assert response.status_code == 400
@@ -162,7 +169,9 @@ def test_health_503_responses_remain_health_contracts_not_error_envelopes(
     app, main_module = _create_app(monkeypatch, ENABLE_DB_HEALTH="true")
     monkeypatch.setattr(main_module, "_database_ready", lambda: False)
 
-    with TestClient(app, follow_redirects=False, raise_server_exceptions=False) as client:
+    with TestClient(
+        app, follow_redirects=False, raise_server_exceptions=False
+    ) as client:
         ready_response = client.get("/ready", headers={"Host": "testserver"})
         db_health_response = client.get("/db-health", headers={"Host": "testserver"})
 
@@ -185,7 +194,9 @@ def test_docs_openapi_and_disabled_docs_boundaries_are_distinct(
 ) -> None:
     docs_enabled_app, _main_module = _create_app(monkeypatch, ENABLE_API_DOCS="true")
 
-    with TestClient(docs_enabled_app, follow_redirects=False, raise_server_exceptions=False) as client:
+    with TestClient(
+        docs_enabled_app, follow_redirects=False, raise_server_exceptions=False
+    ) as client:
         docs_response = client.get("/docs", headers={"Host": "testserver"})
         openapi_response = client.get("/openapi.json", headers={"Host": "testserver"})
 
@@ -197,7 +208,9 @@ def test_docs_openapi_and_disabled_docs_boundaries_are_distinct(
     _assert_not_public_error_envelope(openapi_response.json())
 
     docs_disabled_app, _main_module = _create_app(monkeypatch, ENABLE_API_DOCS="false")
-    with TestClient(docs_disabled_app, follow_redirects=False, raise_server_exceptions=False) as client:
+    with TestClient(
+        docs_disabled_app, follow_redirects=False, raise_server_exceptions=False
+    ) as client:
         missing_docs_response = client.get("/docs", headers={"Host": "testserver"})
 
     assert missing_docs_response.status_code == 404
@@ -213,12 +226,16 @@ def test_static_redirect_and_no_content_surfaces_keep_their_owners(
     app, _main_module = _create_app(monkeypatch)
 
     static_mounts = [
-        route for route in app.routes if isinstance(route, Mount) and route.path == "/static"
+        route
+        for route in app.routes
+        if isinstance(route, Mount) and route.path == "/static"
     ]
     assert len(static_mounts) == 1
     assert isinstance(static_mounts[0].app, StaticFiles)
 
-    with TestClient(app, follow_redirects=False, raise_server_exceptions=False) as client:
+    with TestClient(
+        app, follow_redirects=False, raise_server_exceptions=False
+    ) as client:
         missing_static_response = client.get(
             "/static/missing.txt",
             headers={"Host": "testserver"},
@@ -233,26 +250,31 @@ def test_static_redirect_and_no_content_surfaces_keep_their_owners(
     assert redirect_response.text == ""
 
     no_content_routes = [
-        route.path
-        for route in _api_routes(app)
-        if route.status_code == 204
+        route.path for route in _api_routes(app) if route.status_code == 204
     ]
     assert no_content_routes == ["/auth/unfinished-account"]
 
 
 @pytest.mark.requirement("WS02-04A-R6", "WS02-04A-R7")
-def test_static_source_has_no_invented_file_streaming_or_websocket_error_owner() -> None:
+def test_static_source_has_no_invented_file_streaming_or_websocket_error_owner() -> (
+    None
+):
     combined_source = "\n".join(_source_map().values())
 
     assert "FileResponse" not in combined_source
     assert "StreamingResponse" not in combined_source
     assert "WebSocket" not in combined_source
     assert ".websocket(" not in combined_source
-    assert "app.mount(\"/static\", StaticFiles(directory=STATIC_DIR), name=\"static\")" in combined_source
+    assert (
+        'app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")'
+        in combined_source
+    )
 
 
 @pytest.mark.requirement("WS02-04A-R7")
-def test_single_exception_handler_and_app_construction_owners_remain_canonical() -> None:
+def test_single_exception_handler_and_app_construction_owners_remain_canonical() -> (
+    None
+):
     sources = _source_map()
     handler_sources = [
         relative
@@ -261,16 +283,26 @@ def test_single_exception_handler_and_app_construction_owners_remain_canonical()
     ]
 
     assert handler_sources == ["backend/observability/http_errors.py"]
-    assert sources["backend/observability/http_errors.py"].count("app.add_exception_handler(") == 3
+    assert (
+        sources["backend/observability/http_errors.py"].count(
+            "app.add_exception_handler("
+        )
+        == 3
+    )
     assert sources["backend/main.py"].count("register_exception_handlers(app)") == 1
-    assert sources["backend/main.py"].count("app.add_middleware(CorrelationIdMiddleware)") == 1
+    assert (
+        sources["backend/main.py"].count("app.add_middleware(CorrelationIdMiddleware,")
+        == 1
+    )
     constructor_locations = _fastapi_constructor_locations()
     assert len(constructor_locations) == 1
     assert constructor_locations[0].startswith("backend/main.py:")
 
 
 @pytest.mark.requirement("WS02-04A-R7")
-def test_no_route_local_error_envelope_or_duplicate_correlation_injector_exists() -> None:
+def test_no_route_local_error_envelope_or_duplicate_correlation_injector_exists() -> (
+    None
+):
     sources = _source_map()
     route_sources = {
         relative: source

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -145,12 +144,8 @@ def _message(
     )
 
 
-def _event_payloads(caplog: pytest.LogCaptureFixture) -> list[dict[str, object]]:
-    return [
-        record.pickup_lane_event
-        for record in caplog.records
-        if hasattr(record, "pickup_lane_event")
-    ]
+def _event_payloads(capsys: pytest.CaptureFixture[str]) -> list[dict[str, object]]:
+    return [json.loads(line) for line in capsys.readouterr().out.splitlines()]
 
 
 def _assert_safe_event_payload(event: dict[str, object], *, result: str) -> None:
@@ -201,14 +196,16 @@ def test_approved_constants_and_retry_after_boundaries() -> None:
     )
     assert (
         chat_rate_limit_service.retry_after_for_window(
-            oldest_qualifying_message_at=_BASE_TIME - timedelta(seconds=59, milliseconds=200),
+            oldest_qualifying_message_at=_BASE_TIME
+            - timedelta(seconds=59, milliseconds=200),
             current_time=_BASE_TIME,
         )
         == 1
     )
     assert (
         chat_rate_limit_service.retry_after_for_window(
-            oldest_qualifying_message_at=_BASE_TIME - timedelta(seconds=45, milliseconds=400),
+            oldest_qualifying_message_at=_BASE_TIME
+            - timedelta(seconds=45, milliseconds=400),
             current_time=_BASE_TIME,
         )
         == 15
@@ -254,7 +251,9 @@ def test_lock_key_uses_deterministic_sender_chat_and_family_identity() -> None:
 @pytest.mark.requirement("WS02-04C3A-R1")
 @pytest.mark.requirement("WS02-04C3A-R2")
 @pytest.mark.requirement("WS02-04C3A-R3")
-def test_rolling_window_uses_committed_visible_text_rows_and_inclusive_boundary() -> None:
+def test_rolling_window_uses_committed_visible_text_rows_and_inclusive_boundary() -> (
+    None
+):
     with _session() as db:
         sender, other_sender, chat, other_chat = _context(db)
         allowed_times = [
@@ -365,31 +364,29 @@ def test_rolling_window_uses_committed_visible_text_rows_and_inclusive_boundary(
 @pytest.mark.requirement("WS02-04C3A-R10")
 def test_advisory_lock_failure_fails_closed_without_fake_rate_limit(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fail_lock(*args, **kwargs) -> None:
         del args, kwargs
         raise SQLAlchemyError("synthetic-store-secret SELECT raw_lock_failure")
 
-    monkeypatch.setattr(chat_rate_limit_service, "_acquire_chat_rate_limit_lock", fail_lock)
+    monkeypatch.setattr(
+        chat_rate_limit_service, "_acquire_chat_rate_limit_lock", fail_lock
+    )
 
-    with _session() as db, caplog.at_level(
-        logging.INFO,
-        logger="backend.services.chat_rate_limit_service",
-    ):
-        with pytest.raises(SQLAlchemyError):
-            chat_rate_limit_service.enforce_visible_text_chat_rate_limit(
-                db,
-                limiter_category="game_chat",
-                message_model=ChatMessage,
-                chat_id=uuid.uuid4(),
-                sender_user_id=uuid.uuid4(),
-                current_time=_BASE_TIME,
-            )
+    with _session() as db, pytest.raises(SQLAlchemyError):
+        chat_rate_limit_service.enforce_visible_text_chat_rate_limit(
+            db,
+            limiter_category="game_chat",
+            message_model=ChatMessage,
+            chat_id=uuid.uuid4(),
+            sender_user_id=uuid.uuid4(),
+            current_time=_BASE_TIME,
+        )
 
-    events = _event_payloads(caplog)
+    events = _event_payloads(capsys)
     assert [event["result"] for event in events] == ["store_error"]
-    assert "stable_error_code" not in events[0]
+    assert events[0]["stable_error_code"] == "CHAT.RATE_LIMIT_STORE_ERROR"
     _assert_safe_event_payload(events[0], result="store_error")
 
 
@@ -397,38 +394,36 @@ def test_advisory_lock_failure_fails_closed_without_fake_rate_limit(
 @pytest.mark.requirement("WS02-04C3A-R10")
 def test_rolling_window_read_failure_fails_closed_without_fake_rate_limit(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fail_read(*args, **kwargs) -> list[datetime]:
         del args, kwargs
         raise SQLAlchemyError("synthetic-store-secret SELECT raw_read_failure")
 
-    monkeypatch.setattr(chat_rate_limit_service, "_recent_qualifying_message_times", fail_read)
+    monkeypatch.setattr(
+        chat_rate_limit_service, "_recent_qualifying_message_times", fail_read
+    )
 
-    with _session() as db, caplog.at_level(
-        logging.INFO,
-        logger="backend.services.chat_rate_limit_service",
-    ):
-        with pytest.raises(SQLAlchemyError):
-            chat_rate_limit_service.enforce_visible_text_chat_rate_limit(
-                db,
-                limiter_category="game_chat",
-                message_model=ChatMessage,
-                chat_id=uuid.uuid4(),
-                sender_user_id=uuid.uuid4(),
-                current_time=_BASE_TIME,
-            )
+    with _session() as db, pytest.raises(SQLAlchemyError):
+        chat_rate_limit_service.enforce_visible_text_chat_rate_limit(
+            db,
+            limiter_category="game_chat",
+            message_model=ChatMessage,
+            chat_id=uuid.uuid4(),
+            sender_user_id=uuid.uuid4(),
+            current_time=_BASE_TIME,
+        )
 
-    events = _event_payloads(caplog)
+    events = _event_payloads(capsys)
     assert [event["result"] for event in events] == ["store_error"]
-    assert "stable_error_code" not in events[0]
+    assert events[0]["stable_error_code"] == "CHAT.RATE_LIMIT_STORE_ERROR"
     _assert_safe_event_payload(events[0], result="store_error")
 
 
 @pytest.mark.requirement("WS02-04C3A-R10")
 def test_allowed_rejected_and_store_error_telemetry_are_bounded(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with _session() as db:
         sender, _other_sender, chat, _other_chat = _context(db)
@@ -443,52 +438,52 @@ def test_allowed_rejected_and_store_error_telemetry_are_bounded(
         )
         db.commit()
 
-        with caplog.at_level(
-            logging.INFO,
-            logger="backend.services.chat_rate_limit_service",
-        ):
+        chat_rate_limit_service.enforce_visible_text_chat_rate_limit(
+            db,
+            limiter_category="need_a_sub_chat",
+            message_model=ChatMessage,
+            chat_id=uuid.uuid4(),
+            sender_user_id=uuid.uuid4(),
+            current_time=_BASE_TIME,
+        )
+
+        with pytest.raises(HTTPException):
             chat_rate_limit_service.enforce_visible_text_chat_rate_limit(
                 db,
-                limiter_category="need_a_sub_chat",
+                limiter_category="game_chat",
+                message_model=ChatMessage,
+                chat_id=chat.id,
+                sender_user_id=sender.id,
+                current_time=_BASE_TIME,
+            )
+
+        def fail_lock(*args, **kwargs) -> None:
+            del args, kwargs
+            raise SQLAlchemyError("synthetic-store-secret raw telemetry text")
+
+        monkeypatch.setattr(
+            chat_rate_limit_service,
+            "_acquire_chat_rate_limit_lock",
+            fail_lock,
+        )
+        with pytest.raises(SQLAlchemyError):
+            chat_rate_limit_service.enforce_visible_text_chat_rate_limit(
+                db,
+                limiter_category="game_chat",
                 message_model=ChatMessage,
                 chat_id=uuid.uuid4(),
                 sender_user_id=uuid.uuid4(),
                 current_time=_BASE_TIME,
             )
 
-            with pytest.raises(HTTPException):
-                chat_rate_limit_service.enforce_visible_text_chat_rate_limit(
-                    db,
-                    limiter_category="game_chat",
-                    message_model=ChatMessage,
-                    chat_id=chat.id,
-                    sender_user_id=sender.id,
-                    current_time=_BASE_TIME,
-                )
-
-            def fail_lock(*args, **kwargs) -> None:
-                del args, kwargs
-                raise SQLAlchemyError("synthetic-store-secret raw telemetry text")
-
-            monkeypatch.setattr(
-                chat_rate_limit_service,
-                "_acquire_chat_rate_limit_lock",
-                fail_lock,
-            )
-            with pytest.raises(SQLAlchemyError):
-                chat_rate_limit_service.enforce_visible_text_chat_rate_limit(
-                    db,
-                    limiter_category="game_chat",
-                    message_model=ChatMessage,
-                    chat_id=uuid.uuid4(),
-                    sender_user_id=uuid.uuid4(),
-                    current_time=_BASE_TIME,
-                )
-
-    events = _event_payloads(caplog)
-    assert [event["result"] for event in events] == ["allowed", "rejected", "store_error"]
+    events = _event_payloads(capsys)
+    assert [event["result"] for event in events] == [
+        "allowed",
+        "rejected",
+        "store_error",
+    ]
     assert events[1]["stable_error_code"] == "API.RATE_LIMITED"
     assert "stable_error_code" not in events[0]
-    assert "stable_error_code" not in events[2]
+    assert events[2]["stable_error_code"] == "CHAT.RATE_LIMIT_STORE_ERROR"
     for event in events:
         _assert_safe_event_payload(event, result=str(event["result"]))

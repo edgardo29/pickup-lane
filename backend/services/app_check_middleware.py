@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-import logging
 from typing import Protocol
 
 from starlette.datastructures import Headers
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from backend.observability.events import EventEnvelope
 from backend.observability.http_errors import public_error_response
-from backend.services.app_check_policy import AppCheckRouteMatch, AppCheckRoutePolicy
+from backend.observability.structured_logging import emit_event
+from backend.services.app_check_policy import AppCheckRoutePolicy
 from backend.services.app_check_service import (
     APP_CHECK_HEADER_NAME,
     AppCheckVerificationOutcome,
@@ -21,9 +19,6 @@ from backend.services.app_check_service import (
     verify_app_check_token,
 )
 from backend.settings import BackendSettings, FirebaseAppCheckMode
-
-
-logger = logging.getLogger(__name__)
 
 APP_CHECK_EVENT_NAME = "app_check.request"
 APP_CHECK_REQUIRED_CODE = "APP_CHECK.REQUIRED"
@@ -36,17 +31,15 @@ class AppCheckVerifier(Protocol):
         self,
         headers: Headers,
         settings: BackendSettings,
-    ) -> AppCheckVerificationResult:
-        ...
+    ) -> AppCheckVerificationResult: ...
 
 
 class AppCheckEventRecorder(Protocol):
     def __call__(
         self,
-        event: "AppCheckEvent",
+        event: AppCheckEvent,
         settings: BackendSettings,
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -124,19 +117,21 @@ class AppCheckMiddleware:
 
 
 def record_app_check_event(event: AppCheckEvent, settings: BackendSettings) -> None:
-    envelope = EventEnvelope(
-        event_name=APP_CHECK_EVENT_NAME,
-        occurred_at=datetime.now(timezone.utc),
-        environment=settings.app_env.value,
-        release=settings.release_identity,
-        provider_kind="firebase",
-        operation=event.operation,
-        resource_kind=event.route_family,
-        result=event.outcome.value,
-        stable_error_code=event.stable_error_code,
-        labels={"route_template": event.route_template},
+    del settings
+    fields: dict[str, object] = {
+        "provider_kind": "firebase",
+        "operation": event.operation,
+        "resource_kind": event.route_family,
+        "result": event.outcome.value,
+        "labels": {"route_template": event.route_template},
+    }
+    if event.stable_error_code is not None:
+        fields["stable_error_code"] = event.stable_error_code
+    emit_event(
+        APP_CHECK_EVENT_NAME,
+        "info" if event.outcome is AppCheckVerificationOutcome.VALID else "warning",
+        fields,
     )
-    logger.info(envelope.to_json())
 
 
 def app_check_header_name() -> str:

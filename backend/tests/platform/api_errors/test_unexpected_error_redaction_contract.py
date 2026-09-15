@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +13,10 @@ from backend.observability.http_errors import (
     GENERIC_UNEXPECTED_DETAIL,
     GENERIC_UNEXPECTED_MESSAGE,
     handle_unexpected_exception,
+)
+from backend.observability.structured_logging import (
+    RuntimeEventEmitter,
+    configure_process_logging,
 )
 from backend.observability.timeouts import (
     DATABASE_TIMEOUT_CODE,
@@ -28,7 +32,6 @@ pytestmark = pytest.mark.no_db_cleanup
 
 _TEST_DATABASE_URL = "postgresql+psycopg://127.0.0.1:5432/pickup_lane_test_db"
 _ALLOWED_ORIGIN = "https://app.example.invalid"
-_ERROR_LOGGER = "backend.observability.http_errors"
 _LOG_SAFE_CORRELATION_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 _SENSITIVE_SENTINELS = (
     "synthetic-raw-exception-text",
@@ -82,7 +85,13 @@ def _create_app(monkeypatch: pytest.MonkeyPatch, **overrides: str | None):
     return main_module.create_app(settings)
 
 
-def _unexpected_response(exc: Exception) -> tuple[int, dict[str, Any], Mapping[str, str]]:
+def _unexpected_response(
+    exc: Exception,
+) -> tuple[int, dict[str, Any], Mapping[str, str]]:
+    configure_process_logging(
+        RuntimeEventEmitter("api", "test", "test-release"),
+        configure_uvicorn=False,
+    )
     with correlation_context(_LOG_SAFE_CORRELATION_ID):
         response = asyncio.run(
             handle_unexpected_exception(
@@ -96,10 +105,9 @@ def _unexpected_response(exc: Exception) -> tuple[int, dict[str, Any], Mapping[s
 @pytest.mark.requirement("WS02-04A-R5")
 def test_generic_unexpected_exception_response_and_log_exclude_private_values(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     app = _create_app(monkeypatch)
-    caplog.set_level(logging.ERROR, logger=_ERROR_LOGGER)
 
     @app.get("/synthetic-unexpected")
     def synthetic_unexpected() -> None:
@@ -112,7 +120,9 @@ def test_generic_unexpected_exception_response_and_log_exclude_private_values(
             )
         )
 
-    with TestClient(app, follow_redirects=False, raise_server_exceptions=False) as client:
+    with TestClient(
+        app, follow_redirects=False, raise_server_exceptions=False
+    ) as client:
         response = client.get(
             "/synthetic-unexpected",
             headers={
@@ -128,18 +138,19 @@ def test_generic_unexpected_exception_response_and_log_exclude_private_values(
     assert payload["detail"] == GENERIC_UNEXPECTED_DETAIL
     assert response.headers["X-Request-ID"] == payload["correlation_id"]
 
+    output = capsys.readouterr()
+    records = [json.loads(line) for line in output.out.splitlines()]
+    assert output.err == ""
     for sentinel in _SENSITIVE_SENTINELS:
         assert sentinel not in response.text
-        assert sentinel not in caplog.text
+        assert sentinel not in output.out
 
-    records = [record for record in caplog.records if record.name == _ERROR_LOGGER]
-    assert len(records) == 1
-    assert records[0].message == "Unhandled application exception."
-    logged_context = records[0].__dict__["pickup_lane_error"]
-    assert logged_context == {
-        "correlation_id": payload["correlation_id"],
-        "error_code": "API.UNEXPECTED",
-    }
+    assert [record["event_name"] for record in records] == [
+        "application.unexpected_error",
+        "http.request",
+    ]
+    assert records[0]["correlation_id"] == payload["correlation_id"]
+    assert records[0]["stable_error_code"] == "API.UNEXPECTED"
 
 
 @pytest.mark.requirement("WS02-04A-R5")
@@ -183,14 +194,12 @@ def test_generic_unexpected_exception_response_and_log_exclude_private_values(
     ],
 )
 def test_timeout_exceptions_use_bounded_503_public_and_log_contracts(
-    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
     exc: Exception,
     expected_code: str,
     expected_message: str,
     expected_details: dict[str, str],
 ) -> None:
-    caplog.set_level(logging.WARNING, logger=_ERROR_LOGGER)
-
     response_status, payload, headers = _unexpected_response(exc)
 
     assert response_status == 503
@@ -198,13 +207,14 @@ def test_timeout_exceptions_use_bounded_503_public_and_log_contracts(
     assert payload["message"] == expected_message
     assert payload["details"] == expected_details
     assert headers["X-Request-ID"] == payload["correlation_id"]
+    output = capsys.readouterr()
+    records = [json.loads(line) for line in output.out.splitlines()]
+    assert output.err == ""
     for sentinel in _SENSITIVE_SENTINELS:
         assert sentinel not in json.dumps(payload)
-        assert sentinel not in caplog.text
+        assert sentinel not in output.out
 
-    records = [record for record in caplog.records if record.name == _ERROR_LOGGER]
     assert len(records) == 1
-    assert records[0].message == "Application operation timed out."
-    logged_context = records[0].__dict__["pickup_lane_error"]
-    assert logged_context["correlation_id"] == payload["correlation_id"]
-    assert logged_context["error_code"] == expected_code
+    assert records[0]["event_name"] == "application.timeout"
+    assert records[0]["correlation_id"] == payload["correlation_id"]
+    assert records[0]["stable_error_code"] == expected_code

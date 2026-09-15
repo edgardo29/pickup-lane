@@ -8,20 +8,30 @@ provider handlers.
 from __future__ import annotations
 
 import re
-from threading import Event, Thread
 import uuid
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from threading import Event, Thread
+from typing import Any
 
 from sqlalchemy import case, func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.models import DurableJob, DurableJobEvent, DurableWorkerHeartbeat
+from backend.observability.correlation import (
+    generate_correlation_id,
+    get_correlation_id,
+    optional_correlation_context,
+    validate_correlation_id,
+)
 from backend.observability.redaction import contains_sensitive_text, is_sensitive_key
-
+from backend.observability.structured_logging import (
+    RuntimeEventEmitter,
+    emit_durable_job_event,
+)
 
 PENDING = "pending"
 RETRY_WAITING = "retry_waiting"
@@ -74,7 +84,7 @@ class HandlerResult:
     retry_delay: timedelta | None = None
 
     @classmethod
-    def success(cls, result_metadata: Mapping[str, Any] | None = None) -> "HandlerResult":
+    def success(cls, result_metadata: Mapping[str, Any] | None = None) -> HandlerResult:
         return cls(
             outcome=HandlerOutcome.SUCCESS,
             result_metadata=result_metadata or {},
@@ -87,7 +97,7 @@ class HandlerResult:
         *,
         retry_delay: timedelta | None = None,
         result_metadata: Mapping[str, Any] | None = None,
-    ) -> "HandlerResult":
+    ) -> HandlerResult:
         return cls(
             outcome=HandlerOutcome.TRANSIENT_FAILURE,
             error_code=error_code,
@@ -101,7 +111,7 @@ class HandlerResult:
         error_code: str,
         *,
         result_metadata: Mapping[str, Any] | None = None,
-    ) -> "HandlerResult":
+    ) -> HandlerResult:
         return cls(
             outcome=HandlerOutcome.PERMANENT_FAILURE,
             error_code=error_code,
@@ -165,7 +175,9 @@ class DurableJobRegistry:
             )
         )
 
-    def executable_definition_for(self, job_type: str, payload_version: int) -> JobDefinition:
+    def executable_definition_for(
+        self, job_type: str, payload_version: int
+    ) -> JobDefinition:
         definition = self.definition_for(job_type, payload_version)
         if definition.handler is None:
             raise UnsupportedJobDefinitionError(
@@ -202,6 +214,15 @@ class ClaimResult:
     job: DurableJob
     lease_token: uuid.UUID
     database_time: datetime
+
+
+@dataclass(frozen=True)
+class _JobLogSummary:
+    job_id: uuid.UUID
+    job_type: str
+    attempt_count: int
+    maximum_attempts: int
+    correlation_id: str | None
 
 
 @dataclass(frozen=True)
@@ -300,7 +321,11 @@ def enqueue_job(
         status=PENDING,
         attempt_count=0,
         maximum_attempts=attempts,
-        correlation_id=correlation_id or _generated_safe_correlation_id(),
+        correlation_id=(
+            correlation_id
+            if correlation_id is not None
+            else get_correlation_id() or generate_correlation_id()
+        ),
         origin_reference_type=origin_reference_type,
         origin_reference_id=origin_reference_id,
         idempotency_key=idempotency_key,
@@ -342,6 +367,7 @@ def claim_job(
     registry: DurableJobRegistry,
     worker_identity: str,
     policy: DurableJobQueuePolicy | None = None,
+    exhausted_jobs: list[_JobLogSummary] | None = None,
 ) -> ClaimResult | None:
     active_policy = policy or DurableJobQueuePolicy()
     supported_pairs = registry.supported_pairs
@@ -355,6 +381,7 @@ def claim_job(
         worker_identity=worker_identity,
         policy=active_policy,
         now=now,
+        exhausted_jobs=exhausted_jobs,
     )
     if recovered is not None:
         return recovered
@@ -375,7 +402,9 @@ def claim_job(
             DurableJob.status.in_(CLAIMABLE_STATUSES),
             DurableJob.available_at <= now,
             DurableJob.attempt_count < DurableJob.maximum_attempts,
-            tuple_(DurableJob.job_type, DurableJob.payload_version).in_(supported_pairs),
+            tuple_(DurableJob.job_type, DurableJob.payload_version).in_(
+                supported_pairs
+            ),
         )
         .order_by(
             fairness_bucket.asc(),
@@ -726,12 +755,18 @@ def backlog_summary(
     for job in jobs:
         by_status[job.status] = by_status.get(job.status, 0) + 1
         status_attempts = attempt_counts_by_status.setdefault(job.status, {})
-        status_attempts[job.attempt_count] = status_attempts.get(job.attempt_count, 0) + 1
+        status_attempts[job.attempt_count] = (
+            status_attempts.get(job.attempt_count, 0) + 1
+        )
         key = (job.job_type, job.payload_version)
         by_type_version[key] = by_type_version.get(key, 0) + 1
         if key not in supported and job.status in CLAIMABLE_STATUSES:
             unsupported.add(key)
-        if job.status == LEASED and job.lease_expires_at and job.lease_expires_at <= now:
+        if (
+            job.status == LEASED
+            and job.lease_expires_at
+            and job.lease_expires_at <= now
+        ):
             expired_leases += 1
         if job.status in CLAIMABLE_STATUSES and job.available_at <= now:
             age = int((now - job.available_at).total_seconds())
@@ -740,9 +775,15 @@ def backlog_summary(
             if age >= active_policy.fairness_age.total_seconds():
                 fairness_protected += 1
 
-    worker_rows = db.execute(
-        select(DurableWorkerHeartbeat).order_by(DurableWorkerHeartbeat.worker_identity.asc())
-    ).scalars().all()
+    worker_rows = (
+        db.execute(
+            select(DurableWorkerHeartbeat).order_by(
+                DurableWorkerHeartbeat.worker_identity.asc()
+            )
+        )
+        .scalars()
+        .all()
+    )
     worker_heartbeats = tuple(
         WorkerHeartbeatSummary(
             worker_identity=worker.worker_identity,
@@ -785,12 +826,16 @@ def inspect_job_history(
     job = db.get(DurableJob, job_id)
     if job is None:
         return None
-    events = db.execute(
-        select(DurableJobEvent)
-        .where(DurableJobEvent.job_id == job_id)
-        .order_by(DurableJobEvent.occurred_at.desc(), DurableJobEvent.id.desc())
-        .limit(limit)
-    ).scalars().all()
+    events = (
+        db.execute(
+            select(DurableJobEvent)
+            .where(DurableJobEvent.job_id == job_id)
+            .order_by(DurableJobEvent.occurred_at.desc(), DurableJobEvent.id.desc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
     return JobInspectionSummary(
         job_type=job.job_type,
         payload_version=job.payload_version,
@@ -835,13 +880,15 @@ class _ActiveLeaseRenewer:
         )
         self.lease_lost = False
 
-    def start(self) -> "_ActiveLeaseRenewer":
+    def start(self) -> _ActiveLeaseRenewer:
         self._thread.start()
         return self
 
     def stop(self) -> None:
         self._stop.set()
-        self._thread.join(timeout=max(1.0, self._policy.heartbeat_interval.total_seconds() * 2))
+        self._thread.join(
+            timeout=max(1.0, self._policy.heartbeat_interval.total_seconds() * 2)
+        )
 
     def _run(self) -> None:
         while not self._stop.wait(self._policy.heartbeat_interval.total_seconds()):
@@ -859,7 +906,7 @@ class _ActiveLeaseRenewer:
                         self._stop.set()
                         return
                     db.commit()
-            except Exception:
+            except Exception:  # noqa: BLE001 - renewal failure means the lease is lost.
                 self.lease_lost = True
                 self._stop.set()
                 return
@@ -874,12 +921,14 @@ class DurableJobRunner:
         worker_identity: str,
         worker_version: str = DEFAULT_WORKER_VERSION,
         policy: DurableJobQueuePolicy | None = None,
+        event_emitter: RuntimeEventEmitter | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.registry = registry
         self.worker_identity = worker_identity
         self.worker_version = worker_version
         self.policy = policy or DurableJobQueuePolicy()
+        self.event_emitter = event_emitter
         self._shutdown_requested = False
 
     def request_shutdown(self) -> None:
@@ -891,6 +940,7 @@ class DurableJobRunner:
             return "shutdown"
 
         with self.session_factory() as db:
+            expired_exhaustions: list[_JobLogSummary] = []
             register_worker_heartbeat(
                 db,
                 worker_identity=self.worker_identity,
@@ -902,10 +952,23 @@ class DurableJobRunner:
                 registry=self.registry,
                 worker_identity=self.worker_identity,
                 policy=self.policy,
+                exhausted_jobs=expired_exhaustions,
             )
-            claimed_job_id = claim.job.id if claim is not None else None
+            claimed_summary = _job_log_summary(claim.job) if claim is not None else None
+            claimed_job_id = (
+                claimed_summary.job_id if claimed_summary is not None else None
+            )
             claimed_lease_token = claim.lease_token if claim is not None else None
             db.commit()
+
+        for exhausted in expired_exhaustions:
+            with optional_correlation_context(exhausted.correlation_id):
+                self._emit_job_event(
+                    exhausted,
+                    severity="error",
+                    result="exhausted",
+                    stable_error_code="JOB.LEASE_EXPIRED_MAX_ATTEMPTS",
+                )
 
         if self._shutdown_requested and claim is None:
             self.mark_stopped()
@@ -933,7 +996,11 @@ class DurableJobRunner:
             db.commit()
 
         try:
-            outcome = self._run_handler(claimed_job_id, claimed_lease_token)
+            outcome = self._run_handler(
+                claimed_job_id,
+                claimed_lease_token,
+                claimed_summary,
+            )
         finally:
             with self.session_factory() as db:
                 register_worker_heartbeat(
@@ -957,11 +1024,26 @@ class DurableJobRunner:
             )
             db.commit()
 
-    def _run_handler(self, job_id: uuid.UUID, lease_token: uuid.UUID) -> str:
-        with self.session_factory() as db:
+    def _run_handler(
+        self,
+        job_id: uuid.UUID,
+        lease_token: uuid.UUID,
+        claimed_summary: _JobLogSummary,
+    ) -> str:
+        with (
+            optional_correlation_context(claimed_summary.correlation_id),
+            self.session_factory() as db,
+        ):
             job = db.get(DurableJob, job_id)
             if job is None:
+                self._emit_job_event(
+                    claimed_summary,
+                    severity="error",
+                    result="missing",
+                    stable_error_code="JOB.MISSING",
+                )
                 return "missing"
+            summary = _job_log_summary(job)
             try:
                 definition = self.registry.executable_definition_for(
                     job.job_type,
@@ -969,6 +1051,12 @@ class DurableJobRunner:
                 )
             except UnsupportedJobDefinitionError:
                 db.rollback()
+                self._emit_job_event(
+                    summary,
+                    severity="error",
+                    result="unsupported",
+                    stable_error_code="JOB.UNSUPPORTED_DEFINITION",
+                )
                 return "unsupported"
             renewer: _ActiveLeaseRenewer | None = None
             try:
@@ -981,15 +1069,29 @@ class DurableJobRunner:
                 ).start()
                 result = definition.handler(db, job)
             except InvalidJobPayloadError:
-                exhaust_job(
+                transitioned = exhaust_job(
                     db,
                     job_id=job_id,
                     lease_token=lease_token,
                     error_code="malformed_payload",
                 )
                 db.commit()
+                if not transitioned:
+                    self._emit_job_event(
+                        summary,
+                        severity="warning",
+                        result="lease_lost",
+                        stable_error_code="JOB.LEASE_LOST",
+                    )
+                    return "lease_lost"
+                self._emit_job_event(
+                    summary,
+                    severity="error",
+                    result="exhausted",
+                    stable_error_code="JOB.MALFORMED_PAYLOAD",
+                )
                 return "exhausted"
-            except Exception:
+            except Exception:  # noqa: BLE001 - registry policy classifies handler failures.
                 if definition.exceptions_are_transient:
                     result = HandlerResult.transient_failure(
                         definition.transient_exception_error_code,
@@ -1005,6 +1107,12 @@ class DurableJobRunner:
 
             if renewer is not None and renewer.lease_lost:
                 db.rollback()
+                self._emit_job_event(
+                    summary,
+                    severity="warning",
+                    result="lease_lost",
+                    stable_error_code="JOB.LEASE_LOST",
+                )
                 return "lease_lost"
 
             if result.outcome == HandlerOutcome.SUCCESS:
@@ -1015,28 +1123,103 @@ class DurableJobRunner:
                     result_metadata=result.result_metadata,
                 )
                 db.commit()
-                return "succeeded" if completed else "lease_lost"
+                if completed:
+                    self._emit_job_event(
+                        summary,
+                        severity="info",
+                        result="succeeded",
+                    )
+                    return "succeeded"
+                self._emit_job_event(
+                    summary,
+                    severity="warning",
+                    result="lease_lost",
+                    stable_error_code="JOB.LEASE_LOST",
+                )
+                return "lease_lost"
             if result.outcome == HandlerOutcome.TRANSIENT_FAILURE:
                 retry_delay = result.retry_delay or definition.transient_retry_delay
+                durable_code = result.error_code or "transient_failure"
+                final_attempt = job.attempt_count >= job.maximum_attempts
                 retried = retry_job(
                     db,
                     job_id=job_id,
                     lease_token=lease_token,
-                    error_code=result.error_code or "transient_failure",
+                    error_code=durable_code,
                     retry_delay=retry_delay,
                     result_metadata=result.result_metadata,
                 )
                 db.commit()
-                return "retry_waiting" if retried else "lease_lost"
+                if retried:
+                    self._emit_job_event(
+                        summary,
+                        severity="error" if final_attempt else "warning",
+                        result="exhausted" if final_attempt else "retry_waiting",
+                        stable_error_code=_structured_job_error_code(
+                            durable_code,
+                            fallback="JOB.TRANSIENT_FAILURE",
+                        ),
+                    )
+                    return "retry_waiting"
+                self._emit_job_event(
+                    summary,
+                    severity="warning",
+                    result="lease_lost",
+                    stable_error_code="JOB.LEASE_LOST",
+                )
+                return "lease_lost"
+            durable_code = result.error_code or "permanent_failure"
             exhausted = exhaust_job(
                 db,
                 job_id=job_id,
                 lease_token=lease_token,
-                error_code=result.error_code or "permanent_failure",
+                error_code=durable_code,
                 result_metadata=result.result_metadata,
             )
             db.commit()
-            return "exhausted" if exhausted else "lease_lost"
+            if exhausted:
+                self._emit_job_event(
+                    summary,
+                    severity="error",
+                    result="exhausted",
+                    stable_error_code=_structured_job_error_code(
+                        durable_code,
+                        fallback="JOB.PERMANENT_FAILURE",
+                    ),
+                )
+                return "exhausted"
+            self._emit_job_event(
+                summary,
+                severity="warning",
+                result="lease_lost",
+                stable_error_code="JOB.LEASE_LOST",
+            )
+            return "lease_lost"
+
+    def _emit_job_event(
+        self,
+        summary: _JobLogSummary,
+        *,
+        severity: str,
+        result: str,
+        stable_error_code: str | None = None,
+    ) -> None:
+        fields: dict[str, object] = {
+            "attempt_count": summary.attempt_count,
+            "maximum_attempts": summary.maximum_attempts,
+            "result": result,
+            "labels": {"job_type": summary.job_type},
+        }
+        if stable_error_code is not None:
+            fields["stable_error_code"] = stable_error_code
+        if summary.job_type in _STRIPE_JOB_TYPES:
+            fields["provider_kind"] = "stripe"
+        emit_durable_job_event(
+            self.event_emitter,
+            summary.job_id,
+            severity,
+            fields,
+        )
 
 
 def sanitize_diagnostic_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
@@ -1045,24 +1228,34 @@ def sanitize_diagnostic_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
     sanitized: dict[str, Any] = {}
     for key, value in metadata.items():
         if not isinstance(key, str) or not _SAFE_KEY_RE.fullmatch(key):
-            raise UnsafeDiagnosticMetadataError("diagnostic metadata keys must be safe labels")
+            raise UnsafeDiagnosticMetadataError(
+                "diagnostic metadata keys must be safe labels"
+            )
         if is_sensitive_key(key):
             raise UnsafeDiagnosticMetadataError("diagnostic metadata key is sensitive")
         if value is None or isinstance(value, bool | int):
             sanitized[key] = value
         elif isinstance(value, str):
             if len(value) > 120 or contains_sensitive_text(value):
-                raise UnsafeDiagnosticMetadataError("diagnostic metadata value is unsafe")
+                raise UnsafeDiagnosticMetadataError(
+                    "diagnostic metadata value is unsafe"
+                )
             sanitized[key] = value
         else:
-            raise UnsafeDiagnosticMetadataError("diagnostic metadata values must be bounded scalars")
+            raise UnsafeDiagnosticMetadataError(
+                "diagnostic metadata values must be bounded scalars"
+            )
     return sanitized
 
 
 def _job_by_idempotency_key(db: Session, idempotency_key: str) -> DurableJob | None:
-    return db.execute(
-        select(DurableJob).where(DurableJob.idempotency_key == idempotency_key)
-    ).scalars().first()
+    return (
+        db.execute(
+            select(DurableJob).where(DurableJob.idempotency_key == idempotency_key)
+        )
+        .scalars()
+        .first()
+    )
 
 
 def _assert_idempotent_match(
@@ -1077,24 +1270,68 @@ def _assert_idempotent_match(
         or job.payload_version != payload_version
         or job.protected_identity != dict(protected_identity)
     ):
-        raise ConflictingIdempotencyKeyError("idempotency key conflicts with existing job")
+        raise ConflictingIdempotencyKeyError(
+            "idempotency key conflicts with existing job"
+        )
 
 
 def _database_now(db: Session) -> datetime:
     return db.execute(select(func.clock_timestamp())).scalar_one()
 
 
-def _generated_safe_correlation_id() -> str:
-    return f"job-{uuid.uuid4().hex[:8]}"
+_STRIPE_JOB_TYPES = frozenset(
+    {
+        "stripe_webhook_event",
+        "stripe_payment_intent_reconcile",
+        "stripe_payment_method_operation_reconcile",
+    }
+)
+_JOB_ERROR_CODES = {
+    "malformed_payload": "JOB.MALFORMED_PAYLOAD",
+    "handler_transient_failure": "JOB.HANDLER_TRANSIENT_FAILURE",
+    "handler_permanent_failure": "JOB.HANDLER_PERMANENT_FAILURE",
+    "transient_failure": "JOB.TRANSIENT_FAILURE",
+    "permanent_failure": "JOB.PERMANENT_FAILURE",
+    "invalid_provider_event": "JOB.INVALID_PROVIDER_EVENT",
+    "provider_event_retry": "JOB.PROVIDER_EVENT_RETRY",
+    "payment_reconcile_invalid": "JOB.PAYMENT_RECONCILE_INVALID",
+    "payment_reconcile_retry": "JOB.PAYMENT_RECONCILE_RETRY",
+    "payment_method_reconcile_retry": "JOB.PAYMENT_METHOD_RECONCILE_RETRY",
+    "lease_expired_max_attempts": "JOB.LEASE_EXPIRED_MAX_ATTEMPTS",
+}
+
+
+def _structured_job_error_code(code: str, *, fallback: str) -> str:
+    if not code:
+        return fallback
+    return _JOB_ERROR_CODES.get(code, "JOB.UNMAPPED_ERROR")
+
+
+def _job_log_summary(job: DurableJob) -> _JobLogSummary:
+    try:
+        correlation_id = validate_correlation_id(job.correlation_id)
+    except ValueError:
+        correlation_id = None
+    return _JobLogSummary(
+        job_id=job.id,
+        job_type=job.job_type,
+        attempt_count=job.attempt_count,
+        maximum_attempts=job.maximum_attempts,
+        correlation_id=correlation_id,
+    )
 
 
 def _locked_job_by_id(db: Session, job_id: uuid.UUID) -> DurableJob:
-    job = db.execute(
-        select(DurableJob)
-        .where(DurableJob.id == job_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    ).scalars().one()
+    job = (
+        db.execute(
+            select(DurableJob)
+            .where(DurableJob.id == job_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        .scalars()
+        .one()
+    )
     return job
 
 
@@ -1105,15 +1342,22 @@ def _recover_one_expired_lease(
     worker_identity: str,
     policy: DurableJobQueuePolicy,
     now: datetime,
+    exhausted_jobs: list[_JobLogSummary] | None = None,
 ) -> ClaimResult | None:
     statement = (
         select(DurableJob)
         .where(
             DurableJob.status == LEASED,
             DurableJob.lease_expires_at <= now,
-            tuple_(DurableJob.job_type, DurableJob.payload_version).in_(supported_pairs),
+            tuple_(DurableJob.job_type, DurableJob.payload_version).in_(
+                supported_pairs
+            ),
         )
-        .order_by(DurableJob.lease_expires_at.asc(), DurableJob.created_at.asc(), DurableJob.id.asc())
+        .order_by(
+            DurableJob.lease_expires_at.asc(),
+            DurableJob.created_at.asc(),
+            DurableJob.id.asc(),
+        )
         .with_for_update(skip_locked=True)
         .limit(1)
     )
@@ -1121,6 +1365,7 @@ def _recover_one_expired_lease(
     if job is None:
         return None
     if job.attempt_count >= job.maximum_attempts:
+        summary = _job_log_summary(job)
         _transition_to_exhausted(
             db,
             job,
@@ -1131,6 +1376,8 @@ def _recover_one_expired_lease(
             now=now,
         )
         db.flush()
+        if exhausted_jobs is not None:
+            exhausted_jobs.append(summary)
         return None
     return _lease_job(
         db,

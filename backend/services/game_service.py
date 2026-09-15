@@ -24,6 +24,7 @@ from backend.models import (
     VenueImage,
     WaitlistEntry,
 )
+from backend.observability.structured_logging import emit_event
 from backend.schemas.game_schema import (
     GameAvailabilityRead,
     GameCardListRead,
@@ -694,7 +695,29 @@ def build_game_card_read(
     if primary_image_url is None and primary_venue_image_object_key is not None:
         try:
             primary_image_url = create_object_read_url(primary_venue_image_object_key)
-        except (R2StorageConfigError, R2StorageError):
+        except R2StorageConfigError:
+            emit_event(
+                "storage.operation_failed",
+                "error",
+                {
+                    "provider_kind": "r2",
+                    "operation": "r2.read_url.create",
+                    "result": "configuration_error",
+                    "stable_error_code": "STORAGE.CONFIG_UNAVAILABLE",
+                },
+            )
+            primary_image_url = None
+        except R2StorageError:
+            emit_event(
+                "storage.operation_failed",
+                "error",
+                {
+                    "provider_kind": "r2",
+                    "operation": "r2.read_url.create",
+                    "result": "provider_error",
+                    "stable_error_code": "STORAGE.READ_URL_FAILED",
+                },
+            )
             primary_image_url = None
 
     display_title = build_game_card_display_title(game)

@@ -19,15 +19,11 @@ from backend.models import (
     VenueImage,
     WaitlistEntry,
 )
+from backend.observability.structured_logging import emit_event
 from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCardRead,
     AdminOfficialGameListRead,
     AdminOfficialGameMoneyRead,
-)
-from backend.services.r2_storage_service import (
-    R2StorageConfigError,
-    R2StorageError,
-    create_object_read_url,
 )
 from backend.services.game_participant_rules import ACTIVE_ROSTER_PARTICIPANT_STATUSES
 from backend.services.official_game_service import get_official_game_or_404
@@ -36,6 +32,11 @@ from backend.services.query_pagination import (
     MAX_COLLECTION_LIMIT,
     bounded_collection_limit,
     bounded_collection_offset,
+)
+from backend.services.r2_storage_service import (
+    R2StorageConfigError,
+    R2StorageError,
+    create_object_read_url,
 )
 
 OFFICIAL_GAME_LIST_DEFAULT_LIMIT = 24
@@ -178,9 +179,7 @@ def load_official_game_list_card_data(
         select(GameParticipant.game_id, func.count(GameParticipant.id))
         .where(
             GameParticipant.game_id.in_(game_ids),
-            GameParticipant.participant_status.in_(
-                ACTIVE_ROSTER_PARTICIPANT_STATUSES
-            ),
+            GameParticipant.participant_status.in_(ACTIVE_ROSTER_PARTICIPANT_STATUSES),
         )
         .group_by(GameParticipant.game_id)
     ).all():
@@ -212,9 +211,7 @@ def build_official_game_active_roster_count_subquery():
             func.count(GameParticipant.id).label("booked_spots"),
         )
         .where(
-            GameParticipant.participant_status.in_(
-                ACTIVE_ROSTER_PARTICIPANT_STATUSES
-            ),
+            GameParticipant.participant_status.in_(ACTIVE_ROSTER_PARTICIPANT_STATUSES),
         )
         .group_by(GameParticipant.game_id)
         .subquery()
@@ -465,7 +462,29 @@ def build_primary_venue_image_url(storage_object_key: str | None) -> str | None:
 
     try:
         return create_object_read_url(storage_object_key)
-    except (R2StorageConfigError, R2StorageError):
+    except R2StorageConfigError:
+        emit_event(
+            "storage.operation_failed",
+            "error",
+            {
+                "provider_kind": "r2",
+                "operation": "r2.read_url.create",
+                "result": "configuration_error",
+                "stable_error_code": "STORAGE.CONFIG_UNAVAILABLE",
+            },
+        )
+        return None
+    except R2StorageError:
+        emit_event(
+            "storage.operation_failed",
+            "error",
+            {
+                "provider_kind": "r2",
+                "operation": "r2.read_url.create",
+                "result": "provider_error",
+                "stable_error_code": "STORAGE.READ_URL_FAILED",
+            },
+        )
         return None
 
 
