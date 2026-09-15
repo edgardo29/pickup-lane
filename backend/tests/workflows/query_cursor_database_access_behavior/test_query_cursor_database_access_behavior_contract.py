@@ -403,9 +403,9 @@ def _notification(
 @pytest.mark.no_db_cleanup
 @pytest.mark.requirement("WS04-01B-R1")
 def test_all_current_collection_routes_have_explicit_contracts() -> None:
-    assert len(PAGINATION_CONTRACTS) == 76
+    assert len(PAGINATION_CONTRACTS) == 75
     assert len(PAGINATION_HANDOFFS) == 0
-    assert len(pagination_contract_keys()) == 76
+    assert len(pagination_contract_keys()) == 75
     assert {contract.key for contract in PAGINATION_HANDOFFS} == set()
 
 
