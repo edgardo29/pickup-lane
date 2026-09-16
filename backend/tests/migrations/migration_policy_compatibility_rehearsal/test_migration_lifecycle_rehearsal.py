@@ -27,6 +27,7 @@ _SYNTHETIC_INTERRUPTION_REVISION = "ws04_03a_interruption"
 _INTERRUPTION_MARKER_TABLE = "ws04_03a_interruption_marker"
 
 
+@pytest.mark.requirement("WS04-03A-R3", "WS04-03A-R4", "WS04-03A-R7", "WS04-03A-R8")
 def test_clean_moderation_schema_has_no_durable_execution_duration(migration_database):
     run_alembic_upgrade("head")
     inspector = inspect(migration_database.engine)
