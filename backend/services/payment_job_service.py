@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from backend.models import DurableJob
+from backend.observability.metrics import stage_reconciliation_outcome
 from backend.services.durable_job_service import (
     DurableJobRegistry,
     HandlerResult,
@@ -56,12 +57,12 @@ def _payment_method_payload(payload: dict[str, Any]) -> None:
     _validate_uuid_only_payload(payload, "payment_method_operation_id")
 
 
-def _retry_result(job: DurableJob, code: str, schedule: tuple[int, ...]) -> HandlerResult:
+def _retry_result(
+    job: DurableJob, code: str, schedule: tuple[int, ...]
+) -> HandlerResult:
     return HandlerResult.transient_failure(
         code,
-        retry_delay=timedelta(
-            seconds=retry_delay_seconds(job.attempt_count, schedule)
-        ),
+        retry_delay=timedelta(seconds=retry_delay_seconds(job.attempt_count, schedule)),
     )
 
 
@@ -95,6 +96,14 @@ def _handle_payment_reconcile(db: Session, job: DurableJob) -> HandlerResult:
 
     payment_id = uuid.UUID(job.payload["payment_id"])
     outcome = reconcile_payment_intent(db, payment_id)
+    metric_result = {
+        "processed": "succeeded",
+        "already_terminal": "already_terminal",
+        "permanent_failure": "failed",
+        "retry": "pending",
+    }.get(outcome)
+    if metric_result is not None:
+        stage_reconciliation_outcome(STRIPE_PAYMENT_INTENT_RECONCILE_JOB, metric_result)
     if outcome in {"processed", "already_terminal"}:
         return HandlerResult.success({"reconcile_outcome": outcome})
     if outcome == "permanent_failure":
@@ -117,6 +126,15 @@ def _handle_payment_method_reconcile(db: Session, job: DurableJob) -> HandlerRes
         db,
         uuid.UUID(job.payload["payment_method_operation_id"]),
     )
+    metric_result = {
+        "succeeded": "succeeded",
+        "failed": "failed",
+        "provider_unknown": "pending",
+    }.get(outcome)
+    if metric_result is not None:
+        stage_reconciliation_outcome(
+            STRIPE_PAYMENT_METHOD_OPERATION_RECONCILE_JOB, metric_result
+        )
     if outcome in {"succeeded", "failed"}:
         return HandlerResult.success({"operation_outcome": outcome})
     return _retry_result(
@@ -174,9 +192,13 @@ def enqueue_payment_reconcile_job(
     *,
     reason: str,
 ) -> DurableJob:
-    if not reason or len(reason) > 120 or any(
-        character not in "abcdefghijklmnopqrstuvwxyz0123456789_:-"
-        for character in reason
+    if (
+        not reason
+        or len(reason) > 120
+        or any(
+            character not in "abcdefghijklmnopqrstuvwxyz0123456789_:-"
+            for character in reason
+        )
     ):
         raise ValueError("payment reconciliation reason must be a safe label")
     return enqueue_job(

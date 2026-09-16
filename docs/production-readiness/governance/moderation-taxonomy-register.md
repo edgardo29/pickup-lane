@@ -36,7 +36,8 @@ monitoring evidence.
 
 Every persisted finding or detection records the applicable scanner, taxonomy,
 configuration, canonicalization, evidence-format, rule, target-context,
-declared-limit, scan-time, and execution-duration provenance. The behavior-
+declared-limit, and scan-time provenance. Scan duration is operational telemetry,
+not persisted finding/detection provenance. The behavior-
 bearing profile configuration is serialized as deterministic compact JSON and
 identified by SHA-256.
 

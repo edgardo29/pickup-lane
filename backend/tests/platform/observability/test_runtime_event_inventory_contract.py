@@ -9,6 +9,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
+from backend.observability.metrics import MetricsRecorder, metrics_context
 from backend.observability.timeouts import DependencyReadTimeoutError
 from backend.schemas.venue_image_schema import VenueImageUploadCreate
 from backend.services import (
@@ -370,7 +371,8 @@ def test_validate_upload_request_config_failure_emits_at_actual_boundary(
         Mock(side_effect=R2StorageConfigError("private-provider-response")),
     )
 
-    with pytest.raises(HTTPException) as exc_info:
+    recorder = MetricsRecorder("api", "test", "storage-test")
+    with metrics_context(recorder), pytest.raises(HTTPException) as exc_info:
         venue_image_service.validate_upload_request(_upload_request())
 
     assert exc_info.value.status_code == 503
@@ -380,6 +382,12 @@ def test_validate_upload_request_config_failure_emits_at_actual_boundary(
         result="configuration_error",
         code="STORAGE.CONFIG_UNAVAILABLE",
     )
+    (item,) = recorder.snapshot().series
+    assert dict(item.dimensions) == {
+        "provider_kind": "r2",
+        "operation": "r2.upload.validate",
+        "result": "configuration_error",
+    }
 
 
 def test_upload_readiness_config_failure_emits_at_actual_boundary(
@@ -392,7 +400,8 @@ def test_upload_readiness_config_failure_emits_at_actual_boundary(
         Mock(side_effect=R2StorageConfigError("private-provider-response")),
     )
 
-    with pytest.raises(HTTPException) as exc_info:
+    recorder = MetricsRecorder("api", "test", "storage-test")
+    with metrics_context(recorder), pytest.raises(HTTPException) as exc_info:
         venue_image_service.check_venue_image_upload_readiness(Mock())
 
     assert exc_info.value.status_code == 503
@@ -402,6 +411,12 @@ def test_upload_readiness_config_failure_emits_at_actual_boundary(
         result="configuration_error",
         code="STORAGE.CONFIG_UNAVAILABLE",
     )
+    (item,) = recorder.snapshot().series
+    assert dict(item.dimensions) == {
+        "provider_kind": "r2",
+        "operation": "r2.readiness.check",
+        "result": "configuration_error",
+    }
 
 
 def test_create_upload_direct_config_failure_emits_at_actual_boundary(
@@ -417,7 +432,8 @@ def test_create_upload_direct_config_failure_emits_at_actual_boundary(
         Mock(side_effect=R2StorageConfigError("private-provider-response")),
     )
 
-    with pytest.raises(HTTPException) as exc_info:
+    recorder = MetricsRecorder("api", "test", "storage-test")
+    with metrics_context(recorder), pytest.raises(HTTPException) as exc_info:
         venue_image_service.create_venue_image_upload(
             Mock(),
             venue_id=uuid.uuid4(),
@@ -432,6 +448,12 @@ def test_create_upload_direct_config_failure_emits_at_actual_boundary(
         result="configuration_error",
         code="STORAGE.CONFIG_UNAVAILABLE",
     )
+    (item,) = recorder.snapshot().series
+    assert dict(item.dimensions) == {
+        "provider_kind": "r2",
+        "operation": "r2.upload_url.create",
+        "result": "configuration_error",
+    }
 
 
 @pytest.mark.parametrize(

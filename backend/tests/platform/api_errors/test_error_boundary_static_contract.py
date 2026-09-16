@@ -291,7 +291,9 @@ def test_single_exception_handler_and_app_construction_owners_remain_canonical()
     )
     assert sources["backend/main.py"].count("register_exception_handlers(app)") == 1
     assert (
-        sources["backend/main.py"].count("app.add_middleware(CorrelationIdMiddleware,")
+        sources["backend/main.py"].count(
+            "app.add_middleware(\n        CorrelationIdMiddleware,"
+        )
         == 1
     )
     constructor_locations = _fastapi_constructor_locations()

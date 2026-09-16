@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic_ns
 
+from backend.observability.metrics import record_metric
 from backend.services.content_moderation_scanner_service import (
     ContentModerationRuleMatch,
     ModerationTextField,
@@ -109,7 +110,6 @@ def validate_content_moderation_scan_result(
         or provenance.canonicalization_version != profile.canonicalization_version
         or provenance.evidence_format_version != profile.evidence_format_version
         or provenance.declared_limits != profile.declared_limits
-        or provenance.execution_duration_us < 0
         or not is_utc_datetime(provenance.scanned_at)
     ):
         raise ModerationEvidenceError("Saved-content scan provenance is not canonical.")
@@ -692,8 +692,6 @@ def build_content_moderation_findings(
     provenance = build_scan_provenance(
         profile=SAVED_CONTENT_PROFILE,
         target_context=target_context,
-        started_ns=started_ns,
-        monotonic_clock=monotonic_clock,
         **provenance_kwargs,
     )
     result = ContentModerationScanResult(
@@ -702,4 +700,9 @@ def build_content_moderation_findings(
         provenance=provenance,
     )
     validate_content_moderation_scan_result(result)
+    record_metric(
+        "moderation.scan.duration_seconds",
+        max(0, monotonic_clock() - started_ns) / 1_000_000_000,
+        {"operation": f"moderation.scan.{target_context}"},
+    )
     return result

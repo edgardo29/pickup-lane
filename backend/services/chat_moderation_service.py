@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic_ns
 
+from backend.observability.metrics import record_metric
 from backend.services.content_moderation_scanner_service import (
     ScanProvenance,
     build_scan_provenance,
@@ -89,7 +90,6 @@ def chat_detection_record_values(
         or provenance.canonicalization_version != profile.canonicalization_version
         or provenance.evidence_format_version != profile.evidence_format_version
         or provenance.declared_limits != profile.declared_limits
-        or provenance.execution_duration_us < 0
         or not is_utc_datetime(provenance.scanned_at)
     ):
         raise ValueError("Chat detection provenance is not canonical.")
@@ -153,7 +153,6 @@ def chat_detection_record_values(
         "evidence_fingerprint": detection.evidence_fingerprint,
         "evidence": detection.evidence,
         "scanned_at": provenance.scanned_at,
-        "execution_duration_us": provenance.execution_duration_us,
         "detection_identity_hash": identity_hash,
     }
 
@@ -355,14 +354,18 @@ def detect_chat_message(
     provenance = build_scan_provenance(
         profile=profile,
         target_context=target_context,
-        started_ns=effective_started_ns,
-        monotonic_clock=monotonic_clock,
         **provenance_kwargs,
     )
-    return ChatModerationScanResult(
+    result = ChatModerationScanResult(
         detections=tuple(detections),
         provenance=provenance,
     )
+    record_metric(
+        "moderation.scan.duration_seconds",
+        max(0, monotonic_clock() - effective_started_ns) / 1_000_000_000,
+        {"operation": f"moderation.scan.{target_context}"},
+    )
+    return result
 
 
 def repeated_message_fact(

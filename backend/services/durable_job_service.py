@@ -16,7 +16,7 @@ from enum import Enum
 from threading import Event, Thread
 from typing import Any
 
-from sqlalchemy import case, func, select, tuple_
+from sqlalchemy import case, func, select, true, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -26,6 +26,17 @@ from backend.observability.correlation import (
     get_correlation_id,
     optional_correlation_context,
     validate_correlation_id,
+)
+from backend.observability.metrics import (
+    BACKLOG_STATES,
+    JOB_TYPES,
+    PRODUCTION_JOB_TYPES,
+    MetricsRecorder,
+    current_metrics,
+    emit_staged_reconciliation,
+    metrics_context,
+    reconciliation_attempt,
+    record_metric,
 )
 from backend.observability.redaction import contains_sensitive_text, is_sensitive_key
 from backend.observability.structured_logging import (
@@ -223,6 +234,7 @@ class _JobLogSummary:
     attempt_count: int
     maximum_attempts: int
     correlation_id: str | None
+    payload_version: int = 1
 
 
 @dataclass(frozen=True)
@@ -859,6 +871,60 @@ def inspect_job_history(
     )
 
 
+def backlog_metric_observations(db: Session, *, registry: DurableJobRegistry):
+    """Fixed aggregates only; no payloads, arbitrary Python groups, or history."""
+    clock = select(func.clock_timestamp().label("now")).cte("metric_clock")
+    labels = case(
+        *(
+            (
+                tuple_(DurableJob.job_type, DurableJob.payload_version).in_(
+                    tuple(
+                        pair for pair in registry.supported_pairs if pair[0] == job_type
+                    )
+                ),
+                job_type,
+            )
+            for job_type in PRODUCTION_JOB_TYPES
+        ),
+        else_="unsupported",
+    )
+    ready = (
+        DurableJob.status.in_(CLAIMABLE_STATUSES)
+        & (DurableJob.available_at <= clock.c.now)
+        & (DurableJob.attempt_count < DurableJob.maximum_attempts)
+    )
+    rows = db.execute(
+        select(
+            labels.label("metric_job_type"),
+            DurableJob.status,
+            func.count(),
+            func.min(case((ready, DurableJob.available_at), else_=None)),
+            clock.c.now,
+        )
+        .select_from(DurableJob)
+        .join(clock, true())
+        .where(DurableJob.status.in_(BACKLOG_STATES))
+        .group_by(labels, DurableJob.status, clock.c.now)
+    ).all()
+    counts = {
+        (job_type, status): 0 for job_type in JOB_TYPES for status in BACKLOG_STATES
+    }
+    ages: dict[str, float] = {}
+    for job_type, status, count, oldest, now in rows:
+        counts[(job_type, status)] = count
+        if oldest is not None:
+            ages[job_type] = max(
+                ages.get(job_type, 0), max(0, (now - oldest).total_seconds())
+            )
+    return [
+        ("worker.backlog.count", count, {"job_type": job_type, "result": status})
+        for (job_type, status), count in sorted(counts.items())
+    ] + [
+        ("worker.backlog.oldest_age_seconds", age, {"job_type": job_type})
+        for job_type, age in sorted(ages.items())
+    ]
+
+
 class _ActiveLeaseRenewer:
     def __init__(
         self,
@@ -879,6 +945,7 @@ class _ActiveLeaseRenewer:
             daemon=True,
         )
         self.lease_lost = False
+        self._metrics_recorder = current_metrics()
 
     def start(self) -> _ActiveLeaseRenewer:
         self._thread.start()
@@ -891,6 +958,10 @@ class _ActiveLeaseRenewer:
         )
 
     def _run(self) -> None:
+        with metrics_context(self._metrics_recorder):
+            self._renew_loop()
+
+    def _renew_loop(self) -> None:
         while not self._stop.wait(self._policy.heartbeat_interval.total_seconds()):
             try:
                 with self._session_factory() as db:
@@ -922,6 +993,7 @@ class DurableJobRunner:
         worker_version: str = DEFAULT_WORKER_VERSION,
         policy: DurableJobQueuePolicy | None = None,
         event_emitter: RuntimeEventEmitter | None = None,
+        metrics_recorder: MetricsRecorder | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.registry = registry
@@ -929,12 +1001,17 @@ class DurableJobRunner:
         self.worker_version = worker_version
         self.policy = policy or DurableJobQueuePolicy()
         self.event_emitter = event_emitter
+        self.metrics_recorder = metrics_recorder
         self._shutdown_requested = False
 
     def request_shutdown(self) -> None:
         self._shutdown_requested = True
 
     def process_once(self) -> str:
+        with metrics_context(self.metrics_recorder or current_metrics()):
+            return self._process_once()
+
+    def _process_once(self) -> str:
         if self._shutdown_requested:
             self.mark_stopped()
             return "shutdown"
@@ -1015,6 +1092,10 @@ class DurableJobRunner:
         return outcome
 
     def mark_stopped(self) -> None:
+        with metrics_context(self.metrics_recorder or current_metrics()):
+            self._mark_stopped()
+
+    def _mark_stopped(self) -> None:
         with self.session_factory() as db:
             register_worker_heartbeat(
                 db,
@@ -1031,6 +1112,8 @@ class DurableJobRunner:
         claimed_summary: _JobLogSummary,
     ) -> str:
         with (
+            metrics_context(self.metrics_recorder or current_metrics()),
+            reconciliation_attempt() as metric_attempt,
             optional_correlation_context(claimed_summary.correlation_id),
             self.session_factory() as db,
         ):
@@ -1092,6 +1175,7 @@ class DurableJobRunner:
                 )
                 return "exhausted"
             except Exception:  # noqa: BLE001 - registry policy classifies handler failures.
+                metric_attempt.staged = None
                 if definition.exceptions_are_transient:
                     result = HandlerResult.transient_failure(
                         definition.transient_exception_error_code,
@@ -1204,6 +1288,16 @@ class DurableJobRunner:
         result: str,
         stable_error_code: str | None = None,
     ) -> None:
+        job_type = (
+            summary.job_type
+            if summary.job_type in PRODUCTION_JOB_TYPES and summary.payload_version == 1
+            else "unsupported"
+        )
+        record_metric(
+            "worker.job.outcome.total", 1, {"job_type": job_type, "result": result}
+        )
+        if result in {"succeeded", "retry_waiting", "exhausted"}:
+            emit_staged_reconciliation()
         fields: dict[str, object] = {
             "attempt_count": summary.attempt_count,
             "maximum_attempts": summary.maximum_attempts,
@@ -1318,6 +1412,7 @@ def _job_log_summary(job: DurableJob) -> _JobLogSummary:
         attempt_count=job.attempt_count,
         maximum_attempts=job.maximum_attempts,
         correlation_id=correlation_id,
+        payload_version=job.payload_version,
     )
 
 

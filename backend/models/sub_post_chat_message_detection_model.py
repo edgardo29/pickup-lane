@@ -2,7 +2,6 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -52,10 +51,6 @@ class SubPostChatMessageDetection(Base):
         CheckConstraint(
             "detection_identity_hash ~ '^[0-9a-f]{64}$'",
             name="ck_sub_post_chat_message_detections_identity_hash",
-        ),
-        CheckConstraint(
-            "execution_duration_us >= 0",
-            name="ck_sub_post_chat_message_detections_duration_nonnegative",
         ),
         CheckConstraint(
             "length(trim(scanner_id)) > 0 "
@@ -135,7 +130,6 @@ class SubPostChatMessageDetection(Base):
     scanned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    execution_duration_us: Mapped[int] = mapped_column(BigInteger, nullable=False)
     detection_identity_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")

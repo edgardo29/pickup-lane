@@ -144,11 +144,19 @@ def main(argv: list[str] | None = None) -> int:
         settings = get_settings()
         event_emitter = build_event_emitter(settings, source_identity="worker")
         configure_process_logging(event_emitter, configure_uvicorn=False)
+        from backend.observability.metrics import MetricsRecorder, metrics_context
+
+        metrics_recorder = MetricsRecorder(
+            event_emitter.source_identity,
+            event_emitter.environment,
+            event_emitter.release,
+        )
     except Exception as exc:  # noqa: BLE001 - expose only a fixed bootstrap failure.
         del exc
         raise RuntimeError("Worker logging bootstrap failed.") from None
 
-    return _run_worker(argv, event_emitter)
+    with metrics_context(metrics_recorder):
+        return _run_worker(argv, event_emitter)
 
 
 def _run_worker(
@@ -156,7 +164,16 @@ def _run_worker(
     event_emitter: RuntimeEventEmitter,
 ) -> int:
     try:
-        from backend.database import SessionLocal, check_database_connection
+        from backend.database import (
+            SessionLocal,
+            check_database_connection,
+            register_pool_metrics,
+        )
+        from backend.observability.metrics import current_metrics
+
+        recorder = current_metrics()
+        if recorder is not None:
+            register_pool_metrics(recorder)
         from backend.services.durable_job_service import (
             DEFAULT_WORKER_VERSION,
             DurableJobQueuePolicy,
@@ -215,6 +232,7 @@ def _run_worker(
             worker_version=args.worker_version,
             policy=policy,
             event_emitter=event_emitter,
+            metrics_recorder=recorder,
         )
 
         def request_shutdown(signum, frame) -> None:

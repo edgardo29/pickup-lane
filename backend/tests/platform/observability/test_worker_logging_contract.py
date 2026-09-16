@@ -452,6 +452,7 @@ def test_current_stripe_job_events_have_provider_without_payment_identifiers(
         SimpleNamespace(
             job_id=job_id,
             job_type=job_type,
+            payload_version=1,
             attempt_count=1,
             maximum_attempts=3,
             correlation_id=None,

@@ -214,7 +214,6 @@ def apply_content_moderation_findings(
             matched_rule_versions=list(finding.matched_rule_versions),
             declared_limits=list(scan_result.provenance.declared_limits),
             scanned_at=scan_result.provenance.scanned_at,
-            execution_duration_us=scan_result.provenance.execution_duration_us,
             finding_identity_hash=identity,
             current_match=True,
             first_detected_at=now,

@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from backend.models import User, Venue, VenueImage
+from backend.observability.metrics import record_provider_outcome
 from backend.observability.structured_logging import emit_event
 from backend.schemas.venue_image_schema import (
     VenueImageAdminRead,
@@ -183,6 +184,7 @@ def validate_upload_request(upload_request: VenueImageUploadCreate) -> None:
     try:
         config = get_r2_storage_config()
     except R2StorageConfigError as exc:
+        record_provider_outcome("r2.upload.validate", "configuration_error")
         _emit_storage_failure(
             operation="r2.upload.validate",
             configuration_error=True,
@@ -395,6 +397,7 @@ def check_venue_image_upload_readiness(db: Session) -> dict[str, bool]:
         get_r2_storage_config()
         db.scalars(select(VenueImage.id).limit(1)).first()
     except R2StorageConfigError as exc:
+        record_provider_outcome("r2.readiness.check", "configuration_error")
         _emit_storage_failure(
             operation="r2.readiness.check",
             configuration_error=True,
@@ -444,6 +447,7 @@ def create_venue_image_upload(
     try:
         storage_config = get_r2_storage_config()
     except R2StorageConfigError as exc:
+        record_provider_outcome("r2.upload_url.create", "configuration_error")
         _emit_storage_failure(
             operation="r2.upload_url.create",
             configuration_error=True,

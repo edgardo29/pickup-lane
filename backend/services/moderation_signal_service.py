@@ -100,7 +100,6 @@ def build_signal_metadata(
         "evidence_format_version": finding.provenance.evidence_format_version,
         "target_context": finding.provenance.target_context,
         "declared_limits": list(finding.provenance.declared_limits),
-        "scan_execution_duration_us": finding.provenance.execution_duration_us,
         "current_match": True,
         "superseded_by_content_change": False,
         "last_scanned_at": scanned_at,

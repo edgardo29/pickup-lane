@@ -76,7 +76,6 @@ def build_concurrent_chat_finding(content_hash: str) -> ModerationFinding:
             target_context="game_chat_message",
             declared_limits=(),
             scanned_at=datetime(2038, 3, 1, 18, tzinfo=timezone.utc),
-            execution_duration_us=1,
         ),
     )
 

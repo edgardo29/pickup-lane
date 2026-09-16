@@ -1,10 +1,12 @@
 import json
 import os
+from contextlib import contextmanager
 
 import firebase_admin
 from firebase_admin import app_check, auth, credentials
 from firebase_admin import exceptions as firebase_exceptions
 
+from backend.observability.metrics import record_provider_outcome
 from backend.observability.timeouts import (
     DependencyMutationTimeoutUnknownError,
     DependencyReadTimeoutError,
@@ -91,27 +93,31 @@ def _load_firebase_credentials(settings) -> credentials.Certificate:
 
 
 def verify_firebase_token(id_token: str) -> dict:
-    firebase_app = initialize_firebase_admin()
+    firebase_app = _initialize_for_operation("firebase.token.verify")
     try:
-        decoded_token = auth.verify_id_token(
-            id_token,
-            app=firebase_app,
-            check_revoked=True,
-            clock_skew_seconds=FIREBASE_TOKEN_CLOCK_SKEW_SECONDS,
-        )
-        auth_user_id = decoded_token.get("uid")
-        if not isinstance(auth_user_id, str) or not auth_user_id:
-            raise ValueError("Firebase token is missing a user id.")
-        user_record = auth.get_user(auth_user_id, app=firebase_app)
-        if getattr(user_record, "disabled", False):
-            raise auth.UserDisabledError("Firebase user is disabled.")
+        with _observe_firebase_operation("firebase.token.verify"):
+            decoded_token = auth.verify_id_token(
+                id_token,
+                app=firebase_app,
+                check_revoked=True,
+                clock_skew_seconds=FIREBASE_TOKEN_CLOCK_SKEW_SECONDS,
+            )
+            auth_user_id = decoded_token.get("uid")
+            if not isinstance(auth_user_id, str) or not auth_user_id:
+                raise ValueError("Firebase token is missing a user id.")
+        with _observe_firebase_operation("firebase.user.lookup"):
+            user_record = auth.get_user(auth_user_id, app=firebase_app)
+            if getattr(user_record, "disabled", False):
+                raise auth.UserDisabledError("Firebase user is disabled.")
 
-        authoritative_token = dict(decoded_token)
-        authoritative_token["uid"] = getattr(user_record, "uid", None) or auth_user_id
-        authoritative_token["email"] = getattr(user_record, "email", None)
-        authoritative_token["email_verified"] = bool(
-            getattr(user_record, "email_verified", False)
-        )
+            authoritative_token = dict(decoded_token)
+            authoritative_token["uid"] = (
+                getattr(user_record, "uid", None) or auth_user_id
+            )
+            authoritative_token["email"] = getattr(user_record, "email", None)
+            authoritative_token["email_verified"] = bool(
+                getattr(user_record, "email_verified", False)
+            )
         return authoritative_token
     except Exception as exc:
         if is_timeout_like_exception(exc):
@@ -141,9 +147,10 @@ def verify_firebase_token(id_token: str) -> dict:
 
 
 def verify_firebase_app_check_token(app_check_token: str) -> dict:
-    firebase_app = initialize_firebase_admin()
+    firebase_app = _initialize_for_operation(FIREBASE_APP_CHECK_VERIFY_OPERATION)
     try:
-        return dict(app_check.verify_token(app_check_token, app=firebase_app))
+        with _observe_firebase_operation(FIREBASE_APP_CHECK_VERIFY_OPERATION):
+            return dict(app_check.verify_token(app_check_token, app=firebase_app))
     except ValueError:
         raise
     except PyJWKClientError as exc:
@@ -166,10 +173,11 @@ def verify_firebase_app_check_token(app_check_token: str) -> dict:
 
 
 def firebase_email_exists(email: str) -> bool:
-    firebase_app = initialize_firebase_admin()
+    firebase_app = _initialize_for_operation("firebase.user.lookup")
 
     try:
-        auth.get_user_by_email(email, app=firebase_app)
+        with _observe_firebase_operation("firebase.user.lookup"):
+            auth.get_user_by_email(email, app=firebase_app)
     except auth.UserNotFoundError:
         return False
     except Exception as exc:
@@ -184,10 +192,11 @@ def firebase_email_exists(email: str) -> bool:
 
 
 def delete_firebase_user(auth_user_id: str) -> None:
-    firebase_app = initialize_firebase_admin()
+    firebase_app = _initialize_for_operation("firebase.user.delete")
 
     try:
-        auth.delete_user(auth_user_id, app=firebase_app)
+        with _observe_firebase_operation("firebase.user.delete"):
+            auth.delete_user(auth_user_id, app=firebase_app)
     except auth.UserNotFoundError:
         return
     except Exception as exc:
@@ -197,3 +206,57 @@ def delete_firebase_user(auth_user_id: str) -> None:
                 operation="firebase.user.delete",
             ) from exc
         raise
+
+
+def _initialize_for_operation(operation: str):
+    try:
+        return initialize_firebase_admin()
+    except Exception:
+        record_provider_outcome(operation, "configuration_error")
+        raise
+
+
+def _firebase_error_result(operation: str, exc: Exception) -> str:
+    if isinstance(exc, auth.UserNotFoundError):
+        if operation == "firebase.user.delete":
+            return "succeeded"
+        return "rejected" if operation == "firebase.token.verify" else "not_found"
+    if operation == "firebase.token.verify" and isinstance(
+        exc,
+        (
+            ValueError,
+            auth.InvalidIdTokenError,
+            auth.ExpiredIdTokenError,
+            auth.RevokedIdTokenError,
+            auth.UserDisabledError,
+        ),
+    ):
+        return "rejected"
+    if operation == "firebase.user.lookup" and isinstance(exc, auth.UserDisabledError):
+        return "rejected"
+    if operation == FIREBASE_APP_CHECK_VERIFY_OPERATION and isinstance(exc, ValueError):
+        return "rejected"
+    if isinstance(exc, firebase_exceptions.ResourceExhaustedError):
+        return "rate_limited"
+    if is_timeout_like_exception(exc):
+        return "unknown_outcome" if operation == "firebase.user.delete" else "timed_out"
+    if operation == FIREBASE_APP_CHECK_VERIFY_OPERATION and isinstance(
+        exc, _APP_CHECK_PROVIDER_UNAVAILABLE_ERRORS
+    ):
+        return "failed"
+    return "failed"
+
+
+@contextmanager
+def _observe_firebase_operation(operation: str):
+    try:
+        yield
+    except Exception as exc:
+        try:
+            result = _firebase_error_result(operation, exc)
+        except Exception:  # noqa: BLE001 - preserve the original provider failure.
+            result = "failed"
+        record_provider_outcome(operation, result)
+        raise
+    else:
+        record_provider_outcome(operation, "succeeded")

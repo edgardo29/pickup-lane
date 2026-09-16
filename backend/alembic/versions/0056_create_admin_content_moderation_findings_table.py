@@ -43,7 +43,6 @@ def upgrade() -> None:
             "declared_limits", postgresql.JSONB(astext_type=sa.Text()), nullable=False
         ),
         sa.Column("scanned_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("execution_duration_us", sa.BigInteger(), nullable=False),
         sa.Column("finding_identity_hash", sa.String(length=64), nullable=False),
         sa.Column(
             "current_match",
@@ -83,10 +82,6 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "finding_identity_hash ~ '^[0-9a-f]{64}$'",
             name="ck_admin_content_moderation_findings_identity_hash",
-        ),
-        sa.CheckConstraint(
-            "execution_duration_us >= 0",
-            name="ck_admin_content_moderation_findings_duration_nonnegative",
         ),
         sa.CheckConstraint(
             "jsonb_typeof(evidence) = 'array' AND jsonb_array_length(evidence) BETWEEN 1 AND 8",
