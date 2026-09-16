@@ -185,6 +185,7 @@ def test_controlled_alembic_interruption_is_inspectable_and_recoverable(
     )
 
 
+@pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R7", "WS04-03A-R8")
 def test_synthetic_alembic_checks_its_own_connection_before_migration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

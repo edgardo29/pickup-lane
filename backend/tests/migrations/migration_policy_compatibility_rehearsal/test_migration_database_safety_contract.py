@@ -103,6 +103,7 @@ def test_migration_lifecycle_environment_rejects_application_database_fallback(
         migration_database_targets_from_environment()
 
 
+@pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R8")
 @pytest.mark.parametrize(
     ("ordinary_url", "migration_url"),
     [
@@ -127,6 +128,7 @@ def test_direct_migration_helpers_reject_nonlocal_or_overridden_targets(
         migration_database_targets_from_environment()
 
 
+@pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R8")
 def test_direct_upgrade_rejects_a_remote_migration_url_before_alembic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -148,6 +150,7 @@ def test_direct_upgrade_rejects_a_remote_migration_url_before_alembic(
         run_alembic_upgrade("head")
 
 
+@pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R8")
 def test_direct_reset_rejects_a_misbound_engine_before_drop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -178,6 +181,7 @@ def test_direct_reset_rejects_a_misbound_engine_before_drop(
     assert executed == ["SELECT current_database()"]
 
 
+@pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R8")
 def test_migration_upgrade_uses_the_validated_migration_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
