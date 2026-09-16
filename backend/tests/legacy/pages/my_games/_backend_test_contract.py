@@ -5,31 +5,31 @@ CONTRACT = {
             {
                 "id": "backend-testing",
                 "kind": "platform_rule",
-                "path": "docs/agent-notes/backend-testing.md",
+                "path": "docs/agent-notes/coding-standards/backend-testing.md",
                 "summary": "Backend test compliance, assertion, source-of-truth, runtime evidence, repository, and local test-running rules.",
             },
             {
                 "id": "my-games-spec",
                 "kind": "feature_spec",
-                "path": "docs/agent-notes/my-games.md",
+                "path": "docs/agent-notes/feature-notes/my-games.md",
                 "summary": "Final My Games backend/page behavior for Games and Need a Sub Upcoming and History.",
             },
             {
                 "id": "browse-games-spec",
                 "kind": "owning_domain_spec",
-                "path": "docs/agent-notes/browse-games.md",
+                "path": "docs/agent-notes/feature-notes/browse-games.md",
                 "summary": "Normal game discovery, hidden access, capacity, and card vocabulary that My Games must keep separate unless explicitly reused.",
             },
             {
                 "id": "game-details-spec",
                 "kind": "owning_domain_spec",
-                "path": "docs/agent-notes/game-details.md",
+                "path": "docs/agent-notes/feature-notes/game-details.md",
                 "summary": "Normal game cancellation lifecycle and participant cancellation semantics used by My Games History.",
             },
             {
                 "id": "need-a-sub-spec",
                 "kind": "owning_domain_spec",
-                "path": "docs/agent-notes/need-a-sub.md",
+                "path": "docs/agent-notes/feature-notes/need-a-sub.md",
                 "summary": "Need a Sub post/request lifecycle, status meanings, visibility, cancellation, and My Games history expectations.",
             },
             {

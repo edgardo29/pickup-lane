@@ -145,7 +145,8 @@ artifacts, and does not define production-readiness scope.
 | `docs/production-readiness/planning/templates/PASS-PLANNING-TEMPLATE.md` | Required plan structure whenever Gate A creates a durable implementation plan. |
 | `docs/production-readiness/planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md` | Current PR-authoring guidance used by implementation Gate D. |
 | `docs/production-readiness/planning/templates/` | Other templates are supporting aids unless the applicable workflow explicitly requires one. |
-| `docs/agent-notes/` | Repository engineering and testing guidance used when its technical scope applies. |
+| `docs/agent-notes/README.md` | Routing index for tracked coding standards and optional local feature notes. |
+| `docs/agent-notes/coding-standards/` | Tracked repository coding and testing guidance used when its technical scope applies. |
 | `backend/tests/README.md` | Backend test organization, execution, and safety guidance. |
 | `backend/tests/` | Current backend tests, evaluated by usefulness and correctness rather than trusted/legacy labels. |
 | `backend/tests/support/requirements/`, `backend/tests/checker/`, `backend/tests/compliance/` | Existing old-framework infrastructure pending later cleanup under the corrected master; not required routing for current work. |
@@ -162,16 +163,18 @@ not override the corrected master or current repository truth.
 
 | Document | Read when |
 |---|---|
-| `docs/agent-notes/app-testing-standards.md` | Application risks, safeguards, scenarios, or evidence adequacy are in scope. |
-| `docs/agent-notes/backend-structure.md` | Backend source, ownership boundaries, imports, or file placement are in scope. |
-| `docs/agent-notes/backend-testing.md` | Backend pytest organization, fixtures, isolation, proof quality, or execution is in scope. |
+| `docs/agent-notes/coding-standards/app-testing-standards.md` | Application risks, safeguards, scenarios, or evidence adequacy are in scope. |
+| `docs/agent-notes/coding-standards/backend-structure.md` | Backend source, ownership boundaries, imports, or file placement are in scope. |
+| `docs/agent-notes/coding-standards/backend-testing.md` | Backend pytest organization, fixtures, isolation, proof quality, or execution is in scope. |
 | `backend/tests/README.md` | Backend test placement, execution, or database safety is in scope. |
-| `docs/agent-notes/database.md` | PostgreSQL, SQLAlchemy, Alembic, migrations, transactions, or test database work is in scope. |
-| `docs/agent-notes/frontend-structure.md` | Frontend source, routing, configuration, interaction, or browser behavior is in scope. |
-| `docs/agent-notes/playwright-structure.md` | Playwright or end-to-end work is explicitly requested or materially necessary. |
+| `docs/agent-notes/coding-standards/database.md` | PostgreSQL, SQLAlchemy, Alembic, migrations, transactions, or test database work is in scope. |
+| `docs/agent-notes/coding-standards/frontend-structure.md` | Frontend source, routing, configuration, interaction, or browser behavior is in scope. |
+| `docs/agent-notes/coding-standards/css-standards.md` | CSS ownership, cascade, accessibility, responsive behavior, or maintenance is in scope. |
 
-Use feature-specific agent notes and provider or operational records only when
-the selected work actually touches them.
+Local feature notes may provide supporting context when present, but they are
+not tracked production-readiness authority. Verify their claims against current
+repository source and applicable tracked authority. Use provider or operational
+records only when the selected work actually touches them.
 
 ## 7. Workflow Selection
 

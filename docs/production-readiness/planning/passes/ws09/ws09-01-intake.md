@@ -85,7 +85,7 @@ WS09-01B is intentionally not executable yet. It becomes executable only when it
 | Authority sources | `docs/production-readiness/00-READ-ME-FIRST.md`; `docs/production-readiness/01-PROGRAM-CONTEXT.md`; corrected master sections 5.10, 7.4, 8.3, 8.7, and 8.8; current `PASS-EXECUTION-REGISTER.md`; current implementation workflow Stage 0; current intake template |
 | Execution-register state | `WS09-01` remains unimplemented; current post-WS09-02C register state records 45 accepted executable passes and 24 remaining units |
 | Applicable accepted prerequisites | EN-02 observability primitives; EN-03 provider-control-plane and sanitized-evidence foundation; WS04-02C logging-safety contract; current API correlation/runtime behavior; current release-identity settings; accepted WS05-01A portable durable-worker/job source behavior |
-| Applicable engineering guidance | Program Context-routed `docs/agent-notes/` backend and testing guidance, applied where relevant without treating it as corrected-master scope authority |
+| Applicable engineering guidance | Program Context-routed `docs/agent-notes/coding-standards/` backend and testing guidance, applied where relevant without treating it as corrected-master scope authority |
 | Child order | `WS09-01A -> WS09-01B` |
 | Selected first executable unit | `WS09-01A - Provider-Independent Structured API and Worker Logging` |
 | Mandatory deferred unit | `WS09-01B - Final Centralized Logging Activation and Verification` |
