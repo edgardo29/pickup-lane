@@ -6,12 +6,177 @@ from types import SimpleNamespace
 import pytest
 
 import backend.firebase_admin_client as firebase_client
+from backend.observability.metrics import MetricsRecorder, metrics_context
 from backend.observability.timeouts import (
     DependencyMutationTimeoutUnknownError,
     DependencyReadTimeoutError,
 )
 
 pytestmark = pytest.mark.no_db_cleanup
+
+
+@pytest.mark.parametrize("owner", ["verify", "lookup", "email", "app_check", "delete"])
+@pytest.mark.parametrize(
+    "outcome", ["succeeded", "timeout", "rate_limited", "failed", "configuration_error"]
+)
+def test_complete_firebase_metric_boundary_matrix(monkeypatch, owner, outcome):
+    from firebase_admin.exceptions import ResourceExhaustedError
+
+    auth_module = _AuthModule()
+    app_check_module = _AppCheckModule()
+    _install_firebase_boundary(monkeypatch, auth_module, app_check_module)
+    operation = {
+        "verify": "firebase.token.verify",
+        "lookup": "firebase.user.lookup",
+        "email": "firebase.user.lookup",
+        "app_check": "firebase.app_check.verify",
+        "delete": "firebase.user.delete",
+    }[owner]
+    expected = (
+        "unknown_outcome"
+        if owner == "delete" and outcome == "timeout"
+        else "timed_out"
+        if outcome == "timeout"
+        else outcome
+    )
+    error = {
+        "timeout": TimeoutError("private-canary"),
+        "rate_limited": ResourceExhaustedError("private-canary"),
+        "failed": RuntimeError("private-canary"),
+    }.get(outcome)
+    if outcome == "configuration_error":
+
+        def fail_initialize():
+            raise firebase_client.FirebaseAdminConfigError("private-canary")
+
+        monkeypatch.setattr(
+            firebase_client, "initialize_firebase_admin", fail_initialize
+        )
+        # Initialization is owned by verify, before lookup is possible.
+        if owner == "lookup":
+            operation = "firebase.token.verify"
+    elif owner == "app_check":
+        app_check_module.verify_token_exception = error
+    else:
+        attribute = {
+            "verify": "verify_id_token_exception",
+            "lookup": "get_user_exception",
+            "email": "get_user_by_email_exception",
+            "delete": "delete_user_exception",
+        }[owner]
+        setattr(auth_module, attribute, error)
+    call = {
+        "verify": lambda: firebase_client.verify_firebase_token("private-token"),
+        "lookup": lambda: firebase_client.verify_firebase_token("private-token"),
+        "email": lambda: firebase_client.firebase_email_exists(
+            "private@example.invalid"
+        ),
+        "app_check": lambda: firebase_client.verify_firebase_app_check_token(
+            "private-token"
+        ),
+        "delete": lambda: firebase_client.delete_firebase_user("private-user"),
+    }[owner]
+    recorder = MetricsRecorder("api", "test", "firebase-test")
+    with metrics_context(recorder):
+        if outcome == "succeeded":
+            call()
+        else:
+            try:
+                call()
+            except Exception as exc:  # noqa: BLE001 - matrix asserts preserved owner-specific types separately.
+                assert exc is not None
+            else:
+                pytest.fail("The configured provider failure must propagate")
+    observations = {
+        tuple(item.dimensions): item.value for item in recorder.snapshot().series
+    }
+    target = tuple(
+        sorted(
+            {
+                "provider_kind": "firebase",
+                "operation": operation,
+                "result": expected,
+            }.items()
+        )
+    )
+    assert observations[target] == 1
+    assert len(observations) == (
+        2
+        if owner in {"verify", "lookup"}
+        and outcome == "succeeded"
+        or owner == "lookup"
+        and outcome != "configuration_error"
+        else 1
+    )
+    assert "private" not in repr(recorder.snapshot())
+
+
+@pytest.mark.parametrize(
+    ("owner", "result"),
+    [
+        ("verify", "rejected"),
+        ("lookup", "not_found"),
+        ("email", "not_found"),
+        ("delete", "succeeded"),
+    ],
+)
+def test_firebase_absence_meaning_and_no_unattempted_lookup(monkeypatch, owner, result):
+    auth_module = _AuthModule()
+    _install_firebase_boundary(monkeypatch, auth_module)
+    attribute = {
+        "verify": "verify_id_token_exception",
+        "lookup": "get_user_exception",
+        "email": "get_user_by_email_exception",
+        "delete": "delete_user_exception",
+    }[owner]
+    setattr(auth_module, attribute, _UserNotFoundError("private-user"))
+    if owner == "verify":
+        monkeypatch.setattr(
+            auth_module, "get_user", lambda *a, **k: pytest.fail("Lookup not reached")
+        )
+    recorder = MetricsRecorder("api", "test", "firebase-test")
+    with metrics_context(recorder):
+        if owner in {"verify", "lookup"}:
+            with pytest.raises(_UserNotFoundError):
+                firebase_client.verify_firebase_token("private-token")
+        elif owner == "email":
+            assert (
+                firebase_client.firebase_email_exists("private@example.invalid")
+                is False
+            )
+        else:
+            assert firebase_client.delete_firebase_user("private-user") is None
+    series = recorder.snapshot().series
+    target = next(item for item in series if dict(item.dimensions)["result"] == result)
+    assert target.value == 1
+    assert len(series) == (2 if owner == "lookup" else 1)
+
+
+@pytest.mark.parametrize("owner", ["verify", "lookup", "app_check"])
+def test_firebase_expected_rejection_is_not_failure(monkeypatch, owner):
+    auth_module = _AuthModule()
+    app_check_module = _AppCheckModule()
+    _install_firebase_boundary(monkeypatch, auth_module, app_check_module)
+    if owner == "verify":
+        auth_module.verify_id_token_exception = ValueError("private-token")
+    elif owner == "lookup":
+        auth_module.get_user_exception = ValueError("private-disabled-user")
+    else:
+        app_check_module.verify_token_exception = ValueError("private-token")
+    recorder = MetricsRecorder("api", "test", "firebase-test")
+    with metrics_context(recorder), pytest.raises(ValueError):
+        (
+            firebase_client.verify_firebase_app_check_token
+            if owner == "app_check"
+            else firebase_client.verify_firebase_token
+        )("private-token")
+    assert dict(recorder.snapshot().series[-1].dimensions)[
+        "result"
+    ] == "rejected" or any(
+        dict(item.dimensions)["operation"] == "firebase.user.lookup"
+        and dict(item.dimensions)["result"] == "rejected"
+        for item in recorder.snapshot().series
+    )
 
 
 class _UserNotFoundError(Exception):
@@ -60,7 +225,6 @@ class _AuthModule:
     def delete_user(self, *args, **kwargs):
         if self.delete_user_exception is not None:
             raise self.delete_user_exception
-        return None
 
 
 class _AppCheckModule:
@@ -110,8 +274,10 @@ def _install_firebase_boundary(
     monkeypatch.setattr(
         firebase_client.firebase_admin,
         "initialize_app",
-        lambda cred, options: initialize_calls.append({"cred": cred, "options": options})
-        or SimpleNamespace(name="synthetic-firebase-app"),
+        lambda cred, options: (
+            initialize_calls.append({"cred": cred, "options": options})
+            or SimpleNamespace(name="synthetic-firebase-app")
+        ),
     )
     return initialize_calls
 
@@ -239,7 +405,9 @@ def test_firebase_app_check_verification_uses_existing_initialized_app(
     app_check_module = _AppCheckModule()
     _install_firebase_boundary(monkeypatch, auth_module, app_check_module)
 
-    result = firebase_client.verify_firebase_app_check_token("synthetic-app-check-token")
+    result = firebase_client.verify_firebase_app_check_token(
+        "synthetic-app-check-token"
+    )
 
     assert result == {"app_id": "1:123456789:web:supported"}
     assert app_check_module.verify_token_calls == [
@@ -292,6 +460,35 @@ def test_firebase_app_check_provider_unavailable_is_not_invalid(
 
     with pytest.raises(firebase_client.FirebaseAppCheckUnavailableError):
         firebase_client.verify_firebase_app_check_token("synthetic-app-check-token")
+
+
+def test_firebase_app_check_deadline_preserves_translation_and_records_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    auth_module = _AuthModule()
+    app_check_module = _AppCheckModule()
+    app_check_module.verify_token_exception = (
+        firebase_client.firebase_exceptions.DeadlineExceededError(
+            "private-deadline-canary"
+        )
+    )
+    _install_firebase_boundary(monkeypatch, auth_module, app_check_module)
+    recorder = MetricsRecorder("api", "test", "firebase-test")
+
+    with (
+        metrics_context(recorder),
+        pytest.raises(firebase_client.FirebaseAppCheckUnavailableError),
+    ):
+        firebase_client.verify_firebase_app_check_token("synthetic-app-check-token")
+
+    (observation,) = recorder.snapshot().series
+    assert observation.value == 1
+    assert dict(observation.dimensions) == {
+        "provider_kind": "firebase",
+        "operation": "firebase.app_check.verify",
+        "result": "timed_out",
+    }
+    assert "private-deadline-canary" not in repr(recorder.snapshot())
 
 
 @pytest.mark.requirement("WS02-04C1-R3", "WS02-04C1-R7")

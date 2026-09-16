@@ -13,9 +13,101 @@ from botocore.exceptions import (
 )
 
 import backend.services.r2_storage_service as r2_storage
+from backend.observability.metrics import MetricsRecorder, metrics_context
 from backend.observability.timeouts import DependencyReadTimeoutError
 
 pytestmark = pytest.mark.no_db_cleanup
+
+
+@pytest.mark.parametrize(
+    "operation", ["r2.upload_url.create", "r2.read_url.create", "r2.metadata.head"]
+)
+@pytest.mark.parametrize(
+    "outcome",
+    ["succeeded", "timed_out", "rate_limited", "failed", "configuration_error"],
+)
+def test_complete_r2_operation_metric_matrix(monkeypatch, operation, outcome):
+    calls = []
+    error = {
+        "timed_out": ReadTimeoutError(endpoint_url="https://private.invalid"),
+        "rate_limited": ClientError({"Error": {"Code": "SlowDown"}}, "private"),
+        "failed": ClientError({"Error": {"Code": "AccessDenied"}}, "private"),
+    }.get(outcome)
+
+    class Client:
+        def head_object(self, **kwargs):
+            calls.append("head")
+            if error:
+                raise error
+            return {"ContentType": "image/jpeg", "ContentLength": 12, "ETag": "private"}
+
+        def generate_presigned_url(self, *args, **kwargs):
+            calls.append("presign")
+            if error:
+                raise error
+            return "https://private.invalid/signed"
+
+    def config():
+        if outcome == "configuration_error":
+            raise r2_storage.R2StorageConfigError("private-secret")
+        return _config()
+
+    monkeypatch.setattr(r2_storage, "get_r2_storage_config", config)
+    monkeypatch.setattr(r2_storage.boto3, "client", lambda *a, **k: Client())
+    call = {
+        "r2.upload_url.create": lambda: r2_storage.create_object_upload_url(
+            object_key="private-key", content_type="image/jpeg"
+        ),
+        "r2.read_url.create": lambda: r2_storage.create_object_read_url("private-key"),
+        "r2.metadata.head": lambda: r2_storage.get_object_properties("private-key"),
+    }[operation]
+    recorder = MetricsRecorder("api", "test", "r2-test")
+    with metrics_context(recorder):
+        if outcome == "succeeded":
+            call()
+        else:
+            try:
+                call()
+            except Exception as exc:  # noqa: BLE001 - matrix spans distinct preserved public types.
+                assert exc is not None
+            else:
+                pytest.fail("The configured storage failure must propagate")
+    series = recorder.snapshot().series
+    assert len(series) == 1 and series[0].value == 1
+    assert dict(series[0].dimensions) == {
+        "provider_kind": "r2",
+        "operation": operation,
+        "result": outcome,
+    }
+    assert len(calls) == (0 if outcome == "configuration_error" else 1)
+    assert "private" not in repr(recorder.snapshot())
+
+
+@pytest.mark.parametrize("code", ["404", "NoSuchKey", "NotFound"])
+def test_r2_absence_has_one_nonfailure_observation(monkeypatch, code):
+    monkeypatch.setattr(r2_storage, "get_r2_storage_config", _config)
+    client = _FakeR2Client(
+        head_error=ClientError({"Error": {"Code": code}}, "HeadObject")
+    )
+    monkeypatch.setattr(r2_storage, "get_r2_client", lambda config: client)
+    recorder = MetricsRecorder("api", "test", "r2-test")
+    with metrics_context(recorder), pytest.raises(r2_storage.R2ObjectNotFoundError):
+        r2_storage.get_object_properties("private-key")
+    assert len(recorder.snapshot().series) == 1
+    assert dict(recorder.snapshot().series[0].dimensions)["result"] == "not_found"
+
+
+def test_r2_result_conversion_failure_is_not_success(monkeypatch):
+    monkeypatch.setattr(r2_storage, "get_r2_storage_config", _config)
+    client = _FakeR2Client()
+    monkeypatch.setattr(
+        client, "head_object", lambda **k: {"ContentLength": "private-invalid"}
+    )
+    monkeypatch.setattr(r2_storage, "get_r2_client", lambda config: client)
+    recorder = MetricsRecorder("api", "test", "r2-test")
+    with metrics_context(recorder), pytest.raises(ValueError):
+        r2_storage.get_object_properties("private-key")
+    assert dict(recorder.snapshot().series[0].dimensions)["result"] == "failed"
 
 
 def _config() -> r2_storage.R2StorageConfig:

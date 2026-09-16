@@ -2,7 +2,6 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -83,10 +82,6 @@ class AdminContentModerationFinding(Base):
             name="ck_admin_content_moderation_findings_detected_order",
         ),
         CheckConstraint(
-            "execution_duration_us >= 0",
-            name="ck_admin_content_moderation_findings_duration_nonnegative",
-        ),
-        CheckConstraint(
             "jsonb_typeof(matched_rule_versions) = 'array' "
             "AND jsonb_array_length(matched_rule_versions) BETWEEN 1 AND 32",
             name="ck_admin_content_moderation_findings_rule_versions_nonempty",
@@ -152,7 +147,6 @@ class AdminContentModerationFinding(Base):
     scanned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    execution_duration_us: Mapped[int] = mapped_column(BigInteger, nullable=False)
     finding_identity_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     current_match: Mapped[bool] = mapped_column(
         nullable=False,

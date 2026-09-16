@@ -22,6 +22,108 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
 pytestmark = pytest.mark.suite_type("ordinary")
 
 
+def test_financial_metrics_cover_complete_issue_taxonomy_and_durable_lifecycle():
+    from sqlalchemy import CheckConstraint, func, select
+
+    from backend.models import MoneyIssue, MoneyIssueEvent
+    from backend.observability.metrics import MONEY_ISSUE_TYPES, MetricsRecorder
+    from backend.services.admin_money_issue_query_service import (
+        financial_discrepancy_metric_observations,
+    )
+    from backend.services.admin_money_issue_rules import ISSUE_DEFAULTS
+
+    assert set(MONEY_ISSUE_TYPES) == set(ISSUE_DEFAULTS)
+    constraint = next(
+        item
+        for item in MoneyIssue.__table__.constraints
+        if isinstance(item, CheckConstraint)
+        and item.name == "ck_money_issues_issue_type"
+    )
+    import re
+
+    assert set(re.findall(r"'([^']+)'", str(constraint.sqltext))) == set(
+        MONEY_ISSUE_TYPES
+    )
+    admin = _user("metric-admin", role="admin")
+    target = _user("metric-target")
+    _add_users(admin, target)
+    game_id, _ = _persist_game_fixture("metric-game", admin=admin, creator=target)
+    booking_id = _persist_paid_booking(
+        game_id=game_id, buyer_user_id=target.id, amount_cents=1200
+    )
+    fixture = _persist_money_repair_fixture(
+        game_id=game_id, booking_id=booking_id, target_user_id=target.id
+    )
+    now = datetime.now(timezone.utc)
+    with _session() as db:
+        for issue in db.scalars(select(MoneyIssue)).all():
+            db.delete(issue)
+        for kind in MONEY_ISSUE_TYPES:
+            value_kind, recommended_action = ISSUE_DEFAULTS[kind]
+            db.add(
+                MoneyIssue(
+                    id=uuid.uuid4(),
+                    operation_key=f"private-{uuid.uuid4()}",
+                    status="open",
+                    issue_type=kind,
+                    origin_workflow="direct_admin_refund",
+                    value_kind=value_kind,
+                    amount_cents=100,
+                    currency="USD",
+                    target_refund_id=fixture["retry_refund_id"]
+                    if kind.startswith("refund_")
+                    else None,
+                    target_credit_usage_id=fixture["credit_usage_id"]
+                    if kind.startswith("credit_")
+                    else None,
+                    recommended_action_code=recommended_action,
+                    occurrence_count=1,
+                    reopen_count=0,
+                    first_detected_at=now,
+                    last_detected_at=now,
+                    last_activity_at=now,
+                    latest_summary="private-sensitive-summary",
+                )
+            )
+        db.commit()
+    recorder = MetricsRecorder("api", "test", "financial-metric-test")
+
+    def collect():
+        with _session() as db:
+            return financial_discrepancy_metric_observations(db)
+
+    recorder.register_observable("financial_discrepancy", collect)
+    populated = recorder.collect()
+    assert len(populated.series) == 7 and all(
+        item.value == 1 for item in populated.series
+    )
+    assert {tuple(item.dimensions) for item in populated.series} == {
+        tuple(sorted({"operation": f"money_issue.{kind}", "result": "open"}.items()))
+        for kind in MONEY_ISSUE_TYPES
+    }
+    with _session() as db:
+        assert db.scalar(select(func.count()).select_from(MoneyIssueEvent)) == 0
+        for issue in db.scalars(select(MoneyIssue)).all():
+            issue.status = "resolved"
+            issue.resolved_at = now
+            issue.resolved_by_user_id = admin.id
+            issue.resolution_reason_code = "invalid_issue"
+        db.commit()
+    assert all(item.value == 0 for item in recorder.collect().series)
+    with _session() as db:
+        for issue in db.scalars(select(MoneyIssue)).all():
+            issue.status = "open"
+            issue.resolved_at = None
+            issue.resolved_by_user_id = None
+            issue.resolution_reason_code = None
+            issue.reopen_count += 1
+        db.commit()
+    assert all(item.value == 1 for item in recorder.collect().series)
+    with _session() as db:
+        assert db.scalar(select(func.count()).select_from(MoneyIssueEvent)) == 0
+    assert "private" not in repr(recorder.snapshot())
+
+
 def _persist_paid_booking(
     *,
     game_id: uuid.UUID,
@@ -646,9 +748,10 @@ def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
         **before_credit_usage_counts,
         "restored": 1,
     }
-    assert _money_issue_state(retry_issue_id)[
-        "recommended_action_code"
-    ] == "review_and_resolve_no_action"
+    assert (
+        _money_issue_state(retry_issue_id)["recommended_action_code"]
+        == "review_and_resolve_no_action"
+    )
     assert _count_model_rows(MoneyIssueEvent) == before_retry_issue_events + 2
 
     retry_replay = client.post(
@@ -785,7 +888,9 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
     )
     assert stale_response.status_code == 403
     assert provider_calls == []
-    assert _count_model_rows(AdminFinancialOutcome) == before_counts[AdminFinancialOutcome]
+    assert (
+        _count_model_rows(AdminFinancialOutcome) == before_counts[AdminFinancialOutcome]
+    )
     assert _count_model_rows(AdminAction) == before_counts[AdminAction]
 
     branch_expectations = {
@@ -796,9 +901,11 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
     }
     provider_call_count = 0
     created_outcome_ids: dict[str, uuid.UUID] = {}
-    for outcome, (expected_status, expected_delta, counted_model) in (
-        branch_expectations.items()
-    ):
+    for outcome, (
+        expected_status,
+        expected_delta,
+        counted_model,
+    ) in branch_expectations.items():
         branch_host = branch_hosts[outcome]
         game_id, _venue_id = _persist_community_game_fixture(
             f"financial-{outcome}",
@@ -837,6 +944,7 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
         if outcome == "credit":
             assert state["host_publish_entitlement_id"] is not None
         assert _count_model_rows(counted_model) == before_model_count + expected_delta
+
 
 @pytest.mark.requirement("WS03-04D-R7", "WS03-04D-R10")
 def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards(
@@ -994,9 +1102,10 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
     reconcile_state = _refund_state(reconcile_refund_id)
     assert reconcile_state["refund_status"] == "succeeded"
     assert reconcile_state["provider_status"] == "succeeded"
-    assert reconcile_state["provider_refund_id"] == before_reconcile_refund[
-        "provider_refund_id"
-    ]
+    assert (
+        reconcile_state["provider_refund_id"]
+        == before_reconcile_refund["provider_refund_id"]
+    )
     assert _count_model_rows(RefundEvent) == before_refund_events + 2
     assert _count_model_rows(AdminAction) == before_admin_actions + 2
 

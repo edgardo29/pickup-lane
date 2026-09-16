@@ -271,7 +271,6 @@ def aggregate_chat_detections(
         "target_context",
         "declared_limits",
         "scanned_at",
-        "execution_duration_us",
         "source_content_hash",
         "source_field",
         "field_purpose",
@@ -322,7 +321,6 @@ def aggregate_chat_detections(
         target_context=first.target_context,
         declared_limits=tuple(first.declared_limits),
         scanned_at=first.scanned_at,
-        execution_duration_us=first.execution_duration_us,
     )
     return [
         ModerationFinding(

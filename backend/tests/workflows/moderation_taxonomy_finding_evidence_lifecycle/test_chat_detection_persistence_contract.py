@@ -225,7 +225,7 @@ def _assert_complete_detection_contract(
     assert detection.matched_rule_versions
     assert detection.declared_limits
     assert len(detection.evidence_fingerprint) == 64
-    assert detection.execution_duration_us >= 0
+    assert not hasattr(detection, "execution_duration_us")
     assert len(detection.detection_identity_hash) == 64
 
 
@@ -300,6 +300,8 @@ def test_game_chat_persists_span_and_repeated_evidence_and_projects_provenance()
         assert signal.metadata_["taxonomy_version"] == repeated.taxonomy_version
         assert signal.metadata_["configuration_hash"] == repeated.configuration_hash
         assert signal.metadata_["target_context"] == TARGET_CONTEXT_GAME_CHAT
+        assert "scan_execution_duration_us" not in signal.metadata_
+        assert not any("duration" in key for key in signal.metadata_)
 
 
 @pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R6")
@@ -350,6 +352,8 @@ def test_need_a_sub_chat_persists_the_same_provenance_and_non_span_contract() ->
         )
         assert signal.metadata_["target_context"] == TARGET_CONTEXT_NEED_A_SUB_CHAT
         assert signal.metadata_["configuration_hash"] == repeated.configuration_hash
+        assert "scan_execution_duration_us" not in signal.metadata_
+        assert not any("duration" in key for key in signal.metadata_)
 
 
 @pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3", "WS03-05A-R6")

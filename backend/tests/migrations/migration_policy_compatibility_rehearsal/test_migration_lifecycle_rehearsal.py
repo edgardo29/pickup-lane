@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
-import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.pool import NullPool
 
 from backend.tests.support.migration_test_database import (
@@ -28,6 +28,25 @@ _INTERRUPTION_MARKER_TABLE = "ws04_03a_interruption_marker"
 
 
 @pytest.mark.requirement("WS04-03A-R3", "WS04-03A-R4", "WS04-03A-R7", "WS04-03A-R8")
+def test_clean_moderation_schema_has_no_durable_execution_duration(migration_database):
+    run_alembic_upgrade("head")
+    inspector = inspect(migration_database.engine)
+    for table in (
+        "admin_content_moderation_findings",
+        "game_chat_message_detections",
+        "sub_post_chat_message_detections",
+    ):
+        assert "execution_duration_us" not in {
+            column["name"] for column in inspector.get_columns(table)
+        }
+        assert all(
+            "execution_duration_us" not in constraint["sqltext"]
+            for constraint in inspector.get_check_constraints(table)
+        )
+    assert model_schema_drift(migration_database.engine) == ()
+
+
+@pytest.mark.requirement("WS04-03A-R3", "WS04-03A-R4", "WS04-03A-R7", "WS04-03A-R8")
 def test_empty_database_upgrades_to_head_and_has_no_model_schema_drift(
     migration_database,
 ) -> None:
@@ -35,7 +54,9 @@ def test_empty_database_upgrades_to_head_and_has_no_model_schema_drift(
 
     run_alembic_upgrade("head")
 
-    assert current_database_revision(migration_database.engine) == alembic_head_revision()
+    assert (
+        current_database_revision(migration_database.engine) == alembic_head_revision()
+    )
     assert model_schema_drift(migration_database.engine) == ()
 
 
@@ -55,7 +76,9 @@ def test_prior_revision_upgrades_to_head_and_reruns_cleanly(migration_database) 
 
 
 @pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R6", "WS04-03A-R7", "WS04-03A-R8")
-def test_migration_database_reset_restores_genuine_empty_state(migration_database) -> None:
+def test_migration_database_reset_restores_genuine_empty_state(
+    migration_database,
+) -> None:
     run_alembic_upgrade("head")
     assert "alembic_version" in schema_object_names(migration_database.engine)
 
@@ -72,30 +95,45 @@ def test_migration_advisory_lock_serializes_overlapping_lifecycle_attempts() -> 
     engine = create_engine(os.environ["MIGRATION_DATABASE_URL"], poolclass=NullPool)
     try:
         with engine.connect() as first, engine.connect() as second:
-            assert first.execute(
-                text("SELECT pg_try_advisory_lock(:lock_id)"),
-                {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
-            ).scalar_one() is True
+            assert (
+                first.execute(
+                    text("SELECT pg_try_advisory_lock(:lock_id)"),
+                    {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
+                ).scalar_one()
+                is True
+            )
 
-            assert second.execute(
-                text("SELECT pg_try_advisory_lock(:lock_id)"),
-                {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
-            ).scalar_one() is False
+            assert (
+                second.execute(
+                    text("SELECT pg_try_advisory_lock(:lock_id)"),
+                    {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
+                ).scalar_one()
+                is False
+            )
 
-            assert first.execute(
-                text("SELECT pg_advisory_unlock(:lock_id)"),
-                {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
-            ).scalar_one() is True
+            assert (
+                first.execute(
+                    text("SELECT pg_advisory_unlock(:lock_id)"),
+                    {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
+                ).scalar_one()
+                is True
+            )
             first.commit()
 
-            assert second.execute(
-                text("SELECT pg_try_advisory_lock(:lock_id)"),
-                {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
-            ).scalar_one() is True
-            assert second.execute(
-                text("SELECT pg_advisory_unlock(:lock_id)"),
-                {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
-            ).scalar_one() is True
+            assert (
+                second.execute(
+                    text("SELECT pg_try_advisory_lock(:lock_id)"),
+                    {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
+                ).scalar_one()
+                is True
+            )
+            assert (
+                second.execute(
+                    text("SELECT pg_advisory_unlock(:lock_id)"),
+                    {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
+                ).scalar_one()
+                is True
+            )
             second.commit()
     finally:
         engine.dispose()

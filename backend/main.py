@@ -28,12 +28,18 @@ from starlette.datastructures import MutableHeaders
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from backend.database import check_database_connection, dispose_database_engine
+from backend.database import (
+    SessionLocal,
+    check_database_connection,
+    dispose_database_engine,
+    register_pool_metrics,
+)
 from backend.observability.http_contracts import RouteMatch, private_route_matches
 from backend.observability.http_errors import (
     CorrelationIdMiddleware,
     register_exception_handlers,
 )
+from backend.observability.metrics import MetricsRecorder, metrics_context
 from backend.observability.openapi_contracts import (
     install_openapi_contracts,
     mark_tombstone_routes_deprecated,
@@ -99,12 +105,17 @@ from backend.routes import (
     venues_router,
     waitlist_entries_router,
 )
+from backend.services.admin_money_issue_query_service import (
+    financial_discrepancy_metric_observations,
+)
 from backend.services.app_check_middleware import AppCheckMiddleware
 from backend.services.app_check_policy import (
     AppCheckRoutePolicy,
     build_app_check_route_policy,
 )
 from backend.services.app_check_service import APP_CHECK_HEADER_NAME
+from backend.services.durable_job_service import backlog_metric_observations
+from backend.services.payment_job_service import build_production_job_registry
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -175,13 +186,37 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         app.state.lifecycle_started = False
-        dispose_database_engine()
+        with metrics_context(app.state.metrics_recorder):
+            dispose_database_engine()
 
 
 def create_app(settings: BackendSettings | None = None) -> FastAPI:
     backend_settings = settings or get_settings()
     event_emitter = build_event_emitter(backend_settings, source_identity="api")
     configure_process_logging(event_emitter)
+    metrics_recorder = MetricsRecorder(
+        event_emitter.source_identity, event_emitter.environment, event_emitter.release
+    )
+    register_pool_metrics(metrics_recorder)
+    registry = build_production_job_registry()
+
+    def collect_domain(query):
+        with SessionLocal() as db:
+            try:
+                return query(db)
+            finally:
+                db.rollback()
+
+    metrics_recorder.register_observable(
+        "durable_backlog",
+        lambda: collect_domain(
+            lambda db: backlog_metric_observations(db, registry=registry)
+        ),
+    )
+    metrics_recorder.register_observable(
+        "financial_discrepancy",
+        lambda: collect_domain(financial_discrepancy_metric_observations),
+    )
     api_docs_enabled = backend_settings.enable_api_docs
 
     app = FastAPI(
@@ -191,6 +226,7 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.lifecycle_started = False
+    app.state.metrics_recorder = metrics_recorder
     app.state.release_identity = backend_settings.release_identity
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -323,7 +359,11 @@ def _add_application_middleware(
         ResponseSecurityHeadersMiddleware,
         private_routes=private_route_matches(app.routes),
     )
-    app.add_middleware(CorrelationIdMiddleware, event_emitter=event_emitter)
+    app.add_middleware(
+        CorrelationIdMiddleware,
+        event_emitter=event_emitter,
+        metrics_recorder=app.state.metrics_recorder,
+    )
 
 
 def _ordinary_json_body_routes(app: FastAPI) -> tuple[RequestBodyLimitRoute, ...]:

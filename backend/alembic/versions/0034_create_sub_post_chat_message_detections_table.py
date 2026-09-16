@@ -40,7 +40,6 @@ def upgrade() -> None:
         sa.Column("evidence_fingerprint", sa.String(length=64), nullable=False),
         sa.Column("evidence", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("scanned_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("execution_duration_us", sa.BigInteger(), nullable=False),
         sa.Column("detection_identity_hash", sa.String(length=64), nullable=False),
         sa.Column(
             "created_at",
@@ -71,10 +70,6 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "detection_identity_hash ~ '^[0-9a-f]{64}$'",
             name="ck_sub_post_chat_message_detections_identity_hash",
-        ),
-        sa.CheckConstraint(
-            "execution_duration_us >= 0",
-            name="ck_sub_post_chat_message_detections_duration_nonnegative",
         ),
         sa.CheckConstraint(
             "length(trim(scanner_id)) > 0 AND length(trim(scanner_version)) > 0 AND length(trim(taxonomy_version)) > 0 AND length(trim(canonicalization_version)) > 0 AND length(trim(evidence_format_version)) > 0 AND length(trim(target_context)) > 0 AND length(trim(field_purpose)) > 0 AND length(trim(source_field)) > 0",

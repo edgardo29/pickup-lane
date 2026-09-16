@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.testclient import TestClient
 
 from backend.observability.correlation import CORRELATION_ID_HEADER, get_correlation_id
+from backend.observability.metrics import Distribution
 from backend.observability.structured_logging import emit_event
 from backend.observability.timeouts import DependencyReadTimeoutError
 from backend.settings import build_settings, reset_settings_cache
@@ -91,6 +92,129 @@ def _app(
         return {"ok": True}
 
     return app
+
+
+@pytest.mark.parametrize(
+    ("path", "status", "result", "route"),
+    [
+        ("/synthetic/success", 200, "success", "/synthetic/success"),
+        ("/synthetic/redirect", 307, "success", "/synthetic/redirect"),
+        ("/synthetic/client-error", 418, "client_error", "/synthetic/client-error"),
+        ("/synthetic/server-error", 503, "server_error", "/synthetic/server-error"),
+        ("/synthetic/timeout", 503, "server_error", "/synthetic/timeout"),
+        ("/synthetic/unexpected", 500, "server_error", "/synthetic/unexpected"),
+        ("/synthetic/started", 202, "success", "/synthetic/started"),
+        (
+            "/synthetic/items/private-id?secret=canary",
+            200,
+            "success",
+            "/synthetic/items/{item_id}",
+        ),
+        ("/private-unmatched?secret=canary", 404, "client_error", "/{unmatched}"),
+    ],
+)
+@pytest.mark.parametrize(
+    "failed_delivery", [None, "entry", "count", "duration", "exit"]
+)
+def test_request_metrics_cover_actual_outer_error_lifecycle_and_sink_failure(
+    monkeypatch,
+    path,
+    status,
+    result,
+    route,
+    failed_delivery,
+):
+    app = _app(monkeypatch)
+    recorder = app.state.metrics_recorder
+
+    class Sink:
+        def record(self, observation):
+            phase = {
+                "api.request.total": "count",
+                "api.request.duration_seconds": "duration",
+            }.get(observation.descriptor.name, "entry" if observation.value else "exit")
+            if phase == failed_delivery:
+                raise RuntimeError("private-sink-canary")
+
+        def replace_family(self, batch):
+            pass
+
+    recorder._sink = Sink()
+    with TestClient(
+        app, follow_redirects=False, raise_server_exceptions=False
+    ) as client:
+        response = client.get(path)
+    assert response.status_code == status
+    series = {item.name: item for item in recorder.snapshot().series}
+    assert set(series) == {
+        "api.request.total",
+        "api.request.duration_seconds",
+        "api.request.in_flight",
+    }
+    assert series["api.request.total"].value == 1
+    expected = {"operation": "http.get", "result": result, "route_template": route}
+    assert dict(series["api.request.total"].dimensions) == expected
+    duration = series["api.request.duration_seconds"]
+    assert dict(duration.dimensions) == expected
+    assert isinstance(duration.value, Distribution) and duration.value.count == 1
+    assert duration.value.min >= 0
+    assert series["api.request.in_flight"].value == 0
+    assert "private" not in repr(recorder.snapshot())
+
+
+@pytest.mark.parametrize(
+    "method", ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "PROPFIND"]
+)
+def test_request_metric_method_inventory(monkeypatch, method):
+    app = _app(monkeypatch)
+    with TestClient(app) as client:
+        client.request(method, "/synthetic/success")
+    item = next(
+        item
+        for item in app.state.metrics_recorder.snapshot().series
+        if item.name == "api.request.total"
+    )
+    assert dict(item.dimensions)["operation"] == "http." + (
+        method.lower() if method != "PROPFIND" else "other"
+    )
+
+
+def test_rejected_request_entry_has_no_unmatched_release(monkeypatch):
+    app = _app(monkeypatch)
+    recorder = app.state.metrics_recorder
+    monkeypatch.setattr(recorder, "enter_request", lambda: False)
+
+    def forbidden_exit():
+        pytest.fail("Rejected entry must not decrement")
+
+    monkeypatch.setattr(recorder, "exit_request", forbidden_exit)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        assert client.get("/synthetic/unexpected").status_code == 500
+    assert not any(
+        item.name == "api.request.in_flight" for item in recorder.snapshot().series
+    )
+
+
+def test_repeated_api_construction_has_fresh_state_and_does_not_poll(monkeypatch):
+    import backend.main as main_module
+
+    def forbidden_session():
+        pytest.fail("App construction must not poll observable database state")
+
+    monkeypatch.setattr(main_module, "SessionLocal", forbidden_session)
+    first = _app(monkeypatch, release="first-release")
+    second = _app(monkeypatch, release="second-release")
+    assert first.state.metrics_recorder is not second.state.metrics_recorder
+    assert first.state.metrics_recorder.snapshot().series == ()
+    assert second.state.metrics_recorder.snapshot().series == ()
+    assert set(first.state.metrics_recorder._callbacks) == {
+        "database_pool",
+        "durable_backlog",
+        "financial_discrepancy",
+    }
+    assert set(second.state.metrics_recorder._callbacks) == set(
+        first.state.metrics_recorder._callbacks
+    )
 
 
 def _records(capsys: pytest.CaptureFixture[str]) -> list[dict[str, object]]:
@@ -199,13 +323,34 @@ def test_missing_empty_and_invalid_request_ids_are_replaced_without_leakage(
         assert request_id not in json.dumps(records)
 
 
-def test_concurrent_requests_keep_correlation_and_app_metadata_isolated(
+@pytest.mark.parametrize(
+    "failed_delivery", [None, "entry", "count", "duration", "exit"]
+)
+def test_concurrent_requests_keep_correlation_metrics_and_app_metadata_isolated(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    failed_delivery: str | None,
 ) -> None:
     app = _app(monkeypatch)
+    recorder = app.state.metrics_recorder
     request_ids = [str(uuid.uuid4()) for _ in range(8)]
 
+    class Sink:
+        def record(self, observation):
+            phase = {
+                "api.request.total": "count",
+                "api.request.duration_seconds": "duration",
+            }.get(
+                observation.descriptor.name,
+                "entry" if observation.value else "exit",
+            )
+            if phase == failed_delivery:
+                raise RuntimeError("private-sink-canary")
+
+        def replace_family(self, batch):
+            pass
+
+    recorder._sink = Sink()
     with TestClient(app, raise_server_exceptions=False) as client:
 
         def make_request(item: tuple[int, str]) -> tuple[str, int]:
@@ -225,6 +370,23 @@ def test_concurrent_requests_keep_correlation_and_app_metadata_isolated(
     assert len(completions) == len(request_ids)
     assert {record["correlation_id"] for record in completions} == set(request_ids)
     assert all(record["source_identity"] == "api" for record in records)
+    series = recorder.snapshot().series
+    request_counts = [item for item in series if item.name == "api.request.total"]
+    request_durations = [
+        item for item in series if item.name == "api.request.duration_seconds"
+    ]
+    in_flight = next(item for item in series if item.name == "api.request.in_flight")
+    assert sum(item.value for item in request_counts) == len(request_ids)
+    assert sum(item.value.count for item in request_durations) == len(request_ids)
+    assert {
+        (dict(item.dimensions)["route_template"], dict(item.dimensions)["result"])
+        for item in request_counts
+    } == {
+        ("/synthetic/success", "success"),
+        ("/synthetic/timeout", "server_error"),
+    }
+    assert in_flight.value == 0
+    assert "private" not in repr(recorder.snapshot())
 
 
 def test_sensitive_unmatched_path_query_and_headers_never_enter_records(

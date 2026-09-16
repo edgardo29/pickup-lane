@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.observability.metrics import Distribution, MetricsRecorder, metrics_context
 from backend.services.chat_moderation_service import (
     CHAT_DETECTION_CATEGORIES,
     ContextPredicateFact,
@@ -68,6 +69,65 @@ def _community_fields(**values: str | None) -> list[ModerationTextField]:
             TARGET_CONTEXT_COMMUNITY_GAME
         ]
     ]
+
+
+@pytest.mark.parametrize(
+    "context", ["community_game", "need_a_sub", "game_chat", "need_a_sub_chat"]
+)
+@pytest.mark.parametrize(
+    "content", ["Let's play basketball", "Text me at 312-555-1212"]
+)
+@pytest.mark.parametrize("sink_fails", [False, True])
+def test_every_scan_context_has_operational_duration_without_persistent_duration(
+    context, content, sink_fails
+):
+    class Sink:
+        def record(self, observation):
+            if sink_fails:
+                raise RuntimeError("private-canary")
+
+        def replace_family(self, batch):
+            pass
+
+    recorder = MetricsRecorder("api", "test", "scanner-test", sink=Sink())
+    ticks = iter((1_000_000, 3_000_000))
+    with metrics_context(recorder):
+        if context in {"community_game", "need_a_sub"}:
+            fields = [
+                ModerationTextField(
+                    name,
+                    name,
+                    content if purpose == FIELD_PURPOSE_GENERAL else None,
+                    purpose,
+                )
+                for name, purpose in SAVED_CONTENT_PROFILE.context_field_inventory[
+                    context
+                ]
+            ]
+            result = build_content_moderation_findings(
+                fields, target_context=context, monotonic_clock=lambda: next(ticks)
+            )
+        else:
+            # Explicit workflow start predates context evaluation and must remain the start.
+            result = detect_chat_message(
+                content,
+                target_context=context,
+                started_ns=1_000_000,
+                monotonic_clock=lambda: 3_000_000,
+            )
+    (observation,) = recorder.snapshot().series
+    assert observation.name == "moderation.scan.duration_seconds"
+    assert dict(observation.dimensions) == {"operation": f"moderation.scan.{context}"}
+    assert observation.value == Distribution(1, 0.002, 0.002, 0.002)
+    assert not hasattr(result.provenance, "execution_duration_us")
+    if context in {"game_chat", "need_a_sub_chat"}:
+        for detection in result.detections:
+            assert "execution_duration_us" not in chat_detection_record_values(
+                message_id="synthetic-message",
+                source_text=content,
+                detection=detection,
+                provenance=result.provenance,
+            )
 
 
 @pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R2")
@@ -294,12 +354,14 @@ def test_saved_scan_uses_controlled_time_exact_hashes_and_raw_unicode_offsets() 
     source = "🏀 Text me at 312-555-1212"
     ticks = iter((1_000_000, 1_009_000))
     scanned_at = datetime(2035, 5, 1, 12, 0, tzinfo=timezone.utc)
-    result = build_content_moderation_findings(
-        _community_fields(description=source),
-        target_context=TARGET_CONTEXT_COMMUNITY_GAME,
-        wall_clock=lambda: scanned_at,
-        monotonic_clock=lambda: next(ticks),
-    )
+    recorder = MetricsRecorder("api", "test", "scanner-test")
+    with metrics_context(recorder):
+        result = build_content_moderation_findings(
+            _community_fields(description=source),
+            target_context=TARGET_CONTEXT_COMMUNITY_GAME,
+            wall_clock=lambda: scanned_at,
+            monotonic_clock=lambda: next(ticks),
+        )
 
     finding = result.findings[0]
     phone_match = next(
@@ -311,7 +373,10 @@ def test_saved_scan_uses_controlled_time_exact_hashes_and_raw_unicode_offsets() 
     assert source[phone_match["start"] : phone_match["end"]] == "312-555-1212"
     assert finding.source_content_hash == exact_source_hash(source)
     assert result.provenance.scanned_at == scanned_at
-    assert result.provenance.execution_duration_us == 9
+    assert not hasattr(result.provenance, "execution_duration_us")
+    assert recorder.snapshot().series[0].value == Distribution(
+        1, 0.000009, 0.000009, 0.000009
+    )
 
 
 @pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3")

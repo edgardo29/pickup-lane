@@ -42,9 +42,7 @@ def build_chat_finding(
         excerpt="Synthetic moderation evidence.",
         content_hash=content_hash,
         matched_rule_ids=("chat-harassment",),
-        matched_rule_versions=(
-            {"rule_id": "chat-harassment", "rule_version": "1"},
-        ),
+        matched_rule_versions=({"rule_id": "chat-harassment", "rule_version": "1"},),
         provenance=ScanProvenance(
             scanner_id="moderation-taxonomy",
             scanner_version="1",
@@ -55,7 +53,6 @@ def build_chat_finding(
             target_context="game_chat_message",
             declared_limits=(),
             scanned_at=SCAN_TIME,
-            execution_duration_us=1,
         ),
     )
 
@@ -268,8 +265,9 @@ def test_dismissed_signal_does_not_hold_reconciled_case_priority() -> None:
         review_case = db.get(AdminReviewCase, case_id)
         signals = list(
             db.scalars(
-                select(AdminReviewSignal)
-                .where(AdminReviewSignal.review_case_id == review_case.id)
+                select(AdminReviewSignal).where(
+                    AdminReviewSignal.review_case_id == review_case.id
+                )
             ).all()
         )
         events = event_rows(db, review_case.id)
@@ -350,9 +348,12 @@ def test_signal_reconciliation_failure_rolls_back_attach_and_supersede(
         fail_before_supersede,
     )
 
-    with session() as db, pytest.raises(
-        RuntimeError,
-        match="synthetic reconciliation failure",
+    with (
+        session() as db,
+        pytest.raises(
+            RuntimeError,
+            match="synthetic reconciliation failure",
+        ),
     ):
         surface_moderation_findings(
             db,
@@ -378,8 +379,11 @@ def test_signal_reconciliation_failure_rolls_back_attach_and_supersede(
             "case_created",
             "signal_attached",
         ]
-        assert db.scalar(
-            select(func.count(AdminReviewSignal.id)).where(
-                AdminReviewSignal.review_case_id == case_id,
+        assert (
+            db.scalar(
+                select(func.count(AdminReviewSignal.id)).where(
+                    AdminReviewSignal.review_case_id == case_id,
+                )
             )
-        ) == 1
+            == 1
+        )

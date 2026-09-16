@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from http import HTTPStatus
+from time import monotonic
 from typing import Any
 
 from fastapi import Request, status
@@ -26,6 +27,7 @@ from backend.observability.correlation import (
 )
 from backend.observability.errors import PublicErrorDescriptor
 from backend.observability.events import EventEnvelope
+from backend.observability.metrics import MetricsRecorder, metrics_context
 from backend.observability.redaction import (
     REDACTION_MARKER,
     contains_sensitive_text,
@@ -84,15 +86,28 @@ _APPROVED_HTTP_EXCEPTION_HEADERS: dict[int, dict[str, str]] = {
 class CorrelationIdMiddleware:
     """Set a safe request correlation ID and mirror it in HTTP responses."""
 
-    def __init__(self, app: ASGIApp, *, event_emitter: RuntimeEventEmitter) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        event_emitter: RuntimeEventEmitter,
+        metrics_recorder: MetricsRecorder | None = None,
+    ) -> None:
         self.app = app
         self._event_emitter = event_emitter
+        self._metrics_recorder = metrics_recorder
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
+        started_at = monotonic()
+        entry_accepted = (
+            self._metrics_recorder.enter_request()
+            if self._metrics_recorder is not None
+            else False
+        )
         correlation_id = _resolve_request_correlation_id(scope)
         token = set_correlation_id(correlation_id)
         logging_state = {
@@ -102,6 +117,11 @@ class CorrelationIdMiddleware:
             "http_status_code": None,
             "response_started": False,
             "route_template": "/{unmatched}",
+            "metrics_recorder": self._metrics_recorder,
+            "metric_started_at": started_at,
+            "metric_entry_accepted": entry_accepted,
+            "metric_completed": False,
+            "metric_released": False,
         }
         state = scope.setdefault("state", {})
         if isinstance(state, dict):
@@ -117,7 +137,10 @@ class CorrelationIdMiddleware:
             await send(message)
 
         try:
-            with event_emitter_context(self._event_emitter):
+            with (
+                event_emitter_context(self._event_emitter),
+                metrics_context(self._metrics_recorder),
+            ):
                 try:
                     await self.app(scope, receive, send_with_correlation_header)
                 except BaseException:
@@ -130,8 +153,10 @@ class CorrelationIdMiddleware:
                         status_code=status_code,
                         method=str(logging_state["http_method"]),
                         route_template=str(logging_state["route_template"]),
+                        logging_state=logging_state,
                     )
         finally:
+            _release_request_metric(logging_state)
             reset_correlation_id(token)
 
 
@@ -349,6 +374,7 @@ def _emit_outer_completion(
             status_code=status_code,
             method=method,
             route_template=route_template,
+            logging_state=logging_state,
         )
 
 
@@ -357,6 +383,7 @@ def _emit_http_completion(
     status_code: int,
     method: str,
     route_template: str,
+    logging_state: dict[str, object] | None = None,
 ) -> None:
     if status_code < 400:
         severity, result = "info", "success"
@@ -364,6 +391,24 @@ def _emit_http_completion(
         severity, result = "warning", "client_error"
     else:
         severity, result = "error", "server_error"
+    if logging_state is not None and not logging_state.get("metric_completed"):
+        logging_state["metric_completed"] = True
+        recorder = logging_state.get("metrics_recorder")
+        try:
+            if isinstance(recorder, MetricsRecorder):
+                dimensions = {
+                    "operation": f"http.{method}",
+                    "route_template": route_template,
+                    "result": result,
+                }
+                recorder.record("api.request.total", 1, dimensions)
+                recorder.record(
+                    "api.request.duration_seconds",
+                    max(0, monotonic() - logging_state["metric_started_at"]),
+                    dimensions,
+                )
+        finally:
+            _release_request_metric(logging_state)
     emit_event(
         "http.request",
         severity,
@@ -374,6 +419,16 @@ def _emit_http_completion(
             "result": result,
         },
     )
+
+
+def _release_request_metric(logging_state: dict[str, object]) -> None:
+    if not logging_state.get("metric_released"):
+        logging_state["metric_released"] = True
+        recorder = logging_state.get("metrics_recorder")
+        if logging_state.get("metric_entry_accepted") and isinstance(
+            recorder, MetricsRecorder
+        ):
+            recorder.exit_request()
 
 
 def _http_method(scope: Scope) -> str:

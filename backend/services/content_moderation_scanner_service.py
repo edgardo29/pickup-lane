@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from time import monotonic_ns
 
 from backend.services.moderation_evidence_service import exact_source_hash
 from backend.services.moderation_taxonomy import (
@@ -79,7 +78,6 @@ class ScanProvenance:
     target_context: str
     declared_limits: tuple[str, ...]
     scanned_at: datetime
-    execution_duration_us: int
 
 
 @dataclass(frozen=True)
@@ -219,15 +217,12 @@ def build_scan_provenance(
     *,
     profile: ScannerProfileDefinition,
     target_context: str,
-    started_ns: int,
     wall_clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
-    monotonic_clock: Callable[[], int] = monotonic_ns,
 ) -> ScanProvenance:
     scanned_at = wall_clock()
     if scanned_at.tzinfo is None or scanned_at.utcoffset() is None:
         raise ValueError("Moderation scan wall clock must be timezone-aware.")
     scanned_at = scanned_at.astimezone(timezone.utc)
-    duration_us = max(0, (monotonic_clock() - started_ns) // 1_000)
     return ScanProvenance(
         scanner_id=profile.scanner_id,
         scanner_version=profile.scanner_version,
@@ -238,7 +233,6 @@ def build_scan_provenance(
         target_context=target_context,
         declared_limits=profile.declared_limits,
         scanned_at=scanned_at,
-        execution_duration_us=duration_us,
     )
 
 

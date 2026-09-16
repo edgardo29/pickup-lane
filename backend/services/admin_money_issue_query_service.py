@@ -52,12 +52,29 @@ from backend.services.admin_user_service import (
 )
 
 
+def financial_discrepancy_metric_observations(db: Session):
+    """Read authoritative open pressure without exposing financial record data."""
+    counts = dict(
+        db.execute(
+            select(MoneyIssue.issue_type, func.count())
+            .where(MoneyIssue.status == "open")
+            .group_by(MoneyIssue.issue_type)
+        ).all()
+    )
+    return [
+        (
+            "financial.discrepancy.open",
+            counts.get(kind, 0),
+            {"operation": f"money_issue.{kind}", "result": "open"},
+        )
+        for kind in sorted(ISSUE_DEFAULTS)
+    ]
+
+
 def sort_money_issues_open_first(issues: list[MoneyIssue]) -> list[MoneyIssue]:
     def sort_key(issue: MoneyIssue) -> tuple[int, float, str]:
         activity_at = (
-            issue.last_activity_at
-            or issue.first_detected_at
-            or issue.created_at
+            issue.last_activity_at or issue.first_detected_at or issue.created_at
         )
         activity_timestamp = activity_at.timestamp() if activity_at is not None else 0
         return (
@@ -73,8 +90,7 @@ def load_by_id(db: Session, model, ids: set[uuid.UUID]) -> dict[uuid.UUID, objec
     if not ids:
         return {}
     return {
-        row.id: row
-        for row in db.scalars(select(model).where(model.id.in_(ids))).all()
+        row.id: row for row in db.scalars(select(model).where(model.id.in_(ids))).all()
     }
 
 
@@ -141,9 +157,7 @@ def build_money_issue_summaries(
         return []
 
     refund_ids = {
-        issue.target_refund_id
-        for issue in issues
-        if issue.target_refund_id is not None
+        issue.target_refund_id for issue in issues if issue.target_refund_id is not None
     }
     refunds = load_by_id(db, Refund, refund_ids)
 
@@ -202,23 +216,17 @@ def build_money_issue_summaries(
     bookings = load_by_id(db, Booking, booking_ids)
 
     user_ids = {
-        issue.target_user_id
-        for issue in issues
-        if issue.target_user_id is not None
+        issue.target_user_id for issue in issues if issue.target_user_id is not None
     }
     user_ids.update(payment.payer_user_id for payment in payments.values())
     user_ids.update(credit.user_id for credit in credits.values())
     users = load_by_id(db, User, user_ids)
 
     game_ids = {
-        issue.target_game_id
-        for issue in issues
-        if issue.target_game_id is not None
+        issue.target_game_id for issue in issues if issue.target_game_id is not None
     }
     game_ids.update(
-        payment.game_id
-        for payment in payments.values()
-        if payment.game_id is not None
+        payment.game_id for payment in payments.values() if payment.game_id is not None
     )
     game_ids.update(
         credit.source_game_id
@@ -226,14 +234,10 @@ def build_money_issue_summaries(
         if credit.source_game_id is not None
     )
     game_ids.update(
-        usage.game_id
-        for usage in credit_usages.values()
-        if usage.game_id is not None
+        usage.game_id for usage in credit_usages.values() if usage.game_id is not None
     )
     game_ids.update(
-        booking.game_id
-        for booking in bookings.values()
-        if booking.game_id is not None
+        booking.game_id for booking in bookings.values() if booking.game_id is not None
     )
     games = load_by_id(db, Game, game_ids)
 
@@ -350,9 +354,7 @@ def list_query_user_ids(db: Session, normalized_query: str) -> list[uuid.UUID]:
             select(User.id),
             normalized_query,
         ).order_by(User.created_at.desc(), User.id.desc())
-    return list(
-        db.scalars(user_statement.limit(MONEY_ISSUE_SEARCH_USER_LIMIT)).all()
-    )
+    return list(db.scalars(user_statement.limit(MONEY_ISSUE_SEARCH_USER_LIMIT)).all())
 
 
 def apply_money_issue_query_filter(
@@ -654,9 +656,7 @@ def get_admin_money_issue_detail(
         else None
     )
     game = (
-        db.get(Game, money_issue.target_game_id)
-        if money_issue.target_game_id
-        else None
+        db.get(Game, money_issue.target_game_id) if money_issue.target_game_id else None
     )
     credit = (
         db.get(GameCredit, money_issue.target_game_credit_id)
@@ -669,9 +669,7 @@ def get_admin_money_issue_detail(
         if credit_usage is not None:
             credit_usages.append(credit_usage)
     recent_refund_events = (
-        list_money_issue_refund_events(db, refund.id)
-        if refund is not None
-        else []
+        list_money_issue_refund_events(db, refund.id) if refund is not None else []
     )
 
     refund_summary = build_refund_summary(db, refund) if refund is not None else None

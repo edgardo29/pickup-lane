@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import wraps
 from urllib.parse import quote
 
 import boto3
@@ -11,6 +12,7 @@ from botocore.exceptions import (
     ReadTimeoutError,
 )
 
+from backend.observability.metrics import record_provider_outcome
 from backend.observability.timeouts import DependencyReadTimeoutError
 from backend.settings import (
     DEFAULT_R2_ALLOWED_IMAGE_TYPES,
@@ -98,9 +100,7 @@ def get_r2_storage_config() -> R2StorageConfig:
         read_url_minutes=settings.r2_read_url_minutes,
         max_image_bytes=settings.r2_max_image_bytes,
         allowed_image_types=settings.r2_allowed_image_types,
-        metadata_connect_timeout_seconds=(
-            settings.r2_metadata_connect_timeout_seconds
-        ),
+        metadata_connect_timeout_seconds=(settings.r2_metadata_connect_timeout_seconds),
         metadata_read_timeout_seconds=settings.r2_metadata_read_timeout_seconds,
     )
 
@@ -141,6 +141,54 @@ def build_object_url(
     )
 
 
+def _r2_error_result(exc: Exception, operation: str) -> str:
+    if isinstance(exc, R2StorageConfigError):
+        return "configuration_error"
+    original = (
+        exc.__cause__
+        if isinstance(exc, (R2StorageError, DependencyReadTimeoutError))
+        and exc.__cause__ is not None
+        else exc
+    )
+    if isinstance(original, ClientError):
+        code = original.response.get("Error", {}).get("Code", "")
+        status = original.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if status == 429 or code in {
+            "SlowDown",
+            "Throttling",
+            "ThrottlingException",
+            "TooManyRequestsException",
+        }:
+            return "rate_limited"
+        if operation == "r2.metadata.head" and code in {"404", "NoSuchKey", "NotFound"}:
+            return "not_found"
+    if isinstance(original, (ConnectTimeoutError, ReadTimeoutError)):
+        return "timed_out"
+    return "failed"
+
+
+def _observe_r2_operation(operation: str):
+    def decorate(call):
+        @wraps(call)
+        def observed(*args, **kwargs):
+            try:
+                result = call(*args, **kwargs)
+            except Exception as exc:
+                try:
+                    classification = _r2_error_result(exc, operation)
+                except Exception:  # noqa: BLE001 - observation cannot mask SDK failure.
+                    classification = "failed"
+                record_provider_outcome(operation, classification)
+                raise
+            record_provider_outcome(operation, "succeeded")
+            return result
+
+        return observed
+
+    return decorate
+
+
+@_observe_r2_operation("r2.upload_url.create")
 def create_object_upload_url(
     *,
     object_key: str,
@@ -173,6 +221,7 @@ def create_object_upload_url(
     )
 
 
+@_observe_r2_operation("r2.read_url.create")
 def create_object_read_url(object_key: str) -> str:
     config = get_r2_storage_config()
 
@@ -190,6 +239,7 @@ def create_object_read_url(object_key: str) -> str:
         raise R2StorageError("Cloudflare R2 could not create a read URL.") from exc
 
 
+@_observe_r2_operation("r2.metadata.head")
 def get_object_properties(object_key: str) -> R2ObjectProperties:
     config = get_r2_storage_config()
 
