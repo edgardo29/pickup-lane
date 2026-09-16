@@ -11,6 +11,54 @@ machine-verifiable Pickup Lane test-compliance rules and that required declared
 machine-readable evidence is internally consistent. Human adequacy review
 remains separate.
 
+## Practical Test Commands
+
+Run backend tests from the repository root through the repository-owned runner.
+It reads `TEST_DATABASE_URL` and `MIGRATION_DATABASE_URL` from the command
+environment or ignored `backend/.env`, validates their exact dedicated names,
+requires both URLs to use the same local loopback PostgreSQL server and port,
+and never treats the development database as a test target.
+
+Show built-in help:
+
+```bash
+backend/.venv/bin/python -m backend.scripts.backend_test --help
+```
+
+Rebuild the dedicated databases:
+
+```bash
+backend/.venv/bin/python -m backend.scripts.backend_test rebuild ordinary
+backend/.venv/bin/python -m backend.scripts.backend_test rebuild migration
+backend/.venv/bin/python -m backend.scripts.backend_test rebuild all
+```
+
+Run an explicit ordinary backend/API selection:
+
+```bash
+backend/.venv/bin/python -m backend.scripts.backend_test test ordinary \
+  backend/tests/platform/settings -q
+```
+
+Run the migration lifecycle selection:
+
+```bash
+backend/.venv/bin/python -m backend.scripts.backend_test test migration \
+  backend/tests/migrations/migration_policy_compatibility_rehearsal -q
+```
+
+The first argument after `ordinary` or `migration` must select an existing path
+under `backend/tests`; options follow it. Additional existing selections must
+also stay under that tree. Accepted pytest arguments are forwarded without
+rewriting, but options that bypass root test fixtures or replace pytest's
+configuration or plugins are rejected. Ambient `PYTEST_ADDOPTS` and
+`PYTEST_PLUGINS` are ignored. Every test command refuses to start when the
+ordinary database is missing, is not at
+the current single Alembic head, or was built from different migration-file
+contents. Both database locks are held because a broad selection can discover
+ordinary and migration tests together.
+Follow the reported `rebuild ordinary` command instead of bypassing that check.
+
 ## Trusted Architecture
 
 The current backend test tree is:
@@ -159,25 +207,17 @@ pickup_lane_migration_test_db
 
 Those tests use `MIGRATION_DATABASE_URL` and may reset only that migration test
 database after validating that the ordinary `DATABASE_URL` still points at
-`pickup_lane_test_db` on the same approved PostgreSQL test host and port.
+`pickup_lane_test_db` on the same local loopback PostgreSQL server and port.
 
-Local setup must provision the migration database explicitly:
-
-```bash
-createdb -h localhost -U postgres -O pickup-lane-user pickup_lane_migration_test_db
-```
-
-Use a sanitized URL with the same host and port as the ordinary test database:
-
-```bash
-MIGRATION_DATABASE_URL='postgresql+psycopg://pickup-lane-user:[PASSWORD]@localhost:5432/pickup_lane_migration_test_db'
-```
+Use `rebuild migration` or `rebuild all` to provision the migration database.
+Do not point the runner at development, production, backups, or similarly named
+databases.
 
 Unsafe database configuration fails before cleanup. Ordinary backend tests block
-uncontrolled external network access and may use only explicitly allowed local
-or test infrastructure for their suite. Provider-contract tests are separate
-and must use test-mode, emulator, sandbox, or equivalent resources when later
-implemented.
+uncontrolled external network access and may use only the configured local
+loopback PostgreSQL test server for their suite. Provider-contract tests are
+separate and must use test-mode, emulator, sandbox, or equivalent resources
+when later implemented.
 
 Retries are diagnostic only and must not silently turn an initial failure into
 clean evidence. Failure artifacts must be sanitized before becoming

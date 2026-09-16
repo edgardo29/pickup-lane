@@ -390,39 +390,70 @@ DATABASE_URL='[LOCAL_DEV_DATABASE_URL]' backend/.venv/bin/python -m backend.scri
 
 ### Test Database
 
-`pickup_lane_test_db`
+Pickup Lane keeps two test databases with separate responsibilities:
 
-Use this for backend and API tests that should behave like CI. Do not use this
-database for browser or manual QA.
+* `pickup_lane_test_db` is the ordinary backend/API test database.
+* `pickup_lane_migration_test_db` is the destructive migration-lifecycle test
+  database.
 
-Clean rebuild:
+They must use the same local PostgreSQL server and port, addressed as
+`localhost`, `127.0.0.1`, or `::1`, and they must remain distinct. This
+loopback-only boundary lets the repository lock coordinate every supported
+local and CI operation. Connection query parameters are rejected so they cannot
+override the validated endpoint. The runner also rejects PostgreSQL environment
+overrides that can change the endpoint or schema, requires `localhost` to
+resolve only to loopback addresses, and checks the connected client socket's
+loopback peer, port, and actual database name before in-database destructive
+SQL or test-controlled Alembic migrations. Neither database may be replaced
+with `pickup_lane_db_dev`, a production database, a similarly named backup, or
+any other target.
 
-Use `DATABASE_URL=[REDACTED]` for Alembic commands against the local test database.
+Configure their SQLAlchemy URLs as `TEST_DATABASE_URL` and
+`MIGRATION_DATABASE_URL` in ignored `backend/.env` or the command environment.
+The repository runner loads those values, validates the exact database names,
+forces the pytest subprocess into the test/CI environment, and supplies the
+ordinary URL as `DATABASE_URL`. It does not use the ambient development
+`DATABASE_URL` as a test target.
 
-Do not point destructive test commands at `pickup_lane_db_dev`.
-
-If backend tests skip unexpectedly, verify `DATABASE_URL` points at
-`pickup_lane_test_db`.
-
-If migration lifecycle tests fail before setup, verify `MIGRATION_DATABASE_URL`
-points at `pickup_lane_migration_test_db` on the same approved PostgreSQL host
-and port as `DATABASE_URL`.
-
-Create the local migration lifecycle database explicitly before running those
-tests:
+Use the repository runner from the repository root:
 
 ```bash
-createdb -h localhost -U postgres -O pickup-lane-user pickup_lane_migration_test_db
+backend/.venv/bin/python -m backend.scripts.backend_test rebuild ordinary
+backend/.venv/bin/python -m backend.scripts.backend_test rebuild migration
+backend/.venv/bin/python -m backend.scripts.backend_test rebuild all
 ```
 
-Use the same PostgreSQL host and port as `TEST_DATABASE_URL`:
+The ordinary rebuild creates a clean database, fingerprints `alembic.ini`,
+Alembic `env.py`, and every current revision file, applies Alembic through the
+current single head, verifies that those sources did not change during the
+rebuild, and records the fingerprint. Every runner-managed pytest execution
+checks both the recorded head and this fingerprint before pytest starts. If a
+canonical migration's contents change after it was applied, the revision ID
+alone is not accepted as current: rebuild the ordinary database.
 
-```bash
-MIGRATION_DATABASE_URL='postgresql+psycopg://pickup-lane-user:[PASSWORD]@localhost:5432/pickup_lane_migration_test_db'
-```
+The migration rebuild creates a genuinely empty migration-lifecycle database.
+The migration tests own its schema setup and reset behavior; do not apply the
+ordinary head to it before those tests.
 
-Exact pytest selections belong in `backend-testing.md` or focused testing
-documentation, not in this file.
+Rebuild the affected test database after any of these changes:
+
+* editing, adding, deleting, or reordering an Alembic revision;
+* changing Alembic environment or migration configuration;
+* changing the configured test-database server or credentials;
+* encountering a missing, partial, or otherwise uncertain test schema.
+
+The runner normalizes supported loopback host aliases and uses per-database file
+locks in the shared `/tmp` directory, independent of each process's `TMPDIR`,
+across rebuilds and pytest runs. Two supported operations on the same machine
+cannot mutate or use either database concurrently. Every unrestricted pytest
+selection locks both databases because even a broadly selected migration run
+can discover ordinary tests. Destructive commands derive and validate the
+exact allow-listed target from the connection URL again immediately before drop
+and create. Output is credential-redacted.
+
+Do not bypass the runner with direct Alembic, `dropdb`, `createdb`, or pytest
+commands for normal test work. Development-database rebuilds remain a separate,
+explicitly authorized operation and are never performed by this runner.
 
 ## Verification
 

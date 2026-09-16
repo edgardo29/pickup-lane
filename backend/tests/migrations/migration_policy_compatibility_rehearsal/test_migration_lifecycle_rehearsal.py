@@ -9,6 +9,9 @@ from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.pool import NullPool
 
+from backend.settings import escape_alembic_config_url
+from backend.tests.support import environment_safety
+from backend.tests.support.environment_safety import EnvironmentSafetyError
 from backend.tests.support.migration_test_database import (
     MIGRATION_DATABASE_ADVISORY_LOCK_ID,
     alembic_head_revision,
@@ -182,6 +185,49 @@ def test_controlled_alembic_interruption_is_inspectable_and_recoverable(
     )
 
 
+def test_synthetic_alembic_checks_its_own_connection_before_migration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_url = (
+        "postgresql+psycopg://test-user:encoded%40secret@localhost:5432/"
+        "pickup_lane_migration_test_db"
+    )
+    config = _synthetic_interruption_alembic_config(
+        tmp_path, database_url, fail_during_upgrade=False
+    )
+    assert config.get_main_option("sqlalchemy.url") == database_url
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+    class FakeEngine:
+        def connect(self):
+            return FakeConnection()
+
+        def dispose(self):
+            pass
+
+    def reject_wrong_connection(_connection, expected_name: str, expected_port: int):
+        assert expected_name == "pickup_lane_migration_test_db"
+        assert expected_port == 5432
+        raise EnvironmentSafetyError("misbound migration connection")
+
+    monkeypatch.setattr("sqlalchemy.create_engine", lambda *_args, **_kwargs: FakeEngine())
+    monkeypatch.setattr(
+        environment_safety,
+        "validate_local_test_connection_identity",
+        reject_wrong_connection,
+    )
+
+    with pytest.raises(EnvironmentSafetyError, match="misbound migration connection"):
+        command.upgrade(config, "head")
+
+
 def _synthetic_interruption_alembic_config(
     tmp_path: Path,
     database_url: str,
@@ -193,15 +239,26 @@ def _synthetic_interruption_alembic_config(
     versions_dir.mkdir(parents=True, exist_ok=True)
     (script_location / "env.py").write_text(
         "from alembic import context\n"
-        "from sqlalchemy import create_engine, pool\n\n"
+        "from sqlalchemy import create_engine, make_url, pool\n"
+        "from backend.tests.support.environment_safety import (\n"
+        "    DEDICATED_MIGRATION_TEST_DATABASE_NAME,\n"
+        "    validate_local_test_connection_identity,\n"
+        ")\n\n"
         "config = context.config\n\n"
         "def run_migrations_online():\n"
+        "    database_url = config.get_main_option('sqlalchemy.url')\n"
         "    engine = create_engine(\n"
-        "        config.get_main_option('sqlalchemy.url'),\n"
+        "        database_url,\n"
         "        poolclass=pool.NullPool,\n"
         "    )\n"
         "    try:\n"
         "        with engine.connect() as connection:\n"
+        "            validate_local_test_connection_identity(\n"
+        "                connection,\n"
+        "                DEDICATED_MIGRATION_TEST_DATABASE_NAME,\n"
+        "                make_url(database_url).port or 5432,\n"
+        "            )\n"
+        "            connection.commit()\n"
         "            context.configure(connection=connection)\n"
         "            with context.begin_transaction():\n"
         "                context.run_migrations()\n"
@@ -234,5 +291,7 @@ def _synthetic_interruption_alembic_config(
     )
     config = Config()
     config.set_main_option("script_location", str(script_location))
-    config.set_main_option("sqlalchemy.url", database_url)
+    config.set_main_option(
+        "sqlalchemy.url", escape_alembic_config_url(database_url)
+    )
     return config

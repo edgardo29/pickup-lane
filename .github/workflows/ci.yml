@@ -114,6 +114,7 @@ jobs:
     env:
       APP_ENV: ci
       DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+      TEST_DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
       PYTHONPATH: ${{ github.workspace }}
 
     steps:
@@ -128,10 +129,22 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Provision migration test database
-        env:
-          PGPASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
-        run: createdb -h localhost -U postgres pickup_lane_migration_test_db
+      - name: Configure migration test database URL
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy.engine import make_url
+
+          # Preserve encoded credentials and the exact ordinary test endpoint.
+          ordinary_url = make_url(os.environ["TEST_DATABASE_URL"])
+          migration_url = ordinary_url.set(database="pickup_lane_migration_test_db")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(
+                  "MIGRATION_DATABASE_URL="
+                  + migration_url.render_as_string(hide_password=False)
+                  + "\n"
+              )
+          PY
 
       - name: Compile backend Python files
         run: >
@@ -140,12 +153,13 @@ jobs:
           backend/models
           backend/routes
           backend/schemas
+          backend/scripts
           backend/tests
           backend/database.py
           backend/main.py
 
-      - name: Apply database migrations
-        run: python -m alembic upgrade head
+      - name: Rebuild dedicated backend test databases
+        run: python -m backend.scripts.backend_test rebuild all
 
       - name: Run migration safety checker
         run: >
@@ -153,12 +167,10 @@ jobs:
           --scope domain
           backend/tests/migrations/migration_policy_compatibility_rehearsal
 
-      - name: Run migration safety tests
-        env:
-          MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/pickup_lane_migration_test_db
+      - name: Run backend test suite
         run: >
-          python -m pytest
-          backend/tests/migrations/migration_policy_compatibility_rehearsal
+          python -m backend.scripts.backend_test test ordinary
+          backend/tests
 
 
   required:

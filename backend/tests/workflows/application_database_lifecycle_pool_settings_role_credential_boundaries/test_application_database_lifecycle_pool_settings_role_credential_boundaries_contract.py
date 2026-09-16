@@ -7,13 +7,21 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from alembic.config import Config
 
 from backend.settings import (
     BACKEND_ENVIRONMENT_VARIABLES,
     SettingsError,
     build_settings,
+    escape_alembic_config_url,
     get_migration_database_url,
     reset_settings_cache,
+    validate_migration_test_database_url,
+    validate_ordinary_test_database_url,
+)
+from backend.tests.support import environment_safety
+from backend.tests.support.environment_safety import (
+    validate_local_test_connection_endpoint,
 )
 
 pytestmark = pytest.mark.no_db_cleanup
@@ -22,6 +30,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 _BACKEND_ROOT = _REPO_ROOT / "backend"
 _FRONTEND_ROOT = _REPO_ROOT / "frontend"
 _TEST_DATABASE_URL = "postgresql+psycopg://db.example.invalid:5432/pickup_lane_test_db"
+_LOCAL_TEST_DATABASE_URL = "postgresql+psycopg://localhost:5432/pickup_lane_test_db"
 _PRODUCTION_DATABASE_URL = "postgresql+psycopg://db.example.invalid:5432/pickup_lane_prod"
 _MIGRATION_DATABASE_URL = (
     "postgresql+psycopg://migration-db.example.invalid:5432/pickup_lane_prod"
@@ -29,6 +38,7 @@ _MIGRATION_DATABASE_URL = (
 _DATABASE_ENV_NAMES = frozenset(
     {
         "DATABASE_URL",
+        "TEST_DATABASE_URL",
         "MIGRATION_DATABASE_URL",
         "DB_POOL_SIZE",
         "DB_MAX_OVERFLOW",
@@ -76,6 +86,86 @@ def _build(
         load_dotenv_file=False,
         validate_full=False,
     )
+
+
+@pytest.mark.requirement("WS04-01A-R5")
+def test_explicit_alembic_test_override_accepts_only_the_ordinary_test_database() -> None:
+    assert (
+        validate_ordinary_test_database_url(_LOCAL_TEST_DATABASE_URL)
+        == _LOCAL_TEST_DATABASE_URL
+    )
+
+    for unsafe_url in (
+        _TEST_DATABASE_URL,
+        f"{_LOCAL_TEST_DATABASE_URL}?host=production-db.example.invalid",
+        _PRODUCTION_DATABASE_URL,
+        _MIGRATION_DATABASE_URL,
+        "not-a-database-url",
+        "",
+    ):
+        with pytest.raises(SettingsError):
+            validate_ordinary_test_database_url(
+                unsafe_url,
+                name="pickup_lane_database_url_override",
+            )
+
+
+def test_explicit_alembic_migration_override_accepts_only_the_migration_test_database() -> None:
+    migration_url = (
+        "postgresql+psycopg://localhost:5432/pickup_lane_migration_test_db"
+    )
+    assert validate_migration_test_database_url(migration_url) == migration_url
+
+    for unsafe_url in (
+        _LOCAL_TEST_DATABASE_URL,
+        migration_url + "?host=db.example.invalid",
+        migration_url.replace("localhost", "db.example.invalid"),
+        "",
+    ):
+        with pytest.raises(SettingsError):
+            validate_migration_test_database_url(unsafe_url)
+
+
+def test_alembic_config_preserves_url_encoded_password() -> None:
+    database_url = (
+        "postgresql+psycopg://test-user:encoded%40secret@localhost:5432/"
+        "pickup_lane_test_db"
+    )
+    config = Config()
+    config.set_main_option("sqlalchemy.url", escape_alembic_config_url(database_url))
+
+    assert config.get_main_option("sqlalchemy.url") == database_url
+
+
+@pytest.mark.parametrize(
+    ("address", "port", "allowed"),
+    [
+        ("127.0.0.1", 5432, True),
+        ("::1", 5432, True),
+        ("203.0.113.10", 5432, False),
+        ("127.0.0.1", 6543, False),
+        (None, 5432, False),
+    ],
+)
+def test_test_database_connection_must_reach_the_local_expected_port(
+    address: str | None,
+    port: int,
+    allowed: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        environment_safety,
+        "_connection_socket_peer",
+        lambda _connection: (address, port),
+    )
+    if allowed:
+        validate_local_test_connection_endpoint(object(), 5432)
+    else:
+        with pytest.raises(
+            environment_safety.EnvironmentSafetyError,
+            match="validated loopback port",
+        ):
+            validate_local_test_connection_endpoint(object(), 5432)
 
 
 def _assert_settings_rejected(

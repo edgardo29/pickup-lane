@@ -733,6 +733,52 @@ The review must determine:
 Do not preserve a broad test merely because it already passes. Do not move a
 domain test into a page folder merely because the page consumes the result.
 
+## Validation Selection And Execution
+
+Use the repository-owned backend test runner for ordinary and migration pytest
+execution. It establishes the dedicated database environment, rejects stale
+ordinary schema state for every test command, locks both databases because an
+explicit broad selection can discover both ordinary and migration tests, and
+forwards accepted pytest arguments exactly. The first pytest argument must
+select an existing path under `backend/tests`; additional existing selections
+must remain there. Place options after the first selection. Options that bypass
+root test fixtures or replace pytest configuration or plugins are rejected;
+ambient `PYTEST_ADDOPTS` and `PYTEST_PLUGINS` are ignored:
+
+```bash
+backend/.venv/bin/python -m backend.scripts.backend_test test ordinary <pytest-selection> [pytest-options]
+backend/.venv/bin/python -m backend.scripts.backend_test test migration <pytest-selection> [pytest-options]
+```
+
+Keep test progress visible while a run is active. Never buffer or suppress the
+entire suite's output until completion, including for credential redaction.
+Redact output as it streams or provide a separate safe live progress signal so
+pytest progress and failure markers remain visible. If a check is naturally
+quiet, give periodic status updates. An interrupted run is incomplete; report
+only the progress and failures actually observed, never a pass result.
+
+Choose validation by actual risk, not a fixed count of files, routes, or tests:
+
+1. Run focused tests while developing the changed behavior.
+2. Run affected regression tests when every materially affected consumer and
+   compatibility boundary can be identified.
+3. Run the full backend suite when the change touches shared/global behavior,
+   schema used broadly across the application, test infrastructure, uncertain
+   consumers, or another blast radius that focused and affected selections
+   cannot bound honestly.
+
+Do not rerun a full suite after every small correction. Diagnose the failure,
+fix a genuine defect when the current implementation authority permits it, and
+rerun the focused failed area. Rerun broader coverage only when the correction
+itself changes the broader blast radius or the prior broader result is no longer
+representative. Never dismiss a genuine failure merely as unrelated: report
+what failed, why, what changed, and the rerun result. Stop when correction would
+require materially different product, architecture, or operational authority.
+
+Completion reporting must list the exact selections run, their observed
+results, every failure encountered and its disposition, and any relevant
+selection or broader suite not run.
+
 ## Automated CI Requirements
 
 Pickup Lane currently uses GitHub Actions, but these requirements apply to any
@@ -757,7 +803,8 @@ request gate.
 
 ## Local Agent Execution Policy
 
-Automated CI runs the required backend suite.
+Automated CI runs the required backend suite through the same repository-owned
+runner used locally.
 
 Agents may inspect code, review tests, edit files, and perform static checks.
 Agents must not run backend API tests, migrations, database-reset commands, or
@@ -766,8 +813,8 @@ An explicit production-readiness task authorizes only the validation required by
 its current instruction and applicable risk; it does not authorize unrelated
 backend tests, migrations, database reset commands, or broader suites.
 
-When verification is needed, agents must provide focused commands for the user
-to run and clearly state what remains unverified.
+When verification is authorized, agents must use focused runner commands first
+and clearly state what remains unverified.
 
 Allowed without explicit backend-test approval:
 
@@ -778,7 +825,7 @@ Allowed without explicit backend-test approval:
 
 Not allowed without explicit approval:
 
-- `pytest backend/tests...`
+- backend test-runner commands that execute pytest
 - Alembic upgrade or downgrade commands.
 - Database create, drop, reset, or truncate commands.
 - Starting backend application processes.

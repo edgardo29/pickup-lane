@@ -16,6 +16,7 @@ from backend.tests.support.environment_safety import (
     guard_socket_connect_ex,
     guard_socket_create_connection,
     validate_dedicated_test_database_url,
+    validate_local_test_connection_identity,
 )
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
@@ -267,7 +268,7 @@ def clean_database(
         pytest.skip("DATABASE_URL is required for backend integration tests.")
 
     try:
-        validate_dedicated_test_database_url(database_url)
+        target = validate_dedicated_test_database_url(database_url)
     except EnvironmentSafetyError as exc:
         raise pytest.UsageError(str(exc)) from exc
 
@@ -276,6 +277,9 @@ def clean_database(
     table_names = ", ".join(TEST_TABLES)
 
     with engine.connect() as connection:
+        validate_local_test_connection_identity(
+            connection, target.database_name, target.port
+        )
         connection.execute(
             text("SELECT pg_advisory_lock(:lock_id)"),
             {"lock_id": TEST_DATABASE_ADVISORY_LOCK_ID},
