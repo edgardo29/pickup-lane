@@ -43,7 +43,7 @@ MIGRATION_SAFETY_FAMILIES: tuple[MigrationSafetyFamily, ...] = (
             "the transition to immutable history requires an explicit project decision",
         ),
         representative_sources=(
-            "docs/agent-notes/database.md",
+            "docs/agent-notes/coding-standards/database.md",
             "backend/alembic/versions/",
         ),
     ),

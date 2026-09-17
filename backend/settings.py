@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Mapping
 from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
@@ -17,12 +17,12 @@ from pydantic import BaseModel, ConfigDict, SecretStr
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+from backend.observability.redaction import contains_sensitive_text
 from backend.observability.request_body_limits import (
     DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES,
     DEFAULT_PLATFORM_NOTICE_REQUEST_BODY_LIMIT_BYTES,
     DEFAULT_STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES,
 )
-from backend.observability.redaction import contains_sensitive_text
 
 
 class SettingsError(RuntimeError):
@@ -56,6 +56,7 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
     {
         "APP_ENV",
         "DATABASE_URL",
+        "TEST_DATABASE_URL",
         "MIGRATION_DATABASE_URL",
         "DB_POOL_SIZE",
         "DB_MAX_OVERFLOW",
@@ -115,6 +116,7 @@ DEFAULT_ALLOWED_HOSTS = ("localhost", "127.0.0.1", "testserver")
 DEFAULT_R2_ALLOWED_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 DEDICATED_TEST_DATABASE_NAME = "pickup_lane_test_db"
 DEDICATED_MIGRATION_TEST_DATABASE_NAME = "pickup_lane_migration_test_db"
+LOCAL_TEST_DATABASE_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 SUPPORTED_STRIPE_CURRENCY = "USD"
 DEFAULT_STRIPE_READ_TIMEOUT_SECONDS = 6
 DEFAULT_STRIPE_MUTATION_TIMEOUT_SECONDS = 15
@@ -350,6 +352,60 @@ def _cached_database_pool_settings() -> DatabasePoolSettings:
 
 def get_migration_database_url() -> str:
     return _cached_migration_database_url()
+
+
+def validate_ordinary_test_database_url(
+    database_url: object,
+    *,
+    name: str = "DATABASE_URL",
+) -> str:
+    """Validate an explicit ordinary-test URL without loading ambient settings."""
+
+    return _validate_explicit_local_test_database_url(
+        database_url, name=name, database_name=DEDICATED_TEST_DATABASE_NAME
+    )
+
+
+def validate_migration_test_database_url(
+    database_url: object,
+    *,
+    name: str = "MIGRATION_DATABASE_URL",
+) -> str:
+    """Validate an explicit migration-test URL without loading ambient settings."""
+
+    return _validate_explicit_local_test_database_url(
+        database_url,
+        name=name,
+        database_name=DEDICATED_MIGRATION_TEST_DATABASE_NAME,
+    )
+
+
+def _validate_explicit_local_test_database_url(
+    database_url: object,
+    *,
+    name: str,
+    database_name: str,
+) -> str:
+    if not isinstance(database_url, str) or not database_url.strip():
+        _fail(name, "must be a non-empty PostgreSQL SQLAlchemy URL")
+    validated_url = _parse_database_url_value(
+        name,
+        database_url,
+        AppEnvironment.TEST,
+        test_database_name=database_name,
+    )
+    parsed = make_url(validated_url)
+    if str(parsed.host).lower() not in LOCAL_TEST_DATABASE_HOSTS:
+        _fail(name, "must use localhost or an explicit loopback address")
+    if parsed.query:
+        _fail(name, "must not use connection query parameters")
+    return validated_url
+
+
+def escape_alembic_config_url(database_url: str) -> str:
+    """Preserve URL-encoded credentials through ConfigParser interpolation."""
+
+    return database_url.replace("%", "%%")
 
 
 @lru_cache(maxsize=1)

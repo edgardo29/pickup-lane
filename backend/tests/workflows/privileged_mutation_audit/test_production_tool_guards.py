@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib
+import importlib.util
+
 import pytest
 
 from backend.settings import AppEnvironment
@@ -10,6 +13,30 @@ pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
 def _unexpected_call(*args, **kwargs):
     del args, kwargs
     raise AssertionError("production refusal crossed a protected boundary")
+
+
+def _portfolio_runner_if_present():
+    if importlib.util.find_spec("backend.scripts.portfolio_seed") is None:
+        pytest.skip("Portfolio seed is absent from this checkout")
+    return importlib.import_module("backend.scripts.portfolio_seed.runner")
+
+
+def test_portfolio_guard_reports_absent_local_module_as_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda module_name: (
+            None
+            if module_name == "backend.scripts.portfolio_seed"
+            else original_find_spec(module_name)
+        ),
+    )
+
+    with pytest.raises(pytest.skip.Exception, match="absent from this checkout"):
+        _portfolio_runner_if_present()
 
 
 def _set_production_settings(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -29,7 +56,7 @@ def _set_production_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_bootstrap_admin_refuses_production_before_database_or_firebase(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.scripts.bootstrap_admin as bootstrap
+    import backend.bootstrap_admin as bootstrap
 
     _set_production_settings(monkeypatch)
     monkeypatch.setattr(bootstrap, "SessionLocal", _unexpected_call)
@@ -61,7 +88,7 @@ def test_demo_seed_refuses_production_before_database_or_domain_work(
 def test_importable_portfolio_runner_refuses_production_before_database_or_domain_work(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.scripts.portfolio_seed.runner as runner
+    runner = _portfolio_runner_if_present()
 
     _set_production_settings(monkeypatch)
     monkeypatch.setattr(runner, "SessionLocal", _unexpected_call)
@@ -77,7 +104,7 @@ def test_importable_portfolio_runner_refuses_production_before_database_or_domai
 @pytest.mark.parametrize(
     ("module_name", "function_name"),
     [
-        ("backend.scripts.bootstrap_admin", "bootstrap_admin"),
+        ("backend.bootstrap_admin", "bootstrap_admin"),
         ("backend.scripts.seed_demo_browse", "seed_demo_browse"),
         ("backend.scripts.portfolio_seed.runner", "seed_portfolio_browse"),
     ],
@@ -87,9 +114,11 @@ def test_mutation_tools_remain_available_outside_production(
     module_name: str,
     function_name: str,
 ) -> None:
-    import importlib
-
-    module = importlib.import_module(module_name)
+    module = (
+        _portfolio_runner_if_present()
+        if module_name == "backend.scripts.portfolio_seed.runner"
+        else importlib.import_module(module_name)
+    )
 
     class _LocalSettings:
         app_env = AppEnvironment.LOCAL

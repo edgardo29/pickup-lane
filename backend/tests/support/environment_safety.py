@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import importlib
+import ipaddress
+import os
 import socket
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy.engine import make_url
-
+from sqlalchemy.engine import Connection, make_url
 
 DEDICATED_TEST_DATABASE_NAME = "pickup_lane_test_db"
 DEDICATED_MIGRATION_TEST_DATABASE_NAME = "pickup_lane_migration_test_db"
+UNSAFE_POSTGRES_ENVIRONMENT_VARIABLES = frozenset(
+    {"PGHOSTADDR", "PGPORT", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS"}
+)
 MODEL_MODULE_FILE_EXCLUSIONS = {
     "__init__.py": "Package initializer and export surface; not a model module.",
 }
@@ -24,6 +28,18 @@ NETWORK_BLOCKED_MESSAGE = (
 
 class EnvironmentSafetyError(RuntimeError):
     """Raised when backend tests would use an unsafe resource."""
+
+
+def validate_test_database_connection_environment(
+    environ: Mapping[str, str] | None = None,
+) -> None:
+    source = os.environ if environ is None else environ
+    unsafe_names = UNSAFE_POSTGRES_ENVIRONMENT_VARIABLES.intersection(source)
+    if unsafe_names:
+        raise EnvironmentSafetyError(
+            "Backend test database operations require PostgreSQL connection "
+            "overrides to be unset: " + ", ".join(sorted(unsafe_names))
+        )
 
 
 @dataclass(frozen=True)
@@ -50,7 +66,7 @@ class MigrationTestDatabaseTargets:
 def parse_database_url(database_url: str, *, name: str = "DATABASE_URL") -> ParsedDatabaseUrl:
     try:
         parsed = make_url(database_url)
-    except Exception as exc:  # noqa: BLE001 - SQLAlchemy wraps URL parsing details.
+    except Exception as exc:
         raise EnvironmentSafetyError(f"{name} is not a valid SQLAlchemy URL.") from exc
 
     drivername = parsed.drivername.lower()
@@ -133,6 +149,69 @@ def validate_migration_test_database_urls(
         application_database=application_database,
         migration_database=migration_database,
     )
+
+
+def _connection_socket_peer(connection: Connection):
+    """Read the client-side TCP peer without taking ownership of libpq's socket."""
+
+    try:
+        socket_fd = connection.connection.driver_connection.pgconn.socket
+        with socket.socket(fileno=os.dup(socket_fd)) as client_socket:
+            return client_socket.getpeername()
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        raise EnvironmentSafetyError(
+            "Could not verify the backend test database connection endpoint."
+        ) from exc
+
+
+def validate_local_test_connection_endpoint(
+    connection: Connection,
+    expected_port: int,
+) -> None:
+    """Require the actual client-side PostgreSQL destination to be loopback."""
+
+    peer = _connection_socket_peer(connection)
+    try:
+        is_loopback = (
+            isinstance(peer, tuple)
+            and len(peer) >= 2
+            and ipaddress.ip_address(peer[0]).is_loopback
+        )
+        actual_port = int(peer[1]) if isinstance(peer, tuple) else None
+    except (TypeError, ValueError):
+        is_loopback = False
+        actual_port = None
+    if not is_loopback or actual_port != expected_port:
+        raise EnvironmentSafetyError(
+            "Backend test database connection must reach the validated loopback port."
+        )
+
+
+def validate_local_test_connection_identity(
+    connection: Connection,
+    expected_database_name: str,
+    expected_port: int,
+) -> None:
+    """Check the actual endpoint and database on the connection about to be used."""
+
+    if expected_database_name not in {
+        DEDICATED_TEST_DATABASE_NAME,
+        DEDICATED_MIGRATION_TEST_DATABASE_NAME,
+    }:
+        raise EnvironmentSafetyError("Expected database is not a dedicated test database.")
+    validate_local_test_connection_endpoint(connection, expected_port)
+    try:
+        actual_database_name = connection.exec_driver_sql(
+            "SELECT current_database()"
+        ).scalar_one()
+    except Exception as exc:
+        raise EnvironmentSafetyError(
+            "Could not verify the connected backend test database identity."
+        ) from exc
+    if actual_database_name != expected_database_name:
+        raise EnvironmentSafetyError(
+            "Connected backend test database does not match the dedicated target."
+        )
 
 
 def _validated_file_exclusions(

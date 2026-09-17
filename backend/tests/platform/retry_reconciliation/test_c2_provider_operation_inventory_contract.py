@@ -37,8 +37,11 @@ _ALLOWED_RUNTIME_BOUNDARIES = {
 }
 _ALLOWED_TOOLING = {
     "firebase_admin": {
-        "backend/scripts/bootstrap_admin.py",
-    }
+        "backend/bootstrap_admin.py",
+    },
+    # The test runner resolves database hosts to reject non-loopback targets;
+    # it does not make a production provider request.
+    "socket": {"backend/test_runner.py"},
 }
 
 

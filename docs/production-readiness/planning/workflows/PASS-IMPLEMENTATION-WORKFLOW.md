@@ -592,6 +592,10 @@ shared infrastructure, schema changes, concurrency behavior, or the current task
 warrants it. Do not run expensive suites merely to satisfy an old Gate ritual,
 and do not omit them when the actual risk calls for them.
 
+Diagnose every validation failure. Fix and report genuine defects when the
+current Gate B authority permits; after a focused correction, repeat broader
+coverage only when the correction or remaining uncertainty warrants it.
+
 Applicable validation may include:
 
 - unit and service tests;

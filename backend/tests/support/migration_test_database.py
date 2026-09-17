@@ -17,11 +17,18 @@ from sqlalchemy.pool import NullPool
 
 import backend.models  # noqa: F401 - register model metadata for drift checks.
 from backend.database_metadata import Base
-from backend.settings import reset_settings_cache
+from backend.settings import (
+    SettingsError,
+    reset_settings_cache,
+    validate_migration_test_database_url,
+    validate_ordinary_test_database_url,
+)
 from backend.tests.support.environment_safety import (
     EnvironmentSafetyError,
     MigrationTestDatabaseTargets,
+    validate_local_test_connection_identity,
     validate_migration_test_database_urls,
+    validate_test_database_connection_environment,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -36,13 +43,23 @@ class MigrationDatabaseContext:
 
 
 def migration_database_targets_from_environment() -> MigrationTestDatabaseTargets:
+    validate_test_database_connection_environment(os.environ)
     database_url = os.environ.get("DATABASE_URL", "")
     migration_database_url = os.environ.get("MIGRATION_DATABASE_URL", "")
     if not migration_database_url:
         raise EnvironmentSafetyError(
             "MIGRATION_DATABASE_URL is required for migration lifecycle tests."
         )
-    return validate_migration_test_database_urls(database_url, migration_database_url)
+    targets = validate_migration_test_database_urls(database_url, migration_database_url)
+    try:
+        validate_ordinary_test_database_url(database_url)
+        validate_migration_test_database_url(migration_database_url)
+    except SettingsError as exc:
+        raise EnvironmentSafetyError(
+            "Migration lifecycle tests require the two exact local test database URLs "
+            "without connection query overrides."
+        ) from exc
+    return targets
 
 
 @contextmanager
@@ -52,6 +69,11 @@ def locked_migration_database() -> Iterator[MigrationDatabaseContext]:
     engine = create_engine(migration_url, poolclass=NullPool)
     try:
         with engine.connect() as lock_connection:
+            validate_local_test_connection_identity(
+                lock_connection,
+                targets.migration_database.database_name,
+                targets.migration_database.port,
+            )
             lock_connection.execute(
                 text("SELECT pg_advisory_lock(:lock_id)"),
                 {"lock_id": MIGRATION_DATABASE_ADVISORY_LOCK_ID},
@@ -72,8 +94,13 @@ def locked_migration_database() -> Iterator[MigrationDatabaseContext]:
 
 
 def reset_migration_database(engine: Engine) -> None:
-    migration_database_targets_from_environment()
+    targets = migration_database_targets_from_environment()
     with engine.begin() as connection:
+        validate_local_test_connection_identity(
+            connection,
+            targets.migration_database.database_name,
+            targets.migration_database.port,
+        )
         connection.execute(text("DROP EXTENSION IF EXISTS pg_trgm CASCADE"))
         _drop_public_views(connection)
         _drop_public_tables(connection)
@@ -181,7 +208,7 @@ def alembic_parent_revision(revision: str) -> str:
         raise AssertionError(f"unknown Alembic revision: {revision}")
     parent = revision_script.down_revision
     if not isinstance(parent, str):
-        raise AssertionError(
+        raise AssertionError(  # noqa: TRY004 - enforce the single-parent migration contract.
             f"expected one parent revision for {revision}; got {parent!r}"
         )
     return parent
@@ -192,6 +219,9 @@ def run_alembic_upgrade(revision: str = "head") -> None:
     reset_settings_cache()
     try:
         config = alembic_config()
+        config.attributes["pickup_lane_migration_test_database_url_override"] = (
+            os.environ["MIGRATION_DATABASE_URL"]
+        )
         # In-process migration tests must not replace or disable pytest/application loggers.
         config.get_section(config.config_ini_section, {})
         config.config_file_name = None

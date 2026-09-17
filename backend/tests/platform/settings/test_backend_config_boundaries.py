@@ -18,6 +18,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 _BACKEND_ROOT = _REPO_ROOT / "backend"
 _FRONTEND_ROOT = _REPO_ROOT / "frontend"
 _CANONICAL_SETTINGS_OWNER = _BACKEND_ROOT / "settings.py"
+_REPOSITORY_TEST_ENVIRONMENT_OWNER = _BACKEND_ROOT / "test_runner.py"
 _NON_REPOSITORY_SOURCE_PARTS = frozenset(
     {".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv", "__pycache__", "venv"}
 )
@@ -51,6 +52,7 @@ _SETTINGS_SIDE_EFFECTFUL_SQLALCHEMY_IMPORT_NAMES = frozenset(
 _BACKEND_PRIVATE_ENV_NAMES = frozenset(
     {
         "DATABASE_URL",
+        "TEST_DATABASE_URL",
         "MIGRATION_DATABASE_URL",
         "INBOX_TOKEN_SECRET",
         "FIREBASE_ADMIN_CREDENTIALS_JSON",
@@ -109,7 +111,10 @@ def _is_runtime_python_file(path: Path) -> bool:
         return False
     if relative_parts[0] == "tests":
         return False
-    return path != _CANONICAL_SETTINGS_OWNER
+    return path not in {
+        _CANONICAL_SETTINGS_OWNER,
+        _REPOSITORY_TEST_ENVIRONMENT_OWNER,
+    }
 
 
 def _runtime_python_files() -> tuple[Path, ...]:
@@ -180,8 +185,10 @@ def _environment_accesses(path: Path) -> tuple[str, ...]:
 
 
 @pytest.mark.requirement("WS02-01-R1")
-def test_only_canonical_settings_owner_is_excluded_from_runtime_env_scan() -> None:
+def test_only_declared_settings_and_test_runner_owners_are_excluded_from_runtime_env_scan() -> None:
     assert _is_runtime_python_file(_CANONICAL_SETTINGS_OWNER) is False
+    assert _is_runtime_python_file(_REPOSITORY_TEST_ENVIRONMENT_OWNER) is False
+    assert _is_runtime_python_file(_BACKEND_ROOT / "durable_worker.py") is True
     assert _is_runtime_python_file(_BACKEND_ROOT / "some_feature" / "settings.py") is True
 
 

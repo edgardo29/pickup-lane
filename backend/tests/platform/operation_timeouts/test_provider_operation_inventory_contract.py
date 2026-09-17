@@ -35,8 +35,11 @@ _ALLOWED_REQUEST_BOUNDARY = {
 }
 _ALLOWED_TOOLING = {
     "firebase_admin": {
-        "backend/scripts/bootstrap_admin.py",
-    }
+        "backend/bootstrap_admin.py",
+    },
+    # The test runner resolves database hosts to reject non-loopback targets;
+    # it does not make a production provider request.
+    "socket": {"backend/test_runner.py"},
 }
 
 
@@ -132,7 +135,7 @@ def test_current_provider_boundaries_are_explicitly_accounted_for() -> None:
     assert hits_by_module["stripe"] == {"backend/services/stripe_service.py"}
     assert hits_by_module["firebase_admin"] == {
         "backend/firebase_admin_client.py",
-        "backend/scripts/bootstrap_admin.py",
+        "backend/bootstrap_admin.py",
     }
     assert hits_by_module["boto3"] == {"backend/services/r2_storage_service.py"}
     assert hits_by_module["botocore"] == {"backend/services/r2_storage_service.py"}
