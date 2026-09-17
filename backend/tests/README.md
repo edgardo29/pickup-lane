@@ -22,28 +22,28 @@ and never treats the development database as a test target.
 Show built-in help:
 
 ```bash
-backend/.venv/bin/python -m backend.scripts.backend_test --help
+backend/.venv/bin/python -m backend.test_runner --help
 ```
 
 Rebuild the dedicated databases:
 
 ```bash
-backend/.venv/bin/python -m backend.scripts.backend_test rebuild ordinary
-backend/.venv/bin/python -m backend.scripts.backend_test rebuild migration
-backend/.venv/bin/python -m backend.scripts.backend_test rebuild all
+backend/.venv/bin/python -m backend.test_runner rebuild ordinary
+backend/.venv/bin/python -m backend.test_runner rebuild migration
+backend/.venv/bin/python -m backend.test_runner rebuild all
 ```
 
 Run an explicit ordinary backend/API selection:
 
 ```bash
-backend/.venv/bin/python -m backend.scripts.backend_test test ordinary \
+backend/.venv/bin/python -m backend.test_runner test ordinary \
   backend/tests/platform/settings -q
 ```
 
 Run the migration lifecycle selection:
 
 ```bash
-backend/.venv/bin/python -m backend.scripts.backend_test test migration \
+backend/.venv/bin/python -m backend.test_runner test migration \
   backend/tests/migrations/migration_policy_compatibility_rehearsal -q
 ```
 

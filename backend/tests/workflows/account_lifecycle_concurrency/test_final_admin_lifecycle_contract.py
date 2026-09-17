@@ -205,8 +205,8 @@ def _admin_bootstrap_route_candidates() -> list[tuple[str, str, str]]:
 @pytest.mark.requirement("WS03-02-R10")
 def test_admin_bootstrap_source_requires_existing_linked_provider_identity_and_no_reachable_bootstrap_route() -> None:
     import backend.routes.admin_user_routes as admin_user_routes
-    import backend.scripts.bootstrap_admin as bootstrap_admin
     import backend.services.auth_account_service as auth_account_service
+    from backend import bootstrap_admin
 
     bootstrap_module = ast.parse(inspect.getsource(bootstrap_admin))
     assert not any(

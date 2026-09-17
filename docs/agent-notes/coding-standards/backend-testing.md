@@ -746,8 +746,8 @@ root test fixtures or replace pytest configuration or plugins are rejected;
 ambient `PYTEST_ADDOPTS` and `PYTEST_PLUGINS` are ignored:
 
 ```bash
-backend/.venv/bin/python -m backend.scripts.backend_test test ordinary <pytest-selection> [pytest-options]
-backend/.venv/bin/python -m backend.scripts.backend_test test migration <pytest-selection> [pytest-options]
+backend/.venv/bin/python -m backend.test_runner test ordinary <pytest-selection> [pytest-options]
+backend/.venv/bin/python -m backend.test_runner test migration <pytest-selection> [pytest-options]
 ```
 
 Keep test progress visible while a run is active. Never buffer or suppress the

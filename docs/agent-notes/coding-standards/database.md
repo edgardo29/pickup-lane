@@ -344,7 +344,8 @@ database once contained them.
 
 Schema migrations should define schema, not serve as general seed scripts.
 
-Use `backend/scripts/` for development seed data and operational data setup.
+Use `backend/scripts/` only for local mock/demo-data setup. Non-demo commands
+such as the test runner, admin bootstrap, and durable worker live outside it.
 
 Immutable reference rows that are required for the database contract may be
 inserted by a focused migration when explicitly approved.
@@ -418,9 +419,9 @@ ordinary URL as `DATABASE_URL`. It does not use the ambient development
 Use the repository runner from the repository root:
 
 ```bash
-backend/.venv/bin/python -m backend.scripts.backend_test rebuild ordinary
-backend/.venv/bin/python -m backend.scripts.backend_test rebuild migration
-backend/.venv/bin/python -m backend.scripts.backend_test rebuild all
+backend/.venv/bin/python -m backend.test_runner rebuild ordinary
+backend/.venv/bin/python -m backend.test_runner rebuild migration
+backend/.venv/bin/python -m backend.test_runner rebuild all
 ```
 
 The ordinary rebuild creates a clean database, fingerprints `alembic.ini`,

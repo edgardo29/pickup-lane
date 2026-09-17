@@ -1,6 +1,6 @@
 """Portable durable-job worker command.
 
-Run with ``python -m backend.scripts.durable_worker``.
+Run with ``python -m backend.durable_worker``.
 """
 
 from __future__ import annotations

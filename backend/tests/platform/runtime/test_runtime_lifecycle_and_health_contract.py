@@ -881,10 +881,27 @@ def test_database_connection_helper_uses_dedicated_postgresql_test_database() ->
     from backend.tests.support.environment_safety import validate_dedicated_test_database_url
 
     validate_dedicated_test_database_url(database_url)
+    child_code = (
+        "import os\n"
+        "from backend.database import DATABASE_URL, check_database_connection\n"
+        "if DATABASE_URL != os.environ['DATABASE_URL']:\n"
+        "    raise SystemExit(2)\n"
+        "raise SystemExit(0 if check_database_connection() else 1)\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", child_code],
+        cwd=_REPO_ROOT,
+        env={**os.environ, "APP_ENV": "test", "DATABASE_URL": database_url},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=30,
+    )
 
-    import backend.database as database_module
-
-    assert database_module.check_database_connection() is True
+    assert completed.returncode == 0, (
+        "database helper did not connect to the dedicated test database "
+        "in a fresh process"
+    )
 
 
 @pytest.mark.requirement("WS02-02-R6")

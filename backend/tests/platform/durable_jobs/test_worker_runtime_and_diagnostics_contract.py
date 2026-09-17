@@ -447,8 +447,8 @@ def test_malformed_payload_reports_lease_lost_when_exhaust_transition_loses_leas
 
 @pytest.mark.requirement("WS05-01A-R6", "WS05-01A-R8")
 def test_portable_worker_command_is_import_safe_and_not_deployment_topology() -> None:
-    module = importlib.import_module("backend.scripts.durable_worker")
-    source = (_REPO_ROOT / "backend/scripts/durable_worker.py").read_text()
+    module = importlib.import_module("backend.durable_worker")
+    source = (_REPO_ROOT / "backend/durable_worker.py").read_text()
 
     assert callable(module.main)
     assert "Celery" not in source
@@ -462,7 +462,7 @@ def test_portable_worker_command_is_import_safe_and_not_deployment_topology() ->
 def test_portable_worker_status_command_exposes_safe_operator_fields(capsys) -> None:
     registry = _registry_with_handler(lambda db, job: HandlerResult.success())
     job_id = _enqueue_with_registry(registry)
-    module = importlib.import_module("backend.scripts.durable_worker")
+    module = importlib.import_module("backend.durable_worker")
 
     assert module.main(["--status", "--job-id", str(job_id)]) == 0
 

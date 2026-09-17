@@ -29,7 +29,7 @@ The backend currently uses:
 * `backend/models/`: SQLAlchemy ORM models
 * `backend/schemas/`: Pydantic request and response models
 * `backend/alembic/versions/`: Alembic migration revisions
-* `backend/scripts/`: explicit development or operational scripts
+* `backend/scripts/`: explicit local mock/demo-data utilities
 * `backend/tests/`: backend tests
 
 Continue using these locations.
@@ -423,13 +423,14 @@ remain visible.
 
 ## Scripts And Tests
 
-`backend/scripts/` owns explicit development, maintenance, repair, or
-operational commands.
+`backend/scripts/` owns explicit local mock/demo-data utilities only. Keep
+test infrastructure, administrator tools, and worker runtime entry points out
+of this directory. The existing non-demo command entry points live in focused
+modules at the `backend/` package root.
 
-Scripts must have a narrow purpose, use existing services for domain behavior,
-and make destructive operations explicit.
-
-A script is not a substitute for a missing service.
+Demo-data scripts must have a narrow purpose, use existing services for domain
+behavior, make destructive operations explicit, and refuse production use.
+They are not a substitute for a missing service.
 
 Tests belong under `backend/tests/` and should follow the domain or workflow
 being tested.

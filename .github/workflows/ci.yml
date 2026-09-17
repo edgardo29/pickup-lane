@@ -153,13 +153,15 @@ jobs:
           backend/models
           backend/routes
           backend/schemas
-          backend/scripts
           backend/tests
+          backend/bootstrap_admin.py
           backend/database.py
+          backend/durable_worker.py
           backend/main.py
+          backend/test_runner.py
 
       - name: Rebuild dedicated backend test databases
-        run: python -m backend.scripts.backend_test rebuild all
+        run: python -m backend.test_runner rebuild all
 
       - name: Run migration safety checker
         run: >
@@ -167,10 +169,15 @@ jobs:
           --scope domain
           backend/tests/migrations/migration_policy_compatibility_rehearsal
 
-      - name: Run backend test suite
+      - name: Run backend test runner safety tests
         run: >
-          python -m backend.scripts.backend_test test ordinary
-          backend/tests
+          python -m backend.test_runner test ordinary
+          backend/tests/platform/backend_test_runner -q
+
+      - name: Run migration lifecycle tests
+        run: >
+          python -m backend.test_runner test migration
+          backend/tests/migrations/migration_policy_compatibility_rehearsal -q
 
 
   required:

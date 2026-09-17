@@ -195,7 +195,7 @@ def _tracked_text_sources() -> dict[str, str]:
     sources: dict[str, str] = {}
     for path in _tracked_files():
         relative = path.relative_to(_REPO_ROOT).as_posix()
-        if _tracked_runtime_path_ignored(relative):
+        if _tracked_runtime_path_ignored(relative) or not path.is_file():
             continue
         try:
             sources[relative] = path.read_text()
@@ -586,11 +586,11 @@ def test_backend_source_has_no_worker_or_scheduler_runtime_configuration() -> No
 
 @pytest.mark.requirement("WS02-02-R8")
 def test_ws05_01a_portable_worker_command_is_not_final_runtime_topology() -> None:
-    command_path = _REPO_ROOT / "backend" / "scripts" / "durable_worker.py"
+    command_path = _REPO_ROOT / "backend" / "durable_worker.py"
     source = command_path.read_text()
 
     assert "def main(" in source
-    assert "python -m backend.scripts.durable_worker" in source
+    assert "python -m backend.durable_worker" in source
     assert "Celery" not in source
     assert "rq worker" not in source
     assert "Redis" not in source

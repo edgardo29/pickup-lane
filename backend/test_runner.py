@@ -42,7 +42,7 @@ from backend.tests.support.environment_safety import (
     validate_test_database_connection_environment,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_ENV_PATH = REPO_ROOT / "backend" / ".env"
 ALEMBIC_INI_PATH = REPO_ROOT / "alembic.ini"
 ALEMBIC_ENV_PATH = REPO_ROOT / "backend" / "alembic" / "env.py"
@@ -54,7 +54,7 @@ DATABASE_COMMENT_QUERY = (
     "FROM pg_database WHERE datname = :database_name"
 )
 REBUILD_ORDINARY_COMMAND = (
-    "backend/.venv/bin/python -m backend.scripts.backend_test rebuild ordinary"
+    "backend/.venv/bin/python -m backend.test_runner rebuild ordinary"
 )
 LOCK_FILE_PREFIX = "pickup-lane-backend-test"
 LOCK_ROOT = Path("/tmp")

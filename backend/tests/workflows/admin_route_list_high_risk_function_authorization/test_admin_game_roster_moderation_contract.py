@@ -1877,6 +1877,13 @@ def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.models import AdminAction, AdminTargetNotice
+    from backend.services import venue_image_service
+
+    monkeypatch.setattr(
+        venue_image_service,
+        "create_object_read_url",
+        lambda object_key: f"https://read.local.invalid/{object_key}",
+    )
 
     admin = _user("community-actions-admin", role="admin")
     stale_admin = _user("community-actions-stale-admin", role="admin")

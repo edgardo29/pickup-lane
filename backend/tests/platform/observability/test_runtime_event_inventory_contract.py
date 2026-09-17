@@ -797,7 +797,7 @@ def test_complete_in_scope_runtime_population_has_no_parallel_plain_logging() ->
         "backend/services/official_game_query_service.py",
         "backend/services/game_service.py",
         "backend/services/durable_job_service.py",
-        "backend/scripts/durable_worker.py",
+        "backend/durable_worker.py",
     )
     event_modules = set(module_paths) - {"backend/main.py"}
 
@@ -840,7 +840,7 @@ def test_complete_in_scope_runtime_population_has_no_parallel_plain_logging() ->
             and isinstance(node.func, ast.Name)
             and node.func.id == "print"
         ]
-        if relative_path == "backend/scripts/durable_worker.py":
+        if relative_path == "backend/durable_worker.py":
             assert len(print_calls) == 1
             assert "def _write_json" in source
         else:

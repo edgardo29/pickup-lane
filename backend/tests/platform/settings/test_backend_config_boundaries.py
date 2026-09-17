@@ -18,7 +18,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 _BACKEND_ROOT = _REPO_ROOT / "backend"
 _FRONTEND_ROOT = _REPO_ROOT / "frontend"
 _CANONICAL_SETTINGS_OWNER = _BACKEND_ROOT / "settings.py"
-_REPOSITORY_TEST_ENVIRONMENT_OWNER = _BACKEND_ROOT / "scripts" / "backend_test.py"
+_REPOSITORY_TEST_ENVIRONMENT_OWNER = _BACKEND_ROOT / "test_runner.py"
 _NON_REPOSITORY_SOURCE_PARTS = frozenset(
     {".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv", "__pycache__", "venv"}
 )
@@ -188,7 +188,7 @@ def _environment_accesses(path: Path) -> tuple[str, ...]:
 def test_only_declared_settings_and_test_runner_owners_are_excluded_from_runtime_env_scan() -> None:
     assert _is_runtime_python_file(_CANONICAL_SETTINGS_OWNER) is False
     assert _is_runtime_python_file(_REPOSITORY_TEST_ENVIRONMENT_OWNER) is False
-    assert _is_runtime_python_file(_BACKEND_ROOT / "scripts" / "durable_worker.py") is True
+    assert _is_runtime_python_file(_BACKEND_ROOT / "durable_worker.py") is True
     assert _is_runtime_python_file(_BACKEND_ROOT / "some_feature" / "settings.py") is True
 
 

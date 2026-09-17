@@ -1,3 +1,5 @@
+"""Local-only command for promoting an existing Firebase-backed user to admin."""
+
 from __future__ import annotations
 
 import argparse

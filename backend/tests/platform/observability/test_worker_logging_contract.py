@@ -12,11 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend import durable_worker
 from backend.observability.structured_logging import (
     RuntimeEventEmitter,
     configure_process_logging,
 )
-from backend.scripts import durable_worker
 from backend.services.durable_job_service import (
     BacklogSummary,
     DurableJobRegistry,
@@ -35,7 +35,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 def test_api_and_worker_bootstrap_precede_database_and_business_imports() -> None:
     api_source = (_REPO_ROOT / "backend/main.py").read_text()
-    worker_source = (_REPO_ROOT / "backend/scripts/durable_worker.py").read_text()
+    worker_source = (_REPO_ROOT / "backend/durable_worker.py").read_text()
 
     assert api_source.index("prepare_api_logging()") < api_source.index(
         "from backend.database import"
@@ -164,7 +164,7 @@ def test_post_bootstrap_worker_failure_is_safe_at_real_process_boundary() -> Non
     script = textwrap.dedent(
         f"""
         import backend.database
-        from backend.scripts import durable_worker
+        from backend import durable_worker
 
         def fail_connection():
             raise RuntimeError({private_text!r})

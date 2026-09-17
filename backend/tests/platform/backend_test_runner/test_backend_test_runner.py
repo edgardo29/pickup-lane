@@ -11,7 +11,7 @@ import pytest
 import sqlalchemy
 from alembic import context as alembic_context
 
-from backend.scripts import backend_test
+from backend import test_runner as backend_test
 from backend.tests import conftest as backend_conftest
 from backend.tests.support import environment_safety
 from backend.tests.support.environment_safety import EnvironmentSafetyError
