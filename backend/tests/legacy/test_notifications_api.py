@@ -20,7 +20,7 @@ from backend.services.notification_event_service import (
     reopen_aggregated_notification,
     resolve_aggregated_notification,
 )
-from backend.tests.helpers import (
+from backend.tests.legacy.helpers import (
     authenticate_as,
     create_booking,
     create_chat_message,
@@ -296,25 +296,26 @@ def create_refund_record(
     refund_status: str = "succeeded",
 ) -> str:
     from backend.database import SessionLocal
-    from backend.models import Refund
-
-    refund_id = uuid4()
-    refunded_at = datetime.now(UTC) if refund_status == "succeeded" else None
+    from backend.models import Booking, Payment
+    from backend.tests.support.refund_fixtures import (
+        build_official_cancellation_refund,
+    )
 
     with SessionLocal() as db:
-        db.add(
-            Refund(
-                id=refund_id,
-                payment_id=UUID(payment_id),
-                booking_id=UUID(booking_id),
-                amount_cents=1300,
-                currency="USD",
-                refund_reason="game_cancelled",
-                refund_status=refund_status,
-                provider_refund_id=f"re_{uuid4().hex}",
-                refunded_at=refunded_at,
-            )
+        payment = db.get(Payment, UUID(payment_id))
+        booking = db.get(Booking, UUID(booking_id))
+        assert payment is not None and booking is not None
+        refund = build_official_cancellation_refund(
+            game_id=booking.game_id,
+            payment_id=payment.id,
+            booking_id=booking.id,
+            amount_cents=1300,
+            refund_status=refund_status,
+            provider_charge_id=payment.provider_charge_id,
+            provider_refund_id=f"re_{uuid4().hex}",
         )
+        refund_id = refund.id
+        db.add(refund)
         db.commit()
 
     return str(refund_id)

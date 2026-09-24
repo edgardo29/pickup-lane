@@ -14,6 +14,7 @@ from backend.schemas import (
     AdminMoneyIssueDetailRead,
     AdminMoneyIssueListResponseRead,
     AdminMoneyIssueResolveCreate,
+    AdminMoneyManualReviewResolveCreate,
     AdminMoneyPaymentDetailRead,
     AdminMoneyPaymentListResponseRead,
     AdminMoneyRefundDetailRead,
@@ -25,6 +26,7 @@ from backend.schemas import (
 )
 from backend.services.admin_financial_outcome_service import (
     create_admin_financial_outcome,
+    resolve_admin_manual_review,
 )
 from backend.services.admin_money_credit_service import (
     list_admin_money_credits,
@@ -118,6 +120,25 @@ def create_admin_money_financial_outcome_route(
     return create_admin_financial_outcome(
         db,
         admin_user=current_admin,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/financial-outcomes/{financial_outcome_id}/resolve",
+    response_model=AdminMoneyFinancialOutcomeRead,
+    status_code=status.HTTP_200_OK,
+)
+def resolve_admin_money_manual_review_route(
+    financial_outcome_id: uuid.UUID,
+    payload: AdminMoneyManualReviewResolveCreate,
+    current_admin: User = Depends(require_recent_active_admin),
+    db: Session = Depends(get_db),
+) -> AdminMoneyFinancialOutcomeRead:
+    return resolve_admin_manual_review(
+        db,
+        admin_user=current_admin,
+        financial_outcome_id=financial_outcome_id,
         payload=payload,
     )
 

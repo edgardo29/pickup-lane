@@ -14,8 +14,11 @@ from backend.observability.metrics import (
     MetricDescriptor,
     MetricsRecorder,
     current_metrics,
+    emit_staged_reconciliation,
     metrics_context,
+    reconciliation_attempt,
     record_metric,
+    stage_reconciliation_outcome,
 )
 
 pytestmark = pytest.mark.no_db_cleanup
@@ -23,6 +26,37 @@ pytestmark = pytest.mark.no_db_cleanup
 
 def _value(snapshot, name):
     return next(item.value for item in snapshot.series if item.name == name)
+
+
+@pytest.mark.requirement("WS05-03A-R1")
+@pytest.mark.parametrize(
+    ("job_type", "expected_count"),
+    [
+        ("stripe_payment_intent_reconcile", 1),
+        ("stripe_payment_method_operation_reconcile", 1),
+        ("stripe_refund_fulfillment", 0),
+    ],
+)
+def test_payment_reconciliation_staging_uses_only_payment_job_types(
+    job_type, expected_count
+):
+    recorder = MetricsRecorder("worker", "test", "test-release")
+
+    with metrics_context(recorder), reconciliation_attempt():
+        stage_reconciliation_outcome(job_type, "succeeded")
+        emit_staged_reconciliation()
+
+    observations = [
+        item
+        for item in recorder.snapshot().series
+        if item.name == "payment.reconciliation.outcome.total"
+    ]
+    assert len(observations) == expected_count
+    if observations:
+        assert dict(observations[0].dimensions) == {
+            "job_type": job_type,
+            "result": "succeeded",
+        }
 
 
 def test_complete_fixed_inventory_and_numeric_kinds():
@@ -91,6 +125,7 @@ def test_complete_fixed_inventory_and_numeric_kinds():
                     "stripe_webhook_event",
                     "stripe_payment_intent_reconcile",
                     "stripe_payment_method_operation_reconcile",
+                    "stripe_refund_fulfillment",
                     "unsupported",
                 },
                 "result": {
@@ -112,6 +147,7 @@ def test_complete_fixed_inventory_and_numeric_kinds():
                     "stripe_webhook_event",
                     "stripe_payment_intent_reconcile",
                     "stripe_payment_method_operation_reconcile",
+                    "stripe_refund_fulfillment",
                     "unsupported",
                 },
                 "result": {"pending", "retry_waiting", "leased", "exhausted"},
@@ -126,6 +162,7 @@ def test_complete_fixed_inventory_and_numeric_kinds():
                     "stripe_webhook_event",
                     "stripe_payment_intent_reconcile",
                     "stripe_payment_method_operation_reconcile",
+                    "stripe_refund_fulfillment",
                     "unsupported",
                 }
             },
@@ -178,6 +215,7 @@ def test_complete_fixed_inventory_and_numeric_kinds():
                     "stripe.payment_intent.retrieve",
                     "stripe.refund.create",
                     "stripe.refund.retrieve",
+                    "stripe.refund.list",
                     "firebase.token.verify",
                     "firebase.user.lookup",
                     "firebase.app_check.verify",
@@ -257,6 +295,7 @@ def test_complete_fixed_inventory_and_numeric_kinds():
         "stripe.payment_intent.retrieve": read_results,
         "stripe.refund.create": mutation_results,
         "stripe.refund.retrieve": read_results,
+        "stripe.refund.list": read_results,
         "firebase.token.verify": read_results | {"rejected"},
         "firebase.user.lookup": read_results | {"rejected", "not_found"},
         "firebase.app_check.verify": read_results | {"rejected"},

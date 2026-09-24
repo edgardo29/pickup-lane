@@ -1,7 +1,7 @@
 """create refund_events table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0052_refund_events'
@@ -20,6 +20,10 @@ def upgrade() -> None:
         sa.Column('actor_user_id', postgresql.UUID(as_uuid=True)),
         sa.Column('admin_action_id', postgresql.UUID(as_uuid=True)),
         sa.Column('idempotency_key', sa.String(length=255)),
+        sa.Column('attempt_number', sa.Integer(), nullable=False),
+        sa.Column('attempt_amount_cents', sa.Integer(), nullable=False),
+        sa.Column('attempt_currency', sa.CHAR(length=3), nullable=False),
+        sa.Column('attempt_request_key', sa.String(length=255)),
         sa.Column('provider', sa.String(length=20)),
         sa.Column('provider_event_id', sa.String(length=255)),
         sa.Column('provider_refund_id', sa.String(length=255)),
@@ -33,6 +37,10 @@ def upgrade() -> None:
         sa.Column('occurred_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.CheckConstraint("event_source IN ('system', 'webhook', 'reconciliation', 'admin')", name='ck_refund_events_event_source'),
+        sa.CheckConstraint('attempt_number >= 0', name='ck_refund_events_attempt_number'),
+        sa.CheckConstraint('attempt_amount_cents > 0', name='ck_refund_events_attempt_amount'),
+        sa.CheckConstraint("attempt_currency = 'USD'", name='ck_refund_events_attempt_currency'),
+        sa.CheckConstraint("((attempt_number = 0 AND attempt_request_key IS NULL) OR (attempt_number > 0 AND attempt_request_key = 'refund:' || refund_id::text || ':attempt:' || attempt_number::text))", name='ck_refund_events_attempt_identity'),
         sa.CheckConstraint("event_type IN ('provider_result_recorded', 'reconciliation_checked', 'local_status_changed', 'provider_outcome_unknown')", name='ck_refund_events_event_type'),
         sa.CheckConstraint("(provider IS NULL OR provider IN ('stripe'))", name='ck_refund_events_provider'),
         sa.CheckConstraint("provider_status IS NULL OR provider_status IN ('processing', 'succeeded', 'failed', 'cancelled', 'unknown')", name='ck_refund_events_provider_status'),
@@ -45,7 +53,7 @@ def upgrade() -> None:
     op.create_index('ix_refund_events_provider_refund_id', 'refund_events', ['provider_refund_id'], unique=False)
     op.create_index('ix_refund_events_refund_id', 'refund_events', ['refund_id'], unique=False)
     op.create_index('ix_refund_events_refund_id_occurred_id', 'refund_events', ['refund_id', 'occurred_at', 'id'], unique=False)
-    op.create_index('uq_refund_events_idempotency_key', 'refund_events', ['idempotency_key'], unique=True, postgresql_where=sa.text('idempotency_key IS NOT NULL'))
+    op.create_index('uq_refund_events_refund_id_idempotency_key', 'refund_events', ['refund_id', 'idempotency_key'], unique=True, postgresql_where=sa.text('idempotency_key IS NOT NULL'))
     op.create_index('uq_refund_events_provider_event_id', 'refund_events', ['provider', 'provider_event_id'], unique=True, postgresql_where=sa.text('provider_event_id IS NOT NULL'))
 
 

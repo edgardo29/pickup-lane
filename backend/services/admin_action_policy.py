@@ -148,6 +148,18 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
         ),
         metadata_builder_key="money",
     ),
+    "resolve_manual_review": AdminActionPolicy(
+        action_type="resolve_manual_review",
+        required_target_rules=(TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),),
+        allowed_target_fields=target_set(
+            TARGET_USER_ID,
+            TARGET_GAME_ID,
+            TARGET_PAYMENT_ID,
+            TARGET_FINANCIAL_OUTCOME_ID,
+            TARGET_HOST_PUBLISH_FEE_ID,
+        ),
+        metadata_builder_key="money",
+    ),
     "apply_financial_outcome": AdminActionPolicy(
         action_type="apply_financial_outcome",
         required_target_rules=(TargetRule(all_of=(TARGET_FINANCIAL_OUTCOME_ID,)),),
@@ -798,7 +810,7 @@ ADMIN_ACTION_POLICIES: dict[str, AdminActionPolicy] = {
             TARGET_HOST_PUBLISH_FEE_ID,
         ),
         client_allowed_target_fields=target_set(),
-        metadata_builder_key="money_issue",
+        metadata_builder_key="money",
         requires_reason=True,
     ),
 }

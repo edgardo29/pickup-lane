@@ -14,7 +14,8 @@ _EXPECTED_POLICY_KEYS = {
     ("stripe.setup_intent.retrieve", "saved_card_setup_sync"),
     ("stripe.payment_method.retrieve", "saved_card_setup_sync"),
     ("stripe.payment_intent.retrieve", "checkout_active_hold_reentry"),
-    ("stripe.refund.retrieve", "admin_refund_reconciliation"),
+    ("stripe.refund.retrieve", "refund_fulfillment_reconciliation"),
+    ("stripe.refund.list", "refund_fulfillment_reconciliation"),
     ("stripe.customer.create", "saved_card_customer_creation"),
     ("stripe.setup_intent.create", "saved_card_setup_intent_creation"),
     ("stripe.payment_intent.create", "checkout_initial_create_before_provider_result"),
@@ -24,10 +25,7 @@ _EXPECTED_POLICY_KEYS = {
     ("stripe.payment_intent.confirm", "community_publish_fee_confirm_after_checkpoint"),
     ("stripe.payment_intent.create", "waitlist_auto_promotion_create"),
     ("stripe.payment_intent.confirm", "waitlist_auto_promotion_confirm"),
-    ("stripe.refund.create", "admin_refund_retry"),
-    ("stripe.refund.create", "official_game_cancellation_refund"),
-    ("stripe.refund.create", "official_player_removal_refund"),
-    ("stripe.refund.create", "community_publish_financial_outcome_refund"),
+    ("stripe.refund.create", "durable_refund_fulfillment"),
     ("stripe.payment_method.detach", "user_visible_saved_card_detach"),
     ("stripe.payment_method.detach", "account_deletion_saved_card_cleanup"),
     ("stripe.payment_method.detach", "unpersisted_best_effort_payment_method_cleanup"),
@@ -129,7 +127,9 @@ def test_c2_provider_operation_registry_matches_current_c3b_inventory() -> None:
     for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES:
         assert policy.material_callers
         assert policy.current_recovery
-        assert policy.application_automatic_retry_allowed is False
+        assert policy.application_automatic_retry_allowed is (
+            policy.workflow_context == "durable_refund_fulfillment"
+        )
         assert policy.approved_retry_attempts is None
         assert policy.approved_backoff_seconds is None
 
@@ -148,17 +148,13 @@ def test_c2_provider_operation_registry_matches_current_c3b_inventory() -> None:
         "community_publish_fee_confirm_after_checkpoint",
         "waitlist_auto_promotion_create",
         "waitlist_auto_promotion_confirm",
-        "admin_refund_retry",
-        "official_game_cancellation_refund",
-        "official_player_removal_refund",
-        "community_publish_financial_outcome_refund",
+        "durable_refund_fulfillment",
         "user_visible_saved_card_detach",
         "account_deletion_saved_card_cleanup",
         "unpersisted_best_effort_payment_method_cleanup",
         "saved_card_default_set",
         "saved_card_default_clear",
         "account_deletion_auth_cleanup",
-        "admin_refund_retry_state_gate",
     }
 
     local_manual_contexts = {
@@ -167,6 +163,7 @@ def test_c2_provider_operation_registry_matches_current_c3b_inventory() -> None:
         if policy.provider == "application" and not policy.provider_mutation
     }
     assert local_manual_contexts == {
+        "admin_refund_retry_state_gate",
         "admin_refund_reconcile_state_gate",
         "admin_credit_repair_state_gate",
     }

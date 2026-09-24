@@ -29,9 +29,7 @@ from backend.observability.timeouts import PublicTimeoutError
 from backend.services.admin_financial_outcome_service import (
     create_financial_outcome_notice_if_needed,
 )
-from backend.services.admin_money_issue_query_service import list_related_money_issues
 from backend.services.admin_money_issue_service import (
-    append_money_issue_event,
     stage_refund_money_issue,
 )
 from backend.services.community_game_publish_service import (
@@ -45,7 +43,6 @@ from backend.services.game_credit_service import (
     release_reserved_game_credits,
 )
 from backend.services.game_notification_service import (
-    create_or_reopen_booking_refunded_notification,
     create_waitlist_payment_failed_notification,
     create_waitlist_promotion_notification,
 )
@@ -75,7 +72,10 @@ from backend.services.payment_rules import (
     COLLECTED_PAYMENT_STATUSES,
     PENDING_PAYMENT_STATUSES,
 )
-from backend.services.refund_event_service import record_refund_event
+from backend.services.refund_event_service import (
+    get_refund_attempt_by_provider_refund_id,
+    record_refund_event,
+)
 from backend.services.status_history_service import (
     add_booking_status_history_if_changed,
     add_participant_status_history_if_changed,
@@ -219,11 +219,28 @@ def normalize_stripe_event_envelope(event_payload: dict[str, Any]) -> dict[str, 
         "community_publish_attempt_id",
         "host_publish_fee_id",
         "refund_id",
+        "attempt_number",
         "checkout_total_cents",
         "credit_applied_cents",
         "minimum_charge_adjustment_cents",
         "stripe_amount_cents",
     }
+    safe_metadata = {
+        key: value for key, value in metadata.items() if key in safe_metadata_keys
+    }
+    attempt_number = safe_metadata.get("attempt_number")
+    if (
+        attempt_number is not None
+        and (
+            not attempt_number.isascii()
+            or not attempt_number.isdigit()
+            or attempt_number.startswith("0")
+            or int(attempt_number) < 1
+        )
+    ):
+        safe_metadata.pop("attempt_number", None)
+    if metadata.get("source") in {"waitlist_auto_promote", "official_game_cancel"}:
+        safe_metadata["source"] = metadata["source"]
     safe_object: dict[str, Any] = {
         "id": provider_object.get("id"),
         "status": provider_object.get("status"),
@@ -235,9 +252,7 @@ def normalize_stripe_event_envelope(event_payload: dict[str, Any]) -> dict[str, 
         "charge": provider_object.get("charge"),
         "latest_charge": get_latest_charge_id(provider_object),
         "cancellation_reason": provider_object.get("cancellation_reason"),
-        "metadata": {
-            key: value for key, value in metadata.items() if key in safe_metadata_keys
-        },
+        "metadata": safe_metadata,
     }
     last_error = provider_object.get("last_payment_error")
     if isinstance(last_error, dict):
@@ -759,6 +774,29 @@ def get_locked_host_publish_fee(
         .where(HostPublishFee.id == host_publish_fee_id)
         .with_for_update()
     ).first()
+
+
+def lock_refund_financial_context(
+    db: Session, refund_reference: Refund
+) -> tuple[Payment | None, HostPublishFee | None, Refund | None]:
+    if refund_reference.booking_id is not None:
+        lock_booking_payment_domain_by_booking_id(db, refund_reference.booking_id)
+    from backend.services.refund_fulfillment_service import (
+        lock_refund_financial_context as lock_shared_refund_financial_context,
+    )
+
+    try:
+        payment, refund = lock_shared_refund_financial_context(
+            db, refund_reference.id
+        )
+    except LookupError:
+        return None, None, None
+    host_publish_fee = (
+        db.get(HostPublishFee, refund.host_publish_fee_id)
+        if refund.host_publish_fee_id is not None
+        else None
+    )
+    return payment, host_publish_fee, refund
 
 
 def get_locked_booking_participants(
@@ -1372,17 +1410,20 @@ def ensure_payment_compensation(
         .where(
             PaymentCompensation.payment_id == payment.id,
             PaymentCompensation.booking_id == booking.id,
-            PaymentCompensation.status.in_({"required", "processing"}),
         )
         .with_for_update()
         .limit(1)
     ).first()
     if existing is not None:
+        advance_required_payment_compensation(
+            db, compensation=existing, payment=payment, now=now
+        )
         return existing
     compensation = PaymentCompensation(
         id=uuid.uuid4(),
         payment_id=payment.id,
         booking_id=booking.id,
+        refund_id=None,
         action="refund",
         reason=reason,
         amount_cents=payment.amount_cents,
@@ -1393,7 +1434,142 @@ def ensure_payment_compensation(
     )
     db.add(compensation)
     db.flush()
+    advance_required_payment_compensation(
+        db, compensation=compensation, payment=payment, now=now
+    )
     return compensation
+
+
+def advance_required_payment_compensation(
+    db: Session,
+    *,
+    compensation: PaymentCompensation,
+    payment: Payment,
+    now: datetime,
+) -> None:
+    """Recount a lifetime compensation, then advance an unlinked obligation."""
+    from backend.services.refund_service import get_refund_payment_ledger
+
+    ledger = get_refund_payment_ledger(
+        db,
+        payment_id=payment.id,
+        payment_amount_cents=payment.amount_cents,
+    )
+    confirmed_cents = ledger.confirmed_returned_cents
+    if confirmed_cents >= payment.amount_cents:
+        compensation.status = "succeeded"
+        compensation.resolved_at = now
+        compensation.error_code = None
+        compensation.updated_at = now
+        db.add(compensation)
+        db.flush()
+        return
+    if compensation.status != "required" or compensation.refund_id is not None:
+        return
+    if ledger.reserved_cents > 0 or ledger.unresolved_attempt_cents > 0:
+        return
+    remaining_cents = payment.amount_cents - confirmed_cents
+    refund_id = uuid.uuid4()
+    origin_key = f"official_game_checkout:compensation:{compensation.id}"
+    refund = Refund(
+        id=refund_id,
+        payment_id=payment.id,
+        booking_id=compensation.booking_id,
+        participant_id=None,
+        host_publish_fee_id=None,
+        provider_refund_id=None,
+        origin_operation_key=origin_key,
+        current_attempt_number=1,
+        stripe_request_key=f"refund:{refund_id}:attempt:1",
+        provider_attempt_started_at=None,
+        automatic_mutation_blocked_reason=None,
+        automatic_mutation_blocked_at=None,
+        origin_workflow="official_game_checkout",
+        provider="stripe",
+        provider_status=None,
+        provider_status_observed_at=None,
+        provider_charge_id=payment.provider_charge_id,
+        last_refund_event_at=None,
+        amount_cents=remaining_cents,
+        currency=payment.currency,
+        refund_reason="unfulfilled_booking",
+        refund_status="approved" if payment.provider_charge_id else "failed",
+        requested_by_user_id=payment.payer_user_id,
+        approved_by_user_id=None,
+        requested_at=now,
+        approved_at=now if payment.provider_charge_id else None,
+        refunded_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(refund)
+    db.flush()
+    compensation.refund_id = refund.id
+    if payment.provider_charge_id:
+        record_refund_event(
+            db,
+            refund=refund,
+            event_type="local_status_changed",
+            event_source="system",
+            new_refund_status="approved",
+            reason_code="compensation_refund_approved",
+            summary="Checkout compensation refund approved for fulfillment.",
+            occurred_at=now,
+        )
+        from backend.services.payment_job_service import build_production_job_registry
+        from backend.services.refund_fulfillment_service import (
+            enqueue_refund_fulfillment_job,
+        )
+
+        enqueue_refund_fulfillment_job(
+            db, refund=refund, registry=build_production_job_registry()
+        )
+    else:
+        event = record_refund_event(
+            db,
+            refund=refund,
+            event_type="local_status_changed",
+            event_source="system",
+            new_refund_status="failed",
+            reason_code="provider_charge_id_missing",
+            summary="Checkout compensation refund is missing its Stripe charge.",
+            metadata={"provider_call_started": False},
+            occurred_at=now,
+        )
+        compensation.status = "failed"
+        compensation.error_code = "provider_charge_id_missing"
+        compensation.resolved_at = now
+        stage_refund_money_issue(
+            db,
+            refund=refund,
+            payment=payment,
+            issue_type="refund_missing_provider_reference",
+            reason_code="provider_charge_id_missing",
+            summary="Checkout compensation refund could not start.",
+            refund_event=event,
+            now=now,
+        )
+    db.add(compensation)
+    db.flush()
+
+
+def advance_required_payment_compensations_for_payment(
+    db: Session, *, payment: Payment, now: datetime
+) -> None:
+    compensations = list(
+        db.scalars(
+            select(PaymentCompensation)
+            .where(
+                PaymentCompensation.payment_id == payment.id,
+            )
+            .order_by(PaymentCompensation.id.asc())
+            .with_for_update()
+        ).all()
+    )
+    for compensation in compensations:
+        advance_required_payment_compensation(
+            db, compensation=compensation, payment=payment, now=now
+        )
 
 
 def apply_payment_intent_succeeded(
@@ -2039,20 +2215,32 @@ def recover_refund_from_metadata(
 
     payment_id = parse_metadata_uuid(metadata, "payment_id")
     booking_id = parse_metadata_uuid(metadata, "booking_id")
-    if booking_id is None:
+    game_id = parse_metadata_uuid(metadata, "game_id")
+    if booking_id is None or game_id is None:
         return None
     booking = lock_booking_payment_domain_by_booking_id(db, booking_id)
     payment = get_locked_payment(db, payment_id)
-    if payment is None or booking is None or payment.booking_id != booking.id:
+    if (
+        payment is None
+        or booking is None
+        or payment.booking_id != booking.id
+        or booking.game_id != game_id
+    ):
         return None
+    origin_key = f"official_game_cancellation:game:{game_id}:payment:{payment.id}"
+    existing = db.scalars(
+        select(Refund).where(Refund.origin_operation_key == origin_key).limit(1)
+    ).first()
+    if existing is not None:
+        return existing
 
     amount_cents = get_refund_amount_cents(refund_payload)
     currency = get_refund_currency(refund_payload)
     if (
         amount_cents is None
-        or amount_cents <= 0
-        or amount_cents > payment.amount_cents
+        or amount_cents != payment.amount_cents
         or currency != payment.currency
+        or refund_payload.get("charge") != payment.provider_charge_id
     ):
         return None
 
@@ -2068,6 +2256,12 @@ def recover_refund_from_metadata(
         origin_workflow="official_game_cancellation",
         provider="stripe",
         provider_refund_id=provider_refund_id,
+        origin_operation_key=origin_key,
+        current_attempt_number=0,
+        stripe_request_key=None,
+        provider_attempt_started_at=None,
+        automatic_mutation_blocked_reason=None,
+        automatic_mutation_blocked_at=None,
         provider_charge_id=payment.provider_charge_id,
         provider_status=None,
         provider_status_observed_at=None,
@@ -2096,15 +2290,13 @@ def sync_refunded_payment_and_booking(
     host_publish_fee: HostPublishFee | None,
     now: datetime,
 ) -> None:
-    refunded_cents = (
-        db.scalar(
-            select(func.coalesce(func.sum(Refund.amount_cents), 0)).where(
-                Refund.payment_id == payment.id,
-                Refund.refund_status == "succeeded",
-            )
-        )
-        or 0
-    )
+    from backend.services.refund_service import get_refund_payment_ledger
+
+    refunded_cents = get_refund_payment_ledger(
+        db,
+        payment_id=payment.id,
+        payment_amount_cents=payment.amount_cents,
+    ).confirmed_returned_cents
     if refunded_cents <= 0:
         return
 
@@ -2187,6 +2379,9 @@ def validate_refund_event_references(
     if currency != refund.currency:
         return "Stripe refund currency does not match internal refund currency."
 
+    if refund_payload.get("charge") != refund.provider_charge_id:
+        return "Stripe refund charge does not match internal refund charge."
+
     return None
 
 
@@ -2207,30 +2402,75 @@ def process_refund_event(
         return
 
     refund_reference = get_refund_by_provider_id(db, provider_refund_id)
+    historical_attempt = get_refund_attempt_by_provider_refund_id(
+        db,
+        provider="stripe",
+        provider_refund_id=provider_refund_id,
+    )
+    is_historical_attempt = False
+    payment = None
+    host_publish_fee = None
     if refund_reference is None:
-        refund = recover_refund_from_metadata(
-            db,
-            refund_payload,
-            now,
+        if historical_attempt is not None:
+            historical_refund = db.get(Refund, historical_attempt.refund_id)
+            if historical_refund is not None:
+                payment, host_publish_fee, refund = lock_refund_financial_context(
+                    db, historical_refund
+                )
+                is_historical_attempt = bool(
+                    refund is not None
+                    and historical_attempt.attempt_number
+                    < refund.current_attempt_number
+                )
+            else:
+                refund = None
+        else:
+            refund = None
+        metadata = get_stripe_object_metadata(refund_payload)
+        internal_refund_id = parse_metadata_uuid(metadata, "refund_id")
+        attempt_text = metadata.get("attempt_number")
+        attempt_number = (
+            int(attempt_text)
+            if attempt_text is not None and attempt_text.isdigit()
+            else None
         )
+        if refund is None and internal_refund_id is not None and attempt_number is not None:
+            candidate_reference = db.get(Refund, internal_refund_id)
+            candidate = None
+            if candidate_reference is not None:
+                payment, host_publish_fee, candidate = lock_refund_financial_context(
+                    db, candidate_reference
+                )
+            if (
+                candidate is not None
+                and candidate.current_attempt_number == attempt_number
+                and candidate.stripe_request_key
+                == f"refund:{candidate.id}:attempt:{attempt_number}"
+                and candidate.provider_refund_id in {None, provider_refund_id}
+            ):
+                refund = candidate
+        if refund is None:
+            refund = recover_refund_from_metadata(db, refund_payload, now)
+            if refund is not None:
+                payment, host_publish_fee, refund = lock_refund_financial_context(
+                    db, refund
+                )
     else:
-        if refund_reference.booking_id is not None:
-            lock_booking_payment_domain_by_booking_id(db, refund_reference.booking_id)
-        refund = get_locked_refund_by_provider_id(db, provider_refund_id)
+        payment, host_publish_fee, refund = lock_refund_financial_context(
+            db, refund_reference
+        )
 
     if refund is None:
         mark_event_ignored(event, "No internal refund matched this Stripe refund.")
         return
 
     event.payment_id = refund.payment_id
-    validation_error = validate_refund_event_references(refund, refund_payload)
-    if validation_error is not None:
-        mark_event_failed(event, validation_error)
-        return
+    validation_error = (
+        None
+        if is_historical_attempt
+        else validate_refund_event_references(refund, refund_payload)
+    )
 
-    payment = get_locked_payment(db, refund.payment_id)
-    booking = get_locked_booking(db, refund.booking_id)
-    host_publish_fee = get_locked_host_publish_fee(db, refund.host_publish_fee_id)
     if payment is None:
         mark_event_failed(event, "Internal payment for this refund was not found.")
         return
@@ -2252,86 +2492,61 @@ def process_refund_event(
         )
         return
 
-    refund_status = map_stripe_refund_event_status(
-        event_payload["type"], refund_payload
-    )
-    refund_event = record_refund_event(
-        db,
-        refund=refund,
-        event_type="provider_result_recorded",
-        event_source="webhook",
-        provider="stripe",
-        provider_event_id=event.provider_event_id,
-        provider_refund_id=provider_refund_id,
-        provider_charge_id=refund_payload.get("charge") or payment.provider_charge_id,
-        provider_status=refund_status,
-        new_refund_status=refund_status,
-        reason_code=f"stripe_webhook_{refund_status}",
-        summary="Stripe refund webhook result recorded.",
-        occurred_at=now,
-    )
-    if refund_status in {"failed", "cancelled"}:
-        stage_refund_money_issue(
+    if is_historical_attempt and historical_attempt is not None:
+        from backend.services.refund_fulfillment_service import (
+            apply_historical_refund_provider_result,
+        )
+        from backend.services.stripe_service import StripeRefundResult
+
+        historical_outcome, historical_code = apply_historical_refund_provider_result(
             db,
             refund=refund,
             payment=payment,
-            issue_type="refund_failed"
-            if refund_status == "failed"
-            else "refund_cancelled",
-            reason_code=f"stripe_webhook_{refund_status}",
-            summary="Stripe reported that a refund did not complete.",
-            refund_event=refund_event,
-            now=now,
+            attempt=historical_attempt,
+            result=StripeRefundResult(
+                id=provider_refund_id,
+                status=str(refund_payload.get("status") or ""),
+                amount_cents=get_refund_amount_cents(refund_payload) or 0,
+                currency=get_refund_currency(refund_payload) or "",
+                charge_id=refund_payload.get("charge"),
+                payment_intent_id=refund_payload.get("payment_intent"),
+                metadata=get_stripe_object_metadata(refund_payload),
+            ),
+            event_source="webhook",
+            provider_event_id=event.provider_event_id,
         )
-    elif refund_status == "succeeded":
-        for money_issue in list_related_money_issues(
-            db,
-            refund_id=refund.id,
-            status_filter="open",
-            limit=10,
-        ):
-            previous_action = money_issue.recommended_action_code
-            money_issue.latest_reason_code = "stripe_webhook_succeeded"
-            money_issue.latest_summary = "Stripe confirmed the refund succeeded."
-            money_issue.recommended_action_code = "review_and_resolve_no_action"
-            money_issue.updated_at = now
-            append_money_issue_event(
-                db,
-                money_issue=money_issue,
-                event_type="refund_outcome_linked",
-                event_source="system",
-                refund_event_id=refund_event.id,
-                reason_code="stripe_webhook_succeeded",
-                summary="Stripe confirmed the refund succeeded.",
-                previous_recommended_action_code=previous_action,
-                new_recommended_action_code=money_issue.recommended_action_code,
-                occurred_at=now,
+        if historical_outcome == "unsafe":
+            mark_event_failed(
+                event,
+                f"Unsafe historical Stripe refund response: {historical_code}.",
             )
-    sync_financial_outcome_for_refund(db, refund, refund_status, now)
+            return
+        mark_event_processed(event, now)
+        return
 
-    if refund_status == "succeeded":
-        db.flush()
-        sync_refunded_payment_and_booking(
-            db,
-            payment,
-            booking,
-            host_publish_fee,
-            now,
-        )
-        if booking is not None:
-            game = get_locked_game(db, booking.game_id)
-            if game is not None:
-                create_or_reopen_booking_refunded_notification(
-                    db,
-                    db_game=game,
-                    booking=booking,
-                    payment=payment,
-                    refund=refund,
-                    now=now,
-                    stripe_refund_processed=True,
-                    credit_restored=booking_has_restored_game_credit(db, booking.id),
-                )
+    from backend.services.refund_fulfillment_service import apply_refund_provider_result
+    from backend.services.stripe_service import StripeRefundResult
 
+    provider_result = StripeRefundResult(
+        id=provider_refund_id,
+        status=str(refund_payload.get("status") or ""),
+        amount_cents=get_refund_amount_cents(refund_payload) or 0,
+        currency=get_refund_currency(refund_payload) or "",
+        charge_id=refund_payload.get("charge"),
+        payment_intent_id=refund_payload.get("payment_intent"),
+        metadata=get_stripe_object_metadata(refund_payload),
+    )
+    provider_outcome, _provider_code = apply_refund_provider_result(
+        db,
+        refund=refund,
+        payment=payment,
+        result=provider_result,
+        event_source="webhook",
+        provider_event_id=event.provider_event_id,
+    )
+    if validation_error is not None or provider_outcome == "unsafe":
+        mark_event_failed(event, validation_error or "Unsafe Stripe refund response.")
+        return
     mark_event_processed(event, now)
 
 

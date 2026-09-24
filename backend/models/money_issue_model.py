@@ -63,7 +63,8 @@ class MoneyIssue(Base):
                 "'recover_provider_reference', 'retry_refund', "
                 "'verify_provider_refund', 'retry_credit_restore', "
                 "'retry_credit_release', 'review_unknown_outcome', "
-                "'review_and_resolve_no_action', 'document_external_completion'"
+                "'review_and_resolve_no_action', 'document_external_completion', "
+                "'reexecute_origin_workflow', 'review_superseding_financial_outcome'"
                 ")"
             ),
             name="ck_money_issues_recommended_action_code",
@@ -73,7 +74,8 @@ class MoneyIssue(Base):
                 "resolution_reason_code IS NULL OR resolution_reason_code IN ("
                 "'retried_successfully', 'provider_completed_no_action_required', "
                 "'handled_externally', 'invalid_issue', "
-                "'unable_to_complete_documented'"
+                "'unable_to_complete_documented', "
+                "'superseded_by_financial_outcome'"
                 ")"
             ),
             name="ck_money_issues_resolution_reason_code",

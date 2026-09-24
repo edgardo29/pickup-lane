@@ -84,6 +84,14 @@ FROZEN_RECENT_AUTH_ROUTE_MATRIX: dict[tuple[str, str], FrozenRecentAuthRoute] = 
         "require_recent_active_admin",
         "admin",
     ),
+    (
+        "POST",
+        "/admin/money/financial-outcomes/{financial_outcome_id}/resolve",
+    ): FrozenRecentAuthRoute(
+        "admin_financial_outcome_manual_review_resolve",
+        "require_recent_active_admin",
+        "admin",
+    ),
     ("POST", "/admin/money/issues/{money_issue_id}/resolve"): FrozenRecentAuthRoute(
         "admin_money_issue_resolve",
         "require_recent_active_admin",
@@ -415,8 +423,8 @@ def test_recent_auth_policy_matches_frozen_matrix_and_registered_routes() -> Non
     frozen_keys = set(FROZEN_RECENT_AUTH_ROUTE_MATRIX)
 
     assert RECENT_AUTH_PUBLIC_ERROR_CODE == "AUTH.RECENT_AUTH_REQUIRED"
-    assert len(RECENT_AUTH_PROTECTED_ACTIONS) == 25
-    assert len({action.action_id for action in RECENT_AUTH_PROTECTED_ACTIONS}) == 25
+    assert len(RECENT_AUTH_PROTECTED_ACTIONS) == 26
+    assert len({action.action_id for action in RECENT_AUTH_PROTECTED_ACTIONS}) == 26
     assert set(policy_by_key) == frozen_keys
     assert RECENT_AUTH_PROTECTED_ROUTE_KEYS == frozen_keys
 
@@ -456,10 +464,10 @@ def test_complete_admin_access_mutation_partition_matches_current_routes() -> No
     not_required = set(RECENT_AUTH_NOT_REQUIRED_ADMIN_MUTATIONS)
     retired = set(RETIRED_OR_NON_EXECUTING_ADMIN_MUTATIONS)
 
-    assert len(required) == 22
+    assert len(required) == 23
     assert len(not_required) == 38
     assert len(retired) == 47
-    assert len(discovered_admin_mutations) == 107
+    assert len(discovered_admin_mutations) == 108
     _assert_pairwise_disjoint(required, not_required, retired)
     assert required | not_required | retired == discovered_admin_mutations
 

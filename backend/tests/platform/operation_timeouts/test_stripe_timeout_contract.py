@@ -102,6 +102,9 @@ class _Refunds(_TimeoutingResource):
     def retrieve(self, *args: Any, **kwargs: Any) -> None:
         self._raise("refund.retrieve")
 
+    def list(self, *args: Any, **kwargs: Any) -> None:
+        self._raise("refund.list")
+
 
 class _TimeoutingV1:
     def __init__(self, *, side: str, calls: list[tuple[str, str]]) -> None:
@@ -165,6 +168,10 @@ _READ_CALLS: tuple[tuple[str, Callable[[], object]], ...] = (
         lambda: stripe_service.retrieve_payment_intent("pi_test"),
     ),
     ("stripe.refund.retrieve", lambda: stripe_service.retrieve_refund("re_test")),
+    (
+        "stripe.refund.list",
+        lambda: stripe_service.list_refunds_for_charge("ch_test"),
+    ),
 )
 
 _MUTATION_CALLS: tuple[tuple[str, Callable[[], object]], ...] = (
@@ -240,12 +247,17 @@ def test_current_stripe_reads_map_timeout_to_dependency_read(
 ) -> None:
     calls = _install_timeout_pair(monkeypatch)
 
-    with pytest.raises(DependencyReadTimeoutError) as exc_info:
-        call()
-
-    assert exc_info.value.provider_kind == "stripe"
-    assert exc_info.value.operation == operation
-    assert exc_info.value.contract.details["outcome"] == "retry_later"
+    if operation.startswith("stripe.refund."):
+        with pytest.raises(stripe_service.StripeRefundOperationError) as exc_info:
+            call()
+        assert exc_info.value.operation == operation.removeprefix("stripe.")
+        assert exc_info.value.classification == "read_timeout"
+    else:
+        with pytest.raises(DependencyReadTimeoutError) as exc_info:
+            call()
+        assert exc_info.value.provider_kind == "stripe"
+        assert exc_info.value.operation == operation
+        assert exc_info.value.contract.details["outcome"] == "retry_later"
     assert calls == [("read", operation.removeprefix("stripe."))]
 
 
@@ -258,12 +270,17 @@ def test_current_stripe_mutations_map_timeout_to_unknown_without_replay(
 ) -> None:
     calls = _install_timeout_pair(monkeypatch)
 
-    with pytest.raises(DependencyMutationTimeoutUnknownError) as exc_info:
-        call()
-
-    assert exc_info.value.provider_kind == "stripe"
-    assert exc_info.value.operation == operation
-    assert exc_info.value.contract.details["outcome"] == "unknown"
+    if operation.startswith("stripe.refund."):
+        with pytest.raises(stripe_service.StripeRefundOperationError) as exc_info:
+            call()
+        assert exc_info.value.operation == operation.removeprefix("stripe.")
+        assert exc_info.value.classification == "mutation_timeout_unknown"
+    else:
+        with pytest.raises(DependencyMutationTimeoutUnknownError) as exc_info:
+            call()
+        assert exc_info.value.provider_kind == "stripe"
+        assert exc_info.value.operation == operation
+        assert exc_info.value.contract.details["outcome"] == "unknown"
     assert calls == [("mutation", operation.removeprefix("stripe."))]
 
 
@@ -355,15 +372,18 @@ def test_every_stripe_operation_has_one_safe_metric_and_preserves_result_or_exce
         if scenario == "succeeded":
             call()
         else:
-            expected = (
-                (
-                    DependencyReadTimeoutError
-                    if read
-                    else DependencyMutationTimeoutUnknownError
+            if operation.startswith("stripe.refund.") and scenario != "configuration_error":
+                expected = stripe_service.StripeRefundOperationError
+            else:
+                expected = (
+                    (
+                        DependencyReadTimeoutError
+                        if read
+                        else DependencyMutationTimeoutUnknownError
+                    )
+                    if scenario == "timeout"
+                    else type(errors[scenario])
                 )
-                if scenario == "timeout"
-                else type(errors[scenario])
-            )
             with pytest.raises(expected):
                 call()
     metric = recorder.snapshot().series

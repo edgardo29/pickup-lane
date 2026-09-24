@@ -62,7 +62,11 @@ function AdminMoneyRefundPage() {
     refundId: '',
     state: 'idle',
   })
-  const [reconcileForm, setReconcileForm] = useState({ reason: '', refundId: '' })
+  const [reconcileForm, setReconcileForm] = useState({
+    providerRefundId: '',
+    reason: '',
+    refundId: '',
+  })
   const [reconcileStatus, setReconcileStatus] = useState({
     error: '',
     message: '',
@@ -161,6 +165,9 @@ function AdminMoneyRefundPage() {
       state: 'idle',
     }
   const reconcileReason = reconcileForm.refundId === refundId ? reconcileForm.reason : ''
+  const reconcileProviderRefundId = reconcileForm.refundId === refundId
+    ? reconcileForm.providerRefundId
+    : ''
   const reconcileSubmitting = activeReconcileStatus.state === 'submitting'
 
   async function handleRefundRetry(event) {
@@ -252,12 +259,13 @@ function AdminMoneyRefundPage() {
           refundId,
           reason,
           idempotencyKey,
+          providerRefundId: reconcileProviderRefundId.trim() || null,
         }),
         { actionLabel: 'reconcile this refund' },
       )
 
       setDetail(nextDetail)
-      setReconcileForm({ reason: '', refundId })
+      setReconcileForm({ providerRefundId: '', reason: '', refundId })
       setReconcileStatus({
         error: '',
         message: 'Stripe status checked.',
@@ -371,6 +379,7 @@ function AdminMoneyRefundPage() {
                         maxLength={1000}
                         onChange={(event) => {
                           setReconcileForm({
+                            providerRefundId: reconcileProviderRefundId,
                             reason: event.target.value,
                             refundId,
                           })
@@ -379,6 +388,25 @@ function AdminMoneyRefundPage() {
                         value={reconcileReason}
                       />
                     </label>
+                    {!detail.refund.provider_refund_id && (
+                      <label>
+                        <span>Provider refund ID (optional)</span>
+                        <input
+                          disabled={reconcileSubmitting}
+                          maxLength={255}
+                          onChange={(event) => {
+                            setReconcileForm({
+                              providerRefundId: event.target.value,
+                              reason: reconcileReason,
+                              refundId,
+                            })
+                          }}
+                          placeholder="re_…"
+                          type="text"
+                          value={reconcileProviderRefundId}
+                        />
+                      </label>
+                    )}
                     <div className="admin-money-action-bar">
                       <div className="admin-money-action-status">
                         {activeReconcileStatus.error && (

@@ -30,6 +30,7 @@ class AdminAction(Base):
                 "'update_booking', "
                 "'update_participant', 'issue_credit', 'reverse_credit', "
                 "'create_financial_outcome', 'apply_financial_outcome', "
+                "'resolve_manual_review', "
                 "'create_official_game', 'update_official_game', "
                 "'assign_official_host', 'remove_official_host', "
                 "'admin_add_player', 'admin_remove_player', 'waive_payment', "
@@ -263,6 +264,16 @@ class AdminAction(Base):
             postgresql_where=text(
                 "action_type = 'create_financial_outcome' "
                 "AND idempotency_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_admin_actions_resolve_manual_review_idempotency",
+            "admin_user_id",
+            "target_financial_outcome_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "action_type = 'resolve_manual_review' AND idempotency_key IS NOT NULL"
             ),
         ),
         Index(

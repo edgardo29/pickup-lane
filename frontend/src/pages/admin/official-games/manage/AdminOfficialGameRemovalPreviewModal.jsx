@@ -9,6 +9,10 @@ import {
 } from '../../../../components/BrowseIcons.jsx'
 import { FormErrorMessage } from '../../../../components/FormErrorMessage.jsx'
 import { formatAdminGameMoney } from '../shared/adminOfficialGameForm.js'
+import {
+  getRemovalRefundCountLabel,
+  RemovalRefundLabel,
+} from './adminOfficialGameFinancialPresentation.js'
 
 const executableOutcomes = new Set([
   'remove_only',
@@ -340,8 +344,8 @@ function AdminOfficialGameRemovalPreviewModal({
                 value={executionResult.removed_participant_ids.length}
               />
               <PreviewFact
-                label="Refunds"
-                value={executionResult.refunds.length}
+                label={getRemovalRefundCountLabel()}
+                value={executionResult.refund_approved_count}
               />
               <PreviewFact
                 label="Credit restored"
@@ -362,7 +366,7 @@ function AdminOfficialGameRemovalPreviewModal({
                   <div key={refund.id}>
                     <span>
                       <strong>{formatState(refund.refund_status)}</strong>
-                      <small>Stripe refund</small>
+                      <RemovalRefundLabel refundStatus={refund.refund_status} />
                     </span>
                     <em>{formatAdminGameMoney(refund.amount_cents, refund.currency)}</em>
                   </div>

@@ -2,10 +2,12 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    CHAR,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     text,
@@ -46,6 +48,19 @@ class RefundEvent(Base):
             ),
             name="ck_refund_events_provider_status",
         ),
+        CheckConstraint("attempt_number >= 0", name="ck_refund_events_attempt_number"),
+        CheckConstraint(
+            "attempt_amount_cents > 0", name="ck_refund_events_attempt_amount"
+        ),
+        CheckConstraint(
+            "attempt_currency = 'USD'", name="ck_refund_events_attempt_currency"
+        ),
+        CheckConstraint(
+            "((attempt_number = 0 AND attempt_request_key IS NULL) OR "
+            "(attempt_number > 0 AND attempt_request_key = "
+            "'refund:' || refund_id::text || ':attempt:' || attempt_number::text))",
+            name="ck_refund_events_attempt_identity",
+        ),
         Index("ix_refund_events_refund_id", "refund_id"),
         Index(
             "ix_refund_events_refund_id_occurred_id",
@@ -63,7 +78,8 @@ class RefundEvent(Base):
             postgresql_where=text("provider_event_id IS NOT NULL"),
         ),
         Index(
-            "uq_refund_events_idempotency_key",
+            "uq_refund_events_refund_id_idempotency_key",
+            "refund_id",
             "idempotency_key",
             unique=True,
             postgresql_where=text("idempotency_key IS NOT NULL"),
@@ -89,6 +105,10 @@ class RefundEvent(Base):
         nullable=True,
     )
     idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    attempt_amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    attempt_currency: Mapped[str] = mapped_column(CHAR(3), nullable=False)
+    attempt_request_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider: Mapped[str | None] = mapped_column(String(20), nullable=True)
     provider_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_refund_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

@@ -20,7 +20,6 @@ from backend.schemas.admin_money_credit_schema import (
 from backend.schemas.admin_money_issue_schema import AdminMoneyIssueSummaryRead
 from backend.schemas.admin_money_payment_schema import AdminMoneyPaymentDetailItemRead
 
-
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 
 
@@ -35,6 +34,7 @@ class AdminMoneyRefundReconcileCreate(BaseModel):
 
     reason: str = Field(min_length=3, max_length=1000)
     idempotency_key: str = Field(min_length=8, max_length=160)
+    provider_refund_id: str | None = Field(default=None, min_length=3, max_length=255)
 
 class AdminMoneyRefundEventRead(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -46,6 +46,10 @@ class AdminMoneyRefundEventRead(BaseModel):
     actor_user_id: UUID | None
     admin_action_id: UUID | None
     idempotency_key: str | None
+    attempt_number: int
+    attempt_amount_cents: int
+    attempt_currency: str
+    attempt_request_key: str | None
     provider: str | None
     provider_event_id: str | None
     provider_refund_id: str | None
@@ -66,6 +70,12 @@ class AdminMoneyRefundEventListResponseRead(BaseModel):
     items: list[AdminMoneyRefundEventRead] = Field(default_factory=list)
     has_more: bool = False
     next_cursor: str | None = None
+
+
+class AdminMoneyRefundJobDiagnosticRead(BaseModel):
+    status: str
+    refund_attempt_number: int
+    error_code: str | None
 
 class AdminMoneyRefundListRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -93,6 +103,10 @@ class AdminMoneyRefundListRead(BaseModel):
     approved_at: datetime | None
     refunded_at: datetime | None
     last_refund_event_at: datetime | None
+    current_attempt_number: int
+    provider_attempt_started_at: datetime | None
+    automatic_mutation_blocked_reason: str | None
+    durable_job_diagnostic: AdminMoneyRefundJobDiagnosticRead | None = None
     linked_issue: AdminMoneyIssueSummaryRead | None = None
     display: AdminMoneyDisplayRead | None = None
     created_at: datetime
@@ -102,6 +116,7 @@ class AdminMoneyRefundListResponseRead(BaseModel):
     items: list[AdminMoneyRefundListRead] = Field(default_factory=list)
     has_more: bool = False
     next_cursor: str | None = None
+
 
 class AdminMoneyRefundDetailItemRead(AdminMoneyRefundListRead):
     pass

@@ -939,180 +939,61 @@ def test_saved_card_detach_provider_success_local_failure_is_honest(
 
 
 @pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
-def test_admin_refund_retry_timeout_preserves_committed_retry_intent(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_admin_refund_retry_commits_durable_intent_without_provider_call() -> None:
+    import inspect
+
     import backend.services.admin_money_refund_service as refund_service
-    from backend.schemas.admin_money_refund_schema import AdminMoneyRefundRetryCreate
 
-    db = _RecordingSession(added=[], added_many=[])
-    refund_id = uuid.uuid4()
-    payment_id = uuid.uuid4()
-    admin_user = SimpleNamespace(id=uuid.uuid4())
-    refund = SimpleNamespace(
-        id=refund_id,
-        payment_id=payment_id,
-        booking_id=None,
-        host_publish_fee_id=None,
-        participant_id=None,
-        amount_cents=500,
-        currency="USD",
-    )
-    payment = SimpleNamespace(
-        id=payment_id,
-        payer_user_id=uuid.uuid4(),
-        booking_id=uuid.uuid4(),
-        provider_charge_id="ch_ws04_02a_retry",
-        amount_cents=500,
-        currency="USD",
-    )
-    admin_action = SimpleNamespace(id=uuid.uuid4())
-    provider_events: list[tuple[str, int]] = []
-
-    monkeypatch.setattr(refund_service, "get_existing_retry_action", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "get_refund_for_retry_or_404", lambda *args, **kwargs: refund)
-    monkeypatch.setattr(refund_service, "get_payment_for_retry_or_404", lambda *args, **kwargs: payment)
-    monkeypatch.setattr(refund_service, "get_booking_for_retry", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "get_host_publish_fee_for_retry", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "validate_refund_retry", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "refund_audit_metadata", lambda *args, **kwargs: {"source": "admin_money_refund_retry"})
-    monkeypatch.setattr(refund_service, "record_admin_action", lambda *args, **kwargs: admin_action)
-
-    def create_stripe_refund(**kwargs):
-        provider_events.append((kwargs["idempotency_key"], db.commit_calls))
-        raise _stripe_timeout("stripe.refund.create")
-
-    monkeypatch.setattr(refund_service, "create_stripe_refund", create_stripe_refund)
-
-    with pytest.raises(DependencyMutationTimeoutUnknownError) as exc_info:
-        refund_service.retry_admin_money_refund(
-            db,
-            admin_user=admin_user,
-            refund_id=refund_id,
-            payload=AdminMoneyRefundRetryCreate(
-                reason="retry timeout boundary",
-                idempotency_key="ws04-02a-admin-refund",
-            ),
-        )
-
-    assert exc_info.value.operation == "stripe.refund.create"
-    assert provider_events == [("ws04-02a-admin-refund", 1)]
-    assert db.flush_calls == 1
-    assert db.commit_calls == 1
-    assert db.rollback_calls == 0
+    source = inspect.getsource(refund_service.retry_admin_money_refund)
+    assert "enqueue_refund_fulfillment_job(" in source
+    assert "build_production_job_registry()" in source
+    assert "create_stripe_refund" not in source
+    assert source.index("enqueue_refund_fulfillment_job(") < source.rindex("db.commit()")
 
 
 @pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
-def test_admin_refund_retry_provider_success_records_typed_event_before_local_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from sqlalchemy.exc import IntegrityError
+def test_refund_provider_mutation_is_owned_only_by_durable_handler() -> None:
+    import inspect
 
     import backend.services.admin_money_refund_service as refund_service
-    from backend.schemas.admin_money_refund_schema import AdminMoneyRefundRetryCreate
+    import backend.services.refund_fulfillment_service as fulfillment_service
 
-    db = _RecordingSession(added=[], added_many=[])
-    refund_id = uuid.uuid4()
-    payment_id = uuid.uuid4()
-    admin_user = SimpleNamespace(id=uuid.uuid4())
-    refund = SimpleNamespace(
-        id=refund_id,
-        payment_id=payment_id,
-        booking_id=None,
-        host_publish_fee_id=None,
-        participant_id=None,
-        amount_cents=500,
-        currency="USD",
-        provider="stripe",
+    retry_source = inspect.getsource(refund_service)
+    handler_source = inspect.getsource(fulfillment_service.handle_refund_fulfillment)
+    assert "create_stripe_refund" not in retry_source
+    assert "create_refund(" in handler_source
+    assert "db.commit()" in handler_source
+    assert handler_source.index("db.commit()") < handler_source.index("create_refund(")
+
+
+@pytest.mark.requirement("WS05-03A-R3")
+def test_admin_refund_reconciliation_releases_locks_before_provider_read() -> None:
+    import inspect
+
+    import backend.services.admin_money_refund_service as refund_service
+    import backend.services.refund_fulfillment_service as fulfillment_service
+
+    source = inspect.getsource(refund_service.reconcile_admin_money_refund)
+    provider_read = source.index("retrieve_stripe_refund(provider_refund_id)")
+    assert source.index("db.rollback()") < provider_read
+    relock_source = source[provider_read:]
+    assert "lock_refund_financial_context(db, refund_id)" in relock_source
+
+    lock_source = inspect.getsource(
+        fulfillment_service.lock_refund_financial_context
     )
-    payment = SimpleNamespace(
-        id=payment_id,
-        payer_user_id=uuid.uuid4(),
-        booking_id=uuid.uuid4(),
-        provider_charge_id="ch_ws04_02a_retry",
-        amount_cents=500,
-        currency="USD",
-    )
-    admin_action = SimpleNamespace(id=uuid.uuid4(), metadata_=None)
-    refund_event = SimpleNamespace(id=uuid.uuid4())
-    provider_events: list[tuple[str, int]] = []
-    checkpoint_events: list[tuple[dict[str, object], int]] = []
-
-    monkeypatch.setattr(refund_service, "get_existing_retry_action", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "get_refund_for_retry_or_404", lambda *args, **kwargs: refund)
-    monkeypatch.setattr(refund_service, "get_payment_for_retry_or_404", lambda *args, **kwargs: payment)
-    monkeypatch.setattr(refund_service, "get_booking_for_retry", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "get_host_publish_fee_for_retry", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "validate_refund_retry", lambda *args, **kwargs: None)
-    monkeypatch.setattr(refund_service, "refund_audit_metadata", lambda *args, **kwargs: {"source": "admin_money_refund_retry"})
-
-    def record_admin_action(*args, **kwargs):
-        del args, kwargs
-        db.add(admin_action)
-        return admin_action
-
-    def create_stripe_refund(**kwargs):
-        provider_events.append((kwargs["idempotency_key"], db.commit_calls))
-        return SimpleNamespace(
-            id="re_ws04_02a_retry_recording_failed",
-            status="succeeded",
-        )
-
-    def apply_refund_retry_result(**kwargs):
-        del kwargs
-        raise IntegrityError("stmt", "params", Exception("local result failed"))
-
-    def record_provider_result_checkpoint(db, **kwargs):
-        checkpoint_events.append((kwargs, db.commit_calls))
-        db.add(refund_event)
-        db.commit()
-        return refund_event.id
-
-    monkeypatch.setattr(refund_service, "record_admin_action", record_admin_action)
-    monkeypatch.setattr(refund_service, "create_stripe_refund", create_stripe_refund)
-    monkeypatch.setattr(
-        refund_service,
-        "record_admin_refund_retry_provider_result_checkpoint",
-        record_provider_result_checkpoint,
-    )
-    monkeypatch.setattr(
-        refund_service,
-        "map_admin_money_retry_refund_status",
-        lambda provider_status: provider_status,
-    )
-    monkeypatch.setattr(
-        refund_service,
-        "apply_refund_retry_result",
-        apply_refund_retry_result,
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        refund_service.retry_admin_money_refund(
-            db,
-            admin_user=admin_user,
-            refund_id=refund_id,
-            payload=AdminMoneyRefundRetryCreate(
-                reason="retry post-provider failure",
-                idempotency_key="ws04-02a-admin-refund",
-            ),
-        )
-
-    assert exc_info.value.status_code == 409
-    assert "Stripe returned a refund result" in exc_info.value.detail
-    assert "refund reconciliation before retrying" in exc_info.value.detail
-    assert provider_events == [("ws04-02a-admin-refund", 1)]
-    assert len(checkpoint_events) == 1
-    checkpoint, prior_commit_count = checkpoint_events[0]
-    assert prior_commit_count == 1
-    assert checkpoint["admin_action_id"] == admin_action.id
-    assert checkpoint["admin_user_id"] == admin_user.id
-    assert checkpoint["refund_id"] == refund_id
-    assert checkpoint["provider_charge_id"] == payment.provider_charge_id
-    assert checkpoint["provider_refund_id"] == "re_ws04_02a_retry_recording_failed"
-    assert checkpoint["refund_status"] == "succeeded"
-    assert admin_action.metadata_ is None
-    assert db.commit_calls == 2
-    assert db.rollback_calls == 1
+    lock_order = [
+        "select(Game)",
+        "select(Booking)",
+        "select(Payment)",
+        "select(HostPublishFee)",
+        "select(Refund)",
+        "select(PaymentCompensation)",
+        "select(AdminFinancialOutcome)",
+        "select(MoneyIssue)",
+    ]
+    positions = [lock_source.index(token) for token in lock_order]
+    assert positions == sorted(positions)
 
 
 @pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")

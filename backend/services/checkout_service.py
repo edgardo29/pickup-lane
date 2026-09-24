@@ -610,8 +610,8 @@ def build_checkout_response(
         db.scalars(
             select(PaymentCompensation)
             .where(
+                PaymentCompensation.payment_id == payment.id,
                 PaymentCompensation.booking_id == booking.id,
-                PaymentCompensation.status.in_({"required", "processing"}),
             )
             .order_by(PaymentCompensation.created_at.desc())
             .limit(1)
@@ -1505,12 +1505,12 @@ def get_game_checkout_status_workflow(
     compensation = db.scalars(
         select(PaymentCompensation)
         .where(
+            PaymentCompensation.payment_id == payment.id,
             PaymentCompensation.booking_id == booking.id,
-            PaymentCompensation.status.in_({"required", "processing"}),
         )
         .order_by(PaymentCompensation.created_at.desc())
         .limit(1)
-    ).first()
+    ).first() if payment is not None else None
 
     return GameCheckoutStatusRead(
         booking_id=booking.id,

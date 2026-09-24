@@ -20,6 +20,7 @@ from backend.services.auth_service import (
     user_is_active_admin,
 )
 from backend.services.booking_rules import (
+    FINANCIAL_SUMMARY_PAYMENT_STATUSES,
     build_booking_conflict_detail,
     normalize_booking_lifecycle_fields,
     validate_booking_business_rules,
@@ -59,6 +60,11 @@ def get_active_user_or_404(db: Session, user_id: uuid.UUID, detail: str) -> User
 
 
 def create_booking_workflow(db: Session, booking: BookingCreate) -> Booking:
+    if booking.payment_status in FINANCIAL_SUMMARY_PAYMENT_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refund and credit summaries are managed by financial workflows.",
+        )
     get_active_game_or_404(db, booking.game_id)
     get_active_user_or_404(db, booking.buyer_user_id, "Buyer user not found.")
 
@@ -213,6 +219,11 @@ def update_booking_workflow(
         )
 
     update_data = booking_update.model_dump(exclude_unset=True)
+    if update_data.get("payment_status") in FINANCIAL_SUMMARY_PAYMENT_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refund and credit summaries are managed by financial workflows.",
+        )
     effective_booking_data = {
         "game_id": update_data.get("game_id", db_booking.game_id),
         "buyer_user_id": update_data.get("buyer_user_id", db_booking.buyer_user_id),

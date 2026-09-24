@@ -26,7 +26,6 @@ from backend.models import (
     User,
     WaitlistEntry,
 )
-from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
 from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCancelExecute,
     AdminOfficialGameCancellationBookingImpactRead,
@@ -40,6 +39,7 @@ from backend.schemas.game_schema import (
 )
 from backend.services.admin_action_service import record_admin_action
 from backend.services.admin_money_issue_service import (
+    resolve_reexecuted_origin_credit_issues,
     stage_credit_money_issue,
     stage_refund_money_issue,
 )
@@ -74,16 +74,15 @@ from backend.services.notification_event_service import (
     build_game_notification_fields,
     resolve_aggregated_notification,
 )
+from backend.services.refund_attempt_policy import (
+    authoritative_succeeded_amount_for_refunds,
+)
 from backend.services.refund_event_service import record_refund_event
+from backend.services.refund_service import get_refund_payment_ledger
 from backend.services.status_history_service import (
+    add_booking_status_history_if_changed,
     add_game_status_history_if_changed,
     add_participant_status_history_if_changed,
-)
-from backend.services.stripe_service import (
-    StripeConfigError,
-)
-from backend.services.stripe_service import (
-    create_refund as create_stripe_refund,
 )
 
 
@@ -345,6 +344,7 @@ def build_cancellation_payment_summary() -> dict[str, object]:
         "payment_followup_required": False,
         "payment_refund_created": False,
         "refund_created_count": 0,
+        "refund_approved_count": 0,
         "refund_failed_count": 0,
         "refund_processing_count": 0,
         "refund_missing_charge_count": 0,
@@ -358,6 +358,7 @@ def build_cancellation_payment_summary() -> dict[str, object]:
 def build_cancellation_refund_summary() -> dict[str, object]:
     return {
         "refund_created_count": 0,
+        "refund_approved_count": 0,
         "refund_failed_count": 0,
         "refund_processing_count": 0,
         "refund_missing_charge_count": 0,
@@ -493,10 +494,24 @@ def build_official_cancellation_booking_impact(
     missing_charge_payments = [
         payment for payment in succeeded_payments if not payment.provider_charge_id
     ]
+    payment_ledgers = {
+        payment.id: get_refund_payment_ledger(
+            db,
+            payment_id=payment.id,
+            payment_amount_cents=payment.amount_cents,
+        )
+        for payment in succeeded_payments
+    }
     refundable_payments = [
-        payment for payment in succeeded_payments if payment.provider_charge_id
+        payment
+        for payment in succeeded_payments
+        if payment.provider_charge_id
+        and payment_ledgers[payment.id].available_cents > 0
     ]
-    cash_refundable_cents = sum(payment.amount_cents for payment in refundable_payments)
+    cash_refundable_cents = sum(
+        payment_ledgers[payment.id].available_cents
+        for payment in refundable_payments
+    )
     credit_restorable_cents = sum_credit_usage_cents(credit_usages, {"redeemed"})
     credit_releasable_cents = sum_credit_usage_cents(credit_usages, {"reserved"})
 
@@ -767,17 +782,28 @@ def cancel_game_bookings(
                         successful_refunds,
                     )
                 ):
-                    booking.payment_status = "refunded"
+                    record_cancellation_financial_summary(
+                        db,
+                        booking=booking,
+                        payment_status="refunded",
+                        current_user=current_user,
+                    )
                     booking_refund_followup_required = False
-                elif (
-                    restored_credit_cents > 0
-                    and refund_summary["refund_failed_count"] == 0
-                    and refund_summary["refund_processing_count"] == 0
-                    and refund_summary["refund_missing_charge_count"] == 0
-                    and not booking_has_refundable_payments(payments)
-                ):
-                    booking.payment_status = "credit_restored"
-                    booking_refund_followup_required = False
+                elif restored_credit_cents > 0:
+                    record_cancellation_financial_summary(
+                        db,
+                        booking=booking,
+                        payment_status="credit_restored",
+                        current_user=current_user,
+                    )
+                    if (
+                        refund_summary["refund_failed_count"] == 0
+                        and refund_summary["refund_processing_count"] == 0
+                        and refund_summary["refund_approved_count"] == 0
+                        and refund_summary["refund_missing_charge_count"] == 0
+                        and not booking_has_refundable_payments(payments)
+                    ):
+                        booking_refund_followup_required = False
                 if booking_refund_followup_required:
                     payment_summary["refund_followup_required"] = True
                 if successful_refunds:
@@ -793,7 +819,8 @@ def cancel_game_bookings(
                         refund=refund,
                         now=now,
                         stripe_refund_processed=True,
-                        credit_restored=credit_restored,
+                        credit_component="restored" if credit_restored else "none",
+                        notice_context="game_cancellation",
                     )
                 if credit_restored and not successful_refunds:
                     create_or_reopen_booking_refunded_notification(
@@ -804,7 +831,8 @@ def cancel_game_bookings(
                         refund=None,
                         now=now,
                         stripe_refund_processed=False,
-                        credit_restored=True,
+                        credit_component="restored",
+                        notice_context="game_cancellation",
                     )
             elif has_processing_payment:
                 payment_summary["processing_payment_booking_count"] = (
@@ -832,6 +860,18 @@ def cancel_game_bookings(
                 payment_summary["credit_released_cents"] = int(
                     payment_summary["credit_released_cents"]
                 ) + sum(usage.amount_cents for usage in released_credit_usages)
+                if released_credit_usages:
+                    create_or_reopen_booking_refunded_notification(
+                        db,
+                        db_game=db_game,
+                        booking=booking,
+                        payment=None,
+                        refund=None,
+                        now=now,
+                        stripe_refund_processed=False,
+                        credit_component="released",
+                        notice_context="game_cancellation",
+                    )
 
                 booking.payment_status = "failed"
                 payment_summary["uncharged_pending_booking_count"] = (
@@ -866,19 +906,40 @@ def create_official_cancellation_refunds(
         if payment.payment_status not in CANCELLATION_AUTO_REFUND_PAYMENT_STATUSES:
             continue
 
+        payment = db.scalars(
+            select(Payment).where(Payment.id == payment.id).with_for_update()
+        ).one()
+        origin_key = (
+            f"official_game_cancellation:game:{db_game.id}:payment:{payment.id}"
+        )
         existing_refund = db.scalars(
             select(Refund)
             .where(
-                Refund.payment_id == payment.id,
-                Refund.booking_id == booking.id,
-                Refund.refund_reason == "game_cancelled",
-                Refund.refund_status.in_(
-                    {"pending", "approved", "processing", "succeeded"}
-                ),
+                Refund.origin_operation_key == origin_key,
             )
             .limit(1)
         ).first()
         if existing_refund is not None:
+            if authoritative_succeeded_amount_for_refunds(
+                db, (existing_refund,)
+            ) > 0:
+                summary["successful_refunds"].append((payment, existing_refund))
+            elif existing_refund.refund_status == "approved":
+                summary["refund_approved_count"] += 1
+            elif existing_refund.refund_status == "processing":
+                summary["refund_processing_count"] += 1
+            elif existing_refund.refund_status in {"failed", "cancelled"}:
+                summary["refund_failed_count"] += 1
+                if not existing_refund.provider_charge_id:
+                    summary["refund_missing_charge_count"] += 1
+            continue
+
+        available_cents = get_refund_payment_ledger(
+            db,
+            payment_id=payment.id,
+            payment_amount_cents=payment.amount_cents,
+        ).available_cents
+        if available_cents <= 0:
             continue
 
         if not payment.provider_charge_id:
@@ -888,88 +949,38 @@ def create_official_cancellation_refunds(
                 booking,
                 current_user,
                 now,
+                origin_key=origin_key,
                 provider_refund_id=None,
                 refund_status="failed",
                 reason_code="provider_charge_id_missing",
+                amount_cents=available_cents,
             )
             summary["refund_failed_count"] += 1
             summary["refund_missing_charge_count"] += 1
             continue
 
-        refund_idempotency_key = f"game_cancel:{db_game.id}:payment:{payment.id}:refund"
-        try:
-            stripe_refund = create_stripe_refund(
-                charge_id=payment.provider_charge_id,
-                amount_cents=payment.amount_cents,
-                currency=payment.currency,
-                idempotency_key=refund_idempotency_key,
-                metadata={
-                    "source": "official_game_cancel",
-                    "game_id": str(db_game.id),
-                    "booking_id": str(booking.id),
-                    "payment_id": str(payment.id),
-                    "admin_user_id": str(current_user.id),
-                },
-            )
-        except StripeConfigError:
-            create_cancellation_refund_record(
-                db,
-                payment,
-                booking,
-                current_user,
-                now,
-                provider_refund_id=None,
-                refund_status="failed",
-                reason_code="stripe_refunds_not_configured",
-            )
-            summary["refund_failed_count"] += 1
-            continue
-        except DependencyMutationTimeoutUnknownError:
-            create_cancellation_refund_record(
-                db,
-                payment,
-                booking,
-                current_user,
-                now,
-                provider_refund_id=None,
-                refund_status="processing",
-                reason_code="stripe_refund_timeout_unknown",
-            )
-            summary["refund_processing_count"] += 1
-            continue
-        except Exception:  # noqa: BLE001 - refund failure must create support record
-            create_cancellation_refund_record(
-                db,
-                payment,
-                booking,
-                current_user,
-                now,
-                provider_refund_id=None,
-                refund_status="failed",
-                reason_code="stripe_refund_request_failed",
-            )
-            summary["refund_failed_count"] += 1
-            continue
-
-        refund_status = map_stripe_refund_status(stripe_refund.status)
         refund = create_cancellation_refund_record(
             db,
             payment,
             booking,
             current_user,
             now,
-            provider_refund_id=stripe_refund.id,
-            refund_status=refund_status,
-            reason_code=f"stripe_refund_{refund_status}",
+            origin_key=origin_key,
+            provider_refund_id=None,
+            refund_status="approved",
+            reason_code="refund_approved_for_fulfillment",
+            amount_cents=available_cents,
         )
         summary["refund_created_count"] += 1
+        summary["refund_approved_count"] += 1
+        from backend.services.payment_job_service import build_production_job_registry
+        from backend.services.refund_fulfillment_service import (
+            enqueue_refund_fulfillment_job,
+        )
 
-        if refund_status == "succeeded":
-            summary["successful_refunds"].append((payment, refund))
-        elif refund_status in {"failed", "cancelled"}:
-            summary["refund_failed_count"] += 1
-        else:
-            summary["refund_processing_count"] += 1
+        enqueue_refund_fulfillment_job(
+            db, refund=refund, registry=build_production_job_registry()
+        )
 
     return summary
 
@@ -984,6 +995,8 @@ def create_cancellation_refund_record(
     provider_refund_id: str | None,
     refund_status: str,
     reason_code: str,
+    origin_key: str,
+    amount_cents: int,
 ) -> Refund:
     provider_status = (
         "unknown"
@@ -992,19 +1005,27 @@ def create_cancellation_refund_record(
         if provider_refund_id is not None
         else None
     )
+    refund_id = uuid.uuid4()
+    attempt_key = f"refund:{refund_id}:attempt:1"
     refund = Refund(
-        id=uuid.uuid4(),
+        id=refund_id,
         payment_id=payment.id,
         booking_id=booking.id,
         participant_id=None,
         origin_workflow="official_game_cancellation",
         provider="stripe",
         provider_refund_id=provider_refund_id,
+        origin_operation_key=origin_key,
+        current_attempt_number=1,
+        stripe_request_key=attempt_key,
+        provider_attempt_started_at=None,
+        automatic_mutation_blocked_reason=None,
+        automatic_mutation_blocked_at=None,
         provider_charge_id=payment.provider_charge_id,
         provider_status=provider_status,
         provider_status_observed_at=now if provider_status is not None else None,
-        last_refund_event_at=now,
-        amount_cents=payment.amount_cents,
+        last_refund_event_at=None,
+        amount_cents=amount_cents,
         currency=payment.currency,
         refund_reason="game_cancelled",
         refund_status=refund_status,
@@ -1023,7 +1044,11 @@ def create_cancellation_refund_record(
     refund_event = record_refund_event(
         db,
         refund=refund,
-        event_type="provider_result_recorded",
+        event_type=(
+            "provider_result_recorded"
+            if provider_refund_id is not None
+            else "local_status_changed"
+        ),
         event_source="system",
         actor_user_id=current_user.id,
         provider="stripe",
@@ -1033,6 +1058,11 @@ def create_cancellation_refund_record(
         new_refund_status=refund_status,
         reason_code=reason_code,
         summary="Official-game cancellation refund result recorded.",
+        metadata=(
+            {"provider_call_started": False}
+            if provider_refund_id is None and refund_status in {"failed", "cancelled"}
+            else None
+        ),
         occurred_at=now,
     )
     if refund_status in {"failed", "cancelled"}:
@@ -1108,6 +1138,36 @@ def cancel_game_waitlist_entries(db: Session, db_game: Game, now: datetime) -> N
         db.add(waitlist_entry)
 
 
+def record_cancellation_financial_summary(
+    db: Session,
+    *,
+    booking: Booking,
+    payment_status: str,
+    current_user: User,
+) -> None:
+    old_payment_status = booking.payment_status
+    if old_payment_status == payment_status:
+        return
+    old_booking_status = booking.booking_status
+    old_reservation_status = booking.reservation_status
+    booking.payment_status = payment_status
+    db.add(booking)
+    add_booking_status_history_if_changed(
+        db,
+        booking,
+        old_booking_status=old_booking_status,
+        old_payment_status=old_payment_status,
+        old_reservation_status=old_reservation_status,
+        changed_by_user_id=current_user.id,
+        change_source="admin" if user_is_active_admin(current_user) else "user",
+        reason=(
+            "credit_return_committed"
+            if payment_status == "credit_restored"
+            else "refund_summary_recalculated"
+        ),
+    )
+
+
 def mark_booking_cancelled_for_game_cancellation(
     db: Session,
     booking: Booking,
@@ -1115,6 +1175,9 @@ def mark_booking_cancelled_for_game_cancellation(
     now: datetime,
     cancellation_type: str,
 ) -> None:
+    old_booking_status = booking.booking_status
+    old_payment_status = booking.payment_status
+    old_reservation_status = booking.reservation_status
     booking.booking_status = "cancelled"
     booking.reservation_status = (
         "not_required" if booking.reservation_status == "not_required" else "released"
@@ -1125,6 +1188,16 @@ def mark_booking_cancelled_for_game_cancellation(
     booking.cancel_reason = cancellation_type
     booking.updated_at = now
     db.add(booking)
+    add_booking_status_history_if_changed(
+        db,
+        booking,
+        old_booking_status=old_booking_status,
+        old_payment_status=old_payment_status,
+        old_reservation_status=old_reservation_status,
+        changed_by_user_id=current_user.id,
+        change_source="admin" if user_is_active_admin(current_user) else "user",
+        reason="game_cancelled",
+    )
 
 
 def close_game_chats(db: Session, db_game: Game, now: datetime) -> None:
@@ -1495,11 +1568,24 @@ def apply_game_cancellation_state(
         admin_action_idempotency_key,
         admin_action_type,
     )
+    resolved_origin_issue_ids = (
+        resolve_reexecuted_origin_credit_issues(
+            db,
+            origin_workflow="official_game_cancellation",
+            target_game_id=db_game.id,
+            target_booking_id=None,
+            admin_action=admin_action,
+            now=now,
+        )
+        if admin_action is not None
+        else []
+    )
     money_issue_ids = list_official_cancellation_money_issue_ids(
         db,
         db_game=db_game,
         payment_summary=payment_summary,
     )
+    money_issue_ids = list(dict.fromkeys([*money_issue_ids, *resolved_origin_issue_ids]))
 
     db_game.game_status = "cancelled"
     db_game.cancelled_at = now
@@ -1609,7 +1695,9 @@ def build_official_cancellation_booking_result(
     credit_restored_cents = sum_credit_usage_cents(credit_usages, {"restored"})
     credit_released_cents = sum_credit_usage_cents(credit_usages, {"released"})
     succeeded_refunds = [
-        refund for refund in refunds if refund.refund_status == "succeeded"
+        refund
+        for refund in refunds
+        if authoritative_succeeded_amount_for_refunds(db, (refund,)) > 0
     ]
     processing_refunds = [
         refund
@@ -1618,6 +1706,9 @@ def build_official_cancellation_booking_result(
     ]
     failed_refunds = [
         refund for refund in refunds if refund.refund_status in {"failed", "cancelled"}
+    ]
+    approved_refunds = [
+        refund for refund in refunds if refund.refund_status == "approved"
     ]
     has_processing_payment = any(
         payment.payment_status == "processing" for payment in payments
@@ -1633,6 +1724,8 @@ def build_official_cancellation_booking_result(
         follow_up_reason = "missing_stripe_charge_id"
     elif failed_refunds:
         follow_up_reason = "stripe_refund_failed"
+    elif approved_refunds:
+        follow_up_reason = "stripe_refund_queued"
     elif processing_refunds:
         follow_up_reason = "stripe_refund_processing"
     elif has_processing_payment:
@@ -1739,6 +1832,7 @@ def execute_official_game_cancellation(
         cancelled_waitlist_entry_count=preview.waitlist_entry_count,
         notified_user_count=len(set(notified_user_ids)),
         refund_created_count=int(payment_summary["refund_created_count"]),
+        refund_approved_count=int(payment_summary["refund_approved_count"]),
         refund_failed_count=int(payment_summary["refund_failed_count"]),
         refund_processing_count=int(payment_summary["refund_processing_count"]),
         refund_missing_charge_count=int(payment_summary["refund_missing_charge_count"]),

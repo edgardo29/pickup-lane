@@ -223,15 +223,16 @@ def list_admin_money_payments(
 
 
 def sum_payment_refunded_cents(db: Session, payment_id: uuid.UUID) -> int:
-    from sqlalchemy import func
+    from backend.services.refund_service import get_refund_payment_ledger
 
-    total = db.scalar(
-        select(func.coalesce(func.sum(Refund.amount_cents), 0)).where(
-            Refund.payment_id == payment_id,
-            Refund.refund_status == "succeeded",
-        )
-    )
-    return int(total or 0)
+    payment = db.get(Payment, payment_id)
+    if payment is None:
+        return 0
+    return get_refund_payment_ledger(
+        db,
+        payment_id=payment.id,
+        payment_amount_cents=payment.amount_cents,
+    ).confirmed_returned_cents
 
 
 def sum_payment_credit_usage_cents(
@@ -290,17 +291,30 @@ def payment_refund_totals(
 ) -> dict[uuid.UUID, int]:
     if not payment_ids:
         return {}
-    return {
-        payment_id: int(total or 0)
-        for payment_id, total in db.execute(
-            select(Refund.payment_id, func.coalesce(func.sum(Refund.amount_cents), 0))
-            .where(
-                Refund.payment_id.in_(payment_ids),
-                Refund.refund_status == "succeeded",
+    from backend.services.refund_attempt_policy import (
+        refund_attempt_evidence_for_refunds,
+        refund_attempt_identity_matches_refund,
+    )
+
+    refunds = list(
+        db.scalars(select(Refund).where(Refund.payment_id.in_(payment_ids))).all()
+    )
+    evidence = refund_attempt_evidence_for_refunds(
+        db, (refund.id for refund in refunds)
+    )
+    totals = {payment_id: 0 for payment_id in payment_ids}
+    for refund in refunds:
+        totals[refund.payment_id] += sum(
+            attempt.amount_cents
+            for attempt_number, attempt in evidence.get(refund.id, {}).items()
+            if attempt.status == "succeeded"
+            and refund_attempt_identity_matches_refund(
+                refund,
+                attempt_number=attempt_number,
+                attempt=attempt,
             )
-            .group_by(Refund.payment_id)
-        ).all()
-    }
+        )
+    return totals
 
 
 def payment_credit_usage_totals(

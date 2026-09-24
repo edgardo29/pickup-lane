@@ -493,8 +493,6 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
         GameCredit,
         MoneyIssue,
         Payment,
-        Refund,
-        RefundEvent,
     )
     from backend.services.admin_money_credit_service import list_admin_money_credits
     from backend.services.admin_money_issue_query_service import (
@@ -504,6 +502,10 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
     from backend.services.admin_money_refund_query_service import (
         list_admin_money_refunds,
         list_refund_events,
+    )
+    from backend.tests.support.refund_fixtures import (
+        build_direct_admin_refund,
+        build_refund_event,
     )
 
     now = datetime(2026, 8, 22, 12, tzinfo=timezone.utc)
@@ -549,24 +551,16 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
         db.commit()
 
         refunds = [
-            Refund(
-                id=uuid.uuid4(),
+            build_direct_admin_refund(
                 payment_id=payments[0].id,
                 booking_id=booking.id,
                 provider_refund_id=f"re_ws04_01b_{index}_{uuid.uuid4().hex[:8]}",
-                origin_workflow="direct_admin_refund",
-                provider="stripe",
                 provider_status="processing",
-                provider_status_observed_at=now + timedelta(minutes=index),
                 provider_charge_id=payments[0].provider_charge_id,
                 amount_cents=300,
-                currency="USD",
-                refund_reason="admin_refund",
                 refund_status=status,
                 requested_by_user_id=user.id,
-                requested_at=now + timedelta(minutes=index),
-                created_at=now + timedelta(minutes=index),
-                updated_at=now + timedelta(minutes=index),
+                now=now + timedelta(minutes=index),
             )
             for index, status in enumerate(("pending", "pending", "failed"), start=1)
         ]
@@ -574,19 +568,17 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
         db.commit()
 
         refund_events = [
-            RefundEvent(
-                id=uuid.uuid4(),
-                refund_id=refunds[0].id,
+            build_refund_event(
+                refund=refunds[0],
                 event_type=event_type,
                 event_source="system",
-                provider="stripe",
                 provider_event_id=f"evt_ws04_01b_{index}_{uuid.uuid4().hex[:8]}",
-                provider_refund_id=refunds[0].provider_refund_id,
-                provider_charge_id=refunds[0].provider_charge_id,
                 provider_status="processing",
                 idempotency_key=f"ws04-01b-refund-event-{index}-{uuid.uuid4()}",
+                reason_code="query_cursor_fixture",
+                summary="Query cursor refund event fixture.",
+                new_refund_status="processing",
                 occurred_at=now + timedelta(minutes=index),
-                created_at=now + timedelta(minutes=index),
             )
             for index, event_type in enumerate(
                 (

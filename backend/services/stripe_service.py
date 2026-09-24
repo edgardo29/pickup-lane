@@ -16,6 +16,16 @@ class StripeConfigError(RuntimeError):
     """Raised when Stripe cannot be called safely from this environment."""
 
 
+class StripeRefundOperationError(RuntimeError):
+    """Typed refund failure used by the durable refund state machine."""
+
+    def __init__(self, *, operation: str, classification: str, http_status: int | None):
+        super().__init__(f"Stripe {operation} failed ({classification}).")
+        self.operation = operation
+        self.classification = classification
+        self.http_status = http_status
+
+
 @dataclass(frozen=True)
 class StripeClientPair:
     read: Any
@@ -44,6 +54,7 @@ class StripeRefundResult:
     currency: str
     charge_id: str | None
     payment_intent_id: str | None
+    metadata: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -199,6 +210,7 @@ def extract_payment_intent_result(payment_intent: Any) -> StripePaymentIntentRes
 def extract_refund_result(refund: Any) -> StripeRefundResult:
     charge = getattr(refund, "charge", None)
     payment_intent = getattr(refund, "payment_intent", None)
+    metadata = getattr(refund, "metadata", None)
 
     return StripeRefundResult(
         id=refund.id,
@@ -207,6 +219,7 @@ def extract_refund_result(refund: Any) -> StripeRefundResult:
         currency=str(getattr(refund, "currency", "") or "").upper(),
         charge_id=charge if isinstance(charge, str) else None,
         payment_intent_id=payment_intent if isinstance(payment_intent, str) else None,
+        metadata=dict(metadata) if isinstance(metadata, dict) else None,
     )
 
 
@@ -490,6 +503,12 @@ def create_refund(
     return refund
 
 
+def validate_refund_preflight(currency: str) -> None:
+    """Prove refund configuration and currency before a provider checkpoint."""
+    _validate_refund_currency(currency)
+    get_stripe_client_pair()
+
+
 def retrieve_refund(refund_id: str) -> StripeRefundResult:
     refund = _call_stripe_read(
         "refund.retrieve",
@@ -499,6 +518,43 @@ def retrieve_refund(refund_id: str) -> StripeRefundResult:
     )
 
     return refund
+
+
+def list_refunds_for_charge(
+    charge_id: str,
+    *,
+    maximum_pages: int = 3,
+    page_size: int = 100,
+) -> tuple[list[StripeRefundResult], bool]:
+    """Return a bounded charge refund listing and whether the bound was exceeded."""
+    if maximum_pages < 1 or maximum_pages > 3 or page_size != 100:
+        raise ValueError("refund listing must use the approved three-page bound")
+    results: list[StripeRefundResult] = []
+    starting_after: str | None = None
+    truncated = False
+    for page_number in range(maximum_pages):
+        params: dict[str, object] = {"charge": charge_id, "limit": page_size}
+        if starting_after is not None:
+            params["starting_after"] = starting_after
+        page = _call_stripe_read(
+            "refund.list",
+            lambda client, request=params: client.v1.refunds.list(request),
+            use_client=True,
+        )
+        data = list(getattr(page, "data", ()) or ())
+        results.extend(extract_refund_result(item) for item in data)
+        has_more = bool(getattr(page, "has_more", False))
+        if not has_more:
+            return results, False
+        if page_number == maximum_pages - 1 or not data:
+            truncated = True
+            break
+        last_id = getattr(data[-1], "id", None)
+        if not isinstance(last_id, str) or not last_id:
+            truncated = True
+            break
+        starting_after = last_id
+    return results, truncated
 
 
 def construct_webhook_event(payload: bytes, signature: str) -> Any:
@@ -536,6 +592,21 @@ def _stripe_error_result(exc: Exception, operation: str, *, invoked: bool) -> st
     return "failed"
 
 
+def _classify_refund_exception(exc: Exception) -> str:
+    http_status = getattr(exc, "http_status", None)
+    if http_status == 429:
+        return "rate_limited"
+    if isinstance(exc, DependencyMutationTimeoutUnknownError):
+        return "mutation_timeout_unknown"
+    if isinstance(exc, DependencyReadTimeoutError):
+        return "read_timeout"
+    if isinstance(http_status, int) and http_status >= 500:
+        return "provider_server_error"
+    if isinstance(http_status, int) and 400 <= http_status < 500:
+        return "unsafe_client_error"
+    return "network_or_unknown"
+
+
 def _call_stripe_operation(
     operation: str, call, *, mutation: bool, use_client: bool, extract, preflight
 ):
@@ -568,6 +639,12 @@ def _call_stripe_operation(
         except Exception:  # noqa: BLE001 - telemetry cannot mask a provider error.
             classification = "failed" if invoked else "configuration_error"
         record_provider_outcome(f"stripe.{operation}", classification)
+        if operation.startswith("refund.") and invoked:
+            raise StripeRefundOperationError(
+                operation=operation,
+                classification=_classify_refund_exception(exc),
+                http_status=getattr(exc, "http_status", None),
+            ) from exc
         raise
     record_provider_outcome(f"stripe.{operation}", "succeeded")
     return result

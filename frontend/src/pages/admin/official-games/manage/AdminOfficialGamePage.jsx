@@ -30,6 +30,10 @@ import AdminOfficialGameRemovalPreviewModal from './AdminOfficialGameRemovalPrev
 import AdminOfficialGameRosterPanel from './AdminOfficialGameRosterPanel.jsx'
 import AdminOfficialGameSummary from './AdminOfficialGameSummary.jsx'
 import AdminOfficialGameWaitlistTab from './AdminOfficialGameWaitlistTab.jsx'
+import {
+  getCancellationCategoryLabel,
+  CancellationFollowUpLabel,
+} from './adminOfficialGameFinancialPresentation.js'
 import { useAdminOfficialGameLedgers } from './useAdminOfficialGameLedgers.js'
 import {
   addAdminOfficialGamePlayer,
@@ -80,37 +84,6 @@ function getCancelDisabledReason(game) {
   }
 
   return ''
-}
-
-const cancellationCategoryLabels = {
-  cancel_only: 'Cancel only',
-  credit_restore: 'Restore credit',
-  credit_restored: 'Credit restored',
-  follow_up_required: 'Follow-up required',
-  pending_hold_release: 'Release pending hold',
-  pending_hold_released: 'Pending hold released',
-  stripe_refund: 'Refund cash',
-  stripe_refund_and_credit_restore: 'Refund cash + restore credit',
-  stripe_refunded: 'Cash refunded',
-  stripe_refunded_and_credit_restored: 'Cash refunded + credit restored',
-}
-
-const cancellationFollowUpLabels = {
-  active_refund: 'Active refund',
-  existing_or_disputed_refund_state: 'Existing refund state',
-  missing_stripe_charge_id: 'Missing Stripe charge',
-  payment_state_follow_up: 'Payment state follow-up',
-  processing_payment: 'Processing payment',
-  stripe_refund_failed: 'Stripe refund failed',
-  stripe_refund_processing: 'Stripe refund processing',
-}
-
-function getCancellationCategoryLabel(category) {
-  return cancellationCategoryLabels[category] || category || 'Review'
-}
-
-function getCancellationFollowUpLabel(reason) {
-  return cancellationFollowUpLabels[reason] || reason || ''
 }
 
 function getCancellationCreditCents(row) {
@@ -235,7 +208,7 @@ function AdminOfficialGameCancelModal({
                 </div>
                 {row.follow_up_required && (
                   <div className="admin-official-cancel-row__warning">
-                    {getCancellationFollowUpLabel(row.follow_up_reason)}
+                    <CancellationFollowUpLabel reason={row.follow_up_reason} />
                   </div>
                 )}
               </div>

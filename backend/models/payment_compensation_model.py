@@ -26,7 +26,7 @@ class PaymentCompensation(Base):
             name="ck_payment_compensations_reason",
         ),
         CheckConstraint(
-            "status IN ('required', 'processing', 'succeeded', 'failed', 'cancelled')",
+            "status IN ('required', 'processing', 'succeeded', 'failed')",
             name="ck_payment_compensations_status",
         ),
         CheckConstraint("amount_cents > 0", name="ck_payment_compensations_amount"),
@@ -34,11 +34,10 @@ class PaymentCompensation(Base):
         Index("ix_payment_compensations_payment", "payment_id", "created_at", "id"),
         Index("ix_payment_compensations_booking", "booking_id", "created_at", "id"),
         Index(
-            "uq_payment_compensations_active",
+            "uq_payment_compensations_payment_booking",
             "payment_id",
             "booking_id",
             unique=True,
-            postgresql_where=text("status IN ('required', 'processing')"),
         ),
     )
 
@@ -48,6 +47,9 @@ class PaymentCompensation(Base):
     )
     booking_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="RESTRICT"), nullable=False
+    )
+    refund_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("refunds.id", ondelete="SET NULL"), nullable=True
     )
     action: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'refund'")

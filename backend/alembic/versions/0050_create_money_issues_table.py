@@ -1,7 +1,7 @@
 """create money_issues table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0050_money_issues'
@@ -49,11 +49,11 @@ def upgrade() -> None:
         sa.CheckConstraint("issue_type IN ('refund_missing_provider_reference', 'refund_processing_overdue', 'refund_failed', 'refund_cancelled', 'refund_outcome_unknown', 'credit_restore_failed', 'credit_release_failed')", name='ck_money_issues_issue_type'),
         sa.CheckConstraint('occurrence_count >= 1', name='ck_money_issues_occurrence_count'),
         sa.CheckConstraint("origin_workflow IN ('player_removal', 'official_game_cancellation', 'community_publish_fee_refund', 'direct_admin_refund', 'official_game_checkout', 'pending_checkout_expiration', 'pending_checkout_cancellation', 'admin_game_update')", name='ck_money_issues_origin_workflow'),
-        sa.CheckConstraint("recommended_action_code IN ('recover_provider_reference', 'retry_refund', 'verify_provider_refund', 'retry_credit_restore', 'retry_credit_release', 'review_unknown_outcome', 'review_and_resolve_no_action', 'document_external_completion')", name='ck_money_issues_recommended_action_code'),
+        sa.CheckConstraint("recommended_action_code IN ('recover_provider_reference', 'retry_refund', 'verify_provider_refund', 'retry_credit_restore', 'retry_credit_release', 'review_unknown_outcome', 'review_and_resolve_no_action', 'document_external_completion', 'reexecute_origin_workflow', 'review_superseding_financial_outcome')", name='ck_money_issues_recommended_action_code'),
         sa.CheckConstraint("(issue_type NOT LIKE 'refund_%' OR target_refund_id IS NOT NULL)", name='ck_money_issues_refund_requires_refund'),
         sa.CheckConstraint('reopen_count >= 0', name='ck_money_issues_reopen_count'),
         sa.CheckConstraint("((status = 'open') AND resolved_at IS NULL AND resolved_by_user_id IS NULL AND resolution_reason_code IS NULL AND resolution_note IS NULL AND resolution_external_reference IS NULL) OR ((status = 'resolved') AND resolved_at IS NOT NULL AND resolved_by_user_id IS NOT NULL AND resolution_reason_code IS NOT NULL)", name='ck_money_issues_resolution_fields_match_status'),
-        sa.CheckConstraint("resolution_reason_code IS NULL OR resolution_reason_code IN ('retried_successfully', 'provider_completed_no_action_required', 'handled_externally', 'invalid_issue', 'unable_to_complete_documented')", name='ck_money_issues_resolution_reason_code'),
+        sa.CheckConstraint("resolution_reason_code IS NULL OR resolution_reason_code IN ('retried_successfully', 'provider_completed_no_action_required', 'handled_externally', 'invalid_issue', 'unable_to_complete_documented', 'superseded_by_financial_outcome')", name='ck_money_issues_resolution_reason_code'),
         sa.CheckConstraint("status IN ('open', 'resolved')", name='ck_money_issues_status'),
         sa.CheckConstraint("value_kind IN ('cash_refund', 'game_credit_restore', 'game_credit_release')", name='ck_money_issues_value_kind'),
         sa.ForeignKeyConstraint(['resolved_by_user_id'], ['users.id'], ondelete='SET NULL'),

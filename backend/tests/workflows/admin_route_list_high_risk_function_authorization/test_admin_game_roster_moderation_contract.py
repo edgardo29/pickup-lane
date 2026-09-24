@@ -1427,7 +1427,7 @@ def test_admin_official_game_cancellation_exercises_booking_refund_credit_notifi
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.models import AdminAction, Notification, Refund, RefundEvent
-    from backend.services import game_cancellation_service
+    from backend.services import refund_fulfillment_service
     from backend.services.stripe_service import StripeRefundResult
 
     admin = _user("official-cancel-admin", role="admin")
@@ -1477,12 +1477,12 @@ def test_admin_official_game_cancellation_exercises_booking_refund_credit_notifi
             currency=currency,
             charge_id=charge_id,
             payment_intent_id=None,
+            metadata={key: str(value) for key, value in metadata.items()},
         )
 
+    monkeypatch.setattr(refund_fulfillment_service, "create_refund", fake_create_refund)
     monkeypatch.setattr(
-        game_cancellation_service,
-        "create_stripe_refund",
-        fake_create_refund,
+        refund_fulfillment_service, "validate_refund_preflight", lambda _currency: None
     )
     client = _client()
 
@@ -1556,37 +1556,24 @@ def test_admin_official_game_cancellation_exercises_booking_refund_credit_notifi
     assert cancel_body["cancelled_participant_count"] == 1
     assert cancel_body["notified_user_count"] == 1
     assert cancel_body["refund_created_count"] == 1
+    assert cancel_body["refund_approved_count"] == 1
     assert cancel_body["refund_failed_count"] == 0
     assert cancel_body["refund_processing_count"] == 0
     assert cancel_body["refund_missing_charge_count"] == 0
     assert cancel_body["credit_restored_count"] == 1
     assert cancel_body["credit_restored_cents"] == 400
-    assert cancel_body["refund_follow_up_required"] is False
+    assert cancel_body["refund_follow_up_required"] is True
     assert cancel_body["payment_follow_up_required"] is False
     assert cancel_body["money_issue_ids"] == []
     assert cancel_body["booking_results"][0]["booking_id"] == str(
         fixture["booking_id"]
     )
     assert cancel_body["booking_results"][0]["refunds"][0]["amount_cents"] == 800
-    assert cancel_body["booking_results"][0]["cash_refunded_cents"] == 800
+    assert cancel_body["booking_results"][0]["cash_refunded_cents"] == 0
     assert cancel_body["booking_results"][0]["credit_restored_cents"] == 400
-    assert cancel_body["booking_results"][0]["follow_up_required"] is False
+    assert cancel_body["booking_results"][0]["follow_up_required"] is True
 
-    assert provider_calls == [
-        {
-            **provider_calls[0],
-            "charge_id": before_payment["provider_charge_id"],
-            "amount_cents": 800,
-            "currency": "USD",
-        }
-    ]
-    assert provider_calls[0]["metadata"] == {
-        "source": "official_game_cancel",
-        "game_id": str(game_id),
-        "booking_id": str(fixture["booking_id"]),
-        "payment_id": str(fixture["payment_id"]),
-        "admin_user_id": str(admin.id),
-    }
+    assert provider_calls == []
 
     cancelled_game = _game_state(game_id)
     assert cancelled_game["game_status"] == "cancelled"
@@ -1601,8 +1588,39 @@ def test_admin_official_game_cancellation_exercises_booking_refund_credit_notifi
 
     cancelled_booking = _booking_state(fixture["booking_id"])
     assert cancelled_booking["booking_status"] == "cancelled"
-    assert cancelled_booking["payment_status"] == "refunded"
+    assert cancelled_booking["payment_status"] == "credit_restored"
     assert cancelled_booking["cancelled_by_user_id"] == admin.id
+
+    from backend.models import BookingStatusHistory
+
+    with _session() as db:
+        cancellation_history = list(
+            db.scalars(
+                select(BookingStatusHistory)
+                .where(BookingStatusHistory.booking_id == fixture["booking_id"])
+                .order_by(BookingStatusHistory.created_at, BookingStatusHistory.id)
+            ).all()
+        )
+    credit_history = [
+        row
+        for row in cancellation_history
+        if row.change_reason == "credit_return_committed"
+    ]
+    lifecycle_history = [
+        row for row in cancellation_history if row.change_reason == "game_cancelled"
+    ]
+    assert len(credit_history) == 1
+    assert credit_history[0].old_payment_status == "paid"
+    assert credit_history[0].new_payment_status == "credit_restored"
+    assert credit_history[0].change_source == "admin"
+    assert credit_history[0].changed_by_user_id == admin.id
+    assert len(lifecycle_history) == 1
+    assert lifecycle_history[0].old_booking_status == "confirmed"
+    assert lifecycle_history[0].new_booking_status == "cancelled"
+    assert lifecycle_history[0].old_payment_status == "credit_restored"
+    assert lifecycle_history[0].new_payment_status == "credit_restored"
+    assert lifecycle_history[0].change_source == "admin"
+    assert lifecycle_history[0].changed_by_user_id == admin.id
 
     cancelled_participant = _participant_state(fixture["participant_id"])
     assert cancelled_participant["participant_status"] == "cancelled"
@@ -1622,21 +1640,414 @@ def test_admin_official_game_cancellation_exercises_booking_refund_credit_notifi
     refunds = _refunds_for_booking(fixture["booking_id"])
     assert len(refunds) == 1
     assert refunds[0]["payment_id"] == fixture["payment_id"]
-    assert refunds[0]["refund_status"] == "succeeded"
-    assert refunds[0]["provider_status"] == "succeeded"
+    assert refunds[0]["refund_status"] == "approved"
+    assert refunds[0]["provider_status"] is None
     assert refunds[0]["amount_cents"] == 800
     assert refunds[0]["refund_reason"] == "game_cancelled"
     assert refunds[0]["origin_workflow"] == "official_game_cancellation"
     assert refunds[0]["approved_by_user_id"] == admin.id
-    assert refunds[0]["refunded_at"] is not None
+    assert refunds[0]["refunded_at"] is None
     assert _count_model_rows(Refund) == before_refunds + 1
     assert _count_model_rows(RefundEvent) == before_refund_events + 1
     assert _notification_types_for_user_game(
         user_id=player.id,
         game_id=game_id,
     ) >= {"game_cancelled", "booking_refunded"}
+    with _session() as db:
+        queued_notice = db.scalars(
+            select(Notification).where(
+                Notification.user_id == player.id,
+                Notification.related_game_id == game_id,
+                Notification.notification_type == "booking_refunded",
+            )
+        ).one()
+        assert queued_notice.title == "Credit restored"
+        assert "canceled official game" in queued_notice.body
+        assert queued_notice.related_refund_id is None
+        assert queued_notice.action_key is None
     assert _count_model_rows(Notification) == before_notifications + 2
     assert _count_model_rows(AdminAction) == before_admin_actions + 1
+
+    from backend.database import SessionLocal
+    from backend.services.durable_job_service import DurableJobRunner
+    from backend.services.payment_job_service import build_production_job_registry
+
+    runner = DurableJobRunner(
+        session_factory=SessionLocal,
+        registry=build_production_job_registry(),
+        worker_identity=f"ws05-03a-cancellation-{uuid.uuid4()}",
+    )
+    assert runner.process_once() == "succeeded"
+    assert len(provider_calls) == 1
+    assert provider_calls[0]["charge_id"] == before_payment["provider_charge_id"]
+    assert provider_calls[0]["amount_cents"] == 800
+    assert provider_calls[0]["currency"] == "USD"
+    assert provider_calls[0]["metadata"] == {
+        "refund_id": str(refunds[0]["id"]),
+        "payment_id": str(fixture["payment_id"]),
+        "attempt_number": 1,
+    }
+    fulfilled_refund = _refunds_for_booking(fixture["booking_id"])[0]
+    assert fulfilled_refund["refund_status"] == "succeeded"
+    assert fulfilled_refund["provider_status"] == "succeeded"
+    assert fulfilled_refund["refunded_at"] is not None
+    assert _booking_state(fixture["booking_id"])["payment_status"] == "refunded"
+    with _session() as db:
+        refund_history = list(
+            db.scalars(
+                select(BookingStatusHistory).where(
+                    BookingStatusHistory.booking_id == fixture["booking_id"],
+                    BookingStatusHistory.change_reason
+                    == "refund_summary_recalculated",
+                )
+            ).all()
+        )
+    assert len(refund_history) == 1
+    assert refund_history[0].old_payment_status == "credit_restored"
+    assert refund_history[0].new_payment_status == "refunded"
+    assert refund_history[0].change_source == "scheduled_job"
+    assert refund_history[0].changed_by_user_id is None
+    with _session() as db:
+        completed_notice = db.scalars(
+            select(Notification).where(
+                Notification.user_id == player.id,
+                Notification.related_game_id == game_id,
+                Notification.notification_type == "booking_refunded",
+            )
+        ).one()
+        assert completed_notice.title == "Refund and credit processed"
+        assert "canceled official game" in completed_notice.body
+        assert completed_notice.related_refund_id == fulfilled_refund["id"]
+        assert completed_notice.action_key is None
+    assert _count_model_rows(RefundEvent) == before_refund_events + 3
+    assert _count_model_rows(Notification) == before_notifications + 2
+
+
+@pytest.mark.requirement("WS05-03A-R4", "WS05-03A-R5")
+@pytest.mark.parametrize("cash_first", [False, True], ids=["credit-first", "cash-first"])
+def test_admin_player_removal_preserves_credit_and_cash_completion_order(
+    monkeypatch: pytest.MonkeyPatch,
+    cash_first: bool,
+) -> None:
+    from backend.models import Booking, BookingStatusHistory, Notification, Payment
+    from backend.services import refund_fulfillment_service
+    from backend.services.refund_fulfillment_service import apply_refund_provider_result
+    from backend.services.stripe_service import StripeRefundResult
+    from backend.tests.support.refund_fixtures import build_direct_admin_refund
+
+    order_label = "cash-first" if cash_first else "credit-first"
+    admin = _user(f"removal-{order_label}-admin", role="admin")
+    creator = _user(f"removal-{order_label}-creator")
+    player = _user(f"removal-{order_label}-player")
+    _add_users(admin, creator, player)
+    game_id, _venue_id = _persist_game_fixture(
+        f"removal-{order_label}", admin=admin, creator=creator
+    )
+    fixture = _persist_official_paid_booking_with_credit_fixture(
+        f"removal-{order_label}",
+        game_id=game_id,
+        buyer_user_id=player.id,
+        admin_user_id=admin.id,
+    )
+    _install_tokens_for_users(monkeypatch, {"admin-token": admin})
+
+    if cash_first:
+        with _session() as db:
+            booking = db.get(Booking, fixture["booking_id"])
+            payment = db.get(Payment, fixture["payment_id"])
+            assert booking is not None
+            assert payment is not None
+            refund = build_direct_admin_refund(
+                payment_id=payment.id,
+                booking_id=booking.id,
+                amount_cents=payment.amount_cents,
+                refund_status="approved",
+                provider_charge_id=payment.provider_charge_id,
+                requested_by_user_id=admin.id,
+            )
+            db.add(refund)
+            db.flush()
+            apply_refund_provider_result(
+                db,
+                refund=refund,
+                payment=payment,
+                result=StripeRefundResult(
+                    id=f"re_ws05_03a_cash_first_{uuid.uuid4().hex}",
+                    status="succeeded",
+                    amount_cents=refund.amount_cents,
+                    currency="USD",
+                    charge_id=payment.provider_charge_id,
+                    payment_intent_id=payment.provider_payment_intent_id,
+                    metadata={
+                        "refund_id": str(refund.id),
+                        "payment_id": str(payment.id),
+                        "attempt_number": "1",
+                    },
+                ),
+                event_source="system",
+            )
+            db.commit()
+        assert _booking_state(fixture["booking_id"])["payment_status"] == "refunded"
+
+    payment_state = _payment_state(fixture["payment_id"])
+    provider_calls: list[dict[str, object]] = []
+
+    def fake_create_refund(**kwargs) -> StripeRefundResult:
+        provider_calls.append(kwargs)
+        return StripeRefundResult(
+            id=f"re_ws05_03a_removal_{uuid.uuid4().hex}",
+            status="succeeded",
+            amount_cents=kwargs["amount_cents"],
+            currency=kwargs["currency"],
+            charge_id=kwargs["charge_id"],
+            payment_intent_id=payment_state["provider_payment_intent_id"],
+            metadata={key: str(value) for key, value in kwargs["metadata"].items()},
+        )
+
+    monkeypatch.setattr(refund_fulfillment_service, "create_refund", fake_create_refund)
+    monkeypatch.setattr(
+        refund_fulfillment_service, "validate_refund_preflight", lambda _currency: None
+    )
+    client = _client()
+    preview = client.post(
+        (
+            f"/admin/official-games/{game_id}/participants/"
+            f"{fixture['participant_id']}/remove-preview"
+        ),
+        headers=_auth_headers("admin-token"),
+    )
+    assert preview.status_code == 200
+    preview_body = preview.json()
+    if cash_first:
+        assert preview_body["automatic_outcome_available"] is True
+        assert preview_body["allowed_outcomes"] == [
+            "restore_credit_and_remove_party"
+        ]
+        assert preview_body["classification"] == "restore_credit"
+        assert _booking_state(fixture["booking_id"])["payment_status"] == "refunded"
+        assert _game_credit_state(fixture["credit_id"])["available_cents"] == 0
+        assert provider_calls == []
+
+    execute = client.post(
+        (
+            f"/admin/official-games/{game_id}/participants/"
+            f"{fixture['participant_id']}/remove"
+        ),
+        json={
+            "preview_token": preview_body["preview_token"],
+            "outcome": preview_body["allowed_outcomes"][0],
+            "reason": f"Exercise the {order_label} removal order.",
+        },
+        headers=_auth_headers("admin-token"),
+    )
+    assert execute.status_code == 200, execute.text
+    result = execute.json()
+    assert result["credit_restored_cents"] == 400
+
+    with _session() as db:
+        notice = db.scalars(
+            select(Notification).where(
+                Notification.user_id == player.id,
+                Notification.related_game_id == game_id,
+                Notification.notification_type == "booking_refunded",
+            )
+        ).one()
+        assert "removed from this official game" in notice.body
+        assert notice.action_key is not None
+        history = list(
+            db.scalars(
+                select(BookingStatusHistory).where(
+                    BookingStatusHistory.booking_id == fixture["booking_id"]
+                )
+            ).all()
+        )
+
+    lifecycle_history = [
+        row for row in history if row.change_reason == "player_removed"
+    ]
+    assert len(lifecycle_history) == 1
+    assert lifecycle_history[0].old_booking_status == "confirmed"
+    assert lifecycle_history[0].new_booking_status == "cancelled"
+    assert lifecycle_history[0].old_payment_status == (
+        "refunded" if cash_first else "credit_restored"
+    )
+    assert lifecycle_history[0].new_payment_status == (
+        "refunded" if cash_first else "credit_restored"
+    )
+    assert lifecycle_history[0].change_source == "admin"
+    assert lifecycle_history[0].changed_by_user_id == admin.id
+
+    if cash_first:
+        assert result["booking_payment_status"] == "refunded"
+        assert result["refunds"] == []
+        assert notice.title == "Refund and credit processed"
+        assert _game_credit_state(fixture["credit_id"])["available_cents"] == 400
+        assert provider_calls == []
+        assert not [
+            row for row in history if row.change_reason == "credit_return_committed"
+        ]
+        return
+
+    assert result["booking_payment_status"] == "credit_restored"
+    assert len(result["refunds"]) == 1
+    assert result["refunds"][0]["refund_status"] == "approved"
+    assert notice.title == "Credit restored"
+    credit_history = [
+        row for row in history if row.change_reason == "credit_return_committed"
+    ]
+    assert len(credit_history) == 1
+    assert credit_history[0].old_payment_status == "paid"
+    assert credit_history[0].new_payment_status == "credit_restored"
+    assert credit_history[0].change_source == "admin"
+    assert credit_history[0].changed_by_user_id == admin.id
+
+    from backend.database import SessionLocal
+    from backend.services.durable_job_service import DurableJobRunner
+    from backend.services.payment_job_service import build_production_job_registry
+
+    runner = DurableJobRunner(
+        session_factory=SessionLocal,
+        registry=build_production_job_registry(),
+        worker_identity=f"ws05-03a-removal-{uuid.uuid4()}",
+    )
+    assert runner.process_once() == "succeeded"
+    assert len(provider_calls) == 1
+    assert _booking_state(fixture["booking_id"])["payment_status"] == "refunded"
+    with _session() as db:
+        completed_notice = db.scalars(
+            select(Notification).where(
+                Notification.user_id == player.id,
+                Notification.related_game_id == game_id,
+                Notification.notification_type == "booking_refunded",
+            )
+        ).one()
+        later_cash_history = list(
+            db.scalars(
+                select(BookingStatusHistory).where(
+                    BookingStatusHistory.booking_id == fixture["booking_id"],
+                    BookingStatusHistory.change_reason
+                    == "refund_summary_recalculated",
+                )
+            ).all()
+        )
+    assert completed_notice.title == "Refund and credit processed"
+    assert "removed from this official game" in completed_notice.body
+    assert completed_notice.action_key is not None
+    assert len(later_cash_history) == 1
+    assert later_cash_history[0].old_payment_status == "credit_restored"
+    assert later_cash_history[0].new_payment_status == "refunded"
+    assert later_cash_history[0].change_source == "scheduled_job"
+    assert later_cash_history[0].changed_by_user_id is None
+
+
+@pytest.mark.requirement("WS05-03A-R4", "WS05-03A-R5")
+def test_admin_cancellation_preserves_cash_first_summary_when_credit_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from backend.models import Booking, BookingStatusHistory, Notification, Payment
+    from backend.services.refund_fulfillment_service import apply_refund_provider_result
+    from backend.services.stripe_service import StripeRefundResult
+    from backend.tests.support.refund_fixtures import (
+        build_official_cancellation_refund,
+    )
+
+    admin = _user("cancel-cash-first-admin", role="admin")
+    creator = _user("cancel-cash-first-creator")
+    player = _user("cancel-cash-first-player")
+    _add_users(admin, creator, player)
+    game_id, _venue_id = _persist_game_fixture(
+        "cancel-cash-first", admin=admin, creator=creator
+    )
+    fixture = _persist_official_paid_booking_with_credit_fixture(
+        "cancel-cash-first",
+        game_id=game_id,
+        buyer_user_id=player.id,
+        admin_user_id=admin.id,
+    )
+    _install_tokens_for_users(monkeypatch, {"admin-token": admin})
+
+    with _session() as db:
+        booking = db.get(Booking, fixture["booking_id"])
+        payment = db.get(Payment, fixture["payment_id"])
+        assert booking is not None
+        assert payment is not None
+        refund = build_official_cancellation_refund(
+            game_id=game_id,
+            payment_id=payment.id,
+            booking_id=booking.id,
+            amount_cents=payment.amount_cents,
+            refund_status="approved",
+            provider_charge_id=payment.provider_charge_id,
+            provider_refund_id=None,
+            requested_by_user_id=admin.id,
+        )
+        db.add(refund)
+        db.flush()
+        apply_refund_provider_result(
+            db,
+            refund=refund,
+            payment=payment,
+            result=StripeRefundResult(
+                id=f"re_ws05_03a_cancel_cash_first_{uuid.uuid4().hex}",
+                status="succeeded",
+                amount_cents=refund.amount_cents,
+                currency="USD",
+                charge_id=payment.provider_charge_id,
+                payment_intent_id=payment.provider_payment_intent_id,
+                metadata={
+                    "refund_id": str(refund.id),
+                    "payment_id": str(payment.id),
+                    "attempt_number": "1",
+                },
+            ),
+            event_source="system",
+        )
+        db.commit()
+        refund_id = refund.id
+
+    assert _booking_state(fixture["booking_id"])["payment_status"] == "refunded"
+    client = _client()
+    preview = client.post(
+        f"/admin/official-games/{game_id}/cancel-preview",
+        headers=_auth_headers("admin-token"),
+    )
+    assert preview.status_code == 200
+    cancel = client.post(
+        f"/admin/official-games/{game_id}/cancel",
+        json={
+            "preview_token": preview.json()["preview_token"],
+            "reason": "Cancel after cash was already confirmed returned.",
+        },
+        headers=_auth_headers("admin-token"),
+    )
+    assert cancel.status_code == 200, cancel.text
+    assert cancel.json()["credit_restored_cents"] == 400
+    assert _booking_state(fixture["booking_id"])["payment_status"] == "refunded"
+
+    with _session() as db:
+        notice = db.scalars(
+            select(Notification).where(
+                Notification.user_id == player.id,
+                Notification.related_game_id == game_id,
+                Notification.notification_type == "booking_refunded",
+            )
+        ).one()
+        history = list(
+            db.scalars(
+                select(BookingStatusHistory).where(
+                    BookingStatusHistory.booking_id == fixture["booking_id"]
+                )
+            ).all()
+        )
+    assert notice.title == "Refund and credit processed"
+    assert "canceled official game" in notice.body
+    assert notice.related_refund_id == refund_id
+    assert notice.action_key is None
+    assert len(
+        [row for row in history if row.change_reason == "refund_summary_recalculated"]
+    ) == 1
+    assert len([row for row in history if row.change_reason == "game_cancelled"]) == 1
+    assert not [row for row in history if row.change_reason == "credit_return_committed"]
 
 
 @pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R9", "WS03-04D-R10")

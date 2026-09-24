@@ -19,6 +19,7 @@ import {
 } from './adminMoneyFormatters.js'
 import AdminWorkspaceLayout from '../shared/AdminWorkspaceLayout.jsx'
 import { listAdminMoneyRefunds } from './adminMoneyApi.js'
+import { RefundDurableListIndicator } from './adminMoneyRefundPresentation.js'
 
 const REFUND_STATUS_OPTIONS = [
   { label: 'All', value: 'all' },
@@ -276,6 +277,7 @@ function AdminMoneyRefundsPage() {
                       <div>
                         <span>{formatDateTime(refund.created_at)}</span>
                         {refund.linked_issue && <span>Open money issue</span>}
+                        <RefundDurableListIndicator refund={refund} />
                       </div>
                     </div>
                   ))}

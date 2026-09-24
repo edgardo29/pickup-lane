@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "WS05-03A-R1",
+      "owning_pass": "WS05-03A",
+      "source_controls": ["PAY-002", "PAY-009", "WS05-01A", "WS05-02"],
+      "state": "required",
+      "scope": "platform/durable_jobs",
+      "reason": "Refund fulfillment jobs must use immutable attempt identity, bounded retry and exhaustion behavior, monotonic provider outcomes, and finite user notice context."
+    },
+    {
+      "id": "WS05-03A-R2",
+      "owning_pass": "WS05-03A",
+      "source_controls": ["PAY-009", "PAY-010", "ADM-011", "WS05-02"],
+      "state": "required",
+      "scope": "platform/retry_reconciliation",
+      "reason": "Admin retry and reconciliation must preserve amount, identity, transaction, compensation, MoneyIssue, replacement, audit, and terminal-attempt invariants."
+    },
+    {
+      "id": "WS05-03A-R3",
+      "owning_pass": "WS05-03A",
+      "source_controls": ["DB-004", "DB-005", "PAY-002", "WS05-01A"],
+      "state": "required",
+      "scope": "workflows/transaction_boundary_external_side_effect_safety",
+      "reason": "Refund provider reads and mutations must occur outside database lock transactions and only after durable intent checkpoints commit."
+    },
+    {
+      "id": "WS05-03A-R4",
+      "owning_pass": "WS05-03A",
+      "source_controls": ["PAY-009", "PAY-010"],
+      "state": "required",
+      "scope": "workflows/payment_booking_state_machines_webhook_authority",
+      "reason": "Only authoritative financial workflows may write refund and credit booking summaries, with one correctly attributed history transition per committed change."
+    },
+    {
+      "id": "WS05-03A-R5",
+      "owning_pass": "WS05-03A",
+      "source_controls": ["ADM-011", "PAY-010"],
+      "state": "required",
+      "scope": "workflows/admin_route_list_high_risk_function_authorization",
+      "reason": "Financial outcome and refund actions must retain staff authorization, recent-auth, idempotency, audit, and minimized response contracts."
+    },
+    {
+      "id": "WS05-03A-R6",
+      "owning_pass": "WS05-03A",
+      "source_controls": ["WS05-03B", "WS05-04", "WS09", "WS10"],
+      "state": "deferred",
+      "scope": "planning",
+      "reason": "Broad reconciliation, disputes, final deployed worker capacity, live Stripe evidence, alert delivery, and operational runbooks remain later-owned."
+    }
+  ]
+}

@@ -492,6 +492,11 @@ ACTION_DISPLAY_RULES: dict[str, AdminActionDisplayRule] = {
         "Financial outcome created",
         (PrimaryTargetRule(TARGET_FINANCIAL_OUTCOME_ID, "Financial outcome"),),
     ),
+    "resolve_manual_review": AdminActionDisplayRule(
+        "resolve_manual_review",
+        "Resolve manual review",
+        (PrimaryTargetRule(TARGET_FINANCIAL_OUTCOME_ID, "Financial outcome"),),
+    ),
     "apply_financial_outcome": AdminActionDisplayRule(
         "apply_financial_outcome",
         "Financial outcome applied",
