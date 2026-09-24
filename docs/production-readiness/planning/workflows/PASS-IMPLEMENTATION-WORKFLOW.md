@@ -617,9 +617,11 @@ unless the current owner instruction explicitly asks for the next step.
 
 ## 9. GATE C: Independent Semantic Review
 
-Gate C is a read-only independent review of the complete change set.
-
-Every Gate C review must be a full, exhaustive semantic and adversarial review of the entire defined change boundary. Review rigor does not scale down because a change is small, appears simple, has green tests, passed Gate B validation, or inspires reviewer confidence. Only the amount of material inside the review boundary changes.
+Gate C is a read-only, independent, systematic semantic review of the complete
+change set against a fixed review contract. Review rigor does not scale down
+because a change is small, appears simple, has green tests, passed Gate B
+validation, or inspires reviewer confidence. Only the amount of material inside
+the review boundary changes.
 
 Passing tests do not replace semantic review.
 
@@ -628,7 +630,21 @@ that defines ownership, the applicable prerequisite contracts and standards,
 and the actual Gate B diff and validation report. Use the corrected master and
 current repository truth to resolve conflicts; the plan does not override them.
 
-If any material required to complete the review cannot be inspected, Gate C must return blocked rather than approve through inference or partial visibility.
+Use a fresh review context that is separate from the context used to implement
+or correct the current change set. Reach conclusions from the governing
+artifacts, current source, actual diff, tests, and validation evidence rather
+than relying on the implementer's conclusions or prior review results.
+
+The fixed review contract consists of the authoritative scope, the accepted
+executable boundary, the reviewed requirements and design, accepted
+prerequisite behavior, and applicable engineering standards. Gate C may expose
+a material defect within that contract, including one the plan failed to name
+explicitly, but it does not create new product requirements or move the
+completion bar during review. Route an actual authority, design, or boundary
+problem to the responsible earlier stage.
+
+If any material required to complete the review cannot be inspected, Gate C
+must return blocked rather than approve through inference or partial visibility.
 
 ### 9.1 Review Boundary
 
@@ -655,7 +671,7 @@ Do not approve while any material part of the required review boundary remains u
 Gate C does not edit files, stage changes, commit, push, create or update a PR,
 merge, rebase, reset, apply a stash, or self-fix.
 
-### 9.2 Semantic And Adversarial Sweep
+### 9.2 Contract-Bound Semantic Sweep
 
 Trace every pass-owned requirement and invariant through the implementation, every affected representation and path, applicable failure and edge behavior, and its appropriate proof.
 
@@ -683,7 +699,8 @@ Inspect sibling and equivalent paths proactively whenever they share an affected
 
 When a defect pattern is found, expand the review across the complete affected invariant family and all equivalent paths within the relevant change boundary.
 
-Finding one or several defects does not end the review. Continue until the entire Gate C review boundary has been inspected and all reasonably discoverable material findings have been collected.
+Finding one or several defects does not end the review. Complete the defined
+review boundary before reporting all qualifying material findings together.
 
 ### 9.3 Outcomes And Corrections
 
@@ -697,7 +714,7 @@ Approval requires:
 
 - completion of the entire defined Gate C review;
 - every pass-owned requirement and invariant traced through implementation and proof;
-- every adversarial category evaluated against the change;
+- every applicable review category evaluated against the change;
 - all affected sibling, equivalent, and cross-representation paths inspected;
 - no remaining material semantic defect;
 - no material omission;
@@ -707,17 +724,45 @@ Approval requires:
 
 It does not require a permanent coverage ledger, visible appendix, universal matrix, requirement declaration, or testing record.
 
-A material finding identifies the affected requirement or invariant, the
-conflicting behavior, its consequence, relevant files or paths, and the correct
-route. Cosmetic preferences and harmless alternative designs are not material
-findings.
+A material finding must identify:
+
+- the authoritative requirement, invariant, accepted contract, applicable
+  standard, or necessary consequence of them that is violated;
+- a concrete reachable input, state, event, failure, concurrency, or execution
+  path;
+- the conflicting implementation behavior and its material consequence;
+- the relevant files or paths and the source evidence supporting the finding;
+- the correct correction route.
+
+Use a focused reproduction or test when source inspection alone cannot
+establish the behavior confidently. A new failing test is not mandatory when
+the reachable defect is already established directly from the source and
+contracts.
+
+Speculative hardening, unreachable hypotheticals, cosmetic preferences,
+harmless alternative designs, optional refactoring, and tests proposed only to
+increase test volume are not material findings. If no finding satisfies the
+standard above, Gate C must report no material findings and may approve when all
+other approval conditions are met.
 
 Corrections are separate editing work followed by focused and affected
 validation and a new complete review of the corrected change set.
 
-After corrections, Gate C must review the corrected change set completely again. It must not limit the next review to only the lines changed during correction.
+Before editing, the correction work must confirm each reported finding against
+current source and the fixed review contract. Correct the complete accepted
+finding set and its affected invariant families, then run focused and affected
+validation warranted by those changes.
 
-Inspect the complete affected invariant family so a narrow fix does not leave sibling defects. There is no fixed automatic correction-cycle count; owner direction and the current task determine whether another correction or review occurs. Gate C itself remains read-only.
+After corrections, Gate C must use fresh review context and review the corrected
+change set completely again. It must not limit the next review to only the lines
+changed during correction.
+
+Stop after the first complete Gate C review with no material findings; do not
+require additional clean reviews.
+
+Stop and route the work instead of continuing the cycle when correct resolution
+requires a changed design or executable boundary, an owner decision, or
+inaccessible evidence.
 
 Gate C does not automatically rerun successful broad suites. Run the smallest
 focused reproduction only when a concrete semantic concern requires it.
@@ -768,7 +813,7 @@ planning.
 | Implementation has a defect within the selected scope | Gate B correction |
 | Correct implementation requires a changed design, new product behavior, or unresolved owner decision | Gate A or owner decision, as appropriate |
 | Final infrastructure is required but not selected or evidenced | Defer to the corrected-master owner/trigger, or stop if current work truly depends on it |
-| Independent review finds a material implementation or evidence defect | Separate correction, validation, and new independent review |
+| Independent review finds a material implementation or evidence defect | Validate and correct the complete finding set, run focused and affected validation, and perform one fresh complete independent review |
 | Git finalization finds semantic or publication-integrity trouble | Stop and route to the responsible earlier work; Gate D does not fix content |
 
 ## 12. Register Updates
