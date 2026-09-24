@@ -29,7 +29,7 @@ class AdminFinancialOutcome(Base):
             name="ck_admin_financial_outcomes_outcome",
         ),
         CheckConstraint(
-            "applied_status IN ('pending', 'applied', 'failed', 'not_applicable')",
+            "applied_status IN ('pending', 'applied', 'failed', 'not_applicable', 'superseded')",
             name="ck_admin_financial_outcomes_applied_status",
         ),
         CheckConstraint(
@@ -56,6 +56,12 @@ class AdminFinancialOutcome(Base):
                 "OR applied_at IS NOT NULL"
             ),
             name="ck_admin_financial_outcomes_terminal_requires_applied_at",
+        ),
+        CheckConstraint(
+            "((applied_status = 'superseded' AND superseded_at IS NOT NULL "
+            "AND applied_at IS NULL AND applied_by_user_id IS NULL) OR "
+            "(applied_status <> 'superseded' AND superseded_at IS NULL))",
+            name="ck_admin_financial_outcomes_superseded_fields",
         ),
         Index("ix_admin_financial_outcomes_target_game_id", "target_game_id"),
         Index("ix_admin_financial_outcomes_target_sub_post_id", "target_sub_post_id"),
@@ -161,6 +167,9 @@ class AdminFinancialOutcome(Base):
         nullable=True,
     )
     applied_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(

@@ -1,7 +1,7 @@
 """create host_publish_entitlements table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0047_host_publish_entitlements'
@@ -50,6 +50,7 @@ def upgrade() -> None:
     op.create_index('ix_host_publish_entitlements_used_by_fee_id', 'host_publish_entitlements', ['used_by_host_publish_fee_id'], unique=False)
     op.create_index('ix_host_publish_entitlements_used_by_game_id', 'host_publish_entitlements', ['used_by_game_id'], unique=False)
     op.create_index('ux_host_publish_entitlements_one_first_free_per_host', 'host_publish_entitlements', ['host_user_id'], unique=True, postgresql_where=sa.text("entitlement_type = 'first_free'"))
+    op.create_index('ux_host_publish_entitlements_source_financial_outcome_id', 'host_publish_entitlements', ['source_financial_outcome_id'], unique=True, postgresql_where=sa.text('source_financial_outcome_id IS NOT NULL'))
 
 
 def downgrade() -> None:

@@ -22,6 +22,7 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
 pytestmark = pytest.mark.suite_type("ordinary")
 
 
+@pytest.mark.requirement("WS05-03A-R5")
 def test_financial_metrics_cover_complete_issue_taxonomy_and_durable_lifecycle():
     from sqlalchemy import CheckConstraint, func, select
 
@@ -188,15 +189,20 @@ def _persist_money_repair_fixture(
         db.add(payment)
         db.flush()
 
+        retry_refund_id = uuid.uuid4()
         retry_refund = Refund(
-            id=uuid.uuid4(),
+            id=retry_refund_id,
             payment_id=payment.id,
             booking_id=booking_id,
             provider_refund_id=None,
+            origin_operation_key=f"direct_admin_refund:refund:{retry_refund_id}",
+            current_attempt_number=1,
+            stripe_request_key=f"refund:{retry_refund_id}:attempt:1",
+            provider_attempt_started_at=None,
             origin_workflow="direct_admin_refund",
             provider="stripe",
-            provider_status="failed",
-            provider_status_observed_at=now,
+            provider_status=None,
+            provider_status_observed_at=None,
             provider_charge_id=payment.provider_charge_id,
             amount_cents=300,
             currency="USD",
@@ -207,11 +213,18 @@ def _persist_money_repair_fixture(
             requested_at=now,
             approved_at=now,
         )
+        reconcile_refund_id = uuid.uuid4()
         reconcile_refund = Refund(
-            id=uuid.uuid4(),
+            id=reconcile_refund_id,
             payment_id=payment.id,
             booking_id=booking_id,
             provider_refund_id=f"re_ws03d_reconcile_{uuid.uuid4().hex}",
+            origin_operation_key=(
+                f"direct_admin_refund:refund:{reconcile_refund_id}"
+            ),
+            current_attempt_number=1,
+            stripe_request_key=f"refund:{reconcile_refund_id}:attempt:1",
+            provider_attempt_started_at=now,
             origin_workflow="direct_admin_refund",
             provider="stripe",
             provider_status="failed",
@@ -228,6 +241,30 @@ def _persist_money_repair_fixture(
         )
         db.add_all([retry_refund, reconcile_refund])
         db.flush()
+        from backend.services.refund_event_service import record_refund_event
+
+        record_refund_event(
+            db,
+            refund=retry_refund,
+            event_type="local_status_changed",
+            event_source="system",
+            new_refund_status="failed",
+            reason_code="provider_charge_id_missing",
+            summary="Retry fixture proves no provider call started.",
+            metadata={"provider_call_started": False},
+        )
+        record_refund_event(
+            db,
+            refund=reconcile_refund,
+            event_type="provider_result_recorded",
+            event_source="system",
+            provider_refund_id=reconcile_refund.provider_refund_id,
+            provider_charge_id=payment.provider_charge_id,
+            provider_status="failed",
+            new_refund_status="failed",
+            reason_code="refund_fixture_provider_failed",
+            summary="Reconciliation fixture provider attempt failed.",
+        )
 
         credit = GameCredit(
             id=uuid.uuid4(),
@@ -433,6 +470,8 @@ def _refund_state(refund_id: uuid.UUID) -> dict[str, object]:
         refund = db.get(Refund, refund_id)
         assert refund is not None
         return {
+            "payment_id": refund.payment_id,
+            "current_attempt_number": refund.current_attempt_number,
             "refund_status": refund.refund_status,
             "provider_refund_id": refund.provider_refund_id,
             "provider_charge_id": refund.provider_charge_id,
@@ -810,12 +849,11 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
         AdminAction,
         AdminFinancialOutcome,
         AdminTargetNotice,
+        DurableJob,
         HostPublishEntitlement,
         Refund,
         RefundEvent,
     )
-    from backend.services import admin_financial_outcome_service
-    from backend.services.stripe_service import StripeRefundResult
 
     admin = _user("financial-branches-admin", role="admin")
     stale_admin = _user("financial-branches-stale-admin", role="admin")
@@ -830,39 +868,13 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
         {"admin-token": admin, "stale-admin-token": stale_admin},
         stale_tokens={"stale-admin-token"},
     )
-    provider_calls: list[tuple[str, int]] = []
-
-    def fake_create_refund(
-        *,
-        charge_id: str,
-        amount_cents: int,
-        currency: str,
-        idempotency_key: str,
-        metadata: dict[str, str],
-    ) -> StripeRefundResult:
-        assert metadata["source"] == "community_publish_fee_financial_outcome"
-        provider_calls.append((charge_id, amount_cents))
-        return StripeRefundResult(
-            id=f"re_ws03d_outcome_{uuid.uuid4().hex}",
-            status="succeeded",
-            amount_cents=amount_cents,
-            currency=currency,
-            charge_id=charge_id,
-            payment_intent_id=None,
-        )
-
-    monkeypatch.setattr(
-        admin_financial_outcome_service,
-        "create_stripe_refund",
-        fake_create_refund,
-    )
-
     client = _client()
     before_counts = {
         AdminAction: _count_model_rows(AdminAction),
         AdminFinancialOutcome: _count_model_rows(AdminFinancialOutcome),
         AdminTargetNotice: _count_model_rows(AdminTargetNotice),
         HostPublishEntitlement: _count_model_rows(HostPublishEntitlement),
+        DurableJob: _count_model_rows(DurableJob),
         Refund: _count_model_rows(Refund),
         RefundEvent: _count_model_rows(RefundEvent),
     }
@@ -887,7 +899,6 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
         headers=_auth_headers("stale-admin-token"),
     )
     assert stale_response.status_code == 403
-    assert provider_calls == []
     assert (
         _count_model_rows(AdminFinancialOutcome) == before_counts[AdminFinancialOutcome]
     )
@@ -897,9 +908,8 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
         "manual_review": ("pending", 1, AdminFinancialOutcome),
         "forfeit": ("applied", 1, AdminFinancialOutcome),
         "credit": ("applied", 1, HostPublishEntitlement),
-        "refund": ("applied", 1, Refund),
+        "refund": ("pending", 1, Refund),
     }
-    provider_call_count = 0
     created_outcome_ids: dict[str, uuid.UUID] = {}
     for outcome, (
         expected_status,
@@ -916,6 +926,18 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
             game_id=game_id,
             host_user_id=branch_host.id,
         )
+        partial_response = client.post(
+            "/admin/money/financial-outcomes",
+            json={
+                "outcome": outcome,
+                "reason": f"Reject partial {outcome} outcome.",
+                "idempotency_key": f"ws05-03a-partial-{outcome}-{uuid.uuid4()}",
+                "host_publish_fee_id": str(fee_id),
+                "amount_cents": 899,
+            },
+            headers=_auth_headers("admin-token"),
+        )
+        assert partial_response.status_code == 400
         before_model_count = _count_model_rows(counted_model)
         response = client.post(
             "/admin/money/financial-outcomes",
@@ -936,21 +958,63 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
         assert state["applied_status"] == expected_status
         assert state["amount_cents"] == 900
         if outcome == "refund":
-            provider_call_count += 1
-            assert len(provider_calls) == provider_call_count
             assert state["refund_id"] is not None
-        else:
-            assert len(provider_calls) == provider_call_count
+            assert _count_model_rows(DurableJob) == before_counts[DurableJob] + 1
         if outcome == "credit":
             assert state["host_publish_entitlement_id"] is not None
         assert _count_model_rows(counted_model) == before_model_count + expected_delta
 
+    manual_review_id = created_outcome_ids["manual_review"]
+    resolution_key = f"ws05-03a-manual-resolution-{uuid.uuid4()}"
+    resolve_response = client.post(
+        f"/admin/money/financial-outcomes/{manual_review_id}/resolve",
+        json={
+            "outcome": "forfeit",
+            "reason": "Complete reviewed publish-fee disposition.",
+            "amount_cents": 900,
+            "idempotency_key": resolution_key,
+        },
+        headers=_auth_headers("admin-token"),
+    )
+    assert resolve_response.status_code == 200, resolve_response.text
+    replacement = resolve_response.json()
+    assert replacement["outcome"] == "forfeit"
+    assert replacement["applied_status"] == "applied"
+    assert replacement["id"] != str(manual_review_id)
+    manual_review_state = _financial_outcome_state(manual_review_id)
+    assert manual_review_state["applied_status"] == "superseded"
+
+    replay = client.post(
+        f"/admin/money/financial-outcomes/{manual_review_id}/resolve",
+        json={
+            "outcome": "forfeit",
+            "reason": "Complete reviewed publish-fee disposition.",
+            "amount_cents": 900,
+            "idempotency_key": resolution_key,
+        },
+        headers=_auth_headers("admin-token"),
+    )
+    assert replay.status_code == 200
+    assert replay.json()["id"] == replacement["id"]
+    conflicting_replay = client.post(
+        f"/admin/money/financial-outcomes/{manual_review_id}/resolve",
+        json={
+            "outcome": "forfeit",
+            "reason": "Different resolution data must conflict.",
+            "amount_cents": 900,
+            "idempotency_key": resolution_key,
+        },
+        headers=_auth_headers("admin-token"),
+    )
+    assert conflicting_replay.status_code == 409
+
 
 @pytest.mark.requirement("WS03-04D-R7", "WS03-04D-R10")
+@pytest.mark.requirement("WS05-03A-R5")
 def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from backend.models import AdminAction, RefundEvent
+    from backend.models import AdminAction, DurableJob, RefundEvent
     from backend.services import admin_money_refund_service
     from backend.services.stripe_service import StripeRefundResult
 
@@ -980,25 +1044,6 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
     )
     provider_calls: list[tuple[str, str, int | None]] = []
 
-    def fake_create_refund(
-        *,
-        charge_id: str,
-        amount_cents: int,
-        currency: str,
-        idempotency_key: str,
-        metadata: dict[str, str],
-    ) -> StripeRefundResult:
-        assert metadata["source"] == "admin_money_refund_retry"
-        provider_calls.append(("retry", charge_id, amount_cents))
-        return StripeRefundResult(
-            id=f"re_ws03d_retry_{uuid.uuid4().hex}",
-            status="succeeded",
-            amount_cents=amount_cents,
-            currency=currency,
-            charge_id=charge_id,
-            payment_intent_id=None,
-        )
-
     def fake_retrieve_refund(refund_id: str) -> StripeRefundResult:
         provider_calls.append(("reconcile", refund_id, None))
         return StripeRefundResult(
@@ -1006,15 +1051,17 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
             status="succeeded",
             amount_cents=200,
             currency="USD",
-            charge_id=None,
+            charge_id=before_reconcile_refund["provider_charge_id"],
             payment_intent_id=None,
+            metadata={
+                "refund_id": str(reconcile_refund_id),
+                "payment_id": str(before_reconcile_refund["payment_id"]),
+                "attempt_number": str(
+                    before_reconcile_refund["current_attempt_number"]
+                ),
+            },
         )
 
-    monkeypatch.setattr(
-        admin_money_refund_service,
-        "create_stripe_refund",
-        fake_create_refund,
-    )
     monkeypatch.setattr(
         admin_money_refund_service,
         "retrieve_stripe_refund",
@@ -1026,6 +1073,7 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
     before_retry_refund = _refund_state(retry_refund_id)
     before_refund_events = _count_model_rows(RefundEvent)
     before_admin_actions = _count_model_rows(AdminAction)
+    before_jobs = _count_model_rows(DurableJob)
 
     stale_retry = client.post(
         f"/admin/money/refunds/{retry_refund_id}/retry",
@@ -1050,16 +1098,16 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
         },
         headers=_auth_headers("admin-token"),
     )
-    assert retry.status_code == 200
-    assert len(provider_calls) == 1
-    assert provider_calls[0][0] == "retry"
+    assert retry.status_code == 200, retry.text
+    assert provider_calls == []
     retry_state = _refund_state(retry_refund_id)
-    assert retry_state["refund_status"] == "succeeded"
-    assert retry_state["provider_status"] == "succeeded"
-    assert retry_state["provider_refund_id"] is not None
+    assert retry_state["refund_status"] == "approved"
+    assert retry_state["provider_status"] is None
+    assert retry_state["provider_refund_id"] is None
     assert retry_state["approved_by_user_id"] == admin.id
-    assert _count_model_rows(RefundEvent) == before_refund_events + 1
+    assert _count_model_rows(RefundEvent) == before_refund_events + 2
     assert _count_model_rows(AdminAction) == before_admin_actions + 1
+    assert _count_model_rows(DurableJob) == before_jobs + 1
 
     retry_replay = client.post(
         f"/admin/money/refunds/{retry_refund_id}/retry",
@@ -1070,9 +1118,10 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
         headers=_auth_headers("admin-token"),
     )
     assert retry_replay.status_code == 200
-    assert len(provider_calls) == 1
-    assert _count_model_rows(RefundEvent) == before_refund_events + 1
+    assert provider_calls == []
+    assert _count_model_rows(RefundEvent) == before_refund_events + 2
     assert _count_model_rows(AdminAction) == before_admin_actions + 1
+    assert _count_model_rows(DurableJob) == before_jobs + 1
 
     before_reconcile_refund = _refund_state(reconcile_refund_id)
     stale_reconcile = client.post(
@@ -1084,7 +1133,7 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
         headers=_auth_headers("stale-admin-token"),
     )
     assert stale_reconcile.status_code == 403
-    assert len(provider_calls) == 1
+    assert provider_calls == []
     assert _refund_state(reconcile_refund_id) == before_reconcile_refund
 
     reconcile_idempotency_key = f"ws03d-refund-reconcile-{uuid.uuid4()}"
@@ -1096,9 +1145,9 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
         },
         headers=_auth_headers("admin-token"),
     )
-    assert reconcile.status_code == 200
-    assert len(provider_calls) == 2
-    assert provider_calls[1][0] == "reconcile"
+    assert reconcile.status_code == 200, reconcile.text
+    assert len(provider_calls) == 1
+    assert provider_calls[0][0] == "reconcile"
     reconcile_state = _refund_state(reconcile_refund_id)
     assert reconcile_state["refund_status"] == "succeeded"
     assert reconcile_state["provider_status"] == "succeeded"
@@ -1106,7 +1155,7 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
         reconcile_state["provider_refund_id"]
         == before_reconcile_refund["provider_refund_id"]
     )
-    assert _count_model_rows(RefundEvent) == before_refund_events + 2
+    assert _count_model_rows(RefundEvent) == before_refund_events + 3
     assert _count_model_rows(AdminAction) == before_admin_actions + 2
 
     reconcile_replay = client.post(
@@ -1118,6 +1167,70 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
         headers=_auth_headers("admin-token"),
     )
     assert reconcile_replay.status_code == 200
-    assert len(provider_calls) == 2
-    assert _count_model_rows(RefundEvent) == before_refund_events + 2
+    assert len(provider_calls) == 1
+    assert _count_model_rows(RefundEvent) == before_refund_events + 3
     assert _count_model_rows(AdminAction) == before_admin_actions + 2
+
+
+@pytest.mark.requirement("WS05-03A-R5")
+def test_origin_credit_repair_refuses_generic_ledger_retry() -> None:
+    from fastapi import HTTPException
+    from sqlalchemy import func, select
+
+    from backend.models import AdminAction, GameCreditUsage, MoneyIssue
+    from backend.schemas.admin_money_issue_schema import (
+        AdminMoneyIssueCreditRetryCreate,
+    )
+    from backend.services.admin_money_issue_service import (
+        retry_admin_money_issue_credit,
+    )
+
+    admin = _user("origin-credit-repair-admin", role="admin")
+    target = _user("origin-credit-repair-target")
+    _add_users(admin, target)
+    game_id, _venue_id = _persist_game_fixture(
+        "origin-credit-repair",
+        admin=admin,
+        creator=target,
+    )
+    booking_id = _persist_paid_booking(
+        game_id=game_id,
+        buyer_user_id=target.id,
+        amount_cents=1200,
+    )
+    fixture = _persist_money_repair_fixture(
+        game_id=game_id,
+        booking_id=booking_id,
+        target_user_id=target.id,
+    )
+
+    with _session() as db:
+        issue = db.get(MoneyIssue, fixture["retry_issue_id"])
+        assert issue is not None
+        issue.origin_workflow = "player_removal"
+        issue.recommended_action_code = "reexecute_origin_workflow"
+        db.commit()
+
+        usage = db.get(GameCreditUsage, fixture["credit_usage_id"])
+        assert usage is not None
+        before_status = usage.usage_status
+        before_action_count = db.scalar(select(func.count()).select_from(AdminAction))
+
+        with pytest.raises(HTTPException) as exc_info:
+            retry_admin_money_issue_credit(
+                db,
+                admin_user=admin,
+                money_issue_id=issue.id,
+                payload=AdminMoneyIssueCreditRetryCreate(
+                    reason="Must rerun the removal preview.",
+                    idempotency_key=f"origin-credit-repair-{uuid.uuid4()}",
+                ),
+            )
+
+        assert exc_info.value.status_code == 409
+        assert "originating cancellation or player-removal preview" in str(
+            exc_info.value.detail
+        )
+        db.rollback()
+        assert db.get(GameCreditUsage, usage.id).usage_status == before_status
+        assert db.scalar(select(func.count()).select_from(AdminAction)) == before_action_count

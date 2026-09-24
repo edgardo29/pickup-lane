@@ -1,11 +1,12 @@
 """Admin publish-fee financial outcome workflows."""
 
+import hashlib
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -16,17 +17,23 @@ from backend.models import (
     Game,
     HostPublishEntitlement,
     HostPublishFee,
+    MoneyIssue,
     Payment,
     Refund,
     User,
 )
-from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
 from backend.schemas.admin_money_financial_outcome_schema import (
     AdminMoneyFinancialOutcomeCreate,
     AdminMoneyFinancialOutcomeRead,
+    AdminMoneyManualReviewResolveCreate,
 )
 from backend.services.admin_action_service import record_admin_action
-from backend.services.admin_money_issue_service import stage_refund_money_issue
+from backend.services.admin_money_issue_service import (
+    append_money_issue_event,
+    publish_fee_prior_cash_attempts_are_incapable,
+    refund_has_only_terminal_attempts,
+    stage_refund_money_issue,
+)
 from backend.services.admin_record_rules import (
     normalize_idempotency_key,
     normalize_optional_text,
@@ -37,12 +44,6 @@ from backend.services.refund_event_service import record_refund_event
 from backend.services.refund_service import (
     build_refund_conflict_detail,
     validate_refund_amount_available,
-)
-from backend.services.stripe_service import (
-    StripeConfigError,
-)
-from backend.services.stripe_service import (
-    create_refund as create_stripe_refund,
 )
 
 VALID_FINANCIAL_OUTCOMES = {
@@ -82,6 +83,9 @@ def build_financial_outcome_conflict_detail(exc: IntegrityError) -> str:
 
     if "ux_host_publish_entitlements_one_first_free_per_host" in error_text:
         return "This host already has a first free publish entitlement."
+
+    if "ux_host_publish_entitlements_source_financial_outcome_id" in error_text:
+        return "This financial outcome already has a publish-credit entitlement."
 
     if "uq_admin_actions_create_financial_outcome_idempotency" in error_text:
         return "Financial outcome with this idempotency key already exists."
@@ -163,6 +167,7 @@ def get_existing_financial_outcome(
     *,
     admin_user_id: uuid.UUID,
     idempotency_key: str,
+    request_identity: dict[str, Any],
 ) -> AdminFinancialOutcome | None:
     action = get_existing_financial_outcome_action(
         db,
@@ -172,7 +177,39 @@ def get_existing_financial_outcome(
     if action is None or action.target_financial_outcome_id is None:
         return None
 
+    if (action.metadata_ or {}).get("request_identity") != request_identity:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Financial-outcome idempotency key was replayed with different request data.",
+        )
+
     return db.get(AdminFinancialOutcome, action.target_financial_outcome_id)
+
+
+def financial_outcome_request_identity(
+    payload: AdminMoneyFinancialOutcomeCreate,
+    *,
+    outcome: str,
+    reason: str,
+    internal_note: str | None,
+) -> dict[str, Any]:
+    return {
+        "outcome": outcome,
+        "reason": reason,
+        "internal_note": internal_note,
+        "host_publish_fee_id": (
+            str(payload.host_publish_fee_id)
+            if payload.host_publish_fee_id is not None
+            else None
+        ),
+        "host_user_id": (
+            str(payload.host_user_id) if payload.host_user_id is not None else None
+        ),
+        "target_game_id": (
+            str(payload.target_game_id) if payload.target_game_id is not None else None
+        ),
+        "amount_cents": payload.amount_cents,
+    }
 
 
 def get_admin_financial_outcome_detail(
@@ -243,15 +280,16 @@ def get_active_game_or_404(db: Session, game_id: uuid.UUID) -> Game:
 
 
 def sum_succeeded_refunds_for_payment(db: Session, payment_id: uuid.UUID) -> int:
-    return (
-        db.scalar(
-            select(func.coalesce(func.sum(Refund.amount_cents), 0)).where(
-                Refund.payment_id == payment_id,
-                Refund.refund_status == "succeeded",
-            )
-        )
-        or 0
-    )
+    from backend.services.refund_service import get_refund_payment_ledger
+
+    payment = db.get(Payment, payment_id)
+    if payment is None:
+        return 0
+    return get_refund_payment_ledger(
+        db,
+        payment_id=payment.id,
+        payment_amount_cents=payment.amount_cents,
+    ).confirmed_returned_cents
 
 
 def sync_publish_fee_refunded_state(
@@ -295,9 +333,16 @@ def resolve_outcome_context(
     target_game_id = payload.target_game_id
 
     if payload.host_publish_fee_id is not None:
+        fee_reference = db.get(HostPublishFee, payload.host_publish_fee_id)
+        if fee_reference is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Host publish fee not found.",
+            )
+        if fee_reference.payment_id is not None:
+            payment = get_locked_payment_or_404(db, fee_reference.payment_id)
         host_publish_fee = get_locked_host_publish_fee_or_404(
-            db,
-            payload.host_publish_fee_id,
+            db, payload.host_publish_fee_id
         )
         target_game_id = target_game_id or host_publish_fee.game_id
         host_user_id = host_publish_fee.host_user_id
@@ -316,13 +361,11 @@ def resolve_outcome_context(
                 detail="target_game_id must match the host publish fee game.",
             )
 
-        if host_publish_fee.payment_id is not None and outcome in {
-            "refund",
-            "credit",
-            "forfeit",
-            "manual_review",
-        }:
-            payment = get_locked_payment_or_404(db, host_publish_fee.payment_id)
+        if payment is not None and payment.id != host_publish_fee.payment_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Host publish fee payment changed while it was being locked.",
+            )
 
         amount_cents = (
             payload.amount_cents
@@ -430,8 +473,7 @@ def enforce_no_existing_active_financial_decision(
         )
 
 
-def validate_refund_outcome_context(
-    db: Session,
+def validate_collected_publish_fee_context(
     *,
     host_publish_fee: HostPublishFee | None,
     payment: Payment | None,
@@ -440,13 +482,13 @@ def validate_refund_outcome_context(
     if host_publish_fee is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refund outcomes require host_publish_fee_id.",
+            detail="Collected publish-fee outcomes require host_publish_fee_id.",
         )
 
     if payment is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refund outcomes require a paid publish fee payment.",
+            detail="Collected publish-fee outcomes require a paid publish fee payment.",
         )
 
     if host_publish_fee.fee_status == "refunded":
@@ -464,7 +506,7 @@ def validate_refund_outcome_context(
     if payment.payment_type != "community_publish_fee":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refund outcomes require a community publish fee payment.",
+            detail="Collected publish-fee outcomes require a community publish fee payment.",
         )
 
     if payment.payer_user_id != host_publish_fee.host_user_id:
@@ -485,13 +527,13 @@ def validate_refund_outcome_context(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refund outcomes require a succeeded publish fee payment.",
+            detail="Collected publish-fee outcomes require a succeeded publish fee payment.",
         )
 
     if amount_cents <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Refund outcomes require amount_cents greater than 0.",
+            detail="Collected publish-fee outcomes require amount_cents greater than 0.",
         )
 
     if amount_cents != host_publish_fee.amount_cents:
@@ -505,6 +547,28 @@ def validate_refund_outcome_context(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Publish fee payment currency must match the fee currency.",
         )
+
+    if payment.amount_cents != host_publish_fee.amount_cents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Publish fee payment amount must match the full fee amount.",
+        )
+
+    return host_publish_fee, payment
+
+
+def validate_refund_outcome_context(
+    db: Session,
+    *,
+    host_publish_fee: HostPublishFee | None,
+    payment: Payment | None,
+    amount_cents: int,
+) -> tuple[HostPublishFee, Payment]:
+    host_publish_fee, payment = validate_collected_publish_fee_context(
+        host_publish_fee=host_publish_fee,
+        payment=payment,
+        amount_cents=amount_cents,
+    )
 
     validate_refund_amount_available(
         db,
@@ -575,9 +639,11 @@ def create_publish_fee_refund_record(
     amount_cents: int,
     admin_user: User,
     now: datetime,
+    financial_outcome_id: uuid.UUID,
 ) -> Refund:
+    refund_id = uuid.uuid4()
     return Refund(
-        id=uuid.uuid4(),
+        id=refund_id,
         payment_id=payment.id,
         booking_id=None,
         participant_id=None,
@@ -585,6 +651,14 @@ def create_publish_fee_refund_record(
         origin_workflow="community_publish_fee_refund",
         provider="stripe",
         provider_refund_id=None,
+        origin_operation_key=(
+            f"community_publish_fee_refund:financial_outcome:{financial_outcome_id}"
+        ),
+        current_attempt_number=1,
+        stripe_request_key=f"refund:{refund_id}:attempt:1",
+        provider_attempt_started_at=None,
+        automatic_mutation_blocked_reason=None,
+        automatic_mutation_blocked_at=None,
         provider_charge_id=payment.provider_charge_id,
         provider_status=None,
         provider_status_observed_at=None,
@@ -592,7 +666,7 @@ def create_publish_fee_refund_record(
         amount_cents=amount_cents,
         currency=payment.currency,
         refund_reason=PUBLISH_FEE_REFUND_REASON,
-        refund_status="processing",
+        refund_status="approved",
         requested_by_user_id=admin_user.id,
         approved_by_user_id=admin_user.id,
         requested_at=now,
@@ -619,6 +693,7 @@ def apply_refund_outcome(
         amount_cents=financial_outcome.amount_cents,
         admin_user=admin_user,
         now=now,
+        financial_outcome_id=financial_outcome.id,
     )
     db.add(refund)
     db.flush()
@@ -640,7 +715,7 @@ def apply_refund_outcome(
         refund_event = record_refund_event(
             db,
             refund=refund,
-            event_type="provider_outcome_unknown",
+            event_type="local_status_changed",
             event_source="system",
             actor_user_id=admin_user.id,
             provider="stripe",
@@ -649,6 +724,7 @@ def apply_refund_outcome(
             new_refund_status="failed",
             reason_code="provider_charge_id_missing",
             summary="Publish-fee refund could not start because the payment has no provider charge id.",
+            metadata={"provider_call_started": False},
             occurred_at=now,
         )
         stage_refund_money_issue(
@@ -663,90 +739,33 @@ def apply_refund_outcome(
         )
         return refund
 
-    try:
-        provider_refund = create_stripe_refund(
-            charge_id=payment.provider_charge_id,
-            amount_cents=refund.amount_cents,
-            currency=refund.currency,
-            idempotency_key=f"{idempotency_key}:stripe-refund",
-            metadata={
-                "source": "community_publish_fee_financial_outcome",
-                "payment_id": str(payment.id),
-                "refund_id": str(refund.id),
-                "host_publish_fee_id": str(host_publish_fee.id),
-                "financial_outcome_id": str(financial_outcome.id),
-                "admin_user_id": str(admin_user.id),
-            },
-        )
-        refund.provider_refund_id = provider_refund.id
-        refund.provider_charge_id = payment.provider_charge_id
-        refund.provider_status = map_stripe_refund_status(provider_refund.status)
-        refund.provider_status_observed_at = now
-        refund.refund_status = map_stripe_refund_status(provider_refund.status)
-    except StripeConfigError:
-        refund.refund_status = "failed"
-        financial_outcome.failure_reason = "Stripe refunds are not configured."
-    except DependencyMutationTimeoutUnknownError:
-        refund.provider_status = "unknown"
-        refund.provider_status_observed_at = now
-        refund.refund_status = "processing"
-        financial_outcome.failure_reason = None
-    except Exception:
-        refund.refund_status = "failed"
-        financial_outcome.failure_reason = (
-            "Stripe publish fee refund could not be completed."
-        )
-
-    refund.refunded_at = now if refund.refund_status == "succeeded" else None
-    refund.updated_at = now
-    refund.last_refund_event_at = now
-    financial_outcome.applied_status = map_refund_status_to_outcome_status(
-        refund.refund_status
-    )
-    financial_outcome.applied_by_user_id = admin_user.id
-    if financial_outcome.applied_status in APPLIED_OUTCOME_STATUSES:
-        financial_outcome.applied_at = now
+    financial_outcome.applied_status = "pending"
+    financial_outcome.applied_at = None
+    financial_outcome.applied_by_user_id = None
+    financial_outcome.failure_reason = None
     financial_outcome.updated_at = now
-    if refund.refund_status == "succeeded":
-        db.flush()
-        sync_publish_fee_refunded_state(
-            db,
-            payment=payment,
-            host_publish_fee=host_publish_fee,
-            now=now,
-        )
-    db.add(refund)
     db.add(financial_outcome)
-    refund_event = record_refund_event(
+    record_refund_event(
         db,
         refund=refund,
-        event_type="provider_result_recorded",
+        event_type="local_status_changed",
         event_source="system",
         actor_user_id=admin_user.id,
         provider="stripe",
-        provider_refund_id=refund.provider_refund_id,
         provider_charge_id=payment.provider_charge_id,
-        provider_status=refund.provider_status,
-        new_refund_status=refund.refund_status,
-        reason_code=f"publish_fee_refund_{refund.refund_status}",
-        summary="Publish-fee refund result recorded.",
+        new_refund_status="approved",
+        reason_code="refund_approved_for_fulfillment",
+        summary="Publish-fee refund approved for durable fulfillment.",
         occurred_at=now,
     )
-    if refund.refund_status in {"failed", "cancelled"}:
-        stage_refund_money_issue(
-            db,
-            refund=refund,
-            payment=payment,
-            issue_type=(
-                "refund_failed"
-                if refund.refund_status == "failed"
-                else "refund_cancelled"
-            ),
-            reason_code=f"publish_fee_refund_{refund.refund_status}",
-            summary="Publish-fee refund did not complete with the provider.",
-            refund_event=refund_event,
-            now=now,
-        )
+    from backend.services.payment_job_service import build_production_job_registry
+    from backend.services.refund_fulfillment_service import (
+        enqueue_refund_fulfillment_job,
+    )
+
+    enqueue_refund_fulfillment_job(
+        db, refund=refund, registry=build_production_job_registry()
+    )
     return refund
 
 
@@ -963,6 +982,7 @@ def record_financial_outcome_actions(
     idempotency_key: str,
     refund: Refund | None,
     payment: Payment | None,
+    request_identity: dict[str, Any],
 ) -> AdminAction:
     create_action = record_admin_action(
         db,
@@ -971,12 +991,15 @@ def record_financial_outcome_actions(
         outcome="succeeded",
         reason=financial_outcome.reason,
         idempotency_key=idempotency_key,
-        metadata=financial_outcome_audit_metadata(
-            financial_outcome,
-            source="admin_money_financial_outcome_create",
-            refund=refund,
-            payment=payment,
-        ),
+        metadata={
+            **financial_outcome_audit_metadata(
+                financial_outcome,
+                source="admin_money_financial_outcome_create",
+                refund=refund,
+                payment=payment,
+            ),
+            "request_identity": request_identity,
+        },
         **financial_outcome_audit_targets(financial_outcome),
     )
     linked_review_case = link_admin_action_to_open_review_case(db, create_action)
@@ -996,11 +1019,17 @@ def record_financial_outcome_actions(
             db.add(entitlement)
 
     if financial_outcome.outcome in {"refund", "credit", "forfeit"}:
+        apply_action_outcome = {
+            "applied": "succeeded",
+            "not_applicable": "succeeded",
+            "failed": "failed",
+            "pending": "pending",
+        }[financial_outcome.applied_status]
         apply_action = record_admin_action(
             db,
             admin_user_id=admin_user.id,
             action_type="apply_financial_outcome",
-            outcome="succeeded",
+            outcome=apply_action_outcome,
             reason=financial_outcome.reason,
             metadata=financial_outcome_audit_metadata(
                 financial_outcome,
@@ -1064,19 +1093,181 @@ def stage_financial_outcome_money_issue(
     )
 
 
+def reclassify_superseded_publish_refund_issues(
+    db: Session,
+    *,
+    financial_outcome: AdminFinancialOutcome,
+    admin_user: User | None = None,
+    admin_action: AdminAction | None = None,
+) -> None:
+    if (
+        financial_outcome.host_publish_fee_id is None
+        or financial_outcome.applied_status not in ACTIVE_FINANCIAL_DECISION_STATUSES
+        or financial_outcome.outcome
+        not in {"credit", "forfeit", "refund", "manual_review"}
+    ):
+        return
+    fee = db.get(HostPublishFee, financial_outcome.host_publish_fee_id)
+    if fee is None or financial_outcome.amount_cents != fee.amount_cents:
+        return
+    prior_refund_query = select(Refund).where(
+        Refund.host_publish_fee_id == financial_outcome.host_publish_fee_id,
+        Refund.refund_status.in_({"failed", "cancelled"}),
+    )
+    if financial_outcome.refund_id is not None:
+        prior_refund_query = prior_refund_query.where(
+            Refund.id != financial_outcome.refund_id
+        )
+    prior_refunds = list(
+        db.scalars(
+            prior_refund_query.order_by(Refund.id.asc()).with_for_update()
+        ).all()
+    )
+    if not prior_refunds:
+        return
+    list(
+        db.scalars(
+            select(AdminFinancialOutcome)
+            .where(
+                AdminFinancialOutcome.host_publish_fee_id
+                == financial_outcome.host_publish_fee_id
+            )
+            .order_by(AdminFinancialOutcome.id.asc())
+            .with_for_update()
+        ).all()
+    )
+    issues = list(
+        db.scalars(
+            select(MoneyIssue).where(
+                MoneyIssue.target_refund_id.in_([refund.id for refund in prior_refunds]),
+                MoneyIssue.status == "open",
+            )
+            .order_by(MoneyIssue.id.asc())
+            .with_for_update()
+        ).all()
+    )
+    for issue in issues:
+        previous_action = issue.recommended_action_code
+        issue.recommended_action_code = "review_superseding_financial_outcome"
+        issue.latest_reason_code = "superseded_by_financial_outcome"
+        issue.latest_summary = (
+            "A later authoritative publish-fee decision supersedes this cash refund."
+        )
+        issue.updated_at = financial_outcome.updated_at
+        db.add(issue)
+        append_money_issue_event(
+            db,
+            money_issue=issue,
+            event_type="recommended_action_changed",
+            event_source="admin" if admin_user is not None else "system",
+            actor_user_id=admin_user.id if admin_user is not None else None,
+            admin_action_id=admin_action.id if admin_action is not None else None,
+            reason_code="superseded_by_financial_outcome",
+            summary=issue.latest_summary,
+            previous_recommended_action_code=previous_action,
+            new_recommended_action_code=issue.recommended_action_code,
+            metadata={
+                "replacement_financial_outcome_id": str(financial_outcome.id)
+            },
+        )
+
+
+def recompute_superseded_publish_refund_issues(
+    db: Session,
+    *,
+    financial_outcome: AdminFinancialOutcome,
+) -> None:
+    """Restore truthful retry guidance when a replacement stops being authoritative."""
+    if financial_outcome.host_publish_fee_id is None:
+        return
+    authoritative = db.scalars(
+        select(AdminFinancialOutcome).where(
+            AdminFinancialOutcome.host_publish_fee_id
+            == financial_outcome.host_publish_fee_id,
+            AdminFinancialOutcome.applied_status.in_(ACTIVE_FINANCIAL_DECISION_STATUSES),
+        )
+    ).first()
+    if authoritative is not None:
+        return
+    prior_refunds = list(
+        db.scalars(
+            select(Refund).where(
+                Refund.host_publish_fee_id == financial_outcome.host_publish_fee_id,
+                Refund.refund_status.in_({"failed", "cancelled"}),
+            )
+            .order_by(Refund.id.asc())
+            .with_for_update()
+        ).all()
+    )
+    if not prior_refunds:
+        return
+    refunds_by_id = {refund.id: refund for refund in prior_refunds}
+    issues = list(
+        db.scalars(
+            select(MoneyIssue)
+            .where(
+                MoneyIssue.target_refund_id.in_(refunds_by_id),
+                MoneyIssue.status == "open",
+                MoneyIssue.recommended_action_code
+                == "review_superseding_financial_outcome",
+            )
+            .order_by(MoneyIssue.id.asc())
+            .with_for_update()
+        ).all()
+    )
+    now = datetime.now(timezone.utc)
+    for issue in issues:
+        refund = refunds_by_id.get(issue.target_refund_id)
+        if refund is None:
+            continue
+        previous_action = issue.recommended_action_code
+        if refund_has_only_terminal_attempts(db, refund):
+            next_action = "retry_refund"
+        elif refund.provider_refund_id is None:
+            next_action = "recover_provider_reference"
+        else:
+            next_action = "review_unknown_outcome"
+        issue.recommended_action_code = next_action
+        issue.latest_reason_code = "superseding_financial_outcome_failed"
+        issue.latest_summary = (
+            "The replacement financial outcome failed; the earlier refund requires "
+            "a fresh provider-state review."
+        )
+        issue.updated_at = now
+        append_money_issue_event(
+            db,
+            money_issue=issue,
+            event_type="recommended_action_changed",
+            event_source="system",
+            reason_code="superseding_financial_outcome_failed",
+            summary=issue.latest_summary,
+            previous_recommended_action_code=previous_action,
+            new_recommended_action_code=issue.recommended_action_code,
+            occurred_at=now,
+        )
+
+
 def create_admin_financial_outcome(
     db: Session,
     *,
     admin_user: User,
     payload: AdminMoneyFinancialOutcomeCreate,
+    commit: bool = True,
 ) -> AdminMoneyFinancialOutcomeRead:
     outcome, reason, internal_note, idempotency_key = (
         validate_financial_outcome_payload(payload)
+    )
+    request_identity = financial_outcome_request_identity(
+        payload,
+        outcome=outcome,
+        reason=reason,
+        internal_note=internal_note,
     )
     existing_outcome = get_existing_financial_outcome(
         db,
         admin_user_id=admin_user.id,
         idempotency_key=idempotency_key,
+        request_identity=request_identity,
     )
     if existing_outcome is not None:
         return AdminMoneyFinancialOutcomeRead.model_validate(existing_outcome)
@@ -1090,18 +1281,71 @@ def create_admin_financial_outcome(
         amount_cents,
     ) = resolve_outcome_context(db, payload=payload, outcome=outcome)
 
-    if outcome in {"refund", "credit", "forfeit"} and amount_cents <= 0:
+    if outcome in {"refund", "credit", "forfeit", "manual_review"} and amount_cents <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"{outcome} outcomes require amount_cents greater than 0.",
         )
 
+    if host_publish_fee is not None:
+        collected_payment = (
+            payment is not None
+            and payment.payment_status == "succeeded"
+            and payment.paid_at is not None
+        )
+        paid_context = host_publish_fee.fee_status == "paid" or collected_payment
+        if paid_context and outcome == "no_fee_charged":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A collected publish fee cannot resolve to no_fee_charged.",
+            )
+        if not paid_context and outcome not in {"no_fee_charged", "manual_review"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An uncollected publish fee allows only no_fee_charged or manual_review.",
+            )
+        if outcome in {"refund", "credit", "forfeit", "manual_review"} and (
+            amount_cents != host_publish_fee.amount_cents
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Publish-fee financial decisions must use the full host publish fee.",
+            )
+        if outcome == "no_fee_charged" and amount_cents != 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="no_fee_charged requires amount_cents 0.",
+            )
+
+        if paid_context and outcome in {"refund", "credit", "forfeit", "manual_review"}:
+            host_publish_fee, payment = validate_collected_publish_fee_context(
+                host_publish_fee=host_publish_fee,
+                payment=payment,
+                amount_cents=amount_cents,
+            )
+
     if outcome == "refund":
-        host_publish_fee, payment = validate_refund_outcome_context(
+        if host_publish_fee is None or payment is None:
+            raise AssertionError("validated refund outcome is missing context")
+        validate_refund_amount_available(
             db,
-            host_publish_fee=host_publish_fee,
-            payment=payment,
-            amount_cents=amount_cents,
+            payment.id,
+            payment.amount_cents,
+            amount_cents,
+        )
+    if (
+        host_publish_fee is not None
+        and outcome in {"refund", "credit", "forfeit"}
+        and not publish_fee_prior_cash_attempts_are_incapable(
+            db, host_publish_fee_id=host_publish_fee.id
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A prior cash refund attempt may still return value. Reconcile every "
+                "attempt before applying a replacement financial outcome."
+            ),
         )
     enforce_no_existing_active_financial_decision(
         db,
@@ -1164,6 +1408,7 @@ def create_admin_financial_outcome(
             idempotency_key=idempotency_key,
             refund=refund,
             payment=payment,
+            request_identity=request_identity,
         )
         stage_financial_outcome_money_issue(
             db,
@@ -1173,16 +1418,194 @@ def create_admin_financial_outcome(
             admin_user=admin_user,
             admin_action=admin_action,
         )
-        db.commit()
-        db.refresh(financial_outcome)
+        reclassify_superseded_publish_refund_issues(
+            db,
+            financial_outcome=financial_outcome,
+            admin_user=admin_user,
+            admin_action=admin_action,
+        )
+        if commit:
+            db.commit()
+            db.refresh(financial_outcome)
     except HTTPException:
         db.rollback()
         raise
     except IntegrityError as exc:
         db.rollback()
+        existing_outcome = get_existing_financial_outcome(
+            db,
+            admin_user_id=admin_user.id,
+            idempotency_key=idempotency_key,
+            request_identity=request_identity,
+        )
+        if existing_outcome is not None:
+            return AdminMoneyFinancialOutcomeRead.model_validate(existing_outcome)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_financial_outcome_conflict_detail(exc),
         ) from exc
 
     return AdminMoneyFinancialOutcomeRead.model_validate(financial_outcome)
+
+
+def resolve_admin_manual_review(
+    db: Session,
+    *,
+    admin_user: User,
+    financial_outcome_id: uuid.UUID,
+    payload: AdminMoneyManualReviewResolveCreate,
+) -> AdminMoneyFinancialOutcomeRead:
+    idempotency_key = normalize_required_idempotency_key(payload.idempotency_key)
+    replay_identity = {
+        "outcome": payload.outcome.strip().lower(),
+        "reason": normalize_required_text(payload.reason, "reason"),
+        "internal_note": normalize_optional_text(payload.internal_note, "internal_note"),
+        "amount_cents": payload.amount_cents,
+    }
+    existing_action = db.scalars(
+        select(AdminAction).where(
+            AdminAction.admin_user_id == admin_user.id,
+            AdminAction.action_type == "resolve_manual_review",
+            AdminAction.target_financial_outcome_id == financial_outcome_id,
+            AdminAction.idempotency_key == idempotency_key,
+        )
+    ).first()
+    if existing_action is not None:
+        existing_metadata = existing_action.metadata_ or {}
+        if existing_metadata.get("resolution_identity") != replay_identity:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Manual-review idempotency key was replayed with different resolution data.",
+            )
+        replacement_id = existing_metadata.get(
+            "replacement_financial_outcome_id"
+        )
+        try:
+            replacement_uuid = uuid.UUID(replacement_id)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Manual-review replay is missing its replacement outcome.",
+            )
+        return get_admin_financial_outcome_detail(
+            db, financial_outcome_id=replacement_uuid
+        )
+
+    reference = db.get(AdminFinancialOutcome, financial_outcome_id)
+    if reference is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Financial outcome not found.",
+        )
+    payment = (
+        get_locked_payment_or_404(db, reference.payment_id)
+        if reference.payment_id is not None
+        else None
+    )
+    fee = (
+        get_locked_host_publish_fee_or_404(db, reference.host_publish_fee_id)
+        if reference.host_publish_fee_id is not None
+        else None
+    )
+    manual_review = db.scalars(
+        select(AdminFinancialOutcome)
+        .where(AdminFinancialOutcome.id == financial_outcome_id)
+        .with_for_update()
+    ).first()
+    existing_action = db.scalars(
+        select(AdminAction).where(
+            AdminAction.admin_user_id == admin_user.id,
+            AdminAction.action_type == "resolve_manual_review",
+            AdminAction.target_financial_outcome_id == financial_outcome_id,
+            AdminAction.idempotency_key == idempotency_key,
+        )
+    ).first()
+    if existing_action is not None:
+        existing_metadata = existing_action.metadata_ or {}
+        if existing_metadata.get("resolution_identity") != replay_identity:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Manual-review idempotency key was replayed with different resolution data.",
+            )
+        replacement_id = existing_metadata.get("replacement_financial_outcome_id")
+        try:
+            replacement_uuid = uuid.UUID(replacement_id)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Manual-review replay is missing its replacement outcome.",
+            )
+        return get_admin_financial_outcome_detail(
+            db, financial_outcome_id=replacement_uuid
+        )
+    if (
+        manual_review is None
+        or manual_review.outcome != "manual_review"
+        or manual_review.applied_status != "pending"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only an active pending manual review can be resolved.",
+        )
+    paid = payment is not None and payment.payment_status == "succeeded"
+    if paid and payload.outcome == "no_fee_charged":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A collected publish fee cannot resolve to no_fee_charged.",
+        )
+    if not paid and payload.outcome != "no_fee_charged":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An uncollected publish fee can resolve only to no_fee_charged.",
+        )
+    now = datetime.now(timezone.utc)
+    manual_review.applied_status = "superseded"
+    manual_review.superseded_at = now
+    manual_review.applied_at = None
+    manual_review.applied_by_user_id = None
+    manual_review.updated_at = now
+    db.add(manual_review)
+    db.flush()
+    replacement_idempotency_key = (
+        "manual-review-replacement:"
+        + hashlib.sha256(
+            f"{manual_review.id}:{admin_user.id}:{idempotency_key}".encode()
+        ).hexdigest()
+    )
+    replacement = create_admin_financial_outcome(
+        db,
+        admin_user=admin_user,
+        payload=AdminMoneyFinancialOutcomeCreate(
+            outcome=payload.outcome,
+            reason=payload.reason,
+            internal_note=payload.internal_note,
+            idempotency_key=replacement_idempotency_key,
+            host_publish_fee_id=fee.id if fee is not None else None,
+            host_user_id=manual_review.host_user_id,
+            target_game_id=manual_review.target_game_id,
+            amount_cents=payload.amount_cents,
+        ),
+        commit=False,
+    )
+    record_admin_action(
+        db,
+        admin_user_id=admin_user.id,
+        action_type="resolve_manual_review",
+        outcome="succeeded",
+        target_user_id=manual_review.host_user_id,
+        target_game_id=manual_review.target_game_id,
+        target_payment_id=manual_review.payment_id,
+        target_financial_outcome_id=manual_review.id,
+        target_host_publish_fee_id=manual_review.host_publish_fee_id,
+        reason=payload.reason,
+        idempotency_key=idempotency_key,
+        metadata={
+            "manual_review_financial_outcome_id": str(manual_review.id),
+            "replacement_financial_outcome_id": str(replacement.id),
+            "resolution_identity": replay_identity,
+        },
+    )
+    db.commit()
+    return get_admin_financial_outcome_detail(
+        db, financial_outcome_id=replacement.id
+    )

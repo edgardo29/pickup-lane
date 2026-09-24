@@ -2,25 +2,83 @@
 
 import uuid
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from sqlalchemy import func, select
 
-from backend.database import SessionLocal
-from backend.models import DurableJob, DurableJobEvent
-from backend.observability.metrics import (
-    BACKLOG_STATES,
-    JOB_TYPES,
-    PRODUCTION_JOB_TYPES,
-    MetricsRecorder,
+pytestmark = [
+    pytest.mark.suite_type("ordinary"),
+    pytest.mark.requirement("WS05-01A-R5", "WS05-01A-R7"),
+]
+
+_COLLECTION_PRODUCTION_JOB_TYPES = (
+    "stripe_webhook_event",
+    "stripe_payment_intent_reconcile",
+    "stripe_payment_method_operation_reconcile",
+    "stripe_refund_fulfillment",
 )
-from backend.services.durable_job_service import (
-    CLAIMABLE_STATUSES,
-    backlog_metric_observations,
-    operator_cancel_job,
-    requeue_exhausted_job,
-)
-from backend.services.payment_job_service import build_production_job_registry
+SessionLocal: Any = None
+DurableJob: Any = None
+DurableJobEvent: Any = None
+BACKLOG_STATES: Any = None
+JOB_TYPES: Any = None
+PRODUCTION_JOB_TYPES: Any = None
+MetricsRecorder: Any = None
+CLAIMABLE_STATUSES: Any = None
+backlog_metric_observations: Any = None
+operator_cancel_job: Any = None
+requeue_exhausted_job: Any = None
+build_production_job_registry: Any = None
+
+
+@pytest.fixture(autouse=True)
+def _load_runtime_globals() -> None:
+    from backend.database import SessionLocal as session_factory
+    from backend.models import DurableJob as job_model
+    from backend.models import DurableJobEvent as event_model
+    from backend.observability.metrics import (
+        BACKLOG_STATES as backlog_states,
+    )
+    from backend.observability.metrics import (
+        JOB_TYPES as job_types,
+    )
+    from backend.observability.metrics import (
+        PRODUCTION_JOB_TYPES as production_job_types,
+    )
+    from backend.observability.metrics import (
+        MetricsRecorder as recorder_type,
+    )
+    from backend.services.durable_job_service import (
+        CLAIMABLE_STATUSES as claimable_statuses,
+    )
+    from backend.services.durable_job_service import (
+        backlog_metric_observations as collect_backlog,
+    )
+    from backend.services.durable_job_service import (
+        operator_cancel_job as cancel_job,
+    )
+    from backend.services.durable_job_service import (
+        requeue_exhausted_job as requeue_job,
+    )
+    from backend.services.payment_job_service import (
+        build_production_job_registry as build_registry,
+    )
+
+    globals().update(
+        SessionLocal=session_factory,
+        DurableJob=job_model,
+        DurableJobEvent=event_model,
+        BACKLOG_STATES=backlog_states,
+        JOB_TYPES=job_types,
+        PRODUCTION_JOB_TYPES=production_job_types,
+        MetricsRecorder=recorder_type,
+        CLAIMABLE_STATUSES=claimable_statuses,
+        backlog_metric_observations=collect_backlog,
+        operator_cancel_job=cancel_job,
+        requeue_exhausted_job=requeue_job,
+        build_production_job_registry=build_registry,
+    )
 
 
 @pytest.mark.parametrize(
@@ -28,7 +86,7 @@ from backend.services.payment_job_service import build_production_job_registry
     ["pending", "retry_waiting", "leased", "exhausted", "succeeded", "cancelled"],
 )
 @pytest.mark.parametrize(
-    "kind", [*PRODUCTION_JOB_TYPES, "unknown", "unsupported_version"]
+    "kind", [*_COLLECTION_PRODUCTION_JOB_TYPES, "unknown", "unsupported_version"]
 )
 @pytest.mark.parametrize("availability", ["ready", "future", "attempt_limit"])
 def test_complete_status_type_version_claimability_matrix(status, kind, availability):
@@ -92,7 +150,7 @@ def test_complete_status_type_version_claimability_matrix(status, kind, availabi
     recorder.register_observable("durable_backlog", collect)
     snapshot = recorder.collect()
     counts = [item for item in snapshot.series if item.name == "worker.backlog.count"]
-    assert len(counts) == 16
+    assert len(counts) == len(JOB_TYPES) * len(BACKLOG_STATES)
     mapped = kind if kind in PRODUCTION_JOB_TYPES else "unsupported"
     for item in counts:
         labels = dict(item.dimensions)
@@ -115,7 +173,7 @@ def test_complete_status_type_version_claimability_matrix(status, kind, availabi
         db.delete(db.get(DurableJob, job_id))
         db.commit()
     emptied = recorder.collect()
-    assert len(emptied.series) == 16
+    assert len(emptied.series) == len(JOB_TYPES) * len(BACKLOG_STATES)
     assert all(item.value == 0 for item in emptied.series)
 
 
@@ -145,7 +203,7 @@ def test_aggregate_query_projects_only_bounded_domain_aggregates():
     rows = backlog_metric_observations(
         InspectSession(), registry=build_production_job_registry()
     )
-    assert len(rows) == len(JOB_TYPES) * len(BACKLOG_STATES) == 16
+    assert len(rows) == len(JOB_TYPES) * len(BACKLOG_STATES) == 20
     assert all(value == 0 for _, value, _ in rows)
 
 

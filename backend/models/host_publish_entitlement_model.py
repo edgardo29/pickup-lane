@@ -85,6 +85,12 @@ class HostPublishEntitlement(Base):
             unique=True,
             postgresql_where=text("entitlement_type = 'first_free'"),
         ),
+        Index(
+            "ux_host_publish_entitlements_source_financial_outcome_id",
+            "source_financial_outcome_id",
+            unique=True,
+            postgresql_where=text("source_financial_outcome_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)

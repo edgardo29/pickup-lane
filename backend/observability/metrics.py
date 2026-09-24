@@ -21,6 +21,11 @@ PRODUCTION_JOB_TYPES = (
     "stripe_webhook_event",
     "stripe_payment_intent_reconcile",
     "stripe_payment_method_operation_reconcile",
+    "stripe_refund_fulfillment",
+)
+PAYMENT_RECONCILIATION_JOB_TYPES = (
+    "stripe_payment_intent_reconcile",
+    "stripe_payment_method_operation_reconcile",
 )
 JOB_TYPES = (*PRODUCTION_JOB_TYPES, "unsupported")
 BACKLOG_STATES = ("pending", "retry_waiting", "leased", "exhausted")
@@ -77,6 +82,7 @@ PROVIDER_RESULTS = MappingProxyType(
                 "payment_method.retrieve",
                 "payment_intent.retrieve",
                 "refund.retrieve",
+                "refund.list",
             )
         },
         "stripe.payment_intent.create": MUTATION_RESULTS | {"rejected"},
@@ -178,7 +184,7 @@ DESCRIPTORS = (
         "counter",
         "operations",
         _dimensions(
-            job_type=PRODUCTION_JOB_TYPES[1:],
+            job_type=PAYMENT_RECONCILIATION_JOB_TYPES,
             result=("succeeded", "failed", "pending", "already_terminal"),
         ),
         True,
@@ -610,7 +616,7 @@ def stage_reconciliation_outcome(job_type: str, result: str) -> None:
     if (
         attempt is not None
         and attempt.staged is None
-        and job_type in PRODUCTION_JOB_TYPES[1:]
+        and job_type in PAYMENT_RECONCILIATION_JOB_TYPES
         and result in {"succeeded", "failed", "pending", "already_terminal"}
     ):
         attempt.staged = (job_type, result)

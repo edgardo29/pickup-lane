@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import backend.services.database_invariant_policy as invariant_policy
 from backend.models import (
     GameCredit,
     GameCreditUsage,
@@ -14,7 +15,6 @@ from backend.models import (
     RefundEvent,
     WaitlistEntry,
 )
-import backend.services.database_invariant_policy as invariant_policy
 
 pytestmark = pytest.mark.no_db_cleanup
 
@@ -98,7 +98,7 @@ def test_declared_database_enforcements_exist_on_current_models() -> None:
     assert "uq_payments_provider_charge_id" in payment_indexes
     assert "uq_refunds_provider_refund_id" in refund_indexes
     assert "uq_refund_events_provider_event_id" in refund_event_indexes
-    assert "uq_refund_events_idempotency_key" in refund_event_indexes
+    assert "uq_refund_events_refund_id_idempotency_key" in refund_event_indexes
     assert "uq_game_credits_idempotency_key" in credit_constraints
     assert "uq_game_credit_usage_idempotency_key" in usage_constraints
     assert "uq_game_credit_usage_one_restore_per_original" in usage_indexes

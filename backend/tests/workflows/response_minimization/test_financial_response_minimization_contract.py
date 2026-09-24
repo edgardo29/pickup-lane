@@ -48,6 +48,7 @@ REFUND_SUMMARY_ALLOWED_FIELDS = {
     "currency",
     "refund_reason",
     "refund_status",
+    "current_attempt_number",
     "requested_at",
     "refunded_at",
     "created_at",
@@ -336,8 +337,8 @@ def _create_financial_rows(db: Session, *, payer, admin):
         Booking,
         Payment,
         PaymentEvent,
-        Refund,
     )
+    from backend.tests.support.refund_fixtures import build_direct_admin_refund
 
     venue = _create_venue(db, admin_user=admin)
     game = _create_game(db, host_user=payer, admin_user=admin, venue=venue)
@@ -376,23 +377,16 @@ def _create_financial_rows(db: Session, *, payer, admin):
         failure_message="internal diagnostic should not serialize",
         payment_metadata={"internal": "not ordinary response"},
     )
-    refund = Refund(
-        id=uuid.uuid4(),
+    refund = build_direct_admin_refund(
         payment_id=payment.id,
         booking_id=booking.id,
         provider_refund_id=f"re_{uuid.uuid4().hex}",
-        origin_workflow="direct_admin_refund",
-        provider="stripe",
         provider_status="processing",
-        provider_status_observed_at=now,
         provider_charge_id=payment.provider_charge_id,
-        last_refund_event_at=now,
         amount_cents=500,
-        currency="USD",
-        refund_reason="admin_refund",
         refund_status="processing",
         requested_by_user_id=admin.id,
-        requested_at=now,
+        now=now,
     )
     event = PaymentEvent(
         id=uuid.uuid4(),

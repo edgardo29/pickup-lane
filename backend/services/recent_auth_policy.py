@@ -119,6 +119,16 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         provider_mfa_dependency="deferred_to_ws03_03b",
     ),
     RecentAuthProtectedAction(
+        action_id="admin_financial_outcome_manual_review_resolve",
+        actor="admin",
+        method="POST",
+        route_template="/admin/money/financial-outcomes/{financial_outcome_id}/resolve",
+        enforcement_dependency="require_recent_active_admin",
+        frontend_caller="adminFinancialOutcomeApi",
+        protections=("active admin", "pending manual review", "idempotency key", "audit action"),
+        provider_mfa_dependency="deferred_to_ws03_03b",
+    ),
+    RecentAuthProtectedAction(
         action_id="admin_money_issue_resolve",
         actor="admin",
         method="POST",

@@ -25,7 +25,7 @@ from backend.services.stripe_service import (
     StripePaymentIntentResult,
     StripeRefundResult,
 )
-from backend.tests.helpers import (
+from backend.tests.legacy.helpers import (
     authenticate_as,
     create_booking,
     create_game_participant,
@@ -813,19 +813,26 @@ def test_admin_can_list_official_game_money_from_admin_route(
                 payment_metadata={"source": "admin_money_route_coverage"},
             )
         )
-        db.add(
-            Refund(
-                id=participant_refund_id,
+        from backend.tests.support.refund_fixtures import build_direct_admin_refund
+
+        participant_refund = build_direct_admin_refund(
                 payment_id=UUID(other_payment["id"]),
                 booking_id=None,
                 participant_id=UUID(participant_refund_target["id"]),
                 provider_refund_id=f"re_participant_scope_{unique_suffix()}",
+                provider_charge_id=None,
+                provider_status="processing",
                 amount_cents=200,
-                currency="USD",
-                refund_reason="admin_refund",
                 refund_status="processing",
             )
+        participant_refund.id = participant_refund_id
+        participant_refund.origin_operation_key = (
+            f"direct_admin_refund:refund:{participant_refund_id}"
         )
+        participant_refund.stripe_request_key = (
+            f"refund:{participant_refund_id}:attempt:1"
+        )
+        db.add(participant_refund)
         db.commit()
     credit = issue_game_credit(
         client,

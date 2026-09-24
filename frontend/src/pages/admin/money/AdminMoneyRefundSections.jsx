@@ -19,6 +19,10 @@ import {
   getDisplayContext,
   getRefundRowTarget,
 } from './adminMoneySectionSelectors.js'
+import {
+  RefundDurableDiagnostic,
+  RefundDurableListIndicator,
+} from './adminMoneyRefundPresentation.js'
 
 export function RefundSummary({ providerSnapshot, refund }) {
   const provider = providerSnapshot || {
@@ -65,6 +69,18 @@ export function RefundSummary({ providerSnapshot, refund }) {
         <DetailField label="Approved" value={formatDateTime(refund.approved_at)} />
         <DetailField label="Refunded" value={formatDateTime(refund.refunded_at)} />
         <DetailField label="Last refund event" value={formatDateTime(refund.last_refund_event_at)} />
+        <DetailField label="Attempt" value={String(refund.current_attempt_number)} />
+        <DetailField label="Attempt started" value={formatDateTime(refund.provider_attempt_started_at)} />
+        <DetailField
+          label="Automatic mutation block"
+          value={formatStatus(refund.automatic_mutation_blocked_reason || 'none')}
+        />
+        {refund.durable_job_diagnostic && (
+          <DetailField
+            label="Durable fulfillment"
+            value={<RefundDurableDiagnostic diagnostic={refund.durable_job_diagnostic} />}
+          />
+        )}
         <DetailField label="Created" value={formatDateTime(refund.created_at)} />
         <DetailField label="Updated" value={formatDateTime(refund.updated_at)} />
       </div>
@@ -109,6 +125,7 @@ export function RefundsSection({
                       : 'No linked issue'}
                   </span>
                 )}
+                <RefundDurableListIndicator refund={refund} />
               </div>
               <div>
                 <span>{formatDateTime(refund.last_refund_event_at || refund.created_at)}</span>

@@ -411,5 +411,5 @@ def test_registry_distinguishes_idempotency_identity_sources() -> None:
         "checkout_initial_create_before_provider_result"
     ].identity_survives_replay
     assert contexts["community_publish_fee_initial_create"].identity_survives_replay
-    assert contexts["admin_refund_retry"].identity_survives_replay
+    assert contexts["durable_refund_fulfillment"].identity_survives_replay
     assert contexts["waitlist_auto_promotion_create"].identity_survives_replay

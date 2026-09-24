@@ -699,20 +699,82 @@ def create_refund(
     payload.update(overrides)
 
     from backend.database import SessionLocal
-    from backend.models import User
-    from backend.schemas import RefundCreate, RefundRead
-    from backend.services.refund_service import create_refund_record
+    from backend.models import Payment, User
+    from backend.schemas import RefundRead
+    from backend.tests.support.refund_fixtures import (
+        build_direct_admin_refund,
+        build_refund_event,
+    )
 
     admin = create_user(client)
     set_user_role(admin["id"], "admin")
     with SessionLocal() as db:
         admin_user = db.get(User, UUID(admin["id"]))
         assert admin_user is not None
-        refund = create_refund_record(
-            db,
-            admin_user=admin_user,
-            payload=RefundCreate.model_validate(payload),
+        payment = db.get(Payment, UUID(payment_id))
+        assert payment is not None
+        refund_status = str(payload["refund_status"])
+        provider_refund_id = payload.get("provider_refund_id")
+        provider_status = payload.get("provider_status")
+        if provider_status is None and provider_refund_id is not None:
+            provider_status = (
+                refund_status
+                if refund_status in {"processing", "succeeded", "failed", "cancelled"}
+                else "processing"
+            )
+        refund = build_direct_admin_refund(
+            payment_id=payment.id,
+            booking_id=UUID(booking_id) if booking_id is not None else None,
+            participant_id=(
+                UUID(participant_id) if participant_id is not None else None
+            ),
+            amount_cents=int(payload["amount_cents"]),
+            refund_status=refund_status,
+            provider_charge_id=payment.provider_charge_id,
+            provider_refund_id=(
+                str(provider_refund_id) if provider_refund_id is not None else None
+            ),
+            provider_status=str(provider_status) if provider_status is not None else None,
+            requested_by_user_id=(
+                UUID(str(payload["requested_by_user_id"]))
+                if payload.get("requested_by_user_id") is not None
+                else admin_user.id
+            ),
         )
+        refund.refund_reason = str(payload["refund_reason"])
+        db.add(refund)
+        if refund_status in {"succeeded", "failed", "cancelled"}:
+            provider_completed = provider_refund_id is not None
+            db.add(
+                build_refund_event(
+                    refund=refund,
+                    event_type=(
+                        "provider_result_recorded"
+                        if provider_completed
+                        else "local_status_changed"
+                    ),
+                    event_source="system",
+                    provider_status=(
+                        str(provider_status) if provider_completed else None
+                    ),
+                    new_refund_status=refund_status,
+                    reason_code=(
+                        "refund_fixture_provider_result"
+                        if provider_completed
+                        else "provider_charge_id_missing"
+                    ),
+                    summary=(
+                        "Refund fixture terminal provider result."
+                        if provider_completed
+                        else "Refund fixture proves no provider call started."
+                    ),
+                    metadata=(
+                        None if provider_completed else {"provider_call_started": False}
+                    ),
+                )
+            )
+        db.commit()
+        db.refresh(refund)
         return RefundRead.model_validate(refund).model_dump(mode="json")
 
 

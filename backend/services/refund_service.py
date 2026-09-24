@@ -1,11 +1,12 @@
 """Refund mutation workflows for admin/support routes."""
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,10 +18,8 @@ from backend.models import (
     Refund,
     User,
 )
-from backend.schemas.refund_schema import RefundCreate, RefundUpdate
 from backend.services.admin_action_service import (
     load_frozen_audited_rows,
-    record_admin_action,
     record_financial_sensitive_read,
     record_sensitive_admin_read_batch,
 )
@@ -35,7 +34,11 @@ from backend.services.query_pagination import (
     bounded_collection_limit,
     bounded_collection_offset,
 )
-from backend.services.refund_event_service import record_refund_event
+from backend.services.refund_attempt_policy import (
+    expected_refund_attempt_numbers,
+    refund_attempt_evidence_for_refunds,
+    refund_attempt_identity_matches_refund,
+)
 
 VALID_REFUND_REASONS = {
     "player_cancelled",
@@ -47,6 +50,7 @@ VALID_REFUND_REASONS = {
     "duplicate_payment",
     "dispute_resolution",
     "publish_fee_refund",
+    "unfulfilled_booking",
 }
 VALID_REFUND_STATUSES = {
     "pending",
@@ -87,6 +91,27 @@ TERMINAL_REFUND_STATUSES = {
     "failed",
     "cancelled",
 }
+
+
+@dataclass(frozen=True)
+class RefundPaymentLedger:
+    collected_cents: int
+    confirmed_returned_cents: int
+    reserved_cents: int
+    unresolved_attempt_cents: int = 0
+    attempt_history_complete: bool = True
+
+    @property
+    def available_cents(self) -> int:
+        if not self.attempt_history_complete:
+            return 0
+        return max(
+            0,
+            self.collected_cents
+            - self.confirmed_returned_cents
+            - self.reserved_cents
+            - self.unresolved_attempt_cents,
+        )
 
 
 def build_refund_conflict_detail(exc: IntegrityError) -> str:
@@ -182,7 +207,7 @@ def validate_refund_business_rules(refund_data: dict[str, object]) -> None:
                 "refund_reason must be 'player_cancelled', 'late_cancel', "
                 "'host_cancelled', 'game_cancelled', 'weather', 'admin_refund', "
                 "'duplicate_payment', 'dispute_resolution', or "
-                "'publish_fee_refund'."
+                "'publish_fee_refund', or 'unfulfilled_booking'."
             ),
         )
 
@@ -438,21 +463,119 @@ def validate_refund_amount_available(
     refund_amount_cents: int,
     exclude_refund_id: uuid.UUID | None = None,
 ) -> None:
-    statement = select(func.coalesce(func.sum(Refund.amount_cents), 0)).where(
-        Refund.payment_id == payment_id,
-        Refund.refund_status.in_(REFUND_AMOUNT_HOLD_STATUSES),
+    available_cents = get_refund_amount_available(
+        db,
+        payment_id=payment_id,
+        payment_amount_cents=payment_amount_cents,
+        exclude_refund_id=exclude_refund_id,
     )
-
-    if exclude_refund_id is not None:
-        statement = statement.where(Refund.id != exclude_refund_id)
-
-    existing_refund_total = db.scalar(statement)
-
-    if existing_refund_total + refund_amount_cents > payment_amount_cents:
+    if refund_amount_cents > available_cents:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Refund amount exceeds the remaining refundable payment amount.",
         )
+
+
+def get_refund_amount_available(
+    db: Session,
+    *,
+    payment_id: uuid.UUID,
+    payment_amount_cents: int,
+    exclude_refund_id: uuid.UUID | None = None,
+) -> int:
+    return get_refund_payment_ledger(
+        db,
+        payment_id=payment_id,
+        payment_amount_cents=payment_amount_cents,
+        exclude_refund_id=exclude_refund_id,
+    ).available_cents
+
+
+def get_refund_payment_ledger(
+    db: Session,
+    *,
+    payment_id: uuid.UUID,
+    payment_amount_cents: int,
+    exclude_refund_id: uuid.UUID | None = None,
+) -> RefundPaymentLedger:
+    """Return the shared payment-wide refund conservation ledger."""
+    refunds = list(
+        db.scalars(
+            select(Refund)
+            .where(Refund.payment_id == payment_id)
+            .order_by(Refund.id.asc())
+        ).all()
+    )
+    evidence_by_refund = refund_attempt_evidence_for_refunds(
+        db, (refund.id for refund in refunds)
+    )
+    confirmed_total = 0
+    reserved_total = 0
+    unresolved_total = 0
+    attempt_history_complete = True
+    for refund in refunds:
+        evidence = evidence_by_refund.get(refund.id, {})
+        confirmed_total += sum(
+            attempt.amount_cents
+            for attempt_number, attempt in evidence.items()
+            if attempt.status == "succeeded"
+            and refund_attempt_identity_matches_refund(
+                refund,
+                attempt_number=attempt_number,
+                attempt=attempt,
+            )
+        )
+        expected_attempts = expected_refund_attempt_numbers(refund, evidence)
+        excludes_current_attempt = refund.id == exclude_refund_id
+        current_is_reserved = not excludes_current_attempt and refund.refund_status in {
+            "pending",
+            "approved",
+            "processing",
+        }
+        if current_is_reserved:
+            reserved_total += refund.amount_cents
+        for attempt_number in expected_attempts:
+            attempt = evidence.get(attempt_number)
+            identity_matches = (
+                attempt is not None
+                and refund_attempt_identity_matches_refund(
+                    refund,
+                    attempt_number=attempt_number,
+                    attempt=attempt,
+                )
+            )
+            if (
+                identity_matches
+                and attempt.status in TERMINAL_REFUND_STATUSES
+            ):
+                continue
+            # The active current attempt is already held by the Refund row.
+            if (
+                attempt_number == refund.current_attempt_number
+                and (current_is_reserved or excludes_current_attempt)
+            ):
+                if attempt is not None and not identity_matches:
+                    attempt_history_complete = False
+                continue
+            if not identity_matches:
+                attempt_history_complete = False
+            unresolved_total += (
+                attempt.amount_cents if attempt is not None else refund.amount_cents
+            )
+
+    if not attempt_history_complete:
+        unresolved_total = max(
+            unresolved_total,
+            max(0, payment_amount_cents - confirmed_total - reserved_total),
+        )
+
+    return RefundPaymentLedger(
+        collected_cents=payment_amount_cents,
+        confirmed_returned_cents=int(confirmed_total),
+        reserved_cents=int(reserved_total),
+        unresolved_attempt_cents=int(unresolved_total),
+        attempt_history_complete=attempt_history_complete,
+    )
 
 
 def validate_refund_is_editable(db_refund: Refund) -> None:
@@ -497,82 +620,6 @@ def refund_audit_metadata(
         metadata["after"] = refund_audit_snapshot(refund)
 
     return metadata
-
-
-def create_refund_record(
-    db: Session,
-    *,
-    admin_user: User,
-    payload: RefundCreate,
-) -> Refund:
-    refund_data = normalize_refund_lifecycle_fields(payload.model_dump())
-    validate_refund_business_rules(refund_data)
-    reject_generic_host_publish_fee_refund_mutation(refund_data)
-    db_payment = validate_refund_references(db, refund_data)
-    if refund_data["refund_status"] in REFUND_AMOUNT_HOLD_STATUSES:
-        validate_refund_amount_available(
-            db,
-            db_payment.id,
-            db_payment.amount_cents,
-            refund_data["amount_cents"],
-        )
-
-    new_refund = Refund(
-        id=uuid.uuid4(),
-        **refund_data,
-    )
-
-    try:
-        db.add(new_refund)
-        db.flush()
-        admin_action = record_admin_action(
-            db,
-            admin_user_id=admin_user.id,
-            action_type="create_refund",
-            outcome="succeeded",
-            target_user_id=db_payment.payer_user_id,
-            target_booking_id=new_refund.booking_id,
-            target_participant_id=new_refund.participant_id,
-            target_payment_id=new_refund.payment_id,
-            target_refund_id=new_refund.id,
-            target_host_publish_fee_id=new_refund.host_publish_fee_id,
-            metadata=refund_audit_metadata(
-                new_refund,
-                source="refund_route_create",
-            ),
-        )
-        record_refund_event(
-            db,
-            refund=new_refund,
-            event_type=(
-                "provider_result_recorded"
-                if new_refund.provider_status is not None
-                else "local_status_changed"
-            ),
-            event_source="admin",
-            actor_user_id=admin_user.id,
-            admin_action_id=admin_action.id,
-            provider=new_refund.provider,
-            provider_refund_id=new_refund.provider_refund_id,
-            provider_charge_id=new_refund.provider_charge_id,
-            provider_status=new_refund.provider_status,
-            new_refund_status=new_refund.refund_status,
-            reason_code="refund_route_create",
-            summary="Admin refund record created.",
-        )
-        db.commit()
-        db.refresh(new_refund)
-    except HTTPException:
-        db.rollback()
-        raise
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_refund_conflict_detail(exc),
-        ) from exc
-
-    return new_refund
 
 
 def get_refund_for_user_or_404(
@@ -671,170 +718,3 @@ def list_refunds(
             target_ids=selected_ids,
         )
     return load_frozen_audited_rows(db, model=Refund, target_ids=selected_ids)
-
-
-def update_refund_record(
-    db: Session,
-    *,
-    admin_user: User,
-    refund_id: uuid.UUID,
-    payload: RefundUpdate,
-) -> Refund:
-    db_refund = db.get(Refund, refund_id)
-
-    if db_refund is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Refund not found.",
-        )
-
-    validate_refund_is_editable(db_refund)
-
-    before_snapshot = refund_audit_snapshot(db_refund)
-    update_data = payload.model_dump(exclude_unset=True)
-    provider_owned_fields = {
-        "origin_workflow",
-        "provider",
-        "provider_refund_id",
-        "provider_charge_id",
-        "provider_status",
-        "provider_status_observed_at",
-        "last_refund_event_at",
-    }
-    protected_fields = sorted(provider_owned_fields.intersection(update_data))
-    if protected_fields:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Refund provider snapshot fields and origin_workflow are managed "
-                "by refund workflow services."
-            ),
-        )
-    effective_refund_data = {
-        "payment_id": update_data.get("payment_id", db_refund.payment_id),
-        "booking_id": update_data.get("booking_id", db_refund.booking_id),
-        "participant_id": update_data.get("participant_id", db_refund.participant_id),
-        "host_publish_fee_id": update_data.get(
-            "host_publish_fee_id",
-            db_refund.host_publish_fee_id,
-        ),
-        "origin_workflow": update_data.get(
-            "origin_workflow",
-            db_refund.origin_workflow,
-        ),
-        "provider": update_data.get("provider", db_refund.provider),
-        "provider_refund_id": update_data.get(
-            "provider_refund_id",
-            db_refund.provider_refund_id,
-        ),
-        "provider_charge_id": update_data.get(
-            "provider_charge_id",
-            db_refund.provider_charge_id,
-        ),
-        "provider_status": update_data.get(
-            "provider_status",
-            db_refund.provider_status,
-        ),
-        "provider_status_observed_at": update_data.get(
-            "provider_status_observed_at",
-            db_refund.provider_status_observed_at,
-        ),
-        "last_refund_event_at": update_data.get(
-            "last_refund_event_at",
-            db_refund.last_refund_event_at,
-        ),
-        "amount_cents": update_data.get("amount_cents", db_refund.amount_cents),
-        "currency": update_data.get("currency", db_refund.currency),
-        "refund_reason": update_data.get("refund_reason", db_refund.refund_reason),
-        "refund_status": update_data.get("refund_status", db_refund.refund_status),
-        "requested_by_user_id": update_data.get(
-            "requested_by_user_id",
-            db_refund.requested_by_user_id,
-        ),
-        "approved_by_user_id": update_data.get(
-            "approved_by_user_id",
-            db_refund.approved_by_user_id,
-        ),
-        "requested_at": update_data.get("requested_at", db_refund.requested_at),
-        "approved_at": update_data.get("approved_at", db_refund.approved_at),
-        "refunded_at": update_data.get("refunded_at", db_refund.refunded_at),
-    }
-    effective_refund_data = normalize_refund_lifecycle_fields(
-        effective_refund_data, db_refund
-    )
-    validate_refund_business_rules(effective_refund_data)
-    reject_generic_host_publish_fee_refund_mutation(effective_refund_data)
-    db_payment = validate_refund_references(db, effective_refund_data)
-    if effective_refund_data["refund_status"] in REFUND_AMOUNT_HOLD_STATUSES:
-        validate_refund_amount_available(
-            db,
-            db_payment.id,
-            db_payment.amount_cents,
-            effective_refund_data["amount_cents"],
-            exclude_refund_id=db_refund.id,
-        )
-
-    # Lifecycle fields are managed from the fully merged refund state so partial
-    # PATCH payloads cannot leave inconsistent timestamps behind.
-    update_data["requested_at"] = effective_refund_data["requested_at"]
-    update_data["approved_at"] = effective_refund_data["approved_at"]
-    update_data["refunded_at"] = effective_refund_data["refunded_at"]
-
-    for field_name, field_value in update_data.items():
-        setattr(db_refund, field_name, field_value)
-
-    db_refund.updated_at = datetime.now(timezone.utc)
-
-    try:
-        db.add(db_refund)
-        db.flush()
-        admin_action = record_admin_action(
-            db,
-            admin_user_id=admin_user.id,
-            action_type="update_refund",
-            outcome="succeeded",
-            target_user_id=db_payment.payer_user_id,
-            target_booking_id=db_refund.booking_id,
-            target_participant_id=db_refund.participant_id,
-            target_payment_id=db_refund.payment_id,
-            target_refund_id=db_refund.id,
-            target_host_publish_fee_id=db_refund.host_publish_fee_id,
-            metadata=refund_audit_metadata(
-                db_refund,
-                source="refund_route_update",
-                before=before_snapshot,
-            ),
-        )
-        record_refund_event(
-            db,
-            refund=db_refund,
-            event_type=(
-                "provider_result_recorded"
-                if db_refund.provider_status is not None
-                else "local_status_changed"
-            ),
-            event_source="admin",
-            actor_user_id=admin_user.id,
-            admin_action_id=admin_action.id,
-            provider=db_refund.provider,
-            provider_refund_id=db_refund.provider_refund_id,
-            provider_charge_id=db_refund.provider_charge_id,
-            provider_status=db_refund.provider_status,
-            previous_refund_status=before_snapshot["refund_status"],
-            new_refund_status=db_refund.refund_status,
-            reason_code="refund_route_update",
-            summary="Admin refund record updated.",
-        )
-        db.commit()
-        db.refresh(db_refund)
-    except HTTPException:
-        db.rollback()
-        raise
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=build_refund_conflict_detail(exc),
-        ) from exc
-
-    return db_refund

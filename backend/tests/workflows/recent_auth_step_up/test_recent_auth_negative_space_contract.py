@@ -252,10 +252,10 @@ def test_complete_admin_partition_fails_closed_for_drift_and_hidden_terminal_act
     retired = set(RETIRED_OR_NON_EXECUTING_ADMIN_MUTATIONS)
     classified = required | not_required | retired
 
-    assert len(required) == 22
+    assert len(required) == 23
     assert len(not_required) == 38
     assert len(retired) == 47
-    assert len(classified) == 107
+    assert len(classified) == 108
     assert required.isdisjoint(not_required)
     assert required.isdisjoint(retired)
     assert not_required.isdisjoint(retired)
@@ -340,14 +340,19 @@ def test_frontend_source_has_no_blind_recent_auth_replay_or_credential_forwardin
             }
         ):
             unsafe_token_refreshers.append(relative_path)
-        if "apiRequest(" in source and any(
-            term in source for term in ("password", "credential", "providerCredential")
-        ):
-            if relative_path not in {
+        if (
+            "apiRequest(" in source
+            and any(
+                term in source
+                for term in ("password", "credential", "providerCredential")
+            )
+            and relative_path
+            not in {
                 "frontend/src/lib/authApi.js",
                 "frontend/src/pages/auth/usePasswordResetForm.js",
-            }:
-                credential_forwarders.append(relative_path)
+            }
+        ):
+            credential_forwarders.append(relative_path)
         if "reauthenticateWithPopup" in source and any(
             term in source for term in ("apiRequest(", "fetch(", "accessToken", "refreshToken")
         ):
@@ -419,9 +424,10 @@ def test_current_trusted_support_does_not_offer_request_owned_freshness_bypass()
     for path in _trusted_support_files():
         relative_path = _relative(path)
         source = path.read_text(encoding="utf-8")
-        if "auth_time" in source or "authenticated_at" in source:
-            if relative_path != "backend/tests/support/requirements/ws03_03a.json":
-                support_bypass_candidates.append(relative_path)
+        if (
+            "auth_time" in source or "authenticated_at" in source
+        ) and relative_path != "backend/tests/support/requirements/ws03_03a.json":
+            support_bypass_candidates.append(relative_path)
         if "require_recent_authentication" in source or "require_recent_active" in source:
             unsafe_override_candidates.append(relative_path)
 

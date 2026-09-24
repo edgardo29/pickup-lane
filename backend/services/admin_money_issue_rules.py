@@ -2,7 +2,6 @@
 
 import uuid
 
-
 ADMIN_MONEY_ISSUE_STATUSES = {"open", "resolved", "all"}
 MONEY_ISSUE_EVENT_LIMIT = 100
 MONEY_ISSUE_REFUND_EVENT_LIMIT = 100
@@ -19,6 +18,7 @@ ISSUE_RESOLUTION_REASONS = {
     "handled_externally",
     "invalid_issue",
     "unable_to_complete_documented",
+    "superseded_by_financial_outcome",
 }
 ISSUE_DEFAULTS = {
     "refund_missing_provider_reference": (

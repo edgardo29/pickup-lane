@@ -179,6 +179,7 @@ def _stripe_mutation_policy(
     identity_survives_replay: bool,
     current_recovery: str,
     durable_follow_up: str | None = None,
+    application_automatic_retry_allowed: bool = False,
 ) -> ProviderOperationRetryPolicy:
     return ProviderOperationRetryPolicy(
         operation=operation,
@@ -189,7 +190,7 @@ def _stripe_mutation_policy(
         read_operation=False,
         provider_mutation=True,
         dependency_retry_owner=RetryOwnership.DEPENDENCY_OWNED,
-        application_automatic_retry_allowed=False,
+        application_automatic_retry_allowed=application_automatic_retry_allowed,
         provider_idempotency_key_used=provider_idempotency_key_used,
         idempotency_identity_source=idempotency_identity_source,
         client_retry_stable_idempotency=client_retry_stable_idempotency,
@@ -227,11 +228,21 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
     _read_policy(
         operation="stripe.refund.retrieve",
         provider="stripe",
-        workflow_context="admin_refund_reconciliation",
+        workflow_context="refund_fulfillment_reconciliation",
         material_callers=(
+            "backend.services.refund_fulfillment_service.handle_refund_fulfillment",
             "backend.services.admin_money_refund_service.reconcile_admin_money_refund",
         ),
-        current_recovery="Admin reconciliation may re-read provider refund state.",
+        current_recovery="The worker and authorized reconciliation may re-read provider refund state.",
+    ),
+    _read_policy(
+        operation="stripe.refund.list",
+        provider="stripe",
+        workflow_context="refund_fulfillment_reconciliation",
+        material_callers=(
+            "backend.services.refund_fulfillment_service.handle_refund_fulfillment",
+        ),
+        current_recovery="The worker performs a bounded charge-filtered search before same-key replay.",
     ),
     _stripe_mutation_policy(
         operation="stripe.customer.create",
@@ -389,56 +400,23 @@ STRIPE_OPERATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
     ),
     _stripe_mutation_policy(
         operation="stripe.refund.create",
-        workflow_context="admin_refund_retry",
-        material_callers=("backend.services.admin_money_refund_service.retry_admin_money_refund",),
-        safety_class=RetrySafetyClass.MANUAL_REPAIR,
-        provider_idempotency_key_used=True,
-        idempotency_identity_source="admin-supplied refund retry key scoped by refund/admin action",
-        client_retry_stable_idempotency=True,
-        identity_survives_replay=True,
-        current_recovery="Admin state-gated retry blocks uncertain provider outcome until reconciliation.",
-    ),
-    _stripe_mutation_policy(
-        operation="stripe.refund.create",
-        workflow_context="official_game_cancellation_refund",
+        workflow_context="durable_refund_fulfillment",
         material_callers=(
-            "backend.services.game_cancellation_service.create_official_cancellation_refunds",
+            "backend.services.refund_fulfillment_service.handle_refund_fulfillment",
         ),
         safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
         provider_idempotency_key_used=True,
-        idempotency_identity_source="deterministic game/payment refund key plus refund record",
-        client_retry_stable_idempotency=True,
-        identity_survives_replay=True,
-        current_recovery="Refund and money-issue state gate later recovery.",
-        durable_follow_up="WS05 durable financial reconciliation.",
-    ),
-    _stripe_mutation_policy(
-        operation="stripe.refund.create",
-        workflow_context="official_player_removal_refund",
-        material_callers=(
-            "backend.services.official_game_player_removal_service.execute_admin_removal_refunds",
+        idempotency_identity_source=(
+            "committed refund:<refund UUID>:attempt:<number> request key"
         ),
-        safety_class=RetrySafetyClass.RECONCILE_BEFORE_RETRY,
-        provider_idempotency_key_used=True,
-        idempotency_identity_source="deterministic game/booking/payment refund key plus refund record",
         client_retry_stable_idempotency=True,
         identity_survives_replay=True,
-        current_recovery="Refund and money-issue state gate later recovery.",
-        durable_follow_up="WS05 durable financial reconciliation.",
-    ),
-    _stripe_mutation_policy(
-        operation="stripe.refund.create",
-        workflow_context="community_publish_financial_outcome_refund",
-        material_callers=(
-            "backend.services.admin_financial_outcome_service.apply_refund_outcome",
+        current_recovery=(
+            "The worker performs a complete bounded read before repeating the "
+            "same committed key and forbids mutation at or after 12 hours."
         ),
-        safety_class=RetrySafetyClass.MANUAL_REPAIR,
-        provider_idempotency_key_used=True,
-        idempotency_identity_source="admin financial-outcome action key plus refund suffix",
-        client_retry_stable_idempotency=True,
-        identity_survives_replay=True,
-        current_recovery="Admin financial outcome and money issue state gate recovery.",
-        durable_follow_up="WS05 durable financial reconciliation.",
+        durable_follow_up="Six-attempt stripe_refund_fulfillment job.",
+        application_automatic_retry_allowed=True,
     ),
     _stripe_mutation_policy(
         operation="stripe.payment_method.detach",
@@ -620,15 +598,18 @@ APPLICATION_RETRY_POLICIES: tuple[ProviderOperationRetryPolicy, ...] = (
         material_callers=("backend.services.admin_money_refund_service.retry_admin_money_refund",),
         safety_class=RetrySafetyClass.MANUAL_REPAIR,
         read_operation=False,
-        provider_mutation=True,
+        provider_mutation=False,
         dependency_retry_owner=RetryOwnership.MANUAL_REPAIR,
         application_automatic_retry_allowed=False,
         provider_idempotency_key_used=True,
         idempotency_identity_source="admin action idempotency key scoped to refund retry",
         client_retry_stable_idempotency=True,
         identity_survives_replay=True,
-        unknown_outcome_possible=True,
-        current_recovery="Admin state-gated retry blocks uncertain provider outcome.",
+        unknown_outcome_possible=False,
+        current_recovery=(
+            "Admin state-gated retry blocks uncertain provider outcomes, commits a new "
+            "Refund attempt, and hands provider work to the durable refund worker."
+        ),
     ),
     ProviderOperationRetryPolicy(
         operation="admin_money.refund.reconcile",
@@ -727,38 +708,38 @@ FANOUT_EXECUTION_POLICIES: tuple[FanoutExecutionPolicy, ...] = (
     ),
     FanoutExecutionPolicy(
         workflow="official_game_cancellation.refunds",
-        execution_model="synchronous_sequential_refund_loop",
+        execution_model="transactional_refund_intent_and_durable_job_fanout",
         current_bound="Current refundable successful payments for the canceled game.",
-        provider_calls_per_item="possible Stripe refund per refundable payment.",
+        provider_calls_per_item="none in request; one bounded durable Stripe refund attempt.",
         new_concurrency_allowed=False,
-        durable_follow_up="Durable financial reconciliation belongs to WS05.",
+        durable_follow_up="stripe_refund_fulfillment owns execution and reconciliation.",
     ),
     FanoutExecutionPolicy(
         workflow="official_game_player_removal.refunds",
-        execution_model="synchronous_sequential_refund_loop",
+        execution_model="transactional_refund_intent_and_durable_job_fanout",
         current_bound="Current succeeded payments for the removed booking/player context.",
-        provider_calls_per_item="possible Stripe refund per refundable payment.",
+        provider_calls_per_item="none in request; one bounded durable Stripe refund attempt.",
         new_concurrency_allowed=False,
-        durable_follow_up="Durable financial reconciliation belongs to WS05.",
+        durable_follow_up="stripe_refund_fulfillment owns execution and reconciliation.",
     ),
     FanoutExecutionPolicy(
         workflow="community_publish_fee.financial_outcome_refund",
-        execution_model="single_admin_state_gated_workflow",
+        execution_model="single_admin_intent_and_durable_job_workflow",
         current_bound="One publish-fee payment/refund context.",
-        provider_calls_per_item="one possible Stripe refund.",
+        provider_calls_per_item="none in request; one bounded durable Stripe refund attempt.",
         new_concurrency_allowed=False,
-        durable_follow_up="Durable financial reconciliation belongs to WS05.",
+        durable_follow_up="stripe_refund_fulfillment owns execution and reconciliation.",
     ),
     FanoutExecutionPolicy(
         workflow="late_checkout_payment.compensation",
         execution_model="single_webhook_compensation_checkpoint",
         current_bound="One late payment no-entitlement context.",
         provider_calls_per_item=(
-            "none; webhook records the compensation obligation only."
+            "none in webhook; one bounded durable refund attempt."
         ),
         new_concurrency_allowed=False,
         durable_follow_up=(
-            "Refund execution and financial reconciliation belong to WS05-03."
+            "stripe_refund_fulfillment owns execution and reconciliation."
         ),
     ),
 )

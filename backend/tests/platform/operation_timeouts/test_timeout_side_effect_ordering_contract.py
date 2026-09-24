@@ -242,7 +242,7 @@ def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_pr
 
 @pytest.mark.requirement("WS02-04C1-R8")
 @pytest.mark.no_db_cleanup
-def test_refund_timeout_branches_preserve_processing_unknown_handoff() -> None:
+def test_refund_origins_commit_durable_intents_without_provider_mutations() -> None:
     from backend.services import (
         admin_financial_outcome_service,
         game_cancellation_service,
@@ -266,11 +266,9 @@ def test_refund_timeout_branches_preserve_processing_unknown_handoff() -> None:
     )
 
     for source in timeout_sources.values():
-        assert "except DependencyMutationTimeoutUnknownError:" in source
-        assert "processing" in source
-    assert '"unknown"' in timeout_sources["publish_fee"]
-    for key in ("cancellation", "admin_removal"):
-        assert "stripe_refund_timeout_unknown" in timeout_sources[key]
+        assert "enqueue_refund_fulfillment_job(" in source
+        assert "create_stripe_refund(" not in source
+        assert "DependencyMutationTimeoutUnknownError" not in source
     assert "ensure_payment_compensation(" in late_payment_source
     assert "DependencyMutationTimeoutUnknownError" not in late_payment_source
     assert "create_stripe_refund(" not in late_payment_source
@@ -481,7 +479,9 @@ def test_provider_mutation_retry_policy_preserves_no_blind_replay() -> None:
 
     assert mutation_policies
     for policy in mutation_policies:
-        assert policy.application_automatic_retry_allowed is False
+        assert policy.application_automatic_retry_allowed is (
+            policy.workflow_context == "durable_refund_fulfillment"
+        )
         assert policy.unknown_outcome_possible is True
         assert policy.current_recovery
 

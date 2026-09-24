@@ -8,9 +8,12 @@ from sqlalchemy.orm import Session
 
 from backend.models import (
     AdminAction,
+    AdminFinancialOutcome,
     Booking,
+    DurableJob,
     Game,
     GameParticipant,
+    HostPublishEntitlement,
     HostPublishFee,
     MoneyIssue,
     Payment,
@@ -32,6 +35,7 @@ from backend.schemas.admin_money_refund_schema import (
     AdminMoneyRefundDetailItemRead,
     AdminMoneyRefundDetailRead,
     AdminMoneyRefundEventListResponseRead,
+    AdminMoneyRefundJobDiagnosticRead,
     AdminMoneyRefundListRead,
     AdminMoneyRefundListResponseRead,
     AdminMoneyRefundProviderSnapshotRead,
@@ -62,12 +66,17 @@ from backend.services.admin_money_payment_service import (
     list_payment_credit_usages,
     load_by_id,
 )
-from backend.services.admin_money_refund_rules import (
-    RETRYABLE_PAYMENT_STATUSES,
-    RETRYABLE_REFUND_STATUSES,
-    UNCERTAIN_PROVIDER_REFUND_STATUSES,
-)
 from backend.services.auth_service import require_active_admin_user
+from backend.services.publish_fee_financial_policy import (
+    publish_fee_prior_cash_attempts_are_incapable,
+)
+from backend.services.refund_attempt_policy import (
+    refund_attempt_evidence_for_refunds,
+    refund_attempt_identity_matches_refund,
+    refund_attempt_statuses,
+    refund_expected_attempts_are_terminal,
+)
+from backend.services.refund_retry_policy import evaluate_refund_retry_eligibility
 from backend.services.refund_service import VALID_REFUND_STATUSES
 
 ADMIN_MONEY_DETAIL_RELATED_LIMIT = 100
@@ -99,46 +108,30 @@ def build_refund_summary(db: Session, refund: Refund) -> AdminMoneyRefundListRea
         status_filter="open",
         limit=1,
     )
-    context_label = None
-    if booking is not None:
-        context_label = f"Booking {compact_id(booking.id)}"
-    elif refund.host_publish_fee_id is not None:
-        context_label = f"Publish fee {compact_id(refund.host_publish_fee_id)}"
-
-    return AdminMoneyRefundListRead(
-        id=refund.id,
-        payment_id=refund.payment_id,
-        booking_id=refund.booking_id,
-        participant_id=refund.participant_id,
-        host_publish_fee_id=refund.host_publish_fee_id,
-        game_id=game.id if game is not None else None,
-        target_user_id=payment.payer_user_id if payment is not None else None,
-        origin_workflow=refund.origin_workflow,
-        provider=refund.provider,
-        provider_refund_id=refund.provider_refund_id,
-        provider_charge_id=refund.provider_charge_id,
-        provider_status=refund.provider_status,
-        provider_status_observed_at=refund.provider_status_observed_at,
-        amount_cents=refund.amount_cents,
-        currency=refund.currency,
-        refund_reason=refund.refund_reason,
-        refund_status=refund.refund_status,
-        requested_by_user_id=refund.requested_by_user_id,
-        approved_by_user_id=refund.approved_by_user_id,
-        requested_at=refund.requested_at,
-        approved_at=refund.approved_at,
-        refunded_at=refund.refunded_at,
-        last_refund_event_at=refund.last_refund_event_at,
+    durable_job = get_current_exhausted_refund_job(db, refund)
+    confirmed_returned_cents = confirmed_returned_by_payment(
+        db, {refund.payment_id}
+    ).get(refund.payment_id, 0)
+    final_replacement_fee_ids = final_replacement_host_publish_fee_ids(
+        db,
+        {refund.host_publish_fee_id}
+        if refund.host_publish_fee_id is not None
+        else set(),
+    )
+    no_action_resolved_refund_ids = refund_ids_with_final_no_action_resolution(
+        db, {refund.id}
+    )
+    return build_refund_summary_from_context(
+        refund,
+        payment=payment,
+        booking=booking,
+        game=game,
+        payer=payer,
         linked_issue=linked_issues[0] if linked_issues else None,
-        display=admin_money_display(
-            user=payer,
-            game=game,
-            context_label=context_label,
-            payment_id=refund.payment_id,
-            refund_id=refund.id,
-        ),
-        created_at=refund.created_at,
-        updated_at=refund.updated_at,
+        durable_job=durable_job,
+        confirmed_returned_cents=confirmed_returned_cents,
+        has_final_replacement=refund.host_publish_fee_id in final_replacement_fee_ids,
+        has_final_no_action_resolution=refund.id in no_action_resolved_refund_ids,
     )
 
 
@@ -150,6 +143,10 @@ def build_refund_summary_from_context(
     game: Game | None,
     payer: User | None,
     linked_issue: MoneyIssue | None,
+    durable_job: DurableJob | None = None,
+    confirmed_returned_cents: int = 0,
+    has_final_replacement: bool = False,
+    has_final_no_action_resolution: bool = False,
 ) -> AdminMoneyRefundListRead:
     context_label = None
     if booking is not None:
@@ -181,6 +178,26 @@ def build_refund_summary_from_context(
         approved_at=refund.approved_at,
         refunded_at=refund.refunded_at,
         last_refund_event_at=refund.last_refund_event_at,
+        current_attempt_number=refund.current_attempt_number,
+        provider_attempt_started_at=refund.provider_attempt_started_at,
+        automatic_mutation_blocked_reason=refund.automatic_mutation_blocked_reason,
+        durable_job_diagnostic=(
+            AdminMoneyRefundJobDiagnosticRead(
+                status=durable_job.status,
+                refund_attempt_number=refund.current_attempt_number,
+                error_code=durable_job.last_error_code,
+            )
+            if refund_has_current_exhausted_diagnostic(
+                refund,
+                payment=payment,
+                durable_job=durable_job,
+                linked_issue=linked_issue,
+                confirmed_returned_cents=confirmed_returned_cents,
+                has_final_replacement=has_final_replacement,
+                has_final_no_action_resolution=has_final_no_action_resolution,
+            )
+            else None
+        ),
         linked_issue=linked_issue,
         display=admin_money_display(
             user=payer,
@@ -205,6 +222,20 @@ def build_refund_summaries(
     refund_ids = {refund.id for refund in refunds}
     payment_ids = {refund.payment_id for refund in refunds}
     payments = load_by_id(db, Payment, payment_ids)
+    confirmed_returned_cents_by_payment = confirmed_returned_by_payment(
+        db, payment_ids
+    )
+    host_publish_fee_ids = {
+        refund.host_publish_fee_id
+        for refund in refunds
+        if refund.host_publish_fee_id is not None
+    }
+    final_replacement_fee_ids = final_replacement_host_publish_fee_ids(
+        db, host_publish_fee_ids
+    )
+    no_action_resolved_refund_ids = refund_ids_with_final_no_action_resolution(
+        db, refund_ids
+    )
     booking_ids = {
         refund.booking_id for refund in refunds if refund.booking_id is not None
     }
@@ -229,6 +260,36 @@ def build_refund_summaries(
     games = load_by_id(db, Game, game_ids)
 
     linked_issue_by_refund_id: dict[uuid.UUID, MoneyIssue] = {}
+    exhausted_job_by_refund_id: dict[uuid.UUID, DurableJob] = {}
+    job_rows = list(
+        db.scalars(
+            select(DurableJob).where(
+                DurableJob.job_type == "stripe_refund_fulfillment",
+                DurableJob.payload_version == 1,
+                DurableJob.status == "exhausted",
+                DurableJob.origin_reference_type == "refund",
+                DurableJob.origin_reference_id.in_(
+                    [str(refund_id) for refund_id in refund_ids]
+                ),
+            )
+        ).all()
+    )
+    for job in job_rows:
+        try:
+            refund_id = uuid.UUID(job.origin_reference_id or "")
+        except ValueError:
+            continue
+        refund = next((row for row in refunds if row.id == refund_id), None)
+        if (
+            refund is not None
+            and job.idempotency_key == refund.stripe_request_key
+            and job.protected_identity
+            == {
+                "refund_id": str(refund.id),
+                "attempt_number": refund.current_attempt_number,
+            }
+        ):
+            exhausted_job_by_refund_id[refund.id] = job
     issue_statement = select(MoneyIssue).where(
         MoneyIssue.target_refund_id.in_(refund_ids)
     )
@@ -272,9 +333,213 @@ def build_refund_summaries(
                 game=games.get(game_id) if game_id is not None else None,
                 payer=payer,
                 linked_issue=linked_issue_by_refund_id.get(refund.id),
+                durable_job=exhausted_job_by_refund_id.get(refund.id),
+                confirmed_returned_cents=confirmed_returned_cents_by_payment.get(
+                    refund.payment_id, 0
+                ),
+                has_final_replacement=(
+                    refund.host_publish_fee_id in final_replacement_fee_ids
+                ),
+                has_final_no_action_resolution=(
+                    refund.id in no_action_resolved_refund_ids
+                ),
             )
         )
     return summaries
+
+
+def refund_has_current_exhausted_diagnostic(
+    refund: Refund,
+    *,
+    payment: Payment | None,
+    durable_job: DurableJob | None,
+    linked_issue: MoneyIssue | None,
+    confirmed_returned_cents: int,
+    has_final_replacement: bool,
+    has_final_no_action_resolution: bool,
+) -> bool:
+    if not (
+        durable_job is not None
+        and durable_job.status == "exhausted"
+        and durable_job.idempotency_key == refund.stripe_request_key
+        and durable_job.protected_identity
+        == {
+            "refund_id": str(refund.id),
+            "attempt_number": refund.current_attempt_number,
+        }
+    ):
+        return False
+    if (
+        (linked_issue is not None and linked_issue.status == "open")
+        or has_final_replacement
+        or has_final_no_action_resolution
+    ):
+        return False
+    if (
+        refund.automatic_mutation_blocked_reason is not None
+        or refund.refund_status == "processing"
+        or refund.provider_status == "unknown"
+    ):
+        return True
+    return bool(
+        refund.refund_status in {"failed", "cancelled"}
+        and (
+            payment is None
+            or confirmed_returned_cents < payment.amount_cents
+        )
+    )
+
+
+def refund_ids_with_final_no_action_resolution(
+    db: Session,
+    refund_ids: set[uuid.UUID],
+) -> set[uuid.UUID]:
+    if not refund_ids:
+        return set()
+    return set(
+        db.scalars(
+            select(MoneyIssue.target_refund_id).where(
+                MoneyIssue.target_refund_id.in_(refund_ids),
+                MoneyIssue.status == "resolved",
+                MoneyIssue.resolution_reason_code
+                == "provider_completed_no_action_required",
+            )
+        ).all()
+    )
+
+
+def confirmed_returned_by_payment(
+    db: Session, payment_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    if not payment_ids:
+        return {}
+    refunds = list(
+        db.scalars(select(Refund).where(Refund.payment_id.in_(payment_ids))).all()
+    )
+    evidence = refund_attempt_evidence_for_refunds(
+        db, (refund.id for refund in refunds)
+    )
+    totals = {payment_id: 0 for payment_id in payment_ids}
+    for refund in refunds:
+        totals[refund.payment_id] += sum(
+            attempt.amount_cents
+            for attempt_number, attempt in evidence.get(refund.id, {}).items()
+            if attempt.status == "succeeded"
+            and refund_attempt_identity_matches_refund(
+                refund,
+                attempt_number=attempt_number,
+                attempt=attempt,
+            )
+        )
+    return totals
+
+
+def final_replacement_host_publish_fee_ids(
+    db: Session, host_publish_fee_ids: set[uuid.UUID]
+) -> set[uuid.UUID]:
+    if not host_publish_fee_ids:
+        return set()
+    valid_credit_exists = (
+        select(HostPublishEntitlement.id)
+        .where(
+            HostPublishEntitlement.id
+            == AdminFinancialOutcome.host_publish_entitlement_id,
+            HostPublishEntitlement.host_user_id
+            == AdminFinancialOutcome.host_user_id,
+            HostPublishEntitlement.entitlement_type == "refund_replacement",
+            HostPublishEntitlement.source == "financial_outcome",
+            HostPublishEntitlement.source_financial_outcome_id
+            == AdminFinancialOutcome.id,
+            HostPublishEntitlement.status != "revoked",
+        )
+        .exists()
+    )
+    rows = list(db.scalars(
+        select(AdminFinancialOutcome)
+        .join(
+            HostPublishFee,
+            HostPublishFee.id == AdminFinancialOutcome.host_publish_fee_id,
+        )
+        .where(
+            AdminFinancialOutcome.host_publish_fee_id.in_(host_publish_fee_ids),
+            AdminFinancialOutcome.applied_status == "applied",
+            or_(
+                AdminFinancialOutcome.outcome == "forfeit",
+                and_(
+                    AdminFinancialOutcome.outcome == "credit",
+                    valid_credit_exists,
+                ),
+                AdminFinancialOutcome.outcome == "refund",
+            ),
+            AdminFinancialOutcome.amount_cents == HostPublishFee.amount_cents,
+            AdminFinancialOutcome.currency == HostPublishFee.currency,
+        )
+    ).all())
+    refund_rows = {
+        refund.id: refund
+        for refund in db.scalars(
+            select(Refund).where(
+                Refund.id.in_(
+                    [row.refund_id for row in rows if row.refund_id is not None]
+                )
+            )
+        ).all()
+    }
+    refund_evidence = refund_attempt_evidence_for_refunds(
+        db, refund_rows.keys()
+    )
+    final_ids: set[uuid.UUID] = set()
+    for row in rows:
+        if row.host_publish_fee_id is None:
+            continue
+        if row.outcome == "refund":
+            refund = refund_rows.get(row.refund_id)
+            if (
+                refund is None
+                or refund.automatic_mutation_blocked_reason is not None
+                or not refund_expected_attempts_are_terminal(db, refund)
+            ):
+                continue
+            returned_cents = sum(
+                attempt.amount_cents
+                for attempt_number, attempt in refund_evidence.get(
+                    refund.id, {}
+                ).items()
+                if attempt.status == "succeeded"
+                and refund_attempt_identity_matches_refund(
+                    refund,
+                    attempt_number=attempt_number,
+                    attempt=attempt,
+                )
+            )
+            if returned_cents < row.amount_cents:
+                continue
+        if publish_fee_prior_cash_attempts_are_incapable(
+            db,
+            host_publish_fee_id=row.host_publish_fee_id,
+            excluding_refund_id=row.refund_id,
+        ):
+            final_ids.add(row.host_publish_fee_id)
+    return final_ids
+
+
+def get_current_exhausted_refund_job(
+    db: Session, refund: Refund
+) -> DurableJob | None:
+    job = db.scalars(
+        select(DurableJob)
+        .where(
+            DurableJob.job_type == "stripe_refund_fulfillment",
+            DurableJob.payload_version == 1,
+            DurableJob.status == "exhausted",
+            DurableJob.origin_reference_type == "refund",
+            DurableJob.origin_reference_id == str(refund.id),
+            DurableJob.idempotency_key == refund.stripe_request_key,
+        )
+        .order_by(DurableJob.created_at.desc(), DurableJob.id.desc())
+        .limit(1)
+    ).first()
+    return job
 
 
 def validate_admin_money_refund_status(refund_status: str) -> None:
@@ -531,27 +796,30 @@ def list_refund_admin_activity(
 
 
 def refund_available_actions(
+    db: Session,
     *,
     refund: Refund,
     payment: Payment | None,
     linked_money_issue: MoneyIssue | None = None,
 ) -> list[AdminMoneyRefundActionRead]:
-    retry_blockers: list[str] = []
-    if refund.refund_status not in RETRYABLE_REFUND_STATUSES:
-        retry_blockers.append("Refund is not failed or cancelled.")
-    if refund.provider_status in UNCERTAIN_PROVIDER_REFUND_STATUSES:
-        retry_blockers.append("Refund provider outcome is still uncertain.")
-    if payment is None:
-        retry_blockers.append("Payment context is missing.")
-    elif payment.payment_status not in RETRYABLE_PAYMENT_STATUSES:
-        retry_blockers.append("Payment did not succeed.")
-    elif payment.paid_at is None:
-        retry_blockers.append("Payment was not marked paid.")
-    elif not payment.provider_charge_id:
-        retry_blockers.append("Payment is missing provider charge id.")
+    retry_eligibility = evaluate_refund_retry_eligibility(
+        db, refund=refund, payment=payment
+    )
+    retry_blockers = [blocker.message for blocker in retry_eligibility.blockers]
+    if retry_eligibility.no_action_required:
+        retry_blockers.append(
+            "No refundable cash remains; review the linked Money Issue as no action."
+        )
 
     check_provider_blockers: list[str] = []
-    if refund.refund_status == "succeeded":
+    if (
+        refund.refund_status == "succeeded"
+        and refund_expected_attempts_are_terminal(db, refund)
+        and refund_attempt_statuses(db, refund.id).get(
+            refund.current_attempt_number
+        )
+        == "succeeded"
+    ):
         check_provider_blockers.append("Refund already succeeded.")
     elif (
         refund.provider_refund_id
@@ -706,6 +974,7 @@ def get_admin_money_refund_detail(
         ],
         linked_money_issue=linked_money_issue,
         available_actions=refund_available_actions(
+            db,
             refund=refund,
             payment=payment,
             linked_money_issue=linked_money_issue,

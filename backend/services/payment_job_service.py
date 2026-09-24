@@ -145,6 +145,15 @@ def _handle_payment_method_reconcile(db: Session, job: DurableJob) -> HandlerRes
 
 
 def build_production_job_registry() -> DurableJobRegistry:
+    from backend.services.refund_fulfillment_service import (
+        REFUND_JOB_MAXIMUM_ATTEMPTS,
+        REFUND_JOB_PAYLOAD_VERSION,
+        STRIPE_REFUND_FULFILLMENT_JOB,
+        handle_refund_fulfillment,
+        handle_refund_job_exhausted,
+        validate_refund_job_payload,
+    )
+
     return DurableJobRegistry(
         (
             JobDefinition(
@@ -167,6 +176,14 @@ def build_production_job_registry() -> DurableJobRegistry:
                 maximum_attempts=PAYMENT_JOB_MAXIMUM_ATTEMPTS,
                 handler=_handle_payment_method_reconcile,
                 payload_validator=_payment_method_payload,
+            ),
+            JobDefinition(
+                job_type=STRIPE_REFUND_FULFILLMENT_JOB,
+                payload_version=REFUND_JOB_PAYLOAD_VERSION,
+                maximum_attempts=REFUND_JOB_MAXIMUM_ATTEMPTS,
+                handler=handle_refund_fulfillment,
+                payload_validator=validate_refund_job_payload,
+                on_exhausted=handle_refund_job_exhausted,
             ),
         )
     )

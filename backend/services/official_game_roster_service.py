@@ -957,8 +957,8 @@ def cancel_pending_booking_payments_for_admin_removal(
     booking: Booking,
     reason: str | None,
     now: datetime,
-) -> None:
-    release_reserved_game_credits(
+) -> list[GameCreditUsage]:
+    released_usages = release_reserved_game_credits(
         db,
         booking.id,
         now=now,
@@ -981,3 +981,4 @@ def cancel_pending_booking_payments_for_admin_removal(
         )
         payment.updated_at = now
         db.add(payment)
+    return released_usages

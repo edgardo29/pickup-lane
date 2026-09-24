@@ -61,12 +61,12 @@ def test_frozen_fanout_inventory_is_represented_as_synchronous_sequential_policy
     ].provider_calls_per_item
     assert policies[
         "community_publish_fee.financial_outcome_refund"
-    ].execution_model == "single_admin_state_gated_workflow"
+    ].execution_model == "single_admin_intent_and_durable_job_workflow"
     assert policies["late_checkout_payment.compensation"].execution_model == (
         "single_webhook_compensation_checkpoint"
     )
     assert policies["late_checkout_payment.compensation"].provider_calls_per_item == (
-        "none; webhook records the compensation obligation only."
+        "none in webhook; one bounded durable refund attempt."
     )
 
     for policy in policies.values():

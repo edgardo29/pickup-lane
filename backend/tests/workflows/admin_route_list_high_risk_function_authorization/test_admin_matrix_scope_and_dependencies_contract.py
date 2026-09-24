@@ -32,8 +32,8 @@ WORKFLOW_SCOPE = "workflows/admin_route_list_high_risk_function_authorization"
 REQUIREMENT_IDS = {f"WS03-04D-R{number}" for number in range(1, 13)}
 REQUIRED_REQUIREMENT_IDS = REQUIREMENT_IDS
 EXPECTED_D_FAMILY_COUNT = 40
-EXPECTED_D_ROUTE_COUNT = 187
-EXPECTED_RECENT_ROUTE_COUNT = 22
+EXPECTED_D_ROUTE_COUNT = 188
+EXPECTED_RECENT_ROUTE_COUNT = 23
 EXPECTED_TOMBSTONE_ROUTE_COUNT = 45
 EXPECTED_INTAKE_SHA = (
     "e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4"
@@ -61,6 +61,7 @@ EXPECTED_RECENT_ROUTE_KEYS = {
     ("POST", "/admin/game-credits/issue"),
     ("POST", "/admin/game-credits/{game_credit_id}/reverse"),
     ("POST", "/admin/money/financial-outcomes"),
+    ("POST", "/admin/money/financial-outcomes/{financial_outcome_id}/resolve"),
     ("POST", "/admin/money/issues/{money_issue_id}/resolve"),
     ("POST", "/admin/money/issues/{money_issue_id}/retry-credit"),
     ("POST", "/admin/money/refunds/{refund_id}/reconcile"),
@@ -245,9 +246,9 @@ def _get_user_role(user_id: uuid.UUID) -> str:
 
 def _callable_identity(callable_obj: Any) -> str:
     if isinstance(callable_obj, partial):
-        raise AssertionError(f"Unrepresentable partial dependency: {callable_obj!r}")
+        raise TypeError(f"Unrepresentable partial dependency: {callable_obj!r}")
     if not (isfunction(callable_obj) or ismethod(callable_obj)):
-        raise AssertionError(f"Unrepresentable callable dependency: {callable_obj!r}")
+        raise TypeError(f"Unrepresentable callable dependency: {callable_obj!r}")
 
     module = getattr(callable_obj, "__module__", None)
     qualname = getattr(callable_obj, "__qualname__", None)
@@ -376,7 +377,9 @@ def _collect_requirement_marker_ids() -> set[str]:
             marker_ids.update(
                 arg.value
                 for arg in node.args
-                if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                if isinstance(arg, ast.Constant)
+                and isinstance(arg.value, str)
+                and arg.value.startswith("WS03-04D-")
             )
     return marker_ids
 

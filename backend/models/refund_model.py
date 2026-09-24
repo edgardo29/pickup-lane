@@ -28,7 +28,7 @@ class Refund(Base):
                 "'player_cancelled', 'late_cancel', 'host_cancelled', "
                 "'game_cancelled', 'weather', 'admin_refund', "
                 "'duplicate_payment', 'dispute_resolution', "
-                "'publish_fee_refund'"
+                "'publish_fee_refund', 'unfulfilled_booking'"
                 ")"
             ),
             name="ck_refunds_refund_reason",
@@ -74,6 +74,20 @@ class Refund(Base):
             name="ck_refunds_amount_cents",
         ),
         CheckConstraint(
+            "((current_attempt_number = 0 AND stripe_request_key IS NULL "
+            "AND provider_refund_id IS NOT NULL) OR "
+            "(current_attempt_number > 0 AND stripe_request_key = "
+            "'refund:' || id::text || ':attempt:' || current_attempt_number::text))",
+            name="ck_refunds_attempt_identity",
+        ),
+        CheckConstraint(
+            "((automatic_mutation_blocked_reason IS NULL AND "
+            "automatic_mutation_blocked_at IS NULL) OR "
+            "(automatic_mutation_blocked_reason = 'historical_attempt_conflict' "
+            "AND automatic_mutation_blocked_at IS NOT NULL))",
+            name="ck_refunds_automatic_mutation_block",
+        ),
+        CheckConstraint(
             "(refund_status <> 'approved' OR approved_at IS NOT NULL)",
             name="ck_refunds_approved_requires_approved_at",
         ),
@@ -106,6 +120,13 @@ class Refund(Base):
         Index("ix_refunds_requested_by_user_id", "requested_by_user_id"),
         Index("ix_refunds_approved_by_user_id", "approved_by_user_id"),
         Index("ix_refunds_provider_refund_id", "provider_refund_id"),
+        Index("uq_refunds_origin_operation_key", "origin_operation_key", unique=True),
+        Index(
+            "uq_refunds_stripe_request_key",
+            "stripe_request_key",
+            unique=True,
+            postgresql_where=text("stripe_request_key IS NOT NULL"),
+        ),
         Index("ix_refunds_provider_charge_id", "provider_charge_id"),
         Index(
             "uq_refunds_provider_refund_id",
@@ -139,6 +160,18 @@ class Refund(Base):
     )
     provider_refund_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True
+    )
+    origin_operation_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    current_attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    stripe_request_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_attempt_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    automatic_mutation_blocked_reason: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+    automatic_mutation_blocked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     origin_workflow: Mapped[str] = mapped_column(
         String(80), nullable=False, server_default=text("'direct_admin_refund'")

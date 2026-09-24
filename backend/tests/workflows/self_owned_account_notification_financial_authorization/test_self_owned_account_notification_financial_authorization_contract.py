@@ -603,21 +603,15 @@ def _refund(
     requested_by_user_id: uuid.UUID,
     index: int,
 ) -> Any:
-    from backend.models import Refund
+    from backend.tests.support.refund_fixtures import build_publish_fee_refund
 
-    return Refund(
-        id=uuid.uuid4(),
+    return build_publish_fee_refund(
+        financial_outcome_id=uuid.uuid4(),
         payment_id=payment_id,
         host_publish_fee_id=host_publish_fee_id,
         provider_refund_id=f"re_ws03_04b_{index}_{uuid.uuid4().hex}",
-        origin_workflow="community_publish_fee_refund",
-        provider="stripe",
-        provider_status="processing",
-        provider_status_observed_at=datetime.now(timezone.utc),
         provider_charge_id=f"ch_ref_ws03_04b_{index}_{uuid.uuid4().hex}",
         amount_cents=1200,
-        currency="USD",
-        refund_reason="publish_fee_refund",
         refund_status="pending",
         requested_by_user_id=requested_by_user_id,
     )

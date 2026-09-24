@@ -4,9 +4,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.schemas.game_schema import GameRead
 from backend.schemas.game_credit_schema import GameCreditRead, GameCreditUsageRead
 from backend.schemas.game_participant_schema import GameParticipantRead
+from backend.schemas.game_schema import GameRead
 from backend.schemas.payment_schema import AdminPaymentRead
 from backend.schemas.refund_schema import AdminRefundRead
 
@@ -219,6 +219,9 @@ class AdminOfficialGamePlayerRemovalResultRead(BaseModel):
     booking_status: str
     booking_payment_status: str
     refunds: list[AdminOfficialGameRemovalRefundRead] = Field(default_factory=list)
+    refund_created_count: int = 0
+    refund_approved_count: int = 0
+    refund_processing_count: int = 0
     credit_restored_count: int = 0
     credit_restored_cents: int = 0
     refund_follow_up_required: bool = False
@@ -291,6 +294,7 @@ class AdminOfficialGameCancellationResultRead(BaseModel):
     cancelled_waitlist_entry_count: int = 0
     notified_user_count: int = 0
     refund_created_count: int = 0
+    refund_approved_count: int = 0
     refund_failed_count: int = 0
     refund_processing_count: int = 0
     refund_missing_charge_count: int = 0

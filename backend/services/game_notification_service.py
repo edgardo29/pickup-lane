@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -34,45 +35,75 @@ def booking_refunded_aggregation_key(game_id: uuid.UUID, booking_id: uuid.UUID) 
     return f"game:{game_id}:booking:{booking_id}:booking_refunded"
 
 
+CreditReturnComponent = Literal["none", "released", "restored", "mixed"]
+RefundNoticeContext = Literal[
+    "game_cancellation",
+    "player_removal",
+    "reservation_expired",
+    "capacity_conflict",
+    "generic_refund",
+]
+
+
+def refund_notice_context_for(
+    refund: Refund | None, *, compensation_reason: str | None = None
+) -> RefundNoticeContext:
+    if refund is not None and refund.origin_workflow == "official_game_cancellation":
+        return "game_cancellation"
+    if refund is not None and refund.origin_workflow == "player_removal":
+        return "player_removal"
+    if compensation_reason in {"reservation_expired", "capacity_conflict"}:
+        return compensation_reason
+    if compensation_reason == "booking_cancelled":
+        return "game_cancellation"
+    if refund is not None and refund.refund_reason == "game_cancelled":
+        return "game_cancellation"
+    return "generic_refund"
+
+
 def booking_refunded_copy(
     *,
     stripe_refund_processed: bool,
-    credit_restored: bool,
-    game_cancelled: bool = True,
+    credit_component: CreditReturnComponent,
+    notice_context: RefundNoticeContext,
 ) -> dict[str, str]:
-    if stripe_refund_processed and credit_restored:
+    if credit_component not in {"none", "released", "restored", "mixed"}:
+        raise ValueError("credit_component is not supported")
+    credit_action = {
+        "released": "released",
+        "restored": "restored",
+        "mixed": "returned to your available balance",
+    }.get(credit_component)
+    context_copy = {
+        "game_cancellation": "for this canceled official game.",
+        "player_removal": "after your booking was removed from this official game.",
+        "reservation_expired": "after your reservation expired.",
+        "capacity_conflict": "after the booking could not be fulfilled because capacity changed.",
+        "generic_refund": "for this official-game booking.",
+    }[notice_context]
+    if stripe_refund_processed and credit_action is not None:
         return {
             "title": "Refund and credit processed",
-            "summary": "Your refund was processed and your game credit was restored.",
+            "summary": f"Your refund was processed and your game credit was {credit_action}.",
             "body": (
                 "Your Stripe refund was processed and your Pickup Lane game credit "
-                "was restored "
-                + (
-                    "for this canceled official game."
-                    if game_cancelled
-                    else "after your booking was removed from this official game."
-                )
+                f"was {credit_action} {context_copy}"
             ),
         }
 
-    if credit_restored:
+    if credit_action is not None:
         return {
-            "title": "Credit restored",
-            "summary": "Your Pickup Lane game credit was restored.",
+            "title": f"Credit {credit_action}",
+            "summary": f"Your Pickup Lane game credit was {credit_action}.",
             "body": (
-                "Your Pickup Lane game credit was restored "
-                + (
-                    "for this canceled official game."
-                    if game_cancelled
-                    else "after your booking was removed from this official game."
-                )
+                f"Your Pickup Lane game credit was {credit_action} {context_copy}"
             ),
         }
 
     return {
         "title": "Refund processed",
         "summary": "Your refund was processed.",
-        "body": "Your refund for this official game was processed.",
+        "body": f"Your refund was processed {context_copy}",
     }
 
 
@@ -93,15 +124,30 @@ def create_or_reopen_booking_refunded_notification(
     payment: Payment | None = None,
     refund: Refund | None = None,
     stripe_refund_processed: bool,
-    credit_restored: bool,
-    game_cancelled: bool = True,
-    force_action_null: bool = True,
+    credit_component: CreditReturnComponent = "none",
+    notice_context: RefundNoticeContext,
 ) -> None:
     aggregation_key = booking_refunded_aggregation_key(db_game.id, booking.id)
+    existing = db.scalars(
+        select(Notification).where(Notification.aggregation_key == aggregation_key)
+    ).first()
+    effective_payment = payment or (
+        db.get(Payment, existing.related_payment_id)
+        if existing is not None and existing.related_payment_id is not None
+        else None
+    )
+    effective_refund = refund or (
+        db.get(Refund, existing.related_refund_id)
+        if existing is not None and existing.related_refund_id is not None
+        else None
+    )
+    effective_stripe_refund_processed = (
+        stripe_refund_processed or effective_refund is not None
+    )
     copy = booking_refunded_copy(
-        stripe_refund_processed=stripe_refund_processed,
-        credit_restored=credit_restored,
-        game_cancelled=game_cancelled,
+        stripe_refund_processed=effective_stripe_refund_processed,
+        credit_component=credit_component,
+        notice_context=notice_context,
     )
     reopen_aggregated_notification(
         db,
@@ -115,15 +161,22 @@ def create_or_reopen_booking_refunded_notification(
                 db_game,
                 "booking_refunded",
                 event_at=now,
-                force_action_null=force_action_null,
+                force_action_null=(
+                    notice_context == "game_cancellation"
+                    or not game_allows_inbox_action(db_game)
+                ),
                 aggregation_key=aggregation_key,
                 **copy,
             ),
             "actor_user_id": None,
             "related_game_id": db_game.id,
             "related_booking_id": booking.id,
-            "related_payment_id": payment.id if payment is not None else None,
-            "related_refund_id": refund.id if refund is not None else None,
+            "related_payment_id": (
+                effective_payment.id if effective_payment is not None else None
+            ),
+            "related_refund_id": (
+                effective_refund.id if effective_refund is not None else None
+            ),
             "related_participant_id": None,
         },
         aggregate_count_mode="clear",

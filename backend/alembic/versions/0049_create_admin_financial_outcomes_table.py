@@ -1,7 +1,7 @@
 """create admin_financial_outcomes table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0049_admin_financial_outcomes'
@@ -33,10 +33,12 @@ def upgrade() -> None:
         sa.Column('created_by_user_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('applied_by_user_id', postgresql.UUID(as_uuid=True)),
         sa.Column('applied_at', sa.DateTime(timezone=True)),
+        sa.Column('superseded_at', sa.DateTime(timezone=True)),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.CheckConstraint('amount_cents >= 0', name='ck_admin_financial_outcomes_amount_cents'),
-        sa.CheckConstraint("applied_status IN ('pending', 'applied', 'failed', 'not_applicable')", name='ck_admin_financial_outcomes_applied_status'),
+        sa.CheckConstraint("applied_status IN ('pending', 'applied', 'failed', 'not_applicable', 'superseded')", name='ck_admin_financial_outcomes_applied_status'),
+        sa.CheckConstraint("((applied_status = 'superseded' AND superseded_at IS NOT NULL AND applied_at IS NULL AND applied_by_user_id IS NULL) OR (applied_status <> 'superseded' AND superseded_at IS NULL))", name='ck_admin_financial_outcomes_superseded_fields'),
         sa.CheckConstraint("currency = 'USD'", name='ck_admin_financial_outcomes_currency'),
         sa.CheckConstraint("outcome IN ('no_fee_charged', 'refund', 'credit', 'forfeit', 'manual_review')", name='ck_admin_financial_outcomes_outcome'),
         sa.CheckConstraint('host_user_id IS NOT NULL AND (target_game_id IS NOT NULL OR target_sub_post_id IS NOT NULL OR host_publish_fee_id IS NOT NULL OR payment_id IS NOT NULL)', name='ck_admin_financial_outcomes_target_required'),

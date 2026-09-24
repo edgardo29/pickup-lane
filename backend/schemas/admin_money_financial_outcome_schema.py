@@ -4,7 +4,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 REQUEST_MODEL_CONFIG = ConfigDict(extra="forbid")
 AdminMoneyFinancialOutcome = Literal[
     "no_fee_charged",
@@ -26,6 +25,16 @@ class AdminMoneyFinancialOutcomeCreate(BaseModel):
     host_user_id: UUID | None = None
     target_game_id: UUID | None = None
     amount_cents: int | None = Field(default=None, ge=0)
+
+
+class AdminMoneyManualReviewResolveCreate(BaseModel):
+    model_config = REQUEST_MODEL_CONFIG
+
+    outcome: Literal["no_fee_charged", "refund", "credit", "forfeit"]
+    reason: str = Field(min_length=3, max_length=1000)
+    internal_note: str | None = Field(default=None, max_length=1000)
+    amount_cents: int = Field(ge=0)
+    idempotency_key: str = Field(min_length=8, max_length=160)
 
 
 class AdminMoneyFinancialOutcomeRead(BaseModel):
@@ -51,5 +60,6 @@ class AdminMoneyFinancialOutcomeRead(BaseModel):
     created_by_user_id: UUID
     applied_by_user_id: UUID | None
     applied_at: datetime | None
+    superseded_at: datetime | None
     created_at: datetime
     updated_at: datetime

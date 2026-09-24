@@ -62,7 +62,9 @@ def test_retry_classes_and_registry_shape_are_source_owned_and_declarative() -> 
         assert policy.workflow_context
         assert policy.material_callers
         assert policy.current_recovery
-        assert policy.application_automatic_retry_allowed is False
+        assert policy.application_automatic_retry_allowed is (
+            policy.workflow_context == "durable_refund_fulfillment"
+        )
 
 
 @pytest.mark.requirement("WS02-04C2-R1", "WS02-04C2-R5", "WS02-04C2-R6")
@@ -230,7 +232,9 @@ def test_fanout_entries_and_durable_handoffs_are_complete_and_non_numeric() -> N
             or policy.execution_model
             in {
                 "single_admin_state_gated_workflow",
+                "single_admin_intent_and_durable_job_workflow",
                 "single_webhook_compensation_checkpoint",
+                "transactional_refund_intent_and_durable_job_fanout",
             }
         )
         assert policy.new_concurrency_allowed is False

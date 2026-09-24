@@ -1,7 +1,7 @@
 """create refunds table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0048_refunds'
@@ -19,6 +19,12 @@ def upgrade() -> None:
         sa.Column('participant_id', postgresql.UUID(as_uuid=True)),
         sa.Column('host_publish_fee_id', postgresql.UUID(as_uuid=True)),
         sa.Column('provider_refund_id', sa.String(length=255)),
+        sa.Column('origin_operation_key', sa.String(length=255), nullable=False),
+        sa.Column('current_attempt_number', sa.Integer(), nullable=False),
+        sa.Column('stripe_request_key', sa.String(length=255)),
+        sa.Column('provider_attempt_started_at', sa.DateTime(timezone=True)),
+        sa.Column('automatic_mutation_blocked_reason', sa.String(length=80)),
+        sa.Column('automatic_mutation_blocked_at', sa.DateTime(timezone=True)),
         sa.Column('origin_workflow', sa.String(length=80), nullable=False, server_default=sa.text("'direct_admin_refund'")),
         sa.Column('provider', sa.String(length=20), nullable=False, server_default=sa.text("'stripe'")),
         sa.Column('provider_status', sa.String(length=30)),
@@ -37,12 +43,14 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
         sa.CheckConstraint('amount_cents > 0', name='ck_refunds_amount_cents'),
+        sa.CheckConstraint("((current_attempt_number = 0 AND stripe_request_key IS NULL AND provider_refund_id IS NOT NULL) OR (current_attempt_number > 0 AND stripe_request_key = 'refund:' || id::text || ':attempt:' || current_attempt_number::text))", name='ck_refunds_attempt_identity'),
+        sa.CheckConstraint("((automatic_mutation_blocked_reason IS NULL AND automatic_mutation_blocked_at IS NULL) OR (automatic_mutation_blocked_reason = 'historical_attempt_conflict' AND automatic_mutation_blocked_at IS NOT NULL))", name='ck_refunds_automatic_mutation_block'),
         sa.CheckConstraint("(refund_status <> 'approved' OR approved_at IS NOT NULL)", name='ck_refunds_approved_requires_approved_at'),
         sa.CheckConstraint("currency = 'USD'", name='ck_refunds_currency'),
         sa.CheckConstraint("origin_workflow IN ('player_removal', 'official_game_cancellation', 'community_publish_fee_refund', 'direct_admin_refund', 'official_game_checkout', 'pending_checkout_expiration', 'pending_checkout_cancellation', 'admin_game_update')", name='ck_refunds_origin_workflow'),
         sa.CheckConstraint("provider IN ('stripe')", name='ck_refunds_provider'),
         sa.CheckConstraint("provider_status IS NULL OR provider_status IN ('processing', 'succeeded', 'failed', 'cancelled', 'unknown')", name='ck_refunds_provider_status'),
-        sa.CheckConstraint("refund_reason IN ('player_cancelled', 'late_cancel', 'host_cancelled', 'game_cancelled', 'weather', 'admin_refund', 'duplicate_payment', 'dispute_resolution', 'publish_fee_refund')", name='ck_refunds_refund_reason'),
+        sa.CheckConstraint("refund_reason IN ('player_cancelled', 'late_cancel', 'host_cancelled', 'game_cancelled', 'weather', 'admin_refund', 'duplicate_payment', 'dispute_resolution', 'publish_fee_refund', 'unfulfilled_booking')", name='ck_refunds_refund_reason'),
         sa.CheckConstraint("refund_status IN ('pending', 'approved', 'processing', 'succeeded', 'failed', 'cancelled')", name='ck_refunds_refund_status'),
         sa.CheckConstraint("(refund_status <> 'succeeded' OR refunded_at IS NOT NULL)", name='ck_refunds_succeeded_requires_refunded_at'),
         sa.CheckConstraint('booking_id IS NOT NULL OR participant_id IS NOT NULL OR host_publish_fee_id IS NOT NULL', name='ck_refunds_target_required'),
@@ -68,6 +76,8 @@ def upgrade() -> None:
     op.create_index('ix_refunds_refund_reason', 'refunds', ['refund_reason'], unique=False)
     op.create_index('ix_refunds_refund_status_created', 'refunds', ['refund_status', 'created_at', 'id'], unique=False)
     op.create_index('ix_refunds_requested_by_user_id', 'refunds', ['requested_by_user_id'], unique=False)
+    op.create_index('uq_refunds_origin_operation_key', 'refunds', ['origin_operation_key'], unique=True)
+    op.create_index('uq_refunds_stripe_request_key', 'refunds', ['stripe_request_key'], unique=True, postgresql_where=sa.text('stripe_request_key IS NOT NULL'))
     op.create_index('uq_refunds_provider_refund_id', 'refunds', ['provider', 'provider_refund_id'], unique=True, postgresql_where=sa.text('provider_refund_id IS NOT NULL'))
 
 

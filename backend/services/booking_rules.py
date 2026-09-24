@@ -37,6 +37,18 @@ VALID_PAYMENT_STATUSES = {
     "disputed",
 }
 VALID_CURRENCY = "USD"
+FINANCIAL_SUMMARY_PAYMENT_STATUSES = {
+    "partially_refunded",
+    "refunded",
+    "credit_restored",
+}
+FINANCIAL_SUMMARY_BOOKING_STATUSES = {
+    "confirmed",
+    "partially_cancelled",
+    "cancelled",
+    "expired",
+    "capacity_conflict",
+}
 CANCELLED_BOOKING_STATUSES = {"cancelled", "partially_cancelled"}
 BOOKED_BOOKING_STATUSES = {"confirmed", "partially_cancelled", "cancelled"}
 
@@ -147,7 +159,8 @@ def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
 
     if (
         booking_data["booking_status"] == "confirmed"
-        and booking_data["payment_status"] not in {"paid", "not_required"}
+        and booking_data["payment_status"]
+        not in {"paid", "not_required", *FINANCIAL_SUMMARY_PAYMENT_STATUSES}
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -166,13 +179,13 @@ def validate_booking_business_rules(booking_data: dict[str, object]) -> None:
     if (
         booking_data["payment_status"]
         in {"refunded", "partially_refunded", "credit_restored"}
-        and booking_data["booking_status"] not in CANCELLED_BOOKING_STATUSES
+        and booking_data["booking_status"] not in FINANCIAL_SUMMARY_BOOKING_STATUSES
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "Refunded, partially_refunded, or credit_restored bookings must have "
-                "booking_status 'cancelled' or 'partially_cancelled'."
+                "a lifecycle state that can retain a committed financial summary."
             ),
         )
 

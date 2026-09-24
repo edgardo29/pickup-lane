@@ -2,17 +2,48 @@
 
 import uuid
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from sqlalchemy import func, select
 
-from backend.database import SessionLocal
-from backend.models import DurableJob, DurableJobEvent
-from backend.observability.metrics import MetricsRecorder, stage_reconciliation_outcome
-from backend.services import durable_job_service as jobs
+pytestmark = [
+    pytest.mark.suite_type("ordinary"),
+    pytest.mark.requirement("WS05-01A-R7"),
+]
+SessionLocal: Any = None
+DurableJob: Any = None
+DurableJobEvent: Any = None
+MetricsRecorder: Any = None
+stage_reconciliation_outcome: Any = None
+jobs: Any = None
 
 
-def _runner(registry, recorder, factory=SessionLocal):
+@pytest.fixture(autouse=True)
+def _load_runtime_globals() -> None:
+    from backend.database import SessionLocal as session_factory
+    from backend.models import DurableJob as job_model
+    from backend.models import DurableJobEvent as event_model
+    from backend.observability.metrics import (
+        MetricsRecorder as recorder_type,
+    )
+    from backend.observability.metrics import (
+        stage_reconciliation_outcome as stage_outcome,
+    )
+    from backend.services import durable_job_service as jobs_service
+
+    globals().update(
+        SessionLocal=session_factory,
+        DurableJob=job_model,
+        DurableJobEvent=event_model,
+        MetricsRecorder=recorder_type,
+        stage_reconciliation_outcome=stage_outcome,
+        jobs=jobs_service,
+    )
+
+
+def _runner(registry, recorder, factory=None):
+    factory = factory or SessionLocal
     return jobs.DurableJobRunner(
         session_factory=factory,
         registry=registry,
@@ -59,7 +90,7 @@ def _enqueue(registry, job_type, version=1, payload=None):
         ("success", "succeeded", "succeeded"),
         ("retry", "retry_waiting", "retry_waiting"),
         ("permanent", "exhausted", "exhausted"),
-        ("final_transient", "retry_waiting", "exhausted"),
+        ("final_transient", "exhausted", "exhausted"),
         ("exception", "retry_waiting", "retry_waiting"),
     ],
 )

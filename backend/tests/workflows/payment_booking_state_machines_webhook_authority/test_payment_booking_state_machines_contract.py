@@ -235,15 +235,15 @@ def test_unresolved_expiry_is_local_shared_and_provider_status_preserving() -> N
 
 
 @pytest.mark.requirement("WS05-02-R3", "WS05-02-R5")
-def test_late_success_and_capacity_conflict_create_compensation_not_refunds() -> None:
+def test_late_success_and_capacity_conflict_create_lifetime_compensation_intents() -> None:
     from backend.services import stripe_webhook_service
 
     compensation_source = _source("backend/models/payment_compensation_model.py")
-    assert "uq_payment_compensations_active" in compensation_source
+    assert "uq_payment_compensations_payment_booking" in compensation_source
     assert '"payment_id",' in compensation_source
     assert '"booking_id",' in compensation_source
     assert "'booking_cancelled'" in compensation_source
-    assert "status IN ('required', 'processing')" in compensation_source
+    assert "status IN ('required', 'processing', 'succeeded', 'failed')" in compensation_source
 
     late_success_source = inspect.getsource(
         stripe_webhook_service.expire_late_successful_payment
@@ -259,12 +259,16 @@ def test_late_success_and_capacity_conflict_create_compensation_not_refunds() ->
     assert 'booking.booking_status = "capacity_conflict"' in capacity_conflict_source
     assert 'booking.reservation_status = "capacity_conflict"' in capacity_conflict_source
     assert combined_source.count("ensure_payment_compensation(") == 2
-    for forbidden in (
-        "create_refund(",
-        "refund_payment(",
-        "stripe_refund",
-    ):
-        assert forbidden not in combined_source
+    compensation_builder_source = inspect.getsource(
+        stripe_webhook_service.ensure_payment_compensation
+    )
+    compensation_advance_source = inspect.getsource(
+        stripe_webhook_service.advance_required_payment_compensation
+    )
+    assert "Refund(" in compensation_advance_source
+    assert "enqueue_refund_fulfillment_job(" in compensation_advance_source
+    assert "create_refund(" not in compensation_builder_source
+    assert "create_refund(" not in compensation_advance_source
 
 
 @pytest.mark.requirement("WS05-02-R2", "WS05-02-R5", "WS05-02-R7")

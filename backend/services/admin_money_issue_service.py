@@ -5,18 +5,23 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.models import (
     AdminAction,
+    AdminFinancialOutcome,
     Booking,
+    Game,
     GameCredit,
     GameCreditUsage,
+    HostPublishEntitlement,
+    HostPublishFee,
     MoneyIssue,
     MoneyIssueEvent,
     Payment,
+    PaymentCompensation,
     Refund,
     RefundEvent,
     User,
@@ -50,6 +55,30 @@ from backend.services.game_credit_service import (
     release_reserved_game_credit_usage,
     restore_redeemed_game_credit_usage,
 )
+from backend.services.publish_fee_financial_policy import (
+    active_publish_fee_sibling_outcome,
+    publish_fee_prior_cash_attempts_are_incapable,
+)
+from backend.services.refund_attempt_policy import (
+    authoritative_succeeded_amount_for_refunds,
+    refund_attempt_statuses,
+    refund_expected_attempts_are_terminal,
+    refund_has_only_terminal_attempts,
+)
+from backend.services.refund_service import get_refund_payment_ledger
+
+
+def refund_issue_action_under_publish_fee_policy(
+    db: Session, *, refund: Refund, default_action: str
+) -> tuple[str, str | None, str | None]:
+    sibling = active_publish_fee_sibling_outcome(db, refund=refund)
+    if sibling is None:
+        return default_action, None, None
+    return (
+        "review_superseding_financial_outcome",
+        "superseded_by_financial_outcome",
+        "A later authoritative publish-fee decision blocks further cash-refund work.",
+    )
 
 
 def get_money_issue_for_update_or_404(
@@ -65,6 +94,84 @@ def get_money_issue_for_update_or_404(
             detail="Money issue not found.",
         )
     return money_issue
+
+
+def get_money_issue_with_financial_context_for_update_or_404(
+    db: Session, money_issue_id: uuid.UUID
+) -> MoneyIssue:
+    reference = db.get(MoneyIssue, money_issue_id)
+    if reference is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Money issue not found.",
+        )
+    if reference.target_game_id is not None:
+        db.scalar(
+            select(Game).where(Game.id == reference.target_game_id).with_for_update()
+        )
+    if reference.target_booking_id is not None:
+        db.scalar(
+            select(Booking)
+            .where(Booking.id == reference.target_booking_id)
+            .with_for_update()
+        )
+    if reference.target_payment_id is not None:
+        db.scalar(
+            select(Payment)
+            .where(Payment.id == reference.target_payment_id)
+            .with_for_update()
+        )
+    refund_reference = (
+        db.get(Refund, reference.target_refund_id)
+        if reference.target_refund_id is not None
+        else None
+    )
+    if refund_reference is not None and refund_reference.host_publish_fee_id is not None:
+        db.scalar(
+            select(HostPublishFee)
+            .where(HostPublishFee.id == refund_reference.host_publish_fee_id)
+            .with_for_update()
+        )
+    if refund_reference is not None:
+        related_refunds = list(
+            db.scalars(
+                select(Refund)
+                .where(
+                    Refund.host_publish_fee_id
+                    == refund_reference.host_publish_fee_id
+                    if refund_reference.host_publish_fee_id is not None
+                    else Refund.id == refund_reference.id
+                )
+                .order_by(Refund.id.asc())
+                .with_for_update()
+            ).all()
+        )
+        related_refund_ids = [refund.id for refund in related_refunds]
+        list(
+            db.scalars(
+                select(AdminFinancialOutcome)
+                .where(
+                    AdminFinancialOutcome.host_publish_fee_id
+                    == refund_reference.host_publish_fee_id
+                )
+                .order_by(AdminFinancialOutcome.id.asc())
+                .with_for_update()
+            ).all()
+        )
+        related_issues = list(
+            db.scalars(
+                select(MoneyIssue)
+                .where(MoneyIssue.target_refund_id.in_(related_refund_ids))
+                .order_by(MoneyIssue.id.asc())
+                .with_for_update()
+            ).all()
+        )
+        selected = next(
+            (issue for issue in related_issues if issue.id == money_issue_id), None
+        )
+        if selected is not None:
+            return selected
+    return get_money_issue_for_update_or_404(db, money_issue_id)
 
 
 def get_existing_money_issue_action(
@@ -138,6 +245,90 @@ def append_money_issue_event(
     return event
 
 
+def financial_outcome_safely_supersedes_refund(
+    db: Session,
+    *,
+    refund: Refund,
+    replacement: AdminFinancialOutcome,
+) -> bool:
+    if (
+        refund.host_publish_fee_id is None
+        or replacement.host_publish_fee_id != refund.host_publish_fee_id
+        or replacement.applied_status != "applied"
+        or replacement.outcome not in {"credit", "forfeit", "refund"}
+        or not publish_fee_prior_cash_attempts_are_incapable(
+            db,
+            host_publish_fee_id=refund.host_publish_fee_id,
+            excluding_refund_id=replacement.refund_id,
+        )
+    ):
+        return False
+    fee = db.get(HostPublishFee, refund.host_publish_fee_id)
+    if (
+        fee is None
+        or replacement.amount_cents != fee.amount_cents
+        or replacement.currency != fee.currency
+    ):
+        return False
+    if replacement.outcome == "forfeit":
+        return True
+    if replacement.outcome == "credit":
+        if replacement.host_publish_entitlement_id is None:
+            return False
+        entitlement = db.get(
+            HostPublishEntitlement, replacement.host_publish_entitlement_id
+        )
+        return bool(
+            entitlement is not None
+            and entitlement.id == replacement.host_publish_entitlement_id
+            and entitlement.host_user_id == replacement.host_user_id
+            and entitlement.entitlement_type == "refund_replacement"
+            and entitlement.source == "financial_outcome"
+            and entitlement.source_financial_outcome_id == replacement.id
+            and entitlement.status != "revoked"
+        )
+    if replacement.refund_id is None:
+        return False
+    replacement_refund = db.get(Refund, replacement.refund_id)
+    if (
+        replacement_refund is None
+        or not refund_expected_attempts_are_terminal(db, replacement_refund)
+    ):
+        return False
+    returned = authoritative_succeeded_amount_for_refunds(
+        db, (replacement_refund,)
+    )
+    return returned >= replacement.amount_cents
+
+
+def refund_payment_no_action_obligation_is_satisfied(
+    db: Session,
+    *,
+    refund: Refund,
+    payment: Payment | None = None,
+) -> bool:
+    """Prove that payment-wide cash and compensation work is complete."""
+    if not refund_has_only_terminal_attempts(db, refund):
+        return False
+    resolved_payment = payment or db.get(Payment, refund.payment_id)
+    if resolved_payment is None:
+        return False
+    compensation = db.scalars(
+        select(PaymentCompensation).where(PaymentCompensation.refund_id == refund.id)
+    ).first()
+    ledger = get_refund_payment_ledger(
+        db,
+        payment_id=resolved_payment.id,
+        payment_amount_cents=resolved_payment.amount_cents,
+    )
+    return bool(
+        ledger.confirmed_returned_cents >= resolved_payment.amount_cents
+        and ledger.reserved_cents == 0
+        and ledger.unresolved_attempt_cents == 0
+        and (compensation is None or compensation.status == "succeeded")
+    )
+
+
 def stage_refund_money_issue(
     db: Session,
     *,
@@ -155,20 +346,67 @@ def stage_refund_money_issue(
 
     detected_at = now or datetime.now(timezone.utc)
     value_kind, recommended_action_code = ISSUE_DEFAULTS[issue_type]
+    active_sibling = active_publish_fee_sibling_outcome(db, refund=refund)
+    if active_sibling is not None:
+        recommended_action_code = "review_superseding_financial_outcome"
+        reason_code = "superseded_by_financial_outcome"
+        summary = (
+            "A later authoritative publish-fee decision blocks this cash refund "
+            "until the complete fee outcome is settled."
+        )
     operation_key = build_refund_issue_operation_key(refund.id)
     target_booking_id = refund.booking_id or (
         payment.booking_id if payment is not None else None
     )
     target_game_id = payment.game_id if payment is not None else None
-    if target_game_id is None:
-        if target_booking_id is not None:
-            booking = db.get(Booking, target_booking_id)
-            target_game_id = booking.game_id if booking is not None else None
+    if target_game_id is None and target_booking_id is not None:
+        booking = db.get(Booking, target_booking_id)
+        target_game_id = booking.game_id if booking is not None else None
     money_issue = db.scalars(
         select(MoneyIssue)
         .where(MoneyIssue.operation_key == operation_key)
         .with_for_update()
     ).first()
+
+    if money_issue is not None and money_issue.status == "resolved":
+        if money_issue.resolution_reason_code == "retried_successfully":
+            returned = authoritative_succeeded_amount_for_refunds(db, (refund,))
+            if (
+                returned >= refund.amount_cents
+                and refund_expected_attempts_are_terminal(db, refund)
+            ):
+                return money_issue
+        if (
+            money_issue.resolution_reason_code
+            == "provider_completed_no_action_required"
+            and refund_payment_no_action_obligation_is_satisfied(
+                db,
+                refund=refund,
+                payment=payment,
+            )
+        ):
+            return money_issue
+        if money_issue.resolution_reason_code == "superseded_by_financial_outcome":
+            replacements = list(
+                db.scalars(
+                select(AdminFinancialOutcome).where(
+                    AdminFinancialOutcome.host_publish_fee_id
+                    == refund.host_publish_fee_id,
+                    or_(
+                        AdminFinancialOutcome.refund_id.is_(None),
+                        AdminFinancialOutcome.refund_id != refund.id,
+                    ),
+                    AdminFinancialOutcome.applied_status == "applied",
+                )
+                ).all()
+            )
+            if any(
+                financial_outcome_safely_supersedes_refund(
+                    db, refund=refund, replacement=replacement
+                )
+                for replacement in replacements
+            ):
+                return money_issue
 
     if money_issue is None:
         money_issue = MoneyIssue(
@@ -291,6 +529,8 @@ def stage_credit_money_issue(
 
     detected_at = now or datetime.now(timezone.utc)
     value_kind, recommended_action_code = ISSUE_DEFAULTS[issue_type]
+    if origin_workflow in {"official_game_cancellation", "player_removal"}:
+        recommended_action_code = "reexecute_origin_workflow"
     operation_key = (
         build_credit_release_issue_operation_key(credit_usage.id)
         if issue_type == "credit_release_failed"
@@ -428,6 +668,81 @@ def money_issue_has_successful_credit_retry(
     return False
 
 
+def resolve_reexecuted_origin_credit_issues(
+    db: Session,
+    *,
+    origin_workflow: str,
+    target_game_id: uuid.UUID,
+    target_booking_id: uuid.UUID | None,
+    admin_action: AdminAction,
+    now: datetime,
+) -> list[uuid.UUID]:
+    """Resolve rollback markers only after their origin workflow returned credit."""
+    filters = [
+        MoneyIssue.target_game_id == target_game_id,
+        MoneyIssue.status == "open",
+        MoneyIssue.origin_workflow == origin_workflow,
+        MoneyIssue.recommended_action_code == "reexecute_origin_workflow",
+        MoneyIssue.issue_type.in_({"credit_release_failed", "credit_restore_failed"}),
+    ]
+    if target_booking_id is not None:
+        filters.append(MoneyIssue.target_booking_id == target_booking_id)
+    issues = list(
+        db.scalars(
+            select(MoneyIssue)
+            .where(*filters)
+            .order_by(MoneyIssue.id.asc())
+            .with_for_update()
+        ).all()
+    )
+    resolved_ids: list[uuid.UUID] = []
+    for issue in issues:
+        if not money_issue_has_successful_credit_retry(db, issue):
+            continue
+        result_usage_id = issue.target_credit_usage_id
+        if issue.issue_type == "credit_restore_failed":
+            restored = db.scalars(
+                select(GameCreditUsage)
+                .where(
+                    GameCreditUsage.original_usage_id == issue.target_credit_usage_id,
+                    GameCreditUsage.usage_type == "restore",
+                    GameCreditUsage.usage_status == "restored",
+                )
+                .limit(1)
+            ).first()
+            result_usage_id = restored.id if restored is not None else None
+        issue.status = "resolved"
+        issue.resolved_at = now
+        issue.resolved_by_user_id = admin_action.admin_user_id
+        issue.resolution_reason_code = "retried_successfully"
+        issue.resolution_note = "Origin workflow re-execution returned the credit."
+        issue.resolution_external_reference = None
+        issue.latest_reason_code = "origin_workflow_reexecuted"
+        issue.latest_summary = "Origin workflow re-execution returned the credit."
+        issue.last_activity_at = now
+        issue.updated_at = now
+        append_money_issue_event(
+            db,
+            money_issue=issue,
+            event_type="issue_resolved",
+            event_source="admin",
+            actor_user_id=admin_action.admin_user_id,
+            admin_action_id=admin_action.id,
+            result_credit_usage_id=result_usage_id,
+            reason_code="retried_successfully",
+            summary=issue.resolution_note,
+            previous_status="open",
+            new_status="resolved",
+            previous_recommended_action_code="reexecute_origin_workflow",
+            new_recommended_action_code="review_and_resolve_no_action",
+            occurred_at=now,
+        )
+        issue.recommended_action_code = "review_and_resolve_no_action"
+        db.add(issue)
+        resolved_ids.append(issue.id)
+    return resolved_ids
+
+
 def validate_money_issue_resolution(
     db: Session,
     *,
@@ -435,7 +750,7 @@ def validate_money_issue_resolution(
     resolution_reason_code: str,
     resolution_note: str | None,
     resolution_external_reference: str | None,
-) -> None:
+) -> AdminFinancialOutcome | None:
     if resolution_reason_code not in ISSUE_RESOLUTION_REASONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -453,7 +768,7 @@ def validate_money_issue_resolution(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="handled_externally requires resolution_external_reference.",
             )
-        return
+        return None
 
     if resolution_reason_code in {"invalid_issue", "unable_to_complete_documented"}:
         if resolution_note is None:
@@ -461,12 +776,51 @@ def validate_money_issue_resolution(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"{resolution_reason_code} requires resolution_note.",
             )
-        return
+        return None
 
-    if resolution_reason_code in {
-        "retried_successfully",
-        "provider_completed_no_action_required",
-    }:
+    if resolution_reason_code == "superseded_by_financial_outcome":
+        if money_issue.target_refund_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Superseded resolution requires a related refund.",
+            )
+        refund = db.get(Refund, money_issue.target_refund_id)
+        if refund is None or refund.host_publish_fee_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Superseded resolution requires publish-fee refund context.",
+            )
+        replacements = list(
+            db.scalars(
+            select(AdminFinancialOutcome).where(
+                AdminFinancialOutcome.host_publish_fee_id
+                == refund.host_publish_fee_id,
+                or_(
+                    AdminFinancialOutcome.refund_id.is_(None),
+                    AdminFinancialOutcome.refund_id != refund.id,
+                ),
+                AdminFinancialOutcome.applied_status == "applied",
+            )
+            ).all()
+        )
+        replacement = next(
+            (
+                candidate
+                for candidate in replacements
+                if financial_outcome_safely_supersedes_refund(
+                    db, refund=refund, replacement=candidate
+                )
+            ),
+            None,
+        )
+        if replacement is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A verified applied replacement financial outcome is required.",
+            )
+        return replacement
+
+    if resolution_reason_code == "retried_successfully":
         if money_issue.issue_type.startswith("refund_"):
             if money_issue.target_refund_id is None:
                 raise HTTPException(
@@ -474,7 +828,15 @@ def validate_money_issue_resolution(
                     detail="Refund issue is missing refund context.",
                 )
             refund = db.get(Refund, money_issue.target_refund_id)
-            if refund is None or refund.refund_status != "succeeded":
+            if (
+                refund is None
+                or refund.refund_status != "succeeded"
+                or not refund_expected_attempts_are_terminal(db, refund)
+                or refund_attempt_statuses(db, refund.id).get(
+                    refund.current_attempt_number
+                )
+                != "succeeded"
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
@@ -494,6 +856,30 @@ def validate_money_issue_resolution(
                     ),
                 )
             return
+
+    if resolution_reason_code == "provider_completed_no_action_required":
+        if not money_issue.issue_type.startswith("refund_") or money_issue.target_refund_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provider no-action resolution requires refund context.",
+            )
+        refund = db.get(Refund, money_issue.target_refund_id)
+        if refund is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provider no-action resolution is missing its refund.",
+            )
+        payment = db.get(Payment, refund.payment_id)
+        if not refund_payment_no_action_obligation_is_satisfied(
+            db,
+            refund=refund,
+            payment=payment,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Provider no-action resolution requires the payment obligation to be satisfied.",
+            )
+        return
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
@@ -540,7 +926,9 @@ def resolve_admin_money_issue(
     if existing_action is not None:
         return get_admin_money_issue_detail(db, money_issue_id=money_issue_id)
 
-    money_issue = get_money_issue_for_update_or_404(db, money_issue_id)
+    money_issue = get_money_issue_with_financial_context_for_update_or_404(
+        db, money_issue_id
+    )
     existing_action = get_existing_money_issue_action(
         db,
         admin_user_id=admin_user.id,
@@ -552,7 +940,7 @@ def resolve_admin_money_issue(
         return get_admin_money_issue_detail(db, money_issue_id=money_issue_id)
     if money_issue.status == "resolved":
         return get_admin_money_issue_detail(db, money_issue_id=money_issue.id)
-    validate_money_issue_resolution(
+    replacement_financial_outcome = validate_money_issue_resolution(
         db,
         money_issue=money_issue,
         resolution_reason_code=resolution_reason_code,
@@ -582,6 +970,11 @@ def resolve_admin_money_issue(
             "new_status": "resolved",
             "resolution_reason_code": resolution_reason_code,
             "resolution_external_reference": resolution_external_reference,
+            "replacement_financial_outcome_id": (
+                str(replacement_financial_outcome.id)
+                if replacement_financial_outcome is not None
+                else None
+            ),
             "source": "admin_money_issue_resolve",
         },
     )
@@ -620,6 +1013,13 @@ def resolve_admin_money_issue(
         summary=resolution_note or "Money issue resolved.",
         previous_status=previous_status,
         new_status="resolved",
+        metadata={
+            "replacement_financial_outcome_id": str(
+                replacement_financial_outcome.id
+            )
+        }
+        if replacement_financial_outcome is not None
+        else None,
     )
 
     try:
@@ -687,6 +1087,14 @@ def retry_admin_money_issue_credit(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Money issue is not a credit retry issue.",
+        )
+    if money_issue.recommended_action_code == "reexecute_origin_workflow":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This credit issue must be repaired by re-running its originating "
+                "cancellation or player-removal preview."
+            ),
         )
     if (
         money_issue.target_credit_usage_id is None
