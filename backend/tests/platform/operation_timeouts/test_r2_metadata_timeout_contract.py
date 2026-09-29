@@ -105,9 +105,258 @@ def test_r2_result_conversion_failure_is_not_success(monkeypatch):
     )
     monkeypatch.setattr(r2_storage, "get_r2_client", lambda config: client)
     recorder = MetricsRecorder("api", "test", "r2-test")
-    with metrics_context(recorder), pytest.raises(ValueError):
+    with metrics_context(recorder), pytest.raises(r2_storage.R2StorageError):
         r2_storage.get_object_properties("private-key")
     assert dict(recorder.snapshot().series[0].dimensions)["result"] == "failed"
+
+
+@pytest.mark.parametrize(
+    ("operation", "call"),
+    [
+        (
+            "r2.upload_url.create",
+            lambda: r2_storage.create_object_upload_url(
+                object_key="private-key", content_type="image/jpeg"
+            ),
+        ),
+        (
+            "r2.read_url.create",
+            lambda: r2_storage.create_object_read_url("private-key"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "malformed_url",
+    [
+        pytest.param("", id="empty-value"),
+        pytest.param("   ", id="blank-value"),
+        pytest.param("not-a-url", id="missing-scheme-and-authority"),
+        pytest.param(
+            "ftp://r2.example.invalid/object",
+            id="unsupported-scheme",
+        ),
+        pytest.param("https:///missing-host", id="missing-host"),
+        pytest.param(
+            "https://user@r2.example.invalid/object",
+            id="userinfo",
+        ),
+        pytest.param(
+            "https://r2.example.invalid/object#fragment",
+            id="fragment",
+        ),
+        pytest.param(
+            "https://r2.example.invalid:/object",
+            id="empty-port",
+        ),
+        pytest.param(
+            "https://r2.example.invalid:not-a-port/object",
+            id="non-numeric-port",
+        ),
+        pytest.param(
+            "https://r2.example.invalid:0/object",
+            id="zero-port",
+        ),
+        pytest.param(
+            "https://r2.example.invalid:65536/object",
+            id="out-of-range-port",
+        ),
+        pytest.param(
+            "https://foo|bar.example.invalid/object",
+            id="forbidden-dns-codepoint",
+        ),
+        pytest.param(
+            "https://r2..example.invalid/object",
+            id="empty-dns-label",
+        ),
+        pytest.param(
+            "https://-r2.example.invalid/object",
+            id="leading-label-hyphen",
+        ),
+        pytest.param(
+            "https://r2-.example.invalid/object",
+            id="trailing-label-hyphen",
+        ),
+        pytest.param(
+            f"https://{'a' * 64}.example.invalid/object",
+            id="oversized-dns-label",
+        ),
+        pytest.param(
+            "https://999.999.999.999/object",
+            id="invalid-ipv4-address",
+        ),
+        pytest.param(
+            "https://0x100000000/object",
+            id="invalid-whatwg-ipv4-number",
+        ),
+        pytest.param(
+            "https://[127.0.0.1]/object",
+            id="bracketed-ipv4-address",
+        ),
+        pytest.param(
+            "https://[v1.invalid]/object",
+            id="non-ip-bracketed-host",
+        ),
+        pytest.param(
+            "https://[fe80::1%eth0]/object",
+            id="raw-ipv6-zone-identifier",
+        ),
+        pytest.param(
+            "https://[fe80::1%25eth0]/object",
+            id="encoded-ipv6-zone-identifier",
+        ),
+        pytest.param("https://%/object", id="malformed-host-escape"),
+        pytest.param(
+            "https://r2\\evil.example.invalid/object",
+            id="backslash-in-authority",
+        ),
+        pytest.param(
+            "https://r2.example.invalid/\x00object",
+            id="raw-control-character",
+        ),
+    ],
+)
+def test_malformed_presigned_url_is_failed_without_success_observation(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    call,
+    malformed_url: str,
+) -> None:
+    class MalformedSigningClient:
+        def generate_presigned_url(self, *args, **kwargs):
+            return malformed_url
+
+    monkeypatch.setattr(r2_storage, "get_r2_storage_config", _config)
+    monkeypatch.setattr(
+        r2_storage,
+        "get_r2_client",
+        lambda config: MalformedSigningClient(),
+    )
+    recorder = MetricsRecorder("api", "test", "r2-test")
+
+    with metrics_context(recorder), pytest.raises(r2_storage.R2StorageError):
+        call()
+
+    (series,) = recorder.snapshot().series
+    assert dict(series.dimensions) == {
+        "provider_kind": "r2",
+        "operation": operation,
+        "result": "failed",
+    }
+
+
+@pytest.mark.parametrize(
+    ("operation", "call"),
+    [
+        (
+            "r2.upload_url.create",
+            lambda: r2_storage.create_object_upload_url(
+                object_key="private-key", content_type="image/jpeg"
+            ),
+        ),
+        (
+            "r2.read_url.create",
+            lambda: r2_storage.create_object_read_url("private-key"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "valid_url",
+    [
+        pytest.param(
+            "https://bucket.account.r2.cloudflarestorage.com/"
+            "folder%2Fimage%20name.jpg?X-Amz-Credential=key%2Fscope&"
+            "X-Amz-Signature=a%2Bb%2Fc%3D&token=one%20two",
+            id="r2-percent-encoded-path-and-query",
+        ),
+        pytest.param(
+            "http://localhost:8080/object",
+            id="http-single-label-host-with-port",
+        ),
+        pytest.param(
+            "https://127.0.0.1:65535/object",
+            id="canonical-ipv4-with-maximum-port",
+        ),
+        pytest.param(
+            "https://[2001:db8::1]:443/object",
+            id="ipv6-literal-with-port",
+        ),
+        pytest.param(
+            "https://bücher.example/object",
+            id="idna-hostname",
+        ),
+        pytest.param(
+            "https://r2.example.invalid./object",
+            id="absolute-dns-hostname",
+        ),
+        pytest.param(
+            f"https://{'a' * 63}.example.invalid/object",
+            id="maximum-dns-label",
+        ),
+    ],
+)
+def test_valid_presigned_url_is_preserved_with_success_observation(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    call,
+    valid_url: str,
+) -> None:
+    class ValidSigningClient:
+        def generate_presigned_url(self, *args, **kwargs):
+            return valid_url
+
+    monkeypatch.setattr(r2_storage, "get_r2_storage_config", _config)
+    monkeypatch.setattr(
+        r2_storage,
+        "get_r2_client",
+        lambda config: ValidSigningClient(),
+    )
+    recorder = MetricsRecorder("api", "test", "r2-test")
+
+    with metrics_context(recorder):
+        result = call()
+
+    actual_url = result.upload_url if operation == "r2.upload_url.create" else result
+    assert actual_url == valid_url
+    (series,) = recorder.snapshot().series
+    assert dict(series.dimensions) == {
+        "provider_kind": "r2",
+        "operation": operation,
+        "result": "succeeded",
+    }
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: r2_storage.create_object_upload_url(
+            object_key="private-key", content_type="image/jpeg"
+        ),
+        lambda: r2_storage.create_object_read_url("private-key"),
+    ],
+)
+def test_presigned_url_cancellation_propagates_without_provider_result(
+    monkeypatch: pytest.MonkeyPatch,
+    call,
+) -> None:
+    cancellation = asyncio.CancelledError()
+
+    class CancelledSigningClient:
+        def generate_presigned_url(self, *args, **kwargs):
+            raise cancellation
+
+    monkeypatch.setattr(r2_storage, "get_r2_storage_config", _config)
+    monkeypatch.setattr(
+        r2_storage,
+        "get_r2_client",
+        lambda config: CancelledSigningClient(),
+    )
+    recorder = MetricsRecorder("api", "test", "r2-test")
+
+    with metrics_context(recorder), pytest.raises(asyncio.CancelledError) as exc_info:
+        call()
+
+    assert exc_info.value is cancellation
+    assert recorder.snapshot().series == ()
 
 
 def _config() -> r2_storage.R2StorageConfig:

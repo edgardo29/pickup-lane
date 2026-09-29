@@ -108,7 +108,8 @@ corrected master blueprint
 -> Gate A engineering planning and plan review
 -> implementation and risk-based testing
 -> independent semantic review
--> normal Git/PR finalization and manual merge
+-> normal Git/PR finalization with the intended post-merge execution-register update
+-> manual merge
 ```
 
 The corrected master defines scope, the implemented-work correction program, the
@@ -134,7 +135,7 @@ artifacts, and does not define production-readiness scope.
 | `docs/production-readiness/00-READ-ME-FIRST.md` | Startup, authority, safety, and publication-boundary entry point. |
 | `docs/production-readiness/01-PROGRAM-CONTEXT.md` | Program overview and routing index. |
 | `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md` | Authoritative production-readiness scope, correction program, remaining roadmap, and completion criteria. |
-| `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` | Factual accepted, unmerged, historical decomposition, and remaining-work state. |
+| `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` | Accepted or intended post-merge execution state, historical decomposition, deferred obligations, and remaining work. |
 | `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md` | First-time Stage 0 through Gate D implementation workflow. |
 | `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` | Recheck guidance for accepted or historical implementation. |
 | `docs/production-readiness/planning/passes/` | Historical and current pass intakes/plans; consult when materially relevant, not as authority over the master. |
@@ -198,7 +199,8 @@ For first-time implementation:
 - implement and test as Gate B work;
 - perform an independent read-only semantic review as Gate C work;
 - perform Git/PR publication as Gate D work only when requested, using the
-  current `PASS-PR-DESCRIPTION-TEMPLATE.md` for the PR body;
+  current `PASS-PR-DESCRIPTION-TEMPLATE.md` for the PR body, and update the
+  execution register once to the final state intended after merge;
 - keep PR merge manual.
 
 For an accepted-pass recheck, normally perform Gate A through Gate D. Return to
@@ -234,8 +236,10 @@ work is performed.
 ## 9. Work Families And Ordering
 
 The corrected master section 8 defines the 27 remaining units and the scope that
-survives. The execution register records what is accepted, what is implemented
-but unmerged, and what remains; it does not define or expand scope.
+survives. The execution register records accepted execution state or the
+intended post-merge state carried by a substantive PR, plus remaining and
+deferred work; it does not track normal transient gate progress or define or
+expand scope.
 
 A selected unit may be kept whole or decomposed when that is genuinely needed.
 Each child must own one coherent outcome, preserve all parent obligations, avoid
@@ -248,12 +252,14 @@ blocks only work that actually depends on the missing fact.
 
 After merge, verify the intended merge, switch local `develop` back to the
 current `origin/develop` state using the normal safe fast-forward path, and
-reconcile factual execution-register state when needed. Then choose subsequent
-work from the corrected master, current repository truth, real prerequisites,
-deferred-trigger state, and owner direction. Do not use automatic progression.
-If the next unit is a later child of an accepted decomposition that remains
-valid, begin that child at Gate A; otherwise perform Stage 0 for new first-time
-scope.
+confirm that the Gate D register update landed in its intended final state. Do
+not make a second routine register update for the same pass; use exceptional
+cleanup only when publication failed or repository truth differs from that
+intended state. Then choose subsequent work from the corrected master, current
+repository truth, real prerequisites, deferred-trigger state, and owner
+direction. Do not use automatic progression. If the next unit is a later child
+of an accepted decomposition that remains valid, begin that child at Gate A;
+otherwise perform Stage 0 for new first-time scope.
 
 ## 10. Essential Terminology
 
@@ -268,7 +274,7 @@ scope.
 | Gate A | Required first-time engineering planning and plan review; the plan may be concise. |
 | Gate B | Implementation and risk-based testing. |
 | Gate C | Independent, read-only semantic review. |
-| Gate D | Normal Git and PR finalization; it does not include merge. |
+| Gate D | Normal Git and PR finalization, including the pass's one execution-register update to its intended post-merge state; it does not include merge. |
 | Accepted baseline | The current `develop` commit used as the understood starting point for a branch. |
 | Provider-neutral work | Work whose correctness does not require unselected final-provider facts. |
 | Deferred obligation | Required late-bound work with a known owner, trigger, prerequisites, and completion boundary; deferral is not proof. |

@@ -2439,8 +2439,13 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
 
     admin = _user("community-more-admin", role="admin")
     ordinary = _user("community-more-ordinary")
+    suspended_admin = _user(
+        "community-more-suspended-admin",
+        role="admin",
+        account_status="suspended",
+    )
     host = _user("community-more-host")
-    _add_users(admin, ordinary, host)
+    _add_users(admin, ordinary, suspended_admin, host)
     game_id, venue_id = _persist_community_game_fixture(
         "community-more",
         admin=admin,
@@ -2448,7 +2453,11 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
     )
     _install_tokens_for_users(
         monkeypatch,
-        {"admin-token": admin, "ordinary-token": ordinary},
+        {
+            "admin-token": admin,
+            "ordinary-token": ordinary,
+            "suspended-admin-token": suspended_admin,
+        },
     )
     provider_calls: list[str] = []
 
@@ -2588,6 +2597,19 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
     assert provider_calls == []
     assert _count_model_rows(VenueImage) == before_images
 
+    suspended_upload = client.post(
+        f"/admin/venues/{venue_id}/images/upload-url",
+        json={
+            "file_name": "suspended.jpg",
+            "content_type": "image/jpeg",
+            "size_bytes": 1200,
+        },
+        headers=_auth_headers("suspended-admin-token"),
+    )
+    assert suspended_upload.status_code == 403
+    assert provider_calls == []
+    assert _count_model_rows(VenueImage) == before_images
+
     upload = client.post(
         f"/admin/venues/{venue_id}/images/upload-url",
         json={
@@ -2601,6 +2623,12 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
     )
     assert upload.status_code == 201
     upload_body = upload.json()
+    assert set(upload_body) == {
+        "image",
+        "upload_url",
+        "upload_headers",
+        "expires_at",
+    }
     image_id = uuid.UUID(upload_body["image"]["id"])
     assert upload_body["image"]["uploaded_by_user_id"] == str(admin.id)
     assert provider_calls == ["config", "config", "upload:image/jpeg", "read"]
@@ -2608,6 +2636,19 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
 
     image_state = _venue_image_state(image_id)
     assert image_state["image_status"] == "pending_upload"
+    denied_completion_actions = _count_model_rows(AdminAction)
+    denied_completion_provider_calls = list(provider_calls)
+    for denied_token in ("ordinary-token", "suspended-admin-token"):
+        denied_complete = client.post(
+            f"/admin/venue-images/{image_id}/complete",
+            json={"etag": "denied-etag"},
+            headers=_auth_headers(denied_token),
+        )
+        assert denied_complete.status_code == 403
+        assert _venue_image_state(image_id)["image_status"] == "pending_upload"
+        assert provider_calls == denied_completion_provider_calls
+        assert _count_model_rows(AdminAction) == denied_completion_actions
+
     object_properties_by_key[str(image_state["storage_object_key"])] = R2ObjectProperties(
         content_type="image/jpeg",
         size_bytes=1200,
@@ -2619,6 +2660,12 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         headers=_auth_headers("admin-token"),
     )
     assert complete.status_code == 200
+    complete_body = complete.json()
+    assert complete_body["id"] == str(image_id)
+    assert complete_body["image_status"] == "active"
+    assert "upload_url" not in complete_body
+    assert "upload_headers" not in complete_body
+    assert "expires_at" not in complete_body
     completed_state = _venue_image_state(image_id)
     assert completed_state["image_status"] == "active"
     assert completed_state["etag"] == "local-complete-etag"

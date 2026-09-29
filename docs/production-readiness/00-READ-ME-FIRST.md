@@ -28,8 +28,9 @@ Before production-readiness work:
 2. Read `01-PROGRAM-CONTEXT.md`.
 3. Read
    `planning/program/pickup-lane-master-production-readiness-blueprint.md`.
-4. Check `planning/program/PASS-EXECUTION-REGISTER.md` for factual accepted,
-   unmerged, and remaining-work state.
+4. Check `planning/program/PASS-EXECUTION-REGISTER.md` for accepted or intended
+   post-merge state, remaining work, and recorded deferred obligations. A normal
+   pass does not use the register to track transient pre-publication progress.
 5. Use the workflow-selection section below to enter the applicable workflow.
 6. Follow that workflow's stage-specific routing to the current plan, technical
    standards, product documents, provider records, or historical material needed
@@ -65,7 +66,7 @@ SCOPE, RECONCILIATION, AND DECOMPOSITION DECISION / STAGE 0
 -> ENGINEERING PLAN AND PLAN REVIEW / GATE A
 -> IMPLEMENT AND TEST / GATE B
 -> INDEPENDENT SEMANTIC REVIEW / GATE C
--> GIT AND PR FINALIZATION / GATE D
+-> GIT AND PR FINALIZATION + EXECUTION-REGISTER UPDATE / GATE D
 -> MANUAL MERGE
 ```
 
@@ -168,7 +169,9 @@ Use this distinction:
    product behavior where the master delegates or does not decide it.
 3. Current accepted source, configuration, tests, migrations, and documentation
    define what currently exists and behaves.
-4. The execution register records factual implementation state.
+4. The execution register records accepted execution state or the intended
+   post-merge state carried by the current substantive PR; it does not track a
+   normal pass's transient progress through earlier gates.
 
 Historical audits, the old remediation plan, governance records, decision
 records, intakes, pass plans, SHAs, PR descriptions, and Git history are
@@ -303,10 +306,13 @@ PR merge remains a deliberate manual repository action.
 
 After a manual merge, follow the implementation workflow's post-merge sequence:
 verify the intended merge, return local `develop` to current `origin/develop`,
-reconcile factual execution state when needed, and then select the next eligible
-unit from current authority, dependencies, repository truth, and owner direction.
-If that unit is a later child of an accepted decomposition that remains valid, it
-begins at Gate A rather than repeating Stage 0.
+confirm that the Gate D execution-register update landed in its intended final
+state, and then select the next eligible unit from current authority,
+dependencies, repository truth, and owner direction. Do not make a second
+routine register update for the same pass; correct the register only as
+exceptional cleanup if publication failed or repository truth differs from the
+intended state. If the next unit is a later child of an accepted decomposition
+that remains valid, it begins at Gate A rather than repeating Stage 0.
 
 Separate explicit authorization is required for destructive or irreversible
 provider, runtime, database, deployment, credential, or real-data operations

@@ -1,9 +1,12 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from urllib.parse import quote
+from ipaddress import IPv4Address, IPv6Address
+from urllib.parse import quote, urlsplit
 
 import boto3
+import idna
 from botocore.client import Config
 from botocore.exceptions import (
     BotoCoreError,
@@ -64,6 +67,136 @@ class R2StorageConfig:
 
 
 DEFAULT_ALLOWED_IMAGE_TYPES = DEFAULT_R2_ALLOWED_IMAGE_TYPES
+
+
+def _raise_invalid_presigned_url(error_detail: str) -> None:
+    raise R2StorageError(error_detail)
+
+
+def _is_ipv4_number(value: str) -> bool:
+    normalized = value.casefold()
+    if normalized.startswith("0x"):
+        hexadecimal = normalized[2:]
+        return bool(hexadecimal) and all(
+            character in "0123456789abcdef" for character in hexadecimal
+        )
+    return value.isascii() and value.isdigit()
+
+
+def _validate_explicit_port(port: str, *, error_detail: str) -> None:
+    if not port or not port.isascii() or not port.isdigit():
+        _raise_invalid_presigned_url(error_detail)
+    if not 0 < int(port) < 65536:
+        _raise_invalid_presigned_url(error_detail)
+
+
+def _validate_dns_or_ipv4_hostname(hostname: str, *, error_detail: str) -> None:
+    try:
+        ascii_hostname = idna.encode(
+            hostname,
+            uts46=True,
+            std3_rules=True,
+        ).decode("ascii")
+    except idna.IDNAError as exc:
+        raise R2StorageError(error_detail) from exc
+
+    dns_hostname = ascii_hostname.removesuffix(".").casefold()
+    if not dns_hostname or len(dns_hostname) > 253:
+        _raise_invalid_presigned_url(error_detail)
+
+    try:
+        IPv4Address(dns_hostname)
+    except ValueError:
+        # WHATWG URL consumers interpret a hostname ending in an IPv4 number as
+        # an address. Reject non-canonical forms instead of allowing the browser
+        # to reinterpret a DNS-looking authority after signing.
+        if _is_ipv4_number(dns_hostname.rsplit(".", maxsplit=1)[-1]):
+            _raise_invalid_presigned_url(error_detail)
+
+
+def _validate_presigned_url_authority(
+    authority: str,
+    *,
+    hostname: str,
+    error_detail: str,
+) -> None:
+    if authority.startswith("["):
+        closing_bracket = authority.find("]")
+        remainder = authority[closing_bracket + 1 :]
+        if remainder:
+            if not remainder.startswith(":"):
+                _raise_invalid_presigned_url(error_detail)
+            _validate_explicit_port(remainder[1:], error_detail=error_detail)
+        if "%" in hostname:
+            _raise_invalid_presigned_url(error_detail)
+        try:
+            IPv6Address(hostname)
+        except ValueError as exc:
+            raise R2StorageError(error_detail) from exc
+        return
+
+    if ":" in authority:
+        host, separator, port = authority.rpartition(":")
+        if not separator or ":" in host:
+            _raise_invalid_presigned_url(error_detail)
+        _validate_explicit_port(port, error_detail=error_detail)
+
+    _validate_dns_or_ipv4_hostname(hostname, error_detail=error_detail)
+
+
+def _validated_presigned_url(value: object, *, error_detail: str) -> str:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise R2StorageError(error_detail)
+
+    if any(
+        character.isspace() or ord(character) < 32 or ord(character) == 127
+        for character in value
+    ):
+        raise R2StorageError(error_detail)
+
+    try:
+        parsed = urlsplit(value)
+        _ = parsed.port
+    except ValueError as exc:
+        raise R2StorageError(error_detail) from exc
+
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+    ):
+        raise R2StorageError(error_detail)
+    _validate_presigned_url_authority(
+        parsed.netloc,
+        hostname=parsed.hostname,
+        error_detail=error_detail,
+    )
+    return value
+
+
+def _object_properties_from_response(response: object) -> R2ObjectProperties:
+    if not isinstance(response, Mapping):
+        raise R2StorageError("Cloudflare R2 returned invalid image metadata.")
+
+    content_length = response.get("ContentLength")
+    content_type = response.get("ContentType")
+    etag = response.get("ETag")
+    if (
+        isinstance(content_length, bool)
+        or not isinstance(content_length, int)
+        or content_length < 0
+        or (content_type is not None and not isinstance(content_type, str))
+        or (etag is not None and not isinstance(etag, str))
+    ):
+        raise R2StorageError("Cloudflare R2 returned invalid image metadata.")
+
+    return R2ObjectProperties(
+        content_type=content_type,
+        size_bytes=content_length,
+        etag=etag,
+    )
 
 
 def get_allowed_image_types() -> frozenset[str]:
@@ -200,15 +333,18 @@ def create_object_upload_url(
     )
 
     try:
-        upload_url = get_r2_client(config).generate_presigned_url(
-            "put_object",
-            Params={
-                "Bucket": config.bucket_name,
-                "Key": object_key,
-                "ContentType": content_type,
-            },
-            ExpiresIn=config.upload_url_minutes * 60,
-            HttpMethod="PUT",
+        upload_url = _validated_presigned_url(
+            get_r2_client(config).generate_presigned_url(
+                "put_object",
+                Params={
+                    "Bucket": config.bucket_name,
+                    "Key": object_key,
+                    "ContentType": content_type,
+                },
+                ExpiresIn=config.upload_url_minutes * 60,
+                HttpMethod="PUT",
+            ),
+            error_detail="Cloudflare R2 could not create an upload URL.",
         )
     except (BotoCoreError, ClientError) as exc:
         raise R2StorageError("Cloudflare R2 could not create an upload URL.") from exc
@@ -226,14 +362,17 @@ def create_object_read_url(object_key: str) -> str:
     config = get_r2_storage_config()
 
     try:
-        return get_r2_client(config).generate_presigned_url(
-            "get_object",
-            Params={
-                "Bucket": config.bucket_name,
-                "Key": object_key,
-            },
-            ExpiresIn=config.read_url_minutes * 60,
-            HttpMethod="GET",
+        return _validated_presigned_url(
+            get_r2_client(config).generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": config.bucket_name,
+                    "Key": object_key,
+                },
+                ExpiresIn=config.read_url_minutes * 60,
+                HttpMethod="GET",
+            ),
+            error_detail="Cloudflare R2 could not create a read URL.",
         )
     except (BotoCoreError, ClientError) as exc:
         raise R2StorageError("Cloudflare R2 could not create a read URL.") from exc
@@ -267,11 +406,7 @@ def get_object_properties(object_key: str) -> R2ObjectProperties:
             "Cloudflare R2 could not verify the uploaded image."
         ) from exc
 
-    return R2ObjectProperties(
-        content_type=response.get("ContentType"),
-        size_bytes=int(response.get("ContentLength") or 0),
-        etag=response.get("ETag"),
-    )
+    return _object_properties_from_response(response)
 
 
 def get_content_type_extension(content_type: str, file_name: str) -> str:

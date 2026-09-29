@@ -229,6 +229,18 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
         ),
         _StaleRecentAdminCase(
             "POST",
+            "/admin/money/financial-outcomes/{financial_outcome_id}/resolve",
+            f"/admin/money/financial-outcomes/{route_id}/resolve",
+            {
+                "outcome": "forfeit",
+                "reason": "Stale admin must not resolve financial outcomes.",
+                "amount_cents": 500,
+                "idempotency_key": f"ws03d-stale-outcome-resolve-{uuid.uuid4()}",
+            },
+            "financial outcome resolution",
+        ),
+        _StaleRecentAdminCase(
+            "POST",
             "/admin/money/issues/{money_issue_id}/resolve",
             f"/admin/money/issues/{route_id}/resolve",
             {

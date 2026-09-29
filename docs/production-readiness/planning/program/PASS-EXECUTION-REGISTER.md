@@ -17,13 +17,13 @@ when durable authority leaves multiple equally valid choices.
 | Field | Value |
 |---|---|
 | Register purpose | Distinguish original blueprint parent passes from actual executable passes and record accepted progression state. |
-| Current reconciliation point | Current accepted `develop` contains 47 executable passes, including `WS09-03A` through merged PR #185. `WS05-03A` is implemented but unmerged in the current change set. The proposed state that becomes factual atomically when the substantive `WS05-03A` PR merges has 48 accepted executable passes, no implemented-but-unmerged pass, and 24 remaining executable units. |
-| Accepted pre-`WS05-03A` state | Current accepted `develop` contains `WS09-01A`, `WS09-02A`, `WS09-02B`, `WS09-02C`, `WS09-03A`, and `WS03-05D`, with 47 merged/accepted executable passes. |
+| Current reconciliation point | The intended post-merge state represented by this register contains 49 accepted executable passes, including `WS06-01`, with 23 remaining executable units. `WS05-03B` Gate A is complete, but Gate B is deferred pending the real production worker/scheduler/runtime under `WS05-01B`. |
+| Accepted pre-`WS05-03A` state | Historical pre-`WS05-03A` accepted `develop` contained `WS09-01A`, `WS09-02A`, `WS09-02B`, `WS09-02C`, `WS09-03A`, and `WS03-05D`, with 47 merged/accepted executable passes. |
 | Historical blueprint register | 42 original parent-level planned entries, retained as provenance. |
-| Accepted implemented passes | 48 merged/accepted executable passes in the proposed post-`WS05-03A` merge state. |
-| Implemented but unmerged | `WS05-03A` in the current local change set; none in the proposed post-merge state. |
-| Remaining roadmap | 24 genuinely unimplemented executable units after accepting `WS05-03A`; `WS05-03B` replaces the prior parent-level `WS05-03` placeholder, while mandatory deferred `WS09-01B` and `WS09-03B` remain incomplete. |
-| Next unit selected by this register? | Not by itself. Use the corrected master, applicable prerequisites, current `develop`, and owner selection when more than one unit is valid. |
+| Accepted implemented passes | 49 executable passes in the intended post-merge state, including `WS06-01`. |
+| Implemented but unmerged | None; normal transient gate progress is not recorded in this register. |
+| Remaining roadmap | 23 genuinely unimplemented executable units. `WS05-03B` and `WS05-04` are currently deferred on the `WS05-01B` runtime sequence; mandatory deferred `WS09-01B` and `WS09-03B` also remain incomplete. |
+| Next unit selected by this register? | None. Select subsequent work from current authority, prerequisites, repository truth, and owner direction after merge. |
 
 The recorded accepted `develop` SHA is a historical reconciliation basis for
 this register version. It is not a mutable instruction and is not the
@@ -36,9 +36,9 @@ production-readiness run instruction.
 | Metric | Count | Meaning |
 |---|---:|---|
 | Historical parent-level entries | 42 | Original planning inventory retained as provenance. |
-| Merged/accepted implemented passes | 48 | Proposed post-merge state: 47 accepted before this pass plus accepted `WS05-03A`. |
-| Implemented but unmerged passes | 0 | Proposed post-merge state; the current local change set contains implemented-but-unmerged `WS05-03A`. |
-| Genuinely unimplemented remaining units | 24 | `WS05-03A` is replaced in the remaining roadmap by `WS05-03B`, so the count remains 24. |
+| Merged/accepted implemented passes | 49 | Intended post-merge state, including accepted `WS06-01`. |
+| Implemented but unmerged passes | 0 | Normal transient gate progress is not recorded in this register. |
+| Genuinely unimplemented remaining units | 23 | `WS06-01` is accepted in the intended post-merge state and removed from remaining work. |
 
 Count magnitude is not production-readiness proof. Completion depends on the
 actual surviving safety obligations and final evidence required by the corrected
@@ -102,9 +102,9 @@ navigation. It does not replace the master blueprint.
 | `WS04-03` | Migration policy, compatibility, interruption, and production-like rehearsal | `WS04-03A` is accepted; corrected `WS04-03B` final migration/runtime rehearsal remains deferred. |
 | `WS05-01` | Durable job model, claim/lease lifecycle, and worker deployment | `WS05-01A` is accepted; corrected `WS05-01B` final worker deployment/runtime proof remains deferred. |
 | `WS05-02` | Payment and booking state machines with webhook authority | Accepted; surviving later refund, provider/runtime, observability, and operations work is governed by the corrected master. |
-| `WS05-03` | Refunds, credits, notices and reconciliation | Approved two-child decomposition. `WS05-03A` is implemented but unmerged in the current change set and accepted in the proposed post-merge state. `WS05-03B` remains unimplemented and ordered after A. Parent `WS05-03` remains incomplete. |
-| `WS05-04` | Failure/concurrency/provider verification | Not implemented. Corrected scope is governed by master section 8.3; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
-| `WS06-01` | Admin upload authority and initiation | Not implemented. Corrected scope is governed by master section 8.4; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
+| `WS05-03` | Refunds, credits, notices and reconciliation | Approved two-child decomposition. `WS05-03A` is accepted. `WS05-03B` Gate A is complete and its corrected plan is ready, but Gate B is deferred until `WS05-01B` establishes the real production worker/scheduler/runtime. Parent `WS05-03` remains incomplete. |
+| `WS05-04` | Failure/concurrency/provider verification | Deferred until the required worker/runtime and the implemented `WS05-03B` reconciliation path exist, so deployed-worker, provider, and reconciliation proof can be meaningful. Corrected scope remains governed by master section 8.3. |
+| `WS06-01` | Admin upload authority and initiation | Accepted executable pass. |
 | `WS06-02` | Image validation and sanitization | Not implemented. Corrected scope is governed by master section 8.4; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
 | `WS06-03` | R2 lifecycle and repair | Not implemented. Corrected scope is governed by master section 8.4; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
 | `WS07-01` | Production build and public configuration | Not implemented. Corrected scope is governed by master section 8.5; Stage 0 determines whether the unit executes whole or requires decomposition; do not decompose unless genuinely needed. |
@@ -127,9 +127,10 @@ navigation. It does not replace the master blueprint.
 
 ## 5. Accepted Executable Passes
 
-The following 48 executable passes are merged and accepted in the proposed post-merge
-repository. Plan paths are retained as implementation provenance, not current
-scope authority. Every path is relative to `docs/production-readiness/planning/`.
+The following 49 executable passes are accepted in the intended post-merge
+state represented by this register. Plan paths are retained as implementation
+provenance, not current scope authority. Every path is relative to
+`docs/production-readiness/planning/`.
 
 | Executable pass | Historical parent | Plan | State |
 |---|---|---|---|
@@ -175,7 +176,8 @@ scope authority. Every path is relative to `docs/production-readiness/planning/`
 | `WS04-03A` | `WS04-03` | `passes/ws04/ws04-03a-provider-independent-migration-policy-compatibility-graph-drift-controlled-rehearsal.md` | Accepted |
 | `WS05-01A` | `WS05-01` | `passes/ws05/ws05-01a-provider-independent-durable-job-model-claim-lease-lifecycle-portable-worker-runtime.md` | Accepted |
 | `WS05-02` | `WS05-02` | `passes/ws05/ws05-02-payment-booking-state-machines-webhook-authority.md` | Accepted |
-| `WS05-03A` | `WS05-03` | `passes/ws05/ws05-03a-refund-credit-compensation-financial-notice-fulfillment.md` | Accepted in proposed post-merge state |
+| `WS05-03A` | `WS05-03` | `passes/ws05/ws05-03a-refund-credit-compensation-financial-notice-fulfillment.md` | Accepted through merged PR #187 |
+| `WS06-01` | `WS06-01` | `passes/ws06/ws06-01-admin-upload-authority-initiation.md` | Accepted |
 | `WS09-01A` | `WS09-01` | `passes/ws09/ws09-01a-provider-independent-structured-api-and-worker-logging.md` | Accepted through merged PR #184 |
 | `WS09-02A` | `WS09-02` | `passes/ws09/ws09-02a-reusable-append-only-administrative-audit-foundation.md` | Accepted |
 | `WS09-02B` | `WS09-02` | `passes/ws09/ws09-02b-important-privileged-mutation-audit-coverage.md` | Accepted |
@@ -196,7 +198,7 @@ SHAs are provenance only; future work does not require a frozen intake artifact.
 | `WS04-03` | `docs/production-readiness/planning/passes/ws04/ws04-03-intake.md` | `ffc3e81d2d55ce9cca60d6ae40390d8ae9df2d8f8d3995b4b9c8464c101cfb48` | `WS04-03A` | Accepted split: `WS04-03A` is the current provider-independent migration-policy/rehearsal child; mandatory `WS04-03B` remains deferred until final production database provider, deployment topology, migration runner, and production-equivalent rehearsal inputs are selected and evidenced. |
 | `WS05-01` | `docs/production-readiness/planning/passes/ws05/ws05-01-intake.md` | `1cfa5be5898cf0e53730c7841e5c5c89d9a824c8e10b644b0fcb835e50890720` | `WS05-01A` | Accepted split: `WS05-01A` is the current provider-independent durable-job foundation child; mandatory `WS05-01B` remains deferred until final worker platform, service topology, process/instance model, scaling/resource settings, provider deployment path, and runtime verification environment are selected and evidenced. |
 | `WS05-02` | `docs/production-readiness/planning/passes/ws05/ws05-02-intake.md` | `4450d47c4bd44678b7f9ccd07a229740aad5fdec443153a0d8677dd3491f8ab1` | `WS05-02` | Accepted direct executable pass; surviving later payment, provider/runtime, observability, and operations work is governed by the corrected master. |
-| `WS05-03` | `docs/production-readiness/planning/passes/ws05/ws05-03-intake.md` | Not frozen; current workflow does not record new artifact hashes. | `WS05-03A` | Approved split: `WS05-03A` is implemented but unmerged in the current change set and accepted in the proposed post-merge state; `WS05-03B` remains unimplemented and ordered after A; parent `WS05-03` remains incomplete. |
+| `WS05-03` | `docs/production-readiness/planning/passes/ws05/ws05-03-intake.md` | Not frozen; current workflow does not record new artifact hashes. | `WS05-03A` | Approved split: `WS05-03A` is accepted; `WS05-03B` Gate A is complete with a corrected implementation plan, while Gate B is deferred pending the `WS05-01B` production worker/scheduler/runtime; parent `WS05-03` remains incomplete. |
 | `WS09-01` | `docs/production-readiness/planning/passes/ws09/ws09-01-intake.md` | Not frozen; current workflow does not record new artifact hashes. | `WS09-01A` | Approved split: provider-independent `WS09-01A` is accepted through merged PR #184; mandatory `WS09-01B` remains deferred and parent `WS09-01` remains incomplete. |
 | `WS09-02` | `docs/production-readiness/planning/passes/ws09/ws09-02-intake.md` | `c40b06efc13518fcf2345392eb6636a516179f3b1d34543713fc5808f9d901c5` | `WS09-02A`, `WS09-02B`, `WS09-02C` | Accepted three-child decomposition. All three children are accepted in current `develop`, so parent `WS09-02` is complete. |
 | `WS09-03` | `docs/production-readiness/planning/passes/ws09/ws09-03-intake.md` | Not frozen; current workflow does not record new artifact hashes. | `WS09-03A` | Approved split: provider-independent `WS09-03A` is accepted through merged PR #185; mandatory `WS09-03B` remains deferred and parent `WS09-03` remains incomplete. |
@@ -648,18 +650,23 @@ Approved executable children:
 Approved dependency graph:
 `WS05-03A -> WS05-03B`.
 
-`WS05-03A` is implemented but unmerged in the current change set and accepted
-in the proposed post-merge state. Its canonical plan is
+`WS05-03A` is accepted through merged PR #187. Its canonical plan is
 `docs/production-readiness/planning/passes/ws05/ws05-03a-refund-credit-compensation-financial-notice-fulfillment.md`.
 It owns fulfillment of known refund, credit, compensation, and financial-notice
 obligations through the focused durable refund workflow and existing authorized
 repair paths.
 
-`WS05-03B` remains unimplemented and ordered after WS05-03A. It owns bounded
-periodic monetary reconciliation after A's fulfillment and repair behavior is
-accepted. Parent `WS05-03` remains incomplete until WS05-03B is accepted or its
-remaining obligations are otherwise truthfully resolved under current
+`WS05-03B` Gate A planning and review are complete, and its corrected
+implementation plan is ready. Gate B is intentionally deferred until
+`WS05-01B` establishes and proves the real production worker, scheduler, and
+runtime that will own recurring execution. The deferral is not implementation
+or acceptance; parent `WS05-03` remains incomplete until WS05-03B is accepted
+or its remaining obligations are otherwise truthfully resolved under current
 authority.
+
+`WS05-04` is also deferred until that worker/runtime and the implemented
+WS05-03B reconciliation path exist. Its deployed-worker, provider, and
+reconciliation proof cannot be meaningful before those prerequisites.
 
 ### WS09-01
 
@@ -779,28 +786,32 @@ obligations are otherwise truthfully resolved under current authority.
 
 ## 8. Remaining Work And Progression
 
-The proposed post-`WS05-03A` merge state has 24 remaining executable units.
-`WS05-03A` becomes accepted while `WS05-03B` replaces the former parent-level
-`WS05-03` placeholder. The remaining composition is:
+The intended post-merge state has 23 remaining executable units. `WS05-03B`
+replaces the former parent-level `WS05-03` placeholder. The remaining
+composition is:
 
 - `WS04-01D`, `WS04-03B`, `WS05-01B`, `WS05-03B`, and `WS05-04`;
-- `WS06-01`, `WS06-02`, and `WS06-03`;
+- `WS06-02` and `WS06-03`;
 - `WS07-01`, `WS07-02`, `WS07-03`, `WS07-04`, and `WS07-05`;
 - `WS08-01`, `WS08-02`, and `WS08-03`;
 - `WS09-01B` and `WS09-03B`;
 - `WS10-01`, `WS10-02`, `WS10-03`, and `WS10-04`; and
 - `CLOSE-01` and `CLOSE-02`.
 
-`WS05-03A` is accepted in the proposed post-merge state. `WS05-03B` remains
-unimplemented and ordered after A, and the `WS05-03` umbrella remains incomplete
-but is not separately counted. `WS09-01A` is accepted through merged PR #184.
+`WS05-03A` is accepted through merged PR #187. `WS05-03B` Gate A is complete,
+but its implementation is deferred until `WS05-01B` establishes the production
+worker/scheduler/runtime. `WS05-04` is deferred until that runtime and the
+implemented WS05-03B path exist. Both remain counted as unimplemented, and the
+`WS05-03` umbrella remains incomplete but is not separately counted. `WS06-01`
+is accepted in the intended post-merge state. This register does not select the
+next unit. `WS09-01A` is accepted through merged PR #184.
 `WS09-01B` remains a mandatory deferred executable unit, and the `WS09-01`
 umbrella is incomplete but is not separately counted. `WS09-03A` is accepted
 through merged PR #185; `WS09-03B` remains mandatory and deferred, and the
 `WS09-03` umbrella is incomplete but not separately counted. `WS09-02C` is
 accepted in current `develop`, and the complete `WS09-02` umbrella is not
-counted as remaining work. This register records state but does not select or
-expand that work.
+counted as remaining work. This selection does not expand or redesign any
+unit's corrected-master scope.
 
 For each selected unit:
 

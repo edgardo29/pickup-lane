@@ -22,7 +22,7 @@ STAGE 0: SCOPE, RECONCILIATION, AND DECOMPOSITION DECISION
 -> GATE A: ENGINEERING PLAN AND REVIEW
 -> GATE B: IMPLEMENTATION AND RISK-BASED EVIDENCE
 -> GATE C: INDEPENDENT SEMANTIC REVIEW
--> GATE D: GIT AND PR FINALIZATION
+-> GATE D: GIT AND PR FINALIZATION + EXECUTION-REGISTER UPDATE
 -> MANUAL MERGE
 ```
 
@@ -188,7 +188,9 @@ under the read-first document before continuing.
 
 Stage 0 and Gate A edit only planning artifacts authorized by the current
 instruction. They do not stage, commit, push, create a PR, or update a PR.
-Publication remains Gate D work after independent review.
+They also do not update the execution register merely to record the current
+pass's transient progress. Publication and the normal execution-register update
+remain Gate D work after independent review.
 
 ## 6. STAGE 0: Scope, Reconciliation, And Decomposition Decision
 
@@ -488,7 +490,7 @@ configuration, or provider state.
 
 ### 7.1 Planning Responsibilities
 
-A useful plan should:
+The plan must:
 
 - reconcile the selected unit with the corrected master and current repository
   truth;
@@ -502,9 +504,27 @@ A useful plan should:
 - choose realistic proof layers and focused validation;
 - remain small enough for one coherent implementation and review.
 
-For finite or cross-cutting contracts, use a matrix or inventory when it
-materially reduces omission risk. Do not create one as process bookkeeping when
-the contract is already clear.
+For every finite or cross-cutting contract affected by the work, enumerate the
+complete current population and the planned treatment of every member. This
+includes, when present:
+
+- states, transitions, terminal conditions, and historical behavior;
+- provider operations and their success, pending, rejection, transient,
+  unknown, malformed, and configuration outcomes;
+- identifiers, idempotency keys, uniqueness constraints, replay equivalence,
+  and collision behavior;
+- values or result tokens introduced or changed by the plan and every producer
+  and consumer of each value;
+- persisted representations, migrations, transactions, locks, and rollback
+  behavior;
+- affected interfaces, policies, registries, metrics, diagnostics, and
+  compatibility contracts; and
+- the proof that will establish each material behavior.
+
+Place these finite populations in the relevant requirements, design, failure,
+or testing section. A separate process-administration artifact is not required.
+Do not sample a finite population or leave one of its members for Gate B to
+classify.
 
 The planning template defines structure and authoring quality for a durable
 plan; it does not define scope or override current authority. Existing plans and
@@ -513,32 +533,148 @@ production-readiness authority.
 
 ### 7.2 Impact And Compatibility Review
 
-Before implementation, inspect the relevant surrounding system rather than only
-the expected edit locations. Depending on the change, this can include callers,
-routes, request and response contracts, settings, middleware, provider
-boundaries, state values, schema and migration expectations, constraints,
-existing regression tests, frontend behavior, and technical documentation.
+Before the plan is ready for review, trace every proposed behavior and design
+change through the current surrounding system. Inspect the actual producers,
+callers, entry points, persisted representations, direct and downstream
+consumers, state transitions, constraints, policies, registries, metrics,
+diagnostics, provider boundaries, failure paths, tests, and technical contracts
+that the change affects. Include routes, schemas, settings, middleware,
+migrations, frontend behavior, or other representations when they participate
+in that chain.
 
-The depth of this review should scale with risk. Complete finite populations
-such as state transitions, actor classes, event types, or equivalent adapters
-when sampling could hide a material omission.
+For every state, result token, identity, operation, interface, or persisted
+field that the plan introduces or changes, identify all current producers and
+consumers and define their resulting behavior. Trace the complete affected
+contract family; proximity to an expected edit location is not a boundary.
+Complete every affected finite population rather than sampling it.
+
+A Gate A correction run must perform the same trace for every design decision it
+adds or changes. Correct the complete affected contract family, including newly
+required compatibility and proof, rather than only the cited sentence or
+example. This impact trace is part of producing an executable plan; it does not
+authorize the author or corrector to approve the plan.
 
 ### 7.3 Plan Review And Corrections
 
-Review the Gate A plan before implementation. Verify that it is
-consistent with the corrected master, current repository truth, real
-prerequisites, and the selected scope; that it leaves no material design choice
-for implementation to invent; and that its validation can prove the behavior it
-claims.
+Gate A plan authoring or correction and Gate A plan review are separate runs. A
+run that creates or changes the plan must stop when the current plan is ready
+for review and cannot approve it. Review begins only in a later Gate A review
+run; it does not occur in the same run that authored or corrected the plan.
 
-Report material findings together. Route a plan defect back to Gate A, a wrong
-executable boundary back to Stage 0, and an unresolved product, policy,
-security, provider, or operational decision to the owner. After a correction,
-review the corrected plan again. There is no fixed number of automatic review or
-correction rounds.
+The review run must use fresh context separate from the authoring or correction
+context. It must derive its conclusions from the governing sources and current
+repository rather than an authoring report, prior review verdict, or correction
+summary. It must reread and identify in its report the exact review basis:
 
-Gate A ends with either a usable current plan or a clearly reported blocker. It
-does not automatically begin implementation.
+- the corrected-master obligation;
+- the accepted Stage 0 result or intake and selected executable boundary;
+- the current repository branch, complete staged, unstaged, and untracked state,
+  and current source needed to verify the plan's claims;
+- the execution register;
+- every prerequisite contract identified by current authority, Stage 0, or the
+  affected repository behavior;
+- every engineering and testing standard that Program Context routes to for the
+  plan's actual technical scope and, for a durable plan, the current planning
+  template; and
+- explicit owner decisions that govern the selected work.
+
+The Gate A review contract becomes fixed when the first complete plan review
+begins. It consists of the authoritative obligation, accepted executable
+boundary, applicable prerequisite contracts and standards, explicit owner
+decisions, and current repository behavior relevant to those items. Plan
+corrections may change the plan, but they do not change that review contract.
+A later review may identify a previously missed violation or consequence within
+the fixed contract, but it must not move the completion bar, introduce a new
+requirement, or reinterpret a preference as an obligation. If current authority,
+repository truth, or an owner decision genuinely changes the review contract,
+the review must identify that change explicitly and route any resulting scope,
+design, or ownership consequence before continuing.
+
+Before reaching a verdict, build a source-backed review inventory from that
+basis. The inventory must contain:
+
+- every in-scope requirement, prerequisite contract, boundary, non-goal, and
+  deferred obligation;
+- every behavior, invariant, mechanism, failure case, and completion claim in
+  the plan;
+- every affected finite or cross-cutting contract listed in Section 7.1; and
+- every current repository producer, representation, consumer, and
+  compatibility contract needed to verify those items.
+
+Trace each inventory item through the governing source, plan requirement,
+design, current producer, persisted or transmitted representation, every
+consumer, failure and replay behavior, and planned proof. For each item, record
+one result in the Gate A review report:
+
+- `covered`: the complete chain is defined and consistent;
+- `material finding`: the item satisfies the materiality rule below; or
+- `inapplicable`: the category was evaluated and the report gives the concrete
+  reason it does not apply.
+
+The coverage record belongs in the review report and does not require another
+repository artifact. A review cannot claim complete coverage while an inventory
+item is omitted, unresolved, or supported only by the plan's assertion. Confirm
+from this trace that deferred or out-of-scope work has not been pulled into the
+pass, repository claims and affected paths are accurate, Gate B would not need
+to invent a material design choice, and the proposed validation can prove every
+material completion claim.
+
+A plan-review finding is material only when the review demonstrates at least
+one of these conditions:
+
+- a conflict with current authority, current repository truth, or an accepted
+  prerequisite contract;
+- behavior or design required to implement an existing in-scope obligation is
+  missing;
+- the plan contains a scope gap, scope overlap, or unauthorized expansion;
+- Gate B would have to invent a material implementation choice;
+- the planned behavior is incompatible with an existing affected workflow; or
+- the proposed validation cannot prove a material completion claim.
+
+Each material finding must identify the governing source or repository
+evidence, the affected plan section, the conflicting or missing design, its
+concrete consequence, and the exact correction route. A preference, speculative
+hardening proposal, unsupported hypothetical, harmless alternative, optional
+refactoring, or request for additional proof that does not expose one of the
+conditions above is not a Gate A blocker.
+
+Complete the review of the entire plan after finding a defect and report all
+qualifying material findings together. Route a plan defect to a separate Gate A
+correction run, a wrong executable boundary to Stage 0, and an unresolved
+product, policy, security, provider, or operational decision to the owner.
+
+Before modifying the plan, the correction run must independently confirm each
+reported finding against the complete Gate A review basis, the fixed review
+contract, current repository evidence, and the materiality conditions above.
+Correct only findings that are supported by that basis and actually satisfy a
+materiality condition. If a reported finding does not qualify, do not change the
+plan for it; report the finding as rejected with the source-backed reason.
+
+For every validated finding, the correction must fully resolve the design defect
+and update the complete genuinely affected contract family, including any
+required behavior, failure handling, compatibility, and proof consequences. Do
+not opportunistically redesign, strengthen, generalize, refactor, or rewrite
+unrelated plan behavior. Broader changes are allowed when they are required to
+resolve the validated finding completely or are required by governing authority
+or current repository truth.
+
+A correction run may change the plan but cannot approve it. Its report must name
+every contract added or changed by the correction and confirm that Section 7.2's
+complete affected-family trace was performed.
+
+Review a corrected plan in another fresh Gate A review run against the complete
+review basis and the entire corrected plan, not only the reported corrections.
+Use the prior coverage inventory as navigation, not as proof: independently
+reverify every item and add every contract introduced or changed by the
+correction. An additional inventory item is valid only when the review cites the
+authority or current repository evidence that makes it applicable and explains
+why it was absent from the prior inventory. A reviewer cannot add an item from
+preference, speculative hardening, or a newly invented requirement.
+
+The first complete Gate A review with no material findings approves the plan and
+ends Gate A; do not request another clean review. If required review material is
+inaccessible or a routed decision remains unresolved, report Gate A as blocked.
+Gate A does not automatically begin implementation.
 
 ## 8. GATE B: Implementation And Risk-Based Evidence
 
@@ -613,7 +749,9 @@ and evidence claims broader than the proof.
 
 Gate B ends with a validated local change set and a concise implementation and
 validation report. It does not stage, commit, push, create a PR, or begin Gate C
-unless the current owner instruction explicitly asks for the next step.
+unless the current owner instruction explicitly asks for the next step. It does
+not update the execution register merely to record that the current pass has
+been implemented locally.
 
 ## 9. GATE C: Independent Semantic Review
 
@@ -670,6 +808,11 @@ Do not approve while any material part of the required review boundary remains u
 
 Gate C does not edit files, stage changes, commit, push, create or update a PR,
 merge, rebase, reset, apply a stash, or self-fix.
+
+Gate C does not require the current pass to appear in the execution register as
+implemented but unmerged. The absence of a transient register update for the
+current pass is not a finding; the normal register transition occurs once in
+Gate D after Gate C approval.
 
 ### 9.2 Contract-Bound Semantic Sweep
 
@@ -769,10 +912,11 @@ focused reproduction only when a concrete semantic concern requires it.
 
 Limiting test execution does not limit semantic review depth. Passing tests, prior validation, implementation notes, or reviewer confidence never substitute for complete inspection of the implementation, surrounding contracts, and evidence.
 
-## 10. GATE D: Git And PR Finalization
+## 10. GATE D: Git And PR Finalization And Execution-Register Update
 
-Gate D is mechanical Git and PR work after the change set has passed independent
-review and the owner has asked to publish it.
+Gate D performs the one normal execution-register update and mechanical Git and
+PR work after the change set has passed independent review and the owner has
+asked to publish it.
 
 Before drafting or updating the pull request, read and follow the current
 `docs/production-readiness/planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md`.
@@ -786,6 +930,8 @@ Gate D must:
   and intended changed-file set;
 - stop if `origin/develop` advanced in a way that requires reconciliation;
 - inspect the final diff for scope and sensitive material;
+- update the execution register exactly once for the current pass, in the
+  substantive PR, to the state intended to exist after that PR merges;
 - stage only approved files and inspect the staged diff;
 - create the intended commit or commit structure;
 - push normally without force;
@@ -801,8 +947,10 @@ plans and Gate reports do not prove implementation behavior.
 Gate D does not amend, squash, rebase, reset, cherry-pick, rewrite history,
 force-push, merge, or enable auto-merge unless the owner explicitly authorizes
 the particular action. PR merge remains manual. Gate D does not author semantic
-content changes; route any discovered content defect back to implementation or
-planning.
+product, implementation, or planning changes. The required execution-register
+transition is the authorized application of the already-approved pass result,
+not permission to redesign execution state. Route any discovered content defect
+back to implementation or planning.
 
 ## 11. Correction Routing
 
@@ -819,14 +967,26 @@ planning.
 ## 12. Register Updates
 
 The execution register is a factual status record, not scope authority or an
-automatic work selector. Update it when a substantive change alters accepted
-execution state, a decomposition is genuinely created, or recorded history is
-found inaccurate.
+automatic work selector.
 
-Register updates normally travel with the substantive PR. They must distinguish
-merged/accepted work, implemented but unmerged work, remaining corrected-master
-scope, and late-bound obligations. Do not mark work accepted before merge or
-claim deferred evidence is complete.
+For a normal pass, update the register exactly once during Gate D. The update
+travels in the substantive PR and describes the final execution state intended
+to exist after that PR merges, including the accepted pass or decomposition,
+remaining corrected-master scope, and any still-open late-bound obligations.
+The register version carried by the open PR may therefore describe the current
+pass as accepted or complete before the PR has physically merged; that wording
+represents the atomic post-merge state, not transient branch progress.
+
+Do not update the register during Stage 0, Gate A, Gate B, or Gate C merely to
+record the current pass's progress, and do not introduce an
+implemented-but-unmerged entry for that purpose. Gate C must not treat the
+absence of such an intermediate update as a defect.
+
+After the PR merges, do not perform a second routine register update for the
+same pass. If publication fails, the merged result differs from the intended
+state, or the register is otherwise factually wrong, correct it as exceptional
+cleanup. Never claim completion for a surviving obligation or deferred evidence
+that the pass did not actually complete.
 
 ## 13. Stop Conditions
 
@@ -863,7 +1023,10 @@ After manual merge:
    metadata;
 3. fast-forward local `develop` to `origin/develop` using the normal safe path;
 4. verify local and remote `develop` agree;
-5. reconcile factual execution-register state when needed.
+5. confirm that the Gate D execution-register update landed with the intended
+   final state; do not make a second routine update for the same pass, and use
+   exceptional cleanup only if publication failed or repository truth differs
+   from that intended state.
 
 Select later work from the corrected master, current repository truth, real
 prerequisites, deferred-trigger state, and owner direction. A later child of an
