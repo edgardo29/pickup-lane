@@ -172,7 +172,12 @@ def _refund(payment, booking, *, provider_status: str | None):
     )
 
 
-def _target_state(db: Session, *, provider_status: str | None):
+def _target_state(
+    db: Session,
+    *,
+    provider_status: str | None,
+    record_initial_event: bool = True,
+):
     from backend.services.refund_event_service import record_refund_event
 
     admin = _user(0, role="admin")
@@ -210,7 +215,7 @@ def _target_state(db: Session, *, provider_status: str | None):
             reason_code="refund_fixture_provider_failed",
             summary="Refund fixture provider attempt failed.",
         )
-    elif provider_status is None:
+    elif provider_status is None and record_initial_event:
         record_refund_event(
             db,
             refund=refund,
@@ -1409,7 +1414,11 @@ def test_refund_durable_runner_maps_financial_outcomes_to_job_states(
     from backend.services.stripe_service import StripeRefundResult
 
     with _session() as db:
-        _admin, _user_row, payment, refund = _target_state(db, provider_status=None)
+        _admin, _user_row, payment, refund = _target_state(
+            db,
+            provider_status=None,
+            record_initial_event=False,
+        )
         _queue_refund_job(db, refund)
         refund_id = refund.id
         payment_id = payment.id
@@ -2084,7 +2093,11 @@ def test_concurrent_terminal_provider_observations_cannot_downgrade_success() ->
     from backend.services.stripe_service import StripeRefundResult
 
     with _session() as db:
-        _admin, _user_row, payment, refund = _target_state(db, provider_status=None)
+        _admin, _user_row, payment, refund = _target_state(
+            db,
+            provider_status=None,
+            record_initial_event=False,
+        )
         refund.refund_status = "processing"
         refund.provider_attempt_started_at = datetime.now(timezone.utc)
         db.add(refund)

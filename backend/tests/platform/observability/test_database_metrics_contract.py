@@ -61,17 +61,17 @@ def test_statement_origin_wrapping_and_independent_recovery_errors(
 ):
     recorder = MetricsRecorder(source, "test", "database-test")
     with metrics_context(recorder), Session(small_engine) as session:
-        session.execute(text("SET statement_timeout = 20"))
+        session.execute(text("SET statement_timeout = 100"))
         try:
-            session.execute(text("SELECT pg_sleep(0.1)"))
+            session.execute(text("SELECT pg_sleep(1)"))
         except DBAPIError as first:
             assert isinstance(first.orig, errors.QueryCanceled)
             database.observe_database_timeout(first)
             session.rollback()
             # Run recovery inside the except block: implicit context is the old origin.
             try:
-                session.execute(text("SET statement_timeout = 20"))
-                session.execute(text("SELECT pg_sleep(0.1)"))
+                session.execute(text("SET statement_timeout = 100"))
+                session.execute(text("SELECT pg_sleep(1)"))
             except DBAPIError as second:
                 assert second.orig is not first.orig
                 database.observe_database_timeout(second)
@@ -108,9 +108,9 @@ def test_lock_timeout_against_independent_postgres_lock_owner(small_engine, sour
 def test_raw_checkout_setting_failure_has_same_passive_owner(small_engine):
     def checkout(connection, record, proxy):
         with connection.cursor() as cursor:
-            cursor.execute("SET statement_timeout = 20")
+            cursor.execute("SET statement_timeout = 100")
             connection.commit()
-            cursor.execute("SELECT pg_sleep(0.1)")
+            cursor.execute("SELECT pg_sleep(1)")
 
     event.listen(small_engine, "checkout", checkout)
     recorder = MetricsRecorder("api", "test", "database-test")
@@ -156,13 +156,13 @@ def test_uninstrumented_engine_and_no_active_runtime_do_not_count(small_engine):
     plain = create_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
     try:
         with metrics_context(recorder), plain.connect() as connection:
-            connection.execute(text("SET LOCAL statement_timeout = 20"))
+            connection.execute(text("SET LOCAL statement_timeout = 100"))
             with pytest.raises(DBAPIError):
-                connection.execute(text("SELECT pg_sleep(0.1)"))
+                connection.execute(text("SELECT pg_sleep(1)"))
         with small_engine.connect() as connection:
-            connection.execute(text("SET LOCAL statement_timeout = 20"))
+            connection.execute(text("SET LOCAL statement_timeout = 100"))
             with pytest.raises(DBAPIError):
-                connection.execute(text("SELECT pg_sleep(0.1)"))
+                connection.execute(text("SELECT pg_sleep(1)"))
     finally:
         plain.dispose()
     assert recorder.snapshot().series == ()
@@ -235,8 +235,8 @@ def test_collector_failure_discards_stale_family_and_observes_execution_timeout(
     def collect():
         with small_engine.connect() as connection:
             if fail:
-                connection.execute(text("SET LOCAL statement_timeout = 20"))
-                connection.execute(text("SELECT pg_sleep(0.1)"))
+                connection.execute(text("SET LOCAL statement_timeout = 100"))
+                connection.execute(text("SELECT pg_sleep(1)"))
             return [("database.pool.checked_out", 1, {})]
 
     recorder.register_observable("database_pool", collect)
@@ -259,8 +259,8 @@ def test_lease_renewer_thread_explicitly_activates_worker_recorder(
 
     def heartbeat(db, **kwargs):
         try:
-            db.execute(text("SET LOCAL statement_timeout = 20"))
-            db.execute(text("SELECT pg_sleep(0.1)"))
+            db.execute(text("SET LOCAL statement_timeout = 100"))
+            db.execute(text("SELECT pg_sleep(1)"))
         finally:
             attempted.set()
 

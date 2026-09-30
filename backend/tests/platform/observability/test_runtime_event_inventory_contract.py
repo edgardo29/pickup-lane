@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -424,6 +425,7 @@ def test_create_upload_direct_config_failure_emits_at_actual_boundary(
 ) -> None:
     calls = _capture(monkeypatch, venue_image_service)
     monkeypatch.setattr(venue_image_service, "get_active_venue_or_404", Mock())
+    monkeypatch.setattr(venue_image_service, "get_locked_active_venue_or_404", Mock())
     monkeypatch.setattr(venue_image_service, "validate_upload_request", Mock())
     monkeypatch.setattr(venue_image_service, "validate_selected_image_capacity", Mock())
     monkeypatch.setattr(
@@ -482,6 +484,7 @@ def test_create_upload_ticket_failures_emit_at_actual_boundary(
 ) -> None:
     calls = _capture(monkeypatch, venue_image_service)
     monkeypatch.setattr(venue_image_service, "get_active_venue_or_404", Mock())
+    monkeypatch.setattr(venue_image_service, "get_locked_active_venue_or_404", Mock())
     monkeypatch.setattr(venue_image_service, "validate_upload_request", Mock())
     monkeypatch.setattr(venue_image_service, "validate_selected_image_capacity", Mock())
     monkeypatch.setattr(
@@ -593,6 +596,8 @@ def test_metadata_failures_emit_at_actual_completion_boundary(
         Mock(
             return_value=Mock(
                 image_status="pending_upload",
+                upload_completed_at=None,
+                upload_expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
                 storage_object_key="private-object-key",
             )
         ),
@@ -637,6 +642,8 @@ def test_expected_metadata_not_found_and_timeout_do_not_duplicate_storage_event(
         Mock(
             return_value=Mock(
                 image_status="pending_upload",
+                upload_completed_at=None,
+                upload_expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
                 storage_object_key="private-object-key",
             )
         ),

@@ -31,6 +31,13 @@ class VenueImage(Base):
             name="ck_venue_images_image_status",
         ),
         CheckConstraint(
+            (
+                "image_status <> 'pending_upload' OR "
+                "(upload_expires_at IS NOT NULL AND upload_completed_at IS NULL)"
+            ),
+            name="ck_venue_images_pending_upload_intent",
+        ),
+        CheckConstraint(
             "char_length(btrim(storage_provider)) > 0",
             name="ck_venue_images_storage_provider_not_empty",
         ),
@@ -127,6 +134,9 @@ class VenueImage(Base):
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
     upload_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    upload_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(

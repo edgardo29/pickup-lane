@@ -62,6 +62,9 @@ def build_venue_image_conflict_detail(exc: IntegrityError) -> str:
     if "ck_venue_images_image_status" in error_text:
         return "image_status is not supported."
 
+    if "ck_venue_images_pending_upload_intent" in error_text:
+        return "Pending venue image uploads require a live, unconsumed intent."
+
     if "ck_venue_images_size_bytes_positive" in error_text:
         return "size_bytes must be greater than 0."
 
@@ -125,6 +128,10 @@ def clean_optional_text(value: str | None) -> str | None:
     return cleaned_value or None
 
 
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def build_venue_image_audit_snapshot(venue_image: VenueImage) -> dict[str, object]:
     return {
         "image_status": venue_image.image_status,
@@ -146,10 +153,60 @@ def get_active_venue_or_404(db: Session, venue_id: uuid.UUID) -> Venue:
     return venue
 
 
+def get_locked_venue_or_404(db: Session, venue_id: uuid.UUID) -> Venue:
+    venue = db.scalar(
+        select(Venue)
+        .where(Venue.id == venue_id)
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+
+    if venue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Venue not found.",
+        )
+
+    return venue
+
+
+def get_locked_active_venue_or_404(db: Session, venue_id: uuid.UUID) -> Venue:
+    venue = get_locked_venue_or_404(db, venue_id)
+    if venue.deleted_at is not None or not venue.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Venue not found.",
+        )
+    return venue
+
+
 def get_venue_image_or_404(db: Session, venue_image_id: uuid.UUID) -> VenueImage:
     venue_image = db.get(VenueImage, venue_image_id)
 
     if venue_image is None or venue_image.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Venue image not found.",
+        )
+
+    return venue_image
+
+
+def get_locked_venue_image_or_404(
+    db: Session,
+    venue_image_id: uuid.UUID,
+) -> VenueImage:
+    venue_image = db.scalar(
+        select(VenueImage)
+        .where(
+            VenueImage.id == venue_image_id,
+            VenueImage.deleted_at.is_(None),
+        )
+        .execution_options(populate_existing=True)
+        .with_for_update()
+    )
+
+    if venue_image is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Venue image not found.",
@@ -223,6 +280,58 @@ def validate_selected_image_capacity(db: Session, venue_id: uuid.UUID) -> None:
         )
 
 
+def validate_completable_upload_intent(
+    venue_image: VenueImage,
+    *,
+    now: datetime,
+) -> None:
+    if venue_image.image_status == "removed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Removed venue images cannot be completed.",
+        )
+
+    if (
+        venue_image.image_status != "pending_upload"
+        or venue_image.upload_completed_at is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Venue image upload is no longer pending.",
+        )
+
+    if venue_image.upload_expires_at is None or now >= venue_image.upload_expires_at:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Venue image upload intent has expired.",
+        )
+
+
+def validate_venue_image_status_transition(
+    *,
+    current_status: str,
+    requested_status: str | None,
+) -> None:
+    if current_status == "removed":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Venue image not found.",
+        )
+    if requested_status is None or requested_status == current_status:
+        return
+
+    allowed_transitions = {
+        "pending_upload": {"removed"},
+        "active": {"hidden", "removed"},
+        "hidden": {"active", "removed"},
+    }
+    if requested_status not in allowed_transitions[current_status]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Venue image status transition is not allowed.",
+        )
+
+
 def build_venue_image_object_key(
     *,
     venue_id: uuid.UUID,
@@ -242,6 +351,7 @@ def clear_other_primary_venue_images(
     *,
     venue_id: uuid.UUID,
     excluding_image_id: uuid.UUID,
+    now: datetime | None = None,
 ) -> None:
     existing_primary_images = db.scalars(
         select(VenueImage).where(
@@ -253,10 +363,10 @@ def clear_other_primary_venue_images(
         )
     ).all()
 
-    now = datetime.now(timezone.utc)
+    changed_at = now or utc_now()
     for image in existing_primary_images:
         image.is_primary = False
-        image.updated_at = now
+        image.updated_at = changed_at
         db.add(image)
 
 
@@ -442,68 +552,69 @@ def create_venue_image_upload(
 ) -> VenueImageUploadRead:
     get_active_venue_or_404(db, venue_id)
     validate_upload_request(upload_request)
-    validate_selected_image_capacity(db, venue_id)
-
     try:
-        storage_config = get_r2_storage_config()
-    except R2StorageConfigError as exc:
-        record_provider_outcome("r2.upload_url.create", "configuration_error")
-        _emit_storage_failure(
-            operation="r2.upload_url.create",
-            configuration_error=True,
-            provider_code="STORAGE.UPLOAD_URL_FAILED",
-        )
-        raise storage_config_error_response(exc) from exc
+        get_locked_active_venue_or_404(db, venue_id)
+        validate_selected_image_capacity(db, venue_id)
 
-    venue_image_id = uuid.uuid4()
-    content_type = upload_request.content_type.strip().lower()
-    object_key = build_venue_image_object_key(
-        venue_id=venue_id,
-        venue_image_id=venue_image_id,
-        file_name=upload_request.file_name,
-        content_type=content_type,
-        is_primary=upload_request.is_primary,
-        sort_order=upload_request.sort_order,
-    )
-    venue_image = VenueImage(
-        id=venue_image_id,
-        venue_id=venue_id,
-        uploaded_by_user_id=current_admin.id,
-        storage_provider="r2",
-        storage_object_key=object_key,
-        storage_bucket=storage_config.bucket_name,
-        storage_account_id=storage_config.account_id,
-        content_type=content_type,
-        size_bytes=upload_request.size_bytes,
-        image_role=upload_request.image_role,
-        image_status="pending_upload",
-        is_primary=upload_request.is_primary,
-        sort_order=upload_request.sort_order,
-        alt_text=clean_optional_text(upload_request.alt_text),
-        caption=clean_optional_text(upload_request.caption),
-    )
+        try:
+            storage_config = get_r2_storage_config()
+        except R2StorageConfigError as exc:
+            record_provider_outcome("r2.upload_url.create", "configuration_error")
+            _emit_storage_failure(
+                operation="r2.upload_url.create",
+                configuration_error=True,
+                provider_code="STORAGE.UPLOAD_URL_FAILED",
+            )
+            raise storage_config_error_response(exc) from exc
 
-    try:
-        upload_ticket = create_object_upload_url(
-            object_key=object_key,
+        venue_image_id = uuid.uuid4()
+        content_type = upload_request.content_type.strip().lower()
+        object_key = build_venue_image_object_key(
+            venue_id=venue_id,
+            venue_image_id=venue_image_id,
+            file_name=upload_request.file_name,
             content_type=content_type,
+            is_primary=upload_request.is_primary,
+            sort_order=upload_request.sort_order,
         )
-    except R2StorageConfigError as exc:
-        _emit_storage_failure(
-            operation="r2.upload_url.create",
-            configuration_error=True,
-            provider_code="STORAGE.UPLOAD_URL_FAILED",
-        )
-        raise storage_config_error_response(exc) from exc
-    except R2StorageError as exc:
-        _emit_storage_failure(
-            operation="r2.upload_url.create",
-            configuration_error=False,
-            provider_code="STORAGE.UPLOAD_URL_FAILED",
-        )
-        raise storage_provider_error_response(exc) from exc
+        try:
+            upload_ticket = create_object_upload_url(
+                object_key=object_key,
+                content_type=content_type,
+            )
+        except R2StorageConfigError as exc:
+            _emit_storage_failure(
+                operation="r2.upload_url.create",
+                configuration_error=True,
+                provider_code="STORAGE.UPLOAD_URL_FAILED",
+            )
+            raise storage_config_error_response(exc) from exc
+        except R2StorageError as exc:
+            _emit_storage_failure(
+                operation="r2.upload_url.create",
+                configuration_error=False,
+                provider_code="STORAGE.UPLOAD_URL_FAILED",
+            )
+            raise storage_provider_error_response(exc) from exc
 
-    try:
+        venue_image = VenueImage(
+            id=venue_image_id,
+            venue_id=venue_id,
+            uploaded_by_user_id=current_admin.id,
+            storage_provider="r2",
+            storage_object_key=object_key,
+            storage_bucket=storage_config.bucket_name,
+            storage_account_id=storage_config.account_id,
+            content_type=content_type,
+            size_bytes=upload_request.size_bytes,
+            image_role=upload_request.image_role,
+            image_status="pending_upload",
+            is_primary=upload_request.is_primary,
+            sort_order=upload_request.sort_order,
+            alt_text=clean_optional_text(upload_request.alt_text),
+            caption=clean_optional_text(upload_request.caption),
+            upload_expires_at=upload_ticket.expires_at,
+        )
         db.add(venue_image)
         db.flush()
         record_admin_action(
@@ -519,8 +630,16 @@ def create_venue_image_upload(
                 "after": build_venue_image_audit_snapshot(venue_image),
             },
         )
+        db.flush()
+        image_response = build_admin_venue_image_read(venue_image)
+        response = VenueImageUploadRead(
+            image=image_response,
+            upload_url=upload_ticket.upload_url,
+            upload_headers=upload_ticket.upload_headers,
+            expires_at=upload_ticket.expires_at,
+        )
         db.commit()
-        db.refresh(venue_image)
+        return response
     except HTTPException:
         db.rollback()
         raise
@@ -533,13 +652,9 @@ def create_venue_image_upload(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_venue_image_conflict_detail(exc),
         ) from exc
-
-    return VenueImageUploadRead(
-        image=build_admin_venue_image_read(venue_image),
-        upload_url=upload_ticket.upload_url,
-        upload_headers=upload_ticket.upload_headers,
-        expires_at=upload_ticket.expires_at,
-    )
+    except BaseException:
+        db.rollback()
+        raise
 
 
 def complete_venue_image_upload(
@@ -550,15 +665,16 @@ def complete_venue_image_upload(
     current_admin: User,
 ) -> VenueImageAdminRead:
     venue_image = get_venue_image_or_404(db, venue_image_id)
-    if venue_image.image_status == "removed":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Removed venue images cannot be completed.",
-        )
+    try:
+        validate_completable_upload_intent(venue_image, now=utc_now())
+    except HTTPException:
+        db.rollback()
+        raise
 
     try:
         object_properties = get_object_properties(venue_image.storage_object_key)
     except R2StorageConfigError as exc:
+        db.rollback()
         _emit_storage_failure(
             operation="r2.metadata.head",
             configuration_error=True,
@@ -566,11 +682,13 @@ def complete_venue_image_upload(
         )
         raise storage_config_error_response(exc) from exc
     except R2ObjectNotFoundError as exc:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded object was not found for this venue image.",
         ) from exc
     except R2StorageError as exc:
+        db.rollback()
         _emit_storage_failure(
             operation="r2.metadata.head",
             configuration_error=False,
@@ -580,8 +698,12 @@ def complete_venue_image_upload(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Cloudflare R2 could not verify the uploaded image.",
         ) from exc
+    except BaseException:
+        db.rollback()
+        raise
 
     if object_properties.size_bytes != venue_image.size_bytes:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded image size does not match the requested size.",
@@ -589,13 +711,16 @@ def complete_venue_image_upload(
 
     object_content_type = (object_properties.content_type or "").lower()
     if object_content_type and object_content_type != venue_image.content_type:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded image content type does not match the requested type.",
         )
 
     try:
-        now = datetime.now(timezone.utc)
+        venue_image = get_locked_venue_image_or_404(db, venue_image_id)
+        now = utc_now()
+        validate_completable_upload_intent(venue_image, now=now)
         before_snapshot = build_venue_image_audit_snapshot(venue_image)
         old_status = venue_image.image_status
         should_mark_primary = bool(venue_image.is_primary)
@@ -617,6 +742,7 @@ def complete_venue_image_upload(
                 db,
                 venue_id=venue_image.venue_id,
                 excluding_image_id=venue_image.id,
+                now=now,
             )
             db.flush()
             venue_image.is_primary = True
@@ -638,8 +764,10 @@ def complete_venue_image_upload(
                 "after": build_venue_image_audit_snapshot(venue_image),
             },
         )
+        db.flush()
+        response = build_admin_venue_image_read(venue_image)
         db.commit()
-        db.refresh(venue_image)
+        return response
     except HTTPException:
         db.rollback()
         raise
@@ -649,8 +777,9 @@ def complete_venue_image_upload(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_venue_image_conflict_detail(exc),
         ) from exc
-
-    return build_admin_venue_image_read(venue_image)
+    except BaseException:
+        db.rollback()
+        raise
 
 
 def update_venue_image(
@@ -660,7 +789,6 @@ def update_venue_image(
     image_update: VenueImageUpdate,
     current_admin: User,
 ) -> VenueImageAdminRead:
-    venue_image = get_venue_image_or_404(db, venue_image_id)
     update_data = image_update.model_dump(exclude_unset=True)
     reason = clean_optional_text(update_data.pop("reason", None))
 
@@ -670,33 +798,45 @@ def update_venue_image(
     if "image_status" in update_data and update_data["image_status"] is not None:
         update_data["image_status"] = validate_image_status(update_data["image_status"])
 
-    if update_data.get("image_status") == "removed":
-        update_data["deleted_at"] = datetime.now(timezone.utc)
-        update_data["is_primary"] = False
-
-    before_snapshot = build_venue_image_audit_snapshot(venue_image)
-    old_status = venue_image.image_status
-
     for text_field in ("alt_text", "caption"):
         if text_field in update_data:
             update_data[text_field] = clean_optional_text(update_data[text_field])
 
-    for field_name, field_value in update_data.items():
-        setattr(venue_image, field_name, field_value)
-
-    if venue_image.image_status != "active" and venue_image.is_primary:
-        venue_image.is_primary = False
-
-    venue_image.updated_at = datetime.now(timezone.utc)
-
-    if venue_image.image_status == "active" and venue_image.is_primary:
-        clear_other_primary_venue_images(
-            db,
-            venue_id=venue_image.venue_id,
-            excluding_image_id=venue_image.id,
-        )
-
     try:
+        venue_image = get_locked_venue_image_or_404(db, venue_image_id)
+        requested_status = update_data.get("image_status")
+        validate_venue_image_status_transition(
+            current_status=venue_image.image_status,
+            requested_status=requested_status,
+        )
+        if venue_image.image_status == "hidden" and requested_status == "active":
+            get_locked_venue_or_404(db, venue_image.venue_id)
+            validate_selected_image_capacity(db, venue_image.venue_id)
+
+        now = utc_now()
+        if requested_status == "removed":
+            update_data["deleted_at"] = now
+            update_data["is_primary"] = False
+
+        before_snapshot = build_venue_image_audit_snapshot(venue_image)
+        old_status = venue_image.image_status
+
+        for field_name, field_value in update_data.items():
+            setattr(venue_image, field_name, field_value)
+
+        if venue_image.image_status != "active" and venue_image.is_primary:
+            venue_image.is_primary = False
+
+        venue_image.updated_at = now
+
+        if venue_image.image_status == "active" and venue_image.is_primary:
+            clear_other_primary_venue_images(
+                db,
+                venue_id=venue_image.venue_id,
+                excluding_image_id=venue_image.id,
+                now=now,
+            )
+
         action_type = (
             "remove_venue_image"
             if venue_image.image_status == "removed"
@@ -719,8 +859,10 @@ def update_venue_image(
             },
         )
         db.add(venue_image)
+        db.flush()
+        response = build_admin_venue_image_read(venue_image)
         db.commit()
-        db.refresh(venue_image)
+        return response
     except HTTPException:
         db.rollback()
         raise
@@ -730,5 +872,6 @@ def update_venue_image(
             status_code=status.HTTP_409_CONFLICT,
             detail=build_venue_image_conflict_detail(exc),
         ) from exc
-
-    return build_admin_venue_image_read(venue_image)
+    except BaseException:
+        db.rollback()
+        raise
