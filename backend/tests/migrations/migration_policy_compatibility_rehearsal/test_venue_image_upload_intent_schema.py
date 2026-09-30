@@ -12,6 +12,7 @@ from backend.tests.support.migration_test_database import (
 pytestmark = pytest.mark.migration_lifecycle
 
 
+@pytest.mark.requirement("WS06-01-R4")
 def test_venue_image_upload_intent_schema_matches_model(migration_database) -> None:
     run_alembic_upgrade("head")
     inspector = inspect(migration_database.engine)
