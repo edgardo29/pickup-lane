@@ -12,7 +12,6 @@ from fastapi import HTTPException
 from fastapi.routing import APIRoute
 from sqlalchemy import func, select, text
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _session():
@@ -202,7 +201,7 @@ def _admin_bootstrap_route_candidates() -> list[tuple[str, str, str]]:
     return candidates
 
 
-@pytest.mark.requirement("WS03-02-R10")
+@pytest.mark.pass_provenance('WS03-02')
 def test_admin_bootstrap_source_requires_existing_linked_provider_identity_and_no_reachable_bootstrap_route() -> None:
     import backend.routes.admin_user_routes as admin_user_routes
     import backend.services.auth_account_service as auth_account_service
@@ -267,7 +266,7 @@ def test_admin_bootstrap_source_requires_existing_linked_provider_identity_and_n
     assert _admin_bootstrap_route_candidates() == []
 
 
-@pytest.mark.requirement("WS03-02-R9", "WS03-02-R10")
+@pytest.mark.pass_provenance('WS03-02')
 def test_final_active_admin_cannot_be_demoted_suspended_or_deleted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -363,7 +362,7 @@ def test_final_active_admin_cannot_be_demoted_suspended_or_deleted(
     }
 
 
-@pytest.mark.requirement("WS03-02-R9", "WS03-02-R10")
+@pytest.mark.pass_provenance('WS03-02')
 def test_non_final_admin_can_be_demoted_when_another_active_admin_remains() -> None:
     from backend.services.admin_user_role_service import change_user_role
 
@@ -421,7 +420,7 @@ def _concurrent_demote(
             return ("http", exc.status_code, exc.detail, backend_pid)
 
 
-@pytest.mark.requirement("WS03-02-R9", "WS03-02-R10")
+@pytest.mark.pass_provenance('WS03-02')
 def test_concurrent_admin_demotions_cannot_leave_zero_active_admins() -> None:
     admin_a_id = _create_user(
         auth_user_id=f"ws03-02-admin-race-a-{uuid.uuid4()}",

@@ -13,7 +13,7 @@ from backend.tests.workflows.route_lifecycle_cleanup.test_retired_route_registra
     route_by_method_path,
 )
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FRONTEND_ADMIN_API = REPO_ROOT / "frontend" / "src" / "pages" / "admin" / "shared" / "adminApi.js"
@@ -27,13 +27,16 @@ FRONTEND_OFFICIAL_GAMES_API = (
     / "shared"
     / "adminOfficialGamesApi.js"
 )
-TRUSTED_SUPPORT_FILES = (
-    REPO_ROOT / "backend" / "tests" / "conftest.py",
-    REPO_ROOT / "backend" / "tests" / "support" / "__init__.py",
-    REPO_ROOT / "backend" / "tests" / "support" / "artifacts.py",
-    REPO_ROOT / "backend" / "tests" / "support" / "browser_quality.py",
-    REPO_ROOT / "backend" / "tests" / "support" / "environment_safety.py",
-)
+SUPPORT_SOURCE_ROOT = REPO_ROOT / "backend" / "tests" / "support"
+
+
+def _current_support_source_files() -> tuple[Path, ...]:
+    return (
+        REPO_ROOT / "backend" / "tests" / "conftest.py",
+        *sorted(SUPPORT_SOURCE_ROOT.rglob("*.py")),
+    )
+
+
 def _call_names(function) -> tuple[str, ...]:
     source = inspect.getsource(function)
     tree = ast.parse(source)
@@ -124,7 +127,7 @@ def _http_method_path_from_call(node: ast.Call, method_name: str) -> tuple[str, 
     return method.upper(), path
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_need_a_sub_duplicate_removal_is_retired_and_admin_post_is_canonical() -> None:
     retired = _route("PATCH", "/need-a-sub/posts/{sub_post_id}/remove")
     canonical = _assert_active_route("POST", "/admin/need-a-sub/{post_id}/remove", body_expected=True)
@@ -134,7 +137,7 @@ def test_need_a_sub_duplicate_removal_is_retired_and_admin_post_is_canonical() -
     assert "remove_need_a_sub_post_by_admin" in _call_names(canonical.endpoint)
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_official_game_player_delete_is_retired_and_post_preview_execute_are_canonical() -> None:
     retired = _route("DELETE", "/admin/official-games/{game_id}/participants/{participant_id}")
     preview = _assert_active_route(
@@ -154,7 +157,7 @@ def test_official_game_player_delete_is_retired_and_post_preview_execute_are_can
     assert "execute_official_game_player_removal" in _call_names(execute.endpoint)
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_official_game_host_delete_is_retired_and_post_remove_is_canonical() -> None:
     retired = _route("DELETE", "/admin/official-games/{game_id}/host")
     canonical = _assert_active_route(
@@ -172,12 +175,7 @@ def test_official_game_host_delete_is_retired_and_post_remove_is_canonical() -> 
     )
 
 
-@pytest.mark.requirement(
-    "WS02-04B2A2B1-R3",
-    "WS02-04B2A2B1-R4",
-    "WS02-04B2A2B1-R5",
-    "WS02-04B2A2B1-R6",
-)
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_frontend_production_callers_use_canonical_replacement_routes() -> None:
     admin_api = FRONTEND_ADMIN_API.read_text()
     official_games_api = FRONTEND_OFFICIAL_GAMES_API.read_text()
@@ -204,15 +202,15 @@ def test_frontend_production_callers_use_canonical_replacement_routes() -> None:
     assert "method: 'DELETE'" not in player_execute
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R6")
-def test_current_trusted_backend_support_helpers_do_not_setup_through_retired_routes() -> None:
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
+def test_current_backend_support_helpers_do_not_setup_through_retired_routes() -> None:
     retired_patterns = {
         (retired_route.method, _path_pattern(retired_route.path)): retired_route.id
         for retired_route in RETIRED_MUTATION_ROUTES
     }
     http_methods = {"get", "post", "patch", "put", "delete", "request"}
 
-    for path in TRUSTED_SUPPORT_FILES:
+    for path in _current_support_source_files():
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):

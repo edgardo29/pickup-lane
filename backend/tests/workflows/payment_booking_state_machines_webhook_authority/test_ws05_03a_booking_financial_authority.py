@@ -4,9 +4,8 @@ from uuid import uuid4
 import pytest
 
 pytestmark = [
-    pytest.mark.suite_type("ordinary"),
     pytest.mark.no_db_cleanup,
-    pytest.mark.requirement("WS05-03A-R4"),
+    pytest.mark.pass_provenance('WS05-03A'),
 ]
 
 

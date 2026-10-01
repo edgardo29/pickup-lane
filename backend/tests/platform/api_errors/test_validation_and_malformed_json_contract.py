@@ -101,7 +101,7 @@ def _assert_validation_payload_is_bounded(payload: Mapping[str, object]) -> None
         assert isinstance(field_error["error_type"], str)
 
 
-@pytest.mark.requirement("WS02-04A-R2")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_validation_error_excludes_submitted_values_and_uses_safe_structure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -139,7 +139,7 @@ def test_validation_error_excludes_submitted_values_and_uses_safe_structure(
     ]
 
 
-@pytest.mark.requirement("WS02-04A-R2")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_malformed_json_error_excludes_raw_body_and_parser_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

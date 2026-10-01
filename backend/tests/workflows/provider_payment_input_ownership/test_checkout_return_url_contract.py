@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 from backend.schemas.checkout_schema import GameCheckoutPaymentIntentCreate
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 
 def _settings():
@@ -19,7 +19,7 @@ def _valid_url(game_id: uuid.UUID) -> str:
     return f"https://app.pickuplane.example/games/{game_id}/checkout"
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_checkout_return_url_is_optional_trimmed_and_exactly_scoped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -35,7 +35,7 @@ def test_checkout_return_url_is_optional_trimmed_and_exactly_scoped(
     ) == _valid_url(game_id)
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 @pytest.mark.parametrize(
     "url_factory",
     [
@@ -62,7 +62,7 @@ def test_checkout_return_url_rejects_unowned_redirect_shapes(
     assert exc_info.value.status_code == 400
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_invalid_checkout_return_url_rejects_before_db_or_provider_work(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

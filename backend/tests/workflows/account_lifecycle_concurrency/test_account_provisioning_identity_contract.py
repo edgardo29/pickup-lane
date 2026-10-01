@@ -8,7 +8,6 @@ from fastapi import HTTPException
 from sqlalchemy import delete, func, inspect, select
 from sqlalchemy.orm import Session
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _session():
@@ -82,7 +81,7 @@ def _count_rows(db: Session, model: type[object], *criteria: object) -> int:
     return int(db.scalar(statement) or 0)
 
 
-@pytest.mark.requirement("WS03-02-R1", "WS03-02-R3")
+@pytest.mark.pass_provenance('WS03-02')
 def test_live_database_constraints_pin_identity_and_one_to_one_context_rows() -> None:
     with _session() as db:
         inspector = inspect(db.bind)
@@ -117,7 +116,7 @@ def test_live_database_constraints_pin_identity_and_one_to_one_context_rows() ->
         )
 
 
-@pytest.mark.requirement("WS03-02-R1", "WS03-02-R3", "WS03-02-R4")
+@pytest.mark.pass_provenance('WS03-02')
 def test_same_uid_repeat_sync_preserves_identity_refreshes_snapshots_and_repairs_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -163,7 +162,7 @@ def test_same_uid_repeat_sync_preserves_identity_refreshes_snapshots_and_repairs
         assert _count_rows(db, UserStats, UserStats.user_id == first_user_id) == 1
 
 
-@pytest.mark.requirement("WS03-02-R1", "WS03-02-R5")
+@pytest.mark.pass_provenance('WS03-02')
 def test_different_uid_same_email_conflicts_without_relinking_existing_account(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

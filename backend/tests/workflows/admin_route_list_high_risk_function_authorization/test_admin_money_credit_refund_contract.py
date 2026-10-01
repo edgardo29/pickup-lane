@@ -19,10 +19,9 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
-@pytest.mark.requirement("WS05-03A-R5")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_financial_metrics_cover_complete_issue_taxonomy_and_durable_lifecycle():
     from sqlalchemy import CheckConstraint, func, select
 
@@ -517,7 +516,7 @@ def _financial_outcome_state(financial_outcome_id: uuid.UUID) -> dict[str, objec
         }
 
 
-@pytest.mark.requirement("WS03-04D-R3", "WS03-04D-R7", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_stale_admin_cannot_issue_credit_or_create_financial_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -551,7 +550,7 @@ def test_stale_admin_cannot_issue_credit_or_create_financial_side_effects(
     assert _count_model_rows(AdminAction) == before_admin_actions
 
 
-@pytest.mark.requirement("WS03-04D-R7", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_recent_active_admin_can_issue_credit_and_ordinary_user_cannot_list_money(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -646,7 +645,7 @@ def test_recent_active_admin_can_issue_credit_and_ordinary_user_cannot_list_mone
     assert ordinary_response.status_code == 403
 
 
-@pytest.mark.requirement("WS03-04D-R7", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -841,7 +840,7 @@ def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
     assert repaired_event["provider_created_at"] == before_event["provider_created_at"]
 
 
-@pytest.mark.requirement("WS03-04D-R7", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_provider_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1009,8 +1008,7 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
     assert conflicting_replay.status_code == 409
 
 
-@pytest.mark.requirement("WS03-04D-R7", "WS03-04D-R10")
-@pytest.mark.requirement("WS05-03A-R5")
+@pytest.mark.pass_provenance('WS03-04D', 'WS05-03A')
 def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1172,7 +1170,7 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
     assert _count_model_rows(AdminAction) == before_admin_actions + 2
 
 
-@pytest.mark.requirement("WS05-03A-R5")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_origin_credit_repair_refuses_generic_ledger_retry() -> None:
     from fastapi import HTTPException
     from sqlalchemy import func, select

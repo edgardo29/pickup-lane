@@ -6,8 +6,6 @@ from pathlib import Path
 
 import pytest
 
-import backend.services.provider_retry_policy as retry_policy
-
 pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -111,14 +109,7 @@ def _network_hits(path: Path) -> list[_NetworkHit]:
     return hits
 
 
-def _registry_operations() -> set[str]:
-    return {
-        policy.operation
-        for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES
-    }
-
-
-@pytest.mark.requirement("WS02-04C2-R3")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_current_runtime_provider_network_boundaries_are_classified() -> None:
     unclassified: list[_NetworkHit] = []
     for path in _production_python_files():
@@ -131,95 +122,13 @@ def test_current_runtime_provider_network_boundaries_are_classified() -> None:
     assert unclassified == []
 
 
-@pytest.mark.requirement("WS02-04C2-R3", "WS02-04C2-R4")
-def test_current_provider_wrapper_operations_have_retry_policy_entries() -> None:
-    assert _registry_operations() >= {
-        "stripe.customer.create",
-        "stripe.setup_intent.create",
-        "stripe.setup_intent.retrieve",
-        "stripe.payment_method.retrieve",
-        "stripe.payment_method.detach",
-        "stripe.customer.default_payment_method.set",
-        "stripe.customer.default_payment_method.clear",
-        "stripe.payment_intent.create",
-        "stripe.payment_intent.confirm",
-        "stripe.payment_intent.retrieve",
-        "stripe.refund.create",
-        "stripe.refund.retrieve",
-        "firebase.app_check.verify",
-        "firebase.token.verify",
-        "firebase.user.lookup",
-        "firebase.user.delete",
-        "r2.metadata.head",
-        "stripe.webhook.delivery",
-        "admin_money.refund.retry",
-        "admin_money.refund.reconcile",
-        "admin_money.credit.retry",
-    }
-
-    for operation in (
-        "stripe.setup_intent.retrieve",
-        "stripe.payment_method.retrieve",
-        "stripe.payment_intent.retrieve",
-        "stripe.refund.retrieve",
-        "r2.metadata.head",
-        "firebase.app_check.verify",
-        "firebase.token.verify",
-    ):
-        policy = retry_policy.policy_by_operation(operation)
-        assert policy.safety_class == retry_policy.RetrySafetyClass.SAFE_READ
-        assert policy.read_operation
-        assert not policy.provider_mutation
-
-    app_check_policy = retry_policy.policy_by_operation("firebase.app_check.verify")
-    assert app_check_policy.workflow_context == "app_check_request_verification"
-    assert app_check_policy.material_callers == (
-        "backend.firebase_admin_client.verify_firebase_app_check_token",
-    )
-    assert app_check_policy.application_automatic_retry_allowed is False
-    assert "provider_unavailable" in app_check_policy.current_recovery
-    assert "request replay" in app_check_policy.current_recovery
-    assert "mutation replay" in app_check_policy.current_recovery
-
-
-@pytest.mark.requirement("WS02-04C2-R3", "WS02-04C2-R5", "WS02-04C2-R6")
-def test_current_stripe_mutation_callers_have_workflow_specific_contexts() -> None:
-    contexts = {
-        policy.workflow_context
-        for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES
-        if policy.provider == "stripe"
-    }
-
-    assert contexts >= {
-        "saved_card_customer_creation",
-        "saved_card_setup_intent_creation",
-        "checkout_initial_create_before_provider_result",
-        "checkout_initial_confirm_after_checkpoint",
-        "checkout_existing_pending_confirm_after_provider_read",
-        "community_publish_fee_initial_create",
-        "community_publish_fee_confirm_after_checkpoint",
-        "waitlist_auto_promotion_create",
-        "waitlist_auto_promotion_confirm",
-        "durable_refund_fulfillment",
-        "refund_fulfillment_reconciliation",
-        "user_visible_saved_card_detach",
-        "account_deletion_saved_card_cleanup",
-        "unpersisted_best_effort_payment_method_cleanup",
-        "saved_card_default_set",
-        "saved_card_default_clear",
-    }
-    assert "late_checkout_payment_refund" not in contexts
-
-
-@pytest.mark.requirement("WS02-04C2-R3")
-def test_r2_presigning_and_browser_upload_are_not_counted_as_backend_provider_retry() -> None:
+@pytest.mark.pass_provenance('WS02-04C2')
+def test_r2_presigning_is_local_and_browser_upload_is_not_a_backend_provider_call() -> None:
     source = (_REPO_ROOT / "backend/services/r2_storage_service.py").read_text()
 
-    assert "head_object" in source
+    assert "def create_object_upload_url" in source
+    assert "def create_object_read_url" in source
     assert "generate_presigned_url" in source
-    assert retry_policy.policy_by_operation("r2.metadata.head").read_operation
-    assert "r2.presigned_url.generate" not in _registry_operations()
-    assert "direct browser upload" not in {
-        policy.workflow_context
-        for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES
-    }
+    assert "def get_object_properties" in source
+    assert "head_object" in source
+    assert ".put_object(" not in source

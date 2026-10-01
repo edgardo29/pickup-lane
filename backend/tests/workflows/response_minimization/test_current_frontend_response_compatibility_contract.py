@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
@@ -52,7 +52,7 @@ def _ordinary_frontend_files() -> list[Path]:
     return sorted(set(files))
 
 
-@pytest.mark.requirement("WS02-05B2-R9")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_current_frontend_still_requires_retained_game_and_self_fields() -> None:
     from backend.schemas.game_schema import GameDetailRead
     from backend.schemas.user_schema import SelfUserRead
@@ -74,7 +74,7 @@ def test_current_frontend_still_requires_retained_game_and_self_fields() -> None
     assert "email_verified_at" in create_game_source
 
 
-@pytest.mark.requirement("WS02-05B2-R9")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_public_image_ordering_uses_public_display_fields_only() -> None:
     selector_source = _read("frontend/src/pages/browse-games/gameImageSelectors.js")
     unit_test_source = _read("frontend/tests/unit/gameImageSelectors.test.js")
@@ -93,7 +93,7 @@ def test_public_image_ordering_uses_public_display_fields_only() -> None:
     assert "storage_" not in unit_test_source
 
 
-@pytest.mark.requirement("WS02-05B2-R9")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_ordinary_frontend_callers_do_not_consume_removed_internal_response_fields() -> None:
     hits: dict[str, list[str]] = {}
     for path in _ordinary_frontend_files():

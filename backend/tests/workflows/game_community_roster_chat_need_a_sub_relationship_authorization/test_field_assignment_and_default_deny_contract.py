@@ -19,7 +19,6 @@ from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_
     _venue,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 SERVER_CONTROLLED_FIELDS = {
     "user_id",
@@ -49,7 +48,7 @@ SERVER_CONTROLLED_FIELDS = {
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS03-04C-R9", "WS03-04C-R11")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_c_write_schemas_forbid_server_controlled_mass_assignment_fields() -> None:
     from pydantic import BaseModel
 
@@ -133,7 +132,7 @@ def test_c_write_schemas_forbid_server_controlled_mass_assignment_fields() -> No
     }
 
 
-@pytest.mark.requirement("WS03-04C-R9", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_default_deny_and_extra_field_rejections_create_no_relationship_rows(
     client,
     monkeypatch: pytest.MonkeyPatch,

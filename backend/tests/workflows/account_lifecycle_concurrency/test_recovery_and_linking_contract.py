@@ -7,7 +7,6 @@ import pytest
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.suite_type("ordinary"),
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -17,7 +16,7 @@ def _read(relative_path: str) -> str:
     return (_REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
-@pytest.mark.requirement("WS03-02-R8")
+@pytest.mark.pass_provenance('WS03-02')
 def test_sign_in_errors_do_not_distinguish_missing_account_from_wrong_secret() -> None:
     auth_errors = _read("frontend/src/lib/authErrors.js")
     sign_in_form = _read("frontend/src/pages/auth/useSignInForm.js")
@@ -30,7 +29,7 @@ def test_sign_in_errors_do_not_distinguish_missing_account_from_wrong_secret() -
     assert "getAuthErrorMessage(requestError)" in sign_in_form
 
 
-@pytest.mark.requirement("WS03-02-R8")
+@pytest.mark.pass_provenance('WS03-02')
 def test_forgot_password_treats_user_not_found_like_successful_reset_request() -> None:
     forgot_password = _read("frontend/src/pages/auth/ForgotPasswordPage.jsx")
     check_email = _read("frontend/src/pages/auth/CheckEmailPage.jsx")
@@ -46,7 +45,7 @@ def test_forgot_password_treats_user_not_found_like_successful_reset_request() -
     assert "If an account exists" in check_email
 
 
-@pytest.mark.requirement("WS03-02-R8")
+@pytest.mark.pass_provenance('WS03-02')
 def test_reset_password_and_password_linking_remain_provider_owned() -> None:
     credential_actions = _read("frontend/src/context/authProviderCredentialActions.js")
     reset_form = _read("frontend/src/pages/auth/usePasswordResetForm.js")
@@ -61,7 +60,7 @@ def test_reset_password_and_password_linking_remain_provider_owned() -> None:
     assert "fetch(" not in reset_form
 
 
-@pytest.mark.requirement("WS03-02-R1", "WS03-02-R5", "WS03-02-R8")
+@pytest.mark.pass_provenance('WS03-02')
 def test_local_source_has_conflict_not_email_based_relink_or_merge_authority() -> None:
     auth_account_service = _read("backend/services/auth_account_service.py")
     auth_routes = _read("backend/routes/auth_routes.py")

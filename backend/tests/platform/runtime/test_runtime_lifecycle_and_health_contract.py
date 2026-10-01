@@ -415,7 +415,7 @@ def _app_owner_findings() -> dict[str, list[str]]:
     return _app_owner_findings_from_sources(_runtime_source_map())
 
 
-@pytest.mark.requirement("WS02-02-R1")
+@pytest.mark.pass_provenance('WS02-02')
 def test_backend_main_is_the_single_canonical_app_and_health_owner(monkeypatch) -> None:
     main_module = _import_main(monkeypatch)
     app = main_module.create_app(_runtime_settings(ENABLE_DB_HEALTH="true"))
@@ -438,7 +438,7 @@ def test_backend_main_is_the_single_canonical_app_and_health_owner(monkeypatch) 
     }
 
 
-@pytest.mark.requirement("WS02-02-R1")
+@pytest.mark.pass_provenance('WS02-02')
 def test_app_owner_detector_recognizes_equivalent_fastapi_ownership_forms() -> None:
     sources = {
         "backend/runtime_alias.py": textwrap.dedent(
@@ -542,7 +542,7 @@ def test_app_owner_detector_recognizes_equivalent_fastapi_ownership_forms() -> N
     ]
 
 
-@pytest.mark.requirement("WS02-02-R1")
+@pytest.mark.pass_provenance('WS02-02')
 def test_app_owner_detector_recognizes_startup_and_shutdown_event_registration() -> None:
     sources = {
         "backend/runtime_events.py": textwrap.dedent(
@@ -579,7 +579,7 @@ def test_app_owner_detector_recognizes_startup_and_shutdown_event_registration()
     ]
 
 
-@pytest.mark.requirement("WS02-02-R1")
+@pytest.mark.pass_provenance('WS02-02')
 def test_app_owner_detector_ignores_non_app_syntax_and_non_runtime_paths() -> None:
     sources = {
         "backend/routes/router_only.py": textwrap.dedent(
@@ -616,7 +616,7 @@ def test_app_owner_detector_ignores_non_app_syntax_and_non_runtime_paths() -> No
     }
 
 
-@pytest.mark.requirement("WS02-02-R2")
+@pytest.mark.pass_provenance('WS02-02')
 def test_backend_main_import_constructs_app_without_runtime_side_effects() -> None:
     child_code = textwrap.dedent(
         """
@@ -741,7 +741,7 @@ def _safe_subprocess_output(completed: subprocess.CompletedProcess[str]) -> str:
     return output.replace(_SYNTHETIC_DATABASE_URL, "[REDACTED_DATABASE_URL]")[-2000:]
 
 
-@pytest.mark.requirement("WS02-02-R3")
+@pytest.mark.pass_provenance('WS02-02')
 def test_lifespan_state_transitions_and_calls_public_dispose_helper(monkeypatch) -> None:
     main_module = _import_main(monkeypatch)
     app = main_module.create_app(_runtime_settings())
@@ -763,7 +763,7 @@ def test_lifespan_state_transitions_and_calls_public_dispose_helper(monkeypatch)
     assert dispose_calls == ["disposed"]
 
 
-@pytest.mark.requirement("WS02-02-R3")
+@pytest.mark.pass_provenance('WS02-02')
 def test_public_dispose_helper_delegates_to_sqlalchemy_engine(monkeypatch) -> None:
     _install_runtime_environment(monkeypatch)
     import backend.database as database_module
@@ -781,7 +781,7 @@ def test_public_dispose_helper_delegates_to_sqlalchemy_engine(monkeypatch) -> No
     assert dispose_calls == ["engine.dispose"]
 
 
-@pytest.mark.requirement("WS02-02-R4")
+@pytest.mark.pass_provenance('WS02-02')
 def test_live_uses_lifecycle_state_without_database_or_provider_calls(monkeypatch) -> None:
     main_module = _import_main(monkeypatch)
     _install_optional_provider_sentinels(monkeypatch)
@@ -813,7 +813,7 @@ def test_live_uses_lifecycle_state_without_database_or_provider_calls(monkeypatc
     assert database_calls == []
 
 
-@pytest.mark.requirement("WS02-02-R5")
+@pytest.mark.pass_provenance('WS02-02')
 def test_ready_gates_on_lifecycle_and_database_probe_without_optional_providers(
     monkeypatch,
 ) -> None:
@@ -873,7 +873,7 @@ def test_ready_gates_on_lifecycle_and_database_probe_without_optional_providers(
     assert outcomes == []
 
 
-@pytest.mark.requirement("WS02-02-R5")
+@pytest.mark.pass_provenance('WS02-02')
 def test_database_connection_helper_uses_dedicated_postgresql_test_database() -> None:
     database_url = os.environ.get("DATABASE_URL", "")
     assert database_url, "DATABASE_URL is required for WS02-02 PostgreSQL helper evidence"
@@ -904,7 +904,7 @@ def test_database_connection_helper_uses_dedicated_postgresql_test_database() ->
     )
 
 
-@pytest.mark.requirement("WS02-02-R6")
+@pytest.mark.pass_provenance('WS02-02')
 def test_root_compatibility_is_not_database_backed_or_canonical_readiness(
     monkeypatch,
 ) -> None:
@@ -933,7 +933,7 @@ def test_root_compatibility_is_not_database_backed_or_canonical_readiness(
     assert probe_calls == ["ready"]
 
 
-@pytest.mark.requirement("WS02-02-R6")
+@pytest.mark.pass_provenance('WS02-02')
 def test_db_health_is_settings_controlled_uses_shared_probe_and_hides_diagnostics(
     monkeypatch,
 ) -> None:

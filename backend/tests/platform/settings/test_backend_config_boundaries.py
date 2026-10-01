@@ -184,7 +184,7 @@ def _environment_accesses(path: Path) -> tuple[str, ...]:
     return tuple(findings)
 
 
-@pytest.mark.requirement("WS02-01-R1")
+@pytest.mark.pass_provenance('WS02-01')
 def test_only_declared_settings_and_test_runner_owners_are_excluded_from_runtime_env_scan() -> None:
     assert _is_runtime_python_file(_CANONICAL_SETTINGS_OWNER) is False
     assert _is_runtime_python_file(_REPOSITORY_TEST_ENVIRONMENT_OWNER) is False
@@ -192,7 +192,7 @@ def test_only_declared_settings_and_test_runner_owners_are_excluded_from_runtime
     assert _is_runtime_python_file(_BACKEND_ROOT / "some_feature" / "settings.py") is True
 
 
-@pytest.mark.requirement("WS02-01-R1")
+@pytest.mark.pass_provenance('WS02-01')
 def test_runtime_backend_code_does_not_bypass_authoritative_settings_boundary() -> None:
     direct_environment_access = [
         finding
@@ -203,12 +203,12 @@ def test_runtime_backend_code_does_not_bypass_authoritative_settings_boundary() 
     assert direct_environment_access == []
 
 
-@pytest.mark.requirement("WS02-01-R7")
+@pytest.mark.pass_provenance('WS02-01')
 def test_authoritative_settings_owner_has_no_direct_runtime_or_provider_dependencies() -> None:
     assert _settings_side_effectful_imports(_CANONICAL_SETTINGS_OWNER) == ()
 
 
-@pytest.mark.requirement("WS02-01-R6", "WS03-03B-R1", "WS03-03B-R2", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS02-01', 'WS03-03B')
 def test_frontend_public_config_uses_vite_names_and_excludes_backend_private_names() -> None:
     frontend_example_names = _parse_env_example_names(_FRONTEND_ROOT / ".env.example")
     frontend_source_names = _frontend_source_env_names()
@@ -224,7 +224,7 @@ def test_frontend_public_config_uses_vite_names_and_excludes_backend_private_nam
     } == set()
 
 
-@pytest.mark.requirement("WS02-01-R6", "WS02-01-R9", "WS03-03B-R1")
+@pytest.mark.pass_provenance('WS02-01', 'WS03-03B')
 def test_backend_safe_example_names_are_declared_settings_names() -> None:
     backend_example_names = _parse_env_example_names(_BACKEND_ROOT / ".env.example")
 
@@ -233,7 +233,7 @@ def test_backend_safe_example_names_are_declared_settings_names() -> None:
     assert all(not name.startswith("VITE_") for name in backend_example_names)
 
 
-@pytest.mark.requirement("WS02-01-R2", "WS02-01-R9")
+@pytest.mark.pass_provenance('WS02-01')
 def test_environment_vocabulary_matches_settings_plan_matrix_and_ci_artifacts() -> None:
     canonical_values = {environment.value for environment in AppEnvironment}
     backend_example = (_BACKEND_ROOT / ".env.example").read_text()

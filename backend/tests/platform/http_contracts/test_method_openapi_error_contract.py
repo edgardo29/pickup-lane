@@ -65,7 +65,7 @@ def _response_codes(schema: dict[str, object], path: str, method: str) -> set[st
     return set(operation["responses"])
 
 
-@pytest.mark.requirement("WS02-05A-R2")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_unsupported_method_remains_framework_owned_with_stable_public_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -84,7 +84,7 @@ def test_unsupported_method_remains_framework_owned_with_stable_public_error(
     assert "POST" not in live_route.methods
 
 
-@pytest.mark.requirement("WS02-05A-R3")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_openapi_error_components_match_runtime_public_error_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -114,7 +114,7 @@ def test_openapi_error_components_match_runtime_public_error_shape(
     ]
 
 
-@pytest.mark.requirement("WS02-05A-R2", "WS02-05A-R3", "WS02-05A-R6")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_route_derived_error_documentation_matches_current_route_classification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -144,7 +144,7 @@ def test_route_derived_error_documentation_matches_current_route_classification(
     assert "requestBody" not in tombstone
 
 
-@pytest.mark.requirement("WS02-05A-R3")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_openapi_public_error_schemas_do_not_expose_sensitive_diagnostics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -13,7 +13,7 @@ from backend.services.app_check_policy import (
 )
 from backend.settings import build_settings
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 TEST_DATABASE_URL = "postgresql+psycopg://db.example.invalid:5432/pickup_lane_test_db"
 ALLOWED_ORIGIN = "https://app.example.invalid"
@@ -39,7 +39,7 @@ def _settings(mode: str = "enforced"):
     )
 
 
-@pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R5", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_current_registered_routes_are_precomputed_and_fully_classified() -> None:
     from backend.main import create_app
 
@@ -58,7 +58,7 @@ def test_current_registered_routes_are_precomputed_and_fully_classified() -> Non
     assert all(not hasattr(entry, "endpoint") for entry in entries)
 
 
-@pytest.mark.requirement("WS03-03B-R5", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_policy_matches_only_precomputed_method_path_and_disposition() -> None:
     from backend.main import create_app
 
@@ -85,7 +85,7 @@ def test_policy_matches_only_precomputed_method_path_and_disposition() -> None:
     assert unmatched is None
 
 
-@pytest.mark.requirement("WS03-03B-R5", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_registered_unclassified_api_route_fails_policy_construction() -> None:
     app = FastAPI()
 
@@ -97,7 +97,7 @@ def test_registered_unclassified_api_route_fails_policy_construction() -> None:
         build_app_check_route_policy(app)
 
 
-@pytest.mark.requirement("WS03-03B-R5", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_supported_browser_route_tags_are_explicit_not_prefix_only() -> None:
     assert "games" in SUPPORTED_BROWSER_API_ROUTE_TAGS
     assert "admin_official_games" in SUPPORTED_BROWSER_API_ROUTE_TAGS
@@ -105,7 +105,7 @@ def test_supported_browser_route_tags_are_explicit_not_prefix_only() -> None:
     assert all(tag and not tag.startswith("/") for tag in SUPPORTED_BROWSER_API_ROUTE_TAGS)
 
 
-@pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R5", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_unmatched_and_method_mismatch_requests_preserve_normal_404_and_405() -> None:
     from backend.main import create_app
 
@@ -121,7 +121,7 @@ def test_unmatched_and_method_mismatch_requests_preserve_normal_404_and_405() ->
     assert method_response.json()["code"] == "API.METHOD_NOT_ALLOWED"
 
 
-@pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R5")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_cors_preflight_remains_outside_app_check_but_actual_request_is_evaluated() -> None:
     from backend.main import create_app
 

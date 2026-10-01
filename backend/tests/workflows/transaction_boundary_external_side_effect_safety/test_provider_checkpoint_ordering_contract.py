@@ -94,7 +94,7 @@ def _stripe_timeout(operation: str) -> DependencyMutationTimeoutUnknownError:
     )
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R3", "WS04-02A-R4")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_checkout_create_timeout_leaves_committed_local_checkpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -215,7 +215,7 @@ def test_checkout_create_timeout_leaves_committed_local_checkpoint(
     ]
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_checkout_provider_success_then_local_recording_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -357,7 +357,7 @@ def test_checkout_provider_success_then_local_recording_failure_is_honest(
     ]
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_community_publish_create_timeout_keeps_attempt_checkpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -418,7 +418,7 @@ def test_community_publish_create_timeout_keeps_attempt_checkpoint(
     assert staged_attempt.attempt_status == "requires_payment_method"
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_community_publish_provider_success_then_local_recording_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -494,7 +494,7 @@ def test_community_publish_provider_success_then_local_recording_failure_is_hone
     assert staged_attempts[0].payment_id == staged_payments[0].id
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -616,7 +616,7 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
     ]
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -741,7 +741,7 @@ def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
     ]
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_saved_card_sync_default_provider_success_local_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -815,7 +815,7 @@ def test_saved_card_sync_default_provider_success_local_failure_is_honest(
     assert db.rollback_calls == 1
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_saved_card_default_provider_success_local_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -880,7 +880,7 @@ def test_saved_card_default_provider_success_local_failure_is_honest(
     assert db.rollback_calls == 1
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_saved_card_detach_provider_success_local_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -938,7 +938,7 @@ def test_saved_card_detach_provider_success_local_failure_is_honest(
     assert db.rollback_calls == 1
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_admin_refund_retry_commits_durable_intent_without_provider_call() -> None:
     import inspect
 
@@ -951,7 +951,7 @@ def test_admin_refund_retry_commits_durable_intent_without_provider_call() -> No
     assert source.index("enqueue_refund_fulfillment_job(") < source.rindex("db.commit()")
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_refund_provider_mutation_is_owned_only_by_durable_handler() -> None:
     import inspect
 
@@ -966,7 +966,7 @@ def test_refund_provider_mutation_is_owned_only_by_durable_handler() -> None:
     assert handler_source.index("db.commit()") < handler_source.index("create_refund(")
 
 
-@pytest.mark.requirement("WS05-03A-R3")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_admin_refund_reconciliation_releases_locks_before_provider_read() -> None:
     import inspect
 
@@ -996,7 +996,7 @@ def test_admin_refund_reconciliation_releases_locks_before_provider_read() -> No
     assert positions == sorted(positions)
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_unfinished_account_cleanup_config_failure_rolls_back_before_support_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1059,7 +1059,7 @@ def test_unfinished_account_cleanup_config_failure_rolls_back_before_support_sta
     assert support_records == []
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_unfinished_account_cleanup_timeout_keeps_unknown_outcome_uncommitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1123,7 +1123,7 @@ def test_unfinished_account_cleanup_timeout_keeps_unknown_outcome_uncommitted(
     assert support_records == []
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_unfinished_account_cleanup_provider_success_records_support_followup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1200,7 +1200,7 @@ def test_unfinished_account_cleanup_provider_success_records_support_followup(
     }
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R4", "WS04-02A-R5")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_unfinished_account_cleanup_duplicate_provider_delete_can_complete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

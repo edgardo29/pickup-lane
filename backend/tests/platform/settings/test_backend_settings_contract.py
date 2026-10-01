@@ -94,7 +94,7 @@ def _assert_rejected(
     return message
 
 
-@pytest.mark.requirement("WS02-01-R1", "WS02-01-R2")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize(
     ("raw_app_env", "expected_env", "production_like"),
     [
@@ -117,7 +117,7 @@ def test_canonical_environment_identities_parse_and_classify(
     assert settings.is_production_like is production_like
 
 
-@pytest.mark.requirement("WS02-01-R2")
+@pytest.mark.pass_provenance('WS02-01')
 def test_environment_identity_defaulting_is_bounded_to_local_or_ci() -> None:
     local_settings = _build(_settings_env(None, DATABASE_URL=_PRODUCTION_DATABASE_URL))
     ci_settings = _build(_settings_env(None, CI="true", DATABASE_URL=_TEST_DATABASE_URL))
@@ -126,7 +126,7 @@ def test_environment_identity_defaulting_is_bounded_to_local_or_ci() -> None:
     assert ci_settings.app_env is AppEnvironment.CI
 
 
-@pytest.mark.requirement("WS02-01-R2", "WS02-01-R3")
+@pytest.mark.pass_provenance('WS02-01')
 def test_deployed_runtime_markers_require_explicit_production_like_identity() -> None:
     _assert_rejected(
         _settings_env(None, RENDER="true"),
@@ -134,7 +134,7 @@ def test_deployed_runtime_markers_require_explicit_production_like_identity() ->
     )
 
 
-@pytest.mark.requirement("WS02-01-R2", "WS02-01-R3")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize("raw_app_env", ["", "   ", "qa"])
 def test_blank_or_unknown_environment_identity_is_rejected(raw_app_env: str) -> None:
     _assert_rejected(
@@ -143,14 +143,14 @@ def test_blank_or_unknown_environment_identity_is_rejected(raw_app_env: str) -> 
     )
 
 
-@pytest.mark.requirement("WS02-01-R2")
+@pytest.mark.pass_provenance('WS02-01')
 def test_environment_identity_normalizes_accepted_case_and_padding() -> None:
     settings = _build(_settings_env(" Production "))
 
     assert settings.app_env is AppEnvironment.PRODUCTION
 
 
-@pytest.mark.requirement("WS02-01-R3", "WS02-01-R5", "WS03-03B-R1")
+@pytest.mark.pass_provenance('WS02-01', 'WS03-03B')
 @pytest.mark.parametrize("app_env", ["preview", "staging", "production"])
 @pytest.mark.parametrize(
     "missing_name",
@@ -173,7 +173,7 @@ def test_production_like_environments_reject_missing_required_config(
     )
 
 
-@pytest.mark.requirement("WS02-01-R3")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize(
     ("name", "value"),
     [
@@ -190,7 +190,7 @@ def test_production_like_environments_reject_local_only_values(name: str, value:
     )
 
 
-@pytest.mark.requirement("WS02-01-R3", "WS02-01-R6")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize("app_env", ["preview", "staging", "production"])
 @pytest.mark.parametrize(
     "name",
@@ -209,7 +209,7 @@ def test_production_like_environments_reject_wildcard_host_and_cors_boundaries(
     )
 
 
-@pytest.mark.requirement("WS02-01-R3")
+@pytest.mark.pass_provenance('WS02-01')
 def test_production_rejects_api_docs_exposure() -> None:
     _assert_rejected(
         _settings_env("production", ENABLE_API_DOCS="true"),
@@ -217,7 +217,7 @@ def test_production_rejects_api_docs_exposure() -> None:
     )
 
 
-@pytest.mark.requirement("WS02-01-R3", "WS02-01-R5")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize(
     ("name", "placeholder"),
     [
@@ -240,7 +240,7 @@ def test_production_like_environments_reject_documented_placeholders_without_ech
     )
 
 
-@pytest.mark.requirement("WS02-01-R4")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize("app_env", ["test", "ci"])
 def test_test_and_ci_require_the_dedicated_database_identity(app_env: str) -> None:
     settings = _build(_settings_env(app_env))
@@ -248,7 +248,7 @@ def test_test_and_ci_require_the_dedicated_database_identity(app_env: str) -> No
     assert settings.database_url_value.endswith(f"/{DEDICATED_TEST_DATABASE_NAME}")
 
 
-@pytest.mark.requirement("WS02-01-R4")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize("app_env", ["test", "ci"])
 def test_test_and_ci_reject_non_dedicated_database_names(app_env: str) -> None:
     _assert_rejected(
@@ -257,7 +257,7 @@ def test_test_and_ci_reject_non_dedicated_database_names(app_env: str) -> None:
     )
 
 
-@pytest.mark.requirement("WS02-01-R4", "WS04-03A-R4", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS02-01', 'WS04-03A')
 @pytest.mark.parametrize("app_env", ["test", "ci"])
 def test_test_and_ci_accept_separate_migration_database_identity(app_env: str) -> None:
     parsed = settings_module._parse_migration_database_url(
@@ -268,7 +268,7 @@ def test_test_and_ci_accept_separate_migration_database_identity(app_env: str) -
     assert parsed.endswith(f"/{DEDICATED_MIGRATION_TEST_DATABASE_NAME}")
 
 
-@pytest.mark.requirement("WS02-01-R4", "WS04-03A-R4", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS02-01', 'WS04-03A')
 @pytest.mark.parametrize("app_env", ["test", "ci"])
 def test_test_and_ci_reject_application_database_as_explicit_migration_database(
     app_env: str,
@@ -283,7 +283,7 @@ def test_test_and_ci_reject_application_database_as_explicit_migration_database(
     assert DEDICATED_MIGRATION_TEST_DATABASE_NAME in message
 
 
-@pytest.mark.requirement("WS02-01-R4")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize(
     "database_url",
     [
@@ -302,7 +302,7 @@ def test_database_url_validation_rejects_malformed_or_unsupported_urls(
     )
 
 
-@pytest.mark.requirement("WS02-01-R4")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize(
     "database_name",
     [
@@ -325,7 +325,7 @@ def test_production_database_names_reject_lower_environment_identities(
     )
 
 
-@pytest.mark.requirement("WS02-01-R5")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize(
     "missing_name",
     ["STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRET"],
@@ -343,7 +343,7 @@ def test_enabled_stripe_payments_require_backend_fields_together(missing_name: s
     _assert_rejected(env, mentions=(missing_name,))
 
 
-@pytest.mark.requirement("WS02-01-R5")
+@pytest.mark.pass_provenance('WS02-01')
 def test_stripe_configuration_rejects_unsupported_currency() -> None:
     _assert_rejected(
         _settings_env("production", STRIPE_CURRENCY="EUR"),
@@ -351,7 +351,7 @@ def test_stripe_configuration_rejects_unsupported_currency() -> None:
     )
 
 
-@pytest.mark.requirement("WS02-01-R5")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize(
     ("name", "value"),
     [
@@ -371,7 +371,7 @@ def test_firebase_admin_configuration_rejects_invalid_backend_values(
     )
 
 
-@pytest.mark.requirement("WS02-01-R5")
+@pytest.mark.pass_provenance('WS02-01')
 def test_firebase_admin_credentials_path_is_validated_without_provider_access() -> None:
     missing_path = "synthetic-missing-firebase-admin.json"
 
@@ -386,7 +386,7 @@ def test_firebase_admin_credentials_path_is_validated_without_provider_access() 
     )
 
 
-@pytest.mark.requirement("WS02-01-R5")
+@pytest.mark.pass_provenance('WS02-01')
 @pytest.mark.parametrize(
     ("name", "value"),
     [
@@ -405,7 +405,7 @@ def test_r2_configuration_rejects_partial_or_unsafe_backend_values(
     )
 
 
-@pytest.mark.requirement("WS02-01-R5", "WS03-03B-R1")
+@pytest.mark.pass_provenance('WS02-01', 'WS03-03B')
 def test_complete_backend_private_provider_config_is_accepted_without_provider_calls() -> None:
     settings = _build(
         _settings_env(
@@ -423,7 +423,7 @@ def test_complete_backend_private_provider_config_is_accepted_without_provider_c
     assert settings.r2_configured is True
 
 
-@pytest.mark.requirement("WS02-01-R1", "WS02-01-R7")
+@pytest.mark.pass_provenance('WS02-01')
 def test_explicit_settings_construction_uses_synthetic_mapping_without_dotenv(
     monkeypatch,
 ) -> None:
@@ -438,7 +438,7 @@ def test_explicit_settings_construction_uses_synthetic_mapping_without_dotenv(
     assert settings.cors_allowed_origins == ("https://app.example.invalid",)
 
 
-@pytest.mark.requirement("WS02-01-R7")
+@pytest.mark.pass_provenance('WS02-01')
 def test_ordinary_settings_tests_block_uncontrolled_network_access() -> None:
     probe_socket = socket.socket()
     try:
@@ -450,7 +450,7 @@ def test_ordinary_settings_tests_block_uncontrolled_network_access() -> None:
     assert NETWORK_BLOCKED_MESSAGE in str(exc_info.value)
 
 
-@pytest.mark.requirement("WS02-01-R1", "WS02-01-R2")
+@pytest.mark.pass_provenance('WS02-01')
 def test_non_production_defaults_are_bounded_to_non_production_environments() -> None:
     settings = _build(
         _settings_env(

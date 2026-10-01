@@ -119,7 +119,7 @@ def _is_sqlish(value: str) -> bool:
     return bool(_SQLISH_PATTERN.search(value))
 
 
-@pytest.mark.requirement("WS04-02C-R6", "WS04-02C-R8")
+@pytest.mark.pass_provenance('WS04-02C')
 def test_current_production_raw_sql_inventory_matches_policy_allowlist() -> None:
     actual = _raw_sql_calls(
         _python_files(
@@ -133,7 +133,7 @@ def test_current_production_raw_sql_inventory_matches_policy_allowlist() -> None
     assert actual == value_policy.raw_sql_allowlist_keys()
 
 
-@pytest.mark.requirement("WS04-02C-R6", "WS04-02C-R8")
+@pytest.mark.pass_provenance('WS04-02C')
 def test_production_source_rejects_unsafe_sql_construction_patterns() -> None:
     violations: list[str] = []
     blocked_substrings = (
@@ -175,7 +175,7 @@ def test_production_source_rejects_unsafe_sql_construction_patterns() -> None:
     assert violations == []
 
 
-@pytest.mark.requirement("WS04-02C-R6", "WS04-02C-R8")
+@pytest.mark.pass_provenance('WS04-02C')
 def test_migration_raw_sql_is_fixed_and_allowlisted_for_value_safety_scope() -> None:
     migrations = _python_files("backend/alembic/versions")
     actual = {
@@ -192,15 +192,17 @@ def test_migration_raw_sql_is_fixed_and_allowlisted_for_value_safety_scope() -> 
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or _call_name(node) != "execute":
                 continue
-            if not node.args or not isinstance(node.args[0], ast.Constant):
-                dynamic_violations.append(f"{_relative(path)}:{node.lineno}")
-            elif not isinstance(node.args[0].value, str):
+            if (
+                not node.args
+                or not isinstance(node.args[0], ast.Constant)
+                or not isinstance(node.args[0].value, str)
+            ):
                 dynamic_violations.append(f"{_relative(path)}:{node.lineno}")
 
     assert dynamic_violations == []
 
 
-@pytest.mark.requirement("WS04-02C-R7", "WS04-02C-R8")
+@pytest.mark.pass_provenance('WS04-02C')
 def test_repository_logging_does_not_intentionally_emit_sensitive_database_values() -> None:
     violations: list[str] = []
     for path in _python_files(

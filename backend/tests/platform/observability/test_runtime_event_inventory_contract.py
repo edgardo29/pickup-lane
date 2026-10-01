@@ -33,7 +33,6 @@ from backend.services.r2_storage_service import (
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.requirement("WS09-01A"),
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -58,6 +57,7 @@ def _capture(monkeypatch: pytest.MonkeyPatch, module) -> list[tuple[object, ...]
         ),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_app_check_inventory_has_exact_fixed_mappings(
     monkeypatch: pytest.MonkeyPatch,
     outcome: AppCheckVerificationOutcome,
@@ -95,6 +95,7 @@ def test_app_check_inventory_has_exact_fixed_mappings(
         ("store_error", "error", "CHAT.RATE_LIMIT_STORE_ERROR"),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_chat_rate_limit_inventory_has_exact_fixed_mappings(
     monkeypatch: pytest.MonkeyPatch,
     result: str,
@@ -122,6 +123,7 @@ def test_chat_rate_limit_inventory_has_exact_fixed_mappings(
     assert calls == [("chat.rate_limit", severity, fields)]
 
 
+@pytest.mark.pass_provenance('WS09-01A')
 def test_content_finding_reconciliation_failure_rolls_back_before_exact_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -165,6 +167,7 @@ def test_content_finding_reconciliation_failure_rolls_back_before_exact_event(
         (RuntimeError("private-canary"), "failed", "MODERATION.SURFACING_FAILED"),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_moderation_surfacing_failures_preserve_distinct_exact_mappings(
     monkeypatch: pytest.MonkeyPatch,
     error: Exception,
@@ -221,6 +224,7 @@ def test_moderation_surfacing_failures_preserve_distinct_exact_mappings(
         ),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_saved_content_reconciliation_catches_have_distinct_exact_mappings(
     monkeypatch: pytest.MonkeyPatch,
     function_name: str,
@@ -293,6 +297,7 @@ def test_saved_content_reconciliation_catches_have_distinct_exact_mappings(
         ),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_storage_event_helper_has_exact_safe_mapping(
     monkeypatch: pytest.MonkeyPatch,
     operation: str,
@@ -362,6 +367,7 @@ def _assert_storage_call(
         assert prohibited not in serialized
 
 
+@pytest.mark.pass_provenance('WS09-01A', 'WS09-03A')
 def test_validate_upload_request_config_failure_emits_at_actual_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -391,6 +397,7 @@ def test_validate_upload_request_config_failure_emits_at_actual_boundary(
     }
 
 
+@pytest.mark.pass_provenance('WS09-01A', 'WS09-03A')
 def test_upload_readiness_config_failure_emits_at_actual_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -420,6 +427,7 @@ def test_upload_readiness_config_failure_emits_at_actual_boundary(
     }
 
 
+@pytest.mark.pass_provenance('WS09-01A', 'WS09-03A')
 def test_create_upload_direct_config_failure_emits_at_actual_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -475,6 +483,7 @@ def test_create_upload_direct_config_failure_emits_at_actual_boundary(
         ),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_create_upload_ticket_failures_emit_at_actual_boundary(
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
@@ -536,6 +545,7 @@ def test_create_upload_ticket_failures_emit_at_actual_boundary(
         ),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_image_read_url_failures_emit_at_actual_admin_and_public_boundaries(
     monkeypatch: pytest.MonkeyPatch,
     function_name: str,
@@ -582,6 +592,7 @@ def test_image_read_url_failures_emit_at_actual_admin_and_public_boundaries(
         ),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_metadata_failures_emit_at_actual_completion_boundary(
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
@@ -631,6 +642,7 @@ def test_metadata_failures_emit_at_actual_completion_boundary(
         DependencyReadTimeoutError(provider_kind="r2", operation="r2.metadata.head"),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_expected_metadata_not_found_and_timeout_do_not_duplicate_storage_event(
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
@@ -684,6 +696,7 @@ def test_expected_metadata_not_found_and_timeout_do_not_duplicate_storage_event(
         ),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_official_game_best_effort_read_failure_emits_and_returns_none(
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
@@ -724,6 +737,7 @@ def test_official_game_best_effort_read_failure_emits_and_returns_none(
         ),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_game_card_best_effort_read_failure_emits_and_preserves_missing_image(
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
@@ -768,6 +782,7 @@ def test_game_card_best_effort_read_failure_emits_and_preserves_missing_image(
     )
 
 
+@pytest.mark.pass_provenance('WS09-01A')
 def test_storage_inventory_is_owned_only_by_request_facing_services() -> None:
     venue_source = (_REPO_ROOT / "backend/services/venue_image_service.py").read_text()
     official_source = (
@@ -791,6 +806,7 @@ def test_storage_inventory_is_owned_only_by_request_facing_services() -> None:
     assert "R2ObjectNotFoundError" in venue_source
 
 
+@pytest.mark.pass_provenance('WS09-01A')
 def test_complete_in_scope_runtime_population_has_no_parallel_plain_logging() -> None:
     module_paths = (
         "backend/main.py",

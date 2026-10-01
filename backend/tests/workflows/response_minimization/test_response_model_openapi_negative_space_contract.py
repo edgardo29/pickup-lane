@@ -7,7 +7,7 @@ from typing import get_args, get_origin
 import pytest
 from fastapi.routing import APIRoute
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 HTTP_RESPONSE_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 NO_RESPONSE_MODEL = "None"
@@ -651,7 +651,7 @@ def _operation(openapi: dict[str, Any], method: str, path: str) -> dict[str, Any
     return openapi["paths"][path][method.lower()]
 
 
-@pytest.mark.requirement("WS02-05B2-R8")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_b2_routes_declare_expected_response_models() -> None:
     for (method, path), expected_model_name in B2_ROUTE_MODELS.items():
         route = _route(method, path)
@@ -659,7 +659,7 @@ def test_b2_routes_declare_expected_response_models() -> None:
         assert _model_name(route.response_model) == expected_model_name
 
 
-@pytest.mark.requirement("WS02-05B2-R8")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_openapi_components_publish_minimized_response_shapes() -> None:
     from backend.main import app
 
@@ -748,7 +748,7 @@ def test_openapi_components_publish_minimized_response_shapes() -> None:
             assert schema["type"] == "object", key
 
 
-@pytest.mark.requirement("WS02-05B2-R8")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_negative_space_response_families_are_explicitly_classified() -> None:
     suspicious_candidates = _suspicious_response_candidates()
 

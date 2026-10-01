@@ -18,7 +18,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 @dataclass(frozen=True)
@@ -327,7 +326,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
     ]
 
 
-@pytest.mark.requirement("WS03-04D-R2", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_shared_admin_gate_rejects_missing_invalid_ordinary_unverified_and_inactive_users(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -373,7 +372,7 @@ def test_shared_admin_gate_rejects_missing_invalid_ordinary_unverified_and_inact
     assert response.json()["user_id"] == str(admin.id)
 
 
-@pytest.mark.requirement("WS03-04D-R3", "WS03-04D-R5", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_stale_admin_recent_auth_denial_does_not_change_target_role_or_audit_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -405,14 +404,7 @@ def test_stale_admin_recent_auth_denial_does_not_change_target_role_or_audit_row
     assert _count_model_rows(AdminAction) == before_admin_actions
 
 
-@pytest.mark.requirement(
-    "WS03-04D-R3",
-    "WS03-04D-R5",
-    "WS03-04D-R6",
-    "WS03-04D-R7",
-    "WS03-04D-R8",
-    "WS03-04D-R10",
-)
+@pytest.mark.pass_provenance('WS03-04D')
 def test_every_recent_admin_high_risk_class_rejects_stale_auth_before_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

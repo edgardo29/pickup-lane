@@ -9,7 +9,6 @@ from pydantic import ValidationError
 
 from backend.schemas.payment_event_schema import PaymentEventUpdate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _session():
@@ -73,7 +72,7 @@ def _payment_event():
     )
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_payment_event_repair_schema_allows_only_repair_fields() -> None:
     payment_id = uuid.uuid4()
     assert PaymentEventUpdate(payment_id=payment_id).payment_id == payment_id
@@ -91,7 +90,7 @@ def test_payment_event_repair_schema_allows_only_repair_fields() -> None:
         PaymentEventUpdate(processing_status="failed")
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_payment_event_repair_persists_allowed_fields_without_mutating_provider_metadata() -> None:
     from backend.models import PaymentEvent
     from backend.services.payment_event_service import update_payment_event_record
@@ -138,7 +137,7 @@ def test_payment_event_repair_persists_allowed_fields_without_mutating_provider_
         }
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_rejected_payment_event_repair_does_not_change_persisted_state() -> None:
     from backend.models import PaymentEvent
     from backend.services.payment_event_service import update_payment_event_record

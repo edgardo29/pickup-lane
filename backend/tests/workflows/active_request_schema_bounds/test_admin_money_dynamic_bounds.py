@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from backend.schemas.admin_money_financial_outcome_schema import AdminMoneyFinancialOutcomeCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _STARTS_AT = datetime(2035, 1, 15, 18, 0, tzinfo=timezone.utc)
 _ENDS_AT = datetime(2035, 1, 15, 20, 0, tzinfo=timezone.utc)
@@ -144,7 +143,7 @@ def _payload(**overrides: object) -> AdminMoneyFinancialOutcomeCreate:
     return AdminMoneyFinancialOutcomeCreate(**payload)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_amount_cents_schema_rejects_negative_and_accepts_non_negative_values() -> None:
     with pytest.raises(ValidationError):
         _payload(amount_cents=-1)
@@ -153,7 +152,7 @@ def test_amount_cents_schema_rejects_negative_and_accepts_non_negative_values() 
     assert _payload(amount_cents=1).amount_cents == 1
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_host_publish_fee_target_allows_equal_amount_and_rejects_amount_above_target() -> None:
     from backend.models import AdminFinancialOutcome
     from backend.services.admin_financial_outcome_service import resolve_outcome_context
@@ -181,7 +180,7 @@ def test_host_publish_fee_target_allows_equal_amount_and_rejects_amount_above_ta
         assert _count(db, AdminFinancialOutcome) == 0
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_no_eligible_positive_target_rejects_positive_amount_but_allows_zero_boundary() -> None:
     from backend.models import AdminFinancialOutcome
     from backend.services.admin_financial_outcome_service import resolve_outcome_context
@@ -211,7 +210,7 @@ def test_no_eligible_positive_target_rejects_positive_amount_but_allows_zero_bou
         assert resolved[-1] == 0
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_rejected_dynamic_amounts_do_not_persist_prohibited_financial_outcomes() -> None:
     from backend.models import AdminFinancialOutcome
     from backend.services.admin_financial_outcome_service import resolve_outcome_context

@@ -99,7 +99,7 @@ Do not fill them with terminology such as:
 - evidence classifications;
 - publication mechanics;
 - approval workflow;
-- trusted-evidence terminology;
+- test-certification terminology;
 - artifact-state terminology.
 
 If the engineering decision can be explained without a framework term, use
@@ -456,7 +456,6 @@ Include only metadata the workflow actually needs, such as:
 - approved prerequisite or decision references;
 - child IDs and order;
 - proposed canonical plan path;
-- proposed requirement artifact location;
 - proposed test or verification location;
 - blockers;
 - exact next workflow action.
@@ -474,8 +473,7 @@ Use a table when exact values are easier to review:
 | Approved decisions and prerequisites | `[Relevant decisions and completed prerequisites / None]` |
 | Child order | `[PASS-A -> PASS-B -> PASS-C / Not applicable]` |
 | Proposed canonical plan path | `[Path for next executable work / Not applicable]` |
-| Proposed requirement declaration | `[Path / Not applicable]` |
-| Proposed trusted test or verification location | `[Path / Not applicable]` |
+| Proposed test or verification location | `[Path / Not applicable]` |
 | Blockers | `[Actual blockers / None]` |
 | Exact next allowed action | `[Exact workflow action]` |
 

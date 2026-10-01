@@ -1,231 +1,169 @@
-# Backend Test Compliance Checker
+# Backend Tests
 
-## Purpose
+This directory contains the current backend test suite. Tests are organized by
+the behavior they protect, and backend pytest execution must go through the
+repository-owned guarded runner.
 
-The backend test compliance checker validates machine-verifiable testing
-foundation rules for trusted backend test scopes. It is a compliance verifier,
-not a semantic certification engine and not a pytest runtime runner.
+## Run Tests Safely
 
-Checker `PASS` means only that the requested scope satisfies applicable
-machine-verifiable Pickup Lane test-compliance rules and that required declared
-machine-readable evidence is internally consistent. Human adequacy review
-remains separate.
-
-## Practical Test Commands
-
-Run backend tests from the repository root through the repository-owned runner.
-It reads `TEST_DATABASE_URL` and `MIGRATION_DATABASE_URL` from the command
-environment or ignored `backend/.env`, validates their exact dedicated names,
-requires both URLs to use the same local loopback PostgreSQL server and port,
-and never treats the development database as a test target.
-
-Show built-in help:
+Run commands from the repository root. The runner reads `TEST_DATABASE_URL` and
+`MIGRATION_DATABASE_URL` from the environment or the ignored `backend/.env`.
 
 ```bash
 backend/.venv/bin/python -m backend.test_runner --help
-```
 
-Rebuild the dedicated databases:
-
-```bash
 backend/.venv/bin/python -m backend.test_runner rebuild ordinary
 backend/.venv/bin/python -m backend.test_runner rebuild migration
 backend/.venv/bin/python -m backend.test_runner rebuild all
-```
 
-Run an explicit ordinary backend/API selection:
-
-```bash
 backend/.venv/bin/python -m backend.test_runner test ordinary \
   backend/tests/platform/settings -q
+
+backend/.venv/bin/python -m backend.test_runner test migration \
+  backend/tests/migrations/migration_policy_compatibility_rehearsal -q
+
+backend/.venv/bin/python -m backend.test_runner test ordinary \
+  backend/tests --collect-only -q
 ```
 
-Run the migration lifecycle selection:
+The first argument after `ordinary` or `migration` must be an existing path
+under `backend/tests`. Additional test selections must stay under that tree.
+Pytest options follow the first selection. The runner rejects options,
+configuration, plugins, and environment overrides that could bypass the root
+safety fixtures.
+
+## Behavior Ownership
+
+Directory placement describes the behavior a test owns. It does not certify a
+test or give it a different level of authority.
+
+- `domains/` owns stable business and domain invariants.
+- `workflows/` owns cross-domain behavior whose integration is the contract.
+- `platform/` owns global backend, API, framework, security, and test-runner
+  behavior.
+- `migrations/` owns Alembic, schema-history, graph, drift, and lifecycle
+  behavior.
+- `support/` owns reusable test infrastructure only.
+- Provider-contract coverage, when applicable, must be explicitly separated
+  and designed around safe emulator, sandbox, test-mode, or dedicated test
+  resources.
+
+Create or move tests according to the behavior under test, not merely the route
+or page that first exposed a defect. Do not create placeholder directories.
+
+`legacy/` is excluded from default collection. Its tests require individual
+assessment before reuse or reactivation; their location alone does not establish
+whether they are correct, obsolete, or useful.
+
+## Database Safety And Isolation
+
+Ordinary tests and migration tests use separate exact-purpose PostgreSQL
+databases:
+
+- ordinary tests: `pickup_lane_test_db`;
+- migration lifecycle tests: `pickup_lane_migration_test_db`.
+
+The runner verifies configured database names, loopback endpoints, and the
+database actually reached before destructive operations. It rejects development,
+production, remote, backup-like, cross-endpoint, or otherwise unsafe targets.
+It also locks destructive operations and requires the ordinary database schema
+to match the current migration source before pytest starts.
+
+Root fixtures in `backend/tests/conftest.py` validate the ordinary database,
+check cleanup-table inventory completeness, clean application tables before and
+after database-using tests, clear dependency overrides, and install the
+network/provider guard.
+
+Tests that genuinely must not open or clean the ordinary application database
+use `pytest.mark.no_db_cleanup`. Migration-owned lifecycle tests use
+`pytest.mark.migration_lifecycle` where appropriate. Filenames do not bypass
+database cleanup.
+
+## Fixtures And Support
+
+- Put broadly shared fixtures in `backend/tests/conftest.py` only when they
+  genuinely apply across the suite.
+- Put feature-specific shared setup in the owning feature directory.
+- Put reusable cross-scope infrastructure in `backend/tests/support/`.
+- Keep important scenario setup and assertions visible in the test when a
+  helper would obscure the behavior being proved.
+
+Current support responsibilities include environment and database validation,
+migration inspection and lifecycle support, production-database target
+rejection, artifact sanitization, and genuinely reusable behavioral fixtures.
+
+## Network And Provider Isolation
+
+Ordinary tests block uncontrolled external network access. The configured local
+PostgreSQL test endpoint is allowed; provider and arbitrary external endpoints
+are not. Mock or fake provider boundaries for ordinary tests.
+
+Tests that intentionally contact a real provider require an explicitly safe
+execution design and non-production resources such as a sandbox, emulator,
+test-mode account, or dedicated disposable resource. They must never rely on
+production credentials, data, or infrastructure.
+
+## Migration Tests
+
+Migration tests use the migration runner mode and the dedicated migration
+database. The surviving migration suite directly covers database targeting,
+migration graph and source inspection, unsafe change detection, lifecycle
+rehearsal, locking, interruption and recovery, drift, and schema compatibility.
+
+Use:
 
 ```bash
 backend/.venv/bin/python -m backend.test_runner test migration \
   backend/tests/migrations/migration_policy_compatibility_rehearsal -q
 ```
 
-The first argument after `ordinary` or `migration` must select an existing path
-under `backend/tests`; options follow it. Additional existing selections must
-also stay under that tree. Accepted pytest arguments are forwarded without
-rewriting, but options that bypass root test fixtures or replace pytest's
-configuration or plugins are rejected. Ambient `PYTEST_ADDOPTS` and
-`PYTEST_PLUGINS` are ignored. Every test command refuses to start when the
-ordinary database is missing, is not at
-the current single Alembic head, or was built from different migration-file
-contents. Both database locks are held because a broad selection can discover
-ordinary and migration tests together.
-Follow the reported `rebuild ordinary` command instead of bypassing that check.
+## Artifact And Output Safety
 
-## Trusted Architecture
+Runner output and captured artifacts must not expose database credentials,
+provider secrets, tokens, or other sensitive values. Artifact sanitization is
+owned by `backend/tests/support/artifacts.py` and direct tests under
+`backend/tests/platform/backend_test_runner/`.
 
-The current backend test tree is:
+Keep live progress visible during long runs. Sanitization must redact output as
+it streams rather than hiding the complete run until exit.
 
-```text
-backend/tests/
-  checker/
-  compliance/
-  platform/
-  support/
-  legacy/
-```
+## Strict Markers
 
-`legacy/` is a historical archive only. It is not trusted production-readiness
-evidence, is excluded from trusted discovery, is not part of normal validation,
-does not define current expected behavior, and is not required to remain
-runnable.
-
-Trusted production-readiness backend tests are organized by ownership:
-
-```text
-backend/tests/
-  domains/
-  workflows/
-  platform/
-  migrations/
-  provider_contract/
-  support/
-  checker/
-```
-
-- `domains/` owns stable business and domain invariants.
-- `workflows/` owns cross-domain orchestration whose integration is itself the
-  contract.
-- `platform/` owns global backend, API, framework, and security behavior.
-- `migrations/` owns Alembic and schema-history testing.
-- `provider_contract/` owns explicit provider, emulator, sandbox, or
-  test-resource verification.
-- `support/` owns reusable test infrastructure only.
-- `checker/` owns checker, compliance, and environment-safety self-tests.
-
-`domains/`, `workflows/`, `migrations/`, and `provider_contract/` are reserved
-trusted roots in suite policy. Do not create placeholder directories for them;
-create a root only when reviewed, current trusted coverage exists for that
-ownership area.
-
-Existing backend application tests are not trusted production-readiness evidence
-until future work derives them from authoritative requirements under this
-system. Historical/out-of-scope tests are excluded from trusted discovery and
-are not inputs to current test design.
-
-## Requirement Declarations And Metadata
-
-Stable requirement IDs are declared once in pass-owned JSON files under:
-
-```text
-backend/tests/support/requirements/
-```
-
-Each declaration file stores only machine-needed identity: requirement ID,
-owning pass, source controls, current machine state, and scope where needed. It
-does not store product specifications, scenarios, assertions, or exact pytest
-node IDs.
-
-Pytest tests declare the stable requirement IDs they prove with:
+Pytest uses strict marker validation. The complete custom marker set is:
 
 ```python
-@pytest.mark.requirement("EN01-R3")
-def test_exact_database_name_is_required():
-    ...
+pytest.mark.no_db_cleanup
+pytest.mark.migration_lifecycle
+pytest.mark.pass_provenance(*pass_ids)
 ```
 
-One test may declare multiple requirements, and one requirement may map to many
-tests. Exact current pytest node IDs are generated from pytest collection.
+`pass_provenance` records production-readiness passes that introduced or
+materially changed a test as evidence for those passes.
 
-## Human Testing Records
+- Use one or more pass IDs when that provenance is real.
+- Preserve genuine multi-pass provenance.
+- Place the marker at the narrowest accurate module, class, or function scope.
+- Do not add a pass merely because it reran an existing test.
+- Ordinary product-development tests with no production-readiness provenance do
+  not need the marker.
 
-Human testing/risk records are concise and scope-owned. The EN-01 foundation
-record lives at:
-
-```text
-backend/tests/checker/TESTING_RECORD.md
-```
-
-These records explain useful risks, scenarios, boundaries, owning layers, gaps,
-and adequacy conclusions. They do not duplicate every Python test, exact node
-ID, or product specification. The reusable standard for these records lives at:
-
-```text
-docs/production-readiness/planning/templates/TESTING-RECORD-TEMPLATE.md
-```
-
-## Checker Commands
-
-Run from the repository root.
-
-File scope:
+Provenance is source-local. To find tests associated with a pass, search the
+test source directly:
 
 ```bash
-backend/.venv/bin/python backend/tests/check_backend_tests.py \
-  --scope file backend/tests/checker/test_checker_foundation.py
+rg 'WS06-01' backend/tests
 ```
 
-Domain/subtree scope:
+There is no separate provenance manifest or rule requiring every test to carry
+provenance.
 
-```bash
-backend/.venv/bin/python backend/tests/check_backend_tests.py \
-  --scope domain backend/tests/checker
-```
+## Focused Safety Tests
 
-Suite scope:
+`backend/tests/platform/backend_test_runner/` directly tests runner selection,
+database and endpoint validation, network blocking, cleanup inventory,
+artifact sanitization, strict marker configuration, silent retry settings,
+sleep-based synchronization, and production-looking credentials.
 
-```bash
-backend/.venv/bin/python backend/tests/check_backend_tests.py \
-  --scope suite
-```
-
-The checker performs pytest collection for node ID generation only. Pytest
-remains the runtime authority for executing tests, fixtures, assertions, and
-normal pytest/JUnit artifacts.
-
-## Result States
-
-- `PASS` / exit code `0`: applicable machine-verifiable compliance rules pass.
-- `FAIL` / exit code `1`: definite machine-verifiable compliance violation.
-- `BLOCKED` / exit code `2`: required authority, evidence, or prerequisite is
-  missing, unresolved, or explicitly blocked.
-- `USAGE_ERROR` / exit code `3`: invocation, arguments, target, or scope is
-  invalid.
-- `INTERNAL_ERROR` / exit code `4`: checker malfunctioned unexpectedly.
-
-## Safety Foundation
-
-Standard backend tests must use synthetic non-production data and resources.
-The exact dedicated PostgreSQL test database name is:
-
-```text
-pickup_lane_test_db
-```
-
-Migration lifecycle tests have their own exact-purpose PostgreSQL database:
-
-```text
-pickup_lane_migration_test_db
-```
-
-Those tests use `MIGRATION_DATABASE_URL` and may reset only that migration test
-database after validating that the ordinary `DATABASE_URL` still points at
-`pickup_lane_test_db` on the same local loopback PostgreSQL server and port.
-
-Use `rebuild migration` or `rebuild all` to provision the migration database.
-Do not point the runner at development, production, backups, or similarly named
-databases.
-
-Unsafe database configuration fails before cleanup. Ordinary backend tests block
-uncontrolled external network access and may use only the configured local
-loopback PostgreSQL test server for their suite. Provider-contract tests are
-separate and must use test-mode, emulator, sandbox, or equivalent resources
-when later implemented.
-
-Retries are diagnostic only and must not silently turn an initial failure into
-clean evidence. Failure artifacts must be sanitized before becoming
-production-readiness evidence.
-
-## EN-01 Validation
-
-EN-01 is validated by checker, environment-safety, traceability,
-suite-separation, browser-quality, retry/flake, artifact, and fixture/support
-self-tests. Do not create application-domain pilot tests to prove the
-foundation.
+These focused tests protect concrete execution safeguards. Normal test design
+still follows the risk-based guidance in
+`docs/agent-notes/coding-standards/backend-testing.md`.

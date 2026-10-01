@@ -8,8 +8,7 @@ import pytest
 from sqlalchemy import func, select
 
 pytestmark = [
-    pytest.mark.suite_type("ordinary"),
-    pytest.mark.requirement("WS05-01A-R7"),
+    pytest.mark.pass_provenance('WS05-01A'),
 ]
 SessionLocal: Any = None
 DurableJob: Any = None

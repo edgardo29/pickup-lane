@@ -16,7 +16,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _platform_notice_state(notice_id: uuid.UUID) -> dict[str, object]:
@@ -149,7 +148,7 @@ def _review_case_state(review_case_id: uuid.UUID) -> dict[str, object]:
         }
 
 
-@pytest.mark.requirement("WS03-04D-R3", "WS03-04D-R8", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_platform_notice_create_requires_recent_admin_and_scopes_recipients(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -245,7 +244,7 @@ def test_platform_notice_create_requires_recent_admin_and_scopes_recipients(
     assert _count_model_rows(AdminAction) == before_cancel_actions + 1
 
 
-@pytest.mark.requirement("WS03-04D-R4", "WS03-04D-R8", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_support_review_and_admin_action_reads_are_admin_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -363,7 +362,7 @@ def test_support_review_and_admin_action_reads_are_admin_only(
     assert ordinary_response.status_code == 403
 
 
-@pytest.mark.requirement("WS03-04D-R8", "WS03-04D-R9", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

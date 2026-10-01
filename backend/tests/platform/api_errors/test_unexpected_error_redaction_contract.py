@@ -102,7 +102,7 @@ def _unexpected_response(
     return response.status_code, json.loads(response.body), response.headers
 
 
-@pytest.mark.requirement("WS02-04A-R5")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_generic_unexpected_exception_response_and_log_exclude_private_values(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -153,7 +153,7 @@ def test_generic_unexpected_exception_response_and_log_exclude_private_values(
     assert records[0]["stable_error_code"] == "API.UNEXPECTED"
 
 
-@pytest.mark.requirement("WS02-04A-R5")
+@pytest.mark.pass_provenance('WS02-04A')
 @pytest.mark.parametrize(
     ("exc", "expected_code", "expected_message", "expected_details"),
     [

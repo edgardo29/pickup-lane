@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import json
 import re
 import uuid
@@ -14,20 +13,15 @@ from typing import Any
 import pytest
 from fastapi.routing import APIRoute
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 MATRIX_PATH = (
     REPO_ROOT
     / "backend/tests/workflows/authorization_matrix_foundation/authorization_matrix.json"
 )
-REQUIREMENTS_PATH = REPO_ROOT / "backend/tests/support/requirements/ws03_04c.json"
 AUTH_PREFIX = "backend.services.auth_service:"
 EXCLUDED_METHODS = {"HEAD", "OPTIONS"}
-WORKFLOW_SCOPE = "workflows/game_community_roster_chat_need_a_sub_relationship_authorization"
-REQUIREMENT_IDS = {f"WS03-04C-R{number}" for number in range(1, 13)}
-REQUIRED_REQUIREMENT_IDS = {f"WS03-04C-R{number}" for number in range(1, 12)}
-DEFERRED_REQUIREMENT_ID = "WS03-04C-R12"
 EXPECTED_C_ROUTE_KEYS = {
     ("GET", "/bookings"),
     ("GET", "/bookings/me"),
@@ -630,14 +624,6 @@ def _matrix() -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
-def _requirement_declarations() -> dict[str, dict[str, Any]]:
-    with REQUIREMENTS_PATH.open(encoding="utf-8") as handle:
-        payload = json.load(handle)
-    assert payload["schema_version"] == 1
-    return {entry["id"]: entry for entry in payload["requirements"]}
-
-
-@lru_cache(maxsize=1)
 def _current_route_map() -> dict[tuple[str, str], APIRoute]:
     from backend.main import app
 
@@ -660,29 +646,6 @@ def _flatten_matrix_routes() -> dict[tuple[str, str], tuple[dict[str, Any], dict
             assert key not in routes, f"duplicate matrix route key: {key}"
             routes[key] = (family, route)
     return routes
-
-
-def _collect_requirement_marker_ids() -> dict[str, set[str]]:
-    marker_ids: dict[str, set[str]] = {}
-    for path in sorted(Path(__file__).parent.glob("test_*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            if not isinstance(node.func, ast.Attribute) or node.func.attr != "requirement":
-                continue
-            value = node.func.value
-            if not (
-                isinstance(value, ast.Attribute)
-                and value.attr == "mark"
-                and isinstance(value.value, ast.Name)
-                and value.value.id == "pytest"
-            ):
-                continue
-            for arg in node.args:
-                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                    marker_ids.setdefault(arg.value, set()).add(path.name)
-    return marker_ids
 
 
 _QUOTED_SQL_VALUE_RE = re.compile(r"'([^']+)'")
@@ -766,7 +729,7 @@ def _assert_complete_state_classification(
     )
 
 
-@pytest.mark.requirement("WS03-04C-R1", "WS03-04C-R2", "WS03-04C-R11")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_matrix_scope_guard_and_route_dependencies_match_current_app() -> None:
     matrix_routes = _flatten_matrix_routes()
     c_routes = {
@@ -824,31 +787,7 @@ def test_matrix_scope_guard_and_route_dependencies_match_current_app() -> None:
         assert "backend.services.auth_service:get_verified_firebase_identity" in dependencies
 
 
-@pytest.mark.requirement("WS03-04C-R11")
-def test_requirement_declaration_and_pytest_markers_match_c_contract() -> None:
-    declarations = _requirement_declarations()
-    assert set(declarations) == REQUIREMENT_IDS
-
-    for requirement_id in REQUIRED_REQUIREMENT_IDS:
-        declaration = declarations[requirement_id]
-        assert declaration["owning_pass"] == "WS03-04C"
-        assert declaration["state"] == "required"
-        assert declaration["scope"] == WORKFLOW_SCOPE
-        assert declaration["source_controls"]
-        assert declaration["reason"].strip()
-
-    deferred = declarations[DEFERRED_REQUIREMENT_ID]
-    assert deferred["owning_pass"] == "WS03-04C"
-    assert deferred["state"] == "deferred"
-    assert deferred["scope"] == "governance"
-    assert deferred["reason"].strip()
-
-    marker_files = _collect_requirement_marker_ids()
-    assert REQUIRED_REQUIREMENT_IDS <= set(marker_files)
-    assert DEFERRED_REQUIREMENT_ID not in marker_files
-
-
-@pytest.mark.requirement("WS03-04C-R2", "WS03-04C-R3", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_frozen_finite_state_classification_covers_c_lifecycle_values() -> None:
     from backend.models import (
         Booking,

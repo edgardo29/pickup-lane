@@ -20,7 +20,7 @@ from backend.observability.correlation import (
 pytestmark = pytest.mark.no_db_cleanup
 
 
-@pytest.mark.requirement("EN02-CORR-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_generated_correlation_id_is_canonical_uuidv4_without_domain_material():
     correlation_id = generate_correlation_id()
     parsed = uuid.UUID(correlation_id)
@@ -33,7 +33,7 @@ def test_generated_correlation_id_is_canonical_uuidv4_without_domain_material():
     assert "secret" not in correlation_id
 
 
-@pytest.mark.requirement("EN02-CORR-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_canonical_uuidv4_is_accepted_and_unsafe_forms_are_rejected():
     valid = "123e4567-e89b-42d3-a456-426614174000"
 
@@ -53,7 +53,7 @@ def test_canonical_uuidv4_is_accepted_and_unsafe_forms_are_rejected():
             validate_correlation_id(value)
 
 
-@pytest.mark.requirement("EN02-CORR-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_untrusted_incoming_request_id_is_rejected_or_replaced_when_absent():
     invalid_domain_id = "booking_12345"
 
@@ -66,7 +66,7 @@ def test_untrusted_incoming_request_id_is_rejected_or_replaced_when_absent():
         resolve_correlation_id(invalid_domain_id)
 
 
-@pytest.mark.requirement("EN02-CORR-002")
+@pytest.mark.pass_provenance('EN-02')
 def test_set_reset_and_nested_context_restore_prior_correlation_id():
     outer = "123e4567-e89b-42d3-a456-426614174000"
     inner = "123e4567-e89b-42d3-a456-426614174001"
@@ -83,7 +83,7 @@ def test_set_reset_and_nested_context_restore_prior_correlation_id():
     assert get_correlation_id() is None
 
 
-@pytest.mark.requirement("EN02-CORR-002")
+@pytest.mark.pass_provenance('EN-02')
 def test_correlation_context_resets_after_failure_path():
     outer = "123e4567-e89b-42d3-a456-426614174002"
     inner = "123e4567-e89b-42d3-a456-426614174003"
@@ -100,7 +100,7 @@ def test_correlation_context_resets_after_failure_path():
     assert get_correlation_id() is None
 
 
-@pytest.mark.requirement("EN02-CORR-002")
+@pytest.mark.pass_provenance('EN-02')
 def test_async_tasks_keep_independent_correlation_contexts():
     first = "123e4567-e89b-42d3-a456-426614174004"
     second = "123e4567-e89b-42d3-a456-426614174005"

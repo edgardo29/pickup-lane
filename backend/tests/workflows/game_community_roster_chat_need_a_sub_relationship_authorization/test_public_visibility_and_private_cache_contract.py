@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 
 import pytest
 
@@ -19,10 +18,9 @@ from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_
     _venue,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
-@pytest.mark.requirement("WS03-04C-R3", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_public_catalog_reads_omit_non_public_rows_and_admin_filters(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -193,7 +191,7 @@ def test_public_catalog_reads_omit_non_public_rows_and_admin_filters(
     assert client.get(f"/need-a-sub/posts/{removed_post_id}").status_code == 404
 
 
-@pytest.mark.requirement("WS03-04C-R3", "WS03-04C-R6", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_hidden_game_and_community_detail_are_publicly_concealed_but_private_for_host(
     client,
     monkeypatch: pytest.MonkeyPatch,

@@ -77,7 +77,7 @@ def _assert_public_error_envelope(
     _assert_canonical_uuidv4(payload["correlation_id"])
 
 
-@pytest.mark.requirement("WS02-04A-R1")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_framework_404_uses_stable_public_error_envelope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -104,7 +104,7 @@ def test_framework_404_uses_stable_public_error_envelope(
     assert payload["correlation_id"] == response.headers["X-Request-ID"]
 
 
-@pytest.mark.requirement("WS02-04A-R1")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_public_error_response_uses_en02_descriptor_shape_and_optional_details() -> None:
     response = public_error_response(
         status_code=409,
@@ -127,7 +127,7 @@ def test_public_error_response_uses_en02_descriptor_shape_and_optional_details()
     assert response.headers["X-Request-ID"] == _VALID_CORRELATION_ID
 
 
-@pytest.mark.requirement("WS02-04A-R1")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_current_frontend_api_client_uses_top_level_detail_and_code() -> None:
     source = (_REPO_ROOT / "frontend/src/lib/apiClient.js").read_text()
 

@@ -53,7 +53,6 @@ finally:
     if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
         os.environ.pop("DATABASE_URL", None)
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_TIME = datetime(2037, 7, 1, 12, 0, tzinfo=timezone.utc)
 _RISKY_BODY = "Text me at 312-555-1212"
@@ -229,7 +228,7 @@ def _assert_complete_detection_contract(
     assert len(detection.detection_identity_hash) == 64
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_game_chat_persists_span_and_repeated_evidence_and_projects_provenance() -> (
     None
 ):
@@ -304,7 +303,7 @@ def test_game_chat_persists_span_and_repeated_evidence_and_projects_provenance()
         assert not any("duration" in key for key in signal.metadata_)
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_need_a_sub_chat_persists_the_same_provenance_and_non_span_contract() -> None:
     with _session() as db:
         owner, post, chat = _seed_sub_chat(db)
@@ -356,7 +355,7 @@ def test_need_a_sub_chat_persists_the_same_provenance_and_non_span_contract() ->
         assert not any("duration" in key for key in signal.metadata_)
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_stable_chat_rule_keys_persist_and_serialize_in_both_chat_domains() -> None:
     body = "You are worthless. Go back to your country."
     expected = {
@@ -415,7 +414,7 @@ def test_stable_chat_rule_keys_persist_and_serialize_in_both_chat_domains() -> N
             )
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_game_repeated_query_uses_latest_visible_same_sender_text_with_id_tiebreak() -> (
     None
 ):
@@ -532,7 +531,7 @@ def test_game_repeated_query_uses_latest_visible_same_sender_text_with_id_tiebre
         assert fact.reference_message_id == str(eligible.id)
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_need_a_sub_repeated_query_uses_latest_visible_same_sender_text_with_id_tiebreak() -> (
     None
 ):
@@ -662,7 +661,7 @@ def test_need_a_sub_repeated_query_uses_latest_visible_same_sender_text_with_id_
         )
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_need_a_sub_repeated_query_explicitly_filters_non_text_rows() -> None:
     class RecordingSession:
         statement = None
@@ -686,7 +685,7 @@ def test_need_a_sub_repeated_query_explicitly_filters_non_text_rows() -> None:
     assert "text" in compiled.params.values()
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_game_chat_detection_failure_rolls_back_all_message_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -718,7 +717,7 @@ def test_game_chat_detection_failure_rolls_back_all_message_side_effects(
         assert chat.latest_message_id is None
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_need_a_sub_detection_failure_rolls_back_all_message_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -753,7 +752,7 @@ def test_need_a_sub_detection_failure_rolls_back_all_message_side_effects(
         assert chat.latest_message_id is None
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R5", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_game_chat_integrity_failure_is_sanitized_and_rolls_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -782,7 +781,7 @@ def test_game_chat_integrity_failure_is_sanitized_and_rolls_back(
         assert _count(db, GameChatMessageDetection) == 0
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R5", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_need_a_sub_chat_integrity_failure_is_sanitized_and_rolls_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -814,7 +813,7 @@ def test_need_a_sub_chat_integrity_failure_is_sanitized_and_rolls_back(
         assert _count(db, SubPostChatMessageDetection) == 0
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_chat_signal_integrity_error_log_excludes_evidence_canary(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -850,7 +849,7 @@ def test_chat_signal_integrity_error_log_excludes_evidence_canary(
     assert record["stable_error_code"] == "MODERATION.SURFACING_INTEGRITY"
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_chat_signal_exception_log_excludes_sensitive_evidence(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -884,7 +883,7 @@ def test_chat_signal_exception_log_excludes_sensitive_evidence(
     assert record["stable_error_code"] == "MODERATION.SURFACING_FAILED"
 
 
-@pytest.mark.requirement("WS03-05A-R5", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_postgresql_rejects_malformed_and_duplicate_chat_detection_identity() -> None:
     with _session() as db:
         owner, chat = _seed_game_chat(db)
@@ -933,7 +932,7 @@ def test_postgresql_rejects_malformed_and_duplicate_chat_detection_identity() ->
         )
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_postgresql_rejects_json_null_discriminators_and_blank_rule_keys() -> None:
     with _session() as db:
         game_owner, game_chat = _seed_game_chat(db)

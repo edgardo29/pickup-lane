@@ -21,7 +21,6 @@ from backend.tests.workflows.moderation_review_case_lifecycle.conftest import (
     session,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 SCAN_TIME = datetime(2038, 3, 1, 18, tzinfo=timezone.utc)
 

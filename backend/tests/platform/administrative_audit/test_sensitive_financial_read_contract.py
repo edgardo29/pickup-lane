@@ -60,7 +60,6 @@ from backend.tests.workflows.payment_booking_state_machines_webhook_authority.te
     _create_booking_payment_state,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _user(label: str, *, role: str = "player", status: str = "active") -> User:

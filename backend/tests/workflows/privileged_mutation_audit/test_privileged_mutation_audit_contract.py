@@ -33,7 +33,6 @@ from backend.services.admin_action_display_service import (
 )
 from backend.services.admin_action_service import AUDIT_UNAVAILABLE_DETAIL
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_TIME = datetime(2035, 7, 10, 18, 0, tzinfo=timezone.utc)
 

@@ -66,7 +66,7 @@ def _assert_rejected(name: str, value: str) -> str:
     return message
 
 
-@pytest.mark.requirement("WS02-04B2A1-R6")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_b2a1_request_body_limit_defaults_are_approved_values() -> None:
     settings = _build(_settings_env())
 
@@ -74,14 +74,14 @@ def test_b2a1_request_body_limit_defaults_are_approved_values() -> None:
     assert settings.stripe_webhook_request_body_limit_bytes == 65_536
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_a2c_ordinary_json_request_body_limit_default_is_approved_value() -> None:
     settings = _build(_settings_env())
 
     assert settings.ordinary_json_request_body_limit_bytes == 65_536
 
 
-@pytest.mark.requirement("WS02-04B2A1-R6")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 @pytest.mark.parametrize(
     ("name", "attribute", "value"),
     [
@@ -99,14 +99,14 @@ def test_b2a1_request_body_limit_custom_positive_integer_is_accepted(
     assert getattr(settings, attribute) == int(value)
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_a2c_ordinary_json_request_body_limit_custom_positive_integer_is_accepted() -> None:
     settings = _build(_settings_env(ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES="32768"))
 
     assert settings.ordinary_json_request_body_limit_bytes == 32_768
 
 
-@pytest.mark.requirement("WS02-04B2A1-R6")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 @pytest.mark.parametrize("name", [_PLATFORM_ENV, _STRIPE_ENV])
 @pytest.mark.parametrize(
     ("value", "expected"),
@@ -126,7 +126,7 @@ def test_b2a1_request_body_limit_invalid_values_are_rejected(
     assert expected in message
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
@@ -144,7 +144,7 @@ def test_a2c_ordinary_json_request_body_limit_invalid_values_are_rejected(
     assert expected in message
 
 
-@pytest.mark.requirement("WS02-04B2A1-R6")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_b2a1_environment_variable_names_are_registered_and_documented() -> None:
     env_names = settings_module.BACKEND_ENVIRONMENT_VARIABLES
     example = (_REPO_ROOT / "backend" / ".env.example").read_text()
@@ -155,7 +155,7 @@ def test_b2a1_environment_variable_names_are_registered_and_documented() -> None
     assert "STRIPE_WEBHOOK_REQUEST_BODY_LIMIT_BYTES=65536" in example
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_a2c_environment_variable_name_is_registered_and_documented() -> None:
     env_names = settings_module.BACKEND_ENVIRONMENT_VARIABLES
     example = (_REPO_ROOT / "backend" / ".env.example").read_text()
@@ -164,12 +164,7 @@ def test_a2c_environment_variable_name_is_registered_and_documented() -> None:
     assert "ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES=65536" in example
 
 
-@pytest.mark.requirement(
-    "WS02-04B2A1-R6",
-    "WS02-04B2A1-R7",
-    "WS02-04B2A2C-R2",
-    "WS02-04B2A2C-R5",
-)
+@pytest.mark.pass_provenance('WS02-04B2A1', 'WS02-04B2A2C')
 def test_b2a1_settings_are_distinct_from_ordinary_json_configuration() -> None:
     settings = _build(
         _settings_env(
@@ -184,7 +179,7 @@ def test_b2a1_settings_are_distinct_from_ordinary_json_configuration() -> None:
     assert settings.ordinary_json_request_body_limit_bytes == 3000
 
 
-@pytest.mark.requirement("WS02-04B2A1-R6", "WS02-04B2A2C-R5")
+@pytest.mark.pass_provenance('WS02-04B2A1', 'WS02-04B2A2C')
 def test_b2a1_special_class_defaults_remain_separate_from_a2c_default() -> None:
     settings = _build(_settings_env())
 
@@ -228,7 +223,7 @@ def _string_literals(path: Path) -> set[str]:
     }
 
 
-@pytest.mark.requirement("WS02-04B2A1-R6", "WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_no_duplicate_b2a1_environment_owner_exists_outside_settings_module() -> None:
     owners: dict[str, list[str]] = {_PLATFORM_ENV: [], _STRIPE_ENV: []}
     for path in _production_python_files():
@@ -243,7 +238,7 @@ def test_no_duplicate_b2a1_environment_owner_exists_outside_settings_module() ->
     }
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_no_duplicate_a2c_environment_owner_exists_outside_settings_module() -> None:
     owners: dict[str, list[str]] = {_ORDINARY_ENV: []}
     for path in _production_python_files():
@@ -255,7 +250,7 @@ def test_no_duplicate_a2c_environment_owner_exists_outside_settings_module() -> 
     assert owners == {_ORDINARY_ENV: ["backend/settings.py"]}
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_a2c_ordinary_limit_configuration_is_not_frontend_exposed() -> None:
     leaked_files = [
         str(path.relative_to(_REPO_ROOT))

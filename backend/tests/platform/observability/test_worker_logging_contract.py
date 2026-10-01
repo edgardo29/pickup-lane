@@ -28,7 +28,7 @@ from backend.services.durable_job_service import (
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.requirement("WS09-01A"),
+    pytest.mark.pass_provenance('WS09-01A'),
 ]
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 

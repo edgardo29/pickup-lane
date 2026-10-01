@@ -145,7 +145,7 @@ def _assert_not_public_error_envelope(payload: Mapping[str, object]) -> None:
     assert not {"detail", "code", "message", "correlation_id"} <= set(payload)
 
 
-@pytest.mark.requirement("WS02-04A-R6")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_invalid_host_remains_trusted_host_middleware_owned(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -162,7 +162,7 @@ def test_invalid_host_remains_trusted_host_middleware_owned(
     assert response.headers["X-Request-ID"]
 
 
-@pytest.mark.requirement("WS02-04A-R6")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_health_503_responses_remain_health_contracts_not_error_envelopes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -188,7 +188,7 @@ def test_health_503_responses_remain_health_contracts_not_error_envelopes(
     _assert_not_public_error_envelope(db_health_response.json())
 
 
-@pytest.mark.requirement("WS02-04A-R6")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_docs_openapi_and_disabled_docs_boundaries_are_distinct(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -219,7 +219,7 @@ def test_docs_openapi_and_disabled_docs_boundaries_are_distinct(
     assert payload["correlation_id"] == missing_docs_response.headers["X-Request-ID"]
 
 
-@pytest.mark.requirement("WS02-04A-R6")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_static_redirect_and_no_content_surfaces_keep_their_owners(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -255,7 +255,7 @@ def test_static_redirect_and_no_content_surfaces_keep_their_owners(
     assert no_content_routes == ["/auth/unfinished-account"]
 
 
-@pytest.mark.requirement("WS02-04A-R6", "WS02-04A-R7")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_static_source_has_no_invented_file_streaming_or_websocket_error_owner() -> (
     None
 ):
@@ -271,7 +271,7 @@ def test_static_source_has_no_invented_file_streaming_or_websocket_error_owner()
     )
 
 
-@pytest.mark.requirement("WS02-04A-R7")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_single_exception_handler_and_app_construction_owners_remain_canonical() -> (
     None
 ):
@@ -301,7 +301,7 @@ def test_single_exception_handler_and_app_construction_owners_remain_canonical()
     assert constructor_locations[0].startswith("backend/main.py:")
 
 
-@pytest.mark.requirement("WS02-04A-R7")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_no_route_local_error_envelope_or_duplicate_correlation_injector_exists() -> (
     None
 ):

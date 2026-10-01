@@ -94,7 +94,7 @@ def _verified_budget_record(values: dict[str, int]) -> dict:
     return record
 
 
-@pytest.mark.requirement("WS04-01C-R3", "WS04-01C-R4")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_budget_formula_counts_incremental_rolling_overlap_once() -> None:
     values = {
         "DB_POOL_SIZE": 5,
@@ -123,7 +123,7 @@ def test_budget_formula_counts_incremental_rolling_overlap_once() -> None:
     assert validate_budget_evidence(_verified_budget_record(values), require_final_values=True) == []
 
 
-@pytest.mark.requirement("WS04-01C-R3", "WS04-01C-R4")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_budget_validation_rejects_missing_invalid_or_unattributed_inputs() -> None:
     values = {
         "DB_POOL_SIZE": 5,
@@ -166,7 +166,7 @@ def test_budget_validation_rejects_missing_invalid_or_unattributed_inputs() -> N
     )
 
 
-@pytest.mark.requirement("WS04-01C-R3", "WS04-01C-R4", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_budget_validation_rejects_unknown_zero_mismatch_stale_and_over_capacity() -> None:
     values = {
         "DB_POOL_SIZE": 5,
@@ -215,7 +215,7 @@ def test_budget_validation_rejects_unknown_zero_mismatch_stale_and_over_capacity
     )
 
 
-@pytest.mark.requirement("WS04-01C-R4")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_limit_basis_and_mutable_capacity_inputs_follow_fdn04_method() -> None:
     contract = _load_contract()
 
@@ -260,7 +260,7 @@ def test_limit_basis_and_mutable_capacity_inputs_follow_fdn04_method() -> None:
     ) in validate_budget_evidence(missing_pooler_metadata, require_final_values=False)
 
 
-@pytest.mark.requirement("WS04-01C-R4", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_final_budget_evidence_rejects_deferred_basis_adjustment_and_telemetry() -> None:
     values = {
         "DB_POOL_SIZE": 5,

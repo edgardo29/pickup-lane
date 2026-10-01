@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from backend.schemas.venue_image_schema import VenueImageUploadCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 @dataclass
@@ -123,7 +122,7 @@ def _install_r2_fake(monkeypatch: pytest.MonkeyPatch, *, max_image_bytes: int = 
     return fake
 
 
-@pytest.mark.requirement("WS02-04B1-R8")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_three_selected_venue_images_are_accepted_and_fourth_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -163,7 +162,7 @@ def test_three_selected_venue_images_are_accepted_and_fourth_is_rejected(
         assert len(fake.upload_calls) == 3
 
 
-@pytest.mark.requirement("WS02-04B1-R8")
+@pytest.mark.pass_provenance('WS02-04B1')
 @pytest.mark.parametrize(
     "upload_request",
     [
@@ -199,7 +198,7 @@ def test_declared_size_and_type_checks_happen_before_upload_authorization(
         assert _count(db, VenueImage) == 0
 
 
-@pytest.mark.requirement("WS02-04B1-R8")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_stored_metadata_mismatches_reject_completion_without_activating_image(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -251,7 +250,7 @@ def test_stored_metadata_mismatches_reject_completion_without_activating_image(
         assert statuses == ["pending_upload", "pending_upload"]
 
 
-@pytest.mark.requirement("WS02-04B1-R8")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_missing_provider_content_type_is_recorded_as_current_source_behavior_only() -> None:
     from backend.services import venue_image_service
 

@@ -149,8 +149,8 @@ artifacts, and does not define production-readiness scope.
 | `docs/agent-notes/README.md` | Routing index for tracked coding standards and optional local feature notes. |
 | `docs/agent-notes/coding-standards/` | Tracked repository coding and testing guidance used when its technical scope applies. |
 | `backend/tests/README.md` | Backend test organization, execution, and safety guidance. |
-| `backend/tests/` | Current backend tests, evaluated by usefulness and correctness rather than trusted/legacy labels. |
-| `backend/tests/support/requirements/`, `backend/tests/checker/`, `backend/tests/compliance/` | Existing old-framework infrastructure pending later cleanup under the corrected master; not required routing for current work. |
+| `backend/tests/` | Current backend tests, organized by behavior ownership and evaluated by usefulness and correctness. |
+| `backend/tests/platform/backend_test_runner/` | Direct tests for guarded execution, database and network safety, artifact sanitization, and pytest configuration. |
 
 Read historical or supporting records only when needed to understand current
 behavior, accepted technical contracts, ownership, or provenance. If they
@@ -226,12 +226,17 @@ Passing tests alone do not prove production readiness. Review the behavior,
 failure paths, security/privacy boundaries, compatibility, and any external facts
 the repository cannot establish.
 
-Stable requirement JSON, pytest requirement markers, checker/compliance
-commands, trusted test roots, generated traceability, and
-`TESTING_RECORD.md` are not mandatory. Existing useful tests and evidence
-remain useful regardless of directory or old metadata. Historical testing
-infrastructure remains in the repository until its corrected-master cleanup
-work is performed.
+Backend evidence consists of current source and tests, applicable pass artifacts,
+and source-local `pytest.mark.pass_provenance` where a production-readiness pass
+introduced or materially changed a test as evidence. Provenance may name more
+than one genuine owning pass, but it is not added merely because a pass reran a
+test and is not required for ordinary tests without production-readiness
+provenance. Search it directly in source, for example with
+`rg 'WS06-01' backend/tests`.
+
+Historical accepted plans, intakes, and audit records may describe earlier
+testing mechanics. They remain provenance for what happened, but they do not
+define current backend test execution or evidence handling.
 
 ## 9. Work Families And Ordering
 

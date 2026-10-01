@@ -91,10 +91,6 @@ TEST_TABLES = (
 )
 CLEANUP_TABLE_EXCLUSIONS: dict[str, str] = {}
 TEST_DATABASE_ADVISORY_LOCK_ID = 917_263_514
-NON_DATABASE_TEST_FILES = {
-    "test_check_backend_tests.py",
-    "test_environment_safety.py",
-}
 _NETWORK_GUARD_RESTORE = None
 
 
@@ -205,10 +201,7 @@ def pytest_sessionfinish(session, exitstatus) -> None:
 def _test_uses_database(request: pytest.FixtureRequest) -> bool:
     if request.node.get_closest_marker("no_db_cleanup"):
         return False
-    if request.node.get_closest_marker("migration_lifecycle"):
-        return False
-    path = Path(str(request.node.fspath))
-    return path.name not in NON_DATABASE_TEST_FILES
+    return not request.node.get_closest_marker("migration_lifecycle")
 
 
 def _truncate_test_tables(connection, table_names: str) -> None:

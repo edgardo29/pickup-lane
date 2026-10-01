@@ -380,10 +380,13 @@ matrices, persisted effects, rejected side effects, rollback, idempotency,
 browser checks, migration checks, or broader regression where they are
 materially appropriate.
 
-Existing tests are judged by usefulness and correctness regardless of directory
-or old metadata. Requirement JSON, pytest requirement markers, trusted roots,
-checker/compliance commands, generated traceability, and
-`TESTING_RECORD.md` are not required.
+Existing tests are judged by usefulness and correctness regardless of directory.
+When correction work introduces or materially changes a test as evidence for
+the rechecked pass, mark it with `pytest.mark.pass_provenance` at the narrowest
+accurate scope. Preserve genuine multi-pass ownership. A test does not gain
+provenance merely because the recheck reran it, and ordinary tests without
+production-readiness provenance do not require the marker. Provenance is
+source-local context, not universal metadata or a completeness system.
 
 Before reporting completion, inspect the complete diff, confirm every changed
 file belongs to the correction, and state the commands actually run, results,

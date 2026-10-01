@@ -1,8 +1,8 @@
-"""Current database invariant policy for WS04-02B.
+"""Semantic map of current database invariants and their enforcement.
 
-This module is declarative. It names current roster, waitlist, capacity, and
-financial database invariant dispositions without executing database queries,
-provider calls, retries, workers, or runtime orchestration.
+The map names current roster, waitlist, capacity, and financial invariants
+without executing database queries, provider calls, retries, workers, or
+runtime orchestration.
 """
 
 from __future__ import annotations
@@ -14,19 +14,16 @@ from dataclasses import dataclass
 class DatabaseInvariantDisposition:
     invariant_id: str
     owner: str
-    requirements: tuple[str, ...]
     enforcement: tuple[str, ...]
     serialization_owner: str | None
     contention_result: str
-    ws04_02a_boundary: str | None = None
-    later_owner: str | None = None
+    external_side_effect_boundary: str | None = None
 
 
 DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
     DatabaseInvariantDisposition(
         invariant_id="community_roster_capacity",
         owner="Game plus Booking/GameParticipant/WaitlistEntry capacity rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R2", "WS04-02B-R4"),
         enforcement=(
             "Game row SELECT FOR UPDATE before community roster capacity decisions",
             "capacity-holding participant count includes confirmed and unexpired pending_payment holds",
@@ -38,7 +35,6 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
     DatabaseInvariantDisposition(
         invariant_id="community_active_participant_identity",
         owner="GameParticipant active registered-user relationship",
-        requirements=("WS04-02B-R1", "WS04-02B-R5"),
         enforcement=(
             "partial unique index for active registered user per game",
             "service precheck for clearer conflict messages",
@@ -49,7 +45,6 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
     DatabaseInvariantDisposition(
         invariant_id="waitlist_identity_and_position",
         owner="WaitlistEntry active user and position rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R3", "WS04-02B-R5"),
         enforcement=(
             "partial unique index for active user per game",
             "partial unique index for active waitlist position per game",
@@ -61,7 +56,6 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
     DatabaseInvariantDisposition(
         invariant_id="waitlist_promotion_capacity_hold",
         owner="WaitlistEntry, Booking, GameParticipant, and Payment promotion rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R3", "WS04-02B-R8"),
         enforcement=(
             "Game row lock before every promotion capacity decision",
             "pending_payment booking and participant state persists before provider mutation",
@@ -69,13 +63,11 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="backend.services.game_waitlist_service.promote_waitlist_entries",
         contention_result="a paid promotion hold counts against capacity while provider work is pending",
-        ws04_02a_boundary="waitlist.auto_promotion.payment_intent",
-        later_owner="WS05 for durable provider reconciliation and worker-backed recovery",
+        external_side_effect_boundary="waitlist.auto_promotion.payment_intent",
     ),
     DatabaseInvariantDisposition(
         invariant_id="account_deletion_roster_lock_order",
         owner="Account-deletion future roster cleanup",
-        requirements=("WS04-02B-R1", "WS04-02B-R4"),
         enforcement=(
             "candidate affected games are discovered without dependent-row locks",
             "affected Game rows lock in deterministic ID order",
@@ -83,12 +75,11 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="backend.services.account_deletion_service.cancel_future_roster_activity",
         contention_result="multi-game cleanup follows game-first ordering and avoids reverse-order deadlock hazards",
-        ws04_02a_boundary="account_deletion.firebase_delete",
+        external_side_effect_boundary="account_deletion.firebase_delete",
     ),
     DatabaseInvariantDisposition(
         invariant_id="official_checkout_and_roster_serialization",
         owner="Official checkout, official roster, cancellation, and player-removal workflows",
-        requirements=("WS04-02B-R1", "WS04-02B-R2", "WS04-02B-R9"),
         enforcement=(
             "accepted official checkout Game row lock",
             "accepted official roster administration Game row lock",
@@ -96,13 +87,11 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="existing official-game service lock helpers",
         contention_result="official capacity and roster mutations remain serialized by current accepted locks",
-        ws04_02a_boundary="checkout.payment_intent.create",
-        later_owner="WS05 for full payment and provider reconciliation lifecycle",
+        external_side_effect_boundary="checkout.payment_intent.create",
     ),
     DatabaseInvariantDisposition(
         invariant_id="payment_identity",
         owner="Payment idempotency and provider identity rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R5", "WS04-02B-R6"),
         enforcement=(
             "unique payment idempotency key",
             "partial unique provider PaymentIntent identity when present",
@@ -110,13 +99,11 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="workflow-specific row locks where payment state mutates",
         contention_result="duplicate payment identities fail at the database boundary",
-        ws04_02a_boundary="checkout.payment_intent.create",
-        later_owner="WS05 for provider truth and reconciliation",
+        external_side_effect_boundary="checkout.payment_intent.create",
     ),
     DatabaseInvariantDisposition(
         invariant_id="refund_identity_and_amount_state",
         owner="Refund and refund amount availability rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R5", "WS04-02B-R6"),
         enforcement=(
             "partial unique provider refund identity when present",
             "refund amount availability validation under current admin/provider workflow locks",
@@ -124,12 +111,10 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="admin refund and financial outcome row locks",
         contention_result="duplicate or over-limit refund mutation is rejected or routed to bounded repair state",
-        later_owner="WS05 for full provider reconciliation",
     ),
     DatabaseInvariantDisposition(
         invariant_id="refund_event_identity",
         owner="RefundEvent provider event and idempotency rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R5", "WS04-02B-R6"),
         enforcement=(
             "partial unique provider event identity when present",
             "partial unique refund-event idempotency key when present",
@@ -137,12 +122,10 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="refund-event ingestion and reconciliation workflow state gates",
         contention_result="duplicate refund events converge on one persisted event identity",
-        later_owner="WS05 for provider event lifecycle proof",
     ),
     DatabaseInvariantDisposition(
         invariant_id="host_publish_fee_financial_outcome",
         owner="HostPublishFee, Payment, Refund, and AdminFinancialOutcome rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R6"),
         enforcement=(
             "current publish/payment state transitions",
             "row locks in admin financial outcome mutation paths",
@@ -150,13 +133,11 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="admin financial outcome workflow row locks",
         contention_result="duplicate publish-fee financial outcomes are bounded by current state gates",
-        ws04_02a_boundary="community_publish_fee.payment_intent.create",
-        later_owner="WS05 for full payment lifecycle and provider reconciliation",
+        external_side_effect_boundary="community_publish_fee.payment_intent.create",
     ),
     DatabaseInvariantDisposition(
         invariant_id="game_credit_grant_balance",
         owner="GameCredit grants and GameCreditUsage reservation rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R6", "WS04-02B-R7"),
         enforcement=(
             "ordered available GameCredit grant SELECT FOR UPDATE",
             "available_cents check constraints",
@@ -168,7 +149,6 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
     DatabaseInvariantDisposition(
         invariant_id="game_credit_usage_lifecycle",
         owner="GameCreditUsage redeem, release, restore, and reverse ledger rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R6", "WS04-02B-R7"),
         enforcement=(
             "locked GameCreditUsage rows for release/redeem/restore",
             "locked GameCredit rows for balance restoration/reversal",
@@ -180,7 +160,6 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
     DatabaseInvariantDisposition(
         invariant_id="money_issue_operation_identity",
         owner="MoneyIssue operation keys and admin-money repair rows",
-        requirements=("WS04-02B-R1", "WS04-02B-R5", "WS04-02B-R6"),
         enforcement=(
             "unique money-issue operation key",
             "MoneyIssue SELECT FOR UPDATE in repair/resolution paths",
@@ -188,12 +167,10 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="backend.services.admin_money_issue_service",
         contention_result="duplicate repair/reconciliation attempts cannot create incompatible money-issue outcomes",
-        later_owner="WS05 for broader reconciliation lifecycle",
     ),
     DatabaseInvariantDisposition(
         invariant_id="admin_support_financial_operation_identity",
         owner="AdminAction, SupportFlag, and PlatformNotice operation identities tied to financial flows",
-        requirements=("WS04-02B-R1", "WS04-02B-R5", "WS04-02B-R6"),
         enforcement=(
             "partial admin-action idempotency indexes for financial/support actions",
             "support flag idempotency indexes when support rows are created by financial failures",
@@ -201,12 +178,10 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="owning admin/support workflow state gates",
         contention_result="duplicate operational rows are bounded by idempotency or state gates",
-        later_owner="WS09 and WS10 for full operational audit and incident evidence",
     ),
     DatabaseInvariantDisposition(
         invariant_id="database_failure_classification",
         owner="Current database-invariant mutation paths",
-        requirements=("WS04-02B-R1", "WS04-02B-R8", "WS04-02B-R9"),
         enforcement=(
             "database constraints for duplicate facts",
             "PostgreSQL row locks for aggregate facts",
@@ -215,7 +190,6 @@ DATABASE_INVARIANT_DISPOSITIONS: tuple[DatabaseInvariantDisposition, ...] = (
         ),
         serialization_owner="current service transaction boundaries",
         contention_result="contention, integrity, timeout, deadlock, serialization, and unknown database outcomes remain bounded",
-        later_owner="WS04-03 for migration rehearsal and WS09/WS10 for deployed operational evidence",
     ),
 )
 
@@ -225,13 +199,3 @@ def dispositions_by_invariant_id() -> dict[str, DatabaseInvariantDisposition]:
         disposition.invariant_id: disposition
         for disposition in DATABASE_INVARIANT_DISPOSITIONS
     }
-
-
-def dispositions_for_requirement(
-    requirement_id: str,
-) -> tuple[DatabaseInvariantDisposition, ...]:
-    return tuple(
-        disposition
-        for disposition in DATABASE_INVARIANT_DISPOSITIONS
-        if requirement_id in disposition.requirements
-    )

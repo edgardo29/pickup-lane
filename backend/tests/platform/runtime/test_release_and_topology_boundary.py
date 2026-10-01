@@ -431,7 +431,7 @@ def _runtime_topology_findings() -> dict[str, list[str]]:
     return _runtime_topology_findings_from_sources(_tracked_text_sources())
 
 
-@pytest.mark.requirement("WS02-02-R7")
+@pytest.mark.pass_provenance('WS02-02')
 def test_release_identity_uses_safe_fallback_when_metadata_is_absent() -> None:
     from backend.settings import DEFAULT_RELEASE_IDENTITY
 
@@ -440,14 +440,14 @@ def test_release_identity_uses_safe_fallback_when_metadata_is_absent() -> None:
     assert settings.release_identity == DEFAULT_RELEASE_IDENTITY
 
 
-@pytest.mark.requirement("WS02-02-R7")
+@pytest.mark.pass_provenance('WS02-02')
 def test_safe_generic_release_label_is_accepted() -> None:
     settings = _build_settings(PICKUP_LANE_RELEASE="release-2026-08-12")
 
     assert settings.release_identity == "release-2026-08-12"
 
 
-@pytest.mark.requirement("WS02-02-R7")
+@pytest.mark.pass_provenance('WS02-02')
 @pytest.mark.parametrize(
     ("env_name", "raw_revision", "expected"),
     [
@@ -465,7 +465,7 @@ def test_full_source_revision_values_are_accepted_and_normalized(
     assert settings.release_identity == expected
 
 
-@pytest.mark.requirement("WS02-02-R7")
+@pytest.mark.pass_provenance('WS02-02')
 def test_short_source_revision_is_rejected_without_echoing_value() -> None:
     short_revision = "abc1234"
 
@@ -476,7 +476,7 @@ def test_short_source_revision_is_rejected_without_echoing_value() -> None:
     )
 
 
-@pytest.mark.requirement("WS02-02-R7")
+@pytest.mark.pass_provenance('WS02-02')
 def test_blank_release_label_is_ignored_but_whitespace_padded_label_is_rejected() -> None:
     from backend.settings import DEFAULT_RELEASE_IDENTITY
 
@@ -491,7 +491,7 @@ def test_blank_release_label_is_ignored_but_whitespace_padded_label_is_rejected(
     )
 
 
-@pytest.mark.requirement("WS02-02-R7")
+@pytest.mark.pass_provenance('WS02-02')
 @pytest.mark.parametrize(
     ("value", "mentions"),
     [
@@ -511,7 +511,7 @@ def test_unsafe_release_labels_are_rejected_without_unsafe_echo(
     )
 
 
-@pytest.mark.requirement("WS02-02-R7")
+@pytest.mark.pass_provenance('WS02-02')
 def test_health_response_exposes_only_captured_concise_release_identity(monkeypatch) -> None:
     main_module = _import_main(monkeypatch)
 
@@ -545,7 +545,7 @@ def test_health_response_exposes_only_captured_concise_release_identity(monkeypa
             assert forbidden_fragment not in body
 
 
-@pytest.mark.requirement("WS02-02-R7")
+@pytest.mark.pass_provenance('WS02-02')
 def test_app_release_identity_is_stable_after_ambient_environment_mutation(
     monkeypatch,
 ) -> None:
@@ -570,21 +570,21 @@ def test_app_release_identity_is_stable_after_ambient_environment_mutation(
     assert ready_response.json()["release"] == "release-captured"
 
 
-@pytest.mark.requirement("WS02-02-R8")
+@pytest.mark.pass_provenance('WS02-02')
 def test_no_tracked_backend_runtime_manifest_defines_production_topology() -> None:
     findings = _runtime_topology_findings()
 
     assert findings["deployment_artifacts"] == []
 
 
-@pytest.mark.requirement("WS02-02-R8")
+@pytest.mark.pass_provenance('WS02-02')
 def test_backend_source_has_no_worker_or_scheduler_runtime_configuration() -> None:
     findings = _runtime_topology_findings()
 
     assert findings["worker_scheduler_config"] == []
 
 
-@pytest.mark.requirement("WS02-02-R8")
+@pytest.mark.pass_provenance('WS02-02')
 def test_ws05_01a_portable_worker_command_is_not_final_runtime_topology() -> None:
     command_path = _REPO_ROOT / "backend" / "durable_worker.py"
     source = command_path.read_text()
@@ -598,7 +598,7 @@ def test_ws05_01a_portable_worker_command_is_not_final_runtime_topology() -> Non
     assert "autoscaling" not in source.lower()
 
 
-@pytest.mark.requirement("WS02-02-R8")
+@pytest.mark.pass_provenance('WS02-02')
 def test_no_approved_numeric_runtime_topology_or_pool_budget_is_tracked() -> None:
     findings = _runtime_topology_findings()
 
@@ -606,7 +606,7 @@ def test_no_approved_numeric_runtime_topology_or_pool_budget_is_tracked() -> Non
     assert findings["pool_budget_values"] == []
 
 
-@pytest.mark.requirement("WS02-02-R8")
+@pytest.mark.pass_provenance('WS02-02')
 def test_ws02_02_metadata_keeps_deployment_runtime_configuration_deferred() -> None:
     declaration_path = _REPO_ROOT / "backend" / "tests" / "support" / "requirements" / "ws02_02.json"
     raw = json.loads(declaration_path.read_text())
@@ -627,7 +627,7 @@ def test_ws02_02_metadata_keeps_deployment_runtime_configuration_deferred() -> N
         assert unsafe_fragment not in r10["reason"]
 
 
-@pytest.mark.requirement("WS02-02-R8")
+@pytest.mark.pass_provenance('WS02-02')
 def test_runtime_classifier_detects_common_backend_deployment_artifacts() -> None:
     sources = {
         "deploy/render.yaml": "services:\n  - type: web\n    name: pickup-lane-backend\n",
@@ -660,7 +660,7 @@ def test_runtime_classifier_detects_common_backend_deployment_artifacts() -> Non
     assert "infra/kubernetes/backend-deployment.yaml:replicas" in findings["topology_values"]
 
 
-@pytest.mark.requirement("WS02-02-R8")
+@pytest.mark.pass_provenance('WS02-02')
 def test_runtime_classifier_detects_worker_scheduler_and_runtime_env_config() -> None:
     sources = {
         "backend/.env.example": "WEB_CONCURRENCY=2\n",
@@ -688,7 +688,7 @@ def test_runtime_classifier_detects_worker_scheduler_and_runtime_env_config() ->
     assert findings["topology_values"] == ["backend/.env.example:WEB_CONCURRENCY"]
 
 
-@pytest.mark.requirement("WS02-02-R8")
+@pytest.mark.pass_provenance('WS02-02')
 def test_pool_budget_detector_ignores_application_pool_settings() -> None:
     sources = {
         "backend/database.py": textwrap.dedent(
@@ -710,7 +710,7 @@ def test_pool_budget_detector_ignores_application_pool_settings() -> None:
     ]
 
 
-@pytest.mark.requirement("WS02-02-R8")
+@pytest.mark.pass_provenance('WS02-02')
 def test_runtime_classifier_ignores_frontend_prose_tests_legacy_and_placeholders() -> None:
     sources = {
         "frontend/vercel.json": '{"rewrites": [{"source": "/api/(.*)", "destination": "..."}]}',

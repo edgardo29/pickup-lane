@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from backend.schemas.user_payment_method_schema import UserPaymentMethodSyncCreate
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 
 def _assert_rejected(**overrides: object) -> None:
@@ -19,7 +19,7 @@ def _assert_rejected(**overrides: object) -> None:
         UserPaymentMethodSyncCreate(**payload)
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_setup_intent_id_is_trimmed_bounded_and_required() -> None:
     assert UserPaymentMethodSyncCreate(setup_intent_id="  seti_123  ").setup_intent_id == "seti_123"
     assert UserPaymentMethodSyncCreate(setup_intent_id="x" * 255).setup_intent_id == "x" * 255
@@ -30,7 +30,7 @@ def test_setup_intent_id_is_trimmed_bounded_and_required() -> None:
     _assert_rejected(setup_intent_id="x" * 256)
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_setup_intent_id_remains_opaque_and_provider_validation_is_delegated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

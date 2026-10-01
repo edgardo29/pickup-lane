@@ -197,7 +197,7 @@ def _install_common_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-@pytest.mark.requirement("WS02-04C2-R4", "WS02-04C2-R5", "WS02-04C2-R6")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_create_timeout_preserves_checkpoint_without_confirmation_or_blind_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -259,7 +259,7 @@ def test_create_timeout_preserves_checkpoint_without_confirmation_or_blind_repla
         assert credit.available_cents == 0
 
 
-@pytest.mark.requirement("WS02-04C2-R5", "WS02-04C2-R6")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_confirmation_unknown_preserves_checkpoint_without_blind_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -363,7 +363,7 @@ def test_confirmation_unknown_preserves_checkpoint_without_blind_replay(
         assert len(usages) == 1
 
 
-@pytest.mark.requirement("WS02-04C2-R5", "WS02-04C2-R6")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_active_hold_confirmation_decision_is_serialized_after_checkpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -496,7 +496,7 @@ def test_active_hold_confirmation_decision_is_serialized_after_checkpoint(
         assert usages[0].usage_status == "reserved"
 
 
-@pytest.mark.requirement("WS02-04C2-R6")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_stale_checkout_expiration_releases_local_hold_but_keeps_provider_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

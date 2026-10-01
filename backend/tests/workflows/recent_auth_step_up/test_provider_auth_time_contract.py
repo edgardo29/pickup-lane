@@ -8,7 +8,6 @@ import pytest
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.suite_type("ordinary"),
 ]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -76,7 +75,7 @@ def _function_source(module_path: str, function_name: str) -> str:
     raise AssertionError(f"{function_name} not found in {module_path}")
 
 
-@pytest.mark.requirement("WS03-03A-R1")
+@pytest.mark.pass_provenance('WS03-03A')
 @pytest.mark.parametrize("claim_value", [int(NOW.timestamp()), float(NOW.timestamp())])
 def test_provider_auth_time_numeric_claim_parses_as_provider_utc_time(
     claim_value: int | float,
@@ -89,7 +88,7 @@ def test_provider_auth_time_numeric_claim_parses_as_provider_utc_time(
     assert parsed.tzinfo is UTC
 
 
-@pytest.mark.requirement("WS03-03A-R1", "WS03-03A-R2")
+@pytest.mark.pass_provenance('WS03-03A')
 @pytest.mark.parametrize(
     "claims",
     [
@@ -121,7 +120,7 @@ def test_missing_or_malformed_provider_auth_time_is_unusable(claims: dict) -> No
     )
 
 
-@pytest.mark.requirement("WS03-03A-R1", "WS03-03A-R2")
+@pytest.mark.pass_provenance('WS03-03A')
 @pytest.mark.parametrize(
     ("authenticated_at", "expected"),
     [
@@ -153,7 +152,7 @@ def test_recent_authentication_uses_inclusive_five_minute_utc_boundary(
     )
 
 
-@pytest.mark.requirement("WS03-03A-R1", "WS03-03A-R2")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_token_issue_time_is_not_recent_authentication_fallback() -> None:
     from backend.services.auth_service import (
         is_recent_authentication,
@@ -189,7 +188,7 @@ def test_token_issue_time_is_not_recent_authentication_fallback() -> None:
     assert "iat" not in parser_source
 
 
-@pytest.mark.requirement("WS03-03A-R2")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_recent_authentication_window_is_owned_by_typed_backend_settings() -> None:
     import backend.services.auth_service as auth_service
     from backend.settings import (
@@ -232,7 +231,7 @@ def test_recent_authentication_window_is_owned_by_typed_backend_settings() -> No
     ]
 
 
-@pytest.mark.requirement("WS03-03A-R1", "WS03-03A-R10")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_verified_identity_carries_provider_freshness_only_as_request_scoped_data() -> None:
     from backend.services.auth_service import VerifiedFirebaseIdentity
 
@@ -252,7 +251,7 @@ def test_verified_identity_carries_provider_freshness_only_as_request_scoped_dat
     assert "authenticated_at:" in auth_source
 
 
-@pytest.mark.requirement("WS03-03A-R1", "WS03-03A-R10")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_application_source_has_no_app_owned_recent_auth_freshness_authority() -> None:
     disallowed_occurrences: list[str] = []
     disallowed_storage_freshness: list[str] = []

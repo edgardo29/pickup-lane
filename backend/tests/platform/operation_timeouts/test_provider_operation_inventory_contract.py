@@ -120,12 +120,12 @@ def _unclassified_hits() -> list[_NetworkHit]:
     return unclassified
 
 
-@pytest.mark.requirement("WS02-04C1-R9")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_current_provider_network_inventory_has_no_unclassified_production_bypass() -> None:
     assert _unclassified_hits() == []
 
 
-@pytest.mark.requirement("WS02-04C1-R9")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_current_provider_boundaries_are_explicitly_accounted_for() -> None:
     hits_by_module: dict[str, set[str]] = {}
     for path in _production_python_files():
@@ -141,7 +141,7 @@ def test_current_provider_boundaries_are_explicitly_accounted_for() -> None:
     assert hits_by_module["botocore"] == {"backend/services/r2_storage_service.py"}
 
 
-@pytest.mark.requirement("WS02-04C1-R4", "WS02-04C1-R9")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_r2_presign_and_stripe_webhook_boundaries_are_not_counted_as_provider_timeout_proof() -> None:
     r2_source = (_REPO_ROOT / "backend" / "services" / "r2_storage_service.py").read_text()
     stripe_source = (_REPO_ROOT / "backend" / "services" / "stripe_service.py").read_text()
@@ -152,7 +152,7 @@ def test_r2_presign_and_stripe_webhook_boundaries_are_not_counted_as_provider_ti
     assert "construct_webhook_event" in stripe_source
 
 
-@pytest.mark.requirement("WS02-04C1-R5", "WS02-04C1-R9")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_database_timeout_owner_files_are_current_inventory_members() -> None:
     settings_source = (_REPO_ROOT / "backend" / "settings.py").read_text()
     database_source = (_REPO_ROOT / "backend" / "database.py").read_text()

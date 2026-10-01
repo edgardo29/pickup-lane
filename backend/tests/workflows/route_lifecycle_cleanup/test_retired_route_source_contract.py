@@ -13,7 +13,7 @@ from backend.tests.workflows.route_lifecycle_cleanup.test_retired_route_registra
     route_by_method_path,
 )
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 _BODY_READER_SUFFIXES = (".body", ".json", ".form", ".stream")
 _FORBIDDEN_CALL_NAMES = {
@@ -115,7 +115,7 @@ def _terminates_in_shared_retired_helper(function, seen: set[object] | None = No
     return False
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R1", "WS02-04B2A2B1-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_retired_handlers_have_no_body_db_provider_or_mutation_service_calls() -> None:
     for retired_route in RETIRED_MUTATION_ROUTES:
         route = route_by_method_path(retired_route.method, retired_route.path)
@@ -124,7 +124,7 @@ def test_retired_handlers_have_no_body_db_provider_or_mutation_service_calls() -
         _assert_no_forbidden_calls(route.endpoint, retired_route.id)
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R1", "WS02-04B2A2B1-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_retired_handlers_terminate_in_shared_retired_route_mechanism() -> None:
     for retired_route in RETIRED_MUTATION_ROUTES:
         route = route_by_method_path(retired_route.method, retired_route.path)

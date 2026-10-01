@@ -67,7 +67,7 @@ def _regex_hits(pattern: str) -> dict[str, list[str]]:
     return hits
 
 
-@pytest.mark.requirement("WS02-04C3B-R6")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_c3a_chat_is_the_only_current_source_owned_rate_limit_owner() -> None:
     assert set(_literal_hits("CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES")) == {
         "backend/services/chat_rate_limit_service.py",
@@ -82,7 +82,7 @@ def test_c3a_chat_is_the_only_current_source_owned_rate_limit_owner() -> None:
     }
 
 
-@pytest.mark.requirement("WS02-04C3B-R6")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_no_alternate_non_chat_api_rate_limited_or_rate_limit_retry_after_producer() -> None:
     assert set(_literal_hits("API.RATE_LIMITED")) == _CHAT_RATE_ERROR_OWNER
     assert set(_literal_hits("HTTP_429_TOO_MANY_REQUESTS")) == _CHAT_RATE_ERROR_OWNER
@@ -113,7 +113,7 @@ def test_no_alternate_non_chat_api_rate_limited_or_rate_limit_retry_after_produc
                 assert signal not in context
 
 
-@pytest.mark.requirement("WS02-04C3B-R5", "WS02-04C3B-R6")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_no_generic_non_chat_rate_limiter_middleware_or_provider_cost_counter() -> None:
     main_source = (_BACKEND_ROOT / "main.py").read_text()
     settings_source = (_BACKEND_ROOT / "settings.py").read_text()
@@ -130,7 +130,7 @@ def test_no_generic_non_chat_rate_limiter_middleware_or_provider_cost_counter() 
     assert "provider_cost_rate_limits" not in backend_source
 
 
-@pytest.mark.requirement("WS02-04C3B-R4", "WS02-04C3B-R6")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_existing_product_limits_are_not_reclassified_as_c3b_rate_controls() -> None:
     c3b_plan = (
         _REPO_ROOT

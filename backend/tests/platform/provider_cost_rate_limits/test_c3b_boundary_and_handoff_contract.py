@@ -4,8 +4,6 @@ from pathlib import Path
 
 import pytest
 
-import backend.services.provider_retry_policy as retry_policy
-
 pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -15,7 +13,7 @@ def _read(relative_path: str) -> str:
     return (_REPO_ROOT / relative_path).read_text()
 
 
-@pytest.mark.requirement("WS02-04C3B-R4", "WS02-04C3B-R7")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_c1_c2_c3a_and_b2a2b2_boundaries_remain_distinct_from_c3b_rate_control() -> None:
     c3b_plan = _read("docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md")
     c1_plan = _read("docs/production-readiness/planning/passes/ws02/ws02-04c1-operation-timeouts-cancellation.md")
@@ -36,33 +34,7 @@ def test_c1_c2_c3a_and_b2a2b2_boundaries_remain_distinct_from_c3b_rate_control()
     assert "rate limits and abuse controls outside already accepted source-owned owners" in b2a2b2_plan
 
 
-@pytest.mark.requirement("WS02-04C3B-R4", "WS02-04C3B-R7")
-def test_current_provider_retry_and_handoff_metadata_preserves_later_owners() -> None:
-    assert {handoff.workflow for handoff in retry_policy.DURABLE_WORK_HANDOFFS} == {
-        "provider_unknown_outcome_reconciliation",
-        "checkout_post_expiry_provider_reconciliation",
-        "account_deletion_cleanup_recovery",
-        "future_external_notification_delivery",
-        "future_platform_notice_external_delivery",
-        "durable_financial_reconciliation",
-    }
-
-    for handoff in retry_policy.DURABLE_WORK_HANDOFFS:
-        assert handoff.owner_pass == "WS05"
-        assert handoff.required_durable_properties
-        assert handoff.approved_worker_retry_attempts is None
-        assert handoff.approved_worker_concurrency is None
-        assert handoff.approved_lease_seconds is None
-        assert handoff.approved_scheduler_cadence_seconds is None
-        assert handoff.approved_poison_threshold is None
-
-    for fanout in retry_policy.FANOUT_EXECUTION_POLICIES:
-        assert fanout.new_concurrency_allowed is False
-        assert fanout.approved_concurrency_cap is None
-        assert fanout.approved_batch_size is None
-
-
-@pytest.mark.requirement("WS02-04C3B-R2", "WS02-04C3B-R7")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_external_runtime_provider_edge_and_api_m11_gaps_remain_open() -> None:
     c3b_plan = _read("docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md")
     source_owned_closeout = _read("docs/production-readiness/planning/passes/ws02/ws02-04-source-owned-closeout.md")

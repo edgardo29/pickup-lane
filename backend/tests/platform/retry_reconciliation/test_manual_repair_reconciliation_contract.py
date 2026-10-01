@@ -10,9 +10,6 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-import backend.services.provider_retry_policy as retry_policy
-
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _STARTS_AT = datetime(2035, 3, 3, 18, 0, tzinfo=timezone.utc)
 _ENDS_AT = _STARTS_AT + timedelta(hours=2)
@@ -265,7 +262,7 @@ def _run_one_refund_job(*, event_emitter=None) -> str:
     ).process_once()
 
 
-@pytest.mark.requirement("WS02-04C2-R6")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_admin_refund_retry_rejects_uncertain_provider_status_without_job() -> None:
     import backend.services.admin_money_refund_service as refund_service
     from backend.models import AdminAction
@@ -293,7 +290,7 @@ def test_admin_refund_retry_rejects_uncertain_provider_status_without_job() -> N
         assert _count(db, AdminAction) == 0
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize(
     ("sibling_outcome", "sibling_status"),
     [
@@ -420,7 +417,7 @@ def test_publish_fee_retry_is_blocked_by_every_active_sibling_decision(
         assert _count(db, DurableJob) == 0
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize(
     "blocked_state",
     ["missing_attempt", "historical_conflict", "active_reservation"],
@@ -482,7 +479,7 @@ def test_refund_retry_projection_and_mutation_share_fail_closed_policy(
         assert _count(db, DurableJob) == 0
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_refund_retry_zero_remainder_projects_no_provider_work_and_resolves_no_action() -> None:
     from backend.models import AdminAction, Booking, DurableJob
     from backend.schemas.admin_money_refund_schema import AdminMoneyRefundRetryCreate
@@ -546,7 +543,7 @@ def test_refund_retry_zero_remainder_projects_no_provider_work_and_resolves_no_a
         assert _count(db, DurableJob) == 0
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_attempt_terminal_proof_requires_every_expected_attempt() -> None:
     from backend.models import RefundEvent
     from backend.services.refund_attempt_policy import (
@@ -589,7 +586,7 @@ def test_attempt_terminal_proof_requires_every_expected_attempt() -> None:
         assert refund_has_only_terminal_attempts(db, refund) is False
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_attempt_provider_identity_conflict_blocks_historical_selection() -> None:
     from backend.services.admin_money_refund_service import (
         canonical_historical_provider_attempts,
@@ -641,7 +638,7 @@ def test_attempt_provider_identity_conflict_blocks_historical_selection() -> Non
         assert conflict.value.status_code == 409
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_historical_selection_ignores_audit_only_provider_reference() -> None:
     from backend.services.admin_money_refund_service import (
         canonical_historical_provider_attempts,
@@ -681,7 +678,7 @@ def test_historical_selection_ignores_audit_only_provider_reference() -> None:
         assert selected[1].provider_refund_id != audit_provider_id
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_imported_attempt_zero_requires_authoritative_terminal_proof_before_retry() -> None:
     from backend.models import RefundEvent
     from backend.schemas.admin_money_refund_schema import AdminMoneyRefundRetryCreate
@@ -739,7 +736,7 @@ def test_imported_attempt_zero_requires_authoritative_terminal_proof_before_retr
         assert refund.refund_status == "approved"
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_refund_event_replay_requires_complete_immutable_identity() -> None:
     from backend.services.refund_event_service import record_refund_event
 
@@ -795,7 +792,7 @@ def test_refund_event_replay_requires_complete_immutable_identity() -> None:
         assert other_refund_event.refund_id == refund_two.id
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_same_client_retry_key_on_different_refunds_creates_distinct_event_identities() -> None:
     from backend.models import RefundEvent
     from backend.schemas.admin_money_refund_schema import AdminMoneyRefundRetryCreate
@@ -846,7 +843,7 @@ def test_same_client_retry_key_on_different_refunds_creates_distinct_event_ident
             assert event.idempotency_key.endswith(":attempt:2:queued")
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_payment_ledger_ignores_audit_only_success_and_holds_missing_sibling_attempt() -> None:
     from backend.models import Booking
     from backend.services.refund_event_service import record_refund_event
@@ -931,7 +928,7 @@ def test_payment_ledger_ignores_audit_only_success_and_holds_missing_sibling_att
         assert unavailable.value.status_code == 400
 
 
-@pytest.mark.requirement("WS05-03A-R4", "WS05-03A-R5")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_equivalent_success_observation_does_not_reopen_read_refund_notice() -> None:
     from backend.models import Notification
     from backend.services.refund_fulfillment_service import apply_refund_provider_result
@@ -989,7 +986,7 @@ def test_equivalent_success_observation_does_not_reopen_read_refund_notice() -> 
         assert notice.read_at == read_at
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_historical_identity_mismatch_keeps_stored_payment_event_failed() -> None:
     from backend.models import PaymentEvent
     from backend.services.stripe_webhook_service import process_refund_event
@@ -1047,7 +1044,7 @@ def test_historical_identity_mismatch_keeps_stored_payment_event_failed() -> Non
         assert "historical_attempt_identity_mismatch" in event.processing_error_code
 
 
-@pytest.mark.requirement("WS02-04C2-R6")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_admin_refund_reconciliation_records_state_gated_missing_provider_reference() -> None:
     import backend.services.admin_money_refund_service as refund_service
     from backend.models import MoneyIssue, RefundEvent
@@ -1082,7 +1079,7 @@ def test_admin_refund_reconciliation_records_state_gated_missing_provider_refere
         assert issues[0].issue_type == "refund_missing_provider_reference"
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize(
     ("classification", "expected_status"),
     [("rate_limited", 503), ("unknown_outcome", 502)],
@@ -1134,7 +1131,7 @@ def test_admin_reconciliation_maps_provider_read_failures_without_financial_muta
         assert _count(db, RefundEvent) == before_events
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_admin_reconciliation_can_verify_and_attach_missing_provider_reference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1234,7 +1231,7 @@ def test_admin_reconciliation_can_verify_and_attach_missing_provider_reference(
         assert provider_conflict.value.status_code == 409
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_admin_reconciliation_stages_processing_overdue_from_current_attempt_clock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1295,7 +1292,7 @@ def test_admin_reconciliation_stages_processing_overdue_from_current_attempt_clo
         assert issue.recommended_action_code == "verify_provider_refund"
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_processing_age_is_scoped_to_current_attempt_and_imported_attempt_zero() -> None:
     from backend.models import Booking
     from backend.services.admin_money_refund_service import (
@@ -1366,34 +1363,7 @@ def test_processing_age_is_scoped_to_current_attempt_and_imported_attempt_zero()
         assert refund_processing_threshold_reached(db, refund=imported, now=now)
 
 
-@pytest.mark.requirement("WS02-04C2-R6")
-def test_registry_keeps_manual_and_reconciliation_recovery_boundaries_explicit() -> None:
-    contexts = {
-        policy.workflow_context: policy
-        for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES
-    }
-
-    assert contexts["admin_refund_retry_state_gate"].safety_class == (
-        retry_policy.RetrySafetyClass.MANUAL_REPAIR
-    )
-    assert contexts["admin_refund_retry_state_gate"].dependency_retry_owner == (
-        retry_policy.RetryOwnership.MANUAL_REPAIR
-    )
-    assert not contexts["admin_refund_retry_state_gate"].provider_mutation
-    assert contexts["user_visible_saved_card_detach"].safety_class == (
-        retry_policy.RetrySafetyClass.RECONCILE_BEFORE_RETRY
-    )
-    assert contexts["account_deletion_saved_card_cleanup"].durable_follow_up == (
-        "WS05 durable account cleanup recovery."
-    )
-    assert contexts["account_deletion_auth_cleanup"].safety_class == (
-        retry_policy.RetrySafetyClass.RECONCILE_BEFORE_RETRY
-    )
-    assert contexts["admin_credit_repair_state_gate"].provider == "application"
-    assert not contexts["admin_credit_repair_state_gate"].provider_mutation
-
-
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize(
     ("provider_status", "runner_result", "refund_status", "job_status"),
     [
@@ -1480,7 +1450,7 @@ def test_refund_durable_runner_maps_financial_outcomes_to_job_states(
             assert history == []
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_refund_durable_runner_exhausts_final_unknown_attempt_and_stages_issue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1539,7 +1509,7 @@ def test_refund_durable_runner_exhausts_final_unknown_attempt_and_stages_issue(
         assert _count(db, MoneyIssue) == 1
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_expired_refund_claim_returns_terminal_boundary_before_next_eligible_job() -> None:
     from backend.models import DurableJob
     from backend.services.durable_job_service import (
@@ -1598,7 +1568,7 @@ def test_expired_refund_claim_returns_terminal_boundary_before_next_eligible_job
         db.rollback()
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_worker_checkpoint_stops_unstarted_refund_when_payment_remainder_shrinks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1676,7 +1646,7 @@ def test_worker_checkpoint_stops_unstarted_refund_when_payment_remainder_shrinks
         assert _count(db, MoneyIssue) == 1
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize("origin", ["cancellation", "player_removal"])
 @pytest.mark.parametrize("confirmed_cents", [500, 1200])
 def test_origin_refund_producers_reserve_only_payment_ledger_remainder(
@@ -1759,7 +1729,7 @@ def test_origin_refund_producers_reserve_only_payment_ledger_remainder(
             assert _count(db, DurableJob) == 1
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_player_removal_credit_failure_commits_issue_without_success_notice() -> None:
     from backend.models import (
         Booking,
@@ -1841,7 +1811,7 @@ def test_player_removal_credit_failure_commits_issue_without_success_notice() ->
         ) == 0
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_refund_runner_lease_loss_does_not_persist_provider_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1900,7 +1870,7 @@ def test_refund_runner_lease_loss_does_not_persist_provider_result(
         assert persisted.refunded_at is None
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_refund_exhaustion_survives_support_staging_failure_and_diagnostic_clears_after_success(
     monkeypatch: pytest.MonkeyPatch,
     capsys,
@@ -2025,7 +1995,7 @@ def test_refund_exhaustion_survives_support_staging_failure_and_diagnostic_clear
         )
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_concurrent_refund_retry_exact_replay_creates_one_attempt_and_job() -> None:
     from backend.models import AdminAction, DurableJob, Refund, User
     from backend.schemas.admin_money_refund_schema import AdminMoneyRefundRetryCreate
@@ -2086,7 +2056,7 @@ def test_concurrent_refund_retry_exact_replay_creates_one_attempt_and_job() -> N
         )
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_concurrent_terminal_provider_observations_cannot_downgrade_success() -> None:
     from backend.models import MoneyIssue, Payment, Refund
     from backend.services.refund_fulfillment_service import apply_refund_provider_result
@@ -2160,7 +2130,7 @@ def test_concurrent_terminal_provider_observations_cannot_downgrade_success() ->
             assert issue.recommended_action_code == "review_and_resolve_no_action"
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_mismatched_provider_observation_preserves_actual_identity_without_false_success() -> None:
     from backend.models import RefundEvent
     from backend.services.refund_fulfillment_service import apply_refund_provider_result
@@ -2211,7 +2181,7 @@ def test_mismatched_provider_observation_preserves_actual_identity_without_false
         assert event.new_refund_status is None
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_reconciliation_reads_every_known_attempt_before_clearing_history_block(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2307,7 +2277,7 @@ def test_reconciliation_reads_every_known_attempt_before_clearing_history_block(
         assert persisted.amount_cents == current_amount_cents
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_exhausted_refund_diagnostic_is_only_the_issue_free_fallback() -> None:
     from types import SimpleNamespace
 
@@ -2354,7 +2324,7 @@ def test_exhausted_refund_diagnostic_is_only_the_issue_free_fallback() -> None:
     assert visible(has_final_no_action_resolution=True) is False
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_compensation_recounts_remaining_cash_and_retry_resets_lifecycle() -> None:
     from backend.models import Booking, PaymentCompensation
     from backend.schemas.admin_money_refund_schema import AdminMoneyRefundRetryCreate
@@ -2431,7 +2401,7 @@ def test_compensation_recounts_remaining_cash_and_retry_resets_lifecycle() -> No
         assert persisted.resolved_at is None
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_compensation_retry_with_no_remaining_cash_resolves_without_new_attempt() -> None:
     from backend.models import AdminAction, Booking, DurableJob, PaymentCompensation
     from backend.schemas.admin_money_refund_schema import AdminMoneyRefundRetryCreate
@@ -2525,7 +2495,7 @@ def test_compensation_retry_with_no_remaining_cash_resolves_without_new_attempt(
         ) == 0
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_compensation_waits_for_active_sibling_before_reserving_remainder() -> None:
     from backend.models import Booking
     from backend.services.refund_event_service import record_refund_event
@@ -2574,7 +2544,7 @@ def test_compensation_waits_for_active_sibling_before_reserving_remainder() -> N
         assert compensation_refund.amount_cents == payment.amount_cents
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_publish_credit_entitlement_identity_is_unique_across_sessions() -> None:
     from sqlalchemy.exc import IntegrityError
 
@@ -2627,7 +2597,7 @@ def test_publish_credit_entitlement_identity_is_unique_across_sessions() -> None
         )
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_financial_outcome_and_manual_resolution_replays_require_exact_identity() -> None:
     from backend.models import Booking, Game, HostPublishFee
     from backend.schemas.admin_money_financial_outcome_schema import (
@@ -2743,7 +2713,7 @@ def test_financial_outcome_and_manual_resolution_replays_require_exact_identity(
             )
         assert resolve_conflict.value.status_code == 409
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_provider_no_action_resolution_requires_payment_level_satisfaction() -> None:
     from backend.models import Booking, DurableJob, MoneyIssue
     from backend.schemas.admin_money_issue_schema import AdminMoneyIssueResolveCreate
@@ -2875,7 +2845,7 @@ def test_provider_no_action_resolution_requires_payment_level_satisfaction() -> 
         assert staged_again.occurrence_count == occurrence_count
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_superseded_resolution_requires_exact_applied_replacement_and_terminal_history() -> None:
     from backend.models import (
         AdminAction,
@@ -3039,7 +3009,7 @@ def test_superseded_resolution_requires_exact_applied_replacement_and_terminal_h
             )
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize(
     ("outcome", "invalid_field"),
     [
@@ -3144,7 +3114,7 @@ def test_publish_fee_decisions_reject_invalid_collected_payment_identity_atomica
         } == before
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_money_issue_success_and_replacement_require_complete_attempt_history() -> None:
     from backend.models import (
         AdminFinancialOutcome,
@@ -3273,7 +3243,7 @@ def test_money_issue_success_and_replacement_require_complete_attempt_history() 
         assert fee.id not in final_replacement_host_publish_fee_ids(db, {fee.id})
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_current_success_with_missing_history_remains_blocked_and_reviewable() -> None:
     from types import SimpleNamespace
 
@@ -3356,7 +3326,7 @@ def test_current_success_with_missing_history_remains_blocked_and_reviewable() -
         )
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_worker_blocks_provider_mutation_when_earlier_attempt_evidence_is_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3401,7 +3371,7 @@ def test_worker_blocks_provider_mutation_when_earlier_attempt_evidence_is_missin
         assert issue.recommended_action_code == "review_unknown_outcome"
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize("provider_status", ["succeeded", "failed", "cancelled"])
 def test_terminal_publish_fee_refund_uses_approving_admin_attribution(
     provider_status: str,
@@ -3492,7 +3462,7 @@ def test_terminal_publish_fee_refund_uses_approving_admin_attribution(
         assert outcome.applied_by_user_id == admin.id
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_ambiguous_exhaustion_persists_compensation_error_until_late_success() -> None:
     from backend.models import Booking, DurableJob, PaymentCompensation
     from backend.services import refund_fulfillment_service as fulfillment
@@ -3574,7 +3544,7 @@ def test_ambiguous_exhaustion_persists_compensation_error_until_late_success() -
         assert compensation.resolved_at is not None
 
 
-@pytest.mark.requirement("WS05-03A-R2")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize(
     "job_status",
     ["pending", "retry_waiting", "leased", "succeeded", "exhausted", "cancelled"],

@@ -28,7 +28,7 @@ def _value(snapshot, name):
     return next(item.value for item in snapshot.series if item.name == name)
 
 
-@pytest.mark.requirement("WS05-03A-R1")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize(
     ("job_type", "expected_count"),
     [

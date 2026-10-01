@@ -34,7 +34,7 @@ def _operational_error_from_cause(cause: BaseException) -> OperationalError:
             return exc
 
 
-@pytest.mark.requirement("WS02-04C1-R5")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_checked_out_database_connection_has_approved_statement_and_lock_timeouts() -> None:
     from backend.database import engine
 
@@ -46,7 +46,7 @@ def test_checked_out_database_connection_has_approved_statement_and_lock_timeout
     assert _postgres_timeout_milliseconds(lock_timeout) == 2_000
 
 
-@pytest.mark.requirement("WS02-04C1-R5")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_database_engine_pool_wait_timeout_uses_approved_setting() -> None:
     from backend import database
 
@@ -54,7 +54,7 @@ def test_database_engine_pool_wait_timeout_uses_approved_setting() -> None:
     assert getattr(database.engine.pool, "_timeout") == 2
 
 
-@pytest.mark.requirement("WS02-04C1-R5", "WS02-04C1-R6")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_database_timeout_classification_maps_pool_statement_and_lock() -> None:
     pool_timeout = SQLAlchemyTimeoutError("pool exhausted")
     statement_timeout = _operational_error_from_cause(
@@ -88,7 +88,7 @@ class _FakeSession:
         self.close_calls += 1
 
 
-@pytest.mark.requirement("WS02-04C1-R5")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_database_request_session_rolls_back_on_ordinary_exception_and_closes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -107,7 +107,7 @@ def test_database_request_session_rolls_back_on_ordinary_exception_and_closes(
     assert fake_session.close_calls == 1
 
 
-@pytest.mark.requirement("WS02-04C1-R5", "WS02-04C1-R7")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_database_request_session_closes_on_cancellation_without_timeout_classification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -130,7 +130,7 @@ def test_database_request_session_closes_on_cancellation_without_timeout_classif
     assert database_timeout_from_exception(cancellation) is None
 
 
-@pytest.mark.requirement("WS02-04C1-R5")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_database_request_session_closes_after_success_without_rollback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

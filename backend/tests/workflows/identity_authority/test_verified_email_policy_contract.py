@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _provider_payload(
@@ -204,7 +203,7 @@ def _community_game_detail_state(game_id: uuid.UUID) -> dict[str, object]:
         }
 
 
-@pytest.mark.requirement("WS03-01-R4", "WS03-01-R5", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     ("name", "method", "path", "payload", "role"),
     [
@@ -281,7 +280,7 @@ def test_current_provider_unverified_state_denies_sensitive_route_families_and_c
     assert _email_verified_at(user_id) is None
 
 
-@pytest.mark.requirement("WS03-01-R4")
+@pytest.mark.pass_provenance('WS03-01')
 def test_current_provider_verified_host_can_update_community_game_detail_host_edit(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -318,7 +317,7 @@ def test_current_provider_verified_host_can_update_community_game_detail_host_ed
     }
 
 
-@pytest.mark.requirement("WS03-01-R4")
+@pytest.mark.pass_provenance('WS03-01')
 def test_current_provider_unverified_state_denies_community_host_edit_and_preserves_detail(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -351,7 +350,7 @@ def test_current_provider_unverified_state_denies_community_host_edit_and_preser
     assert _community_game_detail_state(game_id) == before_detail
 
 
-@pytest.mark.requirement("WS03-01-R4", "WS03-01-R5")
+@pytest.mark.pass_provenance('WS03-01')
 def test_current_provider_verified_state_restores_missing_snapshot_and_authorizes_admin_path(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -366,7 +365,7 @@ def test_current_provider_verified_state_restores_missing_snapshot_and_authorize
     assert _email_verified_at(user_id) is not None
 
 
-@pytest.mark.requirement("WS03-01-R4", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     "path",
     [
@@ -384,7 +383,7 @@ def test_public_and_optional_auth_reads_do_not_require_verified_email(
     assert response.status_code == 200
 
 
-@pytest.mark.requirement("WS03-01-R4", "WS03-01-R5", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 def test_unverified_provider_identity_can_use_bootstrap_auth_sync_without_snapshot_authority(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -409,7 +408,7 @@ def test_unverified_provider_identity_can_use_bootstrap_auth_sync_without_snapsh
         assert user.email_verified_at is None
 
 
-@pytest.mark.requirement("WS03-01-R4", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 def test_unverified_user_can_update_allowed_profile_setup_fields(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -429,7 +428,7 @@ def test_unverified_user_can_update_allowed_profile_setup_fields(
     assert _email_verified_at(user_id) is None
 
 
-@pytest.mark.requirement("WS03-01-R4", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 def test_active_user_read_and_status_surfaces_are_not_verified_mutation_gates(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

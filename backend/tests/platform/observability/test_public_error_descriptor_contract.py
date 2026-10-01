@@ -10,7 +10,7 @@ from backend.observability.errors import PublicErrorDescriptor, PublicErrorError
 pytestmark = pytest.mark.no_db_cleanup
 
 
-@pytest.mark.requirement("EN02-PUBLIC-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_public_error_descriptor_accepts_safe_fields_and_serializes_plain_details():
     correlation_id = "123e4567-e89b-42d3-a456-426614174020"
     descriptor = PublicErrorDescriptor(
@@ -42,7 +42,7 @@ def test_public_error_descriptor_accepts_safe_fields_and_serializes_plain_detail
     assert isinstance(serialized["details"]["hints"], list)
 
 
-@pytest.mark.requirement("EN02-PUBLIC-001")
+@pytest.mark.pass_provenance('EN-02')
 @pytest.mark.parametrize(
     "details",
     [
@@ -62,7 +62,7 @@ def test_public_error_descriptor_rejects_unsafe_internal_details(details: dict[s
         )
 
 
-@pytest.mark.requirement("EN02-PUBLIC-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_public_error_descriptor_defensively_copies_caller_owned_details():
     source_details = {
         "hints": ["retry_later"],
@@ -84,7 +84,7 @@ def test_public_error_descriptor_defensively_copies_caller_owned_details():
     }
 
 
-@pytest.mark.requirement("EN02-PUBLIC-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_public_error_descriptor_nested_validated_details_are_immutable():
     descriptor = PublicErrorDescriptor(
         code="API.UNAVAILABLE",
@@ -109,7 +109,7 @@ def test_public_error_descriptor_nested_validated_details_are_immutable():
     }
 
 
-@pytest.mark.requirement("EN02-PUBLIC-001")
+@pytest.mark.pass_provenance('EN-02')
 @pytest.mark.parametrize(
     ("code", "message", "correlation_id"),
     [

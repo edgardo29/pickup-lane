@@ -64,7 +64,7 @@ def _post_json(client: TestClient, path: str, body: dict[str, Any], **headers: s
     )
 
 
-@pytest.mark.requirement("WS02-04B2A1-R1", "WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 @pytest.mark.parametrize("path", ["/admin/platform-notices", "/admin/platform-notices/"])
 def test_platform_notice_create_uses_special_limit_before_downstream_work(
     monkeypatch: pytest.MonkeyPatch,
@@ -79,7 +79,7 @@ def test_platform_notice_create_uses_special_limit_before_downstream_work(
     assert response.json()["code"] == "API.REQUEST_BODY_TOO_LARGE"
 
 
-@pytest.mark.requirement("WS02-04B2A1-R1", "WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_platform_notice_under_limit_reaches_normal_downstream_processing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -105,7 +105,7 @@ def test_platform_notice_under_limit_reaches_normal_downstream_processing(
     assert len(calls) == 1
 
 
-@pytest.mark.requirement("WS02-04B2A1-R1", "WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 @pytest.mark.parametrize(
     ("method", "path"),
     [
@@ -133,7 +133,7 @@ def test_nearby_platform_notice_routes_are_not_platform_notice_create_class(
     assert response.status_code != 413
 
 
-@pytest.mark.requirement("WS02-04B2A1-R2", "WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_signed_stripe_webhook_preserves_raw_bytes_to_construction_seam(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -174,7 +174,7 @@ def test_signed_stripe_webhook_preserves_raw_bytes_to_construction_seam(
     assert observed["db"] == "synthetic-db"
 
 
-@pytest.mark.requirement("WS02-04B2A1-R2", "WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_signed_stripe_over_limit_rejects_before_provider_or_business_processing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -207,7 +207,7 @@ def test_signed_stripe_over_limit_rejects_before_provider_or_business_processing
     assert calls == []
 
 
-@pytest.mark.requirement("WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_missing_stripe_signature_remains_route_owned_not_signed_limit_evidence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -234,7 +234,7 @@ def test_missing_stripe_signature_remains_route_owned_not_signed_limit_evidence(
     assert calls == []
 
 
-@pytest.mark.requirement("WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_special_class_selection_precedence_is_frozen(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _create_app(monkeypatch)
 

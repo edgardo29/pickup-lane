@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from backend.schemas.sub_post_position_schema import SubPostPositionCreate
 from backend.schemas.sub_post_schema import MAX_SUB_POST_POSITION_ROWS, MAX_SUB_POST_TOTAL_SUBS, SubPostCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_START = datetime(2035, 1, 15, 18, 0, tzinfo=timezone.utc)
 _BASE_END = datetime(2035, 1, 15, 20, 0, tzinfo=timezone.utc)
@@ -124,7 +123,7 @@ def _create_post_with_position(db: Session, owner: User) -> tuple[SubPost, SubPo
     return sub_post, position
 
 
-@pytest.mark.requirement("WS02-04B1-R4")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_schema_accepts_six_position_rows_and_rejects_more_than_six_at_schema_boundary() -> None:
     six_schema_rows = [
         _position("field_player", "open", 1, 0),
@@ -145,7 +144,7 @@ def test_schema_accepts_six_position_rows_and_rejects_more_than_six_at_schema_bo
         )
 
 
-@pytest.mark.requirement("WS02-04B1-R4")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_schema_rejects_more_than_eleven_total_substitutes() -> None:
     otherwise_valid_positions = [
         _position("field_player", "men", 3, 0),
@@ -163,7 +162,7 @@ def test_schema_rejects_more_than_eleven_total_substitutes() -> None:
     assert any(error["loc"] == ("subs_needed",) for error in exc_info.value.errors())
 
 
-@pytest.mark.requirement("WS02-04B1-R4")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_service_accepts_eleven_total_substitutes_and_persists_when_other_rules_are_valid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -193,7 +192,7 @@ def test_service_accepts_eleven_total_substitutes_and_persists_when_other_rules_
         assert _count(db, SubPostPosition) == len(positions)
 
 
-@pytest.mark.requirement("WS02-04B1-R4")
+@pytest.mark.pass_provenance('WS02-04B1')
 @pytest.mark.parametrize(
     "positions",
     [
@@ -223,7 +222,7 @@ def test_invalid_position_rows_reject_before_post_or_position_persistence(
         assert _count(db, SubPostPosition) == 0
 
 
-@pytest.mark.requirement("WS02-04B1-R4")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_position_total_mismatch_rejects_before_partial_persistence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -248,7 +247,7 @@ def test_position_total_mismatch_rejects_before_partial_persistence(
         assert _count(db, SubPostPosition) == 0
 
 
-@pytest.mark.requirement("WS02-04B1-R5")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_serial_waitlist_cap_rejects_next_request_without_prohibited_side_effects() -> None:
     from backend.models import Notification, SubPostRequest, SubPostRequestStatusHistory
     from backend.services.need_a_sub_request_service import create_request

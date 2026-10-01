@@ -9,7 +9,6 @@ from fastapi import HTTPException
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _session():
@@ -77,7 +76,7 @@ def _sync_in_thread(token: str) -> tuple[object, ...]:
             return ("http", exc.status_code, exc.detail, backend_pid)
 
 
-@pytest.mark.requirement("WS03-02-R2", "WS03-02-R3")
+@pytest.mark.pass_provenance('WS03-02')
 def test_concurrent_first_login_same_uid_reuses_single_user_and_context_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -111,7 +110,7 @@ def test_concurrent_first_login_same_uid_reuses_single_user_and_context_rows(
         assert _count_rows(db, UserStats, UserStats.user_id == user_id) == 1
 
 
-@pytest.mark.requirement("WS03-02-R2", "WS03-02-R5")
+@pytest.mark.pass_provenance('WS03-02')
 def test_concurrent_first_login_different_uid_same_email_leaves_single_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

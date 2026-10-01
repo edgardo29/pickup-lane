@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FRONTEND_SRC = REPO_ROOT / "frontend" / "src"
@@ -24,7 +24,7 @@ def _frontend_sources() -> str:
     )
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R7")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_current_callers_use_supported_setup_checkout_inbox_and_admin_money_flows() -> None:
     payment_methods_api = PAYMENT_METHODS_API.read_text()
     checkout_api = CHECKOUT_API.read_text()
@@ -40,7 +40,7 @@ def test_current_callers_use_supported_setup_checkout_inbox_and_admin_money_flow
     assert "/admin/money/issues" in admin_money_api
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R7")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_current_frontend_sources_do_not_construct_retired_generic_payment_mutations() -> None:
     source = _frontend_sources()
 
@@ -58,6 +58,6 @@ def test_current_frontend_sources_do_not_construct_retired_generic_payment_mutat
         assert fragment not in source
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R7")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_retired_payment_event_seed_script_is_absent() -> None:
     assert not SEED_PAYMENT_EVENT.exists()

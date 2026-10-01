@@ -9,7 +9,6 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 CHICAGO = ZoneInfo("America/Chicago")
 
@@ -219,7 +218,7 @@ def _route(method: str, path: str) -> APIRoute:
     raise AssertionError(f"Route not found: {method} {path}")
 
 
-@pytest.mark.requirement("WS02-05B2-R5")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_public_game_and_venue_image_responses_exclude_internal_metadata(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -263,7 +262,7 @@ def test_public_game_and_venue_image_responses_exclude_internal_metadata(
     assert venue_image_data["caption"] == "North field"
 
 
-@pytest.mark.requirement("WS02-05B2-R5")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_admin_image_responses_retain_operational_metadata_behind_admin(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -301,7 +300,7 @@ def test_admin_image_responses_retain_operational_metadata_behind_admin(
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-05B2-R5")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_image_routes_declare_public_admin_and_upload_response_models() -> None:
     from backend.schemas import (
         GameImageAdminRead,

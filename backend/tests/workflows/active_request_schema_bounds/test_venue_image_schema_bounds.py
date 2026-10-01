@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from backend.schemas.venue_image_schema import VenueImageUpdate, VenueImageUploadCreate
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 
 def _upload(**overrides: object) -> VenueImageUploadCreate:
@@ -23,7 +23,7 @@ def _assert_rejected(model_factory, **payload: object) -> None:
         model_factory(**payload)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_venue_image_role_and_status_literals_are_bounded() -> None:
     assert _upload(image_role="card").image_role == "card"
     assert _upload(image_role="gallery").image_role == "gallery"
@@ -34,7 +34,7 @@ def test_venue_image_role_and_status_literals_are_bounded() -> None:
     _assert_rejected(VenueImageUpdate, image_status="published")
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_venue_image_sort_order_bounds_cover_upload_and_update() -> None:
     assert _upload().sort_order == 0
     for factory in (_upload, VenueImageUpdate):
@@ -44,7 +44,7 @@ def test_venue_image_sort_order_bounds_cover_upload_and_update() -> None:
         _assert_rejected(factory, sort_order=3)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_venue_image_request_models_reject_neutral_unknown_fields() -> None:
     _assert_rejected(_upload, unsupported_a2a_probe="value")
     _assert_rejected(VenueImageUpdate, unsupported_a2a_probe="value")

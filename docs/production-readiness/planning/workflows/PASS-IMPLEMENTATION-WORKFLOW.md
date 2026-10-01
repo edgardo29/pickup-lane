@@ -715,10 +715,12 @@ Gate B must:
 - protect secrets, credentials, PII, payment data, and provider-private data;
 - report validation that was actually run and any material gap that remains.
 
-Requirement JSON, pytest requirement markers, checker/compliance commands,
-trusted test roots, and a `TESTING_RECORD.md` are not required. Existing useful
-tests and technical safeguards remain valid; their location or old metadata does
-not determine whether they count.
+When Gate B introduces or materially changes a test as evidence for the pass,
+mark that test with `pytest.mark.pass_provenance` using the narrowest accurate
+scope. Preserve genuine multi-pass ownership. Do not add provenance merely
+because the pass reran an existing test, and do not require it for ordinary
+tests with no production-readiness provenance. Provenance is source-local
+context, not universal metadata or a completeness system.
 
 ### 8.2 Validation Selection
 
@@ -865,7 +867,8 @@ Approval requires:
 - evidence and validation claims that match actual proof;
 - no required review material remaining inaccessible or uninspected.
 
-It does not require a permanent coverage ledger, visible appendix, universal matrix, requirement declaration, or testing record.
+It does not require a permanent coverage ledger, visible appendix, universal
+matrix, or parallel evidence bookkeeping.
 
 A material finding must identify:
 

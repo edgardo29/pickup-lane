@@ -147,27 +147,15 @@ jobs:
           PY
 
       - name: Compile backend Python files
-        run: >
-          python -m compileall
-          backend/alembic
-          backend/models
-          backend/routes
-          backend/schemas
-          backend/tests
-          backend/bootstrap_admin.py
-          backend/database.py
-          backend/durable_worker.py
-          backend/main.py
-          backend/test_runner.py
+        run: python -m compileall -q backend
 
       - name: Rebuild dedicated backend test databases
         run: python -m backend.test_runner rebuild all
 
-      - name: Run migration safety checker
+      - name: Collect current backend tests
         run: >
-          python backend/tests/check_backend_tests.py
-          --scope domain
-          backend/tests/migrations/migration_policy_compatibility_rehearsal
+          python -m backend.test_runner test ordinary
+          backend/tests --collect-only -q
 
       - name: Run backend test runner safety tests
         run: >

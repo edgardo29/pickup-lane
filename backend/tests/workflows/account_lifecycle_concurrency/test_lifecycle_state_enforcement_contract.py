@@ -7,7 +7,6 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _session():
@@ -136,7 +135,7 @@ def _user_snapshot(user_id: uuid.UUID) -> dict[str, object]:
         }
 
 
-@pytest.mark.requirement("WS03-02-R4", "WS03-02-R6", "WS03-02-R9")
+@pytest.mark.pass_provenance('WS03-02')
 def test_suspension_is_enforced_on_next_request_and_not_undone_by_sync(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -172,7 +171,7 @@ def test_suspension_is_enforced_on_next_request_and_not_undone_by_sync(
     assert client.get("/my-games", headers=_auth_headers()).status_code == 200
 
 
-@pytest.mark.requirement("WS03-02-R6")
+@pytest.mark.pass_provenance('WS03-02')
 @pytest.mark.parametrize(
     ("account_status", "deleted_at"),
     [
@@ -215,7 +214,7 @@ def test_terminal_lifecycle_states_are_not_resurrected_by_sync_or_provider_ident
     assert _user_snapshot(user_id) == before
 
 
-@pytest.mark.requirement("WS03-02-R9")
+@pytest.mark.pass_provenance('WS03-02')
 def test_admin_role_change_is_seen_on_next_admin_request(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

@@ -17,7 +17,6 @@ from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_
     _venue,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _message_count(db, chat_id) -> int:
@@ -46,7 +45,7 @@ def _read_state_count(db, chat_id) -> int:
     )
 
 
-@pytest.mark.requirement("WS03-04C-R7", "WS03-04C-R9", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_game_chat_membership_sender_read_state_and_removed_message_boundaries(
     client,
     monkeypatch: pytest.MonkeyPatch,

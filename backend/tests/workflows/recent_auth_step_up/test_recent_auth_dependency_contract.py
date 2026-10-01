@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.suite_type("ordinary"),
 ]
 
 
@@ -193,7 +192,7 @@ def _install_admin_and_need_a_sub_remove_sentinel(
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS03-03A-R4")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_recent_auth_dependencies_layer_on_existing_identity_account_and_admin_guards() -> None:
     import backend.services.auth_service as auth_service
 
@@ -252,7 +251,7 @@ def test_recent_auth_dependencies_layer_on_existing_identity_account_and_admin_g
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS03-03A-R4", "WS03-03A-R5")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_recent_auth_wrappers_do_not_replace_existing_workflow_safeguards() -> None:
     from pathlib import Path
 
@@ -298,7 +297,7 @@ def test_recent_auth_wrappers_do_not_replace_existing_workflow_safeguards() -> N
     assert "record_admin_action" in sources["official_cancel"]
 
 
-@pytest.mark.requirement("WS03-03A-R3", "WS03-03A-R5")
+@pytest.mark.pass_provenance('WS03-03A')
 @pytest.mark.parametrize("claim_mode", ["missing", "stale"])
 def test_recent_auth_denial_returns_safe_public_403_before_self_delete_side_effect(
     monkeypatch: pytest.MonkeyPatch,
@@ -358,7 +357,7 @@ def test_recent_auth_denial_returns_safe_public_403_before_self_delete_side_effe
     assert side_effects == []
 
 
-@pytest.mark.requirement("WS03-03A-R3", "WS03-03A-R5")
+@pytest.mark.pass_provenance('WS03-03A')
 @pytest.mark.parametrize("claim_mode", ["missing", "stale"])
 def test_admin_community_cancel_rejects_missing_or_stale_recent_auth_before_service_execution(
     monkeypatch: pytest.MonkeyPatch,
@@ -401,7 +400,7 @@ def test_admin_community_cancel_rejects_missing_or_stale_recent_auth_before_serv
     assert service_calls == []
 
 
-@pytest.mark.requirement("WS03-03A-R5")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_admin_community_cancel_with_fresh_recent_auth_reaches_route_workflow_sentinel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -449,7 +448,7 @@ def test_admin_community_cancel_with_fresh_recent_auth_reaches_route_workflow_se
     assert call["payload"].idempotency_key == _community_cancel_payload()["idempotency_key"]
 
 
-@pytest.mark.requirement("WS03-03A-R3", "WS03-03A-R5")
+@pytest.mark.pass_provenance('WS03-03A')
 @pytest.mark.parametrize("claim_mode", ["missing", "stale"])
 def test_admin_need_a_sub_remove_rejects_missing_or_stale_recent_auth_before_service_execution(
     monkeypatch: pytest.MonkeyPatch,
@@ -492,7 +491,7 @@ def test_admin_need_a_sub_remove_rejects_missing_or_stale_recent_auth_before_ser
     assert service_calls == []
 
 
-@pytest.mark.requirement("WS03-03A-R5")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_admin_need_a_sub_remove_with_fresh_recent_auth_reaches_route_workflow_sentinel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

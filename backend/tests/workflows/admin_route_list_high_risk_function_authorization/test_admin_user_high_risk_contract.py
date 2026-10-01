@@ -15,10 +15,9 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
-@pytest.mark.requirement("WS03-04D-R3", "WS03-04D-R5")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_recent_active_admin_can_change_user_role_and_replay_idempotently(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -61,7 +60,7 @@ def test_recent_active_admin_can_change_user_role_and_replay_idempotently(
     assert _count_model_rows(AdminAction) == before_admin_actions + 1
 
 
-@pytest.mark.requirement("WS03-04D-R5", "WS03-04D-R9", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_user_role_write_rejects_server_controlled_extra_fields_without_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -103,7 +102,7 @@ def _get_user_account_state(user_id: uuid.UUID) -> dict[str, object]:
         }
 
 
-@pytest.mark.requirement("WS03-04D-R5", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_user_admin_actions_preserve_final_admin_and_current_state_guards(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -166,7 +165,7 @@ def test_user_admin_actions_preserve_final_admin_and_current_state_guards(
     assert _count_model_rows(Notification) == before_notifications
 
 
-@pytest.mark.requirement("WS03-04D-R3", "WS03-04D-R5", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_recent_admin_user_account_hosting_and_delete_actions_persist_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

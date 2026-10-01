@@ -134,7 +134,7 @@ def _source_text(paths: Iterable[str]) -> str:
     return "\n".join((_REPO_ROOT / path).read_text() for path in paths)
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R1", "WS02-04B2A2C-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_current_ordinary_route_inventory_is_derived_from_final_fastapi_body_metadata() -> None:
     app, main_module = _create_app_and_main_module()
     final_body_keys = {_route_key(route) for route in _final_body_routes(app)}
@@ -154,7 +154,7 @@ def test_current_ordinary_route_inventory_is_derived_from_final_fastapi_body_met
     assert ((_STRIPE_WEBHOOK[0],), _STRIPE_WEBHOOK[1]) not in production_keys
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R1", "WS02-04B2A2C-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_special_bodyless_and_tombstone_route_counts_remain_accounted_for() -> None:
     app, _main_module = _create_app_and_main_module()
     routes = _app_routes(app)
@@ -191,7 +191,7 @@ def test_special_bodyless_and_tombstone_route_counts_remain_accounted_for() -> N
     assert bodyless_method_body_routes == []
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_dependency_declared_request_body_inherits_ordinary_selection() -> None:
     _app, main_module = _create_app_and_main_module()
     synthetic_app = FastAPI()
@@ -213,7 +213,7 @@ def test_dependency_declared_request_body_inherits_ordinary_selection() -> None:
     ]
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R1", "WS02-04B2A2C-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_manual_raw_body_consumers_are_limited_to_signed_stripe_special_class() -> None:
     assert _manual_body_consumers() == (
         (
@@ -225,7 +225,7 @@ def test_manual_raw_body_consumers_are_limited_to_signed_stripe_special_class() 
     )
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R1", "WS02-04B2A2C-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_no_ownerless_file_form_multipart_or_pass_specific_limit_class_exists() -> None:
     source = _source_text(
         (
@@ -243,7 +243,7 @@ def test_no_ownerless_file_form_multipart_or_pass_specific_limit_class_exists() 
     assert "ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES" in source
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_direct_r2_object_bytes_are_not_a_fastapi_request_body_class() -> None:
     app, _main_module = _create_app_and_main_module()
     upload_related_routes = [

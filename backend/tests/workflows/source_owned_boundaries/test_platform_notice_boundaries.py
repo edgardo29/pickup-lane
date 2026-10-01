@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from backend.schemas.platform_notice_schema import PlatformNoticeCancel, PlatformNoticeCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _count(db: Session, model: type[object]) -> int:
@@ -79,7 +78,7 @@ def _client_overrides(
         client.app.dependency_overrides.clear()
 
 
-@pytest.mark.requirement("WS02-04B1-R1")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_selected_notice_accepts_500_unique_users_and_dedupes_before_cap() -> None:
     from backend.models import AdminAction, Notification, PlatformNotice, PlatformNoticeRecipient
     from backend.services import platform_notice_service
@@ -106,7 +105,7 @@ def test_selected_notice_accepts_500_unique_users_and_dedupes_before_cap() -> No
         assert _count(db, Notification) == 0
 
 
-@pytest.mark.requirement("WS02-04B1-R1")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_selected_notice_rejects_501_unique_users_before_partial_state() -> None:
     from backend.models import AdminAction, Notification, PlatformNotice, PlatformNoticeRecipient
     from backend.services import platform_notice_service
@@ -135,7 +134,7 @@ def test_selected_notice_rejects_501_unique_users_before_partial_state() -> None
         assert _count(db, Notification) == 0
 
 
-@pytest.mark.requirement("WS02-04B1-R1")
+@pytest.mark.pass_provenance('WS02-04B1')
 @pytest.mark.parametrize(
     ("selected_user_status", "expected_code"),
     [
@@ -178,7 +177,7 @@ def test_missing_or_ineligible_selected_user_rejects_before_notice_persistence(
         assert _count(db, Notification) == 0
 
 
-@pytest.mark.requirement("WS02-04B1-R1")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_global_notice_uses_sparse_global_state_without_recipient_or_notification_rows() -> None:
     from backend.models import Notification, PlatformNotice, PlatformNoticeRecipient
     from backend.services import platform_notice_service
@@ -205,7 +204,7 @@ def test_global_notice_uses_sparse_global_state_without_recipient_or_notificatio
         assert _count(db, Notification) == 0
 
 
-@pytest.mark.requirement("WS02-04B1-R2")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_platform_notice_field_and_search_boundaries_are_enforced() -> None:
     from backend.services import platform_notice_service
 
@@ -236,7 +235,7 @@ def test_platform_notice_field_and_search_boundaries_are_enforced() -> None:
     assert search_meaning_exc.value.status_code == 400
 
 
-@pytest.mark.requirement("WS02-04B1-R2")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_notice_history_and_recipient_page_limits_are_bounded() -> None:
     from backend.services import platform_notice_service
 
@@ -259,7 +258,7 @@ def test_notice_history_and_recipient_page_limits_are_bounded() -> None:
         assert clamped_history.limit == 30
 
 
-@pytest.mark.requirement("WS02-04B1-R2")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_recipient_route_bounds_cursor_and_preserves_ws02_04a_validation_behavior(
     client: TestClient,
 ) -> None:
@@ -302,7 +301,7 @@ def test_recipient_route_bounds_cursor_and_preserves_ws02_04a_validation_behavio
         assert "X-Request-ID" in route_cursor_response.headers
 
 
-@pytest.mark.requirement("WS02-04B1-R2")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_cancellation_reason_accepts_boundary_and_rejects_over_bound() -> None:
     from backend.services import platform_notice_service
 

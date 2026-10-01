@@ -37,7 +37,6 @@ from backend.tests.workflows.moderation_review_case_lifecycle.conftest import (
     session,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 GAME_TERMINAL_DELETE_STATES = {"cancelled", "completed", "expired", "removed"}
 SUB_POST_TERMINAL_REMOVE_STATES = {"cancelled", "completed", "expired"}

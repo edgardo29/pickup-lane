@@ -33,7 +33,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 PRIVATE_CANARY = "PRIVATE-CANARY-REPORTER-SECRET-7429"
 SECOND_PRIVATE_CANARY = "PRIVATE-CANARY-ALTERNATE-DETAIL-9137"

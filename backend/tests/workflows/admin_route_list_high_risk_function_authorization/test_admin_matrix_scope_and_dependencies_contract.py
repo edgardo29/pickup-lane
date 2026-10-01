@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import json
 import uuid
 from dataclasses import dataclass
@@ -13,38 +12,19 @@ from typing import Any
 import pytest
 from fastapi.routing import APIRoute
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-WORKFLOW_DIR = Path(__file__).resolve().parent
 MATRIX_PATH = (
     REPO_ROOT
     / "backend/tests/workflows/authorization_matrix_foundation/authorization_matrix.json"
 )
-REQUIREMENTS_PATH = REPO_ROOT / "backend/tests/support/requirements/ws03_04d.json"
-TESTING_RECORD_PATH = WORKFLOW_DIR / "TESTING_RECORD.md"
-REGISTER_PATH = (
-    REPO_ROOT / "docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md"
-)
 AUTH_PREFIX = "backend.services.auth_service:"
 EXCLUDED_METHODS = {"HEAD", "OPTIONS"}
-WORKFLOW_SCOPE = "workflows/admin_route_list_high_risk_function_authorization"
-REQUIREMENT_IDS = {f"WS03-04D-R{number}" for number in range(1, 13)}
-REQUIRED_REQUIREMENT_IDS = REQUIREMENT_IDS
 EXPECTED_D_FAMILY_COUNT = 40
 EXPECTED_D_ROUTE_COUNT = 188
 EXPECTED_RECENT_ROUTE_COUNT = 23
 EXPECTED_TOMBSTONE_ROUTE_COUNT = 45
-EXPECTED_INTAKE_SHA = (
-    "e8dd5cda0aad2325df5c25d7d80f0e01a4849a9a1de205e91f0ac8d919869eb4"
-)
-EXPECTED_PLAN_PATH = (
-    "docs/production-readiness/planning/passes/ws03/"
-    "ws03-04d-admin-route-list-high-risk-function-authorization.md"
-)
-EXPECTED_REQUIREMENT_DECLARATION = "ws03_04d.json"
-LEGACY_TEST_PATH = "backend/tests/" + "legacy/"
-
 REQUIRED_ADMIN_AUTH_DEPENDENCIES = {
     f"{AUTH_PREFIX}get_current_app_user",
     f"{AUTH_PREFIX}get_verified_firebase_identity",
@@ -301,14 +281,6 @@ def _matrix() -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
-def _requirement_declarations() -> dict[str, dict[str, Any]]:
-    with REQUIREMENTS_PATH.open(encoding="utf-8") as handle:
-        payload = json.load(handle)
-    assert payload["schema_version"] == 1
-    return {entry["id"]: entry for entry in payload["requirements"]}
-
-
-@lru_cache(maxsize=1)
 def _current_route_map() -> dict[tuple[str, str], APIRoute]:
     from backend.main import app
 
@@ -357,35 +329,8 @@ def _d_tombstone_route_keys() -> set[tuple[str, str]]:
     }
 
 
-def _collect_requirement_marker_ids() -> set[str]:
-    marker_ids: set[str] = set()
-    for test_file in WORKFLOW_DIR.glob("test_*.py"):
-        tree = ast.parse(test_file.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            if not isinstance(node.func, ast.Attribute) or node.func.attr != "requirement":
-                continue
-            value = node.func.value
-            if not (
-                isinstance(value, ast.Attribute)
-                and value.attr == "mark"
-                and isinstance(value.value, ast.Name)
-                and value.value.id == "pytest"
-            ):
-                continue
-            marker_ids.update(
-                arg.value
-                for arg in node.args
-                if isinstance(arg, ast.Constant)
-                and isinstance(arg.value, str)
-                and arg.value.startswith("WS03-04D-")
-            )
-    return marker_ids
-
-
-@pytest.mark.requirement("WS03-04D-R1", "WS03-04D-R2", "WS03-04D-R3")
-def test_d_route_inventory_matches_accepted_matrix_and_current_route_table() -> None:
+@pytest.mark.pass_provenance('WS03-04D')
+def test_d_route_inventory_matches_behavioral_matrix_and_current_route_table() -> None:
     d_routes = _d_matrix_routes()
     d_families = [
         family
@@ -415,8 +360,8 @@ def test_d_route_inventory_matches_accepted_matrix_and_current_route_table() -> 
         assert matrix_route["source_module"].startswith(ADMIN_SOURCE_MODULE_PREFIXES)
 
 
-@pytest.mark.requirement("WS03-04D-R1", "WS03-04D-R3", "WS03-04D-R10")
-def test_recent_admin_and_tombstone_route_sets_match_frozen_plan() -> None:
+@pytest.mark.pass_provenance('WS03-04D')
+def test_recent_admin_and_tombstone_route_sets_match_authorization_boundaries() -> None:
     recent_routes = _d_routes_with_dependency(
         f"{AUTH_PREFIX}require_recent_active_admin"
     )
@@ -434,64 +379,26 @@ def test_recent_admin_and_tombstone_route_sets_match_frozen_plan() -> None:
     assert not recent_routes & tombstone_routes
 
 
-@pytest.mark.requirement("WS03-04D-R11", "WS03-04D-R12")
-def test_requirements_markers_record_and_register_preserve_d_traceability() -> None:
-    declarations = _requirement_declarations()
-    assert set(declarations) == REQUIREMENT_IDS
-    assert {
-        requirement_id
-        for requirement_id, declaration in declarations.items()
-        if declaration["state"] == "required"
-    } == REQUIRED_REQUIREMENT_IDS
-    assert {
-        declaration["scope"] for declaration in declarations.values()
-    } == {WORKFLOW_SCOPE}
-
-    marker_ids = _collect_requirement_marker_ids()
-    assert marker_ids == REQUIREMENT_IDS
-
-    testing_record = TESTING_RECORD_PATH.read_text(encoding="utf-8")
-    for requirement_id in REQUIREMENT_IDS:
-        assert requirement_id in testing_record
-    assert LEGACY_TEST_PATH not in testing_record
-
-    register = REGISTER_PATH.read_text(encoding="utf-8")
-    assert "`WS03-04D`" in register
-    assert EXPECTED_PLAN_PATH in register
-    assert "WS03-04 parent complete" in register
-    assert "WS03-04A-G001" in register
-    assert "WS05" in register
-
-
-@pytest.mark.requirement("WS03-04D-R12")
-def test_parent_gap_disposition_sources_remain_explicit_and_non_blocking() -> None:
+@pytest.mark.pass_provenance('WS03-04D')
+def test_stripe_webhook_gap_ownership_remains_explicit_and_outside_admin_scope() -> None:
     gaps = _matrix()["uncovered_gaps"]
     assert gaps == [
         {
             "gap_id": "WS03-04A-G001",
             "state": "covered_elsewhere",
-            "title": "Stripe webhook payment lifecycle proof",
+            "title": "Stripe webhook authorization ownership boundary",
             "reason": (
                 "POST /stripe/webhook is a provider callback outside ordinary user "
-                "authorization; PAY-005/PAY-006 payment/webhook lifecycle, signature, "
-                "replay, and idempotent transition proof are owned by WS05 and not "
-                "completed by WS03-04A."
+                "authorization; payment/webhook lifecycle, signature, replay, and "
+                "idempotent transition behavior are owned by WS05."
             ),
             "owner": "WS05",
             "owner_type": "covered_elsewhere",
-            "source_ids": [
-                "SRC-FROZEN-PLAN",
-                "SRC-BLUEPRINT",
-                "SRC-REMEDIATION",
-                "SRC-SOURCE-ROUTES-STRIPE-WEBHOOK-ROUTES",
-            ],
-            "requirement_ids": ["WS03-04A-R8", "WS03-04A-R9"],
             "affected_families": ["stripe_webhook_covered_elsewhere_ws05"],
             "affected_routes": [{"method": "POST", "path": "/stripe/webhook"}],
             "resolution_condition": (
-                "WS05 accepts PAY-005/PAY-006 payment/webhook lifecycle evidence "
-                "or a later owner decision supersedes the handoff."
+                "WS05 payment/webhook coverage remains responsible for lifecycle, "
+                "signature, replay, and idempotent transition behavior for this callback."
             ),
-            "blocks_ws03_04a_acceptance": False,
         }
     ]

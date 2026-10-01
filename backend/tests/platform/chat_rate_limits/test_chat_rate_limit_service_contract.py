@@ -25,7 +25,6 @@ finally:
     if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
         os.environ.pop("DATABASE_URL", None)
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_TIME = datetime(2035, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -179,8 +178,7 @@ def _assert_safe_event_payload(event: dict[str, object], *, result: str) -> None
         assert forbidden not in serialized
 
 
-@pytest.mark.requirement("WS02-04C3A-R1")
-@pytest.mark.requirement("WS02-04C3A-R3")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_approved_constants_and_retry_after_boundaries() -> None:
     assert chat_rate_limit_service.CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES == 5
     assert chat_rate_limit_service.CHAT_RATE_LIMIT_WINDOW_SECONDS == 60
@@ -212,8 +210,7 @@ def test_approved_constants_and_retry_after_boundaries() -> None:
     )
 
 
-@pytest.mark.requirement("WS02-04C3A-R2")
-@pytest.mark.requirement("WS02-04C3A-R4")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_lock_key_uses_deterministic_sender_chat_and_family_identity() -> None:
     sender_id = uuid.UUID("00000000-0000-4000-8000-000000000001")
     other_sender_id = uuid.UUID("00000000-0000-4000-8000-000000000002")
@@ -248,9 +245,7 @@ def test_lock_key_uses_deterministic_sender_chat_and_family_identity() -> None:
     )
 
 
-@pytest.mark.requirement("WS02-04C3A-R1")
-@pytest.mark.requirement("WS02-04C3A-R2")
-@pytest.mark.requirement("WS02-04C3A-R3")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_rolling_window_uses_committed_visible_text_rows_and_inclusive_boundary() -> (
     None
 ):
@@ -360,8 +355,7 @@ def test_rolling_window_uses_committed_visible_text_rows_and_inclusive_boundary(
         assert exc_info.value.headers == {"Retry-After": "1"}
 
 
-@pytest.mark.requirement("WS02-04C3A-R6")
-@pytest.mark.requirement("WS02-04C3A-R10")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_advisory_lock_failure_fails_closed_without_fake_rate_limit(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -390,8 +384,7 @@ def test_advisory_lock_failure_fails_closed_without_fake_rate_limit(
     _assert_safe_event_payload(events[0], result="store_error")
 
 
-@pytest.mark.requirement("WS02-04C3A-R6")
-@pytest.mark.requirement("WS02-04C3A-R10")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_rolling_window_read_failure_fails_closed_without_fake_rate_limit(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -420,7 +413,7 @@ def test_rolling_window_read_failure_fails_closed_without_fake_rate_limit(
     _assert_safe_event_payload(events[0], result="store_error")
 
 
-@pytest.mark.requirement("WS02-04C3A-R10")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_allowed_rejected_and_store_error_telemetry_are_bounded(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

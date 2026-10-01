@@ -18,7 +18,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _venue(label: str, *, creator_id: uuid.UUID, admin_id: uuid.UUID) -> Any:
@@ -790,7 +789,7 @@ def _sub_chat_message_state(message_id: uuid.UUID) -> dict[str, object]:
         }
 
 
-@pytest.mark.requirement("WS03-04D-R4", "WS03-04D-R6", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_official_game_reads_apply_filters_child_lookups_and_binding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -988,7 +987,7 @@ def test_admin_official_game_reads_apply_filters_child_lookups_and_binding(
     )
 
 
-@pytest.mark.requirement("WS03-04D-R4", "WS03-04D-R6", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_community_game_reads_apply_filters_cursors_detail_chat_and_binding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1123,7 +1122,7 @@ def test_admin_community_game_reads_apply_filters_cursors_detail_chat_and_bindin
     )
 
 
-@pytest.mark.requirement("WS03-04D-R4", "WS03-04D-R6", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_need_a_sub_reads_apply_filters_cursors_detail_request_chat_and_binding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1268,7 +1267,7 @@ def test_admin_need_a_sub_reads_apply_filters_cursors_detail_request_chat_and_bi
     )
 
 
-@pytest.mark.requirement("WS03-04D-R3", "WS03-04D-R6", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_stale_admin_cannot_run_recent_game_or_venue_destructive_actions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1302,7 +1301,7 @@ def test_stale_admin_cannot_run_recent_game_or_venue_destructive_actions(
     assert _count_model_rows(AdminAction) == before_admin_actions
 
 
-@pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R9", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_official_game_create_update_cancel_and_host_removal_persist_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1422,7 +1421,7 @@ def test_admin_official_game_create_update_cancel_and_host_removal_persist_state
     assert _count_model_rows(AdminAction) >= before_actions + 2
 
 
-@pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_official_game_cancellation_exercises_booking_refund_credit_notification_and_follow_up_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1723,7 +1722,7 @@ def test_admin_official_game_cancellation_exercises_booking_refund_credit_notifi
     assert _count_model_rows(Notification) == before_notifications + 2
 
 
-@pytest.mark.requirement("WS05-03A-R4", "WS05-03A-R5")
+@pytest.mark.pass_provenance('WS05-03A')
 @pytest.mark.parametrize("cash_first", [False, True], ids=["credit-first", "cash-first"])
 def test_admin_player_removal_preserves_credit_and_cash_completion_order(
     monkeypatch: pytest.MonkeyPatch,
@@ -1940,7 +1939,7 @@ def test_admin_player_removal_preserves_credit_and_cash_completion_order(
     assert later_cash_history[0].changed_by_user_id is None
 
 
-@pytest.mark.requirement("WS05-03A-R4", "WS05-03A-R5")
+@pytest.mark.pass_provenance('WS05-03A')
 def test_admin_cancellation_preserves_cash_first_summary_when_credit_returns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2050,7 +2049,7 @@ def test_admin_cancellation_preserves_cash_first_summary_when_credit_returns(
     assert not [row for row in history if row.change_reason == "credit_return_committed"]
 
 
-@pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R9", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_generic_game_create_update_delete_preserves_admin_and_state_bounds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2136,7 +2135,7 @@ def test_admin_generic_game_create_update_delete_preserves_admin_and_state_bound
         ]
 
 
-@pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_official_game_host_player_and_participant_actions_persist_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2283,7 +2282,7 @@ def test_admin_official_game_host_player_and_participant_actions_persist_state(
     assert _count_model_rows(Notification) == before_remove_notifications + 1
 
 
-@pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2425,7 +2424,7 @@ def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
     assert image_state["storage_object_key"] == before_image["storage_object_key"]
 
 
-@pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R9", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_community_review_payment_restore_and_venue_image_upload_provider_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2676,7 +2675,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
     assert _count_model_rows(AdminTargetNotice) >= before_notices
 
 
-@pytest.mark.requirement("WS03-04D-R3", "WS03-04D-R6", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_stale_admin_cannot_remove_need_a_sub_post_or_create_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2710,7 +2709,7 @@ def test_stale_admin_cannot_remove_need_a_sub_post_or_create_side_effects(
     assert _count_model_rows(AdminTargetNotice) == before_notices
 
 
-@pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R8", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_need_a_sub_enforcement_and_chat_review_remove_restore_persist_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2803,7 +2802,7 @@ def test_admin_need_a_sub_enforcement_and_chat_review_remove_restore_persist_sta
     assert _count_model_rows(AdminTargetNotice) >= before_notices + 1
 
 
-@pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R8", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_chat_moderation_enforces_parent_binding_and_records_removal_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

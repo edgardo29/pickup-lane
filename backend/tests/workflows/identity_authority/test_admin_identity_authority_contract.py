@@ -8,7 +8,6 @@ import pytest
 from fastapi.params import Depends
 from fastapi.testclient import TestClient
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _install_provider_identity(
@@ -77,7 +76,7 @@ def _create_user(
         return user.id
 
 
-@pytest.mark.requirement("WS03-01-R7", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 def test_active_verified_local_admin_can_access_admin_me(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -93,7 +92,7 @@ def test_active_verified_local_admin_can_access_admin_me(
     assert response.json()["account_status"] == "active"
 
 
-@pytest.mark.requirement("WS03-01-R7", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     (
         "provider_verified",
@@ -138,7 +137,7 @@ def test_admin_access_denies_unverified_missing_inactive_deleted_or_non_admin_us
     assert response.json()["detail"] == expected_detail
 
 
-@pytest.mark.requirement("WS03-01-R7", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 def test_firebase_custom_claims_do_not_independently_grant_pickup_lane_admin(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -168,7 +167,7 @@ def test_firebase_custom_claims_do_not_independently_grant_pickup_lane_admin(
     assert response.json()["detail"] == "Admin access required."
 
 
-@pytest.mark.requirement("WS03-01-R7", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 def test_client_supplied_role_data_does_not_independently_grant_admin(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -195,7 +194,7 @@ def test_client_supplied_role_data_does_not_independently_grant_admin(
     assert response.json()["detail"] == "Admin access required."
 
 
-@pytest.mark.requirement("WS03-01-R7")
+@pytest.mark.pass_provenance('WS03-01')
 def test_recent_active_admin_wrapper_layers_on_base_active_admin_dependency() -> None:
     import backend.services.auth_service as auth_service
 

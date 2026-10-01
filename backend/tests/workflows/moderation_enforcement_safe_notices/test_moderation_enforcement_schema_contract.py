@@ -20,7 +20,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 NOTICE_MIGRATION = (

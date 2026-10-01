@@ -19,7 +19,6 @@ from backend.services.moderation_taxonomy import (
     SAVED_PRIORITIES,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _TABLE_CONTRACTS = (
@@ -64,7 +63,7 @@ def _check_values(model, constraint_name: str) -> set[str]:
     return set(re.findall(r"'([^']+)'", str(constraint.sqltext)))
 
 
-@pytest.mark.requirement("WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_models_canonical_migrations_and_live_schema_share_the_same_contract() -> None:
     with _session() as db:
         inspector = inspect(db.bind)
@@ -105,7 +104,7 @@ def test_models_canonical_migrations_and_live_schema_share_the_same_contract() -
                 assert name in migration_source
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_registry_model_migration_and_live_database_finite_sets_are_equal() -> None:
     finite_contracts = (
         (

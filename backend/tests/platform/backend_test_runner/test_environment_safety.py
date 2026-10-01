@@ -27,7 +27,6 @@ from backend.tests.support.environment_safety import (
     validate_migration_test_database_urls,
 )
 
-
 SAFE_DATABASE_URL = (
     "postgresql+psycopg://postgres:postgres@localhost:5432/"
     f"{DEDICATED_TEST_DATABASE_NAME}"
@@ -48,7 +47,7 @@ SAFE_MIGRATION_DATABASE_HOST_URL = (
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.requirement("EN01-R3", "EN01-R4", "EN01-R5", "EN01-R6", "EN01-R9"),
+    pytest.mark.pass_provenance('EN-01'),
 ]
 
 
@@ -364,7 +363,6 @@ def test_external_network_and_provider_addresses_are_blocked(address):
 
     def original_connect(_socket, original_address):
         calls.append(original_address)
-        return None
 
     with pytest.raises(EnvironmentSafetyError) as exc_info:
         guard_socket_connect(original_connect, allowed_network, object(), address)

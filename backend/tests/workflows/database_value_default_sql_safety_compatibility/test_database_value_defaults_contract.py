@@ -6,15 +6,13 @@ from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
 from backend.models import Booking, CommunityGameDetail, Game, User, Venue
 from backend.schemas.booking_schema import BookingRead
 from backend.schemas.community_game_detail_schema import CommunityGameDetailCreate
 from backend.schemas.user_schema import UserRead
-import backend.services.stripe_service as stripe_service
+from backend.services import stripe_service
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _NOW = datetime(2035, 8, 1, 15, 0, tzinfo=timezone.utc)
 
@@ -113,7 +111,7 @@ def _booking(user: User, game: Game, *, currency: str = "USD") -> Booking:
     )
 
 
-@pytest.mark.requirement("WS04-02C-R2", "WS04-02C-R4", "WS04-02C-R8")
+@pytest.mark.pass_provenance('WS04-02C')
 def test_postgresql_status_and_timestamp_defaults_round_trip_through_api_schemas() -> None:
     with _session() as db:
         user = _user()
@@ -164,7 +162,7 @@ def test_postgresql_status_and_timestamp_defaults_round_trip_through_api_schemas
         assert serialized_booking["currency"] == "USD"
 
 
-@pytest.mark.requirement("WS04-02C-R3", "WS04-02C-R8")
+@pytest.mark.pass_provenance('WS04-02C')
 def test_money_currency_constraints_reject_unsupported_currency_at_postgresql_boundary() -> None:
     with _session() as db:
         user = _user()
@@ -188,7 +186,7 @@ def test_money_currency_constraints_reject_unsupported_currency_at_postgresql_bo
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-02C-R3", "WS04-02C-R8")
+@pytest.mark.pass_provenance('WS04-02C')
 def test_stripe_adapter_sends_integer_cents_without_float_conversion(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakePaymentIntents:
         def __init__(self) -> None:
@@ -228,7 +226,7 @@ def test_stripe_adapter_sends_integer_cents_without_float_conversion(monkeypatch
     assert options == {"idempotency_key": "ws04-02c-payment-intent"}
 
 
-@pytest.mark.requirement("WS04-02C-R5", "WS04-02C-R8")
+@pytest.mark.pass_provenance('WS04-02C')
 def test_json_defaults_round_trip_as_independent_postgresql_values_and_schema_defaults() -> None:
     create_one = CommunityGameDetailCreate(game_id=uuid.uuid4())
     create_two = CommunityGameDetailCreate(game_id=uuid.uuid4())

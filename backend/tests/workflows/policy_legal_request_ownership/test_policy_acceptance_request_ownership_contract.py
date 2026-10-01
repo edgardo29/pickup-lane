@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 from backend.schemas.policy_acceptance_schema import PolicyAcceptanceCreate
 from backend.schemas.policy_document_schema import PolicyDocumentCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 ACTIVE_ADMIN_DEPENDENCY = "backend.services.auth_service.require_active_admin"
 GET_DB_DEPENDENCY = "backend.database.get_db"
@@ -186,7 +185,7 @@ def _snapshot_policy_acceptance(acceptance) -> dict[str, object]:
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-04B2A2B3-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_policy_acceptance_tombstones_are_registered_bodyless_admin_guarded_and_non_mutating() -> None:
     for tombstone in POLICY_ACCEPTANCE_TOMBSTONES:
         route = _route_by_method_path(tombstone.method, tombstone.path)
@@ -209,7 +208,7 @@ def test_policy_acceptance_tombstones_are_registered_bodyless_admin_guarded_and_
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-04B2A2B3-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_policy_acceptance_tombstones_return_410_only_after_admin_authentication(
     app_with_clean_overrides,
 ) -> None:
@@ -229,7 +228,7 @@ def test_policy_acceptance_tombstones_return_410_only_after_admin_authentication
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-04B2A2B3-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_policy_acceptance_json_and_malformed_payloads_do_not_revive_body_validation(
     app_with_clean_overrides,
 ) -> None:
@@ -263,7 +262,7 @@ def test_policy_acceptance_json_and_malformed_payloads_do_not_revive_body_valida
             assert malformed_response.status_code != 422, tombstone.id
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_body_bearing_policy_acceptance_post_tombstone_does_not_create_rows(
     app_with_clean_overrides,
 ) -> None:
@@ -288,7 +287,7 @@ def test_body_bearing_policy_acceptance_post_tombstone_does_not_create_rows(
         assert _policy_acceptance_count(db) == before_count
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_body_bearing_policy_acceptance_patch_tombstone_does_not_mutate_existing_row(
     app_with_clean_overrides,
 ) -> None:
@@ -316,7 +315,7 @@ def test_body_bearing_policy_acceptance_patch_tombstone_does_not_mutate_existing
         assert _snapshot_policy_acceptance(acceptance) == original
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_internal_setup_can_create_policy_acceptance_and_admin_reads_remain_available(
     app_with_clean_overrides,
 ) -> None:
@@ -342,7 +341,7 @@ def test_internal_setup_can_create_policy_acceptance_and_admin_reads_remain_avai
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-04B2A2B3-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_rejected_callers_cannot_use_policy_acceptance_admin_read_surfaces(
     app_with_clean_overrides,
 ) -> None:

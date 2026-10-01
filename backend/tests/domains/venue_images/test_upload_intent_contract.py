@@ -30,7 +30,6 @@ from backend.services.r2_storage_service import (
     R2StorageError,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _FUTURE = datetime(2099, 1, 1, tzinfo=timezone.utc)
 _COMPLETED = datetime(2025, 1, 1, tzinfo=timezone.utc)

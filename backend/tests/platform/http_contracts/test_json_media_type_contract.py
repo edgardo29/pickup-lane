@@ -97,7 +97,7 @@ def _post_chat(
     )
 
 
-@pytest.mark.requirement("WS02-05A-R1")
+@pytest.mark.pass_provenance('WS02-05A')
 @pytest.mark.parametrize(
     "content_type",
     [
@@ -121,7 +121,7 @@ def test_ordinary_json_route_accepts_json_compatible_media_types(
     assert calls == ["auth", "db", "service"]
 
 
-@pytest.mark.requirement("WS02-05A-R1")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_missing_content_type_remains_validation_behavior_not_media_rejection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -136,7 +136,7 @@ def test_missing_content_type_remains_validation_behavior_not_media_rejection(
     assert calls == ["auth", "db"]
 
 
-@pytest.mark.requirement("WS02-05A-R1")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_explicit_non_json_media_rejects_before_route_business_behavior(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -151,7 +151,7 @@ def test_explicit_non_json_media_rejects_before_route_business_behavior(
     assert calls == []
 
 
-@pytest.mark.requirement("WS02-05A-R1")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_malformed_json_keeps_validation_behavior_not_media_type_behavior(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -171,7 +171,7 @@ def test_malformed_json_keeps_validation_behavior_not_media_type_behavior(
     assert calls == []
 
 
-@pytest.mark.requirement("WS02-05A-R1")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_signed_stripe_webhook_raw_body_is_outside_ordinary_json_media_enforcement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -218,7 +218,7 @@ def test_signed_stripe_webhook_raw_body_is_outside_ordinary_json_media_enforceme
     }
 
 
-@pytest.mark.requirement("WS02-05A-R1", "WS02-05A-R6")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_bodyless_tombstone_route_is_outside_ordinary_json_parsing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -240,7 +240,7 @@ def test_bodyless_tombstone_route_is_outside_ordinary_json_parsing(
     assert calls == ["admin"]
 
 
-@pytest.mark.requirement("WS02-05A-R1")
+@pytest.mark.pass_provenance('WS02-05A')
 @pytest.mark.parametrize(
     ("content", "extra_headers", "expected_status", "expected_code"),
     [

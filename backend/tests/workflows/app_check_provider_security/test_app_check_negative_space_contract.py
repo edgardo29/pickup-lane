@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BACKEND_ROOT = REPO_ROOT / "backend"
@@ -16,14 +15,13 @@ APP_CHECK_POLICY = BACKEND_ROOT / "services/app_check_policy.py"
 FIREBASE_CLIENT = BACKEND_ROOT / "firebase_admin_client.py"
 FRONTEND_APP_CHECK = FRONTEND_ROOT / "src/lib/appCheck.js"
 FRONTEND_API_CLIENT = FRONTEND_ROOT / "src/lib/apiClient.js"
-RECENT_AUTH_ROOT = BACKEND_ROOT / "tests/workflows/recent_auth_step_up"
 
 
 def _source(path: Path) -> str:
     return path.read_text()
 
 
-@pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R6", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_backend_verifier_does_not_accept_query_body_cookie_or_client_app_id_bypass() -> (
     None
 ):
@@ -43,7 +41,7 @@ def test_backend_verifier_does_not_accept_query_body_cookie_or_client_app_id_byp
         assert forbidden not in source
 
 
-@pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_backend_verifier_uses_central_provider_boundary_and_no_manual_jwt_decode() -> (
     None
 ):
@@ -72,7 +70,7 @@ def test_backend_verifier_uses_central_provider_boundary_and_no_manual_jwt_decod
     assert "rsa" not in combined_source.lower()
 
 
-@pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R6", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_verified_app_id_comparison_is_required_and_not_used_as_identity_or_authz() -> (
     None
 ):
@@ -87,7 +85,7 @@ def test_verified_app_id_comparison_is_required_and_not_used_as_identity_or_auth
         assert forbidden not in middleware_source
 
 
-@pytest.mark.requirement("WS03-03B-R1", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_local_defaults_do_not_leak_into_production_like_app_check_mode() -> None:
     source = _source(BACKEND_ROOT / "settings.py")
 
@@ -96,7 +94,7 @@ def test_local_defaults_do_not_leak_into_production_like_app_check_mode() -> Non
     assert "FirebaseAppCheckMode.DISABLED" in source
 
 
-@pytest.mark.requirement("WS03-03B-R2", "WS03-03B-R6", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_frontend_source_has_no_app_check_bypass_flag_persistence_or_token_leakage() -> (
     None
 ):
@@ -118,7 +116,7 @@ def test_frontend_source_has_no_app_check_bypass_flag_persistence_or_token_leaka
         assert forbidden not in combined_source
 
 
-@pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_app_check_observability_excludes_raw_provider_material_and_new_mode_label() -> (
     None
 ):
@@ -139,7 +137,7 @@ def test_app_check_observability_excludes_raw_provider_material_and_new_mode_lab
         assert forbidden not in middleware_source
 
 
-@pytest.mark.requirement("WS03-03B-R5", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_route_policy_has_no_unknown_excluded_fallback_or_post_routing_dependency() -> (
     None
 ):
@@ -154,7 +152,7 @@ def test_route_policy_has_no_unknown_excluded_fallback_or_post_routing_dependenc
     assert "unknown" not in policy_source.lower()
 
 
-@pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R6", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_recorder_failure_path_cannot_turn_enforced_denial_into_allow_or_retry() -> (
     None
 ):
@@ -166,65 +164,6 @@ def test_recorder_failure_path_cannot_turn_enforced_denial_into_allow_or_retry()
         source, "_record_best_effort", "_stable_error_code"
     )
     assert "retry" not in source.lower()
-
-
-@pytest.mark.requirement("WS03-03B-R6", "WS03-03B-R7")
-def test_ws03_03a_recent_auth_evidence_still_has_deferred_provider_boundaries() -> None:
-    declaration = (
-        BACKEND_ROOT / "tests/support/requirements/ws03_03a.json"
-    ).read_text()
-    recent_auth_sources = "\n".join(
-        path.read_text() for path in RECENT_AUTH_ROOT.glob("*.py")
-    )
-
-    assert '"id": "WS03-03A-R12"' in declaration
-    assert '"id": "WS03-03A-R13"' in declaration
-    assert '"id": "WS03-03A-R14"' in declaration
-    assert '"state": "deferred"' in declaration
-    assert "AUTH.RECENT_AUTH_REQUIRED" in recent_auth_sources
-
-
-@pytest.mark.requirement("WS03-03B-R7")
-def test_deferred_provider_governance_requirements_have_zero_pytest_mappings() -> None:
-    mapped_requirements = _requirement_markers(BACKEND_ROOT / "tests")
-
-    assert "WS03-03B-R8" not in mapped_requirements
-    assert "WS03-03B-R9" not in mapped_requirements
-    assert "WS03-03B-R10" not in mapped_requirements
-
-
-def _requirement_markers(root: Path) -> set[str]:
-    markers: set[str] = set()
-    for path in root.rglob("*.py"):
-        if "legacy" in path.relative_to(root).parts:
-            continue
-        tree = ast.parse(path.read_text())
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            if _call_name(node.func) != "pytest.mark.requirement":
-                continue
-            for arg in node.args:
-                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                    markers.add(arg.value)
-    return markers
-
-
-def _call_name(node: ast.AST) -> str:
-    if isinstance(node, ast.Call):
-        return _call_name(node.func)
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        parts: list[str] = []
-        current: ast.AST = node
-        while isinstance(current, ast.Attribute):
-            parts.append(current.attr)
-            current = current.value
-        if isinstance(current, ast.Name):
-            parts.append(current.id)
-        return ".".join(reversed(parts))
-    return ""
 
 
 def _function_source(source: str, start_name: str, end_name: str) -> str:

@@ -71,7 +71,7 @@ def _normalized_http_exception(
     return response.status_code, json.loads(response.body), response.headers
 
 
-@pytest.mark.requirement("WS02-04A-R3")
+@pytest.mark.pass_provenance('WS02-04A')
 @pytest.mark.parametrize(
     ("status_code", "detail", "expected_code", "expected_message"),
     [
@@ -126,7 +126,7 @@ def test_current_http_exception_statuses_map_to_stable_public_codes(
     assert payload["message"] == expected_message
 
 
-@pytest.mark.requirement("WS02-04A-R3")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_retired_route_lowercase_detail_code_does_not_become_top_level_code() -> None:
     response_status, payload, _headers = _normalized_http_exception(
         status.HTTP_410_GONE,
@@ -145,7 +145,7 @@ def test_retired_route_lowercase_detail_code_does_not_become_top_level_code() ->
     assert payload["message"] == "Generic booking mutations are retired."
 
 
-@pytest.mark.requirement("WS02-04A-R3")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_other_http_exception_uses_safe_detail_code_or_fallback() -> None:
     response_status, payload, _headers = _normalized_http_exception(
         status.HTTP_418_IM_A_TEAPOT,
@@ -167,7 +167,7 @@ def test_other_http_exception_uses_safe_detail_code_or_fallback() -> None:
     assert payload["message"] == "I'm a Teapot."
 
 
-@pytest.mark.requirement("WS02-04A-R3")
+@pytest.mark.pass_provenance('WS02-04A')
 @pytest.mark.parametrize(
     ("headers", "content", "expected_status", "expected_code", "expected_detail"),
     [

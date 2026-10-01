@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from backend.schemas.game_schema import GameCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 GAME_CREATE_ALLOWED_FIELDS = {
     "game_type",
@@ -205,7 +204,7 @@ def _openapi_request_properties(method: str, path: str) -> set[str]:
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-05B1-R1")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_game_create_schema_and_openapi_expose_only_request_owned_fields() -> None:
     assert GameCreate.model_config.get("extra") == "forbid"
     assert set(GameCreate.model_fields) == GAME_CREATE_ALLOWED_FIELDS
@@ -227,7 +226,7 @@ def test_game_create_schema_and_openapi_expose_only_request_owned_fields() -> No
         ("created_at", "2030-01-01T00:00:00+00:00"),
     ),
 )
-@pytest.mark.requirement("WS02-05B1-R1")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_game_create_rejects_representative_protected_overposting_before_persistence(
     client: TestClient,
     field_name: str,
@@ -248,7 +247,7 @@ def test_game_create_rejects_representative_protected_overposting_before_persist
         assert _count_games(db) == before_count
 
 
-@pytest.mark.requirement("WS02-05B1-R2")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_generic_community_create_derives_protected_fields_from_trusted_sources(
     client: TestClient,
 ) -> None:
@@ -298,7 +297,7 @@ def test_generic_community_create_derives_protected_fields_from_trusted_sources(
     assert game.updated_at is not None
 
 
-@pytest.mark.requirement("WS02-05B1-R2")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_generic_official_create_ignores_host_intent_and_applies_official_invariants(
     client: TestClient,
 ) -> None:

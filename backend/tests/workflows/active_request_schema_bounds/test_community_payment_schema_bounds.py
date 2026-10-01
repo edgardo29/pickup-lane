@@ -13,7 +13,7 @@ from backend.schemas.community_game_detail_schema import (
 from backend.schemas.community_game_publish_schema import CommunityGamePublishCreate
 from backend.schemas.community_payment_schema import CommunityPaymentMethodSnapshot
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 _PAYMENT_TYPES = ("venmo", "zelle", "cash_app", "paypal", "apple_cash", "cash", "other")
 
@@ -53,7 +53,7 @@ def _detail_create(**overrides: object) -> CommunityGameDetailCreate:
     return CommunityGameDetailCreate(**payload)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_payment_method_count_bounds_cover_publish_detail_update_and_upsert() -> None:
     for factory in (_publish, _detail_create, CommunityGameDetailUpdate, CommunityGameDetailHostUpsert):
         assert len(factory(payment_methods_snapshot=[]).payment_methods_snapshot or []) == 0
@@ -65,7 +65,7 @@ def test_payment_method_count_bounds_cover_publish_detail_update_and_upsert() ->
         )
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_payment_method_type_literals_and_value_bounds_are_enforced() -> None:
     for method_type in _PAYMENT_TYPES:
         assert CommunityPaymentMethodSnapshot(type=method_type, value="handle").type == method_type
@@ -80,7 +80,7 @@ def test_payment_method_type_literals_and_value_bounds_are_enforced() -> None:
     _assert_rejected(CommunityPaymentMethodSnapshot, type="venmo", value=123)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_duplicate_payment_method_types_reject_on_create_update_and_upsert_paths() -> None:
     duplicate_methods = [_method("venmo", "first"), _method("venmo", "second")]
     for factory in (_publish, _detail_create, CommunityGameDetailHostUpsert):
@@ -90,7 +90,7 @@ def test_duplicate_payment_method_types_reject_on_create_update_and_upsert_paths
     _assert_rejected(CommunityGameDetailUpdate, payment_methods_snapshot=duplicate_methods)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_payment_instructions_are_null_only_and_nested_unknown_fields_reject() -> None:
     for factory in (_publish, _detail_create, CommunityGameDetailUpdate, CommunityGameDetailHostUpsert):
         assert factory().payment_instructions_snapshot is None

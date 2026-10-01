@@ -20,7 +20,7 @@ from backend.observability.structured_logging import (
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.requirement("WS09-01A"),
+    pytest.mark.pass_provenance('WS09-01A'),
 ]
 
 

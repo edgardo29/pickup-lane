@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FRONTEND_SRC = REPO_ROOT / "frontend/src"
@@ -28,7 +28,7 @@ def _relative(path: Path) -> str:
     return path.relative_to(REPO_ROOT).as_posix()
 
 
-@pytest.mark.requirement("WS03-01-R9")
+@pytest.mark.pass_provenance('WS03-01')
 def test_firebase_auth_uses_explicit_browser_local_persistence() -> None:
     source = _read("frontend/src/lib/firebase.js")
 
@@ -41,7 +41,7 @@ def test_firebase_auth_uses_explicit_browser_local_persistence() -> None:
     assert "await authPersistenceReady" in source
 
 
-@pytest.mark.requirement("WS03-01-R9")
+@pytest.mark.pass_provenance('WS03-01')
 def test_credential_sign_in_flows_await_persistence_setup_before_sign_in() -> None:
     credential_source = _read("frontend/src/context/authProviderCredentialActions.js")
     google_source = _read("frontend/src/context/authProviderGoogleActions.js")
@@ -59,7 +59,7 @@ def test_credential_sign_in_flows_await_persistence_setup_before_sign_in() -> No
     )
 
 
-@pytest.mark.requirement("WS03-01-R9")
+@pytest.mark.pass_provenance('WS03-01')
 def test_firebase_id_tokens_are_sent_to_backend_as_authorization_bearer_headers() -> None:
     token_files = [
         path
@@ -84,7 +84,7 @@ def test_firebase_id_tokens_are_sent_to_backend_as_authorization_bearer_headers(
     assert "frontend/src/lib/reauthentication.js" in refresh_only_files
 
 
-@pytest.mark.requirement("WS03-01-R9")
+@pytest.mark.pass_provenance('WS03-01')
 def test_bearer_tokens_are_not_manually_duplicated_into_app_storage_urls_or_forms() -> None:
     storage_terms = ("localStorage", "sessionStorage", "indexedDB")
     token_terms = ("idToken", "accessToken", "refreshToken", "Bearer", "Authorization")
@@ -121,7 +121,7 @@ def test_bearer_tokens_are_not_manually_duplicated_into_app_storage_urls_or_form
     assert unsafe_url_or_body_lines == []
 
 
-@pytest.mark.requirement("WS03-01-R9")
+@pytest.mark.pass_provenance('WS03-01')
 def test_auth_refresh_is_bounded_to_safe_read_specific_paths() -> None:
     auth_source = _read("frontend/src/lib/authApi.js")
     admin_source = _read("frontend/src/pages/admin/shared/adminApi.js")
@@ -150,7 +150,7 @@ def test_auth_refresh_is_bounded_to_safe_read_specific_paths() -> None:
     assert "forceRefresh" not in api_client_source
 
 
-@pytest.mark.requirement("WS03-01-R9")
+@pytest.mark.pass_provenance('WS03-01')
 def test_no_generic_auth_retry_interceptor_blindly_replays_mutations() -> None:
     unsafe_retry_candidates: list[str] = []
 
