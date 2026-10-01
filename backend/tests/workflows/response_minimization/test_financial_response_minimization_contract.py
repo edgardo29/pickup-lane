@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 CHICAGO = ZoneInfo("America/Chicago")
 UUID_PHONE_FALSE_POSITIVE = uuid.UUID("4b340077-7855-4d77-a0fb-558aba611ff5")
@@ -464,7 +463,7 @@ def _route(method: str, path: str) -> APIRoute:
     raise AssertionError(f"Route not found: {method} {path}")
 
 
-@pytest.mark.requirement("WS02-05B2-R4")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_ordinary_payment_refund_and_saved_card_responses_omit_provider_internals(
     client: TestClient,
 ) -> None:
@@ -520,7 +519,7 @@ def test_ordinary_payment_refund_and_saved_card_responses_omit_provider_internal
     assert SAVED_CARD_PROVIDER_FIELDS.isdisjoint(listed_card)
 
 
-@pytest.mark.requirement("WS02-05B2-R4")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_checkout_payment_intent_and_status_responses_are_product_projections(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -659,7 +658,7 @@ def test_checkout_payment_intent_and_status_responses_are_product_projections(
     assert status_data["payment_status"] == "requires_action"
 
 
-@pytest.mark.requirement("WS02-05B2-R4")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_saved_payment_method_action_responses_are_narrow_contracts(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -793,7 +792,7 @@ def test_saved_payment_method_action_responses_are_narrow_contracts(
     assert detach_data["detached_at"] is not None
 
 
-@pytest.mark.requirement("WS02-05B2-R4")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_payment_event_http_reads_exclude_raw_provider_payload(
     client: TestClient,
 ) -> None:
@@ -824,7 +823,7 @@ def test_payment_event_http_reads_exclude_raw_provider_payload(
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-05B2-R4")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_financial_response_models_split_ordinary_and_admin_surfaces() -> None:
     from backend.schemas import (
         AdminMoneyPaymentDetailRead,

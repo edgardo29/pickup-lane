@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FRONTEND_ROOT = REPO_ROOT / "frontend"
@@ -19,7 +19,7 @@ def _source(path: Path) -> str:
     return path.read_text()
 
 
-@pytest.mark.requirement("WS03-03B-R2", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_api_client_centralizes_app_check_header_for_pickup_lane_api_requests() -> None:
     source = _source(API_CLIENT)
 
@@ -30,7 +30,7 @@ def test_api_client_centralizes_app_check_header_for_pickup_lane_api_requests() 
     assert "Authorization" not in _function_source(source, "apiRequest", "getApiErrorCode")
 
 
-@pytest.mark.requirement("WS03-03B-R2", "WS03-03B-R5", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_api_client_does_not_attach_app_check_to_arbitrary_absolute_urls() -> None:
     source = _source(API_CLIENT)
     should_attach_source = _function_source(source, "shouldAttachAppCheck", "buildApiUrl")
@@ -40,7 +40,7 @@ def test_api_client_does_not_attach_app_check_to_arbitrary_absolute_urls() -> No
     assert "getAppCheckToken()" not in _function_source(source, "buildMediaUrl", "formatApiErrorMessage")
 
 
-@pytest.mark.requirement("WS03-03B-R2", "WS03-03B-R5", "WS03-03B-R6", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_direct_signed_provider_upload_uses_raw_fetch_not_shared_api_client() -> None:
     source = _source(ADMIN_OFFICIAL_GAMES_API)
     upload_source = _function_source(
@@ -54,7 +54,7 @@ def test_direct_signed_provider_upload_uses_raw_fetch_not_shared_api_client() ->
     assert "X-Firebase-AppCheck" not in upload_source
 
 
-@pytest.mark.requirement("WS03-03B-R2", "WS03-03B-R6", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_frontend_app_check_helper_does_not_persist_or_log_tokens() -> None:
     combined_source = "\n".join([_source(APP_CHECK_HELPER), _source(API_CLIENT)])
 
@@ -70,7 +70,7 @@ def test_frontend_app_check_helper_does_not_persist_or_log_tokens() -> None:
     assert "URLSearchParams({ appCheck" not in combined_source
 
 
-@pytest.mark.requirement("WS03-03B-R2", "WS03-03B-R6", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_low_level_api_client_has_no_global_retry_or_step_up_replay() -> None:
     source = _source(API_CLIENT)
 

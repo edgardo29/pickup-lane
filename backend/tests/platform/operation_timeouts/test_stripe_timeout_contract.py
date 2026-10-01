@@ -136,7 +136,7 @@ def _install_timeout_pair(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, st
     return calls
 
 
-@pytest.mark.requirement("WS02-04C1-R2")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_stripe_read_and_mutation_clients_receive_distinct_timeout_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -238,7 +238,7 @@ _MUTATION_CALLS: tuple[tuple[str, Callable[[], object]], ...] = (
 )
 
 
-@pytest.mark.requirement("WS02-04C1-R2")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.parametrize(("operation", "call"), _READ_CALLS)
 def test_current_stripe_reads_map_timeout_to_dependency_read(
     monkeypatch: pytest.MonkeyPatch,
@@ -261,7 +261,7 @@ def test_current_stripe_reads_map_timeout_to_dependency_read(
     assert calls == [("read", operation.removeprefix("stripe."))]
 
 
-@pytest.mark.requirement("WS02-04C1-R2")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.parametrize(("operation", "call"), _MUTATION_CALLS)
 def test_current_stripe_mutations_map_timeout_to_unknown_without_replay(
     monkeypatch: pytest.MonkeyPatch,
@@ -284,7 +284,7 @@ def test_current_stripe_mutations_map_timeout_to_unknown_without_replay(
     assert calls == [("mutation", operation.removeprefix("stripe."))]
 
 
-@pytest.mark.requirement("WS02-04C1-R2", "WS02-04C1-R8")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_stripe_non_timeout_provider_errors_are_not_reclassified_or_replayed() -> None:
     calls = 0
 

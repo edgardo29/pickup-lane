@@ -23,7 +23,6 @@ from backend.models import (
 )
 from backend.schemas.game_schema import GameGuestAddCreate, GameJoinCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_TIME = datetime(2035, 6, 1, 18, 0, tzinfo=timezone.utc)
 
@@ -226,7 +225,7 @@ def _join_game(
             return f"http-{exc.status_code}:{exc.detail}"
 
 
-@pytest.mark.requirement("WS04-02B-R2", "WS04-02B-R5", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_concurrent_community_joins_serialize_capacity_on_game_row() -> None:
     with _session() as db:
         host = _user(0)
@@ -291,7 +290,7 @@ def _add_guest(
             return f"http-{exc.status_code}:{exc.detail}"
 
 
-@pytest.mark.requirement("WS04-02B-R2", "WS04-02B-R5", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_concurrent_guest_adds_recompute_capacity_under_same_game_lock() -> None:
     with _session() as db:
         host = _user(0)
@@ -361,7 +360,7 @@ def _add_host_guest(
             return f"http-{exc.status_code}:{exc.detail}"
 
 
-@pytest.mark.requirement("WS04-02B-R2", "WS04-02B-R5", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_concurrent_host_guest_adds_recompute_capacity_under_same_game_lock() -> None:
     with _session() as db:
         host = _user(0)
@@ -411,7 +410,7 @@ def test_concurrent_host_guest_adds_recompute_capacity_under_same_game_lock() ->
     ]
 
 
-@pytest.mark.requirement("WS04-02B-R2", "WS04-02B-R3", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_waitlist_promotion_after_departure_uses_fresh_capacity_under_game_lock() -> None:
     from backend.services.game_roster_service import leave_game_roster_workflow
 
@@ -481,7 +480,7 @@ def test_waitlist_promotion_after_departure_uses_fresh_capacity_under_game_lock(
     assert waitlist_entry.waitlist_status == "accepted"
 
 
-@pytest.mark.requirement("WS04-02B-R3", "WS04-02B-R4", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_account_deletion_multi_game_cleanup_promotes_waitlists_in_game_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -610,7 +609,7 @@ def test_account_deletion_multi_game_cleanup_promotes_waitlists_in_game_order(
     assert accepted_waitlist_entries == 2
 
 
-@pytest.mark.requirement("WS04-02B-R3", "WS04-02B-R8", "WS04-02B-R9")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_paid_waitlist_promotion_commits_capacity_hold_before_provider_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -803,7 +802,7 @@ def test_paid_waitlist_promotion_commits_capacity_hold_before_provider_call(
     assert payment.payment_status == "processing"
 
 
-@pytest.mark.requirement("WS04-02B-R5", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_database_unique_constraints_reject_duplicate_active_roster_and_waitlist_facts() -> None:
     with _session() as db:
         host = _user(0)

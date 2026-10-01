@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 if TYPE_CHECKING:
     from backend.models import User, UserPaymentMethod
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 @dataclass
@@ -125,7 +124,7 @@ def _install_stripe_fake(monkeypatch: pytest.MonkeyPatch) -> _StripeFake:
     return fake
 
 
-@pytest.mark.requirement("WS02-04B1-R6")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_saved_card_serial_cap_counts_only_active_local_rows_and_rejects_sixth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -51,7 +51,7 @@ from backend.services.moderation_taxonomy import (
     validate_registry,
 )
 
-pytestmark = [pytest.mark.suite_type("ordinary"), pytest.mark.no_db_cleanup]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 _INVALID_NESTED_IDENTIFIER_VALUES = (
     pytest.param(1, id="numeric"),
@@ -130,7 +130,7 @@ def test_every_scan_context_has_operational_duration_without_persistent_duration
             )
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R2")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_registry_is_finite_unique_attributable_and_profile_complete() -> None:
     validate_registry()
     assert len(RULES) == len(RULES_BY_ID) == 23
@@ -153,7 +153,7 @@ def test_registry_is_finite_unique_attributable_and_profile_complete() -> None:
     )
 
 
-@pytest.mark.requirement("WS03-05A-R1")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_registry_rejects_duplicate_and_mixed_execution_kind_definitions() -> None:
     with pytest.raises(ModerationTaxonomyError, match="unique"):
         validate_registry(rules=(*RULES, RULES[0]))
@@ -165,7 +165,7 @@ def test_registry_rejects_duplicate_and_mixed_execution_kind_definitions() -> No
         validate_registry(rules=changed)
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     ("attribute", "invalid_value"),
     (
@@ -192,7 +192,7 @@ def test_registry_rejects_mutated_saved_rule_finite_values(
         validate_registry(rules=changed)
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_registry_rejects_mutated_chat_outcome_severity_and_external_key() -> None:
     rule = RULES_BY_ID["chat.harassment_or_abuse.phrase"]
     for changed_rule in (
@@ -207,7 +207,7 @@ def test_registry_rejects_mutated_chat_outcome_severity_and_external_key() -> No
             validate_registry(rules=changed)
 
 
-@pytest.mark.requirement("WS03-05A-R1")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     ("rule_id", "purposes"),
     (
@@ -228,7 +228,7 @@ def test_registry_rejects_cross_profile_or_unreachable_field_purposes(
         validate_registry(rules=changed)
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_registry_rejects_incomplete_duplicate_or_invalid_profile_relationships() -> (
     None
 ):
@@ -261,7 +261,7 @@ def test_registry_rejects_incomplete_duplicate_or_invalid_profile_relationships(
             validate_registry(profiles=(SAVED_CONTENT_PROFILE, changed_profile))
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_registry_finite_outcomes_and_priorities_match_persistence_contract() -> None:
     assert CHAT_DETECTION_CATEGORIES == set(CHAT_DETECTION_OUTCOMES)
     assert {
@@ -275,7 +275,7 @@ def test_registry_finite_outcomes_and_priorities_match_persistence_contract() ->
     assert {rule.evidence_type for rule in RULES} <= set(EVIDENCE_TYPES)
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R2")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_repeated_message_behavior_changes_configuration_hash() -> None:
     original = profile_configuration_hash(CHAT_PROFILE)
     predicate = RULES_BY_ID[REPEATED_MESSAGE_RULE_ID]
@@ -316,7 +316,7 @@ _REGEX_RULE_EXAMPLES = {
 }
 
 
-@pytest.mark.requirement("WS03-05A-R1")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_every_registered_regex_rule_has_a_finite_behavior_example() -> None:
     regex_rules = {
         rule.rule_id: rule
@@ -328,7 +328,7 @@ def test_every_registered_regex_rule_has_a_finite_behavior_example() -> None:
         assert rule.compile_expression().search(_REGEX_RULE_EXAMPLES[rule_id])
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_chat_empty_overlap_and_punctuation_boundaries_are_deterministic() -> None:
     assert (
         detect_chat_message(
@@ -349,7 +349,7 @@ def test_chat_empty_overlap_and_punctuation_boundaries_are_deterministic() -> No
         assert not source[start:end].endswith((")", "."))
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_saved_scan_uses_controlled_time_exact_hashes_and_raw_unicode_offsets() -> None:
     source = "🏀 Text me at 312-555-1212"
     ticks = iter((1_000_000, 1_009_000))
@@ -379,7 +379,7 @@ def test_saved_scan_uses_controlled_time_exact_hashes_and_raw_unicode_offsets() 
     )
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_saved_atomic_matches_keep_exact_spans_while_display_is_bounded() -> None:
     long_url = "https://example.com/" + "a" * 180
     long_email = f"{'b' * 180}@example.com"
@@ -408,7 +408,7 @@ def test_saved_atomic_matches_keep_exact_spans_while_display_is_bounded() -> Non
         assert item["truncated_after"] is True
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_over_cap_evidence_retains_every_contributing_rule_version() -> None:
     phones = " ".join(f"312-555-{1200 + index}" for index in range(8))
     source = f"{phones} player@example.com"
@@ -428,7 +428,7 @@ def test_over_cap_evidence_retains_every_contributing_rule_version() -> None:
     } == set(finding.matched_rule_ids)
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     "target_context",
     (TARGET_CONTEXT_GAME_CHAT, TARGET_CONTEXT_NEED_A_SUB_CHAT),
@@ -454,7 +454,7 @@ def _replace_first_finding(scan, **changes):
     return replace(scan, findings=(replace(scan.findings[0], **changes),))
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     "tamper",
     (
@@ -531,7 +531,7 @@ def test_saved_evidence_rejects_complete_tampering_matrix(tamper: str) -> None:
         validate_content_moderation_scan_result(scan)
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R4")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     "tamper",
     (
@@ -575,7 +575,7 @@ def test_saved_evidence_rejects_noncanonical_identity_and_count_tampering(
         validate_content_moderation_scan_result(_replace_first_finding(scan, **changes))
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     "field_name",
     ("rule_id", "rule_version", "evidence_type"),
@@ -613,7 +613,7 @@ def test_saved_evidence_direct_validator_rejects_non_string_nested_identifiers(
         )
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R4")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_case_or_whitespace_edit_changes_exact_hash_but_preserves_span_fingerprint() -> (
     None
 ):
@@ -630,7 +630,7 @@ def test_case_or_whitespace_edit_changes_exact_hash_but_preserves_span_fingerpri
     assert first.evidence_fingerprint == edited.evidence_fingerprint
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_payment_support_and_field_purpose_exclusions_are_preserved() -> None:
     support_only = build_content_moderation_findings(
         _community_fields(description="Use Venmo $pickup"),
@@ -652,7 +652,7 @@ def test_payment_support_and_field_purpose_exclusions_are_preserved() -> None:
     ]
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     ("source", "expected_rule_ids", "expected_match_count"),
     (
@@ -705,7 +705,7 @@ def test_payment_pressure_attribution_uses_only_contextual_contributors(
     )
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_repeated_message_requires_complete_true_fact_and_has_no_span_fields() -> None:
     absent = detect_chat_message("same", target_context=TARGET_CONTEXT_GAME_CHAT)
     false_fact = ContextPredicateFact(
@@ -737,7 +737,7 @@ def test_repeated_message_requires_complete_true_fact_and_has_no_span_fields() -
     assert not {"start", "end", "matched_text", "matched_source_hash"} & set(evidence)
 
 
-@pytest.mark.requirement("WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_repeated_message_fingerprint_binds_reference_id_and_exact_hash() -> None:
     first = detect_chat_message(
         "same",
@@ -782,7 +782,7 @@ def test_repeated_message_fingerprint_binds_reference_id_and_exact_hash() -> Non
     )
 
 
-@pytest.mark.requirement("WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_repeated_message_rejects_blank_context_reference() -> None:
     with pytest.raises(ValueError, match="reference message ID"):
         repeated_message_fact(
@@ -791,7 +791,7 @@ def test_repeated_message_rejects_blank_context_reference() -> None:
         )
 
 
-@pytest.mark.requirement("WS03-05A-R2")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_scan_provenance_normalizes_to_utc_and_rejects_non_utc_tampering() -> None:
     offset_zone = timezone(timedelta(hours=5))
     result = build_content_moderation_findings(
@@ -824,7 +824,7 @@ def _persisted_detection(scan, detection):
     )
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_chat_projection_uses_and_validates_persisted_source_provenance() -> None:
     source = "call 312-555-1212"
     scan = detect_chat_message(source, target_context=TARGET_CONTEXT_GAME_CHAT)
@@ -852,7 +852,7 @@ def test_chat_projection_uses_and_validates_persisted_source_provenance() -> Non
             )
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_tampered_or_mixed_chat_evidence_is_rejected() -> None:
     result = detect_chat_message(
         "call 312-555-1212",
@@ -887,7 +887,7 @@ def test_tampered_or_mixed_chat_evidence_is_rejected() -> None:
         )
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     "tamper",
     (
@@ -976,7 +976,7 @@ def test_chat_evidence_rejects_complete_tampering_matrix(tamper: str) -> None:
         validate_chat_evidence(**kwargs)
 
 
-@pytest.mark.requirement("WS03-05A-R1", "WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     "tamper",
     (
@@ -1077,7 +1077,7 @@ def _context_detection_with_invalid_reference(field_name: str, value: object):
     )
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     ("field_name", "invalid_value"),
     (
@@ -1105,7 +1105,7 @@ def test_chat_record_builder_rejects_noncanonical_context_reference_fields(
         )
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     ("field_name", "invalid_value"),
     (
@@ -1141,7 +1141,7 @@ def test_chat_projection_rejects_noncanonical_persisted_context_reference_fields
         )
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_chat_record_builder_rejects_tampered_safe_preview() -> None:
     source = "call 312-555-1212"
     result = detect_chat_message(source, target_context=TARGET_CONTEXT_GAME_CHAT)

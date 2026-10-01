@@ -18,7 +18,6 @@ from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_
     _venue,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _publish_payload(label: str) -> dict[str, object]:
@@ -47,7 +46,7 @@ def _publish_payload(label: str) -> dict[str, object]:
     }
 
 
-@pytest.mark.requirement("WS03-04C-R2", "WS03-04C-R6", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_verified_host_publish_creates_host_owned_game_without_provider_attempt(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -135,7 +134,7 @@ def test_verified_host_publish_creates_host_owned_game_without_provider_attempt(
         assert db.scalar(select(func.count()).select_from(CommunityPublishAttempt)) == 0
 
 
-@pytest.mark.requirement("WS03-04C-R6", "WS03-04C-R9", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_community_detail_host_edit_and_publish_attempt_status_are_owner_bound(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -246,7 +245,7 @@ def test_community_detail_host_edit_and_publish_attempt_status_are_owner_bound(
         assert stored.payment_methods_snapshot == [{"type": "cash", "value": "field"}]
 
 
-@pytest.mark.requirement("WS03-04C-R2", "WS03-04C-R6", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_unverified_publish_rejection_creates_no_game_payment_or_attempt(
     client,
     monkeypatch: pytest.MonkeyPatch,

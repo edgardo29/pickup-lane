@@ -77,10 +77,9 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
-@pytest.mark.requirement("WS03-04D-R9", "WS03-04D-R11")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_d_write_schemas_forbid_extra_server_controlled_fields_from_current_source() -> None:
     guarded_models = [
         AdminActionCreate,
@@ -174,12 +173,7 @@ def test_d_write_schemas_forbid_extra_server_controlled_fields_from_current_sour
     assert {model.model_config.get("extra") for model in guarded_models} == {"forbid"}
 
 
-@pytest.mark.requirement(
-    "WS03-04D-R6",
-    "WS03-04D-R8",
-    "WS03-04D-R9",
-    "WS03-04D-R10",
-)
+@pytest.mark.pass_provenance('WS03-04D')
 def test_representative_retired_routes_return_410_without_business_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -221,7 +215,7 @@ def test_representative_retired_routes_return_410_without_business_side_effects(
     assert _count_model_rows(AdminAction) == before_counts[AdminAction]
 
 
-@pytest.mark.requirement("WS03-04D-R6", "WS03-04D-R8", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_all_current_retired_d_routes_return_410_without_business_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

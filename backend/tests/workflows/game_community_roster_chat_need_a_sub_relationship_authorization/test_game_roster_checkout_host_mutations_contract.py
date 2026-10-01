@@ -14,7 +14,6 @@ from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_
     _venue,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _relationship_counts(db, game_id) -> dict[str, int]:
@@ -50,7 +49,7 @@ def _relationship_counts(db, game_id) -> dict[str, int]:
     }
 
 
-@pytest.mark.requirement("WS03-04C-R2", "WS03-04C-R5", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_verified_join_persists_current_user_and_unverified_join_has_no_side_effects(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -139,7 +138,7 @@ def test_verified_join_persists_current_user_and_unverified_join_has_no_side_eff
         assert _relationship_counts(db, rejected_game_id) == before_rejected
 
 
-@pytest.mark.requirement("WS03-04C-R5", "WS03-04C-R9", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_host_guest_cancel_and_host_edit_authorization_preserve_protected_state(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -245,7 +244,7 @@ def test_host_guest_cancel_and_host_edit_authorization_preserve_protected_state(
         assert original_total_spots != refreshed.total_spots
 
 
-@pytest.mark.requirement("WS03-04C-R2", "WS03-04C-R5", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_checkout_payment_intent_rejects_before_payment_rows_for_unverified_user(
     client,
     monkeypatch: pytest.MonkeyPatch,

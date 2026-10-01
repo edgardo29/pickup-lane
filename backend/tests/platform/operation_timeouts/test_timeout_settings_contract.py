@@ -88,7 +88,7 @@ def _frontend_text_files() -> tuple[Path, ...]:
     )
 
 
-@pytest.mark.requirement("WS02-04C1-R1")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_c1_timeout_defaults_are_the_approved_values() -> None:
     settings = _build(_settings_env())
 
@@ -96,7 +96,7 @@ def test_c1_timeout_defaults_are_the_approved_values() -> None:
         assert getattr(settings, attribute) == expected
 
 
-@pytest.mark.requirement("WS02-04C1-R1")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.parametrize(
     ("name", "attribute", "value", "extra"),
     [
@@ -126,7 +126,7 @@ def test_c1_timeout_positive_overrides_are_accepted(
     assert getattr(settings, attribute) == int(value)
 
 
-@pytest.mark.requirement("WS02-04C1-R1")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.parametrize("name", list(_TIMEOUT_ENV))
 @pytest.mark.parametrize(
     ("value", "expected"),
@@ -149,7 +149,7 @@ def test_c1_timeout_invalid_values_are_rejected(
     assert expected in message
 
 
-@pytest.mark.requirement("WS02-04C1-R1")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_c1_database_lock_timeout_must_remain_lower_than_statement_timeout() -> None:
     with pytest.raises(SettingsError) as exc_info:
         _build(
@@ -163,7 +163,7 @@ def test_c1_database_lock_timeout_must_remain_lower_than_statement_timeout() -> 
     assert "must be less than DB_STATEMENT_TIMEOUT_MILLISECONDS" in str(exc_info.value)
 
 
-@pytest.mark.requirement("WS02-04C1-R1")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_c1_timeout_environment_names_are_registered_and_documented() -> None:
     env_names = settings_module.BACKEND_ENVIRONMENT_VARIABLES
     example = (_REPO_ROOT / "backend" / ".env.example").read_text()
@@ -173,7 +173,7 @@ def test_c1_timeout_environment_names_are_registered_and_documented() -> None:
         assert f"{name}={expected}" in example
 
 
-@pytest.mark.requirement("WS02-04C1-R1")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_c1_timeout_environment_names_have_single_backend_settings_owner() -> None:
     production_hits: dict[str, list[str]] = {}
     for name in _TIMEOUT_ENV:
@@ -188,7 +188,7 @@ def test_c1_timeout_environment_names_have_single_backend_settings_owner() -> No
     }
 
 
-@pytest.mark.requirement("WS02-04C1-R1")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_c1_timeout_environment_names_are_backend_only_configuration() -> None:
     frontend_hits: dict[str, list[str]] = {}
     for name in _TIMEOUT_ENV:

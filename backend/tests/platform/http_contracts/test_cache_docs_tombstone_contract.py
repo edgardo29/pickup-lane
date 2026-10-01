@@ -111,7 +111,7 @@ def _headers_for(
     return headers
 
 
-@pytest.mark.requirement("WS02-05A-R4")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_sensitive_private_surfaces_are_classified_private_no_store(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -144,7 +144,7 @@ def test_sensitive_private_surfaces_are_classified_private_no_store(
         assert headers["Cache-Control"] == "private, no-store"
 
 
-@pytest.mark.requirement("WS02-05A-R4", "WS02-05A-R5")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_public_api_errors_health_docs_and_openapi_are_no_store(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -172,7 +172,7 @@ def test_public_api_errors_health_docs_and_openapi_are_no_store(
     assert "Content-Security-Policy" not in openapi_response.headers
 
 
-@pytest.mark.requirement("WS02-05A-R4")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_cache_policy_preserves_route_owned_values_and_excludes_static_redirects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -200,7 +200,7 @@ def test_cache_policy_preserves_route_owned_values_and_excludes_static_redirects
     assert "Cache-Control" not in static_headers
 
 
-@pytest.mark.requirement("WS02-05A-R5")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_docs_exposure_policy_is_source_owned_and_independent_from_auth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -227,7 +227,7 @@ def test_docs_exposure_policy_is_source_owned_and_independent_from_auth(
     assert auth_response.headers["Cache-Control"] == "private, no-store"
 
 
-@pytest.mark.requirement("WS02-05A-R6")
+@pytest.mark.pass_provenance('WS02-05A')
 def test_registered_tombstones_remain_visible_deprecated_and_bodyless_in_openapi(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -6,7 +6,6 @@ import pytest
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.suite_type("ordinary"),
 ]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -121,7 +120,7 @@ def _source_between(source: str, start_snippet: str, end_snippet: str) -> str:
     return source[start:end]
 
 
-@pytest.mark.requirement("WS03-03A-R7")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_email_password_and_google_step_up_use_firebase_reauthentication() -> None:
     reauth = _read("frontend/src/lib/reauthentication.js")
     provider_actions = _read(
@@ -153,7 +152,7 @@ def test_email_password_and_google_step_up_use_firebase_reauthentication() -> No
     assert "const googleProvider = new GoogleAuthProvider()" in provider_actions
 
 
-@pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_step_up_provider_fails_closed_and_exposes_only_caller_owned_actions() -> None:
     provider = _read("frontend/src/context/StepUpProvider.jsx")
     step_up_action = _read("frontend/src/lib/stepUpAction.js")
@@ -180,7 +179,7 @@ def test_step_up_provider_fails_closed_and_exposes_only_caller_owned_actions() -
     assert "useStepUp must be used within a StepUpProvider." in hook
 
 
-@pytest.mark.requirement("WS03-03A-R8")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_current_high_risk_frontend_callers_opt_into_step_up() -> None:
     for relative_path, required_snippets in CURRENT_STEP_UP_CALLERS.items():
         source = _read(relative_path)
@@ -200,7 +199,7 @@ def test_current_high_risk_frontend_callers_opt_into_step_up() -> None:
     assert "/admin/game-credits/${game_credit_id}/reverse" not in frontend_text
 
 
-@pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_admin_community_cancel_uses_caller_owned_step_up_without_rekeying_or_merging_financial_outcome() -> (
     None
 ):
@@ -253,7 +252,7 @@ def test_admin_community_cancel_uses_caller_owned_step_up_without_rekeying_or_me
     assert action_section.count("idempotencyKey") == 1
 
 
-@pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_need_a_sub_remove_uses_step_up_without_wrapping_reversible_actions_or_rekeying() -> (
     None
 ):
@@ -284,7 +283,7 @@ def test_need_a_sub_remove_uses_step_up_without_wrapping_reversible_actions_or_r
     )
 
 
-@pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_hosting_restriction_wraps_execution_only_and_preserves_preview_and_idempotency() -> (
     None
 ):
@@ -322,7 +321,7 @@ def test_hosting_restriction_wraps_execution_only_and_preserves_preview_and_idem
     )
 
 
-@pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_hosting_restoration_wraps_execution_only_and_preserves_idempotency() -> None:
     modal_source = _read(
         "frontend/src/pages/admin/users/AdminUserHostingRestorationModal.jsx"
@@ -349,7 +348,7 @@ def test_hosting_restoration_wraps_execution_only_and_preserves_idempotency() ->
     )
 
 
-@pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_official_player_removal_wraps_execution_only_and_preserves_preview_decision() -> (
     None
 ):
@@ -390,7 +389,7 @@ def test_official_player_removal_wraps_execution_only_and_preserves_preview_deci
     )
 
 
-@pytest.mark.requirement("WS03-03A-R8")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_no_current_frontend_caller_exists_for_backend_only_protected_routes() -> None:
     destructive_callers: list[str] = []
     payment_event_callers: list[str] = []
@@ -409,7 +408,7 @@ def test_no_current_frontend_caller_exists_for_backend_only_protected_routes() -
     assert destructive_callers == []
 
 
-@pytest.mark.requirement("WS03-03A-R8")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_low_level_api_client_does_not_globally_replay_recent_auth_failures() -> None:
     api_client = _read("frontend/src/lib/apiClient.js")
     frontend_occurrences: list[str] = []
@@ -432,7 +431,7 @@ def test_low_level_api_client_does_not_globally_replay_recent_auth_failures() ->
     assert frontend_occurrences == ["frontend/src/lib/stepUpAction.js"]
 
 
-@pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R9")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_add_password_linking_requires_step_up_before_firebase_linking() -> None:
     add_password = _read("frontend/src/pages/profile/useAddPasswordSettings.js")
     settings_model = _read("frontend/src/pages/profile/useSettingsPageModel.jsx")
@@ -457,7 +456,7 @@ def test_add_password_linking_requires_step_up_before_firebase_linking() -> None
     assert "apiRequest(" not in credential_actions
 
 
-@pytest.mark.requirement("WS03-03A-R7", "WS03-03A-R8", "WS03-03A-R9")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_step_up_source_does_not_forward_passwords_or_provider_credentials_to_backend() -> (
     None
 ):

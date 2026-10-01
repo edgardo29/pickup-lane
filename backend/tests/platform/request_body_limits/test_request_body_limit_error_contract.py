@@ -106,7 +106,7 @@ def _assert_common_safe_error_contract(response, *, expected_status: int, expect
         assert unsafe not in rendered
 
 
-@pytest.mark.requirement("WS02-04B2A1-R5", "WS02-04B2A1-R2")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_signed_stripe_oversized_body_uses_safe_stable_413(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -133,7 +133,7 @@ def test_signed_stripe_oversized_body_uses_safe_stable_413(
     assert response.json()["detail"] == "Request body exceeds the approved application limit."
 
 
-@pytest.mark.requirement("WS02-04B2A1-R5", "WS02-04B2A1-R4")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_platform_notice_unsupported_content_encoding_uses_safe_stable_415(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -161,7 +161,7 @@ def test_platform_notice_unsupported_content_encoding_uses_safe_stable_415(
     assert response.json()["detail"] == "Compressed request bodies are not supported for this endpoint."
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_ordinary_oversized_body_uses_safe_stable_413(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -189,7 +189,7 @@ def test_ordinary_oversized_body_uses_safe_stable_413(
     assert response.json()["detail"] == "Request body exceeds the approved application limit."
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_ordinary_unsupported_content_encoding_uses_safe_stable_415(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -218,7 +218,7 @@ def test_ordinary_unsupported_content_encoding_uses_safe_stable_415(
     assert response.json()["detail"] == "Compressed request bodies are not supported for this endpoint."
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_supported_json_request_remains_compatible_with_ordinary_limit() -> None:
     app = _synthetic_ordinary_app(limit_bytes=1024)
 
@@ -233,7 +233,7 @@ def test_supported_json_request_remains_compatible_with_ordinary_limit() -> None
     assert response.json() == {"value": "accepted"}
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_missing_content_type_is_not_rejected_by_a2c_size_limiter() -> None:
     app = _synthetic_ordinary_app(limit_bytes=1024)
 

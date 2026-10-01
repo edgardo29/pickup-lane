@@ -43,7 +43,6 @@ from backend.tests.workflows.moderation_review_case_lifecycle.conftest import (
     session,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def capture_conflict(operation):

@@ -282,7 +282,7 @@ def _install_firebase_boundary(
     return initialize_calls
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_admin_initialization_uses_approved_http_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -303,7 +303,7 @@ def test_firebase_admin_initialization_uses_approved_http_timeout(
     ]
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_token_verification_timeout_maps_to_dependency_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -318,7 +318,7 @@ def test_firebase_token_verification_timeout_maps_to_dependency_read(
     assert exc_info.value.operation == "firebase.token.verify"
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_user_record_timeout_maps_to_dependency_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -333,7 +333,7 @@ def test_firebase_user_record_timeout_maps_to_dependency_read(
     assert exc_info.value.operation == "firebase.token.verify"
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_email_lookup_timeout_maps_to_dependency_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -348,7 +348,7 @@ def test_firebase_email_lookup_timeout_maps_to_dependency_read(
     assert exc_info.value.operation == "firebase.user.lookup"
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_delete_timeout_maps_to_mutation_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -364,7 +364,7 @@ def test_firebase_delete_timeout_maps_to_mutation_unknown(
     assert exc_info.value.contract.details["outcome"] == "unknown"
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_user_not_found_remains_current_non_timeout_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -378,7 +378,7 @@ def test_firebase_user_not_found_remains_current_non_timeout_result(
     assert firebase_client.delete_firebase_user("firebase-user") is None
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_token_validation_failures_remain_auth_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -397,7 +397,7 @@ def test_firebase_token_validation_failures_remain_auth_failures(
         firebase_client.verify_firebase_token("synthetic-token")
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_app_check_verification_uses_existing_initialized_app(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -418,7 +418,7 @@ def test_firebase_app_check_verification_uses_existing_initialized_app(
     ]
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_app_check_timeout_maps_to_dependency_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -434,7 +434,7 @@ def test_firebase_app_check_timeout_maps_to_dependency_read(
     assert exc_info.value.operation == "firebase.app_check.verify"
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_app_check_invalid_token_remains_validation_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -447,7 +447,7 @@ def test_firebase_app_check_invalid_token_remains_validation_failure(
         firebase_client.verify_firebase_app_check_token("synthetic-app-check-token")
 
 
-@pytest.mark.requirement("WS02-04C1-R3")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_app_check_provider_unavailable_is_not_invalid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -491,7 +491,7 @@ def test_firebase_app_check_deadline_preserves_translation_and_records_timeout(
     assert "private-deadline-canary" not in repr(recorder.snapshot())
 
 
-@pytest.mark.requirement("WS02-04C1-R3", "WS02-04C1-R7")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_non_timeout_and_cancellation_are_not_timeout_classified(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -507,7 +507,7 @@ def test_firebase_non_timeout_and_cancellation_are_not_timeout_classified(
         firebase_client.delete_firebase_user("firebase-user")
 
 
-@pytest.mark.requirement("WS02-04C1-R3", "WS02-04C1-R7")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_firebase_app_check_cancellation_is_preserved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

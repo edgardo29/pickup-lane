@@ -26,7 +26,6 @@ finally:
     if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
         os.environ.pop("DATABASE_URL", None)
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_TIME = datetime(2035, 4, 4, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -137,8 +136,7 @@ def _visible_count(db, chat_id: uuid.UUID, sender_user_id: uuid.UUID) -> int:
     )
 
 
-@pytest.mark.requirement("WS02-04C3A-R4")
-@pytest.mark.requirement("WS02-04C3A-R6")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_same_sender_chat_family_concurrent_sends_serialize_on_postgresql_advisory_lock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -261,7 +259,7 @@ def test_same_sender_chat_family_concurrent_sends_serialize_on_postgresql_adviso
         assert _visible_count(db, chat_id, sender_id) == 5
 
 
-@pytest.mark.requirement("WS02-04C3A-R4")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_advisory_key_layer_separates_sender_chat_and_family_identities() -> None:
     sender_id = uuid.UUID("00000000-0000-4000-8000-000000000101")
     other_sender_id = uuid.UUID("00000000-0000-4000-8000-000000000102")

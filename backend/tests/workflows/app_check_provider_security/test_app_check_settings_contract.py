@@ -11,7 +11,7 @@ from backend.settings import (
     build_settings,
 )
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 TEST_DATABASE_URL = "postgresql+psycopg://db.example.invalid:5432/pickup_lane_test_db"
@@ -69,7 +69,7 @@ def _assert_rejected(
         assert value not in message
 
 
-@pytest.mark.requirement("WS03-03B-R1", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 @pytest.mark.parametrize("app_env", ["local", "test", "ci"])
 def test_local_test_and_ci_default_app_check_to_disabled_without_app_id(
     app_env: str,
@@ -80,7 +80,7 @@ def test_local_test_and_ci_default_app_check_to_disabled_without_app_id(
     assert settings.firebase_app_check_app_id is None
 
 
-@pytest.mark.requirement("WS03-03B-R1", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 @pytest.mark.parametrize("app_env", ["preview", "staging", "production"])
 def test_production_like_environments_require_explicit_app_check_mode(
     app_env: str,
@@ -91,7 +91,7 @@ def test_production_like_environments_require_explicit_app_check_mode(
     )
 
 
-@pytest.mark.requirement("WS03-03B-R1")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_explicit_disabled_mode_may_omit_supported_web_app_id() -> None:
     settings = _build(
         _settings_env(
@@ -105,7 +105,7 @@ def test_explicit_disabled_mode_may_omit_supported_web_app_id() -> None:
     assert settings.firebase_app_check_app_id is None
 
 
-@pytest.mark.requirement("WS03-03B-R1", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 @pytest.mark.parametrize("raw_mode", ["observe", "enforced"])
 def test_observe_and_enforced_modes_require_non_blank_supported_web_app_id(
     raw_mode: str,
@@ -120,7 +120,7 @@ def test_observe_and_enforced_modes_require_non_blank_supported_web_app_id(
     )
 
 
-@pytest.mark.requirement("WS03-03B-R1")
+@pytest.mark.pass_provenance('WS03-03B')
 @pytest.mark.parametrize(
     ("raw_mode", "expected"),
     [
@@ -144,7 +144,7 @@ def test_observe_and_enforced_modes_accept_configured_supported_web_app_id(
     assert settings.firebase_app_check_app_id == SYNTHETIC_APP_ID
 
 
-@pytest.mark.requirement("WS03-03B-R1", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 @pytest.mark.parametrize("raw_mode", ["", "audit", "required", "true"])
 def test_unknown_or_blank_app_check_modes_fail_safely(raw_mode: str) -> None:
     _assert_rejected(
@@ -153,7 +153,7 @@ def test_unknown_or_blank_app_check_modes_fail_safely(raw_mode: str) -> None:
     )
 
 
-@pytest.mark.requirement("WS03-03B-R1", "WS03-03B-R6", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_supported_web_app_id_is_separate_from_firebase_project_id() -> None:
     _assert_rejected(
         _settings_env(
@@ -165,7 +165,7 @@ def test_supported_web_app_id_is_separate_from_firebase_project_id() -> None:
     )
 
 
-@pytest.mark.requirement("WS03-03B-R1", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_production_like_app_check_app_id_rejects_documented_placeholder_without_echo() -> None:
     placeholder = "replace-with-firebase-app-check-app-id"
 
@@ -180,7 +180,7 @@ def test_production_like_app_check_app_id_rejects_documented_placeholder_without
     )
 
 
-@pytest.mark.requirement("WS03-03B-R1", "WS03-03B-R2", "WS03-03B-R7")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_app_check_environment_names_are_finite_and_synthetic_examples_only() -> None:
     backend_example = (REPO_ROOT / "backend/.env.example").read_text()
     frontend_example = (REPO_ROOT / "frontend/.env.example").read_text()

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
 from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError
 
@@ -24,7 +23,6 @@ from backend.services.admin_action_policy import (
     TARGET_VENUE_ID,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _EXPECTED_POLICIES = {
     "create_community_game_detail": ({TARGET_GAME_ID}, {TARGET_GAME_ID}, "support"),

@@ -7,7 +7,7 @@ from backend.schemas.auth_schema import AuthDeleteAccountRequest
 from backend.schemas.user_schema import UserUpdate
 from backend.schemas.user_settings_schema import UserSettingsUpdate
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 
 def _text(length: int) -> str:
@@ -19,7 +19,7 @@ def _assert_rejected(model: type[object], **payload: object) -> None:
         model(**payload)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_profile_update_approved_text_bounds_and_nullability() -> None:
     for field_name, max_length in (
         ("phone", 30),
@@ -44,7 +44,7 @@ def test_profile_update_approved_text_bounds_and_nullability() -> None:
     assert omitted.home_state is None
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_settings_update_approved_text_bounds_literals_and_nullability() -> None:
     for field_name in ("selected_city", "selected_state"):
         accepted = UserSettingsUpdate(**{field_name: _text(120)})
@@ -67,7 +67,7 @@ def test_settings_update_approved_text_bounds_literals_and_nullability() -> None
     assert omitted.selected_state is None
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_account_deletion_confirmation_trim_and_literal_boundary() -> None:
     assert AuthDeleteAccountRequest(confirmation="DELETE").confirmation == "DELETE"
     assert AuthDeleteAccountRequest(confirmation="delete").confirmation == "delete"
@@ -78,7 +78,7 @@ def test_account_deletion_confirmation_trim_and_literal_boundary() -> None:
     _assert_rejected(AuthDeleteAccountRequest, confirmation="   ")
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_included_account_profile_schemas_reject_neutral_unknown_fields() -> None:
     for model in (UserUpdate, UserSettingsUpdate, AuthDeleteAccountRequest):
         payload = {"unsupported_a2a_probe": "value"}

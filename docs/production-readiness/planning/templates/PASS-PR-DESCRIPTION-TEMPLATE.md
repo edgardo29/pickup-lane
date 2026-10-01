@@ -322,8 +322,6 @@ The Summary must be understandable without reading:
 
 - the plan;
 - the pass title;
-- the testing record;
-- requirement declarations;
 - Gate reports;
 - the execution register;
 - internal documentation.
@@ -404,8 +402,6 @@ Do not create Changes bullets for:
 - pass decomposition or acceptance;
 - Gate state;
 - requirement mapping;
-- traceability or evidence bookkeeping;
-- testing-record updates;
 - execution-register state;
 - artifact hashes;
 - staging or Git state;
@@ -549,10 +545,7 @@ For configuration-only or mechanical work, describe the relevant checks that act
 
 Do not use Validation bullets for:
 
-- checker `PASS`;
 - requirement mapping;
-- traceability generation;
-- testing-record completeness;
 - `git diff --check`;
 - Git status or staged state;
 - Gate approval;

@@ -12,7 +12,7 @@ from backend.firebase_admin_client import (
     FirebaseIdentityUnavailableError,
 )
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 SYNTHETIC_PROJECT_ID = "pickup-lane-synthetic"
 SYNTHETIC_CREDENTIAL_JSON = '{"type":"service_account","project_id":"synthetic"}'
@@ -128,7 +128,7 @@ def _install_firebase_fakes(
     return admin_fake, auth_fake
 
 
-@pytest.mark.requirement("WS03-01-R1", "WS03-01-R2", "WS03-01-R10")
+@pytest.mark.pass_provenance('WS03-01')
 def test_firebase_admin_verification_is_project_bound_and_provider_authoritative(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -173,7 +173,7 @@ def test_firebase_admin_verification_is_project_bound_and_provider_authoritative
     assert authoritative_token["auth_time"] == 1_700_000_000
 
 
-@pytest.mark.requirement("WS03-01-R1")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize("uid", ["", None])
 def test_firebase_token_requires_valid_uid(
     monkeypatch: pytest.MonkeyPatch,
@@ -190,7 +190,7 @@ def test_firebase_token_requires_valid_uid(
     assert auth_fake.get_user_calls == []
 
 
-@pytest.mark.requirement("WS03-01-R2")
+@pytest.mark.pass_provenance('WS03-01')
 def test_disabled_provider_account_is_denied(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -208,7 +208,7 @@ def test_disabled_provider_account_is_denied(
         firebase_client.verify_firebase_token("synthetic-id-token")
 
 
-@pytest.mark.requirement("WS03-01-R2")
+@pytest.mark.pass_provenance('WS03-01')
 def test_deleted_or_missing_provider_account_is_denied(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -221,7 +221,7 @@ def test_deleted_or_missing_provider_account_is_denied(
         firebase_client.verify_firebase_token("synthetic-id-token")
 
 
-@pytest.mark.requirement("WS03-01-R1", "WS03-01-R2")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     "verify_exc",
     [
@@ -241,7 +241,7 @@ def test_invalid_expired_revoked_or_wrong_project_style_credentials_fail_closed(
         firebase_client.verify_firebase_token("synthetic-id-token")
 
 
-@pytest.mark.requirement("WS03-01-R2")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     "verify_exc",
     [
@@ -262,7 +262,7 @@ def test_provider_unavailable_errors_are_classified_without_raw_provider_detail(
     assert "raw provider stack detail" not in str(exc_info.value)
 
 
-@pytest.mark.requirement("WS03-01-R10")
+@pytest.mark.pass_provenance('WS03-01')
 def test_missing_project_configuration_fails_before_provider_verification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -274,7 +274,7 @@ def test_missing_project_configuration_fails_before_provider_verification(
     assert auth_fake.verify_calls == []
 
 
-@pytest.mark.requirement("WS03-01-R2")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     ("provider_exc", "expected_status", "expected_detail"),
     [

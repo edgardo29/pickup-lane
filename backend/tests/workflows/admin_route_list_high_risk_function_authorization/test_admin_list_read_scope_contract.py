@@ -24,7 +24,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _persist_paid_booking,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _persist_notification_fixture(*, recipient: Any) -> uuid.UUID:
@@ -66,7 +65,7 @@ def _payment_event_provider_event_id(payment_event_id: uuid.UUID) -> str:
         return str(payment_event.provider_event_id)
 
 
-@pytest.mark.requirement("WS03-04D-R4", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_user_list_and_detail_are_admin_only_and_missing_objects_return_404(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -152,7 +151,7 @@ def test_admin_user_list_and_detail_are_admin_only_and_missing_objects_return_40
     assert missing_response.status_code == 404
 
 
-@pytest.mark.requirement("WS03-04D-R4", "WS03-04D-R7", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_money_lists_are_admin_only_and_reject_unsupported_filters(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -326,7 +325,7 @@ def test_admin_money_lists_are_admin_only_and_reject_unsupported_filters(
     assert unsupported.status_code == 400
 
 
-@pytest.mark.requirement("WS03-04D-R4", "WS03-04D-R8", "WS03-04D-R10")
+@pytest.mark.pass_provenance('WS03-04D')
 def test_admin_miscellaneous_read_families_are_admin_only_and_preserve_lookup_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _install_provider_identity(
@@ -86,7 +85,7 @@ def _identity_state(user_id: uuid.UUID) -> dict[str, object]:
         }
 
 
-@pytest.mark.requirement("WS03-01-R6")
+@pytest.mark.pass_provenance('WS03-01')
 def test_users_me_accepts_only_approved_profile_fields(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -121,7 +120,7 @@ def test_users_me_accepts_only_approved_profile_fields(
     assert body["home_state"] == "TX"
 
 
-@pytest.mark.requirement("WS03-01-R5", "WS03-01-R6")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     ("field_name", "field_value"),
     [
@@ -164,7 +163,7 @@ def test_users_me_rejects_identity_provider_admin_and_server_owned_fields(
     assert _identity_state(user_id) == before
 
 
-@pytest.mark.requirement("WS03-01-R6")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     ("method", "path"),
     [
@@ -195,7 +194,7 @@ def test_generic_user_mutation_routes_remain_unavailable(
     )
 
 
-@pytest.mark.requirement("WS03-01-R5", "WS03-01-R6")
+@pytest.mark.pass_provenance('WS03-01')
 def test_provider_authenticated_sync_owns_email_and_verification_snapshots(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -227,7 +226,7 @@ def test_provider_authenticated_sync_owns_email_and_verification_snapshots(
         assert user.email_verified_at is not None
 
 
-@pytest.mark.requirement("WS03-01-R5", "WS03-01-R6")
+@pytest.mark.pass_provenance('WS03-01')
 def test_provider_authenticated_sync_conflicts_fail_without_creating_second_identity(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

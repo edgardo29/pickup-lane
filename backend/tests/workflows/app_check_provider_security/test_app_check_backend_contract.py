@@ -26,7 +26,7 @@ from backend.services.app_check_service import (
 )
 from backend.settings import build_settings
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 TEST_DATABASE_URL = "postgresql+psycopg://db.example.invalid:5432/pickup_lane_test_db"
 SUPPORTED_APP_ID = "1:123456789:web:supported"
@@ -88,7 +88,7 @@ def _fixed_verifier(outcome: AppCheckVerificationOutcome):
     return verifier
 
 
-@pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_verifier_accepts_only_provider_verified_expected_app_id(monkeypatch) -> None:
     monkeypatch.setattr(
         app_check_service,
@@ -102,7 +102,7 @@ def test_verifier_accepts_only_provider_verified_expected_app_id(monkeypatch) ->
     assert result.outcome is AppCheckVerificationOutcome.VALID
 
 
-@pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_verifier_rejects_provider_valid_wrong_app_id(monkeypatch) -> None:
     monkeypatch.setattr(
         app_check_service,
@@ -116,7 +116,7 @@ def test_verifier_rejects_provider_valid_wrong_app_id(monkeypatch) -> None:
     assert result.outcome is AppCheckVerificationOutcome.INVALID
 
 
-@pytest.mark.requirement("WS03-03B-R3")
+@pytest.mark.pass_provenance('WS03-03B')
 @pytest.mark.parametrize(
     ("headers", "expected"),
     [
@@ -142,7 +142,7 @@ def test_verifier_reads_only_the_dedicated_header_case_insensitively(
     assert result.outcome is expected
 
 
-@pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R4")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_verifier_classifies_provider_rejection_and_unavailable_boundaries(
     monkeypatch,
 ) -> None:
@@ -174,7 +174,7 @@ def test_verifier_classifies_provider_rejection_and_unavailable_boundaries(
     assert timeout_result.outcome is AppCheckVerificationOutcome.PROVIDER_UNAVAILABLE
 
 
-@pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_disabled_mode_is_inert_and_does_not_call_verifier() -> None:
     def verifier(_headers, _settings):
         raise AssertionError("disabled App Check must not verify")
@@ -193,7 +193,7 @@ def test_disabled_mode_is_inert_and_does_not_call_verifier() -> None:
     assert recorded == []
 
 
-@pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R5", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_observe_mode_records_bounded_outcome_and_preserves_route_behavior() -> None:
     app, side_effects, recorded = _workflow_app(
         mode="observe",
@@ -213,7 +213,7 @@ def test_observe_mode_records_bounded_outcome_and_preserves_route_behavior() -> 
     assert recorded[0].stable_error_code == APP_CHECK_INVALID_CODE
 
 
-@pytest.mark.requirement("WS03-03B-R3", "WS03-03B-R4", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 @pytest.mark.parametrize(
     ("outcome", "status_code", "error_code", "message"),
     [
@@ -262,7 +262,7 @@ def test_enforced_mode_denies_before_endpoint_side_effects_with_safe_public_erro
     assert recorded[0].outcome is outcome
 
 
-@pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_enforced_valid_outcome_continues_to_endpoint_and_records_event() -> None:
     app, side_effects, recorded = _workflow_app(
         mode="enforced",
@@ -279,7 +279,7 @@ def test_enforced_valid_outcome_continues_to_endpoint_and_records_event() -> Non
     assert recorded[0].stable_error_code is None
 
 
-@pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_recorder_failure_does_not_change_enforced_decision() -> None:
     def failing_recorder(_event, _settings):
         raise RuntimeError("synthetic recorder failure")
@@ -298,7 +298,7 @@ def test_recorder_failure_does_not_change_enforced_decision() -> None:
     assert side_effects == []
 
 
-@pytest.mark.requirement("WS03-03B-R4", "WS03-03B-R5", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-03B')
 def test_real_app_check_denial_preserves_outer_cors_security_and_correlation() -> None:
     from backend.main import create_app
 

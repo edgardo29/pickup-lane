@@ -151,7 +151,7 @@ Avoid unnecessary internal wording such as:
 - handoff;
 - evidence boundary;
 - provider-fact boundary;
-- trusted evidence;
+- test-certification language;
 
 when ordinary engineering language says the same thing more clearly.
 
@@ -294,9 +294,7 @@ The completed engineering plan must not contain:
 - stable-ID sections;
 - evidence classifications;
 - evidence-management language;
-- checker administration;
 - staging mechanics;
-- traceability-generation mechanics;
 - approval mechanics;
 - publication mechanics;
 - execution-register mechanics;
@@ -482,9 +480,7 @@ Do not include:
 
 - exact test-file inventories;
 - requirement-ID administration;
-- checker execution;
 - staging mechanics;
-- traceability generation;
 - evidence publication;
 - approval mechanics;
 - workflow reporting.

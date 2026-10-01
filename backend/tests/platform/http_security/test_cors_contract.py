@@ -153,7 +153,7 @@ def _manual_options_route_findings() -> list[str]:
     return findings
 
 
-@pytest.mark.requirement("WS02-03-R4", "WS03-03B-R4", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS02-03', 'WS03-03B')
 def test_cors_middleware_uses_exact_configured_methods_and_application_headers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -169,7 +169,7 @@ def test_cors_middleware_uses_exact_configured_methods_and_application_headers(
     assert "*" not in middleware.kwargs["allow_headers"]
 
 
-@pytest.mark.requirement("WS02-03-R4", "WS03-03B-R4")
+@pytest.mark.pass_provenance('WS02-03', 'WS03-03B')
 def test_allowed_preflight_uses_exact_methods_and_effective_starlette_headers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -188,7 +188,7 @@ def test_allowed_preflight_uses_exact_methods_and_effective_starlette_headers(
     assert "OPTIONS" not in response.headers["Access-Control-Allow-Methods"]
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.pass_provenance('WS02-03')
 def test_starlette_safelisted_headers_are_accepted_without_expanding_application_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -204,7 +204,7 @@ def test_starlette_safelisted_headers_are_accepted_without_expanding_application
     assert response.headers["Access-Control-Allow-Headers"] == _STARLETTE_EFFECTIVE_HEADERS
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.pass_provenance('WS02-03')
 def test_cors_header_matching_is_case_insensitive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -217,7 +217,7 @@ def test_cors_header_matching_is_case_insensitive(
     assert response.headers["Access-Control-Allow-Headers"] == _STARLETTE_EFFECTIVE_HEADERS
 
 
-@pytest.mark.requirement("WS02-03-R4", "WS03-03B-R4")
+@pytest.mark.pass_provenance('WS02-03', 'WS03-03B')
 @pytest.mark.parametrize("header_name", ["X-Custom-Header", "X-Admin", "X-Forwarded-Host"])
 def test_arbitrary_non_approved_preflight_headers_are_rejected(
     monkeypatch: pytest.MonkeyPatch,
@@ -233,7 +233,7 @@ def test_arbitrary_non_approved_preflight_headers_are_rejected(
     assert response.headers["Access-Control-Allow-Headers"] == _STARLETTE_EFFECTIVE_HEADERS
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.pass_provenance('WS02-03')
 @pytest.mark.parametrize("method", ["HEAD", "OPTIONS"])
 def test_unreviewed_preflight_methods_are_rejected(
     monkeypatch: pytest.MonkeyPatch,
@@ -248,7 +248,7 @@ def test_unreviewed_preflight_methods_are_rejected(
     assert response.text == "Disallowed CORS method"
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.pass_provenance('WS02-03')
 @pytest.mark.parametrize(
     "origin",
     [
@@ -274,7 +274,7 @@ def test_disallowed_simple_origins_do_not_receive_allow_origin(
     assert "Access-Control-Allow-Origin" not in response.headers
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.pass_provenance('WS02-03')
 def test_disallowed_origin_preflight_does_not_receive_cors_grant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -292,7 +292,7 @@ def test_disallowed_origin_preflight_does_not_receive_cors_grant(
     assert "Access-Control-Allow-Origin" not in response.headers
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.pass_provenance('WS02-03')
 def test_disallowed_origin_framework_error_does_not_receive_cors_grant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -315,7 +315,7 @@ def test_disallowed_origin_framework_error_does_not_receive_cors_grant(
     assert "Access-Control-Allow-Origin" not in response.headers
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.pass_provenance('WS02-03')
 def test_allowed_origin_simple_and_error_responses_preserve_cors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -340,7 +340,7 @@ def test_allowed_origin_simple_and_error_responses_preserve_cors(
     assert "Access-Control-Allow-Origin" not in no_origin_response.headers
 
 
-@pytest.mark.requirement("WS02-03-R4")
+@pytest.mark.pass_provenance('WS02-03')
 def test_no_manual_options_or_cors_header_bypass_exists_in_route_source() -> None:
     combined_source = "\n".join(path.read_text() for path in _route_source_files())
 

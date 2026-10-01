@@ -12,7 +12,6 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _user() -> User:
@@ -58,7 +57,7 @@ def _get(client: TestClient, path: str, params: dict[str, object] | None = None)
     return client.get(path, params=params)
 
 
-@pytest.mark.requirement("WS02-04B1-R3")
+@pytest.mark.pass_provenance('WS02-04B1')
 @pytest.mark.parametrize(
     ("path", "needs_auth"),
     [
@@ -92,7 +91,7 @@ def test_public_card_routes_default_to_40_reject_below_1_and_bound_cursor(
         assert oversized_cursor_response.json()["code"] == "API.VALIDATION_FAILED"
 
 
-@pytest.mark.requirement("WS02-04B1-R3")
+@pytest.mark.pass_provenance('WS02-04B1')
 @pytest.mark.parametrize(
     "path",
     [
@@ -118,7 +117,7 @@ def test_public_card_services_clamp_above_100_to_bounded_empty_pages(
         assert response.json()["limit"] == 100
 
 
-@pytest.mark.requirement("WS02-04B1-R3")
+@pytest.mark.pass_provenance('WS02-04B1')
 @pytest.mark.parametrize(
     ("service_name", "decode_name"),
     [
@@ -144,7 +143,7 @@ def test_public_card_malformed_cursors_raise_service_owned_400(
     assert exc_info.value.detail == "cursor is invalid."
 
 
-@pytest.mark.requirement("WS02-04B1-R3")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_public_card_foreign_context_cursors_raise_service_owned_400() -> None:
     from backend.services import game_service, need_a_sub_post_service
 
@@ -178,7 +177,7 @@ def test_public_card_foreign_context_cursors_raise_service_owned_400() -> None:
     assert sub_cards_exc.value.status_code == 400
 
 
-@pytest.mark.requirement("WS02-04B1-R3")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_public_card_sources_use_identity_tie_breakers_and_limit_plus_one() -> None:
     from backend.services import game_service, need_a_sub_post_service
 

@@ -28,7 +28,7 @@ def _read(relative_path: str) -> str:
     return (_REPO_ROOT / relative_path).read_text()
 
 
-@pytest.mark.requirement("WS04-01C-R1", "WS04-01C-R5", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_current_authority_preserves_provider_independent_c_and_mandatory_d() -> None:
     plan = _read(_PLAN)
     intake = _read(_INTAKE)
@@ -50,7 +50,7 @@ def test_current_authority_preserves_provider_independent_c_and_mandatory_d() ->
     assert "Final provider-specific\nvalues remain late-bound" in register
 
 
-@pytest.mark.requirement("WS04-01C-R1", "WS04-01C-R7", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_gate_b_scope_does_not_introduce_production_source_config_or_migrations() -> None:
     plan = _read(_PLAN)
     settings = _read("backend/settings.py")
@@ -67,7 +67,7 @@ def test_gate_b_scope_does_not_introduce_production_source_config_or_migrations(
     assert not [path for path in migration_paths if "ws04_01c" in path.name.lower()]
 
 
-@pytest.mark.requirement("WS04-01C-R2", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_contract_handoff_names_all_d_owned_final_facts_without_values() -> None:
     contract = json.loads((_REPO_ROOT / _CONTRACT_PATH).read_text())
 

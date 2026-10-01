@@ -51,7 +51,7 @@ def _production_like_env(**overrides: str | None) -> dict[str, str]:
     return env
 
 
-@pytest.mark.requirement("EN03-INDEPENDENCE-001")
+@pytest.mark.pass_provenance('EN-03')
 def test_production_like_settings_accept_independent_inbox_token_secret() -> None:
     settings = build_settings(
         _production_like_env(),
@@ -64,7 +64,7 @@ def test_production_like_settings_accept_independent_inbox_token_secret() -> Non
     assert get_inbox_token_secret(settings) == _INDEPENDENT_INBOX_SECRET
 
 
-@pytest.mark.requirement("EN03-INDEPENDENCE-001")
+@pytest.mark.pass_provenance('EN-03')
 def test_missing_production_like_inbox_token_secret_is_rejected_without_fallback() -> None:
     with pytest.raises(SettingsError) as exc_info:
         build_settings(
@@ -79,7 +79,7 @@ def test_missing_production_like_inbox_token_secret_is_rejected_without_fallback
     assert _PRODUCTION_DATABASE_URL not in message
 
 
-@pytest.mark.requirement("EN03-INDEPENDENCE-001")
+@pytest.mark.pass_provenance('EN-03')
 def test_documented_inbox_token_placeholder_is_rejected_without_echoing_value() -> None:
     placeholder = "replace-with-independent-secret"
 
@@ -106,7 +106,7 @@ _CREDENTIAL_REUSE_CASES = (
 )
 
 
-@pytest.mark.requirement("EN03-INDEPENDENCE-001")
+@pytest.mark.pass_provenance('EN-03')
 @pytest.mark.parametrize(
     ("credential_name", "credential_value"),
     _CREDENTIAL_REUSE_CASES,
@@ -129,7 +129,7 @@ def test_inbox_token_secret_rejects_reuse_of_other_credentials_without_echoing_v
     assert credential_value not in message
 
 
-@pytest.mark.requirement("EN03-INDEPENDENCE-001")
+@pytest.mark.pass_provenance('EN-03')
 def test_inbox_token_secret_rejects_reuse_of_firebase_admin_credentials_path_without_echoing_value(
     tmp_path,
 ) -> None:

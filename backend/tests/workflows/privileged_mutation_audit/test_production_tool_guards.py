@@ -7,7 +7,7 @@ import pytest
 
 from backend.settings import AppEnvironment
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 
 def _unexpected_call(*args, **kwargs):

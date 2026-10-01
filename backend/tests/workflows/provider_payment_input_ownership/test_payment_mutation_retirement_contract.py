@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi.routing import APIRoute
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 
 def _api_routes() -> list[APIRoute]:
@@ -29,7 +29,7 @@ def _dependency_names(route: APIRoute) -> set[str]:
     }
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 @pytest.mark.parametrize(
     ("method", "path"),
     [
@@ -53,7 +53,7 @@ def test_generic_payment_refund_and_payment_event_mutations_are_bodyless_admin_t
     assert "backend.database.get_db" not in dependency_names
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_supported_payment_workflow_routes_remain_available() -> None:
     checkout = _route("POST", "/checkout/games/{game_id}/payment-intent")
     webhook = _route("POST", "/stripe/webhook")

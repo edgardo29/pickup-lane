@@ -177,7 +177,7 @@ def _final_d_contract() -> dict:
     return contract
 
 
-@pytest.mark.requirement("WS04-01C-R1", "WS04-01C-R2", "WS04-01C-R5", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_ws04_01c_contract_is_complete_sanitized_and_provider_neutral() -> None:
     contract = _load_contract()
 
@@ -204,7 +204,7 @@ def test_ws04_01c_contract_is_complete_sanitized_and_provider_neutral() -> None:
     ]
 
 
-@pytest.mark.requirement("WS04-01C-R1", "WS04-01C-R2", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_deferred_c_template_does_not_populate_final_provider_or_budget_values() -> None:
     contract = _load_contract()
 
@@ -217,7 +217,7 @@ def test_deferred_c_template_does_not_populate_final_provider_or_budget_values()
         assert field["value"] is None
 
 
-@pytest.mark.requirement("WS04-01C-R1", "WS04-01C-R5", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_provider_independent_template_rejects_populated_provider_topology_claims() -> None:
     contract = _load_contract()
 
@@ -252,7 +252,7 @@ def test_provider_independent_template_rejects_populated_provider_topology_claim
     ) in validate_evidence_contract(final_role_claim)
 
 
-@pytest.mark.requirement("WS04-01C-R1", "WS04-01C-R2", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_final_d_contract_state_rejects_absent_d_owned_evidence() -> None:
     contract = _load_contract()
     contract["contract_state"] = "ws04_01d_final_evidence"
@@ -270,12 +270,12 @@ def test_final_d_contract_state_rejects_absent_d_owned_evidence() -> None:
     ) in errors
 
 
-@pytest.mark.requirement("WS04-01C-R1", "WS04-01C-R2", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_final_d_contract_state_accepts_complete_synthetic_final_evidence() -> None:
     assert validate_evidence_contract(_final_d_contract()) == []
 
 
-@pytest.mark.requirement("WS04-01C-R1", "WS04-01C-R5", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_final_d_contract_state_rejects_missing_required_topology() -> None:
     final_contract = _final_d_contract()
     final_contract["topology_contract"]["connection_mode"] = {
@@ -317,7 +317,7 @@ def test_final_d_contract_state_rejects_missing_required_topology() -> None:
     ) in validate_evidence_contract(bad_not_applicable)
 
 
-@pytest.mark.requirement("WS04-01C-R2")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_sensitive_provider_or_credential_material_is_rejected() -> None:
     contract = _load_contract()
     unsafe = deepcopy(contract)
@@ -333,7 +333,7 @@ def test_sensitive_provider_or_credential_material_is_rejected() -> None:
     assert any("credential URL" in finding for finding in findings)
 
 
-@pytest.mark.requirement("WS04-01C-R2")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_private_control_plane_references_and_raw_evidence_are_rejected() -> None:
     contract = _load_contract()
     unsafe = deepcopy(contract)
@@ -361,7 +361,7 @@ def test_private_control_plane_references_and_raw_evidence_are_rejected() -> Non
     assert any("IP address" in finding for finding in findings)
 
 
-@pytest.mark.requirement("WS04-01C-R2")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_sanitized_evidence_references_are_not_flagged_as_sensitive() -> None:
     findings = detect_sensitive_values(
         {
@@ -375,7 +375,7 @@ def test_sanitized_evidence_references_are_not_flagged_as_sensitive() -> None:
     assert findings == []
 
 
-@pytest.mark.requirement("WS04-01C-R2")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_personal_and_payment_data_patterns_are_rejected() -> None:
     findings = detect_sensitive_values(
         {
@@ -388,7 +388,7 @@ def test_personal_and_payment_data_patterns_are_rejected() -> None:
     assert any("payment card number" in finding for finding in findings)
 
 
-@pytest.mark.requirement("WS04-01C-R2")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_missing_en03_metadata_fails_contract_validation() -> None:
     contract = _load_contract()
     del contract["metadata"]["purpose"]

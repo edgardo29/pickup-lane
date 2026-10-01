@@ -226,7 +226,7 @@ def _install_checkout_boundary_fakes(
     monkeypatch.setattr(checkout_service, "confirm_payment_intent", confirm_payment_intent)
 
 
-@pytest.mark.requirement("WS02-04C2-R5", "WS02-04C2-R6")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_checkout_commits_durable_checkpoint_with_credit_before_confirmation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -327,7 +327,7 @@ def test_checkout_commits_durable_checkpoint_with_credit_before_confirmation(
         assert _count(db, GameCreditUsage) == 1
 
 
-@pytest.mark.requirement("WS02-04C2-R5", "WS02-04C2-R6")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_active_hold_reentry_reuses_provider_identity_and_credit_reservation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -381,35 +381,3 @@ def test_active_hold_reentry_reuses_provider_identity_and_credit_reservation(
         assert usages[0].amount_cents == 700
         assert usages[0].usage_status == "reserved"
         assert credit.available_cents == 0
-
-
-@pytest.mark.requirement("WS02-04C2-R5")
-def test_registry_distinguishes_idempotency_identity_sources() -> None:
-    import backend.services.provider_retry_policy as retry_policy
-
-    contexts = {
-        policy.workflow_context: policy
-        for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES
-    }
-
-    assert contexts["saved_card_customer_creation"].idempotency_identity_source == (
-        "deterministic user-scoped key user:{user.id}:stripe_customer"
-    )
-    assert contexts[
-        "saved_card_setup_intent_creation"
-    ].idempotency_identity_source == (
-        "persisted payment-method operation provider_idempotency_key"
-    )
-    assert contexts["saved_card_setup_intent_creation"].identity_survives_replay
-    assert "committed pending Booking" in contexts[
-        "checkout_initial_create_before_provider_result"
-    ].idempotency_identity_source
-    assert "committed CommunityPublishAttempt" in contexts[
-        "community_publish_fee_initial_create"
-    ].idempotency_identity_source
-    assert contexts[
-        "checkout_initial_create_before_provider_result"
-    ].identity_survives_replay
-    assert contexts["community_publish_fee_initial_create"].identity_survives_replay
-    assert contexts["durable_refund_fulfillment"].identity_survives_replay
-    assert contexts["waitlist_auto_promotion_create"].identity_survives_replay

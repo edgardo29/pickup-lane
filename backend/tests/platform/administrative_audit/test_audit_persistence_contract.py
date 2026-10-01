@@ -13,7 +13,6 @@ from backend.models import AdminAction, AdminRejectedAttempt, User
 from backend.observability.correlation import correlation_context
 from backend.schemas.admin_action_schema import AdminActionNoteCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 IMMUTABLE_ERROR = "admin audit rows are immutable"
 
@@ -104,7 +103,7 @@ def _persist_rejected_attempt(
     return attempt_id
 
 
-@pytest.mark.requirement("WS09-02A-R1")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_admin_action_insert_requires_explicit_outcome_correlation_and_database_time() -> (
     None
 ):
@@ -129,7 +128,7 @@ def test_admin_action_insert_requires_explicit_outcome_correlation_and_database_
         assert action.created_at >= before
 
 
-@pytest.mark.requirement("WS09-02A-R1")
+@pytest.mark.pass_provenance('WS09-02A')
 @pytest.mark.parametrize(
     ("outcome", "correlation_id", "constraint_fragment"),
     [
@@ -166,7 +165,7 @@ def _assert_immutable_error(exc: DBAPIError) -> None:
     assert getattr(exc.orig, "sqlstate", None) == "55000"
 
 
-@pytest.mark.requirement("WS09-02A-R2")
+@pytest.mark.pass_provenance('WS09-02A')
 @pytest.mark.parametrize("table_name", ["admin_actions", "admin_rejected_attempts"])
 @pytest.mark.parametrize("operation", ["update", "delete"])
 @pytest.mark.parametrize("write_style", ["raw", "orm"])
@@ -220,7 +219,7 @@ def test_audit_rows_reject_raw_and_orm_updates_and_deletes(
             assert original.route_path.endswith(f"/{target_id}/suspend")
 
 
-@pytest.mark.requirement("WS09-02A-R3")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_correction_appends_self_linked_row_and_replay_never_rewrites_original() -> (
     None
 ):
@@ -279,7 +278,7 @@ def _quoted_values(definition: str) -> set[str]:
     return set(re.findall(r"'([^']+)'", definition))
 
 
-@pytest.mark.requirement("WS09-02A-R1")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_policy_model_and_database_constraints_are_synchronized() -> None:
     from backend.services.admin_action_policy import ADMIN_ACTION_TYPES
     from backend.services.admin_action_service import ADMIN_ACTION_OUTCOMES
@@ -315,7 +314,7 @@ def test_policy_model_and_database_constraints_are_synchronized() -> None:
     )
 
 
-@pytest.mark.requirement("WS09-02A-R4")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_audit_insert_failure_rolls_back_the_privileged_domain_change() -> None:
     actor_id, target_id = _persist_actor_and_target()
     _persist_action(actor_id, target_id, idempotency_key="duplicate-operation")
@@ -344,7 +343,7 @@ def test_audit_insert_failure_rolls_back_the_privileged_domain_change() -> None:
         assert target.last_name == original_last_name
 
 
-@pytest.mark.requirement("WS09-02A-R4")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_canonical_writer_adds_without_committing() -> None:
     actor_id, target_id = _persist_actor_and_target()
     with _session() as caller_db:

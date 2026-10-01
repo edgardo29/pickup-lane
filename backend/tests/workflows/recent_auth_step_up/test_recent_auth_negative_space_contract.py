@@ -21,14 +21,11 @@ from backend.tests.workflows.recent_auth_step_up.test_recent_auth_route_inventor
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.suite_type("ordinary"),
 ]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BACKEND_ROOT = REPO_ROOT / "backend"
 FRONTEND_SRC = REPO_ROOT / "frontend/src"
-RECENT_AUTH_TEST_ROOT = REPO_ROOT / "backend/tests/workflows/recent_auth_step_up"
-
 PRODUCTION_FRESHNESS_OWNER_PATHS = {
     "backend/services/auth_service.py",
     "backend/services/recent_auth_policy.py",
@@ -80,38 +77,17 @@ def _frontend_source_files() -> list[Path]:
     )
 
 
-def _trusted_support_files() -> list[Path]:
+def _support_python_files() -> list[Path]:
     support_root = REPO_ROOT / "backend/tests/support"
     return sorted(
         path
-        for path in support_root.rglob("*")
+        for path in support_root.rglob("*.py")
         if path.is_file()
-        and path.suffix in {".py", ".json"}
         and "__pycache__" not in path.parts
     )
 
 
-def _requirement_markers(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=_relative(path))
-    markers: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        if not (
-            isinstance(func, ast.Attribute)
-            and func.attr == "requirement"
-            and isinstance(func.value, ast.Attribute)
-            and func.value.attr == "mark"
-        ):
-            continue
-        for arg in node.args:
-            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                markers.add(arg.value)
-    return markers
-
-
-@pytest.mark.requirement("WS03-03A-R1", "WS03-03A-R10", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_backend_source_has_no_alternate_recent_auth_freshness_authority() -> None:
     disallowed_freshness_terms: list[str] = []
     raw_decoded_token_users: list[str] = []
@@ -160,7 +136,7 @@ def test_backend_source_has_no_alternate_recent_auth_freshness_authority() -> No
     assert disallowed_assignments == []
 
 
-@pytest.mark.requirement("WS03-03A-R1", "WS03-03A-R10", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_request_schema_and_storage_source_do_not_accept_client_freshness() -> None:
     schema_offenders: list[str] = []
     storage_offenders: list[str] = []
@@ -211,7 +187,7 @@ def test_request_schema_and_storage_source_do_not_accept_client_freshness() -> N
     assert cookie_or_cache_offenders == []
 
 
-@pytest.mark.requirement("WS03-03A-R5", "WS03-03A-R6", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_recent_auth_policy_window_and_partition_have_single_source_owners() -> None:
     policy_reexports: list[str] = []
     window_redefinitions: list[str] = []
@@ -241,7 +217,7 @@ def test_recent_auth_policy_window_and_partition_have_single_source_owners() -> 
     assert window_redefinitions == []
 
 
-@pytest.mark.requirement("WS03-03A-R5", "WS03-03A-R6", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_complete_admin_partition_fails_closed_for_drift_and_hidden_terminal_actions() -> None:
     from backend.services.recent_auth_policy import RECENT_AUTH_PROTECTED_ROUTE_KEYS
 
@@ -297,7 +273,7 @@ def test_complete_admin_partition_fails_closed_for_drift_and_hidden_terminal_act
     ) in not_required
 
 
-@pytest.mark.requirement("WS03-03A-R6", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_retired_or_non_executing_admin_mutations_remain_non_executing() -> None:
     registered_routes = _registered_routes()
     executing_retired_routes: list[tuple[str, str]] = []
@@ -316,7 +292,7 @@ def test_retired_or_non_executing_admin_mutations_remain_non_executing() -> None
     assert executing_retired_routes == []
 
 
-@pytest.mark.requirement("WS03-03A-R8", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_frontend_source_has_no_blind_recent_auth_replay_or_credential_forwarding() -> None:
     generic_recent_auth_handlers: list[str] = []
     unsafe_token_refreshers: list[str] = []
@@ -368,7 +344,7 @@ def test_frontend_source_has_no_blind_recent_auth_replay_or_credential_forwardin
     assert provider_result_forwarders == []
 
 
-@pytest.mark.requirement("WS03-03A-R9", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_credential_linking_has_no_backend_relink_or_local_account_merge_path() -> None:
     backend_route_text = "\n".join(
         path.read_text(encoding="utf-8")
@@ -397,7 +373,7 @@ def test_credential_linking_has_no_backend_relink_or_local_account_merge_path() 
     ) < add_password.index("await addPasswordToCurrentAccount(newPassword)")
 
 
-@pytest.mark.requirement("WS03-03A-R8", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_no_current_frontend_caller_exists_for_unowned_backend_only_routes() -> None:
     destructive_callers: list[str] = []
     payment_event_callers: list[str] = []
@@ -416,36 +392,18 @@ def test_no_current_frontend_caller_exists_for_unowned_backend_only_routes() -> 
     assert destructive_callers == []
 
 
-@pytest.mark.requirement("WS03-03A-R10", "WS03-03A-R11")
-def test_current_trusted_support_does_not_offer_request_owned_freshness_bypass() -> None:
+@pytest.mark.pass_provenance('WS03-03A')
+def test_current_support_helpers_do_not_offer_request_owned_freshness_bypass() -> None:
     support_bypass_candidates: list[str] = []
     unsafe_override_candidates: list[str] = []
 
-    for path in _trusted_support_files():
+    for path in _support_python_files():
         relative_path = _relative(path)
         source = path.read_text(encoding="utf-8")
-        if (
-            "auth_time" in source or "authenticated_at" in source
-        ) and relative_path != "backend/tests/support/requirements/ws03_03a.json":
+        if "auth_time" in source or "authenticated_at" in source:
             support_bypass_candidates.append(relative_path)
         if "require_recent_authentication" in source or "require_recent_active" in source:
             unsafe_override_candidates.append(relative_path)
 
     assert support_bypass_candidates == []
     assert unsafe_override_candidates == []
-
-
-@pytest.mark.requirement("WS03-03A-R11")
-def test_deferred_provider_governance_requirements_have_no_pytest_mappings() -> None:
-    forbidden_requirements = {
-        "WS03-03A-" + suffix
-        for suffix in ("R12", "R13", "R14")
-    }
-    mapped_requirements: dict[str, set[str]] = {}
-
-    for path in sorted(RECENT_AUTH_TEST_ROOT.glob("test_*.py")):
-        markers = _requirement_markers(path)
-        if markers & forbidden_requirements:
-            mapped_requirements[_relative(path)] = markers & forbidden_requirements
-
-    assert mapped_requirements == {}

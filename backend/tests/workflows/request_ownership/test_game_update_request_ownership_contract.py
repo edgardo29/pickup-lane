@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from backend.schemas.game_schema import GameUpdate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 GAME_UPDATE_ALLOWED_FIELDS = {
     "title",
@@ -273,7 +272,7 @@ def _openapi_request_properties(method: str, path: str) -> set[str]:
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-05B1-R3")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_game_update_schema_and_openapi_expose_only_request_owned_fields() -> None:
     assert GameUpdate.model_config.get("extra") == "forbid"
     assert set(GameUpdate.model_fields) == GAME_UPDATE_ALLOWED_FIELDS
@@ -297,7 +296,7 @@ def test_game_update_schema_and_openapi_expose_only_request_owned_fields() -> No
         ("updated_at", "2030-01-01T00:00:00+00:00"),
     ),
 )
-@pytest.mark.requirement("WS02-05B1-R3", "WS02-05B1-R4")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_game_update_rejects_protected_overposting_and_preserves_existing_row(
     client: TestClient,
     field_name: str,
@@ -331,7 +330,7 @@ def test_game_update_rejects_protected_overposting_and_preserves_existing_row(
     assert after.description == before_description
 
 
-@pytest.mark.requirement("WS02-05B1-R4")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_generic_update_mutates_allowed_fields_and_preserves_protected_fields(
     client: TestClient,
 ) -> None:
@@ -395,7 +394,7 @@ def test_generic_update_mutates_allowed_fields_and_preserves_protected_fields(
     assert after.updated_at is not None
 
 
-@pytest.mark.requirement("WS02-05B1-R4")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_generic_official_update_keeps_official_forced_fields_service_owned(
     client: TestClient,
 ) -> None:

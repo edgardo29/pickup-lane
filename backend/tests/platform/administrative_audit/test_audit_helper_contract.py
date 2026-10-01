@@ -23,7 +23,6 @@ from backend.observability.structured_logging import (
 )
 from backend.schemas.admin_action_schema import AdminActionNoteCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _session():
@@ -90,7 +89,7 @@ def _record_original(actor_id: uuid.UUID, target_id: uuid.UUID) -> uuid.UUID:
         return action.id
 
 
-@pytest.mark.requirement("WS09-01A")
+@pytest.mark.pass_provenance('WS09-01A')
 def test_admin_request_audit_and_logging_share_correlation_without_audit_leakage(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -165,7 +164,7 @@ def test_admin_request_audit_and_logging_share_correlation_without_audit_leakage
         assert prohibited not in serialized
 
 
-@pytest.mark.requirement("WS09-02A-R5")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_sensitive_read_helper_commits_correlation_before_disclosure_and_uses_minimal_target_projection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -224,7 +223,7 @@ def test_sensitive_read_helper_commits_correlation_before_disclosure_and_uses_mi
     assert all("users.email" not in statement for statement in target_selects)
 
 
-@pytest.mark.requirement("WS09-02A-R5")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_sensitive_read_helper_preserves_safe_4xx_contracts_and_rejects_protected_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -303,7 +302,7 @@ def test_sensitive_read_helper_preserves_safe_4xx_contracts_and_rejects_protecte
         assert db.scalar(select(func.count()).select_from(AdminAction)) == 0
 
 
-@pytest.mark.requirement("WS09-02A-R4", "WS09-02A-R5")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_canonical_writer_rejects_sensitive_category(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -324,7 +323,7 @@ def test_canonical_writer_rejects_sensitive_category(
     assert exc_info.value.status_code == 400
 
 
-@pytest.mark.requirement("WS09-02A-R5")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_sensitive_read_success_does_not_commit_caller_pending_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -377,7 +376,7 @@ def _install_failing_session_factory(
     monkeypatch.setattr(admin_action_service, "SessionLocal", failing_factory)
 
 
-@pytest.mark.requirement("WS09-02A-R3", "WS09-02A-R5")
+@pytest.mark.pass_provenance('WS09-02A')
 @pytest.mark.no_db_cleanup
 def test_private_helpers_fail_closed_when_session_creation_fails(
     monkeypatch: pytest.MonkeyPatch,
@@ -410,7 +409,7 @@ def test_private_helpers_fail_closed_when_session_creation_fails(
         assert "secret-host" not in str(exc_info.value.detail)
 
 
-@pytest.mark.requirement("WS09-02A-R5")
+@pytest.mark.pass_provenance('WS09-02A')
 @pytest.mark.parametrize("commit_before_error", [False, True])
 def test_sensitive_read_failure_is_safe_and_does_not_touch_caller_transaction(
     monkeypatch: pytest.MonkeyPatch,
@@ -449,7 +448,7 @@ def test_sensitive_read_failure_is_safe_and_does_not_touch_caller_transaction(
         caller_db.rollback()
 
 
-@pytest.mark.requirement("WS09-02A-R3", "WS09-02A-R5")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_correction_success_and_failure_are_isolated_from_caller_transaction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -485,7 +484,7 @@ def test_correction_success_and_failure_are_isolated_from_caller_transaction(
         caller_db.rollback()
 
 
-@pytest.mark.requirement("WS09-02A-R5")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_private_helper_revalidates_current_admin_state_before_recording(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -518,7 +517,7 @@ def test_private_helper_revalidates_current_admin_state_before_recording(
         assert db.scalar(select(func.count()).select_from(AdminAction)) == 0
 
 
-@pytest.mark.requirement("WS09-02A-R3", "WS09-02A-R5")
+@pytest.mark.pass_provenance('WS09-02A')
 @pytest.mark.parametrize(
     ("role", "account_status", "mark_deleted"),
     [
@@ -561,7 +560,7 @@ def test_correction_helper_revalidates_stale_actor_in_private_session(
         assert db.scalar(select(func.count()).select_from(AdminAction)) == 1
 
 
-@pytest.mark.requirement("WS09-02A-R3")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_correction_helper_hides_unexpected_integrity_error_detail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -602,7 +601,7 @@ def test_correction_helper_hides_unexpected_integrity_error_detail(
         assert db.scalar(select(func.count()).select_from(AdminAction)) == 1
 
 
-@pytest.mark.requirement("WS09-02A-R6")
+@pytest.mark.pass_provenance('WS09-02A')
 @pytest.mark.no_db_cleanup
 def test_non_request_correlation_fallback_generates_and_sets_fresh_uuid_values(
     monkeypatch: pytest.MonkeyPatch,

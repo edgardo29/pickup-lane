@@ -5,8 +5,6 @@ from pathlib import Path
 
 import pytest
 
-import backend.services.provider_retry_policy as retry_policy
-
 pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -34,48 +32,7 @@ def _call_name(node: ast.AST) -> str | None:
     return None
 
 
-@pytest.mark.requirement("WS02-04C2-R8")
-def test_frozen_fanout_inventory_is_represented_as_synchronous_sequential_policy() -> None:
-    policies = {
-        policy.workflow: policy
-        for policy in retry_policy.FANOUT_EXECUTION_POLICIES
-    }
-
-    assert policies["platform_notice.selected_user_publish"].current_bound == (
-        "Selected-user product maximum is 500 recipients."
-    )
-    assert policies["game_chat.notification_rows"].provider_calls_per_item == "none"
-    assert policies["need_a_sub_chat.notification_rows"].provider_calls_per_item == "none"
-    assert policies["game_updated.notification_rows"].provider_calls_per_item == "none"
-    assert "possible Stripe payment" in policies[
-        "waitlist.promotion"
-    ].provider_calls_per_item
-    assert "Firebase delete or Stripe detach" in policies[
-        "account_deletion.cleanup"
-    ].provider_calls_per_item
-    assert "Stripe refund" in policies[
-        "official_game_cancellation.refunds"
-    ].provider_calls_per_item
-    assert "Stripe refund" in policies[
-        "official_game_player_removal.refunds"
-    ].provider_calls_per_item
-    assert policies[
-        "community_publish_fee.financial_outcome_refund"
-    ].execution_model == "single_admin_intent_and_durable_job_workflow"
-    assert policies["late_checkout_payment.compensation"].execution_model == (
-        "single_webhook_compensation_checkpoint"
-    )
-    assert policies["late_checkout_payment.compensation"].provider_calls_per_item == (
-        "none in webhook; one bounded durable refund attempt."
-    )
-
-    for policy in policies.values():
-        assert policy.new_concurrency_allowed is False
-        assert policy.approved_concurrency_cap is None
-        assert policy.approved_batch_size is None
-
-
-@pytest.mark.requirement("WS02-04C2-R8")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_current_fanout_sources_do_not_introduce_unapproved_parallel_execution() -> None:
     prohibited_calls: list[str] = []
     prohibited_imports: list[str] = []
@@ -105,15 +62,3 @@ def test_current_fanout_sources_do_not_introduce_unapproved_parallel_execution()
 
     assert prohibited_imports == []
     assert prohibited_calls == []
-
-
-@pytest.mark.requirement("WS02-04C2-R8")
-def test_product_audience_bounds_are_not_treated_as_worker_or_provider_limits() -> None:
-    selected_user_policy = retry_policy.FANOUT_EXECUTION_POLICIES[0]
-
-    assert selected_user_policy.workflow == "platform_notice.selected_user_publish"
-    assert "500 recipients" in selected_user_policy.current_bound
-    assert selected_user_policy.approved_batch_size is None
-    assert selected_user_policy.approved_concurrency_cap is None
-    assert "worker" not in selected_user_policy.current_bound.lower()
-    assert "provider" not in selected_user_policy.current_bound.lower()

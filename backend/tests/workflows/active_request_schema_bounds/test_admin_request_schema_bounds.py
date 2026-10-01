@@ -28,7 +28,7 @@ from backend.schemas.support_flag_schema import (
     SupportResolutionOutcome,
 )
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 _PREVIEW_TOKEN = "a" * 64
 
@@ -73,7 +73,7 @@ def _money_payload(**overrides: object) -> AdminMoneyFinancialOutcomeCreate:
     return AdminMoneyFinancialOutcomeCreate(**payload)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_admin_official_game_outcome_literals_and_reason_bounds() -> None:
     for outcome in get_args(AdminOfficialRemovalOutcome):
         accepted = AdminOfficialGamePlayerRemovalExecute(
@@ -110,7 +110,7 @@ def test_admin_official_game_outcome_literals_and_reason_bounds() -> None:
     )
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_admin_money_literals_reason_note_and_amount_request_bounds() -> None:
     for outcome in get_args(AdminMoneyFinancialOutcome):
         assert _money_payload(outcome=outcome).outcome == outcome
@@ -124,7 +124,7 @@ def test_admin_money_literals_reason_note_and_amount_request_bounds() -> None:
     _assert_rejected(_money_payload, internal_note="x" * 1001)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_admin_review_literals_and_text_bounds() -> None:
     close_fields = {
         "expected_case_version": 1,
@@ -179,7 +179,7 @@ def test_admin_review_literals_and_text_bounds() -> None:
     )
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_support_resolution_literals_and_reason_bounds() -> None:
     for outcome in get_args(SupportResolutionOutcome):
         accepted = SupportFlagResolve(outcome=outcome, reason="x")

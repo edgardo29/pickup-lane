@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-import backend.services.provider_retry_policy as retry_policy
 import backend.services.transaction_boundary_policy as boundary_policy
 
 pytestmark = pytest.mark.no_db_cleanup
@@ -40,7 +39,7 @@ def _resolve_dotted_object(dotted_path: str) -> object:
     raise import_errors[-1] if import_errors else ModuleNotFoundError(dotted_path)
 
 
-@pytest.mark.requirement("WS04-02A-R1", "WS04-02A-R6", "WS04-02A-R8")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_current_side_effecting_workflows_are_declared_with_complete_boundaries() -> None:
     policies = _policies_by_workflow()
 
@@ -93,14 +92,8 @@ def test_current_side_effecting_workflows_are_declared_with_complete_boundaries(
         assert policy.recovery_path
 
 
-@pytest.mark.requirement("WS04-02A-R1", "WS04-02A-R2", "WS04-02A-R7")
-def test_provider_backed_boundary_contexts_match_retry_policy_registry() -> None:
-    retry_contexts = {
-        policy.workflow_context
-        for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES
-    }
-
-    assert boundary_policy.provider_retry_contexts() == retry_contexts
+@pytest.mark.pass_provenance('WS04-02A')
+def test_provider_backed_transaction_contexts_define_pre_effect_boundaries() -> None:
     assert boundary_policy.provider_retry_contexts() == {
         "saved_card_setup_sync",
         "checkout_active_hold_reentry",
@@ -139,61 +132,59 @@ def test_provider_backed_boundary_contexts_match_retry_policy_registry() -> None
             )
 
 
-@pytest.mark.requirement("WS04-02A-R2", "WS04-02A-R3", "WS04-02A-R4")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_checkout_and_publish_create_policies_require_committed_checkpoints() -> None:
     checkout_boundary = boundary_policy.policy_by_workflow(
         "checkout.payment_intent.create"
     )
-    checkout_retry = retry_policy.policy_by_operation_context(
-        "stripe.payment_intent.create",
-        "checkout_initial_create_before_provider_result",
-    )
     publish_boundary = boundary_policy.policy_by_workflow(
         "community_publish_fee.payment_intent.create"
-    )
-    publish_retry = retry_policy.policy_by_operation_context(
-        "stripe.payment_intent.create",
-        "community_publish_fee_initial_create",
     )
 
     assert (
         "committed pending booking"
         in checkout_boundary.required_pre_effect_checkpoint.lower()
     )
-    assert checkout_retry.identity_survives_replay
-    assert checkout_retry.application_automatic_retry_allowed is False
-    assert "ordinary app replay is not approved" in checkout_retry.current_recovery
+    assert checkout_boundary.operation_class == (
+        boundary_policy.ExternalOperationClass.NO_AUTOMATIC_RETRY_MUTATION
+    )
+    assert "without confirmation or automatic app replay" in (
+        checkout_boundary.timeout_or_unknown_outcome
+    )
+    assert "recoverable" in checkout_boundary.timeout_or_unknown_outcome
 
     assert "Committed publish attempt" in publish_boundary.required_pre_effect_checkpoint
-    assert publish_retry.identity_survives_replay
-    assert publish_retry.application_automatic_retry_allowed is False
-    assert "ordinary app retry is not approved" in publish_retry.current_recovery
+    assert publish_boundary.operation_class == (
+        boundary_policy.ExternalOperationClass.RECONCILE_BEFORE_RETRY_MUTATION
+    )
+    assert "ordinary app retry is not approved" in (
+        publish_boundary.timeout_or_unknown_outcome
+    )
+    assert "reconciliation" in publish_boundary.recovery_path
 
 
-@pytest.mark.requirement("WS04-02A-R1", "WS04-02A-R5", "WS04-02A-R7")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_plan_named_waitlist_late_refund_and_unfinished_cleanup_paths_are_reconciled() -> None:
     policies = _policies_by_workflow()
-    firebase_delete = retry_policy.policy_by_operation_context(
-        "firebase.user.delete",
-        "account_deletion_auth_cleanup",
-    )
+    unfinished_cleanup = policies["unfinished_account.firebase_cleanup"]
 
     assert policies["waitlist.auto_promotion.payment_intent"].provider_retry_contexts == (
         "waitlist_auto_promotion_create",
         "waitlist_auto_promotion_confirm",
     )
     assert policies["late_checkout_payment.compensation"].provider_retry_contexts == ()
-    assert policies["unfinished_account.firebase_cleanup"].provider_retry_contexts == (
+    assert unfinished_cleanup.provider_retry_contexts == (
         "account_deletion_auth_cleanup",
     )
-    assert (
+    assert unfinished_cleanup.service_function == (
         "backend.services.auth_account_service.cleanup_unfinished_account_workflow"
-        in firebase_delete.material_callers
     )
-    assert policies["unfinished_account.firebase_cleanup"].downstream_owner == "WS05"
+    assert "unknown Firebase outcome" in unfinished_cleanup.timeout_or_unknown_outcome
+    assert "Duplicate cleanup reuses Firebase identity" in unfinished_cleanup.recovery_path
+    assert unfinished_cleanup.downstream_owner == "WS05"
 
 
-@pytest.mark.requirement("WS04-02A-R6", "WS04-02A-R8")
+@pytest.mark.pass_provenance('WS04-02A')
 def test_boundary_policy_is_declarative_and_contains_no_sensitive_or_runtime_claims() -> None:
     source = (_REPO_ROOT / "backend/services/transaction_boundary_policy.py").read_text()
     rendered = repr(boundary_policy.TRANSACTION_BOUNDARY_POLICIES)

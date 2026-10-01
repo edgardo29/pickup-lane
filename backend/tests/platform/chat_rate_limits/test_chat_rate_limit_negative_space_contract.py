@@ -27,7 +27,6 @@ finally:
     if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
         os.environ.pop("DATABASE_URL", None)
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _BACKEND_ROOT = _REPO_ROOT / "backend"
@@ -78,7 +77,7 @@ def _route_decorators(path: Path) -> list[tuple[str, str]]:
     return routes
 
 
-@pytest.mark.requirement("WS02-04C3A-R9")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_single_shared_limiter_owner_and_current_send_routes_are_the_only_authenticated_insert_owners() -> (
     None
 ):
@@ -113,7 +112,7 @@ def test_single_shared_limiter_owner_and_current_send_routes_are_the_only_authen
     ]
 
 
-@pytest.mark.requirement("WS02-04C3A-R9")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_no_duplicate_route_middleware_frontend_memory_redis_or_generic_limiter_replaces_c3a() -> (
     None
 ):
@@ -144,8 +143,7 @@ def test_no_duplicate_route_middleware_frontend_memory_redis_or_generic_limiter_
     assert "sessionStorage" not in backend_text
 
 
-@pytest.mark.requirement("WS02-04C3A-R8")
-@pytest.mark.requirement("WS02-04C3A-R9")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_ordinary_user_routes_do_not_expose_self_remove_restore_visibility_bypass() -> (
     None
 ):
@@ -178,7 +176,7 @@ def test_ordinary_user_routes_do_not_expose_self_remove_restore_visibility_bypas
     assert "restore" in admin_sources
 
 
-@pytest.mark.requirement("WS02-04C3A-R8")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_model_metadata_supports_visible_text_boundary_without_claiming_query_plan_or_migration_proof() -> (
     None
 ):
@@ -217,7 +215,7 @@ def test_model_metadata_supports_visible_text_boundary_without_claiming_query_pl
     assert "ix_sub_post_chat_messages_chat_id_visibility_status" in sub_indexes
 
 
-@pytest.mark.requirement("WS02-04C3A-R10")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_c3a_event_source_has_no_sensitive_or_high_cardinality_runtime_fields() -> None:
     source = inspect.getsource(chat_rate_limit_service._log_rate_limit_event)
 

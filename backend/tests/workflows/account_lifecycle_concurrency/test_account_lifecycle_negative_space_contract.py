@@ -9,7 +9,6 @@ import pytest
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.suite_type("ordinary"),
 ]
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -278,7 +277,7 @@ def _is_none_literal(node: ast.AST | None) -> bool:
     return isinstance(node, ast.Constant) and node.value is None
 
 
-@pytest.mark.requirement("WS03-02-R11")
+@pytest.mark.pass_provenance('WS03-02')
 def test_active_route_inventory_classifies_every_account_lifecycle_surface() -> None:
     routes = _discover_routes()
     discovered_keys = set(routes)
@@ -300,7 +299,7 @@ def test_active_route_inventory_classifies_every_account_lifecycle_surface() -> 
         assert sentinel in endpoint_source
 
 
-@pytest.mark.requirement("WS03-02-R11")
+@pytest.mark.pass_provenance('WS03-02')
 def test_active_backend_source_inventory_classifies_every_candidate_module() -> None:
     discovered_paths = _discover_source_candidates()
     classified_paths = set(_SOURCE_CLASSIFICATIONS)
@@ -312,7 +311,7 @@ def test_active_backend_source_inventory_classifies_every_candidate_module() -> 
         assert (_REPO_ROOT / relative_path).is_file()
 
 
-@pytest.mark.requirement("WS03-02-R1", "WS03-02-R5", "WS03-02-R11")
+@pytest.mark.pass_provenance('WS03-02')
 def test_active_backend_source_has_no_unapproved_uid_reassignment_or_user_creation() -> None:
     risky_auth_reassignments: list[str] = []
     risky_user_constructors: list[str] = []
@@ -351,7 +350,7 @@ def test_active_backend_source_has_no_unapproved_uid_reassignment_or_user_creati
     assert "reject_generic_user_mutation()" in combined
 
 
-@pytest.mark.requirement("WS03-02-R11")
+@pytest.mark.pass_provenance('WS03-02')
 def test_context_row_provisioning_candidates_are_classified_and_generic_routes_are_retired() -> None:
     risky_context_constructors: list[str] = []
 
@@ -376,7 +375,7 @@ def test_context_row_provisioning_candidates_are_classified_and_generic_routes_a
     assert "create_user_stats_workflow(" not in user_stats_routes
 
 
-@pytest.mark.requirement("WS03-02-R6", "WS03-02-R9", "WS03-02-R11")
+@pytest.mark.pass_provenance('WS03-02')
 def test_protected_dependency_source_uses_current_local_state_not_role_or_status_cache() -> None:
     auth_service = _read("backend/services/auth_service.py")
 
@@ -392,7 +391,7 @@ def test_protected_dependency_source_uses_current_local_state_not_role_or_status
         assert forbidden not in combined
 
 
-@pytest.mark.requirement("WS03-02-R6", "WS03-02-R7", "WS03-02-R11")
+@pytest.mark.pass_provenance('WS03-02')
 def test_deletion_source_keeps_unknown_outcomes_manual_and_terminal_states_non_resurrecting() -> None:
     self_delete = _read("backend/services/account_deletion_service.py")
     admin_delete = _read("backend/services/admin_user_delete_service.py")
@@ -417,7 +416,7 @@ def test_deletion_source_keeps_unknown_outcomes_manual_and_terminal_states_non_r
     assert "anonymize_user(target_user, now)" in admin_delete
 
 
-@pytest.mark.requirement("WS03-02-R8", "WS03-02-R11")
+@pytest.mark.pass_provenance('WS03-02')
 def test_recovery_and_linking_inventory_has_no_local_password_reset_or_reassignment_api() -> None:
     frontend_sources = {
         "frontend/src/lib/authErrors.js": _read("frontend/src/lib/authErrors.js"),
@@ -480,7 +479,7 @@ def test_recovery_and_linking_inventory_has_no_local_password_reset_or_reassignm
         assert forbidden not in combined
 
 
-@pytest.mark.requirement("WS03-02-R10", "WS03-02-R11")
+@pytest.mark.pass_provenance('WS03-02')
 def test_final_admin_bypass_inventory_requires_locked_current_state_checks() -> None:
     role_service = _read("backend/services/admin_user_role_service.py")
     suspension_service = _read("backend/services/admin_user_account_service.py")

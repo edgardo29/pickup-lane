@@ -7,7 +7,6 @@ from fastapi.routing import APIRoute
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.suite_type("ordinary"),
 ]
 
 MUTATION_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -407,7 +406,7 @@ def _assert_pairwise_disjoint(*sets: set[tuple[str, str]]) -> None:
             assert left.isdisjoint(right), left & right
 
 
-@pytest.mark.requirement("WS03-03A-R5", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_recent_auth_policy_matches_frozen_matrix_and_registered_routes() -> None:
     from backend.services.recent_auth_policy import (
         RECENT_AUTH_PROTECTED_ACTIONS,
@@ -456,7 +455,7 @@ def test_recent_auth_policy_matches_frozen_matrix_and_registered_routes() -> Non
     assert discovered_recent_routes == frozen_keys
 
 
-@pytest.mark.requirement("WS03-03A-R5", "WS03-03A-R6", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_complete_admin_access_mutation_partition_matches_current_routes() -> None:
     registered_routes = _registered_routes()
     discovered_admin_mutations = _admin_access_mutation_routes(registered_routes)
@@ -497,7 +496,7 @@ def test_complete_admin_access_mutation_partition_matches_current_routes() -> No
         )
 
 
-@pytest.mark.requirement("WS03-03A-R5", "WS03-03A-R6", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_admin_route_families_use_action_level_classification_without_wildcards() -> None:
     family_expectations = {
         "/admin/community-games": 11,
@@ -539,7 +538,7 @@ def test_admin_route_families_use_action_level_classification_without_wildcards(
     ) in RECENT_AUTH_NOT_REQUIRED_ADMIN_MUTATIONS
 
 
-@pytest.mark.requirement("WS03-03A-R5", "WS03-03A-R6", "WS03-03A-R11")
+@pytest.mark.pass_provenance('WS03-03A')
 def test_representative_intentionally_non_recent_admin_routes_remain_ordinary() -> None:
     registered_routes = _registered_routes()
     representative_routes = {

@@ -16,7 +16,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _session():
@@ -97,7 +96,7 @@ def _persist_notification_audit_fixture(
         return notification_id, action.id
 
 
-@pytest.mark.requirement("WS09-02A-R7")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_audit_http_surfaces_are_active_admin_only_private_and_additive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -204,7 +203,7 @@ def test_audit_http_surfaces_are_active_admin_only_private_and_additive(
     assert retired_note.status_code == 410
 
 
-@pytest.mark.requirement("WS09-02A-R7")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_direct_service_calls_cannot_bypass_binary_active_admin_access() -> None:
     from backend.services.admin_action_display_service import (
         list_admin_action_log,

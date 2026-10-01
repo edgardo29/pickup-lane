@@ -24,7 +24,7 @@ _EXPECTED_CURRENT_BASE = "0001_pg_trgm"
 _EXPECTED_CURRENT_HEAD = "0065_payment_method_ops"
 
 
-@pytest.mark.requirement("WS04-03A-R2", "WS04-03A-R3", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_current_alembic_revision_chain_is_linear_and_complete() -> None:
     revisions = load_migration_revisions(_VERSIONS_DIR)
 
@@ -45,7 +45,7 @@ def test_current_alembic_revision_chain_is_linear_and_complete() -> None:
     assert script.get_bases() == [_EXPECTED_CURRENT_BASE]
 
 
-@pytest.mark.requirement("WS04-03A-R2", "WS04-03A-R5", "WS04-03A-R6", "WS04-03A-R7")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_current_migration_operation_inventory_classifies_upgrade_side_operations() -> None:
     inventory = build_migration_operation_inventory(_VERSIONS_DIR)
 
@@ -63,7 +63,7 @@ def test_current_migration_operation_inventory_classifies_upgrade_side_operation
     } <= set(inventory.operation_categories)
 
 
-@pytest.mark.requirement("WS04-03A-R2", "WS04-03A-R5", "WS04-03A-R6", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_migration_inventory_fails_closed_for_unclassified_risky_patterns(
     tmp_path: Path,
 ) -> None:
@@ -88,7 +88,7 @@ def test_migration_inventory_fails_closed_for_unclassified_risky_patterns(
     )
 
 
-@pytest.mark.requirement("WS04-03A-R2", "WS04-03A-R5", "WS04-03A-R6", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_raw_sql_inventory_flags_mixed_reviewed_and_destructive_sql(
     tmp_path: Path,
 ) -> None:
@@ -114,7 +114,7 @@ def test_raw_sql_inventory_flags_mixed_reviewed_and_destructive_sql(
     )
 
 
-@pytest.mark.requirement("WS04-03A-R2", "WS04-03A-R5", "WS04-03A-R6", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_raw_sql_inventory_requires_exact_reviewed_extension_forms(
     tmp_path: Path,
 ) -> None:

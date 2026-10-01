@@ -9,7 +9,6 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
@@ -44,7 +43,7 @@ def _payment_event(provider_event_id: str):
     )
 
 
-@pytest.mark.requirement("WS02-04C2-R7")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_signed_webhook_route_uses_construction_seam_before_processing() -> None:
     route_source = (_REPO_ROOT / "backend/routes/stripe_webhook_routes.py").read_text()
     service_source = (_REPO_ROOT / "backend/services/stripe_webhook_service.py").read_text()
@@ -56,7 +55,7 @@ def test_signed_webhook_route_uses_construction_seam_before_processing() -> None
     assert "provider_event_id = event_payload.get(\"id\")" in service_source
 
 
-@pytest.mark.requirement("WS02-04C2-R7")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_webhook_requires_provider_event_id_before_local_event_creation() -> None:
     from backend.models import PaymentEvent
     from backend.services.stripe_webhook_service import (
@@ -75,7 +74,7 @@ def test_webhook_requires_provider_event_id_before_local_event_creation() -> Non
         assert db.scalars(select(PaymentEvent)).all() == []
 
 
-@pytest.mark.requirement("WS02-04C2-R7")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_existing_provider_event_duplicate_is_idempotent_without_reprocessing() -> None:
     from backend.models import PaymentEvent
     from backend.services.stripe_webhook_service import (
@@ -102,7 +101,7 @@ def test_existing_provider_event_duplicate_is_idempotent_without_reprocessing() 
         assert events[0].id == existing.id
 
 
-@pytest.mark.requirement("WS02-04C2-R7")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_provider_event_uniqueness_and_integrity_error_path_are_idempotent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -148,7 +147,7 @@ def test_provider_event_uniqueness_and_integrity_error_path_are_idempotent(
         assert db.scalars(select(PaymentEvent)).all() == []
 
 
-@pytest.mark.requirement("WS02-04C2-R7")
+@pytest.mark.pass_provenance('WS02-04C2')
 def test_no_internal_scheduled_webhook_retry_loop_is_present() -> None:
     source = (_REPO_ROOT / "backend/services/stripe_webhook_service.py").read_text()
 

@@ -259,7 +259,7 @@ def _apply_observation(
     )
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_unfamiliar_provider_status_is_preserved_without_false_failure() -> None:
     now = datetime(2035, 1, 1, 12, 0, tzinfo=timezone.utc)
     with _session() as db:
@@ -287,7 +287,7 @@ def test_unfamiliar_provider_status_is_preserved_without_false_failure() -> None
         assert booking.reservation_status == "held"
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_ordinary_provider_cancellation_fails_and_releases_booking() -> None:
     now = datetime(2035, 1, 2, 12, 0, tzinfo=timezone.utc)
     with _session() as db:
@@ -322,7 +322,7 @@ def test_ordinary_provider_cancellation_fails_and_releases_booking() -> None:
         assert participant.participant_status == "cancelled"
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 @pytest.mark.parametrize(
     ("payment_status", "provider_status"),
     (
@@ -373,7 +373,7 @@ def test_exact_expiry_releases_every_unresolved_state_without_rewriting_provider
         assert participant.participant_status == "cancelled"
 
 
-@pytest.mark.requirement("WS05-02-R3", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_late_success_is_truthful_and_compensation_is_idempotent() -> None:
     from backend.services.checkout_service import expire_stale_pending_checkouts
 
@@ -417,7 +417,7 @@ def test_late_success_is_truthful_and_compensation_is_idempotent() -> None:
         assert compensations[0].status == "required"
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R5", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_reconcile_timeout_expires_stale_hold_without_rewriting_provider_truth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -460,7 +460,7 @@ def test_reconcile_timeout_expires_stale_hold_without_rewriting_provider_truth(
         assert participant.participant_status == "cancelled"
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R4", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_stored_webhook_read_timeout_expires_stale_hold_and_keeps_event_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -528,7 +528,7 @@ def test_stored_webhook_read_timeout_expires_stale_hold_and_keeps_event_pending(
         )
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R3", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_late_success_after_local_cancellation_preserves_cancellation_outcome() -> None:
     now = datetime(2035, 1, 4, 15, 0, tzinfo=timezone.utc)
     with _session() as db:
@@ -583,7 +583,7 @@ def test_late_success_after_local_cancellation_preserves_cancellation_outcome() 
         assert compensation.status == "required"
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R3", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_success_confirms_held_party_but_conflicts_when_total_capacity_is_exceeded() -> None:
     now = datetime(2035, 1, 5, 12, 0, tzinfo=timezone.utc)
     with _session() as db:
@@ -663,7 +663,7 @@ def test_success_confirms_held_party_but_conflicts_when_total_capacity_is_exceed
         assert compensation.reason == "capacity_conflict"
 
 
-@pytest.mark.requirement("WS05-02-R4", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_duplicate_webhook_persists_one_event_and_one_internal_job() -> None:
     from backend.services.stripe_webhook_service import (
         record_and_process_stripe_webhook_event,
@@ -689,7 +689,7 @@ def test_duplicate_webhook_persists_one_event_and_one_internal_job() -> None:
         assert job.protected_identity == {"payment_event_id": str(event.id)}
 
 
-@pytest.mark.requirement("WS05-02-R6", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_payment_method_reconcile_leaves_final_state_for_job_transaction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -766,7 +766,7 @@ def test_payment_method_reconcile_leaves_final_state_for_job_transaction(
             assert resolved.provider_object_id == "seti_ws05_02_recovered"
 
 
-@pytest.mark.requirement("WS05-02-R6", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_paid_waitlist_reverifies_saved_method_before_any_charge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -920,7 +920,7 @@ def _attach_paid_waitlist_processing_state(
     return waitlist_entry.id
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R5", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_paid_waitlist_requires_action_fails_promotion_without_browser_wait() -> None:
     now = datetime(2035, 1, 7, 12, 0, tzinfo=timezone.utc)
     with _session() as db:
@@ -1004,7 +1004,7 @@ def test_paid_waitlist_requires_action_fails_promotion_without_browser_wait() ->
         assert waitlist_entry.waitlist_status == "payment_failed"
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R5", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 @pytest.mark.parametrize("provider_status", ("requires_confirmation", "requires_capture"))
 def test_paid_waitlist_unresolved_provider_states_preserve_truth_without_failure(
     provider_status: str,
@@ -1060,7 +1060,7 @@ def test_paid_waitlist_unresolved_provider_states_preserve_truth_without_failure
         )
 
 
-@pytest.mark.requirement("WS05-02-R1", "WS05-02-R2", "WS05-02-R5", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_paid_waitlist_confirmation_uses_fresh_database_time_after_provider_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1212,7 +1212,7 @@ def test_paid_waitlist_confirmation_uses_fresh_database_time_after_provider_call
         assert compensation.reason == "reservation_expired"
 
 
-@pytest.mark.requirement("WS05-02-R1", "WS05-02-R6", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_unknown_payment_intent_creation_reuses_checkout_without_provider_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1259,7 +1259,7 @@ def test_unknown_payment_intent_creation_reuses_checkout_without_provider_id(
         assert response.stripe_status == "unknown"
 
 
-@pytest.mark.requirement("WS05-02-R1", "WS05-02-R2", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_checkout_confirmation_uses_fresh_database_time_after_provider_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1423,7 +1423,7 @@ def _create_saved_payment_method_pair(
     return user, default_method, secondary_method
 
 
-@pytest.mark.requirement("WS05-02-R6", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_set_default_verifies_provider_owner_before_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1475,7 +1475,7 @@ def test_set_default_verifies_provider_owner_before_mutation(
         assert db.scalar(select(func.count()).select_from(PaymentMethodOperation)) == 0
 
 
-@pytest.mark.requirement("WS05-02-R6", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_provider_unknown_card_operation_blocks_conflicting_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1530,7 +1530,7 @@ def test_provider_unknown_card_operation_blocks_conflicting_mutation(
         assert db.get(UserPaymentMethod, default_method.id).method_status == "active"
 
 
-@pytest.mark.requirement("WS05-02-R6", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_active_payment_method_operation_database_index_blocks_conflicts() -> None:
     now = datetime(2035, 1, 8, 14, 30, tzinfo=timezone.utc)
     with _session() as db:
@@ -1634,7 +1634,7 @@ def _begin_saved_payment_method_operation(
         return f"active:{operation.status}"
 
 
-@pytest.mark.requirement("WS05-02-R6", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_concurrent_saved_method_operations_cannot_both_become_active() -> None:
     now = datetime(2035, 1, 8, 14, 45, tzinfo=timezone.utc)
     with _session() as db:
@@ -1677,7 +1677,7 @@ def test_concurrent_saved_method_operations_cannot_both_become_active() -> None:
     assert active_count == 1
 
 
-@pytest.mark.requirement("WS05-02-R6", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_detach_default_uses_distinct_clear_default_operation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

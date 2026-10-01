@@ -59,7 +59,6 @@ finally:
     if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
         os.environ.pop("DATABASE_URL", None)
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_TIME = datetime(2037, 6, 1, 12, 0, tzinfo=timezone.utc)
 _SENSITIVE_EXCEPTION_CANARY = "CANARY-MODERATION-EVIDENCE 312-555-1212"
@@ -200,7 +199,7 @@ def _findings(db, game_id: uuid.UUID) -> list[AdminContentModerationFinding]:
     )
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     ("description", "expected_rule_ids", "expected_match_count"),
     (
@@ -252,7 +251,7 @@ def test_payment_pressure_persists_only_contextual_contributors(
         )
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R4")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_saved_finding_exact_repeat_edit_clear_and_reappearance_preserve_history() -> (
     None
 ):
@@ -331,7 +330,7 @@ def test_saved_finding_exact_repeat_edit_clear_and_reappearance_preserve_history
         assert detail.finding_summary.previous_issue_labels
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R4")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_long_atomic_url_and_email_matches_persist_complete_evidence() -> None:
     long_url = "https://example.com/" + "a" * 180
     long_email = f"{'b' * 180}@example.com"
@@ -370,7 +369,7 @@ def test_long_atomic_url_and_email_matches_persist_complete_evidence() -> None:
         assert long_email[email_match["start"] : email_match["end"]] == long_email
 
 
-@pytest.mark.requirement("WS03-05A-R4", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_priority_uses_only_current_findings_and_closed_case_stays_immutable() -> None:
     with _session() as db:
         game = _seed_game(
@@ -437,7 +436,7 @@ def test_priority_uses_only_current_findings_and_closed_case_stays_immutable() -
         ] == closed_finding_state
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R4")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_configuration_change_creates_a_new_current_identity(monkeypatch) -> None:
     from backend.services import content_moderation_evidence_service
 
@@ -480,7 +479,7 @@ def test_configuration_change_creates_a_new_current_identity(monkeypatch) -> Non
         assert findings[0].evidence == findings[1].evidence
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R4")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_need_a_sub_adapter_persists_its_frozen_context_and_field_purpose() -> None:
     with _session() as db:
         owner = _user(2)
@@ -507,7 +506,7 @@ def test_need_a_sub_adapter_persists_its_frozen_context_and_field_purpose() -> N
         assert finding.declared_limits
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_tampered_saved_evidence_rejects_without_partial_review_state() -> None:
     with _session() as db:
         game = _seed_game(db)
@@ -537,7 +536,7 @@ def test_tampered_saved_evidence_rejects_without_partial_review_state() -> None:
         assert db.scalar(select(func.count()).select_from(AdminReviewCaseEvent)) == 0
 
 
-@pytest.mark.requirement("WS03-05A-R2", "WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize(
     "field_name",
     ("rule_id", "rule_version", "evidence_type"),
@@ -574,7 +573,7 @@ def test_persistence_rejects_non_string_nested_evidence_identifiers(
         assert db.scalar(select(func.count()).select_from(AdminReviewCaseEvent)) == 0
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 @pytest.mark.parametrize("adapter", ("community_game", "need_a_sub"))
 def test_saved_content_adapter_exception_logs_exclude_sensitive_evidence(
     adapter: str,
@@ -617,7 +616,7 @@ def test_saved_content_adapter_exception_logs_exclude_sensitive_evidence(
     assert record["stable_error_code"] == expected_code
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R6")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_reconciliation_helper_exception_log_excludes_sensitive_evidence(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -658,7 +657,7 @@ def _integrity_error_for_constraint(constraint_name: str) -> IntegrityError:
     return IntegrityError("INSERT", {}, original)
 
 
-@pytest.mark.requirement("WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_non_retryable_integrity_error_is_rolled_back_without_retry(
     monkeypatch,
 ) -> None:
@@ -687,7 +686,7 @@ def test_non_retryable_integrity_error_is_rolled_back_without_retry(
         assert not db.in_transaction()
 
 
-@pytest.mark.requirement("WS03-05A-R3", "WS03-05A-R5")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_source_edit_race_scans_the_post_lock_committed_value() -> None:
     from backend.database import engine
 
@@ -742,7 +741,7 @@ def test_source_edit_race_scans_the_post_lock_committed_value() -> None:
         )
 
 
-@pytest.mark.requirement("WS03-05A-R1")
+@pytest.mark.pass_provenance('WS03-05A')
 def test_need_a_sub_field_inventory_is_complete_before_scanning() -> None:
     owner = _user(3)
     post = _sub_post(owner, notes="Clean")

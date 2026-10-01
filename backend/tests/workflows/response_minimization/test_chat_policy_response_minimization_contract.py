@@ -9,7 +9,6 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 CHICAGO = ZoneInfo("America/Chicago")
 
@@ -321,7 +320,7 @@ def _route(method: str, path: str) -> APIRoute:
     raise AssertionError(f"Route not found: {method} {path}")
 
 
-@pytest.mark.requirement("WS02-05B2-R6")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_participant_game_and_need_a_sub_chat_responses_filter_moderation_fields(
     client: TestClient,
 ) -> None:
@@ -371,7 +370,7 @@ def test_participant_game_and_need_a_sub_chat_responses_filter_moderation_fields
     assert sub_message_data["sender_is_current_chat_member"] is True
 
 
-@pytest.mark.requirement("WS02-05B2-R7")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_public_policy_document_reads_expose_display_version_fields_only(
     client: TestClient,
 ) -> None:
@@ -395,8 +394,7 @@ def test_public_policy_document_reads_expose_display_version_fields_only(
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-05B2-R6")
-@pytest.mark.requirement("WS02-05B2-R7")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_chat_and_policy_routes_declare_participant_public_and_admin_models() -> None:
     from backend.schemas import (
         AdminChatMessageListRead,

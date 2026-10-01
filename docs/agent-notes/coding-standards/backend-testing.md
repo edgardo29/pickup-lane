@@ -94,10 +94,10 @@ correct test set should be.
 
 Tests must trace to intended behavior, a material invariant, or a concrete
 regression risk. Use lightweight mapping when it helps explain important proof,
-but do not require pass-owned JSON declarations, pytest requirement markers,
-generated node inventories, checker compliance, or a separate testing record.
-A test expectation without a traceable specification or established domain
-policy remains unresolved and must not be invented.
+but do not create parallel metadata or generated inventories to duplicate what
+the test source and pass artifacts already establish. A test expectation
+without a traceable specification or established domain policy remains
+unresolved and must not be invented.
 
 ## Enum, Status, Role, And Lifecycle Matrix
 
@@ -168,6 +168,9 @@ Ownership rules:
   whichever endpoint first exposed the issue.
 - File ownership follows the behavior under test, not only the endpoint that
   exposed it.
+
+Directory placement expresses behavior ownership only. It does not certify the
+correctness, authority, or usefulness of a test.
 
 Before completion, the agent must be able to explain why each new or moved test
 belongs in its selected file.
@@ -340,7 +343,8 @@ test suite. Before adding a support module, confirm:
 Current support responsibilities include:
 
 - environment/database/network safety support
-- artifact sanitization and browser-quality policy support
+- artifact sanitization support
+- migration inventory and dedicated migration-database lifecycle support
 
 Future tests may introduce new support modules, but the module must match
 current ownership and be justified by reviewed coverage. Do not restore
@@ -786,9 +790,15 @@ automated workflow provider used for backend validation.
 
 Automation must:
 
-- Run the required backend test suite before merge or release.
-- Use an isolated test database.
-- Apply or validate migrations when the production path depends on migrations.
+- Detect backend-relevant changes and install backend dependencies.
+- Configure separate exact-purpose ordinary and migration test databases.
+- Compile current backend and backend-test Python source.
+- Rebuild both allowlisted test databases through `backend.test_runner`.
+- Collect the complete current non-legacy backend test tree through the guarded
+  runner under strict markers.
+- Run the focused safety tests under
+  `backend/tests/platform/backend_test_runner/`.
+- Run the surviving migration graph, safety, and lifecycle suite.
 - Never use production credentials, production data, or production
   infrastructure.
 - Produce readable failure output.
@@ -938,8 +948,7 @@ Current registered markers:
 ```text
 migration_lifecycle
 no_db_cleanup
-requirement
-suite_type
+pass_provenance(*pass_ids)
 ```
 
 Rules:
@@ -950,9 +959,15 @@ Rules:
 - Tests required for merge protection must not be silently excluded by marker
   defaults.
 
-The existing `requirement` marker is legacy metadata. New or changed tests do
-not need requirement markers, and marker presence does not determine whether a
-test is valid or useful.
+`pass_provenance` is required when a production-readiness pass introduces or
+materially changes a test as evidence for that pass. It may name multiple pass
+IDs when multiple passes genuinely own the test's history. Use the narrowest
+accurate marker scope.
+
+Do not add provenance merely because a pass reran an existing test. Ordinary
+product-development tests with no production-readiness provenance do not need
+the marker. Provenance is read directly from source; it is not universal test
+metadata and has no manifest or completeness rule.
 
 ## Feature Review Checklist
 

@@ -143,7 +143,7 @@ def _delivered_body(result: MiddlewareResult) -> bytes:
     )
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R3", "WS02-04B2A2C-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_exact_ordinary_json_limit_is_accepted_and_delivered_byte_for_byte() -> None:
     body = b"x" * _ORDINARY_LIMIT
 
@@ -154,7 +154,7 @@ def test_exact_ordinary_json_limit_is_accepted_and_delivered_byte_for_byte() -> 
     assert _delivered_body(result) == body
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R3", "WS02-04B2A2C-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_limit_plus_one_ordinary_json_body_is_rejected_before_delivery() -> None:
     result = _run(messages=(_http_message(b"x" * (_ORDINARY_LIMIT + 1)),))
 
@@ -164,7 +164,7 @@ def test_limit_plus_one_ordinary_json_body_is_rejected_before_delivery() -> None
     assert result.app.messages == []
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_valid_oversized_content_length_rejects_before_receive_or_app_call() -> None:
     result = _run(
         scope=_scope(headers=((b"content-length", str(_ORDINARY_LIMIT + 1).encode()),)),
@@ -176,7 +176,7 @@ def test_valid_oversized_content_length_rejects_before_receive_or_app_call() -> 
     assert not result.app.called
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 @pytest.mark.parametrize(
     "headers",
     [
@@ -199,7 +199,7 @@ def test_actual_bytes_remain_authoritative_when_length_metadata_cannot_reject(
     assert result.app.messages == []
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R3", "WS02-04B2A2C-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_multi_message_ordinary_body_is_counted_cumulatively() -> None:
     result = _run(
         messages=(
@@ -212,7 +212,7 @@ def test_multi_message_ordinary_body_is_counted_cumulatively() -> None:
     assert _delivered_body(result) == b"a" * 32_768 + b"b" * 32_768
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R3", "WS02-04B2A2C-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_multi_message_ordinary_body_rejects_when_cumulative_bytes_exceed_limit() -> None:
     result = _run(
         messages=(
@@ -225,7 +225,7 @@ def test_multi_message_ordinary_body_rejects_when_cumulative_bytes_exceed_limit(
     assert _delivered_body(result) == b"a" * 32_768
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R1", "WS02-04B2A2C-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_ordinary_route_path_regex_and_trailing_slash_normalization_are_compatible() -> None:
     result = _run(
         scope=_scope(path="/ordinary/abc/", headers=((b"content-length", b"5"),)),
@@ -239,7 +239,7 @@ def test_ordinary_route_path_regex_and_trailing_slash_normalization_are_compatib
     assert not result.app.called
 
 
-@pytest.mark.requirement("WS02-04B2A2C-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2C')
 def test_oversized_ordinary_body_does_not_reach_fastapi_dependency_or_handler() -> None:
     calls: list[str] = []
     app = FastAPI()

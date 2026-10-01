@@ -11,7 +11,6 @@ from pydantic import ValidationError
 
 from backend.schemas.inbox_schema import InboxGlobalSeenUpdate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _session():
@@ -58,7 +57,7 @@ def _assert_rejected_token_shape(value: object) -> None:
         InboxGlobalSeenUpdate(seen_token=value)
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_seen_token_is_trimmed_bounded_and_required() -> None:
     assert InboxGlobalSeenUpdate(seen_token="  token  ").seen_token == "token"
     assert InboxGlobalSeenUpdate(seen_token="x" * 512).seen_token == "x" * 512
@@ -69,7 +68,7 @@ def test_seen_token_is_trimmed_bounded_and_required() -> None:
     _assert_rejected_token_shape("x" * 513)
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_valid_seen_token_updates_only_the_signed_user_sequence() -> None:
     from backend.models import PlatformNoticeGlobalSeenState
     from backend.services.inbox_service import encode_global_seen_token, mark_global_platform_notices_seen
@@ -89,7 +88,7 @@ def test_valid_seen_token_updates_only_the_signed_user_sequence() -> None:
         assert db.get(PlatformNoticeGlobalSeenState, other_user.id).last_seen_global_sequence == 9
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 @pytest.mark.parametrize(
     "payload_factory",
     [
@@ -141,7 +140,7 @@ def test_signed_but_invalid_seen_tokens_do_not_update_seen_state(payload_factory
         assert db.get(PlatformNoticeGlobalSeenState, user.id).last_seen_global_sequence == 5
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_tampered_seen_token_signature_does_not_update_seen_state() -> None:
     from backend.models import PlatformNoticeGlobalSeenState
     from backend.services.inbox_service import mark_global_platform_notices_seen
@@ -171,7 +170,7 @@ def test_tampered_seen_token_signature_does_not_update_seen_state() -> None:
         assert db.get(PlatformNoticeGlobalSeenState, user.id).last_seen_global_sequence == 8
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_wrong_user_seen_token_rejects_without_side_effect() -> None:
     from backend.models import PlatformNoticeGlobalSeenState
     from backend.services.inbox_service import encode_global_seen_token, mark_global_platform_notices_seen

@@ -30,7 +30,7 @@ _SYNTHETIC_INTERRUPTION_REVISION = "ws04_03a_interruption"
 _INTERRUPTION_MARKER_TABLE = "ws04_03a_interruption_marker"
 
 
-@pytest.mark.requirement("WS04-03A-R3", "WS04-03A-R4", "WS04-03A-R7", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_clean_moderation_schema_has_no_durable_execution_duration(migration_database):
     run_alembic_upgrade("head")
     inspector = inspect(migration_database.engine)
@@ -49,7 +49,7 @@ def test_clean_moderation_schema_has_no_durable_execution_duration(migration_dat
     assert model_schema_drift(migration_database.engine) == ()
 
 
-@pytest.mark.requirement("WS04-03A-R3", "WS04-03A-R4", "WS04-03A-R7", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_empty_database_upgrades_to_head_and_has_no_model_schema_drift(
     migration_database,
 ) -> None:
@@ -63,7 +63,7 @@ def test_empty_database_upgrades_to_head_and_has_no_model_schema_drift(
     assert model_schema_drift(migration_database.engine) == ()
 
 
-@pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R7", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_prior_revision_upgrades_to_head_and_reruns_cleanly(migration_database) -> None:
     head_revision = alembic_head_revision()
     prior_revision = alembic_parent_revision(head_revision)
@@ -78,7 +78,7 @@ def test_prior_revision_upgrades_to_head_and_reruns_cleanly(migration_database) 
     assert current_database_revision(migration_database.engine) == head_revision
 
 
-@pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R6", "WS04-03A-R7", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_migration_database_reset_restores_genuine_empty_state(
     migration_database,
 ) -> None:
@@ -92,7 +92,7 @@ def test_migration_database_reset_restores_genuine_empty_state(
     assert "users" not in schema_object_names(migration_database.engine)
 
 
-@pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R6", "WS04-03A-R7", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_migration_advisory_lock_serializes_overlapping_lifecycle_attempts() -> None:
     migration_database_targets_from_environment()
     engine = create_engine(os.environ["MIGRATION_DATABASE_URL"], poolclass=NullPool)
@@ -142,7 +142,7 @@ def test_migration_advisory_lock_serializes_overlapping_lifecycle_attempts() -> 
         engine.dispose()
 
 
-@pytest.mark.requirement("WS04-03A-R6", "WS04-03A-R7", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_controlled_alembic_interruption_is_inspectable_and_recoverable(
     migration_database,
     tmp_path: Path,
@@ -185,7 +185,7 @@ def test_controlled_alembic_interruption_is_inspectable_and_recoverable(
     )
 
 
-@pytest.mark.requirement("WS04-03A-R4", "WS04-03A-R7", "WS04-03A-R8")
+@pytest.mark.pass_provenance('WS04-03A')
 def test_synthetic_alembic_checks_its_own_connection_before_migration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

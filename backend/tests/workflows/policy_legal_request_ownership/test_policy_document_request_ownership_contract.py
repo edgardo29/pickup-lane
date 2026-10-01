@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import inspect
-import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Iterable
@@ -15,7 +14,6 @@ from sqlalchemy.orm import Session
 
 from backend.schemas.policy_document_schema import PolicyDocumentCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 ACTIVE_ADMIN_DEPENDENCY = "backend.services.auth_service.require_active_admin"
 GET_DB_DEPENDENCY = "backend.database.get_db"
@@ -166,7 +164,7 @@ def _snapshot_policy_document(document) -> dict[str, object]:
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-04B2A2B3-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_policy_document_tombstones_are_registered_bodyless_admin_guarded_and_non_mutating() -> None:
     for tombstone in POLICY_DOCUMENT_TOMBSTONES:
         route = _route_by_method_path(tombstone.method, tombstone.path)
@@ -189,7 +187,7 @@ def test_policy_document_tombstones_are_registered_bodyless_admin_guarded_and_no
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-04B2A2B3-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_policy_document_tombstones_return_410_only_after_admin_authentication(
     app_with_clean_overrides,
 ) -> None:
@@ -209,7 +207,7 @@ def test_policy_document_tombstones_return_410_only_after_admin_authentication(
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-04B2A2B3-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_policy_document_json_and_malformed_payloads_do_not_revive_body_validation(
     app_with_clean_overrides,
 ) -> None:
@@ -240,7 +238,7 @@ def test_policy_document_json_and_malformed_payloads_do_not_revive_body_validati
             assert malformed_response.status_code != 422, tombstone.id
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_body_bearing_policy_document_post_tombstone_does_not_create_rows(
     app_with_clean_overrides,
 ) -> None:
@@ -266,7 +264,7 @@ def test_body_bearing_policy_document_post_tombstone_does_not_create_rows(
         assert _policy_document_count(db) == before_count
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_body_bearing_policy_document_patch_tombstone_does_not_mutate_existing_row(
     app_with_clean_overrides,
 ) -> None:
@@ -293,7 +291,7 @@ def test_body_bearing_policy_document_patch_tombstone_does_not_mutate_existing_r
         assert _snapshot_policy_document(document) == original
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_internal_setup_can_create_policy_documents_and_public_reads_preserve_eligible_documents(
     app_with_clean_overrides,
 ) -> None:
@@ -317,7 +315,7 @@ def test_internal_setup_can_create_policy_documents_and_public_reads_preserve_el
         assert str(document.id) in {item["id"] for item in list_response.json()}
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R3")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_public_policy_document_reads_exclude_inactive_retired_and_future_effective_documents(
     app_with_clean_overrides,
 ) -> None:

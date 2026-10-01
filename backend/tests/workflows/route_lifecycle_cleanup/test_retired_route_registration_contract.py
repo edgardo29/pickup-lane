@@ -6,7 +6,7 @@ from typing import Iterable
 import pytest
 from fastapi.routing import APIRoute
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 @dataclass(frozen=True)
 class RetiredMutationRoute:
@@ -100,7 +100,7 @@ def direct_dependency_call_names(route: APIRoute) -> tuple[str, ...]:
     return tuple(callable_name(dependency.call) for dependency in route.dependant.dependencies)
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_frozen_retired_mutation_inventory_is_exactly_35_routes() -> None:
     keys = [retired_route.key for retired_route in RETIRED_MUTATION_ROUTES]
 
@@ -110,7 +110,7 @@ def test_frozen_retired_mutation_inventory_is_exactly_35_routes() -> None:
     assert ("GET", "/notifications") not in keys
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_retired_mutation_routes_are_registered_bodyless_auth_guarded_and_no_db() -> None:
     for retired_route in RETIRED_MUTATION_ROUTES:
         route = route_by_method_path(retired_route.method, retired_route.path)
@@ -123,7 +123,7 @@ def test_retired_mutation_routes_are_registered_bodyless_auth_guarded_and_no_db(
         assert GET_DB_DEPENDENCY not in dependency_names, retired_route.id
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_retired_mutation_routes_have_no_same_method_duplicate_or_slash_alias() -> None:
     for retired_route in RETIRED_MUTATION_ROUTES:
         normalized_path = retired_route.path.rstrip("/")

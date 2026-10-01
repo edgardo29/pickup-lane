@@ -12,7 +12,7 @@ from backend.observability.redaction import (
 pytestmark = pytest.mark.no_db_cleanup
 
 
-@pytest.mark.requirement("EN02-REDACT-001")
+@pytest.mark.pass_provenance('EN-02')
 @pytest.mark.parametrize(
     "key",
     [
@@ -37,7 +37,7 @@ def test_redaction_recognizes_sensitive_key_and_header_spellings(key: str):
     assert redact_value(payload) == {key: REDACTION_MARKER}
 
 
-@pytest.mark.requirement("EN02-REDACT-001")
+@pytest.mark.pass_provenance('EN-02')
 @pytest.mark.parametrize(
     "value",
     [
@@ -51,7 +51,7 @@ def test_redaction_protects_sensitive_values_embedded_in_strings(value: str):
     assert redact_value(value) == REDACTION_MARKER
 
 
-@pytest.mark.requirement("EN02-REDACT-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_redaction_is_recursive_non_mutating_and_preserves_safe_structure():
     original = {
         "record_id": "booking_123",
@@ -84,7 +84,7 @@ def test_redaction_is_recursive_non_mutating_and_preserves_safe_structure():
     assert original["items"][0]["authorization"] == "Bearer synthetic-token"
 
 
-@pytest.mark.requirement("EN02-REDACT-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_redaction_does_not_redact_safe_structural_identifiers_without_authority():
     payload = {
         "booking_id": "booking_123",
@@ -96,7 +96,7 @@ def test_redaction_does_not_redact_safe_structural_identifiers_without_authority
     assert redact_value(payload) == payload
 
 
-@pytest.mark.requirement("EN02-REDACT-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_phone_detection_ignores_only_validated_uuid_spans():
     offending_uuid = "4b340077-7855-4d77-a0fb-558aba611ff5"
     invalid_uuid_lookalike = "4b340077-7855-4d77-a0fb-558aba611ffg"
@@ -110,7 +110,7 @@ def test_phone_detection_ignores_only_validated_uuid_spans():
     assert redact_value(f"{offending_uuid} {real_phone}") == REDACTION_MARKER
 
 
-@pytest.mark.requirement("EN02-REDACT-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_redaction_handles_recursive_structures_without_leaking_values():
     payload: dict[str, object] = {"safe": "metadata"}
     payload["self"] = payload
@@ -120,7 +120,7 @@ def test_redaction_handles_recursive_structures_without_leaking_values():
     assert redacted == {"safe": "metadata", "self": REDACTION_MARKER}
 
 
-@pytest.mark.requirement("EN02-REDACT-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_redaction_never_uses_unknown_object_repr():
     class UnsafeRepr:
         def __repr__(self) -> str:

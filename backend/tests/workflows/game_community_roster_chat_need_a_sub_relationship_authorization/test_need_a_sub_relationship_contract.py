@@ -17,7 +17,6 @@ from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_
     _user,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _sub_message_count(db, chat_id) -> int:
@@ -33,7 +32,7 @@ def _sub_message_count(db, chat_id) -> int:
     )
 
 
-@pytest.mark.requirement("WS03-04C-R8", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_need_a_sub_owner_requester_lifecycle_and_public_position_boundaries(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -144,7 +143,7 @@ def test_need_a_sub_owner_requester_lifecycle_and_public_position_boundaries(
     assert canceled.json()["request_status"] == "canceled_by_player"
 
 
-@pytest.mark.requirement("WS03-04C-R8", "WS03-04C-R9", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_need_a_sub_chat_requires_confirmed_relationship_and_binds_sender_read_state(
     client,
     monkeypatch: pytest.MonkeyPatch,

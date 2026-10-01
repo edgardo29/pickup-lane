@@ -17,7 +17,7 @@ def _read(relative_path: str) -> str:
     return (_REPO_ROOT / relative_path).read_text()
 
 
-@pytest.mark.requirement("WS02-04C3B-R2", "WS02-04C3B-R3", "WS02-04C3B-R7")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_c3b_deferral_agrees_across_plan_register_and_closeout() -> None:
     plan = _read(_C3B_PLAN)
     register = _read(_LIMITS_REGISTER)
@@ -34,7 +34,7 @@ def test_c3b_deferral_agrees_across_plan_register_and_closeout() -> None:
     assert "remain open or evidence-deferred" in closeout
 
 
-@pytest.mark.requirement("WS02-04C3B-R2", "WS02-04C3B-R5", "WS02-04C3B-R7")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_gate_b_scope_excludes_production_config_migration_and_limiter_state() -> None:
     plan = _read(_C3B_PLAN)
     settings = _read("backend/settings.py")
@@ -56,7 +56,7 @@ def test_gate_b_scope_excludes_production_config_migration_and_limiter_state() -
     ]
 
 
-@pytest.mark.requirement("WS02-04C3B-R2", "WS02-04C3B-R5")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_no_numeric_c3b_rate_policy_or_generic_limiter_artifact_is_approved() -> None:
     plan = _read(_C3B_PLAN)
     register = _read(_LIMITS_REGISTER)
@@ -87,7 +87,7 @@ def test_no_numeric_c3b_rate_policy_or_generic_limiter_artifact_is_approved() ->
     assert not any(path.endswith("limiter_service.py") for path in backend_paths)
 
 
-@pytest.mark.requirement("WS02-04C3B-R2", "WS02-04C3B-R4", "WS02-04C3B-R7")
+@pytest.mark.pass_provenance('WS02-04C3B')
 def test_c3a_chat_is_the_only_approved_source_owned_rate_limit_exception() -> None:
     plan = _read(_C3B_PLAN)
     register = _read(_LIMITS_REGISTER)

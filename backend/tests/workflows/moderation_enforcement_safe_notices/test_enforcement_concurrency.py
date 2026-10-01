@@ -69,7 +69,6 @@ from backend.tests.workflows.moderation_review_case_lifecycle.conftest import (
     run_with_target_lock_barrier,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _count(db, model, *conditions) -> int:

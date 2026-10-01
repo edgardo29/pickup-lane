@@ -88,7 +88,7 @@ def _assert_body_header_correlation(payload: Mapping[str, object], headers: Mapp
     assert headers["X-Request-ID"] == correlation_id
 
 
-@pytest.mark.requirement("WS02-04A-R4")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_valid_incoming_request_id_is_accepted_and_mirrored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -110,7 +110,7 @@ def test_valid_incoming_request_id_is_accepted_and_mirrored(
     assert get_correlation_id() is None
 
 
-@pytest.mark.requirement("WS02-04A-R4")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_invalid_and_missing_request_ids_receive_safe_generated_correlation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -138,7 +138,7 @@ def test_invalid_and_missing_request_ids_receive_safe_generated_correlation(
     assert get_correlation_id() is None
 
 
-@pytest.mark.requirement("WS02-04A-R4")
+@pytest.mark.pass_provenance('WS02-04A')
 @pytest.mark.parametrize(
     ("status_code", "header_name", "header_value", "canonical_name"),
     [
@@ -163,7 +163,7 @@ def test_approved_http_exception_headers_are_preserved_case_insensitively(
     _assert_body_header_correlation(payload, headers)
 
 
-@pytest.mark.requirement("WS02-04A-R4")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_framework_method_not_allowed_preserves_framework_owned_allow_header(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -179,7 +179,7 @@ def test_framework_method_not_allowed_preserves_framework_owned_allow_header(
     _assert_body_header_correlation(payload, response.headers)
 
 
-@pytest.mark.requirement("WS02-04A-R4")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_rejected_http_exception_headers_are_not_forwarded() -> None:
     rejected_headers = {
         "X-Request-ID": _MALICIOUS_REQUEST_ID,
@@ -209,7 +209,7 @@ def test_rejected_http_exception_headers_are_not_forwarded() -> None:
         assert header_name not in headers
 
 
-@pytest.mark.requirement("WS02-04A-R4")
+@pytest.mark.pass_provenance('WS02-04A')
 @pytest.mark.parametrize(
     ("status_code", "header_name"),
     [
@@ -231,7 +231,7 @@ def test_wrong_status_header_pairs_are_not_preserved(
     assert header_name not in headers
 
 
-@pytest.mark.requirement("WS02-04A-R4")
+@pytest.mark.pass_provenance('WS02-04A')
 def test_outer_middleware_headers_survive_after_exception_header_filtering(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SERVICES_ROOT = REPO_ROOT / "backend/services"
@@ -18,7 +18,7 @@ def _production_service_trees() -> list[tuple[Path, ast.AST]]:
     ]
 
 
-@pytest.mark.requirement("WS09-02A-R8")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_every_production_admin_action_writer_uses_explicit_outcome_and_database_time() -> (
     None
 ):
@@ -39,7 +39,7 @@ def test_every_production_admin_action_writer_uses_explicit_outcome_and_database
         assert "created_at" not in keyword_names, path
 
 
-@pytest.mark.requirement("WS09-02A-R8")
+@pytest.mark.pass_provenance('WS09-02A')
 def test_commit_owning_compatibility_paths_do_not_rewrite_admin_action_rows() -> None:
     refund_source = (SERVICES_ROOT / "admin_money_refund_service.py").read_text(
         encoding="utf-8"

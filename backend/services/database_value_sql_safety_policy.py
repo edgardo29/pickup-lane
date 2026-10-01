@@ -1,9 +1,8 @@
-"""Current database value/default and SQL-safety policy for WS04-02C.
+"""Semantic map of current database value/default and SQL safety.
 
-This module is declarative. It names the current repository-owned database
-value surface, accepted SQL construction patterns, and later-owned evidence
-boundaries without opening database connections, reading provider state, or
-executing runtime workflows.
+The map names the repository-owned database value surface and accepted SQL
+construction patterns without opening database connections, reading provider
+state, or executing runtime workflows.
 """
 
 from __future__ import annotations
@@ -15,10 +14,8 @@ from dataclasses import dataclass
 class DatabaseValueSqlSafetyFamily:
     family_id: str
     owner: str
-    requirements: tuple[str, ...]
     accepted_mechanisms: tuple[str, ...]
     representative_sources: tuple[str, ...]
-    later_owner: str | None = None
 
 
 @dataclass(frozen=True)
@@ -29,13 +26,10 @@ class RawSqlAllowance:
     safety_basis: str
 
 
-REQUIREMENT_IDS: tuple[str, ...] = tuple(f"WS04-02C-R{index}" for index in range(1, 9))
-
 DATABASE_VALUE_SQL_SAFETY_FAMILIES: tuple[DatabaseValueSqlSafetyFamily, ...] = (
     DatabaseValueSqlSafetyFamily(
         family_id="timestamp_and_update_timestamps",
         owner="SQLAlchemy models, PostgreSQL defaults, and service-owned state transitions",
-        requirements=("WS04-02C-R1", "WS04-02C-R2", "WS04-02C-R8"),
         accepted_mechanisms=(
             "DateTime(timezone=True) for persisted datetimes",
             "PostgreSQL now() server defaults for creation and initial update timestamps",
@@ -52,7 +46,6 @@ DATABASE_VALUE_SQL_SAFETY_FAMILIES: tuple[DatabaseValueSqlSafetyFamily, ...] = (
     DatabaseValueSqlSafetyFamily(
         family_id="money_currency_and_amounts",
         owner="Money-bearing models, services, schemas, and Stripe adapter boundary",
-        requirements=("WS04-02C-R1", "WS04-02C-R3", "WS04-02C-R8"),
         accepted_mechanisms=(
             "integer cents for programmatic money values",
             "USD-only database constraints or service validation for current money tables",
@@ -73,7 +66,6 @@ DATABASE_VALUE_SQL_SAFETY_FAMILIES: tuple[DatabaseValueSqlSafetyFamily, ...] = (
     DatabaseValueSqlSafetyFamily(
         family_id="status_defaults_and_state_machines",
         owner="Model defaults, check constraints, service constants, and response schemas",
-        requirements=("WS04-02C-R1", "WS04-02C-R4", "WS04-02C-R8"),
         accepted_mechanisms=(
             "database status defaults are values accepted by current constraints",
             "service-set lifecycle states stay within current model constraints",
@@ -89,7 +81,6 @@ DATABASE_VALUE_SQL_SAFETY_FAMILIES: tuple[DatabaseValueSqlSafetyFamily, ...] = (
     DatabaseValueSqlSafetyFamily(
         family_id="json_defaults_and_payload_shapes",
         owner="JSON/JSONB models, service payload builders, and Pydantic schema defaults",
-        requirements=("WS04-02C-R1", "WS04-02C-R5", "WS04-02C-R7", "WS04-02C-R8"),
         accepted_mechanisms=(
             "server-side JSON defaults only where the database owns row creation defaults",
             "Pydantic default_factory for mutable request defaults",
@@ -103,12 +94,10 @@ DATABASE_VALUE_SQL_SAFETY_FAMILIES: tuple[DatabaseValueSqlSafetyFamily, ...] = (
             "backend/schemas/community_game_detail_schema.py",
             "backend/services/payment_event_service.py",
         ),
-        later_owner="WS05 owns full provider event lifecycle and reconciliation proof.",
     ),
     DatabaseValueSqlSafetyFamily(
         family_id="production_raw_sql",
         owner="Repository-owned production source that executes raw SQL expressions",
-        requirements=("WS04-02C-R1", "WS04-02C-R6", "WS04-02C-R8"),
         accepted_mechanisms=(
             "fixed health-check SQL",
             "fixed PostgreSQL timeout/advisory-lock/sequence calls with bound parameters or fixed identifiers",
@@ -124,20 +113,17 @@ DATABASE_VALUE_SQL_SAFETY_FAMILIES: tuple[DatabaseValueSqlSafetyFamily, ...] = (
     DatabaseValueSqlSafetyFamily(
         family_id="migration_sql_expressions",
         owner="Canonical Alembic migrations where SQL affects values, defaults, or SQL safety",
-        requirements=("WS04-02C-R1", "WS04-02C-R6", "WS04-02C-R8"),
         accepted_mechanisms=(
             "fixed extension setup",
             "fixed sequence setup",
             "fixed SQLAlchemy/Alembic expressions for defaults, checks, and indexes",
-            "no interpolated migration SQL or production-like migration rehearsal claim",
+            "no interpolated migration SQL",
         ),
         representative_sources=("backend/alembic/versions/",),
-        later_owner="WS04-03 owns migration graph, drift, interruption, expand/contract policy, and production-like rehearsal.",
     ),
     DatabaseValueSqlSafetyFamily(
         family_id="sql_and_value_logging_safety",
         owner="Application logging around database, provider, admin, payment, and moderation workflows",
-        requirements=("WS04-02C-R1", "WS04-02C-R7", "WS04-02C-R8"),
         accepted_mechanisms=(
             "no SQLAlchemy echo=True in production source",
             "no intentional logging of raw SQL bound values",
@@ -151,28 +137,6 @@ DATABASE_VALUE_SQL_SAFETY_FAMILIES: tuple[DatabaseValueSqlSafetyFamily, ...] = (
             "backend/routes/",
             "backend/observability/",
         ),
-        later_owner="WS09 and WS10 own deployed log aggregation, provider logs, dashboard, alert, and operational access evidence.",
-    ),
-    DatabaseValueSqlSafetyFamily(
-        family_id="accepted_database_contract_boundaries",
-        owner="Accepted WS04-01A/B/C and WS04-02A/B database contracts",
-        requirements=("WS04-02C-R8",),
-        accepted_mechanisms=(
-            "no change to request-session cleanup, pool/timeout settings, or credential boundary",
-            "no change to query/cursor behavior or production database verification deferrals",
-            "no change to transaction checkpoints, provider unknown-outcome handling, row locks, or concurrency invariants",
-            "no final production infrastructure value claimed by WS04-02C",
-        ),
-        representative_sources=(
-            "backend/services/transaction_boundary_policy.py",
-            "backend/services/database_invariant_policy.py",
-            "backend/tests/workflows/application_database_lifecycle_pool_settings_role_credential_boundaries/",
-            "backend/tests/workflows/query_cursor_database_access_behavior/",
-            "backend/tests/platform/production_database_verification/",
-            "backend/tests/workflows/transaction_boundary_external_side_effect_safety/",
-            "backend/tests/workflows/database_invariants_locks_deterministic_concurrency/",
-        ),
-        later_owner="WS04-01D owns final production PostgreSQL topology, numeric connection budget, concrete roles, and final provider/runtime proof.",
     ),
 )
 
@@ -321,15 +285,6 @@ MIGRATION_RAW_SQL_ALLOWLIST: tuple[RawSqlAllowance, ...] = (
         safety_basis="fixed rejected-attempt guard teardown in downgrade",
     ),
 )
-
-LATER_OWNED_EVIDENCE: dict[str, str] = {
-    "WS04-01D": "final production PostgreSQL topology/provider, connection budget, concrete roles/grants, and runtime proof",
-    "WS04-03": "migration graph, drift, interruption, expand/contract policy, and production-like migration rehearsal",
-    "WS05": "durable jobs, payment/provider lifecycle, webhook authority, reconciliation, and worker execution",
-    "WS09": "deployed structured logging, log aggregation, dashboards, alerts, metrics, and provider log access",
-    "WS10": "operational privacy, retention, provider control-plane, incident, backup, restore, and access evidence",
-}
-
 
 def raw_sql_allowlist_keys() -> set[tuple[str, str, str]]:
     return {

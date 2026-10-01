@@ -19,7 +19,7 @@ def _assert_order(source: str, *needles: str) -> None:
     assert positions == sorted(positions)
 
 
-@pytest.mark.requirement("WS05-02-R2")
+@pytest.mark.pass_provenance('WS05-02')
 def test_payment_and_booking_lifecycle_values_are_explicit_and_separate() -> None:
     from backend.services import payment_lifecycle_policy
 
@@ -107,7 +107,7 @@ def test_payment_and_booking_lifecycle_values_are_explicit_and_separate() -> Non
     )
 
 
-@pytest.mark.requirement("WS05-02-R1", "WS05-02-R6", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_checkout_provider_calls_are_between_checkpoints_and_lock_reentry() -> None:
     from backend.services import checkout_service
 
@@ -162,7 +162,7 @@ def test_checkout_provider_calls_are_between_checkpoints_and_lock_reentry() -> N
     )
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_unresolved_expiry_is_local_shared_and_provider_status_preserving() -> None:
     from backend.services import (
         checkout_service,
@@ -234,7 +234,7 @@ def test_unresolved_expiry_is_local_shared_and_provider_status_preserving() -> N
     assert "apply_authoritative_payment_intent_observation(" in reconcile_source
 
 
-@pytest.mark.requirement("WS05-02-R3", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_late_success_and_capacity_conflict_create_lifetime_compensation_intents() -> None:
     from backend.services import stripe_webhook_service
 
@@ -271,7 +271,7 @@ def test_late_success_and_capacity_conflict_create_lifetime_compensation_intents
     assert "create_refund(" not in compensation_advance_source
 
 
-@pytest.mark.requirement("WS05-02-R2", "WS05-02-R5", "WS05-02-R7")
+@pytest.mark.pass_provenance('WS05-02')
 def test_local_invalidation_does_not_invent_provider_cancellation() -> None:
     local_invalidation_sources = {
         "game_cancellation": _source("backend/services/game_cancellation_service.py"),
@@ -292,7 +292,7 @@ def test_local_invalidation_does_not_invent_provider_cancellation() -> None:
     assert 'payment_status = "canceled"' in webhook_source
 
 
-@pytest.mark.requirement("WS05-02-R4", "WS05-02-R5")
+@pytest.mark.pass_provenance('WS05-02')
 def test_webhook_ingest_uses_bounded_event_envelope_and_internal_job_id() -> None:
     from backend.services import payment_job_service, stripe_webhook_service
 
@@ -344,7 +344,7 @@ def test_webhook_ingest_uses_bounded_event_envelope_and_internal_job_id() -> Non
         assert forbidden not in job_source
 
 
-@pytest.mark.requirement("WS05-02-R6")
+@pytest.mark.pass_provenance('WS05-02')
 def test_saved_payment_method_operations_have_durable_unknown_handoffs() -> None:
     from backend.services import payment_method_service
 
@@ -407,12 +407,3 @@ def test_saved_payment_method_operations_have_durable_unknown_handoffs() -> None
         payment_method_service.require_payment_method_operation_retryable
     )
     assert 'operation.status == "provider_unknown"' in retryable_source
-
-
-@pytest.mark.requirement("WS05-02-R7")
-def test_later_provider_and_runtime_evidence_remains_deferred() -> None:
-    declaration = _source("backend/tests/support/requirements/ws05_02.json")
-    assert '"id": "WS05-02-R8"' in declaration
-    assert '"state": "deferred"' in declaration
-    for later_owner in ("WS05-01B", "WS05-03", "WS05-04", "WS09", "WS10"):
-        assert later_owner in declaration

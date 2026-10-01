@@ -8,7 +8,7 @@ import pytest
 
 from backend.schemas.game_schema import GameCreate, GameUpdate
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FRONTEND_SOURCE_ROOTS = (
@@ -229,7 +229,7 @@ def _generic_game_http_payload_issues(path: Path, tree: ast.AST) -> list[str]:
     return issues
 
 
-@pytest.mark.requirement("WS02-05B1-R6")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_current_frontend_callers_do_not_use_generic_game_write_routes() -> None:
     forbidden_calls: list[str] = []
     for path in _source_files(FRONTEND_SOURCE_ROOTS, SOURCE_SUFFIXES):
@@ -248,7 +248,7 @@ def test_current_frontend_callers_do_not_use_generic_game_write_routes() -> None
     assert forbidden_calls == []
 
 
-@pytest.mark.requirement("WS02-05B1-R6")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_generic_game_service_uses_explicit_mapping_not_request_shaped_orm_bypass() -> None:
     source = GAME_SERVICE.read_text()
     tree = ast.parse(source)
@@ -289,7 +289,7 @@ def test_generic_game_service_uses_explicit_mapping_not_request_shaped_orm_bypas
     assert "**game_update.model_dump" not in source
 
 
-@pytest.mark.requirement("WS02-05B1-R6")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_current_trusted_helpers_and_setup_callers_do_not_require_generic_overposting() -> None:
     constructor_issues: list[str] = []
     http_payload_issues: list[str] = []

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import json
 import uuid
 from dataclasses import dataclass
@@ -14,19 +13,14 @@ import pytest
 from fastapi.routing import APIRoute
 from sqlalchemy import func, select
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 MATRIX_PATH = (
     REPO_ROOT
     / "backend/tests/workflows/authorization_matrix_foundation/authorization_matrix.json"
 )
-REQUIREMENTS_PATH = REPO_ROOT / "backend/tests/support/requirements/ws03_04b.json"
 AUTH_PREFIX = "backend.services.auth_service:"
 EXCLUDED_METHODS = {"HEAD", "OPTIONS"}
-REQUIREMENT_IDS = {f"WS03-04B-R{number}" for number in range(1, 11)}
-REQUIRED_REQUIREMENT_IDS = {f"WS03-04B-R{number}" for number in range(1, 10)}
-DEFERRED_REQUIREMENT_ID = "WS03-04B-R10"
 EXPECTED_B_ROUTE_KEYS = {
     ("DELETE", "/auth/account"),
     ("GET", "/auth/me"),
@@ -287,14 +281,6 @@ def _matrix() -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
-def _requirement_declarations() -> dict[str, dict[str, Any]]:
-    with REQUIREMENTS_PATH.open(encoding="utf-8") as handle:
-        payload = json.load(handle)
-    assert payload["schema_version"] == 1
-    return {entry["id"]: entry for entry in payload["requirements"]}
-
-
-@lru_cache(maxsize=1)
 def _current_route_map() -> dict[tuple[str, str], APIRoute]:
     from backend.main import app
 
@@ -317,30 +303,6 @@ def _flatten_matrix_routes() -> dict[tuple[str, str], tuple[dict[str, Any], dict
             assert key not in routes, f"duplicate matrix route key: {key}"
             routes[key] = (family, route)
     return routes
-
-
-def _collect_requirement_marker_ids() -> set[str]:
-    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
-    marker_ids: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        if not isinstance(node.func, ast.Attribute) or node.func.attr != "requirement":
-            continue
-        value = node.func.value
-        if not (
-            isinstance(value, ast.Attribute)
-            and value.attr == "mark"
-            and isinstance(value.value, ast.Name)
-            and value.value.id == "pytest"
-        ):
-            continue
-        marker_ids.update(
-            arg.value
-            for arg in node.args
-            if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
-        )
-    return marker_ids
 
 
 def _user(
@@ -633,8 +595,8 @@ def _game_credit(user_id: uuid.UUID, index: int) -> Any:
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS03-04B-R1", "WS03-04B-R3", "WS03-04B-R9")
-def test_matrix_scope_guard_and_requirement_traceability_match_b_boundary() -> None:
+@pytest.mark.pass_provenance('WS03-04B')
+def test_matrix_scope_and_live_dependencies_match_b_authorization_boundary() -> None:
     matrix_routes = _flatten_matrix_routes()
     b_routes = {
         key: route
@@ -662,30 +624,8 @@ def test_matrix_scope_guard_and_requirement_traceability_match_b_boundary() -> N
         assert "require_active_admin" not in json.dumps(route_entry["auth_dependencies"])
         assert _auth_dependencies(_current_route_map()[key]) == route_entry["auth_dependencies"]
 
-    declarations = _requirement_declarations()
-    assert set(declarations) == REQUIREMENT_IDS
-    for requirement_id in REQUIRED_REQUIREMENT_IDS:
-        declaration = declarations[requirement_id]
-        assert declaration["owning_pass"] == "WS03-04B"
-        assert declaration["state"] == "required"
-        assert (
-            declaration["scope"]
-            == "workflows/self_owned_account_notification_financial_authorization"
-        )
-        assert declaration["reason"].strip()
 
-    deferred = declarations[DEFERRED_REQUIREMENT_ID]
-    assert deferred["owning_pass"] == "WS03-04B"
-    assert deferred["state"] == "deferred"
-    assert deferred["scope"] == "governance"
-    assert deferred["reason"].strip()
-
-    marker_ids = _collect_requirement_marker_ids()
-    assert REQUIRED_REQUIREMENT_IDS <= marker_ids
-    assert DEFERRED_REQUIREMENT_ID not in marker_ids
-
-
-@pytest.mark.requirement("WS03-04B-R2", "WS03-04B-R3", "WS03-04B-R8")
+@pytest.mark.pass_provenance('WS03-04B')
 def test_current_user_profile_settings_and_stats_use_unverified_current_user(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -780,7 +720,7 @@ def test_current_user_profile_settings_and_stats_use_unverified_current_user(
         assert other_settings.selected_city is None
 
 
-@pytest.mark.requirement("WS03-04B-R3", "WS03-04B-R5", "WS03-04B-R8")
+@pytest.mark.pass_provenance('WS03-04B')
 def test_credential_status_and_recent_auth_denials_have_no_mutation_side_effects(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -859,7 +799,7 @@ def test_credential_status_and_recent_auth_denials_have_no_mutation_side_effects
     assert firebase_deletes == []
 
 
-@pytest.mark.requirement("WS03-04B-R2", "WS03-04B-R3", "WS03-04B-R8")
+@pytest.mark.pass_provenance('WS03-04B')
 def test_self_delete_requires_confirmation_and_deletes_only_the_token_user(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -926,7 +866,7 @@ def test_self_delete_requires_confirmation_and_deletes_only_the_token_user(
         assert other_user.auth_user_id == other_auth_id
 
 
-@pytest.mark.requirement("WS03-04B-R4", "WS03-04B-R8")
+@pytest.mark.pass_provenance('WS03-04B')
 def test_notifications_and_inbox_are_concealed_and_current_user_scoped(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -1115,11 +1055,7 @@ def test_notifications_and_inbox_are_concealed_and_current_user_scoped(
         )
 
 
-@pytest.mark.requirement(
-    "WS03-04B-R3",
-    "WS03-04B-R5",
-    "WS03-04B-R8",
-)
+@pytest.mark.pass_provenance('WS03-04B')
 def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -1255,7 +1191,7 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
         )
 
 
-@pytest.mark.requirement("WS03-04B-R6", "WS03-04B-R7", "WS03-04B-R8")
+@pytest.mark.pass_provenance('WS03-04B')
 def test_financial_reads_and_admin_exceptions_are_current_user_scoped(
     client,
     monkeypatch: pytest.MonkeyPatch,

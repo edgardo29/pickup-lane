@@ -122,7 +122,7 @@ def _assert_api_security_headers(
     assert headers["Cache-Control"] == cache_control
 
 
-@pytest.mark.requirement("WS02-03-R5")
+@pytest.mark.pass_provenance('WS02-03')
 def test_public_api_json_response_gets_api_security_headers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -133,7 +133,7 @@ def test_public_api_json_response_gets_api_security_headers(
     _assert_api_security_headers(headers)
 
 
-@pytest.mark.requirement("WS02-03-R5")
+@pytest.mark.pass_provenance('WS02-03')
 def test_private_api_json_response_gets_private_no_store_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -155,7 +155,7 @@ def test_private_api_json_response_gets_private_no_store_cache(
     _assert_api_security_headers(headers, cache_control="private, no-store")
 
 
-@pytest.mark.requirement("WS02-03-R5")
+@pytest.mark.pass_provenance('WS02-03')
 def test_explicit_route_cache_policy_is_preserved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -170,7 +170,7 @@ def test_explicit_route_cache_policy_is_preserved(
     _assert_api_security_headers(headers, cache_control="private, max-age=0")
 
 
-@pytest.mark.requirement("WS02-03-R5")
+@pytest.mark.pass_provenance('WS02-03')
 @pytest.mark.parametrize(
     ("path", "status_code", "content_type"),
     [
@@ -198,7 +198,7 @@ def test_error_and_no_content_responses_receive_api_security_headers(
     _assert_api_security_headers(headers)
 
 
-@pytest.mark.requirement("WS02-03-R6")
+@pytest.mark.pass_provenance('WS02-03')
 def test_docs_html_gets_documentation_specific_headers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -215,7 +215,7 @@ def test_docs_html_gets_documentation_specific_headers(
     assert "geolocation=()" in response.headers["Permissions-Policy"]
 
 
-@pytest.mark.requirement("WS02-03-R6")
+@pytest.mark.pass_provenance('WS02-03')
 def test_openapi_json_keeps_json_policy_without_docs_html_headers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -232,7 +232,7 @@ def test_openapi_json_keeps_json_policy_without_docs_html_headers(
     assert "Permissions-Policy" not in response.headers
 
 
-@pytest.mark.requirement("WS02-03-R6")
+@pytest.mark.pass_provenance('WS02-03')
 @pytest.mark.parametrize("app_env", ["preview", "staging", "production"])
 def test_production_like_environments_do_not_enable_api_docs_by_default(
     app_env: str,
@@ -242,7 +242,7 @@ def test_production_like_environments_do_not_enable_api_docs_by_default(
     assert settings.enable_api_docs is False
 
 
-@pytest.mark.requirement("WS02-03-R6")
+@pytest.mark.pass_provenance('WS02-03')
 def test_production_rejects_explicit_api_docs_enable() -> None:
     with pytest.raises(SettingsError) as exc_info:
         _build(_production_like_settings_env("production", ENABLE_API_DOCS="true"))
@@ -250,7 +250,7 @@ def test_production_rejects_explicit_api_docs_enable() -> None:
     assert "ENABLE_API_DOCS" in str(exc_info.value)
 
 
-@pytest.mark.requirement("WS02-03-R6")
+@pytest.mark.pass_provenance('WS02-03')
 def test_docs_disabled_app_surfaces_are_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -269,7 +269,7 @@ def test_docs_disabled_app_surfaces_are_unavailable(
     assert openapi_response.headers["content-type"].startswith("application/json")
 
 
-@pytest.mark.requirement("WS02-03-R5")
+@pytest.mark.pass_provenance('WS02-03')
 def test_health_and_db_health_responses_receive_api_security_headers_without_database_contact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -286,7 +286,7 @@ def test_health_and_db_health_responses_receive_api_security_headers_without_dat
     _assert_api_security_headers(db_health_response.headers)
 
 
-@pytest.mark.requirement("WS02-03-R5")
+@pytest.mark.pass_provenance('WS02-03')
 @pytest.mark.parametrize(
     ("database_ready", "expected_status_code", "expected_health_status"),
     [
@@ -311,7 +311,7 @@ def test_ready_response_receives_api_security_headers_with_controlled_database_s
     _assert_api_security_headers(response.headers)
 
 
-@pytest.mark.requirement("WS02-03-R5")
+@pytest.mark.pass_provenance('WS02-03')
 def test_webhook_error_response_class_gets_api_security_headers_without_provider_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

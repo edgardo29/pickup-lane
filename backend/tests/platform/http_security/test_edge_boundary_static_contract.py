@@ -344,7 +344,7 @@ def _route_level_cors_header_findings() -> list[str]:
     return sorted(findings)
 
 
-@pytest.mark.requirement("WS02-03-R7")
+@pytest.mark.pass_provenance('WS02-03')
 def test_source_does_not_trust_forwarded_headers_or_install_proxy_middleware() -> None:
     combined_source = _casefolded_runtime_source()
 
@@ -353,7 +353,7 @@ def test_source_does_not_trust_forwarded_headers_or_install_proxy_middleware() -
     assert "trustedproxy" not in combined_source
 
 
-@pytest.mark.requirement("WS02-03-R7")
+@pytest.mark.pass_provenance('WS02-03')
 def test_source_does_not_claim_tls_hsts_or_canonical_redirect_ownership() -> None:
     combined_source = _casefolded_runtime_source()
 
@@ -365,7 +365,7 @@ def test_source_does_not_claim_tls_hsts_or_canonical_redirect_ownership() -> Non
     assert "canonical_host" not in combined_source
 
 
-@pytest.mark.requirement("WS02-03-R9")
+@pytest.mark.pass_provenance('WS02-03')
 def test_backend_runtime_exposes_only_canonical_fastapi_app_construction() -> None:
     assert _fastapi_app_owner_findings() == {
         "constructor_owners": ["backend/main.py:create_app"],
@@ -373,7 +373,7 @@ def test_backend_runtime_exposes_only_canonical_fastapi_app_construction() -> No
     }
 
 
-@pytest.mark.requirement("WS02-03-R9")
+@pytest.mark.pass_provenance('WS02-03')
 def test_canonical_app_has_single_http_security_middleware_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -397,13 +397,13 @@ def test_canonical_app_has_single_http_security_middleware_owner(
     assert middleware_counts == {"cors": 1, "host": 1, "headers": 1}
 
 
-@pytest.mark.requirement("WS02-03-R9")
+@pytest.mark.pass_provenance('WS02-03')
 def test_no_manual_options_or_route_level_cors_owner_bypass_exists() -> None:
     assert _manual_options_route_findings() == []
     assert _route_level_cors_header_findings() == []
 
 
-@pytest.mark.requirement("WS02-03-R9")
+@pytest.mark.pass_provenance('WS02-03')
 def test_static_response_stays_outside_generic_api_header_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -417,7 +417,7 @@ def test_static_response_stays_outside_generic_api_header_policy(
     _assert_no_api_security_headers(response.headers)
 
 
-@pytest.mark.requirement("WS02-03-R9")
+@pytest.mark.pass_provenance('WS02-03')
 def test_framework_slash_redirect_stays_outside_generic_api_header_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -431,7 +431,7 @@ def test_framework_slash_redirect_stays_outside_generic_api_header_policy(
     _assert_no_api_security_headers(response.headers)
 
 
-@pytest.mark.requirement("WS02-03-R9")
+@pytest.mark.pass_provenance('WS02-03')
 @pytest.mark.parametrize(
     ("path", "status_code", "content_type"),
     [

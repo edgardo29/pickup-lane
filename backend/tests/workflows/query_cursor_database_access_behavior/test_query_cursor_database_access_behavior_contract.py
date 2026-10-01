@@ -5,7 +5,6 @@ import os
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -13,11 +12,6 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 
-from backend.observability.pagination_contracts import (
-    PAGINATION_CONTRACTS,
-    PAGINATION_HANDOFFS,
-    pagination_contract_keys,
-)
 from backend.services.admin_money_cursor import (
     encode_money_cursor,
     parse_money_cursor,
@@ -29,7 +23,6 @@ from backend.services.query_pagination import (
 )
 from backend.settings import build_settings, reset_settings_cache
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
 _TEST_DATABASE_URL = "postgresql+psycopg://db.example.invalid:5432/pickup_lane_test_db"
 _ALLOWED_ORIGIN = "https://app.example.invalid"
 _NEWLY_BOUNDED_OFFSET_PATHS = frozenset(
@@ -401,46 +394,36 @@ def _notification(
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-01B-R1")
-def test_all_current_collection_routes_have_explicit_contracts() -> None:
-    assert len(PAGINATION_CONTRACTS) == 75
-    assert len(PAGINATION_HANDOFFS) == 0
-    assert len(pagination_contract_keys()) == 75
-    assert {contract.key for contract in PAGINATION_HANDOFFS} == set()
-
-
-@pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-01B-R1")
-@pytest.mark.requirement("WS04-01B-R2")
-def test_newly_bounded_offset_routes_expose_limit_and_offset_contracts(
+@pytest.mark.pass_provenance('WS04-01B')
+def test_newly_bounded_offset_routes_expose_live_limit_and_offset_parameters(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = _create_app(monkeypatch)
     route_by_key = _api_route_by_key(app)
-    contract_by_path = {contract.path: contract for contract in PAGINATION_CONTRACTS}
+    observed_limit_bounds: set[tuple[int, int]] = set()
 
     assert len(_NEWLY_BOUNDED_OFFSET_PATHS) == 42
     for path in _NEWLY_BOUNDED_OFFSET_PATHS:
-        contract = contract_by_path[path]
         route = route_by_key[("GET", path)]
         query_params = {param.name: param for param in route.dependant.query_params}
 
-        assert contract.style == "offset"
-        assert contract.offset_param == "offset"
-        assert contract.limit_default is not None
-        assert contract.limit_max is not None
         assert "limit" in query_params
         assert "offset" in query_params
         assert query_params["offset"].default == 0
         assert _field_bound(query_params["offset"], "ge") == 0
-        assert query_params["limit"].default == contract.limit_default
         assert _field_bound(query_params["limit"], "ge") == 1
-        assert _field_bound(query_params["limit"], "le") == contract.limit_max
-        assert contract.deterministic_order
+        limit_default = query_params["limit"].default
+        limit_max = _field_bound(query_params["limit"], "le")
+        assert isinstance(limit_default, int)
+        assert isinstance(limit_max, int)
+        assert limit_max == limit_default * 2
+        observed_limit_bounds.add((limit_default, limit_max))
+
+    assert observed_limit_bounds == {(50, 100), (100, 200)}
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-01B-R1")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_collection_limit_helpers_clamp_before_queries() -> None:
     assert bounded_collection_offset(-10) == 0
     assert bounded_collection_offset(5) == 5
@@ -450,7 +433,7 @@ def test_collection_limit_helpers_clamp_before_queries() -> None:
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-01B-R3")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_admin_money_cursors_reject_foreign_query_context() -> None:
     sort_value = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
     row_id = uuid.uuid4()
@@ -478,7 +461,7 @@ def test_admin_money_cursors_reject_foreign_query_context() -> None:
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-01B-R3")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_admin_money_cursors_reject_malformed_values_stably() -> None:
     with pytest.raises(HTTPException) as exc_info:
         parse_money_cursor("not-a-valid-cursor", context={"kind": "x"})
@@ -487,7 +470,7 @@ def test_admin_money_cursors_reject_malformed_values_stably() -> None:
     assert exc_info.value.detail == "cursor is not valid."
 
 
-@pytest.mark.requirement("WS04-01B-R3")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_contexts() -> None:
     from backend.models import (
         GameCredit,
@@ -750,8 +733,7 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-01B-R4")
-@pytest.mark.requirement("WS04-01B-R6")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_scoped_service_lists_keep_binding_and_limits_in_query_source() -> None:
     from backend.services import (
         booking_service,
@@ -797,7 +779,7 @@ def test_scoped_service_lists_keep_binding_and_limits_in_query_source() -> None:
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-01B-R6")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_need_a_sub_request_list_serialization_batches_related_rows() -> None:
     from backend.services import need_a_sub_request_service
 
@@ -810,7 +792,7 @@ def test_need_a_sub_request_list_serialization_batches_related_rows() -> None:
     assert "for sub_request in requests" in serializer_source
 
 
-@pytest.mark.requirement("WS04-01B-R6")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_need_a_sub_request_list_response_batches_related_database_reads() -> None:
     from backend.database import engine
     from backend.services.need_a_sub_request_service import list_owner_sub_post_requests
@@ -894,7 +876,7 @@ def test_need_a_sub_request_list_response_batches_related_database_reads() -> No
     assert "order by" not in waitlist_batch_queries[0]
 
 
-@pytest.mark.requirement("WS04-01B-R6")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_need_a_sub_post_lists_batch_positions_and_request_counts() -> None:
     from backend.database import engine
     from backend.services.need_a_sub_post_service import (
@@ -1010,7 +992,7 @@ def test_need_a_sub_post_lists_batch_positions_and_request_counts() -> None:
     assert_post_list_batch(owner_response, owner_statements)
 
 
-@pytest.mark.requirement("WS04-01B-R6")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_notification_list_batches_related_action_records() -> None:
     from backend.database import engine
     from backend.services.notification_service import list_user_notifications_workflow
@@ -1132,7 +1114,7 @@ def test_notification_list_batches_related_action_records() -> None:
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-01B-R5")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_reviewed_query_shapes_have_current_model_index_support() -> None:
     from backend.models import (
         Booking,
@@ -1234,28 +1216,7 @@ def test_reviewed_query_shapes_have_current_model_index_support() -> None:
     for model, expected_names in required_indexes.items():
         model_index_names = {index.name for index in model.__table__.indexes}
         assert expected_names <= model_index_names, model.__tablename__
-
-
-@pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS04-01B-R5")
-@pytest.mark.requirement("WS04-01B-R7")
-def test_ws04_01b_evidence_does_not_claim_production_query_plan_proof() -> None:
-    testing_record = (
-        _REPO_ROOT
-        / "backend/tests/workflows/query_cursor_database_access_behavior/TESTING_RECORD.md"
-    )
-    if not testing_record.exists():
-        pytest.skip("WS04-01B testing record is created with the pass evidence.")
-
-    text = testing_record.read_text()
-    assert "does not prove production query plans" in text
-    assert "provider latency" in text
-    assert "production row counts" in text
-
-
-@pytest.mark.requirement("WS04-01B-R1")
-@pytest.mark.requirement("WS04-01B-R2")
-@pytest.mark.requirement("WS04-01B-R4")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_user_payment_method_route_bounds_and_scopes_page(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1306,8 +1267,7 @@ def test_user_payment_method_route_bounds_and_scopes_page(
     )
 
 
-@pytest.mark.requirement("WS04-01B-R1")
-@pytest.mark.requirement("WS04-01B-R2")
+@pytest.mark.pass_provenance('WS04-01B')
 def test_mixed_self_admin_routes_expose_shared_effective_limit(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

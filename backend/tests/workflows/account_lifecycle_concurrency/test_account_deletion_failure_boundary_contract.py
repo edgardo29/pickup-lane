@@ -7,7 +7,6 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _session():
@@ -132,7 +131,7 @@ def _delete_payload():
     return AuthDeleteAccountRequest(confirmation="DELETE")
 
 
-@pytest.mark.requirement("WS03-02-R6", "WS03-02-R7")
+@pytest.mark.pass_provenance('WS03-02')
 def test_self_delete_definitive_provider_failure_restores_prior_local_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -168,7 +167,7 @@ def test_self_delete_definitive_provider_failure_restores_prior_local_state(
     assert _support_flag_snapshot(user_id) is None
 
 
-@pytest.mark.requirement("WS03-02-R7")
+@pytest.mark.pass_provenance('WS03-02')
 def test_admin_delete_definitive_provider_failure_restores_prior_local_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -227,7 +226,7 @@ def test_admin_delete_definitive_provider_failure_restores_prior_local_state(
     assert _admin_delete_action_count(target_id) == 0
 
 
-@pytest.mark.requirement("WS03-02-R7")
+@pytest.mark.pass_provenance('WS03-02')
 def test_admin_delete_unknown_provider_outcome_preserves_auth_link_records_support_and_is_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -319,7 +318,7 @@ def test_admin_delete_unknown_provider_outcome_preserves_auth_link_records_suppo
     assert _admin_delete_action_count(target_id) == 0
 
 
-@pytest.mark.requirement("WS03-02-R7")
+@pytest.mark.pass_provenance('WS03-02')
 def test_admin_delete_provider_success_then_local_cleanup_failure_records_support_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -419,7 +418,7 @@ def test_admin_delete_provider_success_then_local_cleanup_failure_records_suppor
     assert _admin_delete_action_count(target_id) == 0
 
 
-@pytest.mark.requirement("WS03-02-R6", "WS03-02-R7")
+@pytest.mark.pass_provenance('WS03-02')
 def test_self_delete_provider_success_then_local_cleanup_failure_records_support_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -469,7 +468,7 @@ def test_self_delete_provider_success_then_local_cleanup_failure_records_support
     }
 
 
-@pytest.mark.requirement("WS03-02-R6", "WS03-02-R7")
+@pytest.mark.pass_provenance('WS03-02')
 def test_self_delete_unknown_provider_outcome_preserves_auth_link_and_is_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -520,7 +519,7 @@ def test_self_delete_unknown_provider_outcome_preserves_auth_link_and_is_not_ret
     assert provider_calls == [uid]
 
 
-@pytest.mark.requirement("WS03-02-R6", "WS03-02-R7")
+@pytest.mark.pass_provenance('WS03-02')
 def test_successful_self_delete_clears_auth_link_and_repeat_delete_does_not_call_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -8,7 +8,7 @@ import pytest
 import backend.firebase_admin_client as firebase_client
 from backend.settings import SettingsError, build_settings
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 SYNTHETIC_PROJECT_ID = "pickup-lane-synthetic"
@@ -65,7 +65,7 @@ def _assert_rejected(
         assert secret_or_placeholder not in message
 
 
-@pytest.mark.requirement("WS03-01-R10")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     "missing_name",
     [
@@ -79,7 +79,7 @@ def test_production_like_settings_require_firebase_credentials_and_project_id(
     _assert_rejected(_settings_env(**{missing_name: None}), mentions=(missing_name,))
 
 
-@pytest.mark.requirement("WS03-01-R10")
+@pytest.mark.pass_provenance('WS03-01')
 def test_production_like_settings_reject_placeholder_project_id_without_echoing_it() -> None:
     placeholder = "replace-with-firebase-project-id"
 
@@ -90,7 +90,7 @@ def test_production_like_settings_reject_placeholder_project_id_without_echoing_
     )
 
 
-@pytest.mark.requirement("WS03-01-R10")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     "project_id",
     [
@@ -129,7 +129,7 @@ class _CredentialsFake:
             self.value = value
 
 
-@pytest.mark.requirement("WS03-01-R10")
+@pytest.mark.pass_provenance('WS03-01')
 def test_firebase_admin_initialization_passes_configured_project_id_without_provider_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -153,7 +153,7 @@ def test_firebase_admin_initialization_passes_configured_project_id_without_prov
     }
 
 
-@pytest.mark.requirement("WS03-01-R10", "WS03-03B-R1", "WS03-03B-R6")
+@pytest.mark.pass_provenance('WS03-01', 'WS03-03B')
 def test_example_configuration_keeps_firebase_values_as_placeholders() -> None:
     text = (REPO_ROOT / "backend/.env.example").read_text()
 

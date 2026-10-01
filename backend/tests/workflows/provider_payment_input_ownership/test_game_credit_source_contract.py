@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from backend.schemas.game_credit_schema import GameCreditIssueCreate, GameCreditReverseCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _STARTS_AT = datetime(2035, 2, 1, 18, 0, tzinfo=timezone.utc)
 _ENDS_AT = _STARTS_AT + timedelta(hours=2)
@@ -240,7 +239,7 @@ def _reverse(
     )
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_payment_source_requires_authoritative_official_in_app_context() -> None:
     from backend.models import GameCredit
 
@@ -262,7 +261,7 @@ def test_payment_source_requires_authoritative_official_in_app_context() -> None
         assert _count(db, GameCredit) == 1
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_credit_source_rejects_non_official_non_in_app_game_contexts() -> None:
     from backend.models import GameCredit
 
@@ -324,7 +323,7 @@ def test_credit_source_rejects_non_official_non_in_app_game_contexts() -> None:
         assert _count(db, GameCredit) == 0
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_credit_source_rejects_booking_and_payment_owned_by_another_user() -> None:
     from backend.models import GameCredit
 
@@ -356,7 +355,7 @@ def test_credit_source_rejects_booking_and_payment_owned_by_another_user() -> No
         assert _count(db, GameCredit) == 0
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_booking_only_payment_source_and_matching_source_game_remain_supported() -> None:
     with _session() as db:
         state = _target_state(db)
@@ -372,7 +371,7 @@ def test_booking_only_payment_source_and_matching_source_game_remain_supported()
         assert credit.amount_cents == 1300
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_payment_booking_and_caller_source_game_must_agree() -> None:
     from backend.models import GameCredit
 
@@ -394,7 +393,7 @@ def test_payment_booking_and_caller_source_game_must_agree() -> None:
         assert _count(db, GameCredit) == 0
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_source_game_only_does_not_manufacture_monetary_eligibility() -> None:
     from backend.models import GameCredit
 
@@ -409,7 +408,7 @@ def test_source_game_only_does_not_manufacture_monetary_eligibility() -> None:
         assert _count(db, GameCredit) == 0
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_same_booking_and_payment_source_share_one_remaining_budget_payment_first() -> None:
     from backend.models import GameCredit
 
@@ -426,7 +425,7 @@ def test_same_booking_and_payment_source_share_one_remaining_budget_payment_firs
         assert _count(db, GameCredit) == 2
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_same_booking_and_payment_source_share_one_remaining_budget_booking_first() -> None:
     from backend.models import GameCredit
 
@@ -443,7 +442,7 @@ def test_same_booking_and_payment_source_share_one_remaining_budget_booking_firs
         assert _count(db, GameCredit) == 2
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_multiple_payments_for_same_booking_share_one_budget() -> None:
     from backend.models import GameCredit
 
@@ -464,7 +463,7 @@ def test_multiple_payments_for_same_booking_share_one_budget() -> None:
         assert _count(db, GameCredit) == 1
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_linked_booking_and_payment_source_ceiling_uses_minimum_amount() -> None:
     from backend.models import GameCredit
 
@@ -505,7 +504,7 @@ def test_linked_booking_and_payment_source_ceiling_uses_minimum_amount() -> None
         assert _count(db, GameCredit) == 1
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_initial_credit_amount_is_positive_and_within_source_ceiling() -> None:
     from backend.models import GameCredit
 
@@ -543,7 +542,7 @@ def test_initial_credit_amount_is_positive_and_within_source_ceiling() -> None:
         assert _count(db, GameCredit) == 1
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_reversed_credits_do_not_reduce_remaining_source_budget() -> None:
     from backend.models import GameCredit
 
@@ -574,7 +573,7 @@ def test_reversed_credits_do_not_reduce_remaining_source_budget() -> None:
         assert _count(db, GameCredit) == 2
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_credit_operational_text_is_trimmed_before_persistence() -> None:
     with _session() as db:
         state = _target_state(db)
@@ -592,7 +591,7 @@ def test_credit_operational_text_is_trimmed_before_persistence() -> None:
         assert credit.note == "source-owned reason"
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_credit_reverse_request_text_bounds_and_rejects_client_amount() -> None:
     assert GameCreditReverseCreate(idempotency_key="  reverse-key  ").idempotency_key == "reverse-key"
     assert GameCreditReverseCreate(note="  reverse note  ").note == "reverse note"
@@ -609,7 +608,7 @@ def test_credit_reverse_request_text_bounds_and_rejects_client_amount() -> None:
         GameCreditReverseCreate(note="n" * 1001)
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_credit_reverse_uses_current_unused_amount_and_persists_reversal() -> None:
     from backend.models import AdminAction, GameCredit, GameCreditUsage
 
@@ -653,7 +652,7 @@ def test_credit_reverse_uses_current_unused_amount_and_persists_reversal() -> No
         assert persisted_credit.available_cents == 0
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_credit_reverse_blank_idempotency_generates_server_owned_key() -> None:
     from backend.models import GameCreditUsage
 
@@ -677,7 +676,7 @@ def test_credit_reverse_blank_idempotency_generates_server_owned_key() -> None:
         assert usage.idempotency_key.startswith(f"reverse-credit:{credit_id}:")
 
 
-@pytest.mark.requirement("WS02-04B2A2B2-R6")
+@pytest.mark.pass_provenance('WS02-04B2A2B2')
 def test_credit_reverse_blank_note_rejects_without_persisted_reversal() -> None:
     from backend.models import AdminAction, GameCredit, GameCreditUsage
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 
 import pytest
 
@@ -22,10 +21,9 @@ from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_
     _waitlist_entry,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
-@pytest.mark.requirement("WS03-04C-R2", "WS03-04C-R4", "WS03-04C-R10")
+@pytest.mark.pass_provenance('WS03-04C')
 def test_current_relationship_reads_bind_to_authenticated_user_not_query_user_ids(
     client,
     monkeypatch: pytest.MonkeyPatch,

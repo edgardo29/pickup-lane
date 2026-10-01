@@ -6,7 +6,6 @@ from datetime import date, datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _provider_payload(
@@ -82,7 +81,7 @@ def _auth_headers(token: str = "valid-token") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.mark.requirement("WS03-01-R1", "WS03-01-R2")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     ("headers", "expected_detail"),
     [
@@ -106,7 +105,7 @@ def test_protected_requests_reject_missing_or_malformed_bearer_credentials(
     assert calls == []
 
 
-@pytest.mark.requirement("WS03-01-R1")
+@pytest.mark.pass_provenance('WS03-01')
 def test_credentials_are_not_accepted_from_query_or_cookie_locations(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -121,7 +120,7 @@ def test_credentials_are_not_accepted_from_query_or_cookie_locations(
     assert calls == []
 
 
-@pytest.mark.requirement("WS03-01-R1", "WS03-01-R2", "WS03-01-R3")
+@pytest.mark.pass_provenance('WS03-01')
 def test_provider_identity_is_established_before_local_user_authority(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -147,7 +146,7 @@ def test_provider_identity_is_established_before_local_user_authority(
     assert calls == ["valid-token"]
 
 
-@pytest.mark.requirement("WS03-01-R3")
+@pytest.mark.pass_provenance('WS03-01')
 def test_valid_provider_token_alone_cannot_grant_local_access(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -163,7 +162,7 @@ def test_valid_provider_token_alone_cannot_grant_local_access(
     assert response.json()["detail"] == "User not found."
 
 
-@pytest.mark.requirement("WS03-01-R3")
+@pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     ("account_status", "deleted", "expected_status", "expected_detail"),
     [
@@ -196,7 +195,7 @@ def test_local_account_state_is_applied_after_provider_identity(
         assert response.json()["detail"] == expected_detail
 
 
-@pytest.mark.requirement("WS03-01-R1", "WS03-01-R2", "WS03-01-R3")
+@pytest.mark.pass_provenance('WS03-01')
 def test_request_scoped_identity_is_sanitized_from_raw_provider_claims(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

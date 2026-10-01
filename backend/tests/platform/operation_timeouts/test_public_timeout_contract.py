@@ -65,7 +65,7 @@ def _timeout_response(exc: Exception) -> tuple[int, dict[str, object], str]:
     return response.status_code, json.loads(response.body), response.headers[CORRELATION_ID_HEADER]
 
 
-@pytest.mark.requirement("WS02-04C1-R6")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.parametrize(
     ("exc", "code", "message", "detail", "details"),
     [
@@ -133,7 +133,7 @@ def test_public_timeout_errors_return_safe_503_contracts(
         assert marker not in rendered
 
 
-@pytest.mark.requirement("WS02-04C1-R6")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_timeout_telemetry_labels_are_bounded_and_safe() -> None:
     read_error = DependencyReadTimeoutError(
         provider_kind="r2",
@@ -165,7 +165,7 @@ def test_timeout_telemetry_labels_are_bounded_and_safe() -> None:
     }
 
 
-@pytest.mark.requirement("WS02-04C1-R7")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_cancellation_is_distinct_from_timeout_and_is_re_raised() -> None:
     cancellation = asyncio.CancelledError()
 
@@ -175,7 +175,7 @@ def test_cancellation_is_distinct_from_timeout_and_is_re_raised() -> None:
         re_raise_if_cancellation(cancellation)
 
 
-@pytest.mark.requirement("WS02-04C1-R7")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_timeout_helpers_do_not_catch_base_exception() -> None:
     tree = ast.parse((_REPO_ROOT / "backend" / "observability" / "timeouts.py").read_text())
     caught_names = {
@@ -189,7 +189,7 @@ def test_timeout_helpers_do_not_catch_base_exception() -> None:
     assert "BaseException" not in caught_names
 
 
-@pytest.mark.requirement("WS02-04C1-R7")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.parametrize("wrapper", [_call_stripe_read, _call_stripe_mutation])
 def test_representative_provider_wrappers_do_not_convert_cancellation(wrapper) -> None:
     def cancelled_call() -> None:

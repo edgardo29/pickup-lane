@@ -9,7 +9,6 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 CHICAGO = ZoneInfo("America/Chicago")
 
@@ -264,8 +263,7 @@ def _assert_game_detail_minimized(data: dict[str, object]) -> None:
     }.issubset(data)
 
 
-@pytest.mark.requirement("WS02-05B2-R1")
-@pytest.mark.requirement("WS02-05B2-R2")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_game_detail_masks_host_fields_for_public_and_non_host_audiences(
     client: TestClient,
 ) -> None:
@@ -311,7 +309,7 @@ def test_game_detail_masks_host_fields_for_public_and_non_host_audiences(
     assert admin_data["host_guest_max"] == 4
 
 
-@pytest.mark.requirement("WS02-05B2-R1")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_public_game_lists_browse_cards_roster_and_counts_are_minimized(
     client: TestClient,
 ) -> None:
@@ -372,7 +370,7 @@ def test_public_game_lists_browse_cards_roster_and_counts_are_minimized(
     assert count_data["participant_count"] == 1
 
 
-@pytest.mark.requirement("WS02-05B2-R1")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_my_games_current_user_card_response_is_minimized(
     client: TestClient,
 ) -> None:
@@ -429,7 +427,7 @@ def test_my_games_current_user_card_response_is_minimized(
     }.issubset(game_card)
 
 
-@pytest.mark.requirement("WS02-05B2-R1")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_current_user_game_participants_response_uses_public_participant_projection(
     client: TestClient,
 ) -> None:
@@ -471,8 +469,7 @@ def test_current_user_game_participants_response_uses_public_participant_project
     assert participant_data["participant_status"] == "confirmed"
 
 
-@pytest.mark.requirement("WS02-05B2-R1")
-@pytest.mark.requirement("WS02-05B2-R2")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_game_mutation_returns_use_detail_contract_and_generic_game_read_stays_admin(
     client: TestClient,
 ) -> None:

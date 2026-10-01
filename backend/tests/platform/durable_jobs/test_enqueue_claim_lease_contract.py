@@ -123,7 +123,7 @@ def _base_job_insert_values(**overrides):
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS05-01A-R1")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_durable_job_models_declare_required_lifecycle_constraints() -> None:
     job_constraints = {
         constraint.name
@@ -152,7 +152,7 @@ def test_durable_job_models_declare_required_lifecycle_constraints() -> None:
     assert "ck_durable_worker_heartbeats_status" in heartbeat_constraints
 
 
-@pytest.mark.requirement("WS05-01A-R1")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_durable_job_database_defaults_schema_and_constraints_are_real() -> None:
     job_id = uuid4()
     event_id = uuid4()
@@ -240,7 +240,7 @@ def test_durable_job_database_defaults_schema_and_constraints_are_real() -> None
         assert any(fk["referred_table"] == "durable_jobs" for fk in heartbeat_fks)
 
 
-@pytest.mark.requirement("WS05-01A-R1")
+@pytest.mark.pass_provenance('WS05-01A')
 @pytest.mark.parametrize(
     "_case_name, overrides_factory",
     (
@@ -306,7 +306,7 @@ def test_durable_job_database_rejects_impossible_lifecycle_states(
         db.rollback()
 
 
-@pytest.mark.requirement("WS05-01A-R1", "WS05-01A-R2")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_enqueue_is_transactional_idempotent_and_conflict_checked() -> None:
     registry = _registry()
 
@@ -365,7 +365,7 @@ def test_enqueue_is_transactional_idempotent_and_conflict_checked() -> None:
             )
 
 
-@pytest.mark.requirement("WS05-01A-R2", "WS05-01A-R4")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_enqueue_rejects_unsupported_definitions_and_invalid_payloads() -> None:
     registry = _registry()
 
@@ -395,7 +395,7 @@ def test_enqueue_rejects_unsupported_definitions_and_invalid_payloads() -> None:
         assert db.execute(select(DurableJob)).scalars().all() == []
 
 
-@pytest.mark.requirement("WS05-01A-R2", "WS05-01A-R3", "WS05-01A-R4")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_handlerless_definitions_cannot_create_claimable_runnable_work() -> None:
     handlerless_registry = _registry(_handlerless_definition())
     assert handlerless_registry.supported_pairs == ()
@@ -445,7 +445,7 @@ def test_handlerless_definitions_cannot_create_claimable_runnable_work() -> None
         assert event_types == ["enqueued"]
 
 
-@pytest.mark.requirement("WS05-01A-R1", "WS05-01A-R3", "WS05-01A-R4")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_independent_sessions_skip_locked_rows_and_preserve_version_overlap() -> None:
     registry = _registry()
     job_id = _enqueue(registry=registry)
@@ -513,7 +513,7 @@ def test_independent_sessions_skip_locked_rows_and_preserve_version_overlap() ->
         db.rollback()
 
 
-@pytest.mark.requirement("WS05-01A-R3", "WS05-01A-R5")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_claim_order_uses_fairness_before_newer_priority() -> None:
     registry = _registry()
     old_low_id = _enqueue(
@@ -544,7 +544,7 @@ def test_claim_order_uses_fairness_before_newer_priority() -> None:
         db.rollback()
 
 
-@pytest.mark.requirement("WS05-01A-R3", "WS05-01A-R5")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_heartbeat_renews_lease_and_stale_tokens_cannot_mutate() -> None:
     registry = _registry(_definition(maximum_attempts=2))
     job_id = _enqueue(registry=registry, maximum_attempts=2)
@@ -628,7 +628,7 @@ def test_heartbeat_renews_lease_and_stale_tokens_cannot_mutate() -> None:
         assert completed.attempt_count == 2
 
 
-@pytest.mark.requirement("WS05-01A-R3", "WS05-01A-R5")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_worker_release_requires_current_lease_token_after_recovery() -> None:
     registry = _registry(_definition(maximum_attempts=3))
     job_id = _enqueue(registry=registry, maximum_attempts=3)
@@ -724,7 +724,7 @@ def test_worker_release_requires_current_lease_token_after_recovery() -> None:
         assert event_types == ["enqueued", "claimed", "lease_recovered", "released"]
 
 
-@pytest.mark.requirement("WS05-01A-R3", "WS05-01A-R5")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_worker_release_at_final_attempt_exhausts_instead_of_reclaiming() -> None:
     registry = _registry(_definition(maximum_attempts=1))
     job_id = _enqueue(registry=registry, maximum_attempts=1)
@@ -752,7 +752,7 @@ def test_worker_release_at_final_attempt_exhausts_instead_of_reclaiming() -> Non
         )
 
 
-@pytest.mark.requirement("WS05-01A-R1", "WS05-01A-R5")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_expired_final_attempt_exhausts_without_extra_attempt() -> None:
     registry = _registry(_definition(maximum_attempts=1))
     job_id = _enqueue(registry=registry, maximum_attempts=1)
@@ -801,7 +801,7 @@ def test_expired_final_attempt_exhausts_without_extra_attempt() -> None:
         assert event_types == ["enqueued", "claimed", "lease_expired_exhausted"]
 
 
-@pytest.mark.requirement("WS05-01A-R5", "WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_operator_cancel_and_requeue_preserve_durable_history() -> None:
     registry = _registry(_definition(maximum_attempts=1))
     cancelled_id = _enqueue(registry=registry, key="ws05-01a-cancel", maximum_attempts=1)

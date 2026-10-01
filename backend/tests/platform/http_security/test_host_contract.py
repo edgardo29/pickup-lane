@@ -75,7 +75,7 @@ def _create_app(monkeypatch: pytest.MonkeyPatch, **overrides: str | None):
     return main_module.create_app(settings)
 
 
-@pytest.mark.requirement("WS02-03-R2")
+@pytest.mark.pass_provenance('WS02-03')
 def test_allowed_hosts_normalize_case_trailing_dot_and_duplicates() -> None:
     settings = _build(
         _settings_env(
@@ -87,7 +87,7 @@ def test_allowed_hosts_normalize_case_trailing_dot_and_duplicates() -> None:
     assert settings.allowed_hosts == ("api.example.invalid",)
 
 
-@pytest.mark.requirement("WS02-03-R2")
+@pytest.mark.pass_provenance('WS02-03')
 def test_production_like_allowed_hosts_must_be_explicit() -> None:
     _assert_rejected(
         _settings_env("production", ALLOWED_HOSTS=None),
@@ -95,7 +95,7 @@ def test_production_like_allowed_hosts_must_be_explicit() -> None:
     )
 
 
-@pytest.mark.requirement("WS02-03-R2")
+@pytest.mark.pass_provenance('WS02-03')
 @pytest.mark.parametrize(
     "raw_hosts",
     [
@@ -123,7 +123,7 @@ def test_production_like_allowed_hosts_reject_unsafe_values(raw_hosts: str) -> N
     )
 
 
-@pytest.mark.requirement("WS02-03-R3")
+@pytest.mark.pass_provenance('WS02-03')
 @pytest.mark.parametrize(
     ("method_name", "path"),
     [
@@ -155,7 +155,7 @@ def test_invalid_host_is_rejected_before_route_or_static_exposure(
     assert "api.example.invalid" not in response.text
 
 
-@pytest.mark.requirement("WS02-03-R3")
+@pytest.mark.pass_provenance('WS02-03')
 def test_allowed_host_reaches_api_docs_openapi_and_static_asset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -178,7 +178,7 @@ def test_allowed_host_reaches_api_docs_openapi_and_static_asset(
     assert static_response.headers["content-type"] == "image/webp"
 
 
-@pytest.mark.requirement("WS02-03-R3")
+@pytest.mark.pass_provenance('WS02-03')
 def test_trusted_host_middleware_is_canonical_and_does_not_redirect_www(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

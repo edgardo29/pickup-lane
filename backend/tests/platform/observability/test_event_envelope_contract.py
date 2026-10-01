@@ -15,7 +15,7 @@ def _occurred_at() -> datetime:
     return datetime(2026, 8, 11, 15, 30, tzinfo=timezone.utc)
 
 
-@pytest.mark.requirement("EN02-EVENT-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_event_envelope_uses_current_correlation_and_serializes_safe_fields():
     correlation_id = "123e4567-e89b-42d3-a456-426614174010"
 
@@ -47,7 +47,7 @@ def test_event_envelope_uses_current_correlation_and_serializes_safe_fields():
     assert "synthetic-secret" not in envelope.to_json()
 
 
-@pytest.mark.requirement("EN02-EVENT-001")
+@pytest.mark.pass_provenance('EN-02')
 @pytest.mark.parametrize(
     ("field_name", "field_value"),
     [
@@ -72,7 +72,7 @@ def test_event_envelope_rejects_unbounded_required_and_enum_fields(
         EventEnvelope(**kwargs)
 
 
-@pytest.mark.requirement("EN02-EVENT-001")
+@pytest.mark.pass_provenance('EN-02')
 @pytest.mark.parametrize(
     "labels",
     [
@@ -92,7 +92,7 @@ def test_event_envelope_rejects_unsafe_or_unapproved_labels(labels: dict[str, st
         )
 
 
-@pytest.mark.requirement("EN02-EVENT-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_event_envelope_defensively_copies_caller_owned_label_input():
     source_labels = {"operation": "booking.create"}
     envelope = EventEnvelope(
@@ -107,7 +107,7 @@ def test_event_envelope_defensively_copies_caller_owned_label_input():
     assert envelope.to_dict()["labels"] == {"operation": "booking.create"}
 
 
-@pytest.mark.requirement("EN02-EVENT-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_event_envelope_validated_labels_cannot_be_mutated_after_validation():
     envelope = EventEnvelope(
         event_name="booking.created",
@@ -122,7 +122,7 @@ def test_event_envelope_validated_labels_cannot_be_mutated_after_validation():
     assert envelope.to_dict()["labels"] == {"operation": "booking.create"}
 
 
-@pytest.mark.requirement("EN02-EVENT-001")
+@pytest.mark.pass_provenance('EN-02')
 @pytest.mark.parametrize(
     "release",
     [

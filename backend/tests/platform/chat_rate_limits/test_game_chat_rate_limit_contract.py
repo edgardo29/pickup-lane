@@ -38,7 +38,6 @@ finally:
     if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
         os.environ.pop("DATABASE_URL", None)
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_TIME = datetime(2035, 4, 2, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -207,8 +206,7 @@ def _side_effect_snapshot(db, chat: GameChat) -> dict[str, object]:
     }
 
 
-@pytest.mark.requirement("WS02-04C3A-R1")
-@pytest.mark.requirement("WS02-04C3A-R2")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_game_chat_send_uses_shared_game_chat_limiter_and_allows_until_fifth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -244,9 +242,7 @@ def test_game_chat_send_uses_shared_game_chat_limiter_and_allows_until_fifth(
         assert seen[-1]["sender_user_id"] == sender.id
 
 
-@pytest.mark.requirement("WS02-04C3A-R1")
-@pytest.mark.requirement("WS02-04C3A-R2")
-@pytest.mark.requirement("WS02-04C3A-R6")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_game_chat_sixth_message_rejects_without_send_side_effects() -> None:
     with _session() as db:
         sender, other_sender, _outsider, chat, other_chat = _context(db)
@@ -269,7 +265,7 @@ def test_game_chat_sixth_message_rejects_without_send_side_effects() -> None:
         assert _side_effect_snapshot(db, chat) == before
 
 
-@pytest.mark.requirement("WS02-04C3A-R5")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_game_chat_authorization_happens_before_limiter_disclosure() -> None:
     with _session() as db:
         sender, _recipient, outsider, chat, _other_chat = _context(db)
@@ -287,7 +283,7 @@ def test_game_chat_authorization_happens_before_limiter_disclosure() -> None:
         assert _count(db, ChatMessage, ChatMessage.chat_id == chat.id) == 5
 
 
-@pytest.mark.requirement("WS02-04C3A-R6")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_game_chat_limiter_store_failure_precedes_send_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -308,7 +304,7 @@ def test_game_chat_limiter_store_failure_precedes_send_side_effects(
         assert _side_effect_snapshot(db, chat) == before
 
 
-@pytest.mark.requirement("WS02-04C3A-R8")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_game_chat_visibility_restoration_and_non_text_boundaries() -> None:
     with _session() as db:
         sender, _recipient, _outsider, chat, _other_chat = _context(db)
@@ -359,8 +355,7 @@ def test_game_chat_visibility_restoration_and_non_text_boundaries() -> None:
         assert _count(db, ChatMessage, ChatMessage.chat_id == chat.id) == 8
 
 
-@pytest.mark.requirement("WS02-04C3A-R1")
-@pytest.mark.requirement("WS02-04C3A-R8")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_game_chat_rate_limiter_remains_before_b1_total_history_cap() -> None:
     source = inspect.getsource(game_chat_service.create_chat_message_record)
 

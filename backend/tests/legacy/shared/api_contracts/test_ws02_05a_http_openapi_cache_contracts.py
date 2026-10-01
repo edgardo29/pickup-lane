@@ -5,7 +5,6 @@ from types import SimpleNamespace
 import uuid
 
 from fastapi import status
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 import pytest
@@ -13,12 +12,6 @@ import pytest
 import backend.main as main_module
 from backend.main import create_app
 from backend.observability.correlation import CORRELATION_ID_HEADER
-from backend.observability.pagination_contracts import (
-    PAGINATION_CONTRACTS,
-    PAGINATION_HANDOFFS,
-    pagination_contract_keys,
-    pagination_handoff_keys,
-)
 from backend.observability.request_body_limits import (
     UNSUPPORTED_CONTENT_ENCODING_CODE,
     UNSUPPORTED_MEDIA_TYPE_CODE,
@@ -358,80 +351,3 @@ def test_openapi_operation_ids_are_unique_and_method_paths_are_not_duplicated():
             operation_ids.append(operation["operationId"])
 
     assert len(operation_ids) == len(set(operation_ids))
-
-
-def test_pagination_inventory_covers_all_current_collection_candidates():
-    app = build_app()
-    current_candidates = _current_collection_route_keys(app.routes)
-    registered_candidates = pagination_contract_keys() | pagination_handoff_keys()
-
-    assert current_candidates == registered_candidates
-    assert pagination_contract_keys().isdisjoint(pagination_handoff_keys())
-    assert len(PAGINATION_HANDOFFS) > 0
-
-
-def test_pagination_contract_route_limits_match_route_metadata():
-    route_map = {
-        ("GET", route.path): route
-        for route in build_app().routes
-        if isinstance(route, APIRoute) and "GET" in (route.methods or set())
-    }
-
-    for contract in PAGINATION_CONTRACTS:
-        route = route_map[contract.key]
-        query_params = {param.name: param for param in route.dependant.query_params}
-
-        if contract.limit_default is not None:
-            assert "limit" in query_params, contract.key
-            assert query_params["limit"].default == contract.limit_default
-
-        if contract.limit_max is not None and "route" in contract.max_owner:
-            assert _query_le(query_params["limit"]) == contract.limit_max
-
-        if contract.next_cursor:
-            assert any("cursor" in name for name in query_params), contract.key
-
-        if contract.offset_param is not None:
-            offset_param = query_params[contract.offset_param]
-            assert _query_ge(offset_param) == 0
-
-
-def _current_collection_route_keys(routes) -> frozenset[tuple[str, str]]:
-    candidates: set[tuple[str, str]] = set()
-    for route in routes:
-        if not isinstance(route, APIRoute) or "GET" not in (route.methods or set()):
-            continue
-        query_params = {param.name: param for param in route.dependant.query_params}
-        response_model = str(route.response_model)
-        if _is_collection_route(response_model, query_params):
-            candidates.add(("GET", route.path))
-    return frozenset(candidates)
-
-
-def _is_collection_route(response_model: str, query_params: dict) -> bool:
-    return (
-        "list[" in response_model
-        or "List" in response_model
-        or "Page" in response_model
-        or "ListRead" in response_model
-        or "ListResponse" in response_model
-        or "limit" in query_params
-        or "cursor" in query_params
-        or "offset" in query_params
-    )
-
-
-def _query_le(param) -> int | None:
-    for metadata in param.field_info.metadata:
-        value = getattr(metadata, "le", None)
-        if value is not None:
-            return value
-    return None
-
-
-def _query_ge(param) -> int | None:
-    for metadata in param.field_info.metadata:
-        value = getattr(metadata, "ge", None)
-        if value is not None:
-            return value
-    return None

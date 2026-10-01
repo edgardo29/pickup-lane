@@ -8,7 +8,6 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 SELF_ALLOWED_FIELDS = {
     "id",
@@ -121,7 +120,7 @@ def _assert_self_user_response(data: dict[str, object]) -> None:
     assert data["member_since"] is not None
 
 
-@pytest.mark.requirement("WS02-05B2-R3")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_self_auth_and_profile_responses_omit_provider_uid_and_audit_fields(
     client: TestClient,
 ) -> None:
@@ -155,7 +154,7 @@ def test_self_auth_and_profile_responses_omit_provider_uid_and_audit_fields(
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS02-05B2-R3")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_self_account_routes_declare_self_user_response_models() -> None:
     from backend.schemas.user_schema import SelfUserRead
 
@@ -166,7 +165,7 @@ def test_self_account_routes_declare_self_user_response_models() -> None:
     assert _route("PATCH", "/users/me").response_model is SelfUserRead
 
 
-@pytest.mark.requirement("WS02-05B2-R3")
+@pytest.mark.pass_provenance('WS02-05B2')
 def test_admin_user_responses_keep_operational_identity_fields_behind_admin(
     client: TestClient,
 ) -> None:

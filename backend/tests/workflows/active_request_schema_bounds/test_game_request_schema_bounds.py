@@ -25,7 +25,7 @@ from backend.schemas.game_schema import (
 from backend.schemas.sub_post_position_schema import SubPostPositionCreate
 from backend.schemas.sub_post_schema import SubPostCreate, SubPostUpdate
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 _STARTS_AT = datetime(2035, 1, 15, 18, 0, tzinfo=timezone.utc)
 _ENDS_AT = datetime(2035, 1, 15, 20, 0, tzinfo=timezone.utc)
@@ -110,7 +110,7 @@ def _sub_post_create(**overrides: object) -> SubPostCreate:
     return SubPostCreate(**payload)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_total_spots_bounds_cover_active_create_and_update_shapes() -> None:
     model_factories = (
         _community_publish,
@@ -127,7 +127,7 @@ def test_total_spots_bounds_cover_active_create_and_update_shapes() -> None:
         _assert_rejected(factory, total_spots=100)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_price_per_player_cents_bounds_cover_active_create_and_update_shapes() -> None:
     model_factories = (
         _community_publish,
@@ -144,7 +144,7 @@ def test_price_per_player_cents_bounds_cover_active_create_and_update_shapes() -
         _assert_rejected(factory, price_per_player_cents=99_901)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_max_guests_per_booking_bounds_only_on_exposing_active_shapes() -> None:
     for factory in (_game_create, GameUpdate, _official_create, AdminOfficialGameUpdate):
         assert factory(max_guests_per_booking=0).max_guests_per_booking == 0
@@ -153,7 +153,7 @@ def test_max_guests_per_booking_bounds_only_on_exposing_active_shapes() -> None:
         _assert_rejected(factory, max_guests_per_booking=3)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_join_checkout_and_booking_guest_count_boundaries() -> None:
     for factory in (GameJoinCreate, GameCheckoutPaymentIntentCreate):
         assert factory(guest_count=0).guest_count == 0
@@ -167,7 +167,7 @@ def test_join_checkout_and_booking_guest_count_boundaries() -> None:
     _assert_rejected(GameBookingGuestAddCreate, guest_count=3)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_host_guest_add_and_guest_removal_do_not_invent_host_upper_bound() -> None:
     assert GameGuestAddCreate(guest_count=1).guest_count == 1
     assert GameGuestAddCreate(guest_count=3).guest_count == 3
@@ -177,7 +177,7 @@ def test_host_guest_add_and_guest_removal_do_not_invent_host_upper_bound() -> No
     _assert_rejected(GameGuestRemoveCreate, remove_count=0)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_cancellation_and_join_consent_version_bounds_and_nullability() -> None:
     assert GameCancelCreate(cancel_reason="x" * 500).cancel_reason == "x" * 500
     assert GameCancelCreate().cancel_reason is None
@@ -190,7 +190,7 @@ def test_cancellation_and_join_consent_version_bounds_and_nullability() -> None:
     _assert_rejected(GameJoinCreate, auto_charge_consent_version="v" * 51)
 
 
-@pytest.mark.requirement("WS02-04B2A2A-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2A')
 def test_need_a_sub_price_due_at_venue_bounds_cover_create_and_update() -> None:
     for factory in (_sub_post_create, SubPostUpdate):
         assert factory(price_due_at_venue_cents=0).price_due_at_venue_cents == 0

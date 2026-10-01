@@ -65,7 +65,7 @@ def _final_role_record() -> dict:
     return record
 
 
-@pytest.mark.requirement("WS04-01C-R2", "WS04-01C-R6", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_role_grant_contract_requires_complete_role_and_privilege_inventory() -> None:
     contract = _load_contract()
 
@@ -75,7 +75,7 @@ def test_role_grant_contract_requires_complete_role_and_privilege_inventory() ->
     assert contract["role_grant_contract"]["migration_role_separation_required"] is True
 
 
-@pytest.mark.requirement("WS04-01C-R6")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_final_role_evidence_rejects_broad_application_privilege() -> None:
     record = _final_role_record()
     privileged = deepcopy(record)
@@ -86,7 +86,7 @@ def test_final_role_evidence_rejects_broad_application_privilege() -> None:
     )
 
 
-@pytest.mark.requirement("WS04-01C-R6")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_final_role_evidence_rejects_shared_application_and_migration_role() -> None:
     record = _final_role_record()
     shared = deepcopy(record)
@@ -99,7 +99,7 @@ def test_final_role_evidence_rejects_shared_application_and_migration_role() -> 
     )
 
 
-@pytest.mark.requirement("WS04-01C-R6")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_final_role_evidence_requires_ownership_search_path_and_default_privileges() -> None:
     record = _final_role_record()
     incomplete = deepcopy(record)
@@ -115,7 +115,7 @@ def test_final_role_evidence_requires_ownership_search_path_and_default_privileg
     )
 
 
-@pytest.mark.requirement("WS04-01C-R6", "WS04-01C-R8")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_final_role_evidence_requires_every_role_class_disposition() -> None:
     record = _final_role_record()
     missing_reporting = deepcopy(record)
@@ -138,7 +138,7 @@ def test_final_role_evidence_requires_every_role_class_disposition() -> None:
     ) in validate_final_role_grant_evidence(missing_schema_owner)
 
 
-@pytest.mark.requirement("WS04-01C-R6")
+@pytest.mark.pass_provenance('WS04-01C')
 def test_final_role_evidence_requires_migration_grant_search_path_and_default_proof() -> None:
     record = _final_role_record()
     incomplete_migration = deepcopy(record)

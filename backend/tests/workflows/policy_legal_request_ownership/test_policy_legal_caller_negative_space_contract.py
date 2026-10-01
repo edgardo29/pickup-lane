@@ -8,7 +8,7 @@ from typing import Iterable
 import pytest
 from fastapi.routing import APIRoute
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FRONTEND_SRC = REPO_ROOT / "frontend" / "src"
@@ -96,7 +96,7 @@ def _route_id(route: APIRoute) -> str:
     return f"{methods} {route.path}"
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_current_frontend_sources_do_not_construct_retired_policy_legal_writes() -> None:
     retired_write_fragments = (
         ("/policy-documents", "POST"),
@@ -116,12 +116,12 @@ def test_current_frontend_sources_do_not_construct_retired_policy_legal_writes()
                 ), f"{path.relative_to(REPO_ROOT)} constructs {method} {endpoint_fragment}"
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R4")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_retired_policy_legal_seed_scripts_are_absent() -> None:
     assert [path for path in RETIRED_POLICY_LEGAL_SEEDS if path.exists()] == []
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R4", "WS02-04B2A2B3-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_no_alternate_active_route_accepts_policy_legal_write_bodies_or_calls_mutation_services() -> None:
     for route in _iter_api_routes():
         if any((method, route.path) in B3_TOMBSTONE_KEYS for method in route.methods):
@@ -137,7 +137,7 @@ def test_no_alternate_active_route_accepts_policy_legal_write_bodies_or_calls_mu
             assert f"{function_name}(" not in source, _route_id(route)
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_policy_legal_tombstones_have_no_same_method_alias_or_ordinary_body_route_selection() -> None:
     from backend.main import app
 
@@ -164,7 +164,7 @@ def test_policy_legal_tombstones_have_no_same_method_alias_or_ordinary_body_rout
         assert (method, path) not in ordinary_keys
 
 
-@pytest.mark.requirement("WS02-04B2A2B3-R5")
+@pytest.mark.pass_provenance('WS02-04B2A2B3')
 def test_no_b3_specific_policy_legal_request_body_limit_class_or_numeric_threshold_exists() -> None:
     from backend.main import SPECIAL_BODY_ROUTE_KEYS
     from backend.observability import request_body_limits

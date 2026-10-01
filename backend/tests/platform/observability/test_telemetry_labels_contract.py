@@ -12,7 +12,7 @@ from backend.observability.telemetry import (
 pytestmark = pytest.mark.no_db_cleanup
 
 
-@pytest.mark.requirement("EN02-TEL-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_telemetry_labels_accept_only_approved_bounded_names_and_values():
     labels = validate_telemetry_labels(
         {
@@ -33,7 +33,7 @@ def test_telemetry_labels_accept_only_approved_bounded_names_and_values():
     ]
 
 
-@pytest.mark.requirement("EN02-TEL-001")
+@pytest.mark.pass_provenance('EN-02')
 @pytest.mark.parametrize(
     ("name", "value"),
     [
@@ -58,7 +58,7 @@ def test_telemetry_labels_reject_high_cardinality_or_privacy_unsafe_material(
         validate_telemetry_label(name, value)
 
 
-@pytest.mark.requirement("EN02-TEL-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_telemetry_label_mapping_is_immutable_after_validation():
     labels = validate_telemetry_labels({"operation": "booking.create"})
 
@@ -69,7 +69,7 @@ def test_telemetry_label_mapping_is_immutable_after_validation():
     assert dict(labels) == {"operation": "booking.create"}
 
 
-@pytest.mark.requirement("EN02-TEL-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_telemetry_labels_defensively_copy_source_mapping():
     source_labels = {"operation": "booking.create"}
     labels = validate_telemetry_labels(source_labels)
@@ -80,7 +80,7 @@ def test_telemetry_labels_defensively_copy_source_mapping():
     assert dict(labels) == {"operation": "booking.create"}
 
 
-@pytest.mark.requirement("EN02-TEL-001")
+@pytest.mark.pass_provenance('EN-02')
 @pytest.mark.parametrize(
     "route_template",
     [
@@ -96,7 +96,7 @@ def test_telemetry_route_template_rejects_raw_identifiers_queries_and_urls(
         validate_telemetry_label("route_template", route_template)
 
 
-@pytest.mark.requirement("EN02-TEL-001")
+@pytest.mark.pass_provenance('EN-02')
 def test_telemetry_label_validation_rejects_sensitive_redaction_inputs():
     with pytest.raises(TelemetryLabelError):
         validate_telemetry_label("operation", "sk_test_synthetic")

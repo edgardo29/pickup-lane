@@ -30,7 +30,6 @@ finally:
     if not _DATABASE_URL_CONFIGURED_FOR_RUNTIME:
         os.environ.pop("DATABASE_URL", None)
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_TIME = datetime(2035, 4, 5, 12, 0, 0, tzinfo=timezone.utc)
 _ALLOWED_ORIGIN = "http://localhost:5173"
@@ -176,7 +175,7 @@ def _normalized_http_exception(
     return response.status_code, json.loads(response.body), response.headers
 
 
-@pytest.mark.requirement("WS02-04C3A-R7")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_real_chat_rate_limit_rejection_uses_safe_429_contract(client: TestClient) -> None:
     sender, chat_id = _rate_limited_context()
     client.app.dependency_overrides[require_verified_user] = lambda: sender
@@ -219,7 +218,7 @@ def test_real_chat_rate_limit_rejection_uses_safe_429_contract(client: TestClien
         ) == 5
 
 
-@pytest.mark.requirement("WS02-04C3A-R7")
+@pytest.mark.pass_provenance('WS02-04C3A')
 def test_c3a_retry_after_allowance_does_not_make_unrelated_headers_public() -> None:
     response_status, payload, headers = _normalized_http_exception(
         status.HTTP_503_SERVICE_UNAVAILABLE,

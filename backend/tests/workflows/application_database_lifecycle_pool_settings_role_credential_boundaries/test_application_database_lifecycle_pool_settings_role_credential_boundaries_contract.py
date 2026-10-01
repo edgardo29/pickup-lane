@@ -88,7 +88,7 @@ def _build(
     )
 
 
-@pytest.mark.requirement("WS04-01A-R5")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_explicit_alembic_test_override_accepts_only_the_ordinary_test_database() -> None:
     assert (
         validate_ordinary_test_database_url(_LOCAL_TEST_DATABASE_URL)
@@ -251,7 +251,7 @@ def _frontend_text_files() -> tuple[Path, ...]:
     )
 
 
-@pytest.mark.requirement("WS04-01A-R1")
+@pytest.mark.pass_provenance('WS04-01A')
 @pytest.mark.parametrize("app_env", ["preview", "staging", "production"])
 def test_production_like_runtime_requires_explicit_pool_configuration(
     app_env: str,
@@ -281,7 +281,7 @@ def test_production_like_runtime_requires_explicit_pool_configuration(
     assert settings.db_max_overflow == 0
 
 
-@pytest.mark.requirement("WS04-01A-R1")
+@pytest.mark.pass_provenance('WS04-01A')
 @pytest.mark.parametrize("app_env", ["local", "test", "ci"])
 def test_local_test_and_ci_may_omit_or_supply_pool_configuration(
     app_env: str,
@@ -297,7 +297,7 @@ def test_local_test_and_ci_may_omit_or_supply_pool_configuration(
     assert supplied_settings.db_max_overflow == 1
 
 
-@pytest.mark.requirement("WS04-01A-R1")
+@pytest.mark.pass_provenance('WS04-01A')
 @pytest.mark.parametrize(
     ("name", "value", "expected"),
     [
@@ -322,7 +322,7 @@ def test_pool_configuration_rejects_invalid_values(
     )
 
 
-@pytest.mark.requirement("WS04-01A-R1", "WS04-01A-R5")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_application_settings_do_not_require_migration_database_url() -> None:
     settings = _build(
         "production",
@@ -336,7 +336,7 @@ def test_application_settings_do_not_require_migration_database_url() -> None:
     assert settings.db_max_overflow == 2
 
 
-@pytest.mark.requirement("WS04-01A-R5")
+@pytest.mark.pass_provenance('WS04-01A')
 @pytest.mark.parametrize("app_env", ["preview", "staging", "production"])
 def test_production_like_migrations_require_migration_database_url(
     monkeypatch: pytest.MonkeyPatch,
@@ -351,7 +351,7 @@ def test_production_like_migrations_require_migration_database_url(
     assert _PRODUCTION_DATABASE_URL not in str(exc_info.value)
 
 
-@pytest.mark.requirement("WS04-01A-R5")
+@pytest.mark.pass_provenance('WS04-01A')
 @pytest.mark.parametrize("app_env", ["local", "test", "ci"])
 def test_non_production_migrations_may_fall_back_to_application_database_url(
     monkeypatch: pytest.MonkeyPatch,
@@ -363,7 +363,7 @@ def test_non_production_migrations_may_fall_back_to_application_database_url(
     assert get_migration_database_url() == env["DATABASE_URL"]
 
 
-@pytest.mark.requirement("WS04-01A-R5")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_migration_database_url_is_validated_safely(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -394,7 +394,7 @@ def test_migration_database_url_is_validated_safely(
     assert get_migration_database_url() == _MIGRATION_DATABASE_URL
 
 
-@pytest.mark.requirement("WS04-01A-R2", "WS04-01A-R4")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_application_engine_uses_configured_pool_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -418,7 +418,7 @@ def test_application_engine_uses_configured_pool_values(
         _dispose_database_module(database)
 
 
-@pytest.mark.requirement("WS04-01A-R1", "WS04-01A-R2")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_non_production_engine_keeps_optional_pool_values_optional(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -443,7 +443,7 @@ class _FakeSession:
         self.close_calls += 1
 
 
-@pytest.mark.requirement("WS04-01A-R3")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_request_session_closes_after_success_without_rollback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -463,7 +463,7 @@ def test_request_session_closes_after_success_without_rollback(
         _dispose_database_module(database)
 
 
-@pytest.mark.requirement("WS04-01A-R3")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_request_session_rolls_back_ordinary_exceptions_and_closes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -483,7 +483,7 @@ def test_request_session_rolls_back_ordinary_exceptions_and_closes(
         _dispose_database_module(database)
 
 
-@pytest.mark.requirement("WS04-01A-R3", "WS04-01A-R4")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_request_session_closes_on_cancellation_without_reclassification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -508,7 +508,7 @@ def test_request_session_closes_on_cancellation_without_reclassification(
         _dispose_database_module(database)
 
 
-@pytest.mark.requirement("WS04-01A-R4")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_database_health_failure_response_remains_generic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -552,7 +552,7 @@ def test_database_health_failure_response_remains_generic(
         assert "pickup_lane_test_db" not in response.text
 
 
-@pytest.mark.requirement("WS04-01A-R4")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_application_shutdown_disposes_engine(monkeypatch: pytest.MonkeyPatch) -> None:
     database = _reload_database_module(monkeypatch, _settings_env("test"))
     try:
@@ -566,7 +566,7 @@ def test_application_shutdown_disposes_engine(monkeypatch: pytest.MonkeyPatch) -
         _dispose_database_module(database)
 
 
-@pytest.mark.requirement("WS04-01A-R5", "WS04-01A-R6")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_alembic_uses_migration_configuration_metadata_path_and_nullpool() -> None:
     source = (_BACKEND_ROOT / "alembic" / "env.py").read_text()
 
@@ -578,7 +578,7 @@ def test_alembic_uses_migration_configuration_metadata_path_and_nullpool() -> No
     assert "MIGRATION_DATABASE_URL" in source
 
 
-@pytest.mark.requirement("WS04-01A-R6")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_model_metadata_loads_complete_model_set_without_application_engine() -> None:
     _drop_module_tree("backend.models")
     sys.modules.pop("backend.database", None)
@@ -605,7 +605,7 @@ def test_model_metadata_loads_complete_model_set_without_application_engine() ->
     )
 
 
-@pytest.mark.requirement("WS04-01A-R7")
+@pytest.mark.pass_provenance('WS04-01A')
 def test_database_configuration_names_remain_backend_only_and_sanitized() -> None:
     example = (_BACKEND_ROOT / ".env.example").read_text()
 

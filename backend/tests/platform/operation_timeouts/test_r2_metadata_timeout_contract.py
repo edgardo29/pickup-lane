@@ -392,7 +392,7 @@ class _FakeR2Client:
         return f"https://signed.example.invalid/{method}"
 
 
-@pytest.mark.requirement("WS02-04C1-R4")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_r2_metadata_client_receives_approved_connect_and_read_timeouts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -413,7 +413,7 @@ def test_r2_metadata_client_receives_approved_connect_and_read_timeouts(
     assert botocore_config.read_timeout == 6
 
 
-@pytest.mark.requirement("WS02-04C1-R4")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.parametrize(
     "timeout_error",
     [
@@ -439,7 +439,7 @@ def test_r2_head_timeout_maps_to_dependency_read(
     ]
 
 
-@pytest.mark.requirement("WS02-04C1-R4")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_r2_object_not_found_and_storage_failures_remain_distinct(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -475,7 +475,7 @@ def test_r2_object_not_found_and_storage_failures_remain_distinct(
         r2_storage.get_object_properties("broken.jpg")
 
 
-@pytest.mark.requirement("WS02-04C1-R4", "WS02-04C1-R7")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_r2_head_cancellation_propagates_without_timeout_classification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -493,7 +493,7 @@ def test_r2_head_cancellation_propagates_without_timeout_classification(
     ]
 
 
-@pytest.mark.requirement("WS02-04C1-R4")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_r2_presigned_urls_are_local_signing_not_metadata_network_timeout_claims(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -41,7 +41,6 @@ from backend.tests.workflows.moderation_review_case_lifecycle.conftest import (
     session,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def event_rows(db, review_case_id: uuid.UUID) -> list[AdminReviewCaseEvent]:

@@ -9,7 +9,7 @@ from backend.tests.workflows.route_lifecycle_cleanup.test_retired_route_registra
     RetiredMutationRoute,
 )
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 _SENTINEL = "B2A2B1_SENTINEL_BODY_SHOULD_NOT_BECOME_ACCEPTED"
 
@@ -42,7 +42,7 @@ def _request(client: TestClient, retired_route: RetiredMutationRoute, **kwargs):
     return client.request(retired_route.method, retired_route.concrete_path, **kwargs)
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R1", "WS02-04B2A2B1-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_all_retired_mutation_routes_return_410_for_authenticated_no_body_requests(
     app_with_clean_overrides,
 ) -> None:
@@ -55,7 +55,7 @@ def test_all_retired_mutation_routes_return_410_for_authenticated_no_body_reques
             assert response.status_code == 410, retired_route.id
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R1", "WS02-04B2A2B1-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_json_payloads_do_not_activate_validation_or_reflect_submitted_contract(
     app_with_clean_overrides,
 ) -> None:
@@ -70,7 +70,7 @@ def test_json_payloads_do_not_activate_validation_or_reflect_submitted_contract(
             assert _SENTINEL not in response.text, retired_route.id
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R1", "WS02-04B2A2B1-R2")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_malformed_json_representatives_do_not_revive_route_owned_body_parsing(
     app_with_clean_overrides,
 ) -> None:
@@ -94,7 +94,7 @@ def test_malformed_json_representatives_do_not_revive_route_owned_body_parsing(
             assert response.status_code != 422, retired_route.id
 
 
-@pytest.mark.requirement("WS02-04B2A2B1-R1")
+@pytest.mark.pass_provenance('WS02-04B2A2B1')
 def test_authentication_dependency_runs_before_representative_tombstone_handlers(
     app_with_clean_overrides,
 ) -> None:

@@ -119,7 +119,7 @@ def _runner(
     )
 
 
-@pytest.mark.requirement("WS05-01A-R4", "WS05-01A-R6")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_runner_executes_success_retry_and_permanent_failure_with_synthetic_handlers() -> (
     None
 ):
@@ -147,7 +147,7 @@ def test_runner_executes_success_retry_and_permanent_failure_with_synthetic_hand
         assert db.get(DurableJob, permanent_job_id).status == EXHAUSTED
 
 
-@pytest.mark.requirement("WS05-01A-R4", "WS05-01A-R6")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_runner_classifies_handler_exceptions_with_safe_error_codes() -> None:
     def transient_handler(db, job):
         del db, job
@@ -212,7 +212,7 @@ def test_runner_classifies_handler_exceptions_with_safe_error_codes() -> None:
         assert "raw permanent detail" not in str(exhausted_events[0].event_metadata)
 
 
-@pytest.mark.requirement("WS05-01A-R3", "WS05-01A-R6")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_runner_renews_active_handler_lease_with_separate_session() -> None:
     renewal_poll = Event()
 
@@ -259,7 +259,7 @@ def test_runner_renews_active_handler_lease_with_separate_session() -> None:
         assert "heartbeat" in event_types
 
 
-@pytest.mark.requirement("WS05-01A-R3", "WS05-01A-R6")
+@pytest.mark.pass_provenance('WS05-01A')
 @pytest.mark.parametrize(
     "handler_result",
     (
@@ -323,7 +323,7 @@ def test_runner_does_not_record_transition_after_active_lease_loss(
         assert "released" not in event_types
 
 
-@pytest.mark.requirement("WS05-01A-R6")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_shutdown_requested_before_iteration_does_not_claim_new_work(capsys) -> None:
     registry = _registry_with_handler(lambda db, job: HandlerResult.success())
     job_id = _enqueue_with_registry(registry)
@@ -347,7 +347,7 @@ def test_shutdown_requested_before_iteration_does_not_claim_new_work(capsys) -> 
         assert heartbeat.current_job_id is None
 
 
-@pytest.mark.requirement("WS05-01A-R6")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_shutdown_requested_while_leased_finishes_current_job_without_new_claims() -> (
     None
 ):
@@ -378,7 +378,7 @@ def test_shutdown_requested_while_leased_finishes_current_job_without_new_claims
         assert heartbeat.current_job_id is None
 
 
-@pytest.mark.requirement("WS05-01A-R4", "WS05-01A-R6", "WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_runner_fails_closed_for_malformed_persisted_payload_without_side_effect(
     capsys,
 ) -> None:
@@ -411,7 +411,7 @@ def test_runner_fails_closed_for_malformed_persisted_payload_without_side_effect
         assert stored.last_error_code == "malformed_payload"
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_malformed_payload_reports_lease_lost_when_exhaust_transition_loses_lease(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -445,7 +445,7 @@ def test_malformed_payload_reports_lease_lost_when_exhaust_transition_loses_leas
         assert db.get(DurableJob, job_id).status == LEASED
 
 
-@pytest.mark.requirement("WS05-01A-R6", "WS05-01A-R8")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_portable_worker_command_is_import_safe_and_not_deployment_topology() -> None:
     module = importlib.import_module("backend.durable_worker")
     source = (_REPO_ROOT / "backend/durable_worker.py").read_text()
@@ -458,7 +458,7 @@ def test_portable_worker_command_is_import_safe_and_not_deployment_topology() ->
     assert "autoscaling" not in source.lower()
 
 
-@pytest.mark.requirement("WS05-01A-R6", "WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_portable_worker_status_command_exposes_safe_operator_fields(capsys) -> None:
     registry = _registry_with_handler(lambda db, job: HandlerResult.success())
     job_id = _enqueue_with_registry(registry)
@@ -487,7 +487,7 @@ def test_portable_worker_status_command_exposes_safe_operator_fields(capsys) -> 
     assert "lease_token" not in output
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_enqueue_defaults_to_request_correlation_then_generated_uuid() -> None:
     registry = _registry_with_handler(lambda db, job: HandlerResult.success())
     request_correlation = str(uuid.uuid4())
@@ -522,7 +522,7 @@ def test_enqueue_defaults_to_request_correlation_then_generated_uuid() -> None:
         assert str(uuid.UUID(generated, version=4)) == generated
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 @pytest.mark.parametrize(
     (
         "job_kind",
@@ -662,7 +662,7 @@ def test_production_payment_jobs_preserve_request_correlation_state_and_safe_eve
     assert "payment_method_operation_id" not in serialized
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 @pytest.mark.parametrize(
     ("handler_result", "attempts", "expected_outcome", "severity", "result", "code"),
     [
@@ -793,7 +793,7 @@ def test_runner_events_follow_committed_state_and_fixed_code_translation(
     assert "future_private_code" not in json.dumps(record)
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_canonical_job_correlation_scopes_handler_event_and_restores_outer_context(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -835,7 +835,7 @@ def test_canonical_job_correlation_scopes_handler_event_and_restores_outer_conte
     assert record["correlation_id"] == stored_correlation
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 @pytest.mark.no_db_cleanup
 @pytest.mark.parametrize(
     ("durable_code", "structured_code"),
@@ -868,7 +868,7 @@ def test_every_current_durable_error_code_has_exact_fixed_translation(
     )
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_job_event_is_attempted_after_commit_and_logging_failure_preserves_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -895,7 +895,7 @@ def test_job_event_is_attempted_after_commit_and_logging_failure_preserves_state
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_missing_claimed_job_has_exact_compatibility_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -939,7 +939,7 @@ def test_missing_claimed_job_has_exact_compatibility_event(
 
 
 @pytest.mark.no_db_cleanup
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_unsupported_claimed_definition_has_exact_compatibility_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -988,7 +988,7 @@ def test_unsupported_claimed_definition_has_exact_compatibility_event(
     )
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_legacy_job_correlation_is_cleared_for_handler_and_event(capsys) -> None:
     seen_correlation: list[str | None] = []
 
@@ -1013,7 +1013,7 @@ def test_legacy_job_correlation_is_cleared_for_handler_and_event(capsys) -> None
     assert record["resource_id"] == str(job_id)
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_expired_final_attempt_emits_after_recovery_commit(capsys) -> None:
     registry = _registry_with_handler(
         lambda db, job: HandlerResult.success(), attempts=1
@@ -1051,7 +1051,7 @@ def test_expired_final_attempt_emits_after_recovery_commit(capsys) -> None:
         assert db.get(DurableJob, job_id).status == EXHAUSTED
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_expired_final_attempt_and_new_claim_each_emit_in_same_iteration(
     capsys,
 ) -> None:
@@ -1096,7 +1096,7 @@ def test_expired_final_attempt_and_new_claim_each_emit_in_same_iteration(
         assert db.get(DurableJob, pending_job_id).status == SUCCEEDED
 
 
-@pytest.mark.requirement("WS05-01A-R6")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_worker_heartbeat_records_running_and_stopped_state(capsys) -> None:
     registry = _registry_with_handler(lambda db, job: HandlerResult.success())
     emitter = RuntimeEventEmitter("worker", "test", "test-release")
@@ -1114,7 +1114,7 @@ def test_worker_heartbeat_records_running_and_stopped_state(capsys) -> None:
         assert heartbeat.current_job_id is None
 
 
-@pytest.mark.requirement("WS05-01A-R7", "WS05-01A-R8")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_backlog_summary_exposes_safe_counts_and_unsupported_versions() -> None:
     v1_registry = DurableJobRegistry(
         (
@@ -1167,7 +1167,7 @@ def test_backlog_summary_exposes_safe_counts_and_unsupported_versions() -> None:
     assert summary.attempt_counts_by_status == {"pending": {0: 1}}
 
 
-@pytest.mark.requirement("WS05-01A-R7", "WS05-01A-R8")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_operator_inspection_exposes_safe_worker_attempt_and_event_history() -> None:
     registry = _registry_with_handler(
         lambda db, job: HandlerResult.permanent_failure("permanent_failure")
@@ -1221,7 +1221,7 @@ def test_operator_inspection_exposes_safe_worker_attempt_and_event_history() -> 
         assert "lease_token" not in str(public_shape)
 
 
-@pytest.mark.requirement("WS05-01A-R7")
+@pytest.mark.pass_provenance('WS05-01A')
 def test_diagnostic_metadata_rejects_sensitive_or_unbounded_values() -> None:
     assert sanitize_diagnostic_metadata({"safe_code": "ok", "attempt": 1}) == {
         "safe_code": "ok",

@@ -7,7 +7,7 @@ from fastapi.routing import APIRoute
 
 from backend.schemas.user_schema import UserUpdate
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BACKEND_ROOT = REPO_ROOT / "backend"
@@ -166,13 +166,7 @@ def _classify_route(route: APIRoute, method: str) -> str:
     raise AssertionError(f"Unclassified WS03-01 route candidate: {method} {path}")
 
 
-@pytest.mark.requirement(
-    "WS03-01-R1",
-    "WS03-01-R3",
-    "WS03-01-R4",
-    "WS03-01-R7",
-    "WS03-01-R8",
-)
+@pytest.mark.pass_provenance('WS03-01')
 def test_ws03_route_inventory_classifies_identity_relevant_routes_and_dependencies() -> None:
     classifications: dict[tuple[str, str], str] = {}
 
@@ -226,7 +220,7 @@ def _relative(path: Path) -> str:
     return path.relative_to(REPO_ROOT).as_posix()
 
 
-@pytest.mark.requirement("WS03-01-R1", "WS03-01-R3", "WS03-01-R7", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 def test_backend_source_has_no_direct_token_or_custom_claim_authority_bypasses() -> None:
     direct_verify_offenders: list[str] = []
     decoded_token_offenders: list[str] = []
@@ -260,7 +254,7 @@ def test_backend_source_has_no_direct_token_or_custom_claim_authority_bypasses()
     assert custom_claim_offenders == []
 
 
-@pytest.mark.requirement("WS03-01-R4", "WS03-01-R5", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 def test_verified_email_authorization_depends_on_provider_identity_not_local_snapshot() -> None:
     source = (BACKEND_ROOT / "services/auth_service.py").read_text()
     require_verified_segment = source[
@@ -272,7 +266,7 @@ def test_verified_email_authorization_depends_on_provider_identity_not_local_sna
     assert "email_verified_at" not in require_verified_segment
 
 
-@pytest.mark.requirement("WS03-01-R6", "WS03-01-R8")
+@pytest.mark.pass_provenance('WS03-01')
 def test_ordinary_profile_schema_exposes_no_identity_owned_fields() -> None:
     model_fields = set(UserUpdate.model_fields)
 
@@ -280,7 +274,7 @@ def test_ordinary_profile_schema_exposes_no_identity_owned_fields() -> None:
     assert model_fields.isdisjoint(IDENTITY_OWNED_FIELDS)
 
 
-@pytest.mark.requirement("WS03-01-R9")
+@pytest.mark.pass_provenance('WS03-01')
 def test_frontend_source_has_no_manual_bearer_storage_or_generic_replay_bypass() -> None:
     unsafe_storage_lines: list[str] = []
     unsafe_token_placement: list[str] = []

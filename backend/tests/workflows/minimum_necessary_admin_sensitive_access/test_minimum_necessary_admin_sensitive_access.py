@@ -41,7 +41,6 @@ from backend.tests.workflows.source_owned_boundaries.test_chat_boundary_contract
     _venue,
 )
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 
 def _seed_chat_surfaces():

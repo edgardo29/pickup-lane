@@ -17,7 +17,6 @@ from backend.settings import build_settings, reset_settings_cache
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
-    pytest.mark.requirement("WS09-01A"),
 ]
 
 _DATABASE_URL = "postgresql+psycopg://127.0.0.1:5432/pickup_lane_test_db"
@@ -116,6 +115,7 @@ def _app(
 @pytest.mark.parametrize(
     "failed_delivery", [None, "entry", "count", "duration", "exit"]
 )
+@pytest.mark.pass_provenance('WS09-03A')
 def test_request_metrics_cover_actual_outer_error_lifecycle_and_sink_failure(
     monkeypatch,
     path,
@@ -165,6 +165,7 @@ def test_request_metrics_cover_actual_outer_error_lifecycle_and_sink_failure(
 @pytest.mark.parametrize(
     "method", ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "PROPFIND"]
 )
+@pytest.mark.pass_provenance('WS09-03A')
 def test_request_metric_method_inventory(monkeypatch, method):
     app = _app(monkeypatch)
     with TestClient(app) as client:
@@ -179,6 +180,7 @@ def test_request_metric_method_inventory(monkeypatch, method):
     )
 
 
+@pytest.mark.pass_provenance('WS09-03A')
 def test_rejected_request_entry_has_no_unmatched_release(monkeypatch):
     app = _app(monkeypatch)
     recorder = app.state.metrics_recorder
@@ -195,6 +197,7 @@ def test_rejected_request_entry_has_no_unmatched_release(monkeypatch):
     )
 
 
+@pytest.mark.pass_provenance('WS09-03A')
 def test_repeated_api_construction_has_fresh_state_and_does_not_poll(monkeypatch):
     import backend.main as main_module
 
@@ -232,6 +235,7 @@ def _records(capsys: pytest.CaptureFixture[str]) -> list[dict[str, object]]:
         ("/synthetic/server-error", 503, "error", "server_error"),
     ],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_handled_requests_emit_one_exact_completion(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -269,6 +273,7 @@ def test_handled_requests_emit_one_exact_completion(
     ]
 
 
+@pytest.mark.pass_provenance('WS09-01A')
 def test_timeout_and_unexpected_paths_are_distinct_and_have_one_completion(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -302,6 +307,7 @@ def test_timeout_and_unexpected_paths_are_distinct_and_have_one_completion(
     "request_id",
     [None, "", "not-a-uuid", str(uuid.uuid4()).upper(), str(uuid.uuid1())],
 )
+@pytest.mark.pass_provenance('WS09-01A')
 def test_missing_empty_and_invalid_request_ids_are_replaced_without_leakage(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -326,6 +332,7 @@ def test_missing_empty_and_invalid_request_ids_are_replaced_without_leakage(
 @pytest.mark.parametrize(
     "failed_delivery", [None, "entry", "count", "duration", "exit"]
 )
+@pytest.mark.pass_provenance('WS09-01A', 'WS09-03A')
 def test_concurrent_requests_keep_correlation_metrics_and_app_metadata_isolated(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -389,6 +396,7 @@ def test_concurrent_requests_keep_correlation_metrics_and_app_metadata_isolated(
     assert "private" not in repr(recorder.snapshot())
 
 
+@pytest.mark.pass_provenance('WS09-01A')
 def test_sensitive_unmatched_path_query_and_headers_never_enter_records(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -411,6 +419,7 @@ def test_sensitive_unmatched_path_query_and_headers_never_enter_records(
     assert "session=private-canary" not in json.dumps(records)
 
 
+@pytest.mark.pass_provenance('WS09-01A')
 def test_matched_sensitive_path_uses_only_route_template(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -427,6 +436,7 @@ def test_matched_sensitive_path_uses_only_route_template(
     assert canary not in json.dumps(records)
 
 
+@pytest.mark.pass_provenance('WS09-01A')
 def test_completed_request_does_not_leak_context_into_background_emission(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -455,6 +465,7 @@ def test_completed_request_does_not_leak_context_into_background_emission(
     assert "correlation_id" not in records[-1]
 
 
+@pytest.mark.pass_provenance('WS09-01A')
 def test_repeated_apps_keep_per_app_release_without_duplicate_records(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -478,6 +489,7 @@ def test_repeated_apps_keep_per_app_release_without_duplicate_records(
     ]
 
 
+@pytest.mark.pass_provenance('WS09-01A')
 def test_failure_after_response_start_has_one_captured_status_completion(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

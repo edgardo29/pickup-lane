@@ -37,7 +37,7 @@ from backend.schemas.game_schema import (
     GameUpdate,
 )
 
-pytestmark = [pytest.mark.no_db_cleanup, pytest.mark.suite_type("ordinary")]
+pytestmark = [pytest.mark.no_db_cleanup]
 
 ACTIVE_ADMIN_DEPENDENCY = "backend.services.auth_service.require_active_admin"
 RECENT_ACTIVE_ADMIN_DEPENDENCY = (
@@ -309,7 +309,7 @@ def _openapi_request_properties(method: str, path: str) -> set[str]:
     return set(request_schema.get("properties", {}))
 
 
-@pytest.mark.requirement("WS02-05B1-R5")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_specialized_mutation_routes_bind_purpose_schemas_and_actor_dependencies() -> None:
     for spec in SPECIALIZED_ROUTE_SPECS:
         route = _route_by_method_path(spec.method, spec.path)
@@ -319,13 +319,13 @@ def test_specialized_mutation_routes_bind_purpose_schemas_and_actor_dependencies
         assert spec.required_dependency in dependency_names, spec.id
 
 
-@pytest.mark.requirement("WS02-05B1-R5")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_specialized_mutation_body_schemas_forbid_unknown_fields() -> None:
     for spec in SPECIALIZED_ROUTE_SPECS:
         assert spec.body_model.model_config.get("extra") == "forbid", spec.id
 
 
-@pytest.mark.requirement("WS02-05B1-R5")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_dedicated_host_and_user_ids_are_not_generic_game_update_fields() -> None:
     host_user_owners = [
         spec.id
@@ -343,7 +343,7 @@ def test_dedicated_host_and_user_ids_are_not_generic_game_update_fields() -> Non
     assert user_id_owners == ["POST /admin/official-games/{game_id}/players"]
 
 
-@pytest.mark.requirement("WS02-05B1-R5")
+@pytest.mark.pass_provenance('WS02-05B1')
 def test_specialized_openapi_request_schemas_do_not_expose_generic_game_bypass_fields() -> None:
     for spec in SPECIALIZED_ROUTE_SPECS:
         properties = _openapi_request_properties(spec.method, spec.path)

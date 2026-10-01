@@ -129,7 +129,7 @@ def _delivered_body(result: MiddlewareResult) -> bytes:
     )
 
 
-@pytest.mark.requirement("WS02-04B2A1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_exact_limit_body_is_accepted_and_delivered_byte_for_byte() -> None:
     body = b"abcd"
 
@@ -140,7 +140,7 @@ def test_exact_limit_body_is_accepted_and_delivered_byte_for_byte() -> None:
     assert _delivered_body(result) == body
 
 
-@pytest.mark.requirement("WS02-04B2A1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_limit_plus_one_body_is_rejected_before_downstream_delivery() -> None:
     result = _run(messages=(_http_message(b"abcde"),))
 
@@ -150,7 +150,7 @@ def test_limit_plus_one_body_is_rejected_before_downstream_delivery() -> None:
     assert result.app.messages == []
 
 
-@pytest.mark.requirement("WS02-04B2A1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_content_length_above_limit_rejects_before_receive_or_app_call() -> None:
     result = _run(
         scope=_scope(headers=((b"content-length", b"5"),)),
@@ -162,7 +162,7 @@ def test_content_length_above_limit_rejects_before_receive_or_app_call() -> None
     assert not result.app.called
 
 
-@pytest.mark.requirement("WS02-04B2A1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 @pytest.mark.parametrize(
     "headers",
     [
@@ -185,7 +185,7 @@ def test_actual_bytes_remain_authoritative_when_length_metadata_is_not_rejecting
     assert result.app.messages == []
 
 
-@pytest.mark.requirement("WS02-04B2A1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_multiple_request_messages_are_counted_cumulatively_with_more_body() -> None:
     result = _run(
         messages=(
@@ -199,7 +199,7 @@ def test_multiple_request_messages_are_counted_cumulatively_with_more_body() -> 
     assert _delivered_body(result) == b"abcd"
 
 
-@pytest.mark.requirement("WS02-04B2A1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_downstream_delivery_stops_at_message_that_exceeds_limit() -> None:
     result = _run(
         messages=(
@@ -213,7 +213,7 @@ def test_downstream_delivery_stops_at_message_that_exceeds_limit() -> None:
     assert len(result.app.messages) == 1
 
 
-@pytest.mark.requirement("WS02-04B2A1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_empty_zero_byte_messages_do_not_count_against_limit() -> None:
     result = _run(
         messages=(
@@ -229,7 +229,7 @@ def test_empty_zero_byte_messages_do_not_count_against_limit() -> None:
     ]
 
 
-@pytest.mark.requirement("WS02-04B2A1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_non_http_scope_passes_through_without_body_limit_behavior() -> None:
     result = _run(
         scope=_scope(scope_type="lifespan"),
@@ -243,7 +243,7 @@ def test_non_http_scope_passes_through_without_body_limit_behavior() -> None:
     assert result.app.scope["type"] == "lifespan"
 
 
-@pytest.mark.requirement("WS02-04B2A1-R3")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_disconnect_non_request_message_reaches_downstream_receive() -> None:
     result = _run(messages=({"type": "http.disconnect"},))
 
@@ -251,7 +251,7 @@ def test_disconnect_non_request_message_reaches_downstream_receive() -> None:
     assert result.app.messages == [{"type": "http.disconnect"}]
 
 
-@pytest.mark.requirement("WS02-04B2A1-R4")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 @pytest.mark.parametrize(
     "headers",
     [
@@ -275,7 +275,7 @@ def test_absent_or_identity_content_encoding_is_accepted_without_decompression(
     assert _delivered_body(result) == compressed_looking_bytes
 
 
-@pytest.mark.requirement("WS02-04B2A1-R4")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 @pytest.mark.parametrize(
     "encoding",
     [b"gzip", b"br", b"identity, gzip", b"Identity, BR"],
@@ -294,7 +294,7 @@ def test_non_identity_content_encoding_is_rejected_before_body_receive(
     assert not result.app.called
 
 
-@pytest.mark.requirement("WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_route_outside_all_limited_classes_is_unaffected_by_size_and_encoding() -> None:
     result = _run(
         scope=_scope(
@@ -309,7 +309,7 @@ def test_route_outside_all_limited_classes_is_unaffected_by_size_and_encoding() 
     assert _delivered_body(result) == b"still delivered"
 
 
-@pytest.mark.requirement("WS02-04B2A1-R7")
+@pytest.mark.pass_provenance('WS02-04B2A1')
 def test_special_classes_take_precedence_over_matching_ordinary_json_routes() -> None:
     matching_route = RequestBodyLimitRoute(
         path=PLATFORM_NOTICE_CREATE_PATH,

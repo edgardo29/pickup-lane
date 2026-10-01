@@ -105,7 +105,7 @@ def _saved_payment_method(user, index: int):
     )
 
 
-@pytest.mark.requirement("WS02-04C1-R8")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.no_db_cleanup
 def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_provider_outcome(
     monkeypatch: pytest.MonkeyPatch,
@@ -240,7 +240,7 @@ def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_pr
     ]
 
 
-@pytest.mark.requirement("WS02-04C1-R8")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.no_db_cleanup
 def test_refund_origins_commit_durable_intents_without_provider_mutations() -> None:
     from backend.services import (
@@ -274,7 +274,7 @@ def test_refund_origins_commit_durable_intents_without_provider_mutations() -> N
     assert "create_stripe_refund(" not in late_payment_source
 
 
-@pytest.mark.requirement("WS02-04C1-R8")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.no_db_cleanup
 def test_firebase_account_deletion_timeout_records_support_unknown_outcome(
     monkeypatch: pytest.MonkeyPatch,
@@ -357,7 +357,7 @@ def test_firebase_account_deletion_timeout_records_support_unknown_outcome(
     ]
 
 
-@pytest.mark.requirement("WS02-04C1-R8")
+@pytest.mark.pass_provenance('WS02-04C1')
 def test_saved_card_unpersisted_cleanup_timeout_cannot_create_saved_card_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -437,7 +437,7 @@ def test_saved_card_unpersisted_cleanup_timeout_cannot_create_saved_card_state(
         )
 
 
-@pytest.mark.requirement("WS02-04C1-R8")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.no_db_cleanup
 def test_saved_card_unpersisted_cleanup_timeout_is_best_effort_only(
     monkeypatch: pytest.MonkeyPatch,
@@ -466,27 +466,7 @@ def test_saved_card_unpersisted_cleanup_timeout_is_best_effort_only(
     assert "You can save up to" in sync_source
 
 
-@pytest.mark.requirement("WS02-04C1-R2", "WS02-04C1-R8")
-@pytest.mark.no_db_cleanup
-def test_provider_mutation_retry_policy_preserves_no_blind_replay() -> None:
-    import backend.services.provider_retry_policy as retry_policy
-
-    mutation_policies = [
-        policy
-        for policy in retry_policy.PROVIDER_OPERATION_RETRY_POLICIES
-        if policy.provider in {"stripe", "firebase"} and policy.provider_mutation
-    ]
-
-    assert mutation_policies
-    for policy in mutation_policies:
-        assert policy.application_automatic_retry_allowed is (
-            policy.workflow_context == "durable_refund_fulfillment"
-        )
-        assert policy.unknown_outcome_possible is True
-        assert policy.current_recovery
-
-
-@pytest.mark.requirement("WS02-04C1-R7", "WS02-04C1-R8")
+@pytest.mark.pass_provenance('WS02-04C1')
 @pytest.mark.no_db_cleanup
 def test_representative_call_sites_catch_exception_not_base_exception() -> None:
     call_site_paths = [

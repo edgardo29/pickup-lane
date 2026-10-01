@@ -12,7 +12,6 @@ from sqlalchemy import func, select
 from backend.models import Booking, Game, GameCredit, GameCreditUsage, User, Venue
 from backend.schemas.game_credit_schema import GameCreditReverseCreate
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _NOW = datetime(2035, 7, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -173,7 +172,7 @@ def _reserve_credit(
             return "insufficient_balance"
 
 
-@pytest.mark.requirement("WS04-02B-R7", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_concurrent_credit_reservations_cannot_overdraw_grant() -> None:
     with _session() as db:
         user = _user()
@@ -244,7 +243,7 @@ def _release_credit_usage(
         return "released", released.id
 
 
-@pytest.mark.requirement("WS04-02B-R7", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_concurrent_reserved_credit_release_converges_to_one_released_usage() -> None:
     with _session() as db:
         user = _user()
@@ -315,7 +314,7 @@ def _redeem_credit_booking(
         return "redeemed"
 
 
-@pytest.mark.requirement("WS04-02B-R7", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_concurrent_reserved_credit_redeem_converges_to_one_redeemed_usage() -> None:
     with _session() as db:
         user = _user()
@@ -393,7 +392,7 @@ def _restore_credit_usage(
         return "restored", restored.id
 
 
-@pytest.mark.requirement("WS04-02B-R7", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_concurrent_redeemed_credit_restore_converges_to_one_restore_row() -> None:
     with _session() as db:
         user = _user()
@@ -495,7 +494,7 @@ def _reverse_credit(
             return f"http-{exc.status_code}:{exc.detail}"
 
 
-@pytest.mark.requirement("WS04-02B-R7", "WS04-02B-R8")
+@pytest.mark.pass_provenance('WS04-02B')
 def test_concurrent_credit_reversal_converges_to_one_reversal_row() -> None:
     with _session() as db:
         admin = _admin()

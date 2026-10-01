@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi import HTTPException
 
-pytestmark = pytest.mark.suite_type("ordinary")
 
 _BASE_TIME = datetime(2035, 2, 1, 18, 0, tzinfo=timezone.utc)
 
@@ -170,7 +169,7 @@ def _sub_message(
     )
 
 
-@pytest.mark.requirement("WS02-04B1-R7")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_game_and_need_a_sub_chat_message_body_boundaries() -> None:
     from backend.services import game_chat_service, sub_post_chat_service
 
@@ -186,7 +185,7 @@ def test_game_and_need_a_sub_chat_message_body_boundaries() -> None:
         assert over_exc.value.status_code == 400
 
 
-@pytest.mark.requirement("WS02-04B1-R7")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_game_chat_page_and_visible_text_history_boundaries() -> None:
     from backend.models import GameChat
     from backend.services import game_chat_service
@@ -227,7 +226,7 @@ def test_game_chat_page_and_visible_text_history_boundaries() -> None:
         assert exc_info.value.status_code == 400
 
 
-@pytest.mark.requirement("WS02-04B1-R7")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_need_a_sub_chat_page_and_visible_text_history_boundaries() -> None:
     from backend.models import SubPostChat
     from backend.services import sub_post_chat_service
@@ -265,7 +264,7 @@ def test_need_a_sub_chat_page_and_visible_text_history_boundaries() -> None:
         assert exc_info.value.status_code == 400
 
 
-@pytest.mark.requirement("WS02-04B1-R7")
+@pytest.mark.pass_provenance('WS02-04B1')
 def test_chat_send_workflows_preserve_c3a_rate_limiter_before_total_cap() -> None:
     from backend.services import game_chat_service, sub_post_chat_service
 
