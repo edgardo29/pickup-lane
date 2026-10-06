@@ -106,7 +106,7 @@ def test_checkout_create_timeout_leaves_committed_local_checkpoint(
     game_id = uuid.uuid4()
     current_user = SimpleNamespace(
         id=uuid.uuid4(),
-        stripe_customer_id="cus_ws04_02a_checkout",
+        stripe_customer_id="cus_transaction_boundary_checkout",
     )
     db_game = SimpleNamespace(
         id=game_id,
@@ -116,11 +116,11 @@ def test_checkout_create_timeout_leaves_committed_local_checkpoint(
     )
     saved_payment_method = SimpleNamespace(
         id=uuid.uuid4(),
-        stripe_payment_method_id="pm_ws04_02a_saved",
+        stripe_payment_method_id="pm_transaction_boundary_saved",
     )
     db = _RecordingSession(added=[], added_many=[])
-    provider_create_events: list[tuple[str, int]] = []
-    provider_confirm_calls: list[str] = []
+    stripe_create_events: list[tuple[str, int]] = []
+    stripe_confirm_calls: list[str] = []
     reconciliation_jobs: list[tuple[uuid.UUID, str]] = []
 
     monkeypatch.setattr(
@@ -176,12 +176,12 @@ def test_checkout_create_timeout_leaves_committed_local_checkpoint(
     )
 
     def create_payment_intent(**kwargs):
-        provider_create_events.append((kwargs["idempotency_key"], db.commit_calls))
+        stripe_create_events.append((kwargs["idempotency_key"], db.commit_calls))
         raise _stripe_timeout("stripe.payment_intent.create")
 
     def confirm_payment_intent(payment_intent_id: str, **kwargs):
         del kwargs
-        provider_confirm_calls.append(payment_intent_id)
+        stripe_confirm_calls.append(payment_intent_id)
         raise AssertionError("checkout must not confirm after create timeout")
 
     monkeypatch.setattr(checkout_service, "create_payment_intent", create_payment_intent)
@@ -204,8 +204,8 @@ def test_checkout_create_timeout_leaves_committed_local_checkpoint(
     assert exc_info.value.operation == "stripe.payment_intent.create"
     assert len(staged_payments) == 1
     staged_payment = next(iter(staged_payments.values()))
-    assert provider_create_events == [(staged_payment.idempotency_key, 1)]
-    assert provider_confirm_calls == []
+    assert stripe_create_events == [(staged_payment.idempotency_key, 1)]
+    assert stripe_confirm_calls == []
     assert db.commit_calls == 2
     assert db.rollback_calls == 2
     assert staged_payment.provider_payment_intent_id is None
@@ -216,7 +216,7 @@ def test_checkout_create_timeout_leaves_committed_local_checkpoint(
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_checkout_provider_success_then_local_recording_failure_is_honest(
+def test_checkout_stripe_success_then_local_recording_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.schemas.checkout_schema import GameCheckoutPaymentIntentCreate
@@ -227,7 +227,7 @@ def test_checkout_provider_success_then_local_recording_failure_is_honest(
     game_id = uuid.uuid4()
     current_user = SimpleNamespace(
         id=uuid.uuid4(),
-        stripe_customer_id="cus_ws04_02a_checkout",
+        stripe_customer_id="cus_transaction_boundary_checkout",
     )
     db_game = SimpleNamespace(
         id=game_id,
@@ -237,15 +237,15 @@ def test_checkout_provider_success_then_local_recording_failure_is_honest(
     )
     saved_payment_method = SimpleNamespace(
         id=uuid.uuid4(),
-        stripe_payment_method_id="pm_ws04_02a_saved",
+        stripe_payment_method_id="pm_transaction_boundary_saved",
     )
     db = _RecordingSession(
         added=[],
         added_many=[],
         commit_failures={2},
     )
-    provider_create_events: list[tuple[str, int]] = []
-    provider_confirm_calls: list[str] = []
+    stripe_create_events: list[tuple[str, int]] = []
+    stripe_confirm_calls: list[str] = []
     reconciliation_jobs: list[tuple[uuid.UUID, str]] = []
 
     monkeypatch.setattr(
@@ -317,18 +317,18 @@ def test_checkout_provider_success_then_local_recording_failure_is_honest(
     )
 
     def create_payment_intent(**kwargs):
-        provider_create_events.append((kwargs["idempotency_key"], db.commit_calls))
+        stripe_create_events.append((kwargs["idempotency_key"], db.commit_calls))
         return SimpleNamespace(
-            id="pi_ws04_02a_checkout_recording_failed",
-            latest_charge_id="ch_ws04_02a_checkout_recording_failed",
+            id="pi_transaction_boundary_checkout_recording_failed",
+            latest_charge_id="ch_transaction_boundary_checkout_recording_failed",
             status="requires_action",
-            client_secret="pi_secret_ws04_02a",
+            client_secret="pi_secret_transaction_boundary",
         )
 
     def confirm_payment_intent(payment_intent_id: str, **kwargs):
         del kwargs
-        provider_confirm_calls.append(payment_intent_id)
-        raise AssertionError("checkout must not confirm before provider result records")
+        stripe_confirm_calls.append(payment_intent_id)
+        raise AssertionError("checkout must not confirm before Stripe result records")
 
     monkeypatch.setattr(checkout_service, "create_payment_intent", create_payment_intent)
     monkeypatch.setattr(checkout_service, "confirm_payment_intent", confirm_payment_intent)
@@ -348,8 +348,8 @@ def test_checkout_provider_success_then_local_recording_failure_is_honest(
     assert exc_info.value.status_code == 409
     assert "Stripe created this payment intent" in exc_info.value.detail
     assert "could not create this payment intent" not in exc_info.value.detail
-    assert provider_create_events == [(staged_payments[0].idempotency_key, 1)]
-    assert provider_confirm_calls == []
+    assert stripe_create_events == [(staged_payments[0].idempotency_key, 1)]
+    assert stripe_confirm_calls == []
     assert db.commit_calls == 2
     assert db.rollback_calls == 2
     assert reconciliation_jobs == [
@@ -368,15 +368,15 @@ def test_community_publish_create_timeout_keeps_attempt_checkpoint(
     payment_method_id = uuid.uuid4()
     host = SimpleNamespace(
         id=uuid.uuid4(),
-        stripe_customer_id="cus_ws04_02a_publish",
+        stripe_customer_id="cus_transaction_boundary_publish",
     )
     publish_request = SimpleNamespace(
         payment_method_id=payment_method_id,
-        model_dump=lambda mode="json": {"source": "ws04-02a", "mode": mode},
+        model_dump=lambda mode="json": {"source": "transaction-boundary", "mode": mode},
     )
     saved_payment_method = SimpleNamespace(id=payment_method_id)
     db = _RecordingSession(added=[], added_many=[])
-    provider_create_events: list[tuple[str, int]] = []
+    stripe_create_events: list[tuple[str, int]] = []
 
     monkeypatch.setattr(publish_service, "get_stripe_currency", lambda: "USD")
     monkeypatch.setattr(
@@ -386,7 +386,7 @@ def test_community_publish_create_timeout_keeps_attempt_checkpoint(
     )
 
     def create_payment_intent(**kwargs):
-        provider_create_events.append((kwargs["idempotency_key"], db.commit_calls))
+        stripe_create_events.append((kwargs["idempotency_key"], db.commit_calls))
         raise _stripe_timeout("stripe.payment_intent.create")
 
     monkeypatch.setattr(publish_service, "create_payment_intent", create_payment_intent)
@@ -411,7 +411,7 @@ def test_community_publish_create_timeout_keeps_attempt_checkpoint(
     assert len(staged_payments) == 1
     staged_attempt = next(iter(staged_attempts.values()))
     assert staged_attempt.payment_id == staged_payments[0].id
-    assert provider_create_events == [(staged_payments[0].idempotency_key, 1)]
+    assert stripe_create_events == [(staged_payments[0].idempotency_key, 1)]
     assert db.commit_calls == 1
     assert db.rollback_calls == 0
     assert staged_payments[0].provider_payment_intent_id is None
@@ -419,7 +419,7 @@ def test_community_publish_create_timeout_keeps_attempt_checkpoint(
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_community_publish_provider_success_then_local_recording_failure_is_honest(
+def test_community_publish_stripe_success_then_local_recording_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import backend.services.community_game_publish_service as publish_service
@@ -429,23 +429,23 @@ def test_community_publish_provider_success_then_local_recording_failure_is_hone
     payment_method_id = uuid.uuid4()
     host = SimpleNamespace(
         id=uuid.uuid4(),
-        stripe_customer_id="cus_ws04_02a_publish",
+        stripe_customer_id="cus_transaction_boundary_publish",
     )
     publish_request = SimpleNamespace(
         payment_method_id=payment_method_id,
-        model_dump=lambda mode="json": {"source": "ws04-02a", "mode": mode},
+        model_dump=lambda mode="json": {"source": "transaction-boundary", "mode": mode},
     )
     saved_payment_method = SimpleNamespace(
         id=payment_method_id,
-        stripe_payment_method_id="pm_ws04_02a_publish",
+        stripe_payment_method_id="pm_transaction_boundary_publish",
     )
     db = _RecordingSession(
         added=[],
         added_many=[],
         commit_failures={2},
     )
-    provider_create_events: list[tuple[str, int]] = []
-    provider_confirm_calls: list[str] = []
+    stripe_create_events: list[tuple[str, int]] = []
+    stripe_confirm_calls: list[str] = []
 
     monkeypatch.setattr(publish_service, "get_stripe_currency", lambda: "USD")
     monkeypatch.setattr(
@@ -455,18 +455,18 @@ def test_community_publish_provider_success_then_local_recording_failure_is_hone
     )
 
     def create_payment_intent(**kwargs):
-        provider_create_events.append((kwargs["idempotency_key"], db.commit_calls))
+        stripe_create_events.append((kwargs["idempotency_key"], db.commit_calls))
         return SimpleNamespace(
-            id="pi_ws04_02a_publish_recording_failed",
-            latest_charge_id="ch_ws04_02a_publish_recording_failed",
+            id="pi_transaction_boundary_publish_recording_failed",
+            latest_charge_id="ch_transaction_boundary_publish_recording_failed",
             status="requires_payment_method",
-            client_secret="pi_secret_ws04_02a_publish",
+            client_secret="pi_secret_transaction_boundary_publish",
         )
 
     def confirm_payment_intent(payment_intent_id: str, **kwargs):
         del kwargs
-        provider_confirm_calls.append(payment_intent_id)
-        raise AssertionError("publish must not confirm before provider result records")
+        stripe_confirm_calls.append(payment_intent_id)
+        raise AssertionError("publish must not confirm before Stripe result records")
 
     monkeypatch.setattr(publish_service, "create_payment_intent", create_payment_intent)
     monkeypatch.setattr(publish_service, "confirm_payment_intent", confirm_payment_intent)
@@ -487,8 +487,8 @@ def test_community_publish_provider_success_then_local_recording_failure_is_hone
     assert exc_info.value.status_code == 409
     assert "Stripe created this publish fee payment intent" in exc_info.value.detail
     assert "could not create this publish fee payment" not in exc_info.value.detail
-    assert provider_create_events == [(staged_payments[0].idempotency_key, 1)]
-    assert provider_confirm_calls == []
+    assert stripe_create_events == [(staged_payments[0].idempotency_key, 1)]
+    assert stripe_confirm_calls == []
     assert db.commit_calls == 2
     assert db.rollback_calls == 1
     assert staged_attempts[0].payment_id == staged_payments[0].id
@@ -505,7 +505,7 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
     buyer_user_id = uuid.uuid4()
     buyer_user = SimpleNamespace(
         id=buyer_user_id,
-        stripe_customer_id="cus_ws04_02a_waitlist",
+        stripe_customer_id="cus_transaction_boundary_waitlist",
     )
     authorized_payment_method_id = uuid.uuid4()
     authorized_payment_method = SimpleNamespace(
@@ -513,7 +513,7 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
         user_id=buyer_user_id,
         method_status="active",
         stripe_customer_id=buyer_user.stripe_customer_id,
-        stripe_payment_method_id="pm_ws04_02a_waitlist",
+        stripe_payment_method_id="pm_transaction_boundary_waitlist",
         card_brand="visa",
         card_last4="4242",
     )
@@ -528,7 +528,7 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
         auto_charge_consent_at=now,
         auto_charge_consent_version="terms-v1",
         authorized_payment_method_id=authorized_payment_method_id,
-        authorized_stripe_payment_method_id="pm_ws04_02a_waitlist",
+        authorized_stripe_payment_method_id="pm_transaction_boundary_waitlist",
         authorized_amount_cents=1600,
         waitlist_status="active",
         promoted_at=None,
@@ -541,17 +541,17 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
         participant_count=1,
     )
     booking_participant = SimpleNamespace(id=uuid.uuid4())
-    provider_create_events: list[tuple[str, int]] = []
-    provider_confirm_calls: list[str] = []
+    stripe_create_events: list[tuple[str, int]] = []
+    stripe_confirm_calls: list[str] = []
     reconciliation_jobs: list[tuple[uuid.UUID, str]] = []
 
     def create_payment_intent(**kwargs):
-        provider_create_events.append((kwargs["idempotency_key"], db.commit_calls))
+        stripe_create_events.append((kwargs["idempotency_key"], db.commit_calls))
         raise _stripe_timeout("stripe.payment_intent.create")
 
     def confirm_payment_intent(payment_intent_id: str, **kwargs):
         del kwargs
-        provider_confirm_calls.append(payment_intent_id)
+        stripe_confirm_calls.append(payment_intent_id)
         raise AssertionError("waitlist must not confirm after create timeout")
 
     def get_locked_paid_waitlist_auto_promotion_state(db_arg, **kwargs):
@@ -570,7 +570,7 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
     )
     monkeypatch.setattr(
         waitlist_service,
-        "apply_provider_verified_saved_payment_method",
+        "apply_stripe_verified_saved_payment_method",
         lambda *args: None,
     )
     monkeypatch.setattr(
@@ -602,8 +602,8 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
     assert status_value == "processing"
     assert held_spots == 1
     assert len(staged_payments) == 1
-    assert provider_create_events == [(staged_payment.idempotency_key, 2)]
-    assert provider_confirm_calls == []
+    assert stripe_create_events == [(staged_payment.idempotency_key, 2)]
+    assert stripe_confirm_calls == []
     assert db.commit_calls == 3
     assert db.rollback_calls == 0
     assert waitlist_entry.waitlist_status == "payment_processing"
@@ -617,7 +617,7 @@ def test_paid_waitlist_auto_promotion_create_timeout_keeps_committed_checkpoint(
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
+def test_paid_waitlist_auto_promotion_stripe_result_records_before_confirm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import backend.services.game_waitlist_service as waitlist_service
@@ -627,7 +627,7 @@ def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
     buyer_user_id = uuid.uuid4()
     buyer_user = SimpleNamespace(
         id=buyer_user_id,
-        stripe_customer_id="cus_ws04_02a_waitlist",
+        stripe_customer_id="cus_transaction_boundary_waitlist",
     )
     authorized_payment_method_id = uuid.uuid4()
     authorized_payment_method = SimpleNamespace(
@@ -635,7 +635,7 @@ def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
         user_id=buyer_user_id,
         method_status="active",
         stripe_customer_id=buyer_user.stripe_customer_id,
-        stripe_payment_method_id="pm_ws04_02a_waitlist",
+        stripe_payment_method_id="pm_transaction_boundary_waitlist",
         card_brand="visa",
         card_last4="4242",
     )
@@ -651,7 +651,7 @@ def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
         auto_charge_consent_at=now,
         auto_charge_consent_version="terms-v1",
         authorized_payment_method_id=authorized_payment_method_id,
-        authorized_stripe_payment_method_id="pm_ws04_02a_waitlist",
+        authorized_stripe_payment_method_id="pm_transaction_boundary_waitlist",
         authorized_amount_cents=1600,
         waitlist_status="active",
         promoted_at=None,
@@ -664,22 +664,22 @@ def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
         participant_count=1,
     )
     booking_participant = SimpleNamespace(id=uuid.uuid4())
-    provider_create_events: list[tuple[str, int]] = []
-    provider_confirm_calls: list[str] = []
+    stripe_create_events: list[tuple[str, int]] = []
+    stripe_confirm_calls: list[str] = []
     reconciliation_jobs: list[tuple[uuid.UUID, str]] = []
 
     def create_payment_intent(**kwargs):
-        provider_create_events.append((kwargs["idempotency_key"], db.commit_calls))
+        stripe_create_events.append((kwargs["idempotency_key"], db.commit_calls))
         return SimpleNamespace(
-            id="pi_ws04_02a_waitlist_recording_failed",
+            id="pi_transaction_boundary_waitlist_recording_failed",
             latest_charge_id=None,
             status="requires_payment_method",
         )
 
     def confirm_payment_intent(payment_intent_id: str, **kwargs):
         del kwargs
-        provider_confirm_calls.append(payment_intent_id)
-        raise AssertionError("waitlist must not confirm before provider result records")
+        stripe_confirm_calls.append(payment_intent_id)
+        raise AssertionError("waitlist must not confirm before Stripe result records")
 
     def get_locked_paid_waitlist_auto_promotion_state(db_arg, **kwargs):
         del kwargs
@@ -697,7 +697,7 @@ def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
     )
     monkeypatch.setattr(
         waitlist_service,
-        "apply_provider_verified_saved_payment_method",
+        "apply_stripe_verified_saved_payment_method",
         lambda *args: None,
     )
     monkeypatch.setattr(
@@ -729,12 +729,12 @@ def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
     staged_payment = next(iter(staged_payments.values()))
     assert exc_info.value.status_code == 409
     assert "Stripe created or updated this waitlist payment" in exc_info.value.detail
-    assert provider_create_events == [(staged_payment.idempotency_key, 2)]
-    assert provider_confirm_calls == []
+    assert stripe_create_events == [(staged_payment.idempotency_key, 2)]
+    assert stripe_confirm_calls == []
     assert db.commit_calls == 3
     assert db.rollback_calls == 1
     assert staged_payment.provider_payment_intent_id == (
-        "pi_ws04_02a_waitlist_recording_failed"
+        "pi_transaction_boundary_waitlist_recording_failed"
     )
     assert reconciliation_jobs == [
         (staged_payment.id, "waitlist_payment_intent_creation")
@@ -742,17 +742,17 @@ def test_paid_waitlist_auto_promotion_provider_result_records_before_confirm(
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_saved_card_sync_default_provider_success_local_failure_is_honest(
+def test_saved_card_sync_default_stripe_success_local_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import backend.services.payment_method_service as payment_service
 
     current_user = SimpleNamespace(
         id=uuid.uuid4(),
-        stripe_customer_id="cus_ws04_02a_saved_card",
+        stripe_customer_id="cus_transaction_boundary_saved_card",
     )
     db = _RecordingSession(added=[], added_many=[], commit_failures={2})
-    provider_default_updates: list[tuple[str, str]] = []
+    stripe_default_updates: list[tuple[str, str]] = []
 
     monkeypatch.setattr(payment_service, "require_stripe_payments_enabled", lambda: None)
     monkeypatch.setattr(
@@ -762,7 +762,7 @@ def test_saved_card_sync_default_provider_success_local_failure_is_honest(
             id=setup_intent_id,
             customer_id=current_user.stripe_customer_id,
             status="succeeded",
-            payment_method_id="pm_ws04_02a_sync",
+            payment_method_id="pm_transaction_boundary_sync",
         ),
     )
     monkeypatch.setattr(
@@ -771,7 +771,7 @@ def test_saved_card_sync_default_provider_success_local_failure_is_honest(
         lambda payment_method_id: SimpleNamespace(
             id=payment_method_id,
             customer_id=current_user.stripe_customer_id,
-            card_fingerprint="card_ws04_02a_sync",
+            card_fingerprint="card_transaction_boundary_sync",
             card_brand="visa",
             card_last4="4242",
             exp_month=12,
@@ -787,7 +787,7 @@ def test_saved_card_sync_default_provider_success_local_failure_is_honest(
     )
 
     def set_customer_default_payment_method(**kwargs):
-        provider_default_updates.append(
+        stripe_default_updates.append(
             (kwargs["customer_id"], kwargs["payment_method_id"])
         )
 
@@ -801,22 +801,22 @@ def test_saved_card_sync_default_provider_success_local_failure_is_honest(
         payment_service.sync_saved_payment_method(
             db,
             current_user,
-            setup_intent_id="seti_ws04_02a_sync",
+            setup_intent_id="seti_transaction_boundary_sync",
             set_as_default=True,
             idempotency_key=uuid.uuid4(),
         )
 
     assert exc_info.value.status_code == 409
     assert "Stripe updated the default payment method" in exc_info.value.detail
-    assert provider_default_updates == [
-        (current_user.stripe_customer_id, "pm_ws04_02a_sync")
+    assert stripe_default_updates == [
+        (current_user.stripe_customer_id, "pm_transaction_boundary_sync")
     ]
     assert db.commit_calls == 3
     assert db.rollback_calls == 1
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_saved_card_default_provider_success_local_failure_is_honest(
+def test_saved_card_default_stripe_success_local_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import backend.services.payment_method_service as payment_service
@@ -824,16 +824,16 @@ def test_saved_card_default_provider_success_local_failure_is_honest(
     payment_method = SimpleNamespace(
         id=uuid.uuid4(),
         user_id=uuid.uuid4(),
-        stripe_payment_method_id="pm_ws04_02a_default",
+        stripe_payment_method_id="pm_transaction_boundary_default",
         method_status="active",
         is_default=False,
     )
     current_user = SimpleNamespace(
         id=payment_method.user_id,
-        stripe_customer_id="cus_ws04_02a_default",
+        stripe_customer_id="cus_transaction_boundary_default",
     )
     db = _RecordingSession(added=[], added_many=[], commit_failures={2})
-    provider_default_updates: list[tuple[str, str]] = []
+    stripe_default_updates: list[tuple[str, str]] = []
 
     monkeypatch.setattr(
         payment_service,
@@ -853,7 +853,7 @@ def test_saved_card_default_provider_success_local_failure_is_honest(
     )
 
     def set_customer_default_payment_method(**kwargs):
-        provider_default_updates.append(
+        stripe_default_updates.append(
             (kwargs["customer_id"], kwargs["payment_method_id"])
         )
 
@@ -873,7 +873,7 @@ def test_saved_card_default_provider_success_local_failure_is_honest(
 
     assert exc_info.value.status_code == 409
     assert "Stripe updated the default payment method" in exc_info.value.detail
-    assert provider_default_updates == [
+    assert stripe_default_updates == [
         (current_user.stripe_customer_id, payment_method.stripe_payment_method_id)
     ]
     assert db.commit_calls == 3
@@ -881,7 +881,7 @@ def test_saved_card_default_provider_success_local_failure_is_honest(
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_saved_card_detach_provider_success_local_failure_is_honest(
+def test_saved_card_detach_stripe_success_local_failure_is_honest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import backend.services.payment_method_service as payment_service
@@ -889,8 +889,8 @@ def test_saved_card_detach_provider_success_local_failure_is_honest(
     payment_method = SimpleNamespace(
         id=uuid.uuid4(),
         user_id=uuid.uuid4(),
-        stripe_customer_id="cus_ws04_02a_detach",
-        stripe_payment_method_id="pm_ws04_02a_detach",
+        stripe_customer_id="cus_transaction_boundary_detach",
+        stripe_payment_method_id="pm_transaction_boundary_detach",
         method_status="active",
         is_default=False,
     )
@@ -899,7 +899,7 @@ def test_saved_card_detach_provider_success_local_failure_is_honest(
         stripe_customer_id=payment_method.stripe_customer_id,
     )
     db = _RecordingSession(added=[], added_many=[], commit_failures={2})
-    provider_detaches: list[str] = []
+    stripe_detaches: list[str] = []
 
     monkeypatch.setattr(
         payment_service,
@@ -919,7 +919,7 @@ def test_saved_card_detach_provider_success_local_failure_is_honest(
 
     def detach_payment_method(payment_method_id: str, **kwargs):
         del kwargs
-        provider_detaches.append(payment_method_id)
+        stripe_detaches.append(payment_method_id)
 
     monkeypatch.setattr(payment_service, "detach_payment_method", detach_payment_method)
 
@@ -933,13 +933,13 @@ def test_saved_card_detach_provider_success_local_failure_is_honest(
 
     assert exc_info.value.status_code == 409
     assert "Stripe detached this payment method" in exc_info.value.detail
-    assert provider_detaches == [payment_method.stripe_payment_method_id]
+    assert stripe_detaches == [payment_method.stripe_payment_method_id]
     assert db.commit_calls == 3
     assert db.rollback_calls == 1
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_admin_refund_retry_commits_durable_intent_without_provider_call() -> None:
+def test_admin_refund_retry_commits_durable_intent_without_stripe_call() -> None:
     import inspect
 
     import backend.services.admin_money_refund_service as refund_service
@@ -952,7 +952,7 @@ def test_admin_refund_retry_commits_durable_intent_without_provider_call() -> No
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_refund_provider_mutation_is_owned_only_by_durable_handler() -> None:
+def test_stripe_refund_mutation_is_owned_only_by_durable_handler() -> None:
     import inspect
 
     import backend.services.admin_money_refund_service as refund_service
@@ -967,16 +967,16 @@ def test_refund_provider_mutation_is_owned_only_by_durable_handler() -> None:
 
 
 @pytest.mark.pass_provenance('WS05-03A')
-def test_admin_refund_reconciliation_releases_locks_before_provider_read() -> None:
+def test_admin_refund_reconciliation_releases_locks_before_stripe_read() -> None:
     import inspect
 
     import backend.services.admin_money_refund_service as refund_service
     import backend.services.refund_fulfillment_service as fulfillment_service
 
     source = inspect.getsource(refund_service.reconcile_admin_money_refund)
-    provider_read = source.index("retrieve_stripe_refund(provider_refund_id)")
-    assert source.index("db.rollback()") < provider_read
-    relock_source = source[provider_read:]
+    stripe_read = source.index("retrieve_stripe_refund(provider_refund_id)")
+    assert source.index("db.rollback()") < stripe_read
+    relock_source = source[stripe_read:]
     assert "lock_refund_financial_context(db, refund_id)" in relock_source
 
     lock_source = inspect.getsource(
@@ -1010,7 +1010,7 @@ def test_unfinished_account_cleanup_config_failure_rolls_back_before_support_sta
     monkeypatch.setattr(
         auth_account_service,
         "get_auth_user_id_from_token",
-        lambda authorization: "firebase-ws04-02a",
+        lambda authorization: "firebase-test-user",
     )
     monkeypatch.setattr(
         auth_account_service,
@@ -1072,7 +1072,7 @@ def test_unfinished_account_cleanup_timeout_keeps_unknown_outcome_uncommitted(
     monkeypatch.setattr(
         auth_account_service,
         "get_auth_user_id_from_token",
-        lambda authorization: "firebase-ws04-02a",
+        lambda authorization: "firebase-test-user",
     )
     monkeypatch.setattr(
         auth_account_service,
@@ -1124,7 +1124,7 @@ def test_unfinished_account_cleanup_timeout_keeps_unknown_outcome_uncommitted(
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_unfinished_account_cleanup_provider_success_records_support_followup(
+def test_unfinished_account_cleanup_firebase_success_records_support_followup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.services import auth_account_service
@@ -1133,12 +1133,12 @@ def test_unfinished_account_cleanup_provider_success_records_support_followup(
     db = _RecordingSession(added=[], added_many=[], commit_failures={1})
     user = SimpleNamespace(id=user_id)
     support_records: list[dict[str, object]] = []
-    provider_deletes: list[str] = []
+    firebase_deletes: list[str] = []
 
     monkeypatch.setattr(
         auth_account_service,
         "get_auth_user_id_from_token",
-        lambda authorization: "firebase-ws04-02a",
+        lambda authorization: "firebase-test-user",
     )
     monkeypatch.setattr(
         auth_account_service,
@@ -1162,7 +1162,7 @@ def test_unfinished_account_cleanup_provider_success_records_support_followup(
     )
 
     def delete_firebase_user(auth_user_id: str) -> None:
-        provider_deletes.append(auth_user_id)
+        firebase_deletes.append(auth_user_id)
 
     def record_account_delete_partial_failure(db, **kwargs) -> None:
         support_records.append(kwargs)
@@ -1187,7 +1187,7 @@ def test_unfinished_account_cleanup_provider_success_records_support_followup(
 
     assert exc_info.value.status_code == 503
     assert "support follow-up" in exc_info.value.detail
-    assert provider_deletes == ["firebase-ws04-02a"]
+    assert firebase_deletes == ["firebase-test-user"]
     assert db.deleted == [user]
     assert db.commit_calls == 2
     assert db.rollback_calls == 1
@@ -1201,19 +1201,19 @@ def test_unfinished_account_cleanup_provider_success_records_support_followup(
 
 
 @pytest.mark.pass_provenance('WS04-02A')
-def test_unfinished_account_cleanup_duplicate_provider_delete_can_complete(
+def test_unfinished_account_cleanup_duplicate_firebase_delete_can_complete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.services import auth_account_service
 
     db = _RecordingSession(added=[], added_many=[])
-    provider_deletes: list[str] = []
+    firebase_deletes: list[str] = []
     support_records: list[dict[str, object]] = []
 
     monkeypatch.setattr(
         auth_account_service,
         "get_auth_user_id_from_token",
-        lambda authorization: "firebase-ws04-02a",
+        lambda authorization: "firebase-test-user",
     )
     monkeypatch.setattr(
         auth_account_service,
@@ -1223,7 +1223,7 @@ def test_unfinished_account_cleanup_duplicate_provider_delete_can_complete(
     monkeypatch.setattr(
         auth_account_service,
         "delete_firebase_user",
-        lambda auth_user_id: provider_deletes.append(auth_user_id),
+        lambda auth_user_id: firebase_deletes.append(auth_user_id),
     )
     monkeypatch.setattr(
         auth_account_service,
@@ -1236,7 +1236,7 @@ def test_unfinished_account_cleanup_duplicate_provider_delete_can_complete(
         db,
     )
 
-    assert provider_deletes == ["firebase-ws04-02a"]
+    assert firebase_deletes == ["firebase-test-user"]
     assert db.deleted == []
     assert db.commit_calls == 1
     assert db.rollback_calls == 0

@@ -76,14 +76,14 @@ def _saved_card_user():
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04c1-card-user-{unique}",
+        auth_user_id=f"operation-timeout-card-user-{unique}",
         role="player",
-        email=f"ws02-04c1-card-{unique}@example.invalid",
+        email=f"operation-timeout-card-{unique}@example.invalid",
         first_name="Timeout",
         last_name="Card",
         account_status="active",
         hosting_status="eligible",
-        stripe_customer_id="cus_ws02_04c1",
+        stripe_customer_id="cus_operation_timeout",
     )
 
 
@@ -94,8 +94,8 @@ def _saved_payment_method(user, index: int):
         id=uuid.uuid4(),
         user_id=user.id,
         stripe_customer_id=user.stripe_customer_id,
-        stripe_payment_method_id=f"pm_ws02_04c1_existing_{index}",
-        card_fingerprint=f"ws02-04c1-fingerprint-{index}",
+        stripe_payment_method_id=f"pm_operation_timeout_existing_{index}",
+        card_fingerprint=f"operation-timeout-fingerprint-{index}",
         card_brand="visa",
         card_last4=f"{index:04d}"[-4:],
         exp_month=12,
@@ -118,7 +118,7 @@ def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_pr
     game_id = uuid.uuid4()
     current_user = SimpleNamespace(
         id=uuid.uuid4(),
-        stripe_customer_id="cus_ws02_04c1_checkout",
+        stripe_customer_id="cus_operation_timeout_checkout",
     )
     db_game = SimpleNamespace(
         id=game_id,
@@ -127,7 +127,7 @@ def test_checkout_payment_timeout_preserves_checkpoint_and_propagates_unknown_pr
         total_spots=12,
     )
     saved_payment_method = SimpleNamespace(
-        stripe_payment_method_id="pm_ws02_04c1_saved"
+        stripe_payment_method_id="pm_operation_timeout_saved"
     )
     db = _RecordingSession(added=[], added_many=[], refreshed=[])
     provider_create_calls: list[dict[str, object]] = []
@@ -287,7 +287,7 @@ def test_firebase_account_deletion_timeout_records_support_unknown_outcome(
         role="player",
         account_status="active",
         deleted_at=None,
-        auth_user_id="firebase-ws02-04c1-delete",
+        auth_user_id="firebase-operation-timeout-delete",
         updated_at=None,
     )
     db = _RecordingSession(added=[], added_many=[], refreshed=[])
@@ -334,11 +334,11 @@ def test_firebase_account_deletion_timeout_records_support_unknown_outcome(
         )
 
     assert exc_info.value.operation == "firebase.user.delete"
-    assert delete_calls == ["firebase-ws02-04c1-delete"]
+    assert delete_calls == ["firebase-operation-timeout-delete"]
     assert db.commit_calls == 1
     assert db.rollback_calls == 0
     assert user.account_status == "pending_deletion"
-    assert user.auth_user_id == "firebase-ws02-04c1-delete"
+    assert user.auth_user_id == "firebase-operation-timeout-delete"
     assert partial_failure_calls == [
         {
             "user_id": user.id,
@@ -378,8 +378,8 @@ def test_saved_card_unpersisted_cleanup_timeout_cannot_create_saved_card_state(
             id=setup_intent_id,
             client_secret=None,
             status="succeeded",
-            customer_id="cus_ws02_04c1",
-            payment_method_id="pm_ws02_04c1_unpersisted",
+            customer_id="cus_operation_timeout",
+            payment_method_id="pm_operation_timeout_unpersisted",
         ),
     )
     monkeypatch.setattr(
@@ -387,8 +387,8 @@ def test_saved_card_unpersisted_cleanup_timeout_cannot_create_saved_card_state(
         "retrieve_payment_method",
         lambda payment_method_id: StripePaymentMethodCardResult(
             id=payment_method_id,
-            customer_id="cus_ws02_04c1",
-            card_fingerprint="ws02-04c1-new-fingerprint",
+            customer_id="cus_operation_timeout",
+            card_fingerprint="operation-timeout-new-fingerprint",
             card_brand="visa",
             card_last4="4242",
             exp_month=12,
@@ -416,7 +416,7 @@ def test_saved_card_unpersisted_cleanup_timeout_cannot_create_saved_card_state(
             payment_method_service.sync_saved_payment_method(
                 db,
                 user,
-                setup_intent_id="seti_ws02_04c1_unpersisted",
+                setup_intent_id="seti_operation_timeout_unpersisted",
                 set_as_default=False,
                 idempotency_key=uuid.uuid4(),
             )
@@ -424,13 +424,13 @@ def test_saved_card_unpersisted_cleanup_timeout_cannot_create_saved_card_state(
 
         assert exc_info.value.status_code == 400
         assert "save up to" in str(exc_info.value.detail)
-        assert detach_calls == ["pm_ws02_04c1_unpersisted"]
+        assert detach_calls == ["pm_operation_timeout_unpersisted"]
         assert _count(db, UserPaymentMethod) == 5
         assert (
             db.scalar(
                 select(UserPaymentMethod).where(
                     UserPaymentMethod.stripe_payment_method_id
-                    == "pm_ws02_04c1_unpersisted"
+                    == "pm_operation_timeout_unpersisted"
                 )
             )
             is None
@@ -458,9 +458,9 @@ def test_saved_card_unpersisted_cleanup_timeout_is_best_effort_only(
     )
 
     assert payment_method_service.detach_unpersisted_payment_method(
-        "pm_ws02_04c1_unpersisted"
+        "pm_operation_timeout_unpersisted"
     ) is None
-    assert detach_calls == ["pm_ws02_04c1_unpersisted"]
+    assert detach_calls == ["pm_operation_timeout_unpersisted"]
     assert "detach_unpersisted_payment_method(stripe_payment_method.id)" in sync_source
     assert "This card is already saved." in sync_source
     assert "You can save up to" in sync_source

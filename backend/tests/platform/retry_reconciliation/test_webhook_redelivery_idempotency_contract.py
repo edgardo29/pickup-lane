@@ -9,7 +9,6 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -82,13 +81,13 @@ def test_existing_provider_event_duplicate_is_idempotent_without_reprocessing() 
     )
 
     with _session() as db:
-        existing = _payment_event("evt_ws02_04c2_duplicate")
+        existing = _payment_event("evt_retry_reconciliation_duplicate")
         db.add(existing)
         db.commit()
 
         result = record_and_process_stripe_webhook_event(
             db,
-            _event_payload("evt_ws02_04c2_duplicate"),
+            _event_payload("evt_retry_reconciliation_duplicate"),
         )
 
         events = db.scalars(select(PaymentEvent)).all()
@@ -126,8 +125,8 @@ def test_provider_event_uniqueness_and_integrity_error_path_are_idempotent(
     with _session() as db, pytest.raises(IntegrityError):
         db.add_all(
             [
-                _payment_event("evt_ws02_04c2_unique"),
-                _payment_event("evt_ws02_04c2_unique"),
+                _payment_event("evt_retry_reconciliation_unique"),
+                _payment_event("evt_retry_reconciliation_unique"),
             ]
         )
         db.commit()
@@ -136,7 +135,7 @@ def test_provider_event_uniqueness_and_integrity_error_path_are_idempotent(
         active_db["db"] = db
         result = webhook_service.record_and_process_stripe_webhook_event(
             db,
-            _event_payload("evt_ws02_04c2_race_duplicate"),
+            _event_payload("evt_retry_reconciliation_race_duplicate"),
         )
 
         assert result == {

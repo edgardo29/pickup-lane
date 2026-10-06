@@ -117,7 +117,7 @@ def test_checkout_provider_calls_are_between_checkpoints_and_lock_reentry() -> N
     _assert_order(
         create_source,
         "db.rollback()",
-        "require_provider_verified_checkout_payment_method(",
+        "require_stripe_verified_checkout_payment_method(",
         "return create_game_checkout_payment_intent_workflow(",
     )
     assert "verify_provider=False" in create_source
@@ -139,7 +139,7 @@ def test_checkout_provider_calls_are_between_checkpoints_and_lock_reentry() -> N
     _assert_order(
         resume_source,
         "db.rollback()",
-        "require_provider_verified_checkout_payment_method(",
+        "require_stripe_verified_checkout_payment_method(",
         "return resume_serialized_pending_checkout(",
     )
     assert "verify_provider=False" in resume_source

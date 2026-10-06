@@ -26,8 +26,8 @@ from backend.tests.support.migration_test_database import (
 
 pytestmark = pytest.mark.migration_lifecycle
 
-_SYNTHETIC_INTERRUPTION_REVISION = "ws04_03a_interruption"
-_INTERRUPTION_MARKER_TABLE = "ws04_03a_interruption_marker"
+_SYNTHETIC_INTERRUPTION_REVISION = "migration_rehearsal_interruption"
+_INTERRUPTION_MARKER_TABLE = "migration_rehearsal_interruption_marker"
 
 
 @pytest.mark.pass_provenance('WS04-03A')
@@ -274,7 +274,7 @@ def _synthetic_interruption_alembic_config(
         if fail_during_upgrade
         else ""
     )
-    (versions_dir / "0001_ws04_03a_interruption.py").write_text(
+    (versions_dir / "0001_migration_rehearsal_interruption.py").write_text(
         "from alembic import op\n"
         "import sqlalchemy as sa\n\n"
         f"revision = {_SYNTHETIC_INTERRUPTION_REVISION!r}\n"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -19,8 +19,8 @@ pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CONTRACT_PATH = (
-    "docs/production-readiness/planning/passes/ws04/"
-    "ws04-01c-production-database-evidence-contract.json"
+    "docs/production-readiness/governance/"
+    "production-database-verification-contract.json"
 )
 
 
@@ -32,9 +32,9 @@ def _source_metadata() -> dict[str, str]:
     return {
         "source_type": "synthetic test fixture",
         "date_collected": "2026-08-24",
-        "reviewer": "ws04-01c-test",
+        "reviewer": "production-database-test",
         "purpose": "prove deterministic budget validator behavior",
-        "supported_control_or_pass": "WS04-01C",
+        "supported_control": "production_database_verification",
         "sanitized_evidence_reference": "synthetic-test-only",
     }
 
@@ -88,7 +88,7 @@ def _verified_budget_record(values: dict[str, int]) -> dict:
             "API correlation",
             "job correlation when jobs exist",
         ],
-        "dashboard_alert_owner": "WS09",
+        "dashboard_alert_owner": "observability_and_reliability_owner",
         "evidence": _source_metadata(),
     }
     return record
@@ -282,7 +282,7 @@ def test_final_budget_evidence_rejects_deferred_basis_adjustment_and_telemetry()
 
     deferred_basis = deepcopy(base)
     deferred_basis["budget_model"]["limit_basis"]["telemetry"] = {
-        "state": "deferred_to_ws04_01d",
+        "state": "deferred_to_final_production_verification",
         "value": None,
         "reason": "not yet collected",
     }
@@ -300,7 +300,7 @@ def test_final_budget_evidence_rejects_deferred_basis_adjustment_and_telemetry()
     ) in validate_budget_evidence(unattributed_adjustment, require_final_values=True)
 
     deferred_telemetry = deepcopy(base)
-    deferred_telemetry["budget_model"]["telemetry_plan"]["state"] = "deferred_to_ws04_01d"
+    deferred_telemetry["budget_model"]["telemetry_plan"]["state"] = "deferred_to_final_production_verification"
     assert "budget_model.telemetry_plan must be verified for final evidence" in validate_budget_evidence(
         deferred_telemetry,
         require_final_values=True,

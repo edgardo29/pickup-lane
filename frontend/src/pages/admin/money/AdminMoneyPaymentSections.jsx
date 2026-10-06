@@ -56,7 +56,7 @@ export function PaymentSummary({ payer, payment }) {
         <DetailCodeField label="PaymentIntent" value={payment.provider_payment_intent_id} />
         <DetailCodeField label="Charge" value={payment.provider_charge_id} />
         <DetailCodeField label="Idempotency" value={payment.idempotency_key} />
-        <DetailField label="Provider" value={formatStatus(payment.provider)} />
+        <DetailField label="Payment service" value={formatStatus(payment.provider)} />
         <DetailField label="Paid" value={formatDateTime(payment.paid_at)} />
         <DetailField label="Created" value={formatDateTime(payment.created_at)} />
         <DetailField label="Updated" value={formatDateTime(payment.updated_at)} />

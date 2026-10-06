@@ -331,7 +331,7 @@ RETIRED_OR_NON_EXECUTING_ADMIN_MUTATIONS: dict[tuple[str, str], str] = {
     ("POST", "/host-publish-fees"): "retired scaffold",
     ("POST", "/notifications"): "retired scaffold",
     ("POST", "/participant-status-history"): "retired scaffold",
-    ("POST", "/payment-events"): "retired provider-event creation",
+    ("POST", "/payment-events"): "retired Stripe-event creation",
     ("POST", "/payments"): "retired scaffold",
     ("POST", "/policy-acceptances"): "retired scaffold",
     ("POST", "/policy-documents"): "retired scaffold",
@@ -438,8 +438,8 @@ def test_recent_auth_policy_matches_frozen_matrix_and_registered_routes() -> Non
         assert action.recent_auth_required is True
         assert action.frontend_caller.strip()
         assert action.protections
-        assert action.provider_mfa_dependency in {
-            "deferred_to_ws03_03b",
+        assert action.firebase_mfa_requirement in {
+            "deferred_pending_firebase_mfa_policy",
             "not_required_for_current_user_saved_card_management",
         }
         assert _has_dependency(route, frozen.dependency), (

@@ -19,14 +19,13 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
 )
 
 
-
 def _venue(label: str, *, creator_id: uuid.UUID, admin_id: uuid.UUID) -> Any:
     from backend.models import Venue
 
     unique = uuid.uuid4()
     return Venue(
         id=uuid.uuid4(),
-        name=f"WS03D Venue {label}",
+        name=f"Admin Authorization Venue {label}",
         address_line_1=f"{unique.int % 10000} Test Avenue",
         city="Chicago",
         state="IL",
@@ -57,7 +56,7 @@ def _official_game(
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title=f"WS03D Official Game {label}",
+        title=f"Admin Authorization Official Game {label}",
         venue_id=venue.id,
         venue_name_snapshot=venue.name,
         address_snapshot=venue.address_line_1,
@@ -103,7 +102,7 @@ def _community_game(
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title=f"WS03D Community Game {label}",
+        title=f"Admin Authorization Community Game {label}",
         venue_id=venue.id,
         venue_name_snapshot=venue.name,
         address_snapshot=venue.address_line_1,
@@ -189,12 +188,16 @@ def _persist_venue_image_fixture(
             venue_id=venue_id,
             uploaded_by_user_id=admin_id,
             storage_provider="r2",
-            storage_object_key=f"ws03d/{label}/{uuid.uuid4()}.jpg",
+            storage_object_key=f"admin_authorization/{label}/{uuid.uuid4()}.jpg",
             storage_bucket="test-venue-images",
             storage_account_id="test-storage-account",
             content_type="image/jpeg",
             size_bytes=1200,
             etag="test-etag",
+            publication_object_key=f"admin_authorization/{label}/published/{uuid.uuid4()}.jpg",
+            publication_content_type="image/jpeg",
+            publication_size_bytes=1200,
+            publication_etag="test-publication-etag",
             image_role="gallery",
             image_status="active",
             is_primary=False,
@@ -224,12 +227,12 @@ def _persist_sub_post_fixture(label: str, *, owner: Any) -> uuid.UUID:
             environment_type="indoor",
             skill_level="any",
             game_player_group="coed",
-            team_name=f"WS03D Need a Sub {label}",
+            team_name=f"Admin Authorization Need a Sub {label}",
             starts_at=starts_at,
             ends_at=starts_at + timedelta(hours=1),
             starts_on_local=starts_at.date(),
             timezone="America/Chicago",
-            location_name=f"WS03D Sub Field {label}",
+            location_name=f"Admin Authorization Sub Field {label}",
             address_line_1="400 Test Avenue",
             city="Chicago",
             state="IL",
@@ -393,9 +396,9 @@ def _persist_sub_post_chat_message_fixture(
 def _official_game_create_payload(label: str) -> dict[str, object]:
     starts_at = datetime.now(timezone.utc) + timedelta(days=12)
     return {
-        "title": f"WS03D API Official Game {label}",
+        "title": f"Admin Authorization API Official Game {label}",
         "venue": {
-            "name": f"WS03D API Venue {label}",
+            "name": f"Admin Authorization API Venue {label}",
             "address_line_1": "777 Admin Test Avenue",
             "city": "Chicago",
             "state": "IL",
@@ -423,7 +426,7 @@ def _generic_game_create_payload(*, venue_id: uuid.UUID, host_user_id: uuid.UUID
     starts_at = datetime.now(timezone.utc) + timedelta(days=13)
     return {
         "game_type": "community",
-        "title": "WS03D Generic Admin Game",
+        "title": "Admin Authorization Generic Admin Game",
         "description": "Local generic admin game fixture.",
         "venue_id": str(venue_id),
         "host_user_id": str(host_user_id),
@@ -545,9 +548,9 @@ def _persist_official_paid_booking_with_credit_fixture(
             game_id=game_id,
             payment_type="booking",
             provider="stripe",
-            provider_payment_intent_id=f"pi_ws03d_cancel_{uuid.uuid4().hex}",
-            provider_charge_id=f"ch_ws03d_cancel_{uuid.uuid4().hex}",
-            idempotency_key=f"ws03d-cancel-payment-{uuid.uuid4()}",
+            provider_payment_intent_id=f"pi_admin_authorization_cancel_{uuid.uuid4().hex}",
+            provider_charge_id=f"ch_admin_authorization_cancel_{uuid.uuid4().hex}",
+            idempotency_key=f"admin_authorization-cancel-payment-{uuid.uuid4()}",
             amount_cents=800,
             currency="USD",
             payment_status="succeeded",
@@ -562,7 +565,7 @@ def _persist_official_paid_booking_with_credit_fixture(
             booking_id=booking.id,
             participant_type="registered_user",
             user_id=buyer_user_id,
-            display_name_snapshot=f"WS03D Cancellation Player {label}",
+            display_name_snapshot=f"Admin Authorization Cancellation Player {label}",
             participant_status="confirmed",
             attendance_status="unknown",
             cancellation_type="none",
@@ -586,7 +589,7 @@ def _persist_official_paid_booking_with_credit_fixture(
             source_booking_id=booking.id,
             source_payment_id=payment.id,
             issued_by_user_id=admin_user_id,
-            idempotency_key=f"ws03d-cancel-credit-{uuid.uuid4()}",
+            idempotency_key=f"admin_authorization-cancel-credit-{uuid.uuid4()}",
             note="Local official-game cancellation credit fixture.",
         )
         db.add(credit)
@@ -602,7 +605,7 @@ def _persist_official_paid_booking_with_credit_fixture(
             currency="USD",
             usage_type="redeem",
             usage_status="redeemed",
-            idempotency_key=f"ws03d-cancel-credit-usage-{uuid.uuid4()}",
+            idempotency_key=f"admin_authorization-cancel-credit-usage-{uuid.uuid4()}",
             reason_code="local_test_redeem",
             redeemed_at=now,
         )
@@ -1346,13 +1349,13 @@ def test_admin_official_game_create_update_cancel_and_host_removal_persist_state
     update_response = client.patch(
         f"/admin/official-games/{game_id}",
         json={
-            "title": "WS03D Updated Official Game",
+            "title": "Admin Authorization Updated Official Game",
             "reason": "Update local official game through admin API.",
         },
         headers=_auth_headers("admin-token"),
     )
     assert update_response.status_code == 200
-    assert update_response.json()["game"]["title"] == "WS03D Updated Official Game"
+    assert update_response.json()["game"]["title"] == "Admin Authorization Updated Official Game"
 
     add_host_player = client.post(
         f"/admin/official-games/{game_id}/players",
@@ -1470,7 +1473,7 @@ def test_admin_official_game_cancellation_exercises_booking_refund_credit_notifi
             }
         )
         return StripeRefundResult(
-            id=f"re_ws03d_cancel_{uuid.uuid4().hex}",
+            id=f"re_admin_authorization_cancel_{uuid.uuid4().hex}",
             status="succeeded",
             amount_cents=amount_cents,
             currency=currency,
@@ -1674,7 +1677,7 @@ def test_admin_official_game_cancellation_exercises_booking_refund_credit_notifi
     runner = DurableJobRunner(
         session_factory=SessionLocal,
         registry=build_production_job_registry(),
-        worker_identity=f"ws05-03a-cancellation-{uuid.uuid4()}",
+        worker_identity=f"refund-fulfillment-cancellation-{uuid.uuid4()}",
     )
     assert runner.process_once() == "succeeded"
     assert len(provider_calls) == 1
@@ -1771,7 +1774,7 @@ def test_admin_player_removal_preserves_credit_and_cash_completion_order(
                 refund=refund,
                 payment=payment,
                 result=StripeRefundResult(
-                    id=f"re_ws05_03a_cash_first_{uuid.uuid4().hex}",
+                    id=f"re_refund_fulfillment_cash_first_{uuid.uuid4().hex}",
                     status="succeeded",
                     amount_cents=refund.amount_cents,
                     currency="USD",
@@ -1794,7 +1797,7 @@ def test_admin_player_removal_preserves_credit_and_cash_completion_order(
     def fake_create_refund(**kwargs) -> StripeRefundResult:
         provider_calls.append(kwargs)
         return StripeRefundResult(
-            id=f"re_ws05_03a_removal_{uuid.uuid4().hex}",
+            id=f"re_refund_fulfillment_removal_{uuid.uuid4().hex}",
             status="succeeded",
             amount_cents=kwargs["amount_cents"],
             currency=kwargs["currency"],
@@ -1907,7 +1910,7 @@ def test_admin_player_removal_preserves_credit_and_cash_completion_order(
     runner = DurableJobRunner(
         session_factory=SessionLocal,
         registry=build_production_job_registry(),
-        worker_identity=f"ws05-03a-removal-{uuid.uuid4()}",
+        worker_identity=f"refund-fulfillment-removal-{uuid.uuid4()}",
     )
     assert runner.process_once() == "succeeded"
     assert len(provider_calls) == 1
@@ -1987,7 +1990,7 @@ def test_admin_cancellation_preserves_cash_first_summary_when_credit_returns(
             refund=refund,
             payment=payment,
             result=StripeRefundResult(
-                id=f"re_ws05_03a_cancel_cash_first_{uuid.uuid4().hex}",
+                id=f"re_refund_fulfillment_cancel_cash_first_{uuid.uuid4().hex}",
                 status="succeeded",
                 amount_cents=refund.amount_cents,
                 currency="USD",
@@ -2097,11 +2100,11 @@ def test_admin_generic_game_create_update_delete_preserves_admin_and_state_bound
 
     update_response = client.patch(
         f"/games/{game_id}",
-        json={"title": "WS03D Generic Game Updated"},
+        json={"title": "Admin Authorization Generic Game Updated"},
         headers=_auth_headers("admin-token"),
     )
     assert update_response.status_code == 200
-    assert update_response.json()["title"] == "WS03D Generic Game Updated"
+    assert update_response.json()["title"] == "Admin Authorization Generic Game Updated"
     assert _count_model_rows(AdminAction) == before_actions + 1
 
     before_delete_state = _game_state(game_id)
@@ -2282,7 +2285,7 @@ def test_admin_official_game_host_player_and_participant_actions_persist_state(
     assert _count_model_rows(Notification) == before_remove_notifications + 1
 
 
-@pytest.mark.pass_provenance('WS03-04D')
+@pytest.mark.pass_provenance('WS03-04D', 'WS06-02')
 def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2292,7 +2295,9 @@ def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
     monkeypatch.setattr(
         venue_image_service,
         "create_object_read_url",
-        lambda object_key: f"https://read.local.invalid/{object_key}",
+        lambda *, target, object_key, config=None: (
+            f"https://read.local.invalid/{object_key}"
+        ),
     )
 
     admin = _user("community-actions-admin", role="admin")
@@ -2329,7 +2334,7 @@ def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
         f"/admin/community-games/{game_id}/hide",
         json={
             "reason": "Ordinary users must not hide community games.",
-            "idempotency_key": f"ws03d-community-ordinary-hide-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-community-ordinary-hide-{uuid.uuid4()}",
         },
         headers=_auth_headers("ordinary-token"),
     )
@@ -2352,7 +2357,7 @@ def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
         f"/admin/community-games/{game_id}/hide",
         json={
             "reason": "Hide community game during local moderation review.",
-            "idempotency_key": f"ws03d-community-hide-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-community-hide-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2363,7 +2368,7 @@ def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
         f"/admin/community-games/{game_id}/pause-joining",
         json={
             "reason": "Pause joins during local moderation review.",
-            "idempotency_key": f"ws03d-community-pause-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-community-pause-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2375,7 +2380,7 @@ def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
     before_cancel_notices = _count_model_rows(AdminTargetNotice)
     cancel_payload = {
         "reason": "Cancel community game during local admin review.",
-        "idempotency_key": f"ws03d-community-cancel-{uuid.uuid4()}",
+        "idempotency_key": f"admin_authorization-community-cancel-{uuid.uuid4()}",
     }
     stale_cancel = client.post(
         f"/admin/community-games/{game_id}/cancel",
@@ -2424,15 +2429,20 @@ def test_admin_community_game_and_venue_image_actions_persist_state_and_denials(
     assert image_state["storage_object_key"] == before_image["storage_object_key"]
 
 
-@pytest.mark.pass_provenance('WS03-04D')
-def test_admin_community_review_payment_restore_and_venue_image_upload_provider_order(
+@pytest.mark.pass_provenance('WS03-04D', 'WS06-02')
+def test_admin_community_review_payment_restore_and_venue_image_upload_r2_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from io import BytesIO
+
+    from PIL import Image
+
     from backend.models import AdminAction, AdminTargetNotice, SupportFlag, VenueImage
     from backend.services import venue_image_service
     from backend.services.r2_storage_service import (
-        R2ObjectProperties,
+        R2DownloadedObject,
         R2ObjectUploadTicket,
+        R2PublishedObject,
         R2StorageConfig,
     )
 
@@ -2458,26 +2468,28 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
             "suspended-admin-token": suspended_admin,
         },
     )
-    provider_calls: list[str] = []
+    r2_calls: list[str] = []
 
     def fake_storage_config() -> R2StorageConfig:
-        provider_calls.append("config")
+        r2_calls.append("config")
         return R2StorageConfig(
             account_id="local-test-account",
             access_key_id="local-test-key",
             secret_access_key="local-test-placeholder",
-            endpoint_url="https://r2.local.invalid",
+            endpoint_url=(
+                "https://local-test-account.r2.cloudflarestorage.com"
+            ),
             bucket_name="local-test-bucket",
             upload_url_minutes=10,
             read_url_minutes=10,
             max_image_bytes=5_000_000,
             allowed_image_types=frozenset({"image/jpeg"}),
-            metadata_connect_timeout_seconds=1,
-            metadata_read_timeout_seconds=1,
+            object_connect_timeout_seconds=1,
+            object_read_timeout_seconds=1,
         )
 
-    def fake_upload_url(*, object_key: str, content_type: str) -> R2ObjectUploadTicket:
-        provider_calls.append(f"upload:{content_type}")
+    def fake_upload_url(*, target, object_key: str, content_type: str, config=None) -> R2ObjectUploadTicket:
+        r2_calls.append(f"upload:{content_type}")
         return R2ObjectUploadTicket(
             upload_url="https://upload.local.invalid",
             upload_headers={"Content-Type": content_type},
@@ -2485,20 +2497,37 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
             expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
         )
 
-    def fake_read_url(object_key: str) -> str:
-        provider_calls.append("read")
+    def fake_read_url(*, target, object_key: str, config=None) -> str:
+        r2_calls.append("read")
         return f"https://read.local.invalid/{object_key}"
 
-    object_properties_by_key: dict[str, R2ObjectProperties] = {}
+    source_buffer = BytesIO()
+    with Image.new("RGB", (8, 8), "navy") as source_image:
+        source_image.save(source_buffer, format="JPEG")
+    source_bytes = source_buffer.getvalue().ljust(1200, b"\0")
 
-    def fake_object_properties(object_key: str) -> R2ObjectProperties:
-        provider_calls.append("head")
-        return object_properties_by_key[object_key]
+    def fake_download(*, target, object_key: str, **kwargs) -> R2DownloadedObject:
+        r2_calls.append("download")
+        return R2DownloadedObject(
+            body=source_bytes,
+            content_type="image/jpeg",
+            size_bytes=len(source_bytes),
+            etag='"staging"',
+        )
+
+    def fake_publish(*, target, object_key: str, body: bytes, content_type: str, config=None):
+        r2_calls.append("publish")
+        return R2PublishedObject(etag='"published"')
+
+    def fake_delete(*, target, object_key: str, config=None) -> None:
+        r2_calls.append("delete")
 
     monkeypatch.setattr(venue_image_service, "get_r2_storage_config", fake_storage_config)
     monkeypatch.setattr(venue_image_service, "create_object_upload_url", fake_upload_url)
     monkeypatch.setattr(venue_image_service, "create_object_read_url", fake_read_url)
-    monkeypatch.setattr(venue_image_service, "get_object_properties", fake_object_properties)
+    monkeypatch.setattr(venue_image_service, "download_object", fake_download)
+    monkeypatch.setattr(venue_image_service, "publish_object", fake_publish)
+    monkeypatch.setattr(venue_image_service, "delete_object", fake_delete)
 
     client = _client()
     before_game = _game_state(game_id)
@@ -2511,7 +2540,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         f"/admin/community-games/{game_id}/hide-payment-text",
         json={
             "reason": "Hide unsafe local payment text.",
-            "idempotency_key": f"ws03d-payment-text-hide-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-payment-text-hide-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2522,7 +2551,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         f"/admin/community-games/{game_id}/restore-payment-text",
         json={
             "reason": "Restore local payment text after review.",
-            "idempotency_key": f"ws03d-payment-text-restore-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-payment-text-restore-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2536,7 +2565,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         f"/admin/community-games/{game_id}/hide",
         json={
             "reason": "Hide before restore branch.",
-            "idempotency_key": f"ws03d-community-hide-more-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-community-hide-more-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2545,7 +2574,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         f"/admin/community-games/{game_id}/restore",
         json={
             "reason": "Restore hidden local community game.",
-            "idempotency_key": f"ws03d-community-restore-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-community-restore-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2556,7 +2585,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         f"/admin/community-games/{game_id}/pause-joining",
         json={
             "reason": "Pause before resume branch.",
-            "idempotency_key": f"ws03d-community-pause-more-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-community-pause-more-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2565,7 +2594,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         f"/admin/community-games/{game_id}/resume-joining",
         json={
             "reason": "Resume local community joining.",
-            "idempotency_key": f"ws03d-community-resume-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-community-resume-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2576,7 +2605,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         f"/admin/community-games/{game_id}/flag-for-review",
         json={
             "reason": "Flag local community game for review.",
-            "idempotency_key": f"ws03d-community-review-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-community-review-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2593,7 +2622,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         headers=_auth_headers("ordinary-token"),
     )
     assert ordinary_upload.status_code == 403
-    assert provider_calls == []
+    assert r2_calls == []
     assert _count_model_rows(VenueImage) == before_images
 
     suspended_upload = client.post(
@@ -2606,7 +2635,7 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         headers=_auth_headers("suspended-admin-token"),
     )
     assert suspended_upload.status_code == 403
-    assert provider_calls == []
+    assert r2_calls == []
     assert _count_model_rows(VenueImage) == before_images
 
     upload = client.post(
@@ -2630,13 +2659,13 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
     }
     image_id = uuid.UUID(upload_body["image"]["id"])
     assert upload_body["image"]["uploaded_by_user_id"] == str(admin.id)
-    assert provider_calls == ["config", "config", "upload:image/jpeg", "read"]
+    assert r2_calls == ["config", "upload:image/jpeg"]
     assert _count_model_rows(VenueImage) == before_images + 1
 
     image_state = _venue_image_state(image_id)
     assert image_state["image_status"] == "pending_upload"
     denied_completion_actions = _count_model_rows(AdminAction)
-    denied_completion_provider_calls = list(provider_calls)
+    denied_completion_r2_calls = list(r2_calls)
     for denied_token in ("ordinary-token", "suspended-admin-token"):
         denied_complete = client.post(
             f"/admin/venue-images/{image_id}/complete",
@@ -2645,14 +2674,9 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
         )
         assert denied_complete.status_code == 403
         assert _venue_image_state(image_id)["image_status"] == "pending_upload"
-        assert provider_calls == denied_completion_provider_calls
+        assert r2_calls == denied_completion_r2_calls
         assert _count_model_rows(AdminAction) == denied_completion_actions
 
-    object_properties_by_key[str(image_state["storage_object_key"])] = R2ObjectProperties(
-        content_type="image/jpeg",
-        size_bytes=1200,
-        etag="local-test-etag",
-    )
     complete = client.post(
         f"/admin/venue-images/{image_id}/complete",
         json={"etag": "local-complete-etag"},
@@ -2667,9 +2691,8 @@ def test_admin_community_review_payment_restore_and_venue_image_upload_provider_
     assert "expires_at" not in complete_body
     completed_state = _venue_image_state(image_id)
     assert completed_state["image_status"] == "active"
-    assert completed_state["etag"] == "local-complete-etag"
     assert completed_state["upload_completed_at"] is not None
-    assert provider_calls[-2:] == ["head", "read"]
+    assert r2_calls[-5:] == ["config", "download", "publish", "read", "delete"]
     assert _game_state(game_id) == before_game
     assert _count_model_rows(AdminAction) >= before_actions + 7
     assert _count_model_rows(AdminTargetNotice) >= before_notices
@@ -2698,7 +2721,7 @@ def test_stale_admin_cannot_remove_need_a_sub_post_or_create_side_effects(
         f"/admin/need-a-sub/{post_id}/remove",
         json={
             "reason": "Stale admin must not remove Need a Sub posts.",
-            "idempotency_key": f"ws03d-stale-sub-real-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-stale-sub-real-{uuid.uuid4()}",
         },
         headers=_auth_headers("stale-admin-token"),
     )
@@ -2733,7 +2756,7 @@ def test_admin_need_a_sub_enforcement_and_chat_review_remove_restore_persist_sta
         f"/admin/need-a-sub/{post_id}/hide",
         json={
             "reason": "Hide local Need a Sub post.",
-            "idempotency_key": f"ws03d-sub-hide-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-sub-hide-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2744,7 +2767,7 @@ def test_admin_need_a_sub_enforcement_and_chat_review_remove_restore_persist_sta
         f"/admin/need-a-sub/{post_id}/restore",
         json={
             "reason": "Restore local Need a Sub post.",
-            "idempotency_key": f"ws03d-sub-restore-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-sub-restore-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2755,7 +2778,7 @@ def test_admin_need_a_sub_enforcement_and_chat_review_remove_restore_persist_sta
         f"/admin/need-a-sub/{post_id}/chat/messages/{message_id}/review",
         json={
             "reason": "Review local Need a Sub chat message.",
-            "idempotency_key": f"ws03d-sub-chat-review-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-sub-chat-review-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2766,7 +2789,7 @@ def test_admin_need_a_sub_enforcement_and_chat_review_remove_restore_persist_sta
         f"/admin/need-a-sub/{post_id}/chat/messages/{message_id}/remove",
         json={
             "reason": "Remove local Need a Sub chat message.",
-            "idempotency_key": f"ws03d-sub-chat-remove-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-sub-chat-remove-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2777,7 +2800,7 @@ def test_admin_need_a_sub_enforcement_and_chat_review_remove_restore_persist_sta
         f"/admin/need-a-sub/{post_id}/chat/messages/{message_id}/restore",
         json={
             "reason": "Restore local Need a Sub chat message.",
-            "idempotency_key": f"ws03d-sub-chat-restore-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-sub-chat-restore-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2789,7 +2812,7 @@ def test_admin_need_a_sub_enforcement_and_chat_review_remove_restore_persist_sta
         f"/admin/need-a-sub/{post_id}/remove",
         json={
             "reason": "Remove local Need a Sub post.",
-            "idempotency_key": f"ws03d-sub-remove-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-sub-remove-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2835,7 +2858,7 @@ def test_admin_chat_moderation_enforces_parent_binding_and_records_removal_state
         f"/admin/official-games/{other_game_id}/chat/messages/{message_id}/remove",
         json={
             "reason": "The message belongs to a different game.",
-            "idempotency_key": f"ws03d-chat-wrong-parent-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-chat-wrong-parent-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -2847,7 +2870,7 @@ def test_admin_chat_moderation_enforces_parent_binding_and_records_removal_state
         f"/admin/official-games/{game_id}/chat/messages/{message_id}/remove",
         json={
             "reason": "Remove unsafe local test chat message.",
-            "idempotency_key": f"ws03d-chat-remove-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-chat-remove-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )

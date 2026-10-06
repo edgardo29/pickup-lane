@@ -96,8 +96,9 @@ be true.
 ### Existing Tests
 
 Evaluate existing tests by current usefulness, correctness, isolation, and the
-behavior they prove. A directory label, including `legacy/`, neither validates
-nor disqualifies a test. Stale tests may be corrected or removed only when the
+behavior they prove. The former `backend/tests/legacy/` archive was assessed
+file by file and retired after useful missing coverage was migrated. Do not
+recreate it. Stale maintained tests may be corrected or removed only when the
 current task owns that work.
 
 ## 4. Obligation-Oriented Provenance Review

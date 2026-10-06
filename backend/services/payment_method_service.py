@@ -1234,7 +1234,7 @@ def verify_saved_payment_method_with_stripe(
         ) from exc
 
     try:
-        apply_provider_verified_saved_payment_method(
+        apply_stripe_verified_saved_payment_method(
             db,
             payment_method,
             current_user,
@@ -1247,7 +1247,7 @@ def verify_saved_payment_method_with_stripe(
         raise
 
 
-def apply_provider_verified_saved_payment_method(
+def apply_stripe_verified_saved_payment_method(
     db: Session,
     payment_method: UserPaymentMethod,
     current_user: User,
@@ -1257,7 +1257,7 @@ def apply_provider_verified_saved_payment_method(
     if stripe_payment_method.id != payment_method.stripe_payment_method_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="This saved card no longer matches the saved provider identity.",
+            detail="This saved card no longer matches the saved Stripe identity.",
         )
 
     if (
@@ -1578,7 +1578,7 @@ def _reconcile_set_default(
     if user is None or payment_method is None or payment_method.user_id != user.id:
         return _fail_operation(db, operation, "payment_method_not_found")
     try:
-        apply_provider_verified_saved_payment_method(
+        apply_stripe_verified_saved_payment_method(
             db,
             payment_method,
             user,

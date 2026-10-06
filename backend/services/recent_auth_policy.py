@@ -1,4 +1,4 @@
-"""Source-owned inventory of WS03-03A recent-auth protected actions."""
+"""Source-owned inventory of recent-auth protected actions."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ class RecentAuthProtectedAction:
     enforcement_dependency: str
     frontend_caller: str
     protections: tuple[str, ...]
-    provider_mfa_dependency: str
+    firebase_mfa_requirement: str
     recent_auth_required: bool = True
 
 
@@ -31,9 +31,9 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         protections=(
             "typed confirmation",
             "existing account deletion workflow guards",
-            "Firebase provider remains account authority",
+            "Firebase remains account authority",
         ),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_user_role_change",
@@ -43,7 +43,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminUserDetailPage role action",
         protections=("active admin", "final-admin guard", "idempotency key", "audit action"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_user_delete",
@@ -53,7 +53,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminUserDeletePreviewModal",
         protections=("active admin", "current-state token", "idempotency key", "audit action"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_user_restrict_hosting",
@@ -70,7 +70,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
             "audit action",
             "account-security notification",
         ),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_user_restore_hosting",
@@ -86,7 +86,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
             "audit action",
             "account-security notification",
         ),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_user_suspend",
@@ -96,7 +96,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminUserSuspensionModal",
         protections=("active admin", "current-state token", "idempotency key", "audit action"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_user_unsuspend",
@@ -106,7 +106,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminUserUnsuspensionModal",
         protections=("active admin", "idempotency key", "audit action"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_financial_outcome_create",
@@ -116,7 +116,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="adminFinancialOutcomeApi",
         protections=("active admin", "idempotency key", "money issue linkage"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_financial_outcome_manual_review_resolve",
@@ -126,7 +126,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="adminFinancialOutcomeApi",
         protections=("active admin", "pending manual review", "idempotency key", "audit action"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_money_issue_resolve",
@@ -136,7 +136,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminMoneyIssuePage",
         protections=("active admin", "current issue state", "idempotency key"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_money_issue_retry_credit",
@@ -146,7 +146,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminMoneyIssuePage",
         protections=("active admin", "current issue state", "idempotency key"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_refund_retry",
@@ -155,8 +155,8 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/admin/money/refunds/{refund_id}/retry",
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminMoneyIssuePage/AdminMoneyRefundPage",
-        protections=("active admin", "provider reconciliation", "idempotency key"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        protections=("active admin", "Stripe reconciliation", "idempotency key"),
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_refund_reconcile",
@@ -165,8 +165,8 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/admin/money/refunds/{refund_id}/reconcile",
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminMoneyRefundPage",
-        protections=("active admin", "provider reconciliation", "idempotency key"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        protections=("active admin", "Stripe reconciliation", "idempotency key"),
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_payment_event_repair",
@@ -177,11 +177,11 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         frontend_caller="no-current-frontend-caller",
         protections=(
             "active admin",
-            "provider event identity immutability",
+            "Stripe event identity immutability",
             "payment linkage validation",
             "processing result repair bounds",
         ),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_game_credit_issue",
@@ -191,7 +191,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="admin money credit workflows",
         protections=("active admin", "source validation", "idempotency key", "ledger row"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_game_credit_reverse",
@@ -201,7 +201,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="admin money credit workflows",
         protections=("active admin", "usage guard", "idempotency key", "ledger row"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="official_game_cancel_execute",
@@ -210,8 +210,8 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         route_template="/admin/official-games/{game_id}/cancel",
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminOfficialGamePage",
-        protections=("active admin", "preview token", "provider refunds", "audit action"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        protections=("active admin", "preview token", "Stripe refunds", "audit action"),
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="official_game_player_removal_execute",
@@ -228,7 +228,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
             "waitlist advancement",
             "audit action",
         ),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_community_game_cancellation",
@@ -247,7 +247,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
             "host/user notices",
             "shared cancellation payment/credit handling where applicable",
         ),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_need_a_sub_post_removal",
@@ -266,7 +266,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
             "owner/requester notices",
             "request and chat closure",
         ),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_game_soft_delete",
@@ -281,7 +281,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
             "soft-delete lifecycle state",
             "review-case closure where applicable",
         ),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="admin_venue_soft_delete",
@@ -295,7 +295,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
             "venue active-state guard",
             "soft-delete lifecycle fields",
         ),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="platform_notice_create",
@@ -305,7 +305,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminPlatformNoticesPage",
         protections=("active admin", "idempotency key", "recipient selection audit"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="platform_notice_cancel",
@@ -315,7 +315,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_admin",
         frontend_caller="AdminPlatformNoticesPage",
         protections=("active admin", "current notice state", "audit action"),
-        provider_mfa_dependency="deferred_to_ws03_03b",
+        firebase_mfa_requirement="deferred_pending_firebase_mfa_policy",
     ),
     RecentAuthProtectedAction(
         action_id="saved_payment_method_default_change",
@@ -325,7 +325,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_user",
         frontend_caller="PaymentMethodsPage",
         protections=("active user", "owned saved-card check", "persistent account-state change"),
-        provider_mfa_dependency="not_required_for_current_user_saved_card_management",
+        firebase_mfa_requirement="not_required_for_current_user_saved_card_management",
     ),
     RecentAuthProtectedAction(
         action_id="saved_payment_method_detach",
@@ -335,7 +335,7 @@ RECENT_AUTH_PROTECTED_ACTIONS: tuple[RecentAuthProtectedAction, ...] = (
         enforcement_dependency="require_recent_active_user",
         frontend_caller="PaymentMethodsPage",
         protections=("active user", "owned saved-card check", "persistent account-state change"),
-        provider_mfa_dependency="not_required_for_current_user_saved_card_management",
+        firebase_mfa_requirement="not_required_for_current_user_saved_card_management",
     ),
 )
 

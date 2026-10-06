@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import HTTPException
@@ -10,8 +11,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.schemas.sub_post_position_schema import SubPostPositionCreate
-from backend.schemas.sub_post_schema import MAX_SUB_POST_POSITION_ROWS, MAX_SUB_POST_TOTAL_SUBS, SubPostCreate
+from backend.schemas.sub_post_schema import (
+    MAX_SUB_POST_POSITION_ROWS,
+    MAX_SUB_POST_TOTAL_SUBS,
+    SubPostCreate,
+)
 
+if TYPE_CHECKING:
+    from backend.models import SubPost, SubPostPosition, User
 
 _BASE_START = datetime(2035, 1, 15, 18, 0, tzinfo=timezone.utc)
 _BASE_END = datetime(2035, 1, 15, 20, 0, tzinfo=timezone.utc)
@@ -23,9 +30,9 @@ def _user(index: int) -> User:
 
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04b1-sub-user-{index}-{uuid.uuid4()}",
+        auth_user_id=f"source-boundary-sub-user-{index}-{uuid.uuid4()}",
         role="player",
-        email=f"ws02-04b1-sub-user-{index}-{uuid.uuid4()}@example.invalid",
+        email=f"source-boundary-sub-user-{index}-{uuid.uuid4()}@example.invalid",
         first_name="Sub",
         last_name=f"User-{index}",
         account_status="active",

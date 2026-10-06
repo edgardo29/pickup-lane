@@ -1,7 +1,7 @@
 """create venue_images table"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = '0020_venue_images'
@@ -23,6 +23,10 @@ def upgrade() -> None:
         sa.Column('content_type', sa.String(length=120), nullable=False),
         sa.Column('size_bytes', sa.Integer(), nullable=False),
         sa.Column('etag', sa.String(length=255)),
+        sa.Column('publication_object_key', sa.Text()),
+        sa.Column('publication_content_type', sa.String(length=120)),
+        sa.Column('publication_size_bytes', sa.Integer()),
+        sa.Column('publication_etag', sa.String(length=255)),
         sa.Column('image_role', sa.String(length=30), nullable=False, server_default=sa.text("'gallery'")),
         sa.Column('image_status', sa.String(length=30), nullable=False, server_default=sa.text("'pending_upload'")),
         sa.Column('is_primary', sa.Boolean(), nullable=False, server_default=sa.text('false')),
@@ -40,6 +44,12 @@ def upgrade() -> None:
         sa.CheckConstraint("image_status IN ('pending_upload', 'active', 'hidden', 'removed')", name='ck_venue_images_image_status'),
         sa.CheckConstraint("image_status <> 'pending_upload' OR (upload_expires_at IS NOT NULL AND upload_completed_at IS NULL)", name='ck_venue_images_pending_upload_intent'),
         sa.CheckConstraint('size_bytes > 0', name='ck_venue_images_size_bytes_positive'),
+        sa.CheckConstraint("((publication_object_key IS NULL AND publication_content_type IS NULL AND publication_size_bytes IS NULL AND publication_etag IS NULL AND upload_completed_at IS NULL) OR (publication_object_key IS NOT NULL AND publication_content_type IS NOT NULL AND publication_size_bytes IS NOT NULL AND publication_etag IS NOT NULL AND upload_completed_at IS NOT NULL))", name='ck_venue_images_publication_tuple_complete'),
+        sa.CheckConstraint("((image_status = 'pending_upload' AND publication_object_key IS NULL) OR (image_status IN ('active', 'hidden') AND publication_object_key IS NOT NULL) OR image_status = 'removed')", name='ck_venue_images_publication_status'),
+        sa.CheckConstraint("publication_content_type IS NULL OR publication_content_type IN ('image/jpeg', 'image/png', 'image/webp')", name='ck_venue_images_publication_content_type'),
+        sa.CheckConstraint('publication_size_bytes IS NULL OR publication_size_bytes BETWEEN 1 AND 8388608', name='ck_venue_images_publication_size_bytes'),
+        sa.CheckConstraint('publication_object_key IS NULL OR char_length(btrim(publication_object_key)) > 0', name='ck_venue_images_publication_object_key_not_empty'),
+        sa.CheckConstraint('publication_etag IS NULL OR char_length(btrim(publication_etag)) > 0', name='ck_venue_images_publication_etag_not_empty'),
         sa.CheckConstraint('sort_order >= 0', name='ck_venue_images_sort_order_non_negative'),
         sa.CheckConstraint('char_length(btrim(storage_account_id)) > 0', name='ck_venue_images_storage_account_id_not_empty'),
         sa.CheckConstraint('char_length(btrim(storage_bucket)) > 0', name='ck_venue_images_storage_bucket_not_empty'),
@@ -56,6 +66,7 @@ def upgrade() -> None:
     op.create_index('ix_venue_images_venue_id_image_status_sort_order', 'venue_images', ['venue_id', 'image_status', 'sort_order'], unique=False)
     op.create_index('uq_venue_images_one_active_primary_per_venue', 'venue_images', ['venue_id'], unique=True, postgresql_where=sa.text("is_primary = true AND image_status = 'active' AND deleted_at IS NULL"))
     op.create_index('uq_venue_images_storage_object_key', 'venue_images', ['storage_object_key'], unique=True)
+    op.create_index('uq_venue_images_publication_object_key', 'venue_images', ['publication_object_key'], unique=True, postgresql_where=sa.text('publication_object_key IS NOT NULL'))
 
 
 def downgrade() -> None:

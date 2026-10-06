@@ -25,6 +25,7 @@ from backend.settings import build_settings, reset_settings_cache
 
 _TEST_DATABASE_URL = "postgresql+psycopg://db.example.invalid:5432/pickup_lane_test_db"
 _ALLOWED_ORIGIN = "https://app.example.invalid"
+_RUNTIME_MODULE_PREFIXES = ("backend.database", "backend.main")
 _NEWLY_BOUNDED_OFFSET_PATHS = frozenset(
     {
         "/admin/game-images",
@@ -71,6 +72,38 @@ _NEWLY_BOUNDED_OFFSET_PATHS = frozenset(
         "/waitlist-entries/me",
     }
 )
+
+
+@pytest.fixture(autouse=True)
+def _restore_runtime_modules_after_test():
+    """Keep app-construction tests from replacing suite-wide module identities."""
+    import backend
+
+    loaded_modules = {
+        name: module
+        for name, module in sys.modules.items()
+        if any(
+            name == prefix or name.startswith(f"{prefix}.")
+            for prefix in _RUNTIME_MODULE_PREFIXES
+        )
+    }
+    missing = object()
+    package_attributes = {
+        name: getattr(backend, name, missing) for name in ("database", "main")
+    }
+    yield
+    for name in tuple(sys.modules):
+        if any(
+            name == prefix or name.startswith(f"{prefix}.")
+            for prefix in _RUNTIME_MODULE_PREFIXES
+        ):
+            sys.modules.pop(name, None)
+    sys.modules.update(loaded_modules)
+    for name, value in package_attributes.items():
+        if value is missing:
+            backend.__dict__.pop(name, None)
+        else:
+            setattr(backend, name, value)
 
 
 def _settings_env() -> dict[str, str]:
@@ -165,15 +198,15 @@ def _user(index: int):
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"firebase-ws04-01b-{index}-{unique}",
+        auth_user_id=f"firebase-database-default-{index}-{unique}",
         role="player",
-        email=f"ws04-01b-{index}-{unique}@example.invalid",
+        email=f"database-default-{index}-{unique}@example.invalid",
         email_verified_at=datetime.now(timezone.utc),
-        first_name=f"WS04B{index}",
+        first_name=f"Query Cursor{index}",
         last_name="User",
         account_status="active",
         hosting_status="eligible",
-        stripe_customer_id=f"cus_ws04_01b_{index}_{unique.hex[:8]}",
+        stripe_customer_id=f"cus_query_cursor_{index}_{unique.hex[:8]}",
     )
 
 
@@ -184,9 +217,9 @@ def _payment_method(user_id: uuid.UUID, index: int):
     return UserPaymentMethod(
         id=uuid.uuid4(),
         user_id=user_id,
-        stripe_customer_id=f"cus_ws04_01b_{index}_{unique.hex[:8]}",
-        stripe_payment_method_id=f"pm_ws04_01b_{index}_{unique.hex[:8]}",
-        card_fingerprint=f"fp_ws04_01b_{index}_{unique.hex[:8]}",
+        stripe_customer_id=f"cus_query_cursor_{index}_{unique.hex[:8]}",
+        stripe_payment_method_id=f"pm_query_cursor_{index}_{unique.hex[:8]}",
+        card_fingerprint=f"fp_query_cursor_{index}_{unique.hex[:8]}",
         card_brand="visa",
         card_last4=f"{index:04d}"[-4:],
         exp_month=12,
@@ -202,7 +235,7 @@ def _venue(*, creator_id: uuid.UUID):
 
     return Venue(
         id=uuid.uuid4(),
-        name=f"WS04B Venue {uuid.uuid4()}",
+        name=f"Query Cursor Venue {uuid.uuid4()}",
         address_line_1="100 Test Street",
         city="Chicago",
         state="IL",
@@ -228,9 +261,9 @@ def _game(*, creator_id: uuid.UUID, venue_id: uuid.UUID):
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title=f"WS04B Game {uuid.uuid4()}",
+        title=f"Query Cursor Game {uuid.uuid4()}",
         venue_id=venue_id,
-        venue_name_snapshot="WS04B Venue",
+        venue_name_snapshot="Query Cursor Venue",
         address_snapshot="100 Test Street",
         city_snapshot="Chicago",
         state_snapshot="IL",
@@ -285,7 +318,7 @@ def _booking(*, game_id: uuid.UUID, buyer_user_id: uuid.UUID):
 def _sub_post(*, owner_id: uuid.UUID):
     from backend.models import SubPost
 
-    city = f"WS04B City {uuid.uuid4().hex[:8]}"
+    city = f"Query Cursor City {uuid.uuid4().hex[:8]}"
     starts_at = datetime.now(timezone.utc) + timedelta(days=30)
     return SubPost(
         id=uuid.uuid4(),
@@ -301,7 +334,7 @@ def _sub_post(*, owner_id: uuid.UUID):
         ends_at=starts_at + timedelta(hours=1),
         starts_on_local=starts_at.date(),
         timezone="America/Chicago",
-        location_name="WS04B Field",
+        location_name="Query Cursor Field",
         address_line_1="200 Test Street",
         city=city,
         state="IL",
@@ -377,10 +410,10 @@ def _notification(
         notification_category="game_activity",
         notification_domain=notification_domain,
         source_type=source_type,
-        title=f"WS04B notification {index}",
-        subject_label=f"WS04B subject {index}",
-        summary=f"WS04B summary {index}",
-        body=f"WS04B body {index}",
+        title=f"Query Cursor notification {index}",
+        subject_label=f"Query Cursor subject {index}",
+        summary=f"Query Cursor summary {index}",
+        body=f"Query Cursor body {index}",
         action_key=action_key,
         event_at=event_at,
         related_game_id=related_game_id,
@@ -518,9 +551,9 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
                 game_id=game.id,
                 payment_type="booking",
                 provider="stripe",
-                provider_payment_intent_id=f"pi_ws04_01b_{index}_{uuid.uuid4().hex[:8]}",
-                provider_charge_id=f"ch_ws04_01b_{index}_{uuid.uuid4().hex[:8]}",
-                idempotency_key=f"ws04-01b-payment-{index}-{uuid.uuid4()}",
+                provider_payment_intent_id=f"pi_query_cursor_{index}_{uuid.uuid4().hex[:8]}",
+                provider_charge_id=f"ch_query_cursor_{index}_{uuid.uuid4().hex[:8]}",
+                idempotency_key=f"database-default-payment-{index}-{uuid.uuid4()}",
                 amount_cents=1200,
                 currency="USD",
                 payment_status=status,
@@ -537,7 +570,7 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
             build_direct_admin_refund(
                 payment_id=payments[0].id,
                 booking_id=booking.id,
-                provider_refund_id=f"re_ws04_01b_{index}_{uuid.uuid4().hex[:8]}",
+                provider_refund_id=f"re_query_cursor_{index}_{uuid.uuid4().hex[:8]}",
                 provider_status="processing",
                 provider_charge_id=payments[0].provider_charge_id,
                 amount_cents=300,
@@ -555,9 +588,9 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
                 refund=refunds[0],
                 event_type=event_type,
                 event_source="system",
-                provider_event_id=f"evt_ws04_01b_{index}_{uuid.uuid4().hex[:8]}",
+                provider_event_id=f"evt_query_cursor_{index}_{uuid.uuid4().hex[:8]}",
                 provider_status="processing",
-                idempotency_key=f"ws04-01b-refund-event-{index}-{uuid.uuid4()}",
+                idempotency_key=f"database-default-refund-event-{index}-{uuid.uuid4()}",
                 reason_code="query_cursor_fixture",
                 summary="Query cursor refund event fixture.",
                 new_refund_status="processing",
@@ -585,7 +618,7 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
                 source_booking_id=booking.id,
                 source_payment_id=payments[0].id,
                 issued_by_user_id=user.id,
-                idempotency_key=f"ws04-01b-credit-{index}-{uuid.uuid4()}",
+                idempotency_key=f"database-default-credit-{index}-{uuid.uuid4()}",
                 created_at=now + timedelta(minutes=index),
                 updated_at=now + timedelta(minutes=index),
             )
@@ -594,7 +627,7 @@ def test_changed_admin_money_cursor_families_reject_invalid_and_mismatched_conte
         issues = [
             MoneyIssue(
                 id=uuid.uuid4(),
-                operation_key=f"ws04-01b-refund-failed-{index}-{uuid.uuid4()}",
+                operation_key=f"database-default-refund-failed-{index}-{uuid.uuid4()}",
                 status="open",
                 issue_type="refund_failed",
                 origin_workflow="direct_admin_refund",

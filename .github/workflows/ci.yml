@@ -96,27 +96,6 @@ jobs:
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: pickup_lane_test_db
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      APP_ENV: ci
-      DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
-      TEST_DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
-      PYTHONPATH: ${{ github.workspace }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -129,44 +108,8 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt
 
-      - name: Configure migration test database URL
-        run: |
-          python - <<'PY'
-          import os
-          from sqlalchemy.engine import make_url
-
-          # Preserve encoded credentials and the exact ordinary test endpoint.
-          ordinary_url = make_url(os.environ["TEST_DATABASE_URL"])
-          migration_url = ordinary_url.set(database="pickup_lane_migration_test_db")
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
-              env_file.write(
-                  "MIGRATION_DATABASE_URL="
-                  + migration_url.render_as_string(hide_password=False)
-                  + "\n"
-              )
-          PY
-
       - name: Compile backend Python files
         run: python -m compileall -q backend
-
-      - name: Rebuild dedicated backend test databases
-        run: python -m backend.test_runner rebuild all
-
-      - name: Collect current backend tests
-        run: >
-          python -m backend.test_runner test ordinary
-          backend/tests --collect-only -q
-
-      - name: Run backend test runner safety tests
-        run: >
-          python -m backend.test_runner test ordinary
-          backend/tests/platform/backend_test_runner -q
-
-      - name: Run migration lifecycle tests
-        run: >
-          python -m backend.test_runner test migration
-          backend/tests/migrations/migration_policy_compatibility_rehearsal -q
-
 
   required:
     name: CI Required

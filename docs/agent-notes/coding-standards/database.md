@@ -1,6 +1,6 @@
 # Database And Migrations
 
-This document defines the authoritative rules for PostgreSQL schema ownership,
+This document defines the repository rules for PostgreSQL schema ownership,
 Alembic migration structure, local database use, and database verification in
 Pickup Lane.
 
@@ -14,7 +14,7 @@ Also read:
 * `backend-testing.md` when backend tests or validation are in scope
 
 This document does not define feature behavior or maintain a catalog of current
-feature tables. Feature-specific schema contracts belong in their owning
+feature tables. Feature-specific schema requirements belong in their owning
 feature documents.
 
 When existing migrations conflict with these rules, do not copy or expand the
@@ -75,7 +75,7 @@ preserved. At that point, applied migrations become immutable and schema
 changes require new forward migrations.
 
 The transition to immutable production migration history requires an explicit
-project-level decision.
+owner decision.
 
 ## One Table, One Canonical Migration
 
@@ -188,9 +188,8 @@ exists first, then rebuild from base.
 Do not introduce circular foreign-key dependencies casually. Redesign the
 relationship when practical.
 
-An unavoidable circular dependency requires an explicit documented exception
-and project-level approval before introducing a relationship-only migration or
-other nonstandard ordering.
+An unavoidable circular dependency requires a documented owner decision before
+introducing a relationship-only migration or other nonstandard ordering.
 
 ## Non-Table Database Objects
 
@@ -253,7 +252,8 @@ Dirty or outdated local databases should be rebuilt rather than making clean
 migrations tolerate every historical local shape.
 
 An exception is acceptable for database infrastructure that is intentionally
-idempotent, such as an approved `CREATE EXTENSION IF NOT EXISTS` statement.
+idempotent, such as a specifically required `CREATE EXTENSION IF NOT EXISTS`
+statement.
 
 Do not add manual commits or rollbacks inside migrations unless the operation
 requires special transaction handling and the reason is documented.
@@ -300,7 +300,7 @@ shape.
 A model-only schema change is incomplete.
 
 A migration-only behavior change is incomplete when application code still
-assumes the old contract.
+assumes the old schema.
 
 Database constraints are the final enforcement layer for invariants that must
 remain true regardless of the caller. Service validation should still provide
@@ -333,7 +333,7 @@ When a pre-production table is retired, clean rebuilds must not recreate it.
 
 Preserve the Alembic revision chain when necessary by converting the retired
 canonical revision into a clearly documented no-op placeholder or another
-approved clean-history form.
+clean-history form selected by an explicit owner decision.
 
 Do not reuse the retired revision for an unrelated table or feature.
 
@@ -347,8 +347,9 @@ Schema migrations should define schema, not serve as general seed scripts.
 Use `backend/scripts/` only for local mock/demo-data setup. Non-demo commands
 such as the test runner, admin bootstrap, and durable worker live outside it.
 
-Immutable reference rows that are required for the database contract may be
-inserted by a focused migration when explicitly approved.
+Immutable reference rows that are required for database behavior may be
+inserted by a focused migration when an applicable requirement source calls for
+them.
 
 Do not place large demo datasets, Firebase test-user creation, or manual QA
 data inside Alembic migrations.
@@ -356,7 +357,7 @@ data inside Alembic migrations.
 When a schema change affects seed scripts, update the scripts in the same task.
 
 Local scripts that create Firebase Auth test users are sensitive and dev-only
-unless explicitly approved for commit.
+unless the current instruction explicitly includes committing them.
 
 ## Local Database Rebuilds
 
@@ -463,7 +464,8 @@ Use the narrowest verification appropriate to the change.
 Before considering a database change complete, confirm as applicable:
 
 * migration modules import successfully
-* the revision chain has one head unless an approved branch is in progress
+* the revision chain has one head unless an intentionally documented Alembic
+  branch is in progress
 * every application table has one canonical migration owner
 * no migration creates or alters multiple application tables
 * a clean database runs `alembic upgrade head`
@@ -473,7 +475,7 @@ Before considering a database change complete, confirm as applicable:
 * relevant seed scripts still run
 * focused backend checks pass when tests are requested
 
-Do not treat success against an already-migrated local database as proof that
+Do not treat success against an already-migrated local database as verification that
 an edited historical migration works. Verify with a clean rebuild.
 
 ## Before Database Changes

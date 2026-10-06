@@ -590,7 +590,7 @@ def apply_refund_provider_result(
             issue_type="refund_outcome_unknown",
             reason_code="refund_incomplete_attempt_history",
             summary=(
-                "Provider confirmed returned cash, but the complete refund attempt "
+                "Stripe confirmed returned cash, but the complete refund attempt "
                 "history is not authoritative."
             ),
             refund_event=event,
@@ -637,7 +637,7 @@ def apply_refund_provider_result(
                 else "refund_incomplete_attempt_history"
             )
             issue.latest_summary = policy_summary or (
-                "Provider confirmed the refund succeeded."
+                "Stripe confirmed the refund succeeded."
                 if attempt_history_is_safe
                 else (
                     "Returned cash is confirmed, but the complete attempt history "
@@ -952,7 +952,7 @@ def handle_refund_fulfillment(db: Session, job) -> HandlerResult:
                 event_source="system",
                 new_refund_status="failed",
                 reason_code="payment_refund_amount_no_longer_available",
-                summary="Refund was stopped before provider mutation because the payment remainder changed.",
+                summary="Refund was stopped before the Stripe mutation because the payment remainder changed.",
                 metadata={"provider_call_started": False},
                 occurred_at=now,
             )
@@ -1024,7 +1024,7 @@ def handle_refund_fulfillment(db: Session, job) -> HandlerResult:
             event_source="system",
             new_refund_status="processing",
             reason_code="refund_provider_attempt_started",
-            summary="Refund provider attempt checkpoint committed.",
+            summary="Stripe refund attempt checkpoint committed.",
             occurred_at=now,
         )
         _sync_dependents(db, refund=refund, payment=payment, now=now)
@@ -1104,7 +1104,7 @@ def handle_refund_fulfillment(db: Session, job) -> HandlerResult:
             "refund_read_retry" if provider_refund_id else "refund_provider_retry",
             retry_delay=_refund_retry_delay(job_attempt_count),
         )
-    except Exception as exc:  # noqa: BLE001 - provider failures remain unsafe.
+    except Exception as exc:  # noqa: BLE001 - Stripe failures remain unsafe.
         if getattr(exc, "http_status", None) == 429:
             return HandlerResult.transient_failure(
                 "refund_provider_retry", retry_delay=_refund_retry_delay(job_attempt_count)

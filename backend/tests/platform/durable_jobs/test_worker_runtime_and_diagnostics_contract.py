@@ -612,7 +612,7 @@ def test_production_payment_jobs_preserve_request_correlation_state_and_safe_eve
         enqueue = lambda db: payment_job_service.enqueue_payment_reconcile_job(
             db,
             protected_reference,
-            reason="ws09_observability_proof",
+            reason="observability_proof",
         )
     else:
         monkeypatch.setattr(

@@ -6,14 +6,33 @@ import os
 import re
 import subprocess
 import textwrap
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 import pytest
+
+from backend.tests.support.environment_safety import (
+    isolated_test_subprocess_environment,
+)
 
 pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
+_MASTER_BLUEPRINT_PATH = (
+    _REPO_ROOT
+    / "docs"
+    / "production-readiness"
+    / "planning"
+    / "program"
+    / "pickup-lane-master-production-readiness-blueprint.md"
+)
+_LIMITS_REGISTER_PATH = (
+    _REPO_ROOT
+    / "docs"
+    / "production-readiness"
+    / "governance"
+    / "limits-and-thresholds-register.md"
+)
 _SYNTHETIC_DATABASE_URL = "postgresql+psycopg://127.0.0.1:5432/pickup_lane_test_db"
 _BASE_RELEASE_ENV = {
     "APP_ENV": "test",
@@ -163,6 +182,7 @@ def _tracked_files() -> tuple[Path, ...]:
     completed = subprocess.run(
         ["git", "ls-files", "--cached", "-z"],
         cwd=_REPO_ROOT,
+        env=isolated_test_subprocess_environment(),
         text=True,
         capture_output=True,
         check=True,
@@ -365,9 +385,12 @@ def _python_source_findings(relative_path: str, source: str) -> dict[str, list[s
                 findings["worker_scheduler_config"].append(
                     f"{relative_path}:python call {terminal_name}"
                 )
-            if terminal_name == "run" and call_name.split(".")[0] in {"uvicorn", "gunicorn"}:
-                if any(keyword.arg == "workers" for keyword in node.keywords):
-                    findings["topology_values"].append(f"{relative_path}:workers keyword")
+            if (
+                terminal_name == "run"
+                and call_name.split(".")[0] in {"uvicorn", "gunicorn"}
+                and any(keyword.arg == "workers" for keyword in node.keywords)
+            ):
+                findings["topology_values"].append(f"{relative_path}:workers keyword")
     findings["pool_budget_values"].extend(
         f"{relative_path}:{name}"
         for name in sorted(_POOL_BUDGET_ENV_NAMES)
@@ -585,7 +608,7 @@ def test_backend_source_has_no_worker_or_scheduler_runtime_configuration() -> No
 
 
 @pytest.mark.pass_provenance('WS02-02')
-def test_ws05_01a_portable_worker_command_is_not_final_runtime_topology() -> None:
+def test_portable_worker_command_is_not_final_runtime_topology() -> None:
     command_path = _REPO_ROOT / "backend" / "durable_worker.py"
     source = command_path.read_text()
 
@@ -607,24 +630,29 @@ def test_no_approved_numeric_runtime_topology_or_pool_budget_is_tracked() -> Non
 
 
 @pytest.mark.pass_provenance('WS02-02')
-def test_ws02_02_metadata_keeps_deployment_runtime_configuration_deferred() -> None:
-    declaration_path = _REPO_ROOT / "backend" / "tests" / "support" / "requirements" / "ws02_02.json"
-    raw = json.loads(declaration_path.read_text())
-    declarations = {entry["id"]: entry for entry in raw["requirements"]}
+def test_current_authority_keeps_deployment_runtime_configuration_deferred() -> None:
+    blueprint = _MASTER_BLUEPRINT_PATH.read_text(encoding="utf-8")
+    limits_register = _LIMITS_REGISTER_PATH.read_text(encoding="utf-8")
+    findings = _runtime_topology_findings()
 
-    assert declarations["WS02-02-R8"] == {
-        "id": "WS02-02-R8",
-        "owning_pass": "WS02-02",
-        "source_controls": ["API-M03", "OPS-001", "DBP-01", "FDN-04"],
-        "state": "required",
-        "scope": "platform/runtime",
+    for required_boundary in (
+        "The final production infrastructure is intentionally not selected yet.",
+        "### 9.2 Work that remains late-bound",
+        "- API/worker process and instance counts;",
+        "- final pool sizes;",
+        "Do not invent late-bound values to complete a pass.",
+    ):
+        assert required_boundary in blueprint
+    assert (
+        "| Database pool and connection budget | "
+        "TBD - owner decision and evidence required |"
+    ) in limits_register
+    assert findings == {
+        "deployment_artifacts": [],
+        "worker_scheduler_config": [],
+        "topology_values": [],
+        "pool_budget_values": [],
     }
-    r10 = declarations["WS02-02-R10"]
-    assert r10["state"] == "deferred"
-    assert r10["scope"] == "planning"
-    assert isinstance(r10["reason"], str) and r10["reason"].strip()
-    for unsafe_fragment in ("postgresql://", "postgresql+", "Bearer ", "sk_", "whsec_", "/Users/"):
-        assert unsafe_fragment not in r10["reason"]
 
 
 @pytest.mark.pass_provenance('WS02-02')

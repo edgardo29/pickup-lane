@@ -30,9 +30,9 @@ def generate_correlation_id() -> str:
 def validate_correlation_id(value: object) -> str:
     """Validate a canonical UUIDv4 correlation identifier.
 
-    Externally supplied values are treated as untrusted input. EN-02 does not
-    accept arbitrary request-ID formats because the approved decisions do not
-    define a broader safe external format.
+    Externally supplied values are treated as untrusted input. The correlation
+    contract does not accept arbitrary request-ID formats because no broader
+    safe external format is approved.
     """
 
     if not isinstance(value, str):

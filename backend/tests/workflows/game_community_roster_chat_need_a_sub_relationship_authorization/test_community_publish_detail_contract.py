@@ -7,17 +7,16 @@ import pytest
 from sqlalchemy import func, select
 
 from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_authorization.test_matrix_scope_and_dependencies_contract import (
-    _Identity,
     _auth_headers,
     _community_detail,
     _game,
+    _Identity,
     _install_auth_identities,
     _recent_time,
     _session,
     _user,
     _venue,
 )
-
 
 
 def _publish_payload(label: str) -> dict[str, object]:
@@ -34,7 +33,7 @@ def _publish_payload(label: str) -> dict[str, object]:
         "total_spots": 10,
         "price_per_player_cents": 0,
         "venue": {
-            "name": f"WS03C Publish Venue {label}",
+            "name": f"Relationship Authorization Publish Venue {label}",
             "address_line_1": f"{label} Publish Ave",
             "city": "Chicago",
             "state": "IL",
@@ -42,7 +41,7 @@ def _publish_payload(label: str) -> dict[str, object]:
             "country_code": "US",
         },
         "payment_methods_snapshot": [],
-        "game_notes": f"WS03C publish {label}",
+        "game_notes": f"Relationship Authorization publish {label}",
     }
 
 

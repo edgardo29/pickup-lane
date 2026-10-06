@@ -35,6 +35,7 @@ from backend.tests.support.environment_safety import (
     DEDICATED_TEST_DATABASE_NAME,
     EnvironmentSafetyError,
     ParsedDatabaseUrl,
+    isolated_test_subprocess_environment,
     parse_database_url,
     validate_local_test_connection_endpoint,
     validate_local_test_connection_identity,
@@ -59,6 +60,8 @@ REBUILD_ORDINARY_COMMAND = (
 LOCK_FILE_PREFIX = "pickup-lane-backend-test"
 LOCK_ROOT = Path("/tmp")
 BACKEND_TESTS_ROOT = REPO_ROOT / "backend" / "tests"
+R2_PROVIDER_CONTRACT_TESTS_ROOT = BACKEND_TESTS_ROOT / "provider_contract" / "r2"
+BACKEND_TEST_ARTIFACTS_ROOT = REPO_ROOT / "backend" / ".test-artifacts"
 PYTEST_SAFETY_BYPASS_OPTIONS = frozenset(
     {
         "--noconftest",
@@ -66,6 +69,9 @@ PYTEST_SAFETY_BYPASS_OPTIONS = frozenset(
         "--pyargs",
         "--rootdir",
         "--override-ini",
+        "--basetemp",
+        "--debug",
+        "--pastebin",
         "-c",
         "-o",
         "-p",
@@ -73,10 +79,17 @@ PYTEST_SAFETY_BYPASS_OPTIONS = frozenset(
 )
 PYTEST_OPTIONS_WITH_VALUES = frozenset(
     {
-        "-k", "-m", "--maxfail", "--tb", "--capture", "--junitxml",
-        "--basetemp", "--durations", "--durations-min", "--ignore",
+        "-k", "-m", "--maxfail", "--tb", "--capture",
+        "--durations", "--durations-min", "--ignore",
         "--ignore-glob", "--deselect", "--log-level", "--log-cli-level",
         "--color", "--import-mode", "--show-capture",
+    }
+)
+PYTEST_OUTPUT_PATH_OPTIONS = frozenset(
+    {
+        "--junit-xml",
+        "--junitxml",
+        "--log-file",
     }
 )
 
@@ -111,21 +124,16 @@ class RunnerConfiguration:
     ) -> dict[str, str]:
         source = os.environ if environ is None else environ
         _validate_connection_environment(source)
-        child_environment = dict(source)
-        # Pytest must run the selection supplied to this invocation, not an
-        # ambient selection inherited from the caller's shell.
-        child_environment.pop("PYTEST_ADDOPTS", None)
-        child_environment.pop("PYTEST_PLUGINS", None)
-        child_environment.update(
-            {
+        return isolated_test_subprocess_environment(
+            source,
+            overrides={
                 "APP_ENV": "ci" if _is_ci_environment(source) else "test",
                 "DATABASE_URL": self.ordinary_url,
                 "TEST_DATABASE_URL": self.ordinary_url,
                 "MIGRATION_DATABASE_URL": self.migration_url,
                 "PYTHONPATH": str(REPO_ROOT),
-            }
+            },
         )
-        return child_environment
 
 
 @dataclass(frozen=True)
@@ -542,7 +550,7 @@ def pytest_command(pytest_arguments: Sequence[str]) -> list[str]:
             "argument after the test target."
         )
     _validate_pytest_selection(pytest_arguments[0])
-    option_value_pending = False
+    option_value_pending: str | None = None
     for argument in pytest_arguments[1:]:
         # Pytest expands @files after this validation pass. Do not let an
         # unchecked file add paths or options that bypass the root conftest.
@@ -552,9 +560,11 @@ def pytest_command(pytest_arguments: Sequence[str]) -> list[str]:
                 "and are not supported."
             )
         if option_value_pending:
-            option_value_pending = False
+            if option_value_pending in PYTEST_OUTPUT_PATH_OPTIONS:
+                _validate_pytest_output_path(argument, option=option_value_pending)
+            option_value_pending = None
             continue
-        option = argument.split("=", 1)[0]
+        option, separator, inline_value = argument.partition("=")
         if option in PYTEST_SAFETY_BYPASS_OPTIONS or any(
             argument.startswith(short_option)
             for short_option in ("-c", "-o", "-p")
@@ -569,13 +579,24 @@ def pytest_command(pytest_arguments: Sequence[str]) -> list[str]:
                 "Pytest options that can bypass backend test safety fixtures "
                 "or change their configuration are not supported."
             )
+        if option in PYTEST_OUTPUT_PATH_OPTIONS:
+            if separator:
+                _validate_pytest_output_path(inline_value, option=option)
+            else:
+                option_value_pending = option
+            continue
         if argument.startswith("-"):
-            option_value_pending = argument in PYTEST_OPTIONS_WITH_VALUES
+            option_value_pending = option if option in PYTEST_OPTIONS_WITH_VALUES else None
             continue
         # An option value may not be a filesystem path. Every existing
         # positional path, however, must remain under the guarded test tree.
         if Path(argument.split("::", 1)[0]).exists():
             _validate_pytest_selection(argument)
+    if option_value_pending in PYTEST_OUTPUT_PATH_OPTIONS:
+        raise BackendTestRunnerError(
+            f"{option_value_pending} requires an output path under "
+            "backend/.test-artifacts."
+        )
     return [sys.executable, "-m", "pytest", *pytest_arguments]
 
 
@@ -589,6 +610,27 @@ def _validate_pytest_selection(selection: str) -> None:
             "Every existing pytest selection must be under backend/tests; "
             "the first selection must exist."
         ) from exc
+
+
+def _validate_pytest_output_path(raw_path: str, *, option: str) -> None:
+    if not raw_path or raw_path.startswith("-"):
+        raise BackendTestRunnerError(
+            f"{option} requires an output path under backend/.test-artifacts."
+        )
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    try:
+        resolved = candidate.resolve(strict=False)
+        relative = resolved.relative_to(BACKEND_TEST_ARTIFACTS_ROOT.resolve())
+    except (OSError, ValueError) as exc:
+        raise BackendTestRunnerError(
+            f"{option} may write only under backend/.test-artifacts."
+        ) from exc
+    if not relative.parts or (resolved.exists() and not resolved.is_file()):
+        raise BackendTestRunnerError(
+            f"{option} requires a file path under backend/.test-artifacts."
+        )
 
 
 def _database_output_secrets(database_urls: Sequence[str]) -> tuple[str, ...]:
@@ -609,9 +651,25 @@ def _database_output_secrets(database_urls: Sequence[str]) -> tuple[str, ...]:
     return tuple(sorted(secrets - {""}, key=len, reverse=True))
 
 
-def redact_output(text_value: str, *, database_urls: Sequence[str] = ()) -> str:
+def _output_secrets(
+    database_urls: Sequence[str],
+    sensitive_values: Sequence[str],
+) -> tuple[str, ...]:
+    secrets = set(_database_output_secrets(database_urls))
+    for value in sensitive_values:
+        if value:
+            secrets.update({value, quote(value, safe="")})
+    return tuple(sorted(secrets, key=len, reverse=True))
+
+
+def redact_output(
+    text_value: str,
+    *,
+    database_urls: Sequence[str] = (),
+    sensitive_values: Sequence[str] = (),
+) -> str:
     sanitized = text_value
-    for secret in _database_output_secrets(database_urls):
+    for secret in _output_secrets(database_urls, sensitive_values):
         # Match a configured secret even if output inserts a line break inside it.
         wrapped = r"(?:\r?\n)?".join(map(re.escape, secret))
         sanitized = re.sub(wrapped, "[REDACTED]", sanitized)
@@ -644,10 +702,11 @@ def stream_redacted_output(
     output: IO[str],
     *,
     database_urls: Sequence[str],
+    sensitive_values: Sequence[str] = (),
 ) -> None:
     """Emit live pytest progress while retaining only possible sensitive text."""
 
-    secrets = _database_output_secrets(database_urls)
+    secrets = _output_secrets(database_urls, sensitive_values)
     pending = ""
     visible_line = ""
 
@@ -696,6 +755,7 @@ def run_pytest(
     *,
     environment: Mapping[str, str],
     database_urls: Sequence[str],
+    sensitive_values: Sequence[str] = (),
     process_factory: Callable[..., Any] = subprocess.Popen,
     output: IO[str] = sys.stdout,
 ) -> int:
@@ -710,7 +770,12 @@ def run_pytest(
     )
     if process.stdout is None:
         raise BackendTestRunnerError("Pytest output stream was not available.")
-    stream_redacted_output(process.stdout, output, database_urls=database_urls)
+    stream_redacted_output(
+        process.stdout,
+        output,
+        database_urls=database_urls,
+        sensitive_values=sensitive_values,
+    )
     return process.wait()
 
 
@@ -755,6 +820,105 @@ def test_migration_database(
         )
 
 
+def _r2_provider_contract_environment(
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    source = os.environ if environ is None else environ
+    required = (
+        "R2_TEST_ACCOUNT_ID",
+        "R2_TEST_ACCESS_KEY_ID",
+        "R2_TEST_SECRET_ACCESS_KEY",
+        "R2_TEST_BUCKET_NAME",
+        "R2_TEST_ENDPOINT_URL",
+    )
+    values = {name: source.get(name, "").strip() for name in required}
+    if any(not value for value in values.values()):
+        raise BackendTestRunnerError(
+            "The isolated R2 provider-contract configuration is incomplete."
+        )
+    parsed = urlsplit(values["R2_TEST_ENDPOINT_URL"])
+    expected_host = f'{values["R2_TEST_ACCOUNT_ID"]}.r2.cloudflarestorage.com'
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != expected_host
+        or parsed.port is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise BackendTestRunnerError(
+            "The R2 provider-contract endpoint is not the dedicated account endpoint."
+        )
+    if source.get("R2_BUCKET_NAME", "").strip() == values["R2_TEST_BUCKET_NAME"]:
+        raise BackendTestRunnerError(
+            "The R2 provider-contract bucket must differ from the application bucket."
+        )
+    return isolated_test_subprocess_environment(
+        source,
+        overrides={
+            "APP_ENV": "test",
+            "PYTHONPATH": str(REPO_ROOT),
+            "BACKEND_PROVIDER_CONTRACT_MODE": "1",
+            "R2_ACCOUNT_ID": values["R2_TEST_ACCOUNT_ID"],
+            "R2_ACCESS_KEY_ID": values["R2_TEST_ACCESS_KEY_ID"],
+            "R2_SECRET_ACCESS_KEY": values["R2_TEST_SECRET_ACCESS_KEY"],
+            "R2_BUCKET_NAME": values["R2_TEST_BUCKET_NAME"],
+            "R2_ENDPOINT_URL": values["R2_TEST_ENDPOINT_URL"].rstrip("/"),
+        },
+    )
+
+
+def load_r2_provider_contract_environment(
+    environ: Mapping[str, str] | None = None,
+    *,
+    dotenv_path: Path = BACKEND_ENV_PATH,
+) -> dict[str, str]:
+    source = os.environ if environ is None else environ
+    values: dict[str, str] = {}
+    if dotenv_path.is_file():
+        try:
+            loaded = dotenv_values(dotenv_path, interpolate=False)
+        except Exception as exc:
+            raise BackendTestRunnerError(
+                "Could not read backend/.env for R2 contract configuration."
+            ) from exc
+        values.update(
+            {name: value for name, value in loaded.items() if value is not None}
+        )
+    values.update({name: value for name, value in source.items() if value is not None})
+    return _r2_provider_contract_environment(values)
+
+
+def test_r2_provider_contract(pytest_arguments: Sequence[str]) -> int:
+    pytest_command(pytest_arguments)
+    provider_root = R2_PROVIDER_CONTRACT_TESTS_ROOT.resolve(strict=True)
+    for argument in pytest_arguments:
+        if argument.startswith("-"):
+            continue
+        candidate = Path(argument.split("::", 1)[0])
+        if not candidate.exists():
+            continue
+        selection = candidate.resolve(strict=True)
+        try:
+            selection.relative_to(provider_root)
+        except ValueError as exc:
+            raise BackendTestRunnerError(
+                "R2 provider-contract mode may select only backend/tests/provider_contract/r2."
+            ) from exc
+    environment = load_r2_provider_contract_environment()
+    return run_pytest(
+        pytest_arguments,
+        environment=environment,
+        database_urls=(),
+        sensitive_values=(
+            environment["R2_ACCESS_KEY_ID"],
+            environment["R2_SECRET_ACCESS_KEY"],
+        ),
+    )
+
+
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = RedactingArgumentParser(
         description=(
@@ -782,7 +946,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     test_parser.add_argument(
         "target",
-        choices=("ordinary", "migration"),
+        choices=("ordinary", "migration", "provider_contract"),
         help="database purpose for the pytest selection",
     )
     test_parser.add_argument(
@@ -798,6 +962,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     database_urls: tuple[str, ...] = ()
     try:
+        if arguments.command == "test" and arguments.target == "provider_contract":
+            return test_r2_provider_contract(arguments.pytest_arguments)
+
         configuration = load_runner_configuration()
         database_urls = (configuration.ordinary_url, configuration.migration_url)
         if arguments.command == "rebuild":

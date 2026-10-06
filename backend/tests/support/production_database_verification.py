@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
-from typing import Any, Mapping
-
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
 
 EVIDENCE_STATES = frozenset(
     {
         "blocked",
-        "deferred_to_ws04_01d",
+        "deferred_to_final_production_verification",
         "not_applicable",
         "stale",
         "unverified",
@@ -19,7 +19,7 @@ EVIDENCE_STATES = frozenset(
 CONTRACT_STATES = frozenset(
     {
         "provider_independent_template",
-        "ws04_01d_final_evidence",
+        "final_production_evidence",
     }
 )
 
@@ -30,14 +30,14 @@ REQUIRED_METADATA_FIELDS = (
     "reviewer",
     "purpose",
     "supported_controls",
-    "supported_passes",
+    "historical_provenance",
     "source_type",
     "sanitized_evidence_reference",
     "raw_evidence_location_reference",
     "open_gaps",
 )
 
-C_TEMPLATE_DEFERRED_METADATA_FIELDS = (
+TEMPLATE_DEFERRED_METADATA_FIELDS = (
     "provider_or_control_plane",
     "environment",
     "date_collected",
@@ -53,7 +53,7 @@ FINAL_METADATA_VALUE_FIELDS = (
     "reviewer",
     "purpose",
     "supported_controls",
-    "supported_passes",
+    "historical_provenance",
     "source_type",
     "sanitized_evidence_reference",
 )
@@ -347,10 +347,10 @@ def validate_evidence_contract(record: Mapping[str, Any]) -> list[str]:
 
     if record.get("schema_version") != 1:
         errors.append("schema_version must be 1")
-    if record.get("owning_pass") != "WS04-01C":
-        errors.append("owning_pass must be WS04-01C")
-    if record.get("future_population_owner") != "WS04-01D":
-        errors.append("future_population_owner must be WS04-01D")
+    if record.get("contract_owner") != "production_database_verification":
+        errors.append("contract_owner must be production_database_verification")
+    if record.get("final_evidence_owner") != "final_production_database_verification":
+        errors.append("final_evidence_owner must be final_production_database_verification")
     contract_state = record.get("contract_state")
     if contract_state not in CONTRACT_STATES:
         errors.append(f"contract_state has unsupported value: {contract_state!r}")
@@ -361,15 +361,15 @@ def validate_evidence_contract(record: Mapping[str, Any]) -> list[str]:
     topology = _mapping(record.get("topology_contract"), "topology_contract", errors)
     _validate_stateful_fields(topology, RUNTIME_TOPOLOGY_FIELDS, "topology_contract", errors)
 
-    if contract_state == "ws04_01d_final_evidence":
-        _validate_ws04_01d_final_evidence(record, metadata, topology, errors)
+    if contract_state == "final_production_evidence":
+        _validate_final_production_evidence(record, metadata, topology, errors)
     else:
         errors.extend(validate_budget_evidence(record, require_final_values=False))
         errors.extend(validate_role_grant_contract(record))
 
     handoff = _mapping(record.get("handoff"), "handoff", errors)
-    if handoff.get("mandatory_follow_up") != "WS04-01D":
-        errors.append("handoff.mandatory_follow_up must be WS04-01D")
+    if handoff.get("final_verification_owner") != "final_production_database_verification":
+        errors.append("handoff.final_verification_owner must be final_production_database_verification")
     required_before = handoff.get("required_before")
     if not isinstance(required_before, list) or "CLOSE-01" not in required_before:
         errors.append("handoff.required_before must include CLOSE-01")
@@ -401,7 +401,7 @@ def validate_budget_evidence(
 
         if not require_final_values:
             if value is not None:
-                errors.append(f"{field} must not contain final values before WS04-01D")
+                errors.append(f"{field} must not contain final values before final_production_database_verification")
             continue
 
         if state == "verified":
@@ -641,7 +641,7 @@ def _validate_provider_independent_template(
     topology: Mapping[str, Any],
     errors: list[str],
 ) -> None:
-    for field in C_TEMPLATE_DEFERRED_METADATA_FIELDS:
+    for field in TEMPLATE_DEFERRED_METADATA_FIELDS:
         _require_deferred_null(
             metadata.get(field),
             f"metadata.{field}",
@@ -659,13 +659,13 @@ def _validate_provider_independent_template(
     inputs = _mapping(budget_model.get("inputs"), "budget_model.inputs", errors)
     for field in BUDGET_INPUT_FIELDS:
         entry = _mapping(inputs.get(field), f"budget_model.inputs.{field}", errors)
-        if entry.get("evidence_state") != "deferred_to_ws04_01d":
+        if entry.get("evidence_state") != "deferred_to_final_production_verification":
             errors.append(
-                f"budget_model.inputs.{field} must remain deferred to WS04-01D "
+                f"budget_model.inputs.{field} must remain deferred to final_production_database_verification "
                 "in provider-independent template"
             )
         if entry.get("value") is not None:
-            errors.append(f"budget_model.inputs.{field}.value must be null before WS04-01D")
+            errors.append(f"budget_model.inputs.{field}.value must be null before final_production_database_verification")
 
     reported = _mapping(
         budget_model.get("reported_calculations"),
@@ -674,7 +674,7 @@ def _validate_provider_independent_template(
     )
     for field, value in reported.items():
         if value is not None:
-            errors.append(f"budget_model.reported_calculations.{field} must be null before WS04-01D")
+            errors.append(f"budget_model.reported_calculations.{field} must be null before final_production_database_verification")
 
     limit_basis = _mapping(budget_model.get("limit_basis"), "budget_model.limit_basis", errors)
     for field in REQUIRED_LIMIT_BASIS_FIELDS:
@@ -707,9 +707,9 @@ def _validate_provider_independent_template(
         "budget_model.telemetry_plan",
         errors,
     )
-    if telemetry_plan.get("state") != "deferred_to_ws04_01d":
+    if telemetry_plan.get("state") != "deferred_to_final_production_verification":
         errors.append(
-            "budget_model.telemetry_plan must remain deferred to WS04-01D "
+            "budget_model.telemetry_plan must remain deferred to final_production_database_verification "
             "in provider-independent template"
         )
 
@@ -721,16 +721,16 @@ def _validate_provider_independent_template(
             f"role_grant_contract.role_classes.{role_class}",
             errors,
         )
-        if entry.get("state") != "deferred_to_ws04_01d":
+        if entry.get("state") != "deferred_to_final_production_verification":
             errors.append(
                 f"role_grant_contract.role_classes.{role_class} must remain "
-                "deferred to WS04-01D in provider-independent template"
+                "deferred to final_production_database_verification in provider-independent template"
             )
     if contract.get("final_evidence"):
-        errors.append("role_grant_contract.final_evidence must not be populated before WS04-01D")
+        errors.append("role_grant_contract.final_evidence must not be populated before final_production_database_verification")
 
 
-def _validate_ws04_01d_final_evidence(
+def _validate_final_production_evidence(
     record: Mapping[str, Any],
     metadata: Mapping[str, Any],
     topology: Mapping[str, Any],
@@ -813,13 +813,13 @@ def _require_deferred_null(value: Any, path: str, errors: list[str]) -> None:
         errors.append(f"{path} must be an object")
         return
     state = value.get("state", value.get("evidence_state"))
-    if state != "deferred_to_ws04_01d":
+    if state != "deferred_to_final_production_verification":
         errors.append(
-            f"{path} must remain deferred to WS04-01D in "
+            f"{path} must remain deferred to final_production_database_verification in "
             "provider-independent template"
         )
     if value.get("value") is not None:
-        errors.append(f"{path}.value must be null before WS04-01D")
+        errors.append(f"{path}.value must be null before final_production_database_verification")
 
 
 def _require_verified_value(
@@ -908,7 +908,7 @@ def _stateful_field_is_populated(value: Any) -> bool:
         return False
     if state == "not_applicable":
         return _non_empty_text(value.get("reason"))
-    if state in {"blocked", "deferred_to_ws04_01d", "stale", "unverified"}:
+    if state in {"blocked", "deferred_to_final_production_verification", "stale", "unverified"}:
         return _non_empty_text(value.get("reason")) or _non_empty_text(value.get("open_gap")) or "value" in value
 
     field_value = value.get("value", value.get("safe_alias"))
@@ -925,7 +925,7 @@ def _evidence_metadata_present(value: Any) -> bool:
         "date_collected",
         "reviewer",
         "purpose",
-        "supported_control_or_pass",
+        "supported_control",
         "sanitized_evidence_reference",
     )
     return all(_non_empty_text(value.get(field)) for field in required)

@@ -62,7 +62,7 @@ IDENTITY_OWNED_FIELDS = {
 
 
 def _active_routes() -> list[APIRoute]:
-    import backend.main as main
+    from backend import main
 
     return [
         route
@@ -97,7 +97,7 @@ def _route_has_any_auth_dependency(route: APIRoute) -> bool:
     dependency_names = _dependency_call_names(route)
     return any(
         name in dependency_names
-        for name in {
+        for name in (
             "get_current_app_user",
             "get_optional_current_app_user",
             "get_synced_current_app_user",
@@ -107,7 +107,7 @@ def _route_has_any_auth_dependency(route: APIRoute) -> bool:
             "require_active_admin",
             "require_recent_active_admin",
             "require_verified_user",
-        }
+        )
     )
 
 
@@ -121,7 +121,7 @@ def _classify_route(route: APIRoute, method: str) -> str:
         return "admin route: current verified active admin dependency"
 
     if path.startswith("/auth"):
-        return "auth bootstrap/account lifecycle route with provider identity boundary"
+        return "auth bootstrap/account lifecycle route with Firebase identity boundary"
 
     if path == "/users/me":
         return "ordinary self profile setup/read route"
@@ -163,11 +163,11 @@ def _classify_route(route: APIRoute, method: str) -> str:
         if _has_dependency(route, "require_verified_user"):
             return "verified-email-required mutation"
 
-    raise AssertionError(f"Unclassified WS03-01 route candidate: {method} {path}")
+    raise AssertionError(f"Unclassified identity-authority route candidate: {method} {path}")
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_ws03_route_inventory_classifies_identity_relevant_routes_and_dependencies() -> None:
+def test_route_inventory_classifies_identity_relevant_routes_and_dependencies() -> None:
     classifications: dict[tuple[str, str], str] = {}
 
     for route in _active_routes():

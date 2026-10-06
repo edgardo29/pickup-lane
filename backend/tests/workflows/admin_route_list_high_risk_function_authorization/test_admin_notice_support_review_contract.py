@@ -17,7 +17,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
 )
 
 
-
 def _platform_notice_state(notice_id: uuid.UUID) -> dict[str, object]:
     from backend.models import PlatformNotice
 
@@ -91,7 +90,7 @@ def _persist_admin_action_fixture(
             target_support_flag_id=support_flag_id,
             target_review_case_id=review_case_id,
             reason="Local admin read/list action fixture.",
-            idempotency_key=f"ws03d-read-action-{uuid.uuid4()}",
+            idempotency_key=f"admin_authorization-read-action-{uuid.uuid4()}",
             created_at=datetime.now(timezone.utc),
         )
         db.add(admin_action)
@@ -170,7 +169,7 @@ def test_platform_notice_create_requires_recent_admin_and_scopes_recipients(
     stale_response = client.post(
         "/admin/platform-notices",
         json={
-            "idempotency_key": f"ws03d-notice-stale-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-notice-stale-{uuid.uuid4()}",
             "title": "Local authorization notice",
             "message": "This stale admin request must not publish.",
             "audience_type": "selected_users",
@@ -185,7 +184,7 @@ def test_platform_notice_create_requires_recent_admin_and_scopes_recipients(
     response = client.post(
         "/admin/platform-notices",
         json={
-            "idempotency_key": f"ws03d-notice-create-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-notice-create-{uuid.uuid4()}",
             "title": "Local authorization notice",
             "message": "This notice is scoped to one selected local test user.",
             "audience_type": "selected_users",
@@ -403,7 +402,7 @@ def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
         f"/admin/review-cases/{review_case_id}/notes",
         json={
             "body": "Ordinary users must not add review notes.",
-            "idempotency_key": f"ws03d-ordinary-review-note-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-ordinary-review-note-{uuid.uuid4()}",
         },
         headers=_auth_headers("ordinary-token"),
     )
@@ -433,7 +432,7 @@ def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
         f"/admin/review-cases/{review_case_id}/notes",
         json={
             "body": "Active admin review note.",
-            "idempotency_key": f"ws03d-review-note-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-review-note-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -454,7 +453,7 @@ def test_support_and_review_mutations_are_admin_only_and_persist_audit_state(
             "outcome": "no_action_needed",
             "reason": "Close local review case after admin review.",
             "expected_case_version": 2,
-            "idempotency_key": f"ws03d-review-close-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-review-close-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )

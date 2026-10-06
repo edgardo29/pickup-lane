@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -53,6 +54,45 @@ _FRONTEND_IGNORED_PARTS = frozenset(
 _FRONTEND_TEXT_SUFFIXES = frozenset(
     {".css", ".env", ".example", ".html", ".js", ".json", ".jsx", ".md", ".ts", ".tsx"}
 )
+_RUNTIME_MODULE_PREFIXES = (
+    "backend.database",
+    "backend.database_metadata",
+    "backend.main",
+    "backend.models",
+)
+
+
+@pytest.fixture(autouse=True)
+def _restore_runtime_modules_after_test():
+    """Keep configuration import tests from replacing suite-wide module identities."""
+    import backend
+
+    loaded_modules = {
+        name: module
+        for name, module in sys.modules.items()
+        if any(
+            name == prefix or name.startswith(f"{prefix}.")
+            for prefix in _RUNTIME_MODULE_PREFIXES
+        )
+    }
+    missing = object()
+    package_attributes = {
+        name: getattr(backend, name, missing)
+        for name in ("database", "database_metadata", "main", "models")
+    }
+    yield
+    for name in tuple(sys.modules):
+        if any(
+            name == prefix or name.startswith(f"{prefix}.")
+            for prefix in _RUNTIME_MODULE_PREFIXES
+        ):
+            sys.modules.pop(name, None)
+    sys.modules.update(loaded_modules)
+    for name, value in package_attributes.items():
+        if value is missing:
+            backend.__dict__.pop(name, None)
+        else:
+            setattr(backend, name, value)
 
 
 def _settings_env(
@@ -219,10 +259,7 @@ def _reload_database_module(
 ) -> ModuleType:
     _install_environment(monkeypatch, env)
     sys.modules.pop("backend.database", None)
-
-    import backend.database as database
-
-    return database
+    return importlib.import_module("backend.database")
 
 
 def _dispose_database_module(database: ModuleType) -> None:
@@ -411,8 +448,8 @@ def test_application_engine_uses_configured_pool_values(
         assert database.DATABASE_POOL_SETTINGS.pool_size == 3
         assert database.DATABASE_POOL_SETTINGS.max_overflow == 1
         assert database.engine.pool.size() == 3
-        assert getattr(database.engine.pool, "_max_overflow") == 1
-        assert getattr(database.engine.pool, "_timeout") == 4
+        assert database.engine.pool._max_overflow == 1
+        assert database.engine.pool._timeout == 4
         assert database.engine.pool.checkedout() == 0
     finally:
         _dispose_database_module(database)
@@ -512,8 +549,9 @@ def test_request_session_closes_on_cancellation_without_reclassification(
 def test_database_health_failure_response_remains_generic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.main as main_module
     from fastapi.testclient import TestClient
+
+    import backend.main as main_module
 
     private_error = "database failed at private-db.example.invalid"
 
@@ -584,8 +622,8 @@ def test_model_metadata_loads_complete_model_set_without_application_engine() ->
     sys.modules.pop("backend.database", None)
     sys.modules.pop("backend.database_metadata", None)
 
-    import backend.database_metadata as metadata_module
-    import backend.models as models
+    metadata_module = importlib.import_module("backend.database_metadata")
+    models = importlib.import_module("backend.models")
 
     assert "backend.database" not in sys.modules
 

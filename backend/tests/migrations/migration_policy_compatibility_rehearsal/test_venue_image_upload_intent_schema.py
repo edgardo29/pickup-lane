@@ -12,7 +12,7 @@ from backend.tests.support.migration_test_database import (
 pytestmark = pytest.mark.migration_lifecycle
 
 
-@pytest.mark.pass_provenance('WS06-01')
+@pytest.mark.pass_provenance("WS06-01", "WS06-02")
 def test_venue_image_upload_intent_schema_matches_model(migration_database) -> None:
     run_alembic_upgrade("head")
     inspector = inspect(migration_database.engine)
@@ -28,6 +28,7 @@ def test_venue_image_upload_intent_schema_matches_model(migration_database) -> N
         for constraint in VenueImage.__table__.constraints
         if isinstance(constraint, CheckConstraint)
     }
+    indexes = {index["name"]: index for index in inspector.get_indexes("venue_images")}
 
     assert columns["upload_expires_at"]["nullable"] is True
     assert columns["upload_expires_at"]["type"].timezone is True
@@ -38,5 +39,26 @@ def test_venue_image_upload_intent_schema_matches_model(migration_database) -> N
     assert model_checks["ck_venue_images_pending_upload_intent"] == (
         "image_status <> 'pending_upload' OR "
         "(upload_expires_at IS NOT NULL AND upload_completed_at IS NULL)"
+    )
+    assert {
+        "publication_object_key",
+        "publication_content_type",
+        "publication_size_bytes",
+        "publication_etag",
+        "upload_completed_at",
+    }.issubset(columns)
+    assert {
+        "ck_venue_images_publication_tuple_complete",
+        "ck_venue_images_publication_status",
+        "ck_venue_images_publication_content_type",
+        "ck_venue_images_publication_size_bytes",
+        "ck_venue_images_publication_object_key_not_empty",
+        "ck_venue_images_publication_etag_not_empty",
+    }.issubset(checks)
+    publication_index = indexes["uq_venue_images_publication_object_key"]
+    assert publication_index["unique"] is True
+    assert publication_index["column_names"] == ["publication_object_key"]
+    assert "publication_object_key IS NOT NULL" in str(
+        publication_index["dialect_options"]["postgresql_where"]
     )
     assert model_schema_drift(migration_database.engine) == ()

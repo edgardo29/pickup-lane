@@ -154,13 +154,13 @@ def _stable_error_code(outcome: AppCheckVerificationOutcome) -> str | None:
         return APP_CHECK_REQUIRED_CODE
     if outcome is AppCheckVerificationOutcome.INVALID:
         return APP_CHECK_INVALID_CODE
-    if outcome is AppCheckVerificationOutcome.PROVIDER_UNAVAILABLE:
+    if outcome is AppCheckVerificationOutcome.FIREBASE_UNAVAILABLE:
         return APP_CHECK_UNAVAILABLE_CODE
     return None
 
 
 def _denial_response(outcome: AppCheckVerificationOutcome) -> Response:
-    if outcome is AppCheckVerificationOutcome.PROVIDER_UNAVAILABLE:
+    if outcome is AppCheckVerificationOutcome.FIREBASE_UNAVAILABLE:
         return public_error_response(
             status_code=503,
             code=APP_CHECK_UNAVAILABLE_CODE,

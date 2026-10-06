@@ -39,7 +39,7 @@ def _resolve_dotted_object(dotted_path: str) -> object:
     raise import_errors[-1] if import_errors else ModuleNotFoundError(dotted_path)
 
 
-@pytest.mark.pass_provenance('WS04-02A')
+@pytest.mark.pass_provenance('WS04-02A', 'WS06-02')
 def test_current_side_effecting_workflows_are_declared_with_complete_boundaries() -> None:
     policies = _policies_by_workflow()
 
@@ -74,7 +74,9 @@ def test_current_side_effecting_workflows_are_declared_with_complete_boundaries(
         "account_deletion.saved_card_cleanup",
         "account_deletion.firebase_delete",
         "unfinished_account.firebase_cleanup",
-        "r2.venue_image_metadata",
+        "r2.venue_image_download",
+        "r2.venue_image_publish",
+        "r2.venue_image_cleanup",
         "notifications.local_rows",
         "platform_notice.publish",
         "support.local_flags",
@@ -92,7 +94,7 @@ def test_current_side_effecting_workflows_are_declared_with_complete_boundaries(
         assert policy.recovery_path
 
 
-@pytest.mark.pass_provenance('WS04-02A')
+@pytest.mark.pass_provenance('WS04-02A', 'WS06-02')
 def test_provider_backed_transaction_contexts_define_pre_effect_boundaries() -> None:
     assert boundary_policy.provider_retry_contexts() == {
         "saved_card_setup_sync",
@@ -122,7 +124,9 @@ def test_provider_backed_transaction_contexts_define_pre_effect_boundaries() -> 
         "app_check_request_verification",
         "authenticated_token_user_lookup",
         "email_availability_lookup",
-        "venue_image_metadata_verification",
+        "venue_image_staging_download",
+        "venue_image_publication",
+        "venue_image_object_cleanup",
     }
 
     for policy in boundary_policy.TRANSACTION_BOUNDARY_POLICIES:
@@ -163,6 +167,23 @@ def test_checkout_and_publish_create_policies_require_committed_checkpoints() ->
     assert "reconciliation" in publish_boundary.recovery_path
 
 
+@pytest.mark.pass_provenance("WS06-02")
+def test_r2_object_boundaries_have_exact_retry_safety_classes() -> None:
+    policies = _policies_by_workflow()
+    assert policies["r2.venue_image_download"].operation_class == (
+        boundary_policy.ExternalOperationClass.STORAGE_OBJECT_DEPENDENCY
+    )
+    assert policies["r2.venue_image_publish"].operation_class == (
+        boundary_policy.ExternalOperationClass.NO_AUTOMATIC_RETRY_MUTATION
+    )
+    assert policies["r2.venue_image_cleanup"].operation_class == (
+        boundary_policy.ExternalOperationClass.IDEMPOTENT_PROVIDER_MUTATION
+    )
+    assert "never reused" in policies[
+        "r2.venue_image_publish"
+    ].timeout_or_unknown_outcome
+
+
 @pytest.mark.pass_provenance('WS04-02A')
 def test_plan_named_waitlist_late_refund_and_unfinished_cleanup_paths_are_reconciled() -> None:
     policies = _policies_by_workflow()
@@ -181,7 +202,7 @@ def test_plan_named_waitlist_late_refund_and_unfinished_cleanup_paths_are_reconc
     )
     assert "unknown Firebase outcome" in unfinished_cleanup.timeout_or_unknown_outcome
     assert "Duplicate cleanup reuses Firebase identity" in unfinished_cleanup.recovery_path
-    assert unfinished_cleanup.downstream_owner == "WS05"
+    assert unfinished_cleanup.downstream_owner == "account_cleanup"
 
 
 @pytest.mark.pass_provenance('WS04-02A')

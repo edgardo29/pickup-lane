@@ -8,8 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-
-def _provider_payload(
+def _firebase_payload(
     *,
     uid: str = "firebase-user",
     email: str = "verified-policy@example.invalid",
@@ -23,16 +22,16 @@ def _provider_payload(
     }
 
 
-def _install_provider_identity(
+def _install_firebase_identity(
     monkeypatch: pytest.MonkeyPatch,
     *,
     uid: str = "firebase-user",
     email: str = "verified-policy@example.invalid",
     email_verified: bool,
 ) -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
-    payload = _provider_payload(uid=uid, email=email, email_verified=email_verified)
+    payload = _firebase_payload(uid=uid, email=email, email_verified=email_verified)
 
     def verify_token(token: str) -> dict[str, object]:
         if token != "valid-token":
@@ -252,7 +251,7 @@ def _community_game_detail_state(game_id: uuid.UUID) -> dict[str, object]:
         ("admin entry", "GET", "/admin/me", None, "admin"),
     ],
 )
-def test_current_provider_unverified_state_denies_sensitive_route_families_and_clears_stale_snapshot(
+def test_current_firebase_unverified_state_denies_sensitive_route_families_and_clears_stale_snapshot(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     name: str,
@@ -262,7 +261,7 @@ def test_current_provider_unverified_state_denies_sensitive_route_families_and_c
     role: str,
 ) -> None:
     del name
-    _install_provider_identity(monkeypatch, email_verified=False)
+    _install_firebase_identity(monkeypatch, email_verified=False)
     user_id = _create_user(
         role=role,
         email_verified_at=datetime.now(timezone.utc),
@@ -281,13 +280,13 @@ def test_current_provider_unverified_state_denies_sensitive_route_families_and_c
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_current_provider_verified_host_can_update_community_game_detail_host_edit(
+def test_current_firebase_verified_host_can_update_community_game_detail_host_edit(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     auth_user_id = "verified-community-host"
     email = "verified-community-host@example.invalid"
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid=auth_user_id,
         email=email,
@@ -318,13 +317,13 @@ def test_current_provider_verified_host_can_update_community_game_detail_host_ed
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_current_provider_unverified_state_denies_community_host_edit_and_preserves_detail(
+def test_current_firebase_unverified_state_denies_community_host_edit_and_preserves_detail(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     auth_user_id = "unverified-community-host"
     email = "unverified-community-host@example.invalid"
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid=auth_user_id,
         email=email,
@@ -351,11 +350,11 @@ def test_current_provider_unverified_state_denies_community_host_edit_and_preser
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_current_provider_verified_state_restores_missing_snapshot_and_authorizes_admin_path(
+def test_current_firebase_verified_state_restores_missing_snapshot_and_authorizes_admin_path(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(monkeypatch, email_verified=True)
+    _install_firebase_identity(monkeypatch, email_verified=True)
     user_id = _create_user(role="admin", email_verified_at=None)
 
     response = client.get("/admin/me", headers=_auth_headers())
@@ -384,11 +383,11 @@ def test_public_and_optional_auth_reads_do_not_require_verified_email(
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_unverified_provider_identity_can_use_bootstrap_auth_sync_without_snapshot_authority(
+def test_unverified_firebase_identity_can_use_bootstrap_auth_sync_without_snapshot_authority(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid="bootstrap-uid",
         email="bootstrap-user@example.invalid",
@@ -413,7 +412,7 @@ def test_unverified_user_can_update_allowed_profile_setup_fields(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(monkeypatch, email_verified=False)
+    _install_firebase_identity(monkeypatch, email_verified=False)
     user_id = _create_user(email_verified_at=None)
 
     response = client.patch(
@@ -433,7 +432,7 @@ def test_active_user_read_and_status_surfaces_are_not_verified_mutation_gates(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(monkeypatch, email_verified=False)
+    _install_firebase_identity(monkeypatch, email_verified=False)
     _create_user(email_verified_at=None)
 
     my_games_response = client.get("/my-games", headers=_auth_headers())

@@ -7,8 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-
-def _provider_payload(
+def _firebase_payload(
     *,
     uid: str = "firebase-user",
     email: str = "Current.Email@example.invalid",
@@ -30,10 +29,10 @@ def _install_token_verifier(
     *,
     payload: dict[str, object] | None = None,
 ) -> list[str]:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     calls: list[str] = []
-    token_payload = payload or _provider_payload()
+    token_payload = payload or _firebase_payload()
 
     def verify_token(token: str) -> dict[str, object]:
         calls.append(token)
@@ -127,14 +126,14 @@ def test_provider_identity_is_established_before_local_user_authority(
 ) -> None:
     calls = _install_token_verifier(
         monkeypatch,
-        payload=_provider_payload(
-            uid="provider-uid",
-            email="provider-current@example.invalid",
+        payload=_firebase_payload(
+            uid="firebase-uid",
+            email="firebase-current@example.invalid",
             email_verified=True,
         ),
     )
     user_id = _create_user(
-        auth_user_id="provider-uid",
+        auth_user_id="firebase-uid",
         email="local-snapshot@example.invalid",
     )
 
@@ -147,13 +146,13 @@ def test_provider_identity_is_established_before_local_user_authority(
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_valid_provider_token_alone_cannot_grant_local_access(
+def test_valid_firebase_token_alone_cannot_grant_local_access(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_token_verifier(
         monkeypatch,
-        payload=_provider_payload(uid="missing-local-user"),
+        payload=_firebase_payload(uid="missing-local-user"),
     )
 
     response = client.get("/users/me", headers=_auth_headers())
@@ -196,7 +195,7 @@ def test_local_account_state_is_applied_after_provider_identity(
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_request_scoped_identity_is_sanitized_from_raw_provider_claims(
+def test_request_scoped_identity_is_sanitized_from_raw_firebase_claims(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.services.auth_service import (
@@ -207,14 +206,14 @@ def test_request_scoped_identity_is_sanitized_from_raw_provider_claims(
 
     _install_token_verifier(
         monkeypatch,
-        payload=_provider_payload(
+        payload=_firebase_payload(
             uid="firebase-user",
             email="MIXED.CASE@example.invalid",
             email_verified=True,
             admin=True,
             role="admin",
             permissions=["*"],
-            raw_provider_claim="not-business-authority",
+            raw_firebase_claim="not-business-authority",
         ),
     )
 
@@ -226,7 +225,7 @@ def test_request_scoped_identity_is_sanitized_from_raw_provider_claims(
         email="mixed.case@example.invalid",
         email_verified=True,
         authenticated_at=datetime.fromtimestamp(1_700_000_000, tz=timezone.utc),
-        provider_account_active=True,
+        firebase_account_active=True,
     )
     assert not hasattr(identity, "admin")
     assert set(decoded) == {"uid", "email", "email_verified"}

@@ -1,6 +1,6 @@
 # Frontend Structure
 
-This document defines the authoritative rules for frontend file placement,
+This document defines the repository rules for frontend file placement,
 responsibility, dependency direction, and architectural ownership in Pickup
 Lane.
 
@@ -10,7 +10,7 @@ frontend files.
 Also read:
 
 * the relevant feature documentation before changing product behavior
-* applicable product or feature authority before changing visual design or
+* applicable product or feature requirements before changing visual design or
   interaction patterns
 * existing shared frontend components and current style/interaction conventions
   before changing visual design or interaction patterns
@@ -38,7 +38,7 @@ frontend/
 │   ├── data/               Shared static reference data
 │   ├── features/           Domain UI and workflows shared by multiple pages
 │   ├── hooks/              Hooks shared across unrelated features
-│   ├── lib/                API, provider, and external-service infrastructure
+│   ├── lib/                API and external-service infrastructure
 │   ├── pages/              Route-level feature folders and page components
 │   ├── routes/             Route registration, guards, and route utilities
 │   ├── styles/             Global, shared, admin, and route-feature styles
@@ -55,7 +55,7 @@ Continue using these locations.
 Do not create a new top-level frontend directory or architectural layer unless
 none of the existing locations can clearly own the responsibility.
 
-A new architectural layer requires an explicit project-level decision.
+A new architectural layer requires an explicit owner decision.
 
 The following are generated or dependency folders, not source folders:
 
@@ -77,7 +77,7 @@ Use the narrowest correct owner:
 4. UI shared across unrelated domains belongs in `components/`.
 5. Hooks shared across unrelated domains belong in `hooks/`.
 6. Application-wide state belongs in `context/`.
-7. Shared API, provider, and external-service infrastructure belongs in `lib/`.
+7. Shared API and external-service infrastructure belongs in `lib/`.
 8. Route declarations and guards belong in `routes/`.
 9. Shared static reference data belongs in `data/`.
 10. Create a new file or directory only when no existing owner is appropriate.
@@ -204,7 +204,7 @@ not merely because the provider file is long.
 `frontend/src/lib/` owns low-level, broadly reusable infrastructure such as:
 
 * the shared API client
-* provider initialization
+* external-service initialization
 * external SDK initialization
 * shared transport behavior
 * shared authentication transport
@@ -217,12 +217,12 @@ the workflow.
 Keep API request functions separate from React rendering and display
 formatting.
 
-Use existing shared clients and provider initialization.
+Use existing shared clients and external-service initialization.
 
 Do not create:
 
 * duplicate API clients
-* duplicate provider setup
+* duplicate external-service setup
 * feature-specific fetch wrappers that bypass shared infrastructure
 * wrappers that merely rename one existing call
 * generic `services.js`, `utils.js`, or `helpers.js` dumping grounds
@@ -252,8 +252,8 @@ Route configuration should import page entry points and shared guards.
 Keep product UI, form behavior, and substantial data workflows out of route
 configuration.
 
-Route guards may decide whether the frontend permits entry to a page. Backend
-authorization remains authoritative.
+Route guards may decide whether the frontend permits entry to a page. The
+backend must still enforce authorization.
 
 Pages must not register themselves with the router.
 
@@ -292,7 +292,7 @@ Current style ownership:
 * `styles/<feature>/`: route-feature layout and component styles
 * `styles/admin/`: shared admin shell and admin feature styles
 * component-local CSS: portable shared components whose styles are part of the
-  component's reusable contract
+  component's reusable interface
 
 Global CSS is loaded from `main.jsx`.
 
@@ -312,11 +312,11 @@ difficult to navigate.
 
 Detailed visual rules, spacing, colors, typography, controls, modals,
 responsive behavior, and design-system requirements must come from applicable
-product/feature authority, existing shared frontend components, existing
+product or feature requirements, existing shared frontend components, existing
 style/interaction conventions, and applicable frontend structure/testing
-standards. No separate tracked global visual-style authority currently exists
+standards. No separate tracked global visual-style requirement currently exists
 in this repository. If a change needs a new global UI or design rule, do not
-invent it silently; resolve it through the project process.
+invent it silently; obtain an explicit owner decision.
 
 ## Files, Folders, And Naming
 
@@ -455,7 +455,7 @@ Do not place production modules in the test package.
 
 ## Scope Discipline
 
-Keep each implementation limited to the approved task.
+Keep each implementation limited to the current instruction.
 
 Do not mix unrelated:
 
@@ -479,7 +479,7 @@ Before editing frontend code:
 
 1. Read this document.
 2. Read the relevant feature documentation.
-3. For visual or interaction changes, read applicable product/feature authority
+3. For visual or interaction changes, read applicable product or feature requirements
    and inspect existing shared frontend components plus current
    style/interaction conventions.
 4. Confirm relevant command and testing requirements from dedicated testing
@@ -500,7 +500,7 @@ Before considering the structural portion complete, confirm:
 * feature-specific code remains local
 * shared code has real reuse and one clear owner
 * shared modules do not depend on page components
-* API and provider infrastructure have not been duplicated
+* API and external-service infrastructure have not been duplicated
 * global state has not absorbed feature-local behavior
 * styles remain with the narrowest correct owner
 * existing app shell, API client, style system, icons, and skeleton primitives

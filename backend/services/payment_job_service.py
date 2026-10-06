@@ -1,4 +1,4 @@
-"""Production durable-job registry and WS05-02 payment consumers."""
+"""Production durable-job registry and payment lifecycle consumers."""
 
 from __future__ import annotations
 

@@ -25,7 +25,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
 )
 
 
-
 def _persist_notification_fixture(*, recipient: Any) -> uuid.UUID:
     from backend.models import Notification
 
@@ -44,7 +43,7 @@ def _persist_notification_fixture(*, recipient: Any) -> uuid.UUID:
             body="Local account security notice body.",
             action_key="view_profile",
             event_at=now,
-            aggregation_key=f"ws03d-admin-notification-{uuid.uuid4()}",
+            aggregation_key=f"admin_authorization-admin-notification-{uuid.uuid4()}",
             actor_user_id=None,
             is_read=False,
             read_at=None,

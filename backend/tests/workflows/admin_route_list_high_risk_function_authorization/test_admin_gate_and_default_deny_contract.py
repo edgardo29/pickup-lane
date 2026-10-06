@@ -19,7 +19,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
 )
 
 
-
 @dataclass(frozen=True)
 class _StaleRecentAdminCase:
     method: str
@@ -95,7 +94,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             {
                 "preview_token": preview_token,
                 "reason": "Stale admin must not delete user accounts.",
-                "idempotency_key": f"ws03d-stale-delete-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-delete-{uuid.uuid4()}",
             },
             "user deletion",
         ),
@@ -106,7 +105,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             {
                 "preview_token": preview_token,
                 "reason": "Stale admin must not suspend accounts.",
-                "idempotency_key": f"ws03d-stale-suspend-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-suspend-{uuid.uuid4()}",
             },
             "account suspension",
         ),
@@ -116,7 +115,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             f"/admin/users/{target_user_id}/unsuspend",
             {
                 "reason": "Stale admin must not unsuspend accounts.",
-                "idempotency_key": f"ws03d-stale-unsuspend-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-unsuspend-{uuid.uuid4()}",
             },
             "account unsuspension",
         ),
@@ -127,7 +126,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             {
                 "preview_token": preview_token,
                 "reason": "Stale admin must not restrict hosting.",
-                "idempotency_key": f"ws03d-stale-hosting-restrict-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-hosting-restrict-{uuid.uuid4()}",
             },
             "hosting restriction",
         ),
@@ -137,7 +136,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             f"/admin/users/{target_user_id}/restore-hosting",
             {
                 "reason": "Stale admin must not restore hosting.",
-                "idempotency_key": f"ws03d-stale-hosting-restore-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-hosting-restore-{uuid.uuid4()}",
             },
             "hosting restoration",
         ),
@@ -148,7 +147,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             {
                 "role": "admin",
                 "reason": "Stale admin must not alter roles.",
-                "idempotency_key": f"ws03d-stale-role-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-role-{uuid.uuid4()}",
             },
             "role change",
         ),
@@ -158,7 +157,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             f"/admin/community-games/{route_id}/cancel",
             {
                 "reason": "Stale admin must not cancel community games.",
-                "idempotency_key": f"ws03d-stale-community-cancel-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-community-cancel-{uuid.uuid4()}",
             },
             "community-game cancellation",
         ),
@@ -186,7 +185,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             f"/admin/need-a-sub/{route_id}/remove",
             {
                 "reason": "Stale admin must not remove Need a Sub posts.",
-                "idempotency_key": f"ws03d-stale-sub-remove-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-sub-remove-{uuid.uuid4()}",
             },
             "Need a Sub removal",
         ),
@@ -198,7 +197,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
                 "user_id": str(target_user_id),
                 "amount_cents": 500,
                 "credit_reason": "admin_credit",
-                "idempotency_key": f"ws03d-stale-credit-issue-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-credit-issue-{uuid.uuid4()}",
                 "note": "Stale admin must not issue credits.",
             },
             "game-credit issue",
@@ -208,7 +207,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             "/admin/game-credits/{game_credit_id}/reverse",
             f"/admin/game-credits/{route_id}/reverse",
             {
-                "idempotency_key": f"ws03d-stale-credit-reverse-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-credit-reverse-{uuid.uuid4()}",
                 "note": "Stale admin must not reverse credits.",
             },
             "game-credit reversal",
@@ -220,7 +219,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             {
                 "outcome": "no_fee_charged",
                 "reason": "Stale admin must not create financial outcomes.",
-                "idempotency_key": f"ws03d-stale-financial-outcome-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-financial-outcome-{uuid.uuid4()}",
                 "host_user_id": str(target_user_id),
                 "amount_cents": 0,
             },
@@ -234,7 +233,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
                 "outcome": "forfeit",
                 "reason": "Stale admin must not resolve financial outcomes.",
                 "amount_cents": 500,
-                "idempotency_key": f"ws03d-stale-outcome-resolve-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-outcome-resolve-{uuid.uuid4()}",
             },
             "financial outcome resolution",
         ),
@@ -245,7 +244,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             {
                 "resolution_reason_code": "handled_externally",
                 "resolution_note": "Stale admin must not resolve money issues.",
-                "idempotency_key": f"ws03d-stale-money-resolve-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-money-resolve-{uuid.uuid4()}",
             },
             "money issue resolution",
         ),
@@ -255,7 +254,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             f"/admin/money/issues/{route_id}/retry-credit",
             {
                 "reason": "Stale admin must not retry credit repair.",
-                "idempotency_key": f"ws03d-stale-money-retry-credit-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-money-retry-credit-{uuid.uuid4()}",
             },
             "money issue credit retry",
         ),
@@ -265,7 +264,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             f"/admin/money/refunds/{route_id}/retry",
             {
                 "reason": "Stale admin must not retry refunds.",
-                "idempotency_key": f"ws03d-stale-refund-retry-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-refund-retry-{uuid.uuid4()}",
             },
             "refund retry",
         ),
@@ -275,7 +274,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             f"/admin/money/refunds/{route_id}/reconcile",
             {
                 "reason": "Stale admin must not reconcile refunds.",
-                "idempotency_key": f"ws03d-stale-refund-reconcile-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-refund-reconcile-{uuid.uuid4()}",
             },
             "refund reconciliation",
         ),
@@ -294,7 +293,7 @@ def _stale_recent_admin_cases(target_user_id: uuid.UUID) -> list[_StaleRecentAdm
             "/admin/platform-notices",
             "/admin/platform-notices",
             {
-                "idempotency_key": f"ws03d-stale-notice-create-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-stale-notice-create-{uuid.uuid4()}",
                 "title": "Stale notice",
                 "message": "This stale admin request must not publish.",
                 "audience_type": "selected_users",
@@ -394,7 +393,7 @@ def test_stale_admin_recent_auth_denial_does_not_change_target_role_or_audit_row
         json={
             "role": "admin",
             "reason": "Recent admin authentication is required.",
-            "idempotency_key": f"ws03d-stale-role-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-stale-role-{uuid.uuid4()}",
         },
         headers=_auth_headers("stale-admin-token"),
     )

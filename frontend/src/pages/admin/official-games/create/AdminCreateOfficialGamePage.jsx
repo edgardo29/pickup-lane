@@ -17,7 +17,7 @@ import {
   assertAdminVenueImageUploadsReady,
   createAdminOfficialGame,
   getAdminOfficialGame,
-  uploadAdminVenueImage,
+  uploadAdminVenueImagesSequentially,
 } from '../shared/adminOfficialGamesApi.js'
 
 const MAX_VENUE_PHOTOS = 3
@@ -197,17 +197,11 @@ function AdminCreateOfficialGameFlow() {
       return
     }
 
-    await Promise.all(
-      venuePhotos.map((photo, index) =>
-        uploadAdminVenueImage({
-          file: photo.file,
-          firebaseUser: currentUser,
-          isPrimary: index === 0,
-          sortOrder: index,
-          venueId,
-        }),
-      ),
-    )
+    await uploadAdminVenueImagesSequentially({
+      firebaseUser: currentUser,
+      photos: venuePhotos,
+      venueId,
+    })
   }
 
   async function handleCreateGame() {

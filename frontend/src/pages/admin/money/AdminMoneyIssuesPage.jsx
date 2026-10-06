@@ -33,7 +33,7 @@ const EMPTY_FILTERS = {
 
 const ISSUE_TYPE_OPTIONS = [
   { label: 'Any issue', value: '' },
-  { label: 'Refund missing provider reference', value: 'refund_missing_provider_reference' },
+  { label: 'Refund missing Stripe reference', value: 'refund_missing_provider_reference' },
   { label: 'Refund processing overdue', value: 'refund_processing_overdue' },
   { label: 'Refund failed', value: 'refund_failed' },
   { label: 'Refund cancelled', value: 'refund_cancelled' },

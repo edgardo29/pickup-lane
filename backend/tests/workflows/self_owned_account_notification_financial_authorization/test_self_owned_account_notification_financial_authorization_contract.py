@@ -13,7 +13,6 @@ import pytest
 from fastapi.routing import APIRoute
 from sqlalchemy import func, select
 
-
 REPO_ROOT = Path(__file__).resolve().parents[4]
 MATRIX_PATH = (
     REPO_ROOT
@@ -155,8 +154,8 @@ def _install_stripe_fake(
     def create_setup_intent(**kwargs: object) -> StripeSetupIntentResult:
         fake.setup_intents.append(dict(kwargs))
         return StripeSetupIntentResult(
-            id="seti_ws03_04b_setup",
-            client_secret="seti_secret_ws03_04b",
+            id="seti_self_owned_authorization_setup",
+            client_secret="seti_secret_self_owned_authorization",
             status="requires_payment_method",
             customer_id=str(kwargs["customer_id"]),
             payment_method_id=None,
@@ -169,7 +168,7 @@ def _install_stripe_fake(
             client_secret=None,
             status="succeeded",
             customer_id=fake.setup_intent_customer_id,
-            payment_method_id="pm_ws03_04b_synced",
+            payment_method_id="pm_self_owned_authorization_synced",
         )
 
     def retrieve_payment_method(payment_method_id: str) -> StripePaymentMethodCardResult:
@@ -178,7 +177,7 @@ def _install_stripe_fake(
             id=payment_method_id,
             customer_id=fake.payment_method_customer_id,
             card_fingerprint=fake.payment_method_fingerprints.get(
-                payment_method_id, "ws03-04b-synced-fingerprint"
+                payment_method_id, "self-owned-authorization-synced-fingerprint"
             ),
             card_brand="visa",
             card_last4="4242",
@@ -318,11 +317,11 @@ def _user(
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"firebase-ws03-04b-{index}-{unique}",
+        auth_user_id=f"firebase-self-owned-authorization-{index}-{unique}",
         role=role,
-        email=f"ws03-04b-{index}-{unique}@example.invalid",
+        email=f"self-owned-authorization-{index}-{unique}@example.invalid",
         email_verified_at=email_verified_at,
-        first_name=f"WS03B{index}",
+        first_name=f"SelfOwned{index}",
         last_name="User",
         account_status=account_status,
         hosting_status="eligible",
@@ -433,8 +432,8 @@ def _payment_method(
         id=uuid.uuid4(),
         user_id=user_id,
         stripe_customer_id=customer_id,
-        stripe_payment_method_id=f"pm_ws03_04b_{index}_{uuid.uuid4().hex}",
-        card_fingerprint=f"ws03-04b-fingerprint-{index}-{uuid.uuid4()}",
+        stripe_payment_method_id=f"pm_self_owned_authorization_{index}_{uuid.uuid4().hex}",
+        card_fingerprint=f"self-owned-authorization-fingerprint-{index}-{uuid.uuid4()}",
         card_brand="visa",
         card_last4=f"{index:04d}"[-4:],
         exp_month=12,
@@ -449,7 +448,7 @@ def _venue(created_by_user_id: uuid.UUID, index: int) -> Any:
 
     return Venue(
         id=uuid.uuid4(),
-        name=f"WS03B Venue {index}",
+        name=f"SelfOwned Venue {index}",
         address_line_1=f"{index} Test Ave",
         city="Chicago",
         state="IL",
@@ -481,9 +480,9 @@ def _community_game(
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title=f"WS03B Community Game {index}",
+        title=f"SelfOwned Community Game {index}",
         venue_id=venue_id,
-        venue_name_snapshot=f"WS03B Venue {index}",
+        venue_name_snapshot=f"SelfOwned Venue {index}",
         address_snapshot=f"{index} Test Ave",
         city_snapshot="Chicago",
         state_snapshot="IL",
@@ -526,9 +525,9 @@ def _payment(
         game_id=game_id,
         payment_type="community_publish_fee",
         provider="stripe",
-        provider_payment_intent_id=f"pi_ws03_04b_{index}_{uuid.uuid4().hex}",
-        provider_charge_id=f"ch_ws03_04b_{index}_{uuid.uuid4().hex}",
-        idempotency_key=f"ws03-04b-payment-{index}-{uuid.uuid4()}",
+        provider_payment_intent_id=f"pi_self_owned_authorization_{index}_{uuid.uuid4().hex}",
+        provider_charge_id=f"ch_self_owned_authorization_{index}_{uuid.uuid4().hex}",
+        idempotency_key=f"self-owned-authorization-payment-{index}-{uuid.uuid4()}",
         amount_cents=1200,
         currency="USD",
         payment_status="succeeded",
@@ -571,8 +570,8 @@ def _refund(
         financial_outcome_id=uuid.uuid4(),
         payment_id=payment_id,
         host_publish_fee_id=host_publish_fee_id,
-        provider_refund_id=f"re_ws03_04b_{index}_{uuid.uuid4().hex}",
-        provider_charge_id=f"ch_ref_ws03_04b_{index}_{uuid.uuid4().hex}",
+        provider_refund_id=f"re_self_owned_authorization_{index}_{uuid.uuid4().hex}",
+        provider_charge_id=f"ch_ref_self_owned_authorization_{index}_{uuid.uuid4().hex}",
         amount_cents=1200,
         refund_status="pending",
         requested_by_user_id=requested_by_user_id,
@@ -590,23 +589,23 @@ def _game_credit(user_id: uuid.UUID, index: int) -> Any:
         currency="USD",
         credit_status="active",
         credit_reason="admin_credit",
-        idempotency_key=f"ws03-04b-credit-{index}-{uuid.uuid4()}",
+        idempotency_key=f"self-owned-authorization-credit-{index}-{uuid.uuid4()}",
     )
 
 
 @pytest.mark.no_db_cleanup
 @pytest.mark.pass_provenance('WS03-04B')
-def test_matrix_scope_and_live_dependencies_match_b_authorization_boundary() -> None:
+def test_matrix_scope_and_live_dependencies_match_self_owned_authorization_boundary() -> None:
     matrix_routes = _flatten_matrix_routes()
     b_routes = {
         key: route
         for key, (family, route) in matrix_routes.items()
-        if family["primary_child_owner"] == "WS03-04B"
+        if family["primary_functional_owner"] == "self_owned_account_and_financial_authorization"
     }
     b_families = [
         family
         for family in _matrix()["route_families"]
-        if family["primary_child_owner"] == "WS03-04B"
+        if family["primary_functional_owner"] == "self_owned_account_and_financial_authorization"
     ]
 
     assert len(b_families) == 11
@@ -616,10 +615,10 @@ def test_matrix_scope_and_live_dependencies_match_b_authorization_boundary() -> 
 
     for key, route_entry in b_routes.items():
         family, _route = matrix_routes[key]
-        assert family["primary_child_owner"] == "WS03-04B"
-        assert route_entry["child_owner"] == "WS03-04B"
+        assert family["primary_functional_owner"] == "self_owned_account_and_financial_authorization"
+        assert route_entry["functional_owner"] == "self_owned_account_and_financial_authorization"
         assert route_entry["route_disposition"] == "protected"
-        assert route_entry["child_owner"] != "blocked"
+        assert route_entry["functional_owner"] != "blocked"
         assert "require_verified_user" not in json.dumps(route_entry["auth_dependencies"])
         assert "require_active_admin" not in json.dumps(route_entry["auth_dependencies"])
         assert _auth_dependencies(_current_route_map()[key]) == route_entry["auth_dependencies"]
@@ -727,9 +726,9 @@ def test_credential_status_and_recent_auth_denials_have_no_mutation_side_effects
 ) -> None:
     firebase_deletes: list[str] = []
     with _session() as db:
-        active_user = _user(3, stripe_customer_id="cus_ws03_04b_active")
+        active_user = _user(3, stripe_customer_id="cus_self_owned_authorization_active")
         suspended_user = _user(4, account_status="suspended")
-        active_card = _payment_method(active_user.id, "cus_ws03_04b_active", 1)
+        active_card = _payment_method(active_user.id, "cus_self_owned_authorization_active", 1)
         db.add_all([active_user, suspended_user, _settings(active_user.id), _stats(active_user.id), active_card])
         db.commit()
         active_user_id = active_user.id
@@ -756,7 +755,7 @@ def test_credential_status_and_recent_auth_denials_have_no_mutation_side_effects
             ),
         },
     )
-    fake = _install_stripe_fake(monkeypatch, setup_customer_id="cus_ws03_04b_active")
+    fake = _install_stripe_fake(monkeypatch, setup_customer_id="cus_self_owned_authorization_active")
 
     from backend.services import account_deletion_service
 
@@ -1061,10 +1060,10 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with _session() as db:
-        user = _user(9, stripe_customer_id="cus_ws03_04b_user")
-        other = _user(10, stripe_customer_id="cus_ws03_04b_other")
-        own_card = _payment_method(user.id, "cus_ws03_04b_user", 1)
-        other_card = _payment_method(other.id, "cus_ws03_04b_other", 2, is_default=True)
+        user = _user(9, stripe_customer_id="cus_self_owned_authorization_user")
+        other = _user(10, stripe_customer_id="cus_self_owned_authorization_other")
+        own_card = _payment_method(user.id, "cus_self_owned_authorization_user", 1)
+        other_card = _payment_method(other.id, "cus_self_owned_authorization_other", 2, is_default=True)
         db.add_all([user, other, own_card, other_card])
         db.commit()
         user_auth_id = user.auth_user_id
@@ -1087,8 +1086,8 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
     )
     fake = _install_stripe_fake(
         monkeypatch,
-        setup_customer_id="cus_ws03_04b_user",
-        payment_method_customer_id="cus_ws03_04b_user",
+        setup_customer_id="cus_self_owned_authorization_user",
+        payment_method_customer_id="cus_self_owned_authorization_user",
         payment_method_fingerprints={
             own_stripe_payment_method_id: own_card_fingerprint,
         },
@@ -1137,9 +1136,9 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
         json={"set_as_default": True},
     )
     assert setup_intent.status_code == 201
-    assert setup_intent.json()["client_secret"] == "seti_secret_ws03_04b"
+    assert setup_intent.json()["client_secret"] == "seti_secret_self_owned_authorization"
 
-    fake.setup_intent_customer_id = "cus_ws03_04b_other"
+    fake.setup_intent_customer_id = "cus_self_owned_authorization_other"
     rejected_sync = client.post(
         "/user-payment-methods/sync",
         headers=_mutation_headers("card-token"),
@@ -1169,7 +1168,7 @@ def test_saved_cards_enforce_owner_recent_auth_and_provider_customer_boundaries(
     assert detached.json()["method_status"] == "detached"
     assert repeated_detach.json()["method_status"] == "detached"
     assert fake.detached_payment_methods == [own_stripe_payment_method_id]
-    assert fake.cleared_customers == ["cus_ws03_04b_user"]
+    assert fake.cleared_customers == ["cus_self_owned_authorization_user"]
     assert fake.retrieved_payment_methods == [
         own_stripe_payment_method_id,
         own_stripe_payment_method_id,

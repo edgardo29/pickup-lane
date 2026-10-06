@@ -115,6 +115,10 @@ Work outside the pass should be mentioned only when necessary to make the scope
 boundary clear.
 
 State that boundary concisely. Do not repeat it throughout the document.
+When an applicable requirement or required external evidence must remain open beyond this
+pass, preserve the specific outstanding work and completion conditions as
+explained in Section 1. This narrow exception does not authorize a history of
+future passes or general project tracking.
 
 ---
 
@@ -133,7 +137,9 @@ Do not organize the plan around statements such as:
 A current deficiency may be mentioned briefly when it helps explain why the
 work exists.
 
-The plan should focus on the resulting behavior.
+The plan should focus on the resulting behavior. Do not omit recorded
+outstanding requirements or external evidence that determine which parts of
+that result can honestly be called complete.
 
 ---
 
@@ -167,7 +173,7 @@ in the pass.
 
 Introduce a new mechanism only when it is:
 
-1. required by the approved engineering scope; or
+1. required by the selected engineering scope; or
 2. necessary to satisfy a requirement of this pass.
 
 Every new setting, component, abstraction, dependency, validation rule,
@@ -184,7 +190,16 @@ more complete.
 The plan must contain an executable design.
 
 If current repository source can answer an important design question, inspect
-the source and resolve it before finalizing the plan.
+the source and resolve it before finalizing the plan. Resolve conflicts about
+what is required through the applicable requirement sources. Inspect accepted
+repository behavior and the current branch change set to understand existing
+implementation, compatibility, consequences, and mismatches. Existing behavior
+does not create a requirement merely because it exists, and current branch
+changes are unaccepted proposals that do not create requirements. Choose one
+coherent approach when the remaining choice is ordinary engineering. If the
+resolution genuinely requires an unavailable product, security, policy, or
+operational decision, stop and identify the exact decision rather than leaving
+it for implementation.
 
 Do not leave implementation with unnecessary alternatives such as:
 
@@ -264,7 +279,13 @@ That may include, when relevant:
 
 Include only what actually applies.
 
-Do not mechanically fill a generic engineering checklist.
+Do not mechanically fill a generic engineering checklist. For every affected
+set of operations, outcomes, states, configuration fields, database elements,
+policy rules, diagnostics, or other applicable items, account for every member
+in the appropriate requirements, design, failure, or testing section. Include
+members intentionally unchanged or inapplicable, with their actual treatment
+and reason. Group identical treatments only when every member is identified;
+do not add unrelated input combinations merely to increase the number of cases.
 
 ---
 
@@ -306,6 +327,12 @@ The completed engineering plan must not contain:
 
 Those belong in supporting workflow artifacts when required.
 
+An outstanding requirement or required external evidence is not
+unnecessary administration when it limits what this pass can complete. Retain
+its necessary engineering consequences and the recorded responsibility and
+completion conditions without adding requirement-ID tables or copying the
+execution register into the plan.
+
 The engineering plan contains only information that helps a developer
 understand, implement, test, or complete the work.
 
@@ -329,6 +356,14 @@ If important related work is outside the pass, state that boundary once here in
 plain language.
 
 Do not describe how that other work will be performed later.
+
+If the selected scope leaves mandatory work or external evidence outstanding,
+identify the exact unfinished requirement or external fact, its recorded responsible
+pass or owner, the prerequisite or trigger, and the latest required completion
+point. State why the current pass can finish safely while it remains open; if
+current correctness depends on that missing work, treat it as a blocker instead.
+Keep this account brief and do not present outstanding work as completed or
+verified.
 
 ---
 
@@ -366,6 +401,16 @@ Machine-readable artifacts may assign identifiers separately. They must preserve
 the engineering meaning defined here.
 
 Every requirement must be necessary to this pass.
+
+For each affected operation and each materially distinct outcome, state the
+required result and any result or side effect that must not occur. Account for
+every member of each affected set, including unchanged or genuinely
+inapplicable members, with an explicit treatment and reason. Include affected
+configurations, database elements, policies, diagnostic outputs, states, and
+interfaces when they are part of the selected scope. Shared implementation does
+not imply identical required behavior for every operation that uses it. Group
+members only if each is named and the shared treatment is unambiguous. Put
+implementation details in Design and verification details in Testing.
 
 ---
 
@@ -407,6 +452,16 @@ Do not introduce speculative engineering.
 
 Do not leave repository-answerable questions unresolved.
 
+For each applicable requirement, explain how the design treats every affected
+operation and its related callers, consumers, configuration, persisted data,
+policy rules, and diagnostics. Define relevant state changes, required and
+prohibited effects, failure handling, retries, recovery, concurrency, and
+timing where they affect correctness. When operations share a helper or service,
+check and describe the required result for each operation rather than assuming
+the helper makes their behavior identical. Every applicable requirement must have
+an executable design; do not leave implementation to decide an unspecified outcome or
+invent a necessary technical rule.
+
 Preserve existing behavior concisely where needed rather than creating a large
 section that repeats the overview and requirements.
 
@@ -428,6 +483,15 @@ Present each case as a numbered item:
    - **Condition:** [What triggers the case.]
    - **Required behavior:** [What the system must do.]
 ```
+
+Cover every applicable, materially distinct failure or boundary outcome for
+the affected operations, including malformed or incomplete external responses,
+unknown outcomes, partial progress, cancellation, recovery, retries,
+transaction uncertainty, concurrent operations, and time boundaries when
+relevant. Specify the required behavior and prohibited side effects of each
+case. Do not treat a shared error handler as verification that every calling operation
+has the correct response. Do not require arbitrary combinations of unrelated
+conditions; record normal behavior in the requirements or design sections.
 
 Each item must represent a real exceptional or boundary condition.
 
@@ -457,7 +521,18 @@ Use numbered subsections when materially different testing areas exist:
 ### 5.2 [Test Area]
 ```
 
-Testing must follow directly from the requirements and design.
+Testing must follow directly from the requirements and design. For every
+applicable requirement and each affected member, explain which appropriate
+test, inspection, migration check, or other verification method will establish
+its required behavior. Specify what the verification must establish, including
+persisted effects and the absence of prohibited effects when those determine correctness.
+Existing tests may supply the verification when adequate; do not require duplicate
+tests or list predicted test filenames.
+
+If necessary verification genuinely depends on recorded later work or external
+facts, distinguish it from verification this pass can execute and preserve the
+recorded owner, trigger, and completion condition in Section 1. Do not claim a
+planned, unrun, unavailable, or deferred verification method is complete.
 
 Cover only relevant behavior, such as:
 
@@ -502,7 +577,12 @@ Then provide a concise Markdown checklist:
 ```
 
 Every item must represent something that genuinely has to be true before this
-pass is complete.
+pass is complete. Include the required behavior and verification outcomes of
+the current pass without copying every requirement verbatim. If recorded
+obligations or external evidence remain open, keep them visibly outstanding
+under the boundary recorded in Section 1. A checklist item must not imply the
+current pass proved them or require another pass to finish before this pass can
+reach its separately recorded completion point.
 
 Prefer engineering outcomes over incidental implementation details.
 
@@ -526,6 +606,17 @@ conditions.
 This section is for the plan author only. Do not copy it into the completed
 plan.
 
+Before declaring the plan ready, reread the entire current plan and complete
+the Gate A self-review required by Sections 7.1 and 7.2 of the implementation
+workflow. Check every applicable requirement and every member of each affected
+set, with its expected behavior, design, failures, compatibility, and planned
+verification. Then perform a **separate omission-focused pass** over the entire plan:
+look for missing related operations or consumers, configuration or database
+elements, policy or diagnostic behavior, failure and recovery cases, retries,
+concurrency, unknown outcomes, unresolved engineering choices, and verification that
+would not actually establish a required effect or prohibited side effect. Do
+not stop this check after fixing the first few problems.
+
 Before declaring the plan ready, verify that:
 
 - a competent developer can understand it without production-readiness process
@@ -535,9 +626,18 @@ Before declaring the plan ready, verify that:
 - technical detail has context before it;
 - failures are individually numbered and organized;
 - no unnecessary jargon remains;
-- no future-pass narration remains;
+- no unnecessary future-pass narration remains beyond the concise, recorded
+  outstanding obligations needed to state the current pass's honest scope;
 - outside-scope material is not repeated;
 - every requirement is necessary;
+- every applicable requirement and every affected member, including intentionally
+  unchanged or genuinely inapplicable members, has explicit planned treatment;
+- required behavior is consistent across requirements, design, failure cases,
+  testing, and completion criteria, including related operations and outcomes;
+- planned verification establishes every required result and prohibited side
+  effect at an appropriate layer, with no necessary verification method left undefined;
+- any recorded outstanding work or external evidence has its recorded owner,
+  prerequisite or trigger, and latest completion point, and is not called proven;
 - every new mechanism has a concrete engineering reason;
 - unknown facts were not guessed;
 - repository-answerable design questions were resolved;
@@ -552,6 +652,9 @@ Before declaring the plan ready, verify that:
   private provider values, personal/payment data, raw sensitive logs, or other
   protected information appear.
 
-If correct implementation requires materially changing the approved
-requirements or design, return to planning rather than silently changing the
-engineering contract.
+Resolve every applicable omission found by these two checks before submitting
+the complete plan for its separate, fresh independent Gate A review. The plan
+author or correction run must not approve its own plan. If correct implementation
+requires materially changing the applicable requirements, technical design, or
+executable scope, route the issue through the appropriate Gate A planning or
+Stage 0 decision instead of silently redesigning work during implementation.

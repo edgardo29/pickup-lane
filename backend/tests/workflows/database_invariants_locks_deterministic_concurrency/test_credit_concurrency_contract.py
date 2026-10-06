@@ -12,7 +12,6 @@ from sqlalchemy import func, select
 from backend.models import Booking, Game, GameCredit, GameCreditUsage, User, Venue
 from backend.schemas.game_credit_schema import GameCreditReverseCreate
 
-
 _NOW = datetime(2035, 7, 1, 12, 0, tzinfo=timezone.utc)
 
 
@@ -26,9 +25,9 @@ def _user() -> User:
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws04-02b-credit-user-{unique}",
+        auth_user_id=f"database-concurrency-credit-user-{unique}",
         role="player",
-        email=f"ws04-02b-credit-user-{unique}@example.invalid",
+        email=f"database-concurrency-credit-user-{unique}@example.invalid",
         first_name="Credit",
         last_name="User",
         account_status="active",
@@ -40,9 +39,9 @@ def _admin() -> User:
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws04-02b-credit-admin-{unique}",
+        auth_user_id=f"database-concurrency-credit-admin-{unique}",
         role="admin",
-        email=f"ws04-02b-credit-admin-{unique}@example.invalid",
+        email=f"database-concurrency-credit-admin-{unique}@example.invalid",
         first_name="Credit",
         last_name="Admin",
         account_status="active",
@@ -59,7 +58,7 @@ def _credit(user_id: uuid.UUID, *, amount_cents: int = 1000) -> GameCredit:
         currency="USD",
         credit_status="active",
         credit_reason="admin_credit",
-        idempotency_key=f"ws04-02b-credit-{uuid.uuid4()}",
+        idempotency_key=f"database-concurrency-credit-{uuid.uuid4()}",
         created_at=_NOW,
         updated_at=_NOW,
     )
@@ -68,7 +67,7 @@ def _credit(user_id: uuid.UUID, *, amount_cents: int = 1000) -> GameCredit:
 def _venue() -> Venue:
     return Venue(
         id=uuid.uuid4(),
-        name="WS04-02B Credit Field",
+        name="Credit Concurrency Field",
         address_line_1="1 Credit Lock Way",
         city="Austin",
         state="TX",
@@ -88,7 +87,7 @@ def _game(host: User, venue: Venue) -> Game:
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title="WS04-02B Credit Game",
+        title="Credit Concurrency Game",
         venue_id=venue.id,
         venue_name_snapshot=venue.name,
         address_snapshot=venue.address_line_1,
@@ -163,7 +162,7 @@ def _reserve_credit(
                 booking_id=booking_id,
                 game_id=None,
                 now=_NOW,
-                idempotency_scope=f"ws04-02b-{booking_id}",
+                idempotency_scope=f"database-concurrency-{booking_id}",
             )
             db.commit()
             return "reserved"
@@ -237,7 +236,7 @@ def _release_credit_usage(
             db,
             usage_id,
             now=_NOW,
-            reason_code="ws04-02b-release",
+            reason_code="database-concurrency-release",
         )
         db.commit()
         return "released", released.id
@@ -267,7 +266,7 @@ def test_concurrent_reserved_credit_release_converges_to_one_released_usage() ->
             currency="USD",
             usage_type="redeem",
             usage_status="reserved",
-            idempotency_key=f"ws04-02b-release-{uuid.uuid4()}",
+            idempotency_key=f"database-concurrency-release-{uuid.uuid4()}",
             reserved_at=_NOW,
             created_at=_NOW,
             updated_at=_NOW,
@@ -338,7 +337,7 @@ def test_concurrent_reserved_credit_redeem_converges_to_one_redeemed_usage() -> 
             currency="USD",
             usage_type="redeem",
             usage_status="reserved",
-            idempotency_key=f"ws04-02b-redeem-{uuid.uuid4()}",
+            idempotency_key=f"database-concurrency-redeem-{uuid.uuid4()}",
             reserved_at=_NOW,
             created_at=_NOW,
             updated_at=_NOW,
@@ -416,7 +415,7 @@ def test_concurrent_redeemed_credit_restore_converges_to_one_restore_row() -> No
             currency="USD",
             usage_type="redeem",
             usage_status="redeemed",
-            idempotency_key=f"ws04-02b-redeem-{uuid.uuid4()}",
+            idempotency_key=f"database-concurrency-redeem-{uuid.uuid4()}",
             reserved_at=_NOW,
             redeemed_at=_NOW,
             created_at=_NOW,
@@ -437,7 +436,7 @@ def test_concurrent_redeemed_credit_restore_converges_to_one_restore_row() -> No
             executor.submit(
                 _restore_credit_usage,
                 usage_id,
-                "ws04-02b-restore",
+                "database-concurrency-restore",
                 barrier,
             )
             for _ in range(2)
@@ -484,8 +483,8 @@ def _reverse_credit(
                 admin_user=admin,
                 game_credit_id=credit_id,
                 payload=GameCreditReverseCreate(
-                    idempotency_key=f"ws04-02b-reverse-{uuid.uuid4()}",
-                    note="ws04-02b reversal concurrency proof",
+                    idempotency_key=f"database-concurrency-reverse-{uuid.uuid4()}",
+                    note="database-concurrency reversal concurrency proof",
                 ),
             )
             return "reversed"

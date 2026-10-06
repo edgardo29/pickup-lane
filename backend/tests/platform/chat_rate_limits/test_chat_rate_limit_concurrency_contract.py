@@ -39,9 +39,9 @@ def _session():
 def _user(index: int) -> User:
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-c3a-race-user-{index}-{uuid.uuid4()}",
+        auth_user_id=f"chat-rate-limit-race-user-{index}-{uuid.uuid4()}",
         role="player",
-        email=f"ws02-c3a-race-{index}-{uuid.uuid4()}@example.invalid",
+        email=f"chat-rate-limit-race-{index}-{uuid.uuid4()}@example.invalid",
         first_name="Race",
         last_name=f"User{index}",
         account_status="active",
@@ -72,7 +72,7 @@ def _game(host: User, venue: Venue) -> Game:
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title="C3A Race Game",
+        title="Rate Limit Race Game",
         venue_id=venue.id,
         venue_name_snapshot=venue.name,
         address_snapshot=venue.address_line_1,

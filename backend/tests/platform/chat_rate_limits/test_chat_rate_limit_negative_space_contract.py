@@ -36,8 +36,7 @@ def _python_sources_under(path: Path) -> list[Path]:
     return [
         source
         for source in path.rglob("*.py")
-        if "tests/legacy" not in source.as_posix()
-        and "__pycache__" not in source.as_posix()
+        if "__pycache__" not in source.as_posix()
     ]
 
 
@@ -113,7 +112,7 @@ def test_single_shared_limiter_owner_and_current_send_routes_are_the_only_authen
 
 
 @pytest.mark.pass_provenance('WS02-04C3A')
-def test_no_duplicate_route_middleware_frontend_memory_redis_or_generic_limiter_replaces_c3a() -> (
+def test_no_duplicate_route_middleware_frontend_memory_redis_or_generic_limiter_replaces_chat_limiter() -> (
     None
 ):
     route_text = "\n".join(
@@ -216,7 +215,7 @@ def test_model_metadata_supports_visible_text_boundary_without_claiming_query_pl
 
 
 @pytest.mark.pass_provenance('WS02-04C3A')
-def test_c3a_event_source_has_no_sensitive_or_high_cardinality_runtime_fields() -> None:
+def test_chat_rate_limit_event_has_no_sensitive_or_high_cardinality_runtime_fields() -> None:
     source = inspect.getsource(chat_rate_limit_service._log_rate_limit_event)
 
     assert '"chat.rate_limit"' in source

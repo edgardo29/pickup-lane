@@ -44,12 +44,12 @@ import {
 
 const RESOLUTION_REASON_OPTIONS = [
   { label: 'Retried Successfully', value: 'retried_successfully' },
-  { label: 'Provider Completed', value: 'provider_completed_no_action_required' },
+  { label: 'Stripe Completed', value: 'provider_completed_no_action_required' },
   { label: 'Handled Externally', value: 'handled_externally' },
   { label: 'Invalid Issue', value: 'invalid_issue' },
   { label: 'Unable To Complete', value: 'unable_to_complete_documented' },
 ]
-const UNCERTAIN_PROVIDER_REFUND_STATUSES = new Set(['processing', 'unknown'])
+const UNCERTAIN_STRIPE_REFUND_STATUSES = new Set(['processing', 'unknown'])
 const RETRYABLE_REFUND_STATUSES = new Set(['failed', 'cancelled'])
 
 function buildMoneyIssueIdempotencyKey(prefix, moneyIssueId) {
@@ -71,7 +71,7 @@ function getIssueRetryKind(moneyIssue, refund) {
     if (
       !refund
       || !RETRYABLE_REFUND_STATUSES.has(refund.refund_status)
-      || UNCERTAIN_PROVIDER_REFUND_STATUSES.has(refund.provider_status)
+      || UNCERTAIN_STRIPE_REFUND_STATUSES.has(refund.provider_status)
     ) {
       return null
     }

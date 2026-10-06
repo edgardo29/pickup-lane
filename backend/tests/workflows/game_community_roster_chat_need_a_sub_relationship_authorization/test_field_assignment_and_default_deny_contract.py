@@ -6,9 +6,9 @@ import pytest
 from sqlalchemy import func, select
 
 from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_authorization.test_matrix_scope_and_dependencies_contract import (
-    _Identity,
     _auth_headers,
     _game,
+    _Identity,
     _install_auth_identities,
     _participant,
     _recent_time,
@@ -18,7 +18,6 @@ from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_
     _user,
     _venue,
 )
-
 
 SERVER_CONTROLLED_FIELDS = {
     "user_id",
@@ -49,12 +48,14 @@ SERVER_CONTROLLED_FIELDS = {
 
 @pytest.mark.no_db_cleanup
 @pytest.mark.pass_provenance('WS03-04C')
-def test_c_write_schemas_forbid_server_controlled_mass_assignment_fields() -> None:
+def test_relationship_write_schemas_forbid_server_controlled_mass_assignment_fields() -> None:
     from pydantic import BaseModel
 
     from backend.schemas.chat_message_schema import ChatMessageCreate
     from backend.schemas.checkout_schema import GameCheckoutPaymentIntentCreate
-    from backend.schemas.community_game_detail_schema import CommunityGameDetailHostUpsert
+    from backend.schemas.community_game_detail_schema import (
+        CommunityGameDetailHostUpsert,
+    )
     from backend.schemas.community_game_publish_schema import CommunityGamePublishCreate
     from backend.schemas.game_chat_schema import GameChatEnsureCreate
     from backend.schemas.game_schema import (
@@ -72,7 +73,11 @@ def test_c_write_schemas_forbid_server_controlled_mass_assignment_fields() -> No
         SubPostRequestAction,
         SubPostRequestCreate,
     )
-    from backend.schemas.sub_post_schema import SubPostCancel, SubPostCreate, SubPostUpdate
+    from backend.schemas.sub_post_schema import (
+        SubPostCancel,
+        SubPostCreate,
+        SubPostUpdate,
+    )
 
     write_schemas: list[type[BaseModel]] = [
         ChatMessageCreate,

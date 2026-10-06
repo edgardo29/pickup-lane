@@ -11,58 +11,58 @@ Use this together with:
 
 - `backend-structure.md` for backend ownership and dependency direction.
 - `database.md` for migrations, test database safety, and reset commands.
-- The relevant finalized feature document.
+- The applicable current product or feature requirements.
 - Any owning domain document that defines shared behavior used by the feature.
 
 When these sources conflict, do not guess. Report the conflict and stop before
 encoding an uncertain expectation into a test.
 
-## Normative Language
+## Requirement Language
 
-The words **must**, **must not**, and **required** define hard gates. Work is not
-complete when a hard gate is unmet.
+The words **must**, **must not**, and **required** identify binding requirements.
+Work is not complete while an applicable requirement is unmet.
 
 The words **should** and **prefer** describe strong defaults. Departures require
 a clear reason in the completion report.
 
 ## Purpose
 
-Backend tests prove finalized behavior. They verify API contracts,
+Backend tests verify required behavior. They cover API interfaces,
 authorization, business rules, database effects, state transitions, expiration,
 capacity, payments, failure behavior, security boundaries, and regressions.
 
 The goal is not to maximize test count or coverage percentage. The goal is a
 suite that would fail for the correct reason if protected behavior regressed.
 
-## Source Of Truth For Expected Behavior
+## Requirement Sources For Expected Behavior
 
-Tests must be derived from finalized product and domain rules, not from whatever
-the current implementation happens to do.
+Tests must be derived from the requirement sources defined by
+`docs/production-readiness/00-READ-ME-FIRST.md` when that workflow applies, and
+from the applicable product, domain, and technical requirements for ordinary
+feature work. They must not be derived solely from whatever the current
+implementation happens to do.
 
-Source priority:
-
-1. Finalized feature specification.
-2. Finalized owning-domain specification.
-3. Shared platform rules and architecture documents.
-4. Current database constraints and public API contracts when they do not
-   conflict with a finalized specification.
-5. Current tests and implementation only as evidence of current
-   behavior, not proof that the behavior is correct.
+Accepted repository source, database constraints, public interfaces, and existing tests
+establish current repository behavior. They are inputs to compatibility and
+regression analysis, but do not create a new requirement merely because the
+behavior exists.
 
 An agent must not preserve or add an expectation merely because the current code
 returns it. When code and specification disagree, report the mismatch. Do not
 change the test expectation to match the code without confirming the intended
 behavior.
 
-Tests under `backend/tests/legacy/` are assessed individually. Their location
-does not make them correct or incorrect: preserve and run useful regressions,
-and correct or remove a test only when it is shown to be obsolete, invalid, or
-redundant.
+All maintained backend tests live in the active behavior-owned roots. The former
+`backend/tests/legacy/` archive was assessed file by file and retired only after
+useful missing coverage was migrated and redundant or obsolete coverage was
+identified. Do not recreate an excluded archive: preserve useful regressions and
+place them under the appropriate active behavior owner.
 
 ## Risk-Based Completion
 
-Backend test work is complete when the material behavior and risks in scope have
-appropriate proof at the correct layer and remaining gaps are reported honestly.
+Backend test work is complete when the material behavior and risks in scope
+have appropriate verification at the correct layer and remaining gaps are
+reported honestly.
 Use the `Feature Review Checklist` as review guidance, applying only items that
 are relevant to the change.
 
@@ -93,33 +93,34 @@ correct test set should be.
 ## Behavior And Risk Traceability
 
 Tests must trace to intended behavior, a material invariant, or a concrete
-regression risk. Use lightweight mapping when it helps explain important proof,
+regression risk. Use lightweight mapping when it helps explain important
+verification,
 but do not create parallel metadata or generated inventories to duplicate what
 the test source and pass artifacts already establish. A test expectation
 without a traceable specification or established domain policy remains
 unresolved and must not be invented.
 
-## Enum, Status, Role, And Lifecycle Matrix
+## Complete Coverage For Bounded Values
 
 When behavior depends on an enum, status field, role, account state, payment
 state, participant state, booking state, visibility state, relationship state,
-privilege state, or lifecycle state, the agent must build an explicit matrix
-before claiming coverage is complete.
+privilege state, or lifecycle state, identify every currently allowed value and
+its expected treatment before claiming coverage is complete.
 
-The matrix must:
+The coverage account must:
 
-- List every authoritative value currently allowed by the model, enum, or
+- List every value currently allowed by the model, enum, or
   database constraint.
-- Be checked against the authoritative model, enum, service constant, schema, or
+- Be checked against the defining model, enum, service constant, schema, or
   database constraint. Do not build it from memory or nearby tests.
 - State the expected behavior for each relevant value.
 - Classify each value as `covered`, `excluded_by_policy`, `not_relevant`, or
   `missing_test`.
 - Make classifications a complete, mutually exclusive partition of the
-  authoritative values. Every value must belong to exactly one classification
+  allowed values. Every value must belong to exactly one classification
   unless the test is explicitly a combination matrix.
 - When a matrix is encoded as classification sets in test code, assert that the
-  sets are pairwise disjoint and that their union equals the authoritative
+  sets are pairwise disjoint and that their union equals the defined
   allowed-value set.
 - Identify the source that defines the classification.
 - Include combinations when behavior depends on more than one field.
@@ -145,7 +146,11 @@ Parametrization is encouraged when several values use the same setup, action,
 and expected rule. Do not force values with different behavior into one
 parametrized test.
 
-## Test Ownership Gate
+The account may be expressed directly in parametrized tests, classification
+sets, or the completion report. Do not create a separate permanent matrix when
+the test source already makes every value and result verifiable.
+
+## Test Ownership
 
 Before placing a test, identify the layer and owned scope that protect the
 behavior.
@@ -154,7 +159,7 @@ Ownership rules:
 
 - `domains/` owns stable business and domain invariants.
 - `workflows/` owns genuine cross-domain orchestration or user-flow behavior
-  whose integration is itself the contract.
+  whose integration is itself the behavior under test.
 - `platform/` owns intentionally global backend, API, framework, and security
   behavior.
 - `migrations/` owns Alembic and schema-history testing.
@@ -169,8 +174,8 @@ Ownership rules:
 - File ownership follows the behavior under test, not only the endpoint that
   exposed it.
 
-Directory placement expresses behavior ownership only. It does not certify the
-correctness, authority, or usefulness of a test.
+Directory placement expresses behavior ownership only. It does not establish
+the correctness or usefulness of a test.
 
 Before completion, the agent must be able to explain why each new or moved test
 belongs in its selected file.
@@ -335,8 +340,8 @@ test suite. Before adding a support module, confirm:
 - more than one current test scope needs the helper, or one scope has a
   cohesive local support need that would be harder to read inline
 - the helper name states the test responsibility clearly
-- the helper does not encode expected product behavior without an authoritative
-  source
+- the helper does not encode expected product behavior without an applicable
+  requirement source
 - the helper does not hide the behavior, assertion, or side effect that makes
   the test meaningful
 
@@ -366,7 +371,7 @@ shared assertions, keep these rules:
 - Security-sensitive response checks may use a shared assertion only when the
   policy applies to several current scenarios.
 
-## Assertion Depth Gate
+## Assertion Depth
 
 Assertions must prove the protected behavior, not merely show that execution
 completed.
@@ -417,10 +422,10 @@ Before choosing assertions, identify the route's possible side effects:
 
 - Every table the route could create, update, delete, soft-delete, or restore.
 - Related capacity or inventory counters.
-- Payment intents, refunds, credits, ledger rows, or provider actions.
+- Payment intents, refunds, credits, ledger rows, or external-service actions.
 - Waitlist, booking, participant, roster, invitation, or membership rows.
 - Audit, history, notification, email, chat, or background-action records.
-- Cache, task, or external-service effects when they are part of the contract.
+- Cache, task, or external-service effects when they are part of the required behavior.
 
 Depending on the behavior, prove that:
 
@@ -462,7 +467,7 @@ If the test database or driver cannot expose a stable constraint identifier,
 document the limitation and assert the narrowest reliable failure detail plus
 post-rollback database state.
 
-## Scenario Review Matrix
+## Scenario Review Prompts
 
 Use the applicable scenario items below as risk-discovery prompts. Select cases
 that protect distinct material behavior or realistic failures; do not require a
@@ -555,8 +560,8 @@ adds no distinct protection.
 
 ### External Services And Webhooks
 
-- Successful provider response.
-- Provider failure.
+- Successful external-service response.
+- External-service failure.
 - Timeout or exception.
 - Duplicate webhook.
 - Out-of-order webhook.
@@ -570,7 +575,7 @@ Every confirmed production or pre-production bug must receive a regression test
 that would fail if the bug returned, unless the user explicitly accepts a
 written exception.
 
-## Controlled Time Gate
+## Controlled Time
 
 Time-based tests must not depend on uncontrolled wall-clock timing.
 
@@ -731,7 +736,7 @@ The review must determine:
   invalid counterparts.
 - Which aggregate, grouped-count, or summary assertions fail to prove filter
   parity with the item query.
-- Which expectations conflict with the finalized specification.
+- Which expectations conflict with an applicable current requirement.
 - Which tests could pass for the wrong reason.
 
 Do not preserve a broad test merely because it already passes. Do not move a
@@ -772,12 +777,12 @@ Choose validation by actual risk, not a fixed count of files, routes, or tests:
    cannot bound honestly.
 
 Do not rerun a full suite after every small correction. Diagnose the failure,
-fix a genuine defect when the current implementation authority permits it, and
+fix a genuine defect when the current instruction and selected scope permit it, and
 rerun the focused failed area. Rerun broader coverage only when the correction
 itself changes the broader blast radius or the prior broader result is no longer
 representative. Never dismiss a genuine failure merely as unrelated: report
 what failed, why, what changed, and the rerun result. Stop when correction would
-require materially different product, architecture, or operational authority.
+require materially different product, architecture, or an owner decision.
 
 Completion reporting must list the exact selections run, their observed
 results, every failure encountered and its disposition, and any relevant
@@ -794,8 +799,14 @@ Automation must:
 - Configure separate exact-purpose ordinary and migration test databases.
 - Compile current backend and backend-test Python source.
 - Rebuild both allowlisted test databases through `backend.test_runner`.
-- Collect the complete current non-legacy backend test tree through the guarded
-  runner under strict markers.
+- Collect the complete current active backend test tree through the guarded
+  runner under strict markers. The canonical explicit collection selects
+  `backend/tests/domains`, `backend/tests/workflows`, `backend/tests/platform`,
+  and `backend/tests/migrations`; do not replace it with the broad
+  `backend/tests` path.
+- Execute the complete ordinary suite from `domains`, `workflows`, and
+  `platform`, then execute the complete migration suite from `migrations` with
+  the migration runner mode.
 - Run the focused safety tests under
   `backend/tests/platform/backend_test_runner/`.
 - Run the surviving migration graph, safety, and lifecycle suite.
@@ -807,9 +818,10 @@ Automation must:
   is visible.
 - Use least-privilege workflow permissions.
 
-Live external-provider tests, destructive tests, and large performance tests
+Live external-service tests, destructive tests, and large performance tests
 belong in separate manual or scheduled workflows rather than the normal pull
-request gate.
+request checks. The isolated Cloudflare R2 compatibility check remains outside
+the ordinary and migration selections.
 
 ## Local Agent Execution Policy
 
@@ -826,14 +838,14 @@ backend tests, migrations, database reset commands, or broader suites.
 When verification is authorized, agents must use focused runner commands first
 and clearly state what remains unverified.
 
-Allowed without explicit backend-test approval:
+Allowed without a user instruction to execute backend tests:
 
 - Reading files.
 - Structural searches.
 - Static checks that do not mutate application or database state.
 - `git diff --check`.
 
-Not allowed without explicit approval:
+Not allowed unless the current user instruction authorizes it:
 
 - backend test-runner commands that execute pytest
 - Alembic upgrade or downgrade commands.
@@ -858,7 +870,7 @@ were added” or “coverage was improved.”
 
 Stop and report instead of guessing when:
 
-- The finalized specification is missing or contradictory.
+- An applicable requirement is missing or contradictory.
 - A required status or role has no defined behavior.
 - Code and specification conflict.
 - Test ownership is unclear between page and domain layers.
@@ -934,7 +946,7 @@ configuration enforce them:
 - Coverage thresholds or coverage-diff enforcement.
 - JUnit XML test reports.
 - Test sharding.
-- Dedicated slow or manual external-provider workflows.
+- Dedicated slow or manual external-service workflows.
 - Scheduled large performance tests.
 
 Do not describe hardening targets as required until they are actually enforced.
@@ -976,7 +988,7 @@ material to the behavior being changed; it is not a universal compliance record.
 
 ### Source And Ownership
 
-- [ ] The finalized feature specification was reviewed.
+- [ ] The applicable current product or feature requirements were reviewed.
 - [ ] Relevant owning-domain specifications were reviewed.
 - [ ] Every test expectation is traceable to a specification or established
       domain policy.
@@ -986,9 +998,9 @@ material to the behavior being changed; it is not a universal compliance record.
 ### Coverage Matrix
 
 - [ ] Important behavior, invariants, and regression risks have appropriate
-      proof at the correct layer.
+      verification at the correct layer.
 - [ ] Relevant enum, status, role, privilege, relationship, and lifecycle values
-      were listed from authoritative sources.
+      were listed from their defining requirement or repository source.
 - [ ] Materially distinct allowed and prohibited values are covered.
 - [ ] Positive privileged-access cases have invalid-privilege counterparts, or
       an exact `covered_elsewhere` reference.

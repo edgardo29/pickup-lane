@@ -1,6 +1,6 @@
 # Backend Structure
 
-This document defines the authoritative rules for backend file placement,
+This document defines the repository rules for backend file placement,
 responsibility, dependency direction, and architectural ownership in Pickup
 Lane.
 
@@ -40,7 +40,7 @@ none of the existing locations can clearly own the responsibility.
 Do not introduce repository, manager, controller, use-case, handler, command,
 or similar parallel layers as part of an ordinary feature change.
 
-A new architectural layer requires an explicit project-level decision.
+A new architectural layer requires an explicit owner decision.
 
 ## Placement Decision Order
 
@@ -157,7 +157,7 @@ Models must not contain:
 * multi-step domain workflows
 
 Model changes must remain aligned with migrations, schemas, services, tests,
-and the relevant feature contract.
+and the relevant feature requirements.
 
 Migration style, revision history, database commands, and rebuild rules belong
 in `database.md`.
@@ -253,7 +253,7 @@ Use the existing authenticated-user and active-user dependencies.
 
 Admin routes must use `require_active_admin`.
 
-Frontend visibility is not authorization. Backend checks remain authoritative.
+Frontend visibility is not authorization. The backend must enforce access.
 
 Route dependencies may enforce broad access requirements. Services own
 authorization that depends on the target record, ownership, workflow state,
@@ -262,7 +262,7 @@ action type, or domain policy.
 Do not reimplement authentication or active-admin checks across domain
 services. Use the existing shared dependencies and service-callable assertions.
 
-## Transactions And External Systems
+## Transactions And External Services
 
 The service that owns a state-changing workflow also owns:
 
@@ -287,12 +287,12 @@ trusting the preview response.
 External client modules own protocol-level concerns such as:
 
 * client initialization
-* provider authentication
+* external-service authentication
 * request construction
 * response parsing
 * timeouts
 * transport errors
-* provider identifiers
+* external-service identifiers
 * webhook signature verification
 
 Domain services own decisions based on external responses.
@@ -302,10 +302,10 @@ audit behavior, notifications, or support outcomes.
 
 Firebase Admin JSON and service-account key files are local secret material.
 They must remain ignored and uncommitted; backend code should load any required
-credential material through the approved configuration path rather than
+credential material through the configured credential path rather than
 hardcoding it in source.
 
-Use existing shared clients and provider initialization. Do not create wrappers
+Use existing shared clients and external-service initialization. Do not create wrappers
 that merely rename one existing call.
 
 ## Infrastructure And Dependencies
@@ -343,7 +343,7 @@ Name files by domain and responsibility, such as:
 * `<domain>_schemas.py`
 * `<domain>_rules.py`
 * `<domain>_policy.py`
-* `<provider>_client.py`
+* `<service>_client.py`
 * `<domain>_queries.py`
 * `test_<domain>_<responsibility>.py`
 
@@ -398,7 +398,7 @@ Required direction:
   lower-level services
 * schemas import only shared types and pure domain definitions
 * models import only model-level types and database infrastructure
-* clients import provider and infrastructure utilities
+* clients import external-service and infrastructure utilities
 
 Required restrictions:
 
@@ -449,7 +449,7 @@ documentation or current task instruction.
 
 ## Scope Discipline
 
-Keep each implementation limited to the approved task.
+Keep each implementation limited to the current instruction.
 
 Do not mix unrelated:
 
@@ -489,7 +489,8 @@ Before considering the structural portion complete, confirm:
 * business behavior remains in services
 * reusable queries and rules have one owner
 * models and migrations remain aligned
-* actor identity and authorization remain authoritative
+* actor identity comes from verified authentication and backend authorization
+  remains enforced
 * transaction ownership is explicit
 * dependencies do not form cycles
 * tests and imports reflect file movement

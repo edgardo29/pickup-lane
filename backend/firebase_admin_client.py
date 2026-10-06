@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover
 FIREBASE_TOKEN_CLOCK_SKEW_SECONDS = 10
 FIREBASE_APP_CHECK_VERIFY_OPERATION = "firebase.app_check.verify"
 
-_APP_CHECK_PROVIDER_UNAVAILABLE_ERRORS = (
+_APP_CHECK_FIREBASE_UNAVAILABLE_ERRORS = (
     firebase_exceptions.AbortedError,
     firebase_exceptions.CancelledError,
     firebase_exceptions.DataLossError,
@@ -157,7 +157,7 @@ def verify_firebase_app_check_token(app_check_token: str) -> dict:
         raise FirebaseAppCheckUnavailableError(
             "Firebase App Check verification is unavailable."
         ) from exc
-    except _APP_CHECK_PROVIDER_UNAVAILABLE_ERRORS as exc:
+    except _APP_CHECK_FIREBASE_UNAVAILABLE_ERRORS as exc:
         raise FirebaseAppCheckUnavailableError(
             "Firebase App Check verification is unavailable."
         ) from exc
@@ -241,7 +241,7 @@ def _firebase_error_result(operation: str, exc: Exception) -> str:
     if is_timeout_like_exception(exc):
         return "unknown_outcome" if operation == "firebase.user.delete" else "timed_out"
     if operation == FIREBASE_APP_CHECK_VERIFY_OPERATION and isinstance(
-        exc, _APP_CHECK_PROVIDER_UNAVAILABLE_ERRORS
+        exc, _APP_CHECK_FIREBASE_UNAVAILABLE_ERRORS
     ):
         return "failed"
     return "failed"
@@ -254,7 +254,7 @@ def _observe_firebase_operation(operation: str):
     except Exception as exc:
         try:
             result = _firebase_error_result(operation, exc)
-        except Exception:  # noqa: BLE001 - preserve the original provider failure.
+        except Exception:  # noqa: BLE001 - preserve the original Firebase failure.
             result = "failed"
         record_provider_outcome(operation, result)
         raise

@@ -8,15 +8,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-
-def _install_provider_identity(
+def _install_firebase_identity(
     monkeypatch: pytest.MonkeyPatch,
     *,
     uid: str = "firebase-user",
     email: str = "provider-sync@example.invalid",
     email_verified: bool = True,
 ) -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     payload = {
         "uid": uid,
@@ -90,7 +89,7 @@ def test_users_me_accepts_only_approved_profile_fields(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(monkeypatch)
+    _install_firebase_identity(monkeypatch)
     user_id = _create_user(
         email="profile-user@example.invalid",
         email_verified_at=datetime.now(timezone.utc),
@@ -149,7 +148,7 @@ def test_users_me_rejects_identity_provider_admin_and_server_owned_fields(
     field_name: str,
     field_value: Any,
 ) -> None:
-    _install_provider_identity(monkeypatch)
+    _install_firebase_identity(monkeypatch)
     user_id = _create_user(email_verified_at=datetime.now(timezone.utc))
     before = _identity_state(user_id)
 
@@ -178,7 +177,7 @@ def test_generic_user_mutation_routes_remain_unavailable(
     method: str,
     path: str,
 ) -> None:
-    _install_provider_identity(monkeypatch, uid="admin-uid", email_verified=True)
+    _install_firebase_identity(monkeypatch, uid="admin-uid", email_verified=True)
     _create_user(
         auth_user_id="admin-uid",
         email="admin@example.invalid",
@@ -199,10 +198,10 @@ def test_provider_authenticated_sync_owns_email_and_verification_snapshots(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid="sync-uid",
-        email="current-provider@example.invalid",
+        email="current-firebase@example.invalid",
         email_verified=True,
     )
     user_id = _create_user(
@@ -214,7 +213,7 @@ def test_provider_authenticated_sync_owns_email_and_verification_snapshots(
     response = client.post("/auth/sync-user", headers=_auth_headers())
 
     assert response.status_code == 200
-    assert response.json()["email"] == "current-provider@example.invalid"
+    assert response.json()["email"] == "current-firebase@example.invalid"
     assert response.json()["email_verified_at"] is not None
     from backend.database import SessionLocal
     from backend.models import User
@@ -222,7 +221,7 @@ def test_provider_authenticated_sync_owns_email_and_verification_snapshots(
     with SessionLocal() as db:
         user = db.get(User, user_id)
         assert user is not None
-        assert user.email == "current-provider@example.invalid"
+        assert user.email == "current-firebase@example.invalid"
         assert user.email_verified_at is not None
 
 
@@ -231,14 +230,14 @@ def test_provider_authenticated_sync_conflicts_fail_without_creating_second_iden
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
-        uid="new-provider-uid",
+        uid="new-firebase-uid",
         email="claimed-email@example.invalid",
         email_verified=True,
     )
     _create_user(
-        auth_user_id="existing-provider-uid",
+        auth_user_id="existing-firebase-uid",
         email="claimed-email@example.invalid",
         email_verified_at=datetime.now(timezone.utc),
     )
@@ -255,7 +254,7 @@ def test_provider_authenticated_sync_conflicts_fail_without_creating_second_iden
     with SessionLocal() as db:
         assert (
             db.scalar(
-                select(User).where(User.auth_user_id == "new-provider-uid")
+                select(User).where(User.auth_user_id == "new-firebase-uid")
             )
             is None
         )

@@ -75,8 +75,11 @@ from backend.services.query_pagination import (
     bounded_collection_offset,
 )
 from backend.services.r2_storage_service import (
+    R2ObjectReference,
     R2StorageConfigError,
     R2StorageError,
+    R2StorageTarget,
+    R2StorageTargetMismatchError,
     create_object_read_url,
 )
 
@@ -624,7 +627,11 @@ def load_game_card_metadata(
     games: list[Game],
     *,
     now: datetime | None = None,
-) -> tuple[dict[uuid.UUID, int], dict[uuid.UUID, str], dict[uuid.UUID, str]]:
+) -> tuple[
+    dict[uuid.UUID, int],
+    dict[uuid.UUID, str],
+    dict[uuid.UUID, R2ObjectReference],
+]:
     if not games:
         return {}, {}, {}
 
@@ -633,7 +640,9 @@ def load_game_card_metadata(
     venue_ids = {game.venue_id for game in games if game.venue_id is not None}
     participant_counts_by_game_id: dict[uuid.UUID, int] = {}
     primary_game_image_urls_by_game_id: dict[uuid.UUID, str] = {}
-    primary_venue_image_object_key_by_venue_id: dict[uuid.UUID, str] = {}
+    primary_venue_image_object_key_by_venue_id: dict[
+        uuid.UUID, R2ObjectReference
+    ] = {}
 
     for game_id, participant_count in db.execute(
         select(GameParticipant.game_id, func.count(GameParticipant.id))
@@ -659,8 +668,14 @@ def load_game_card_metadata(
         primary_game_image_urls_by_game_id.setdefault(game_id, image_url)
 
     if venue_ids:
-        for venue_id, storage_object_key in db.execute(
-            select(VenueImage.venue_id, VenueImage.storage_object_key)
+        for venue_id, provider, account_id, bucket_name, object_key in db.execute(
+            select(
+                VenueImage.venue_id,
+                VenueImage.storage_provider,
+                VenueImage.storage_account_id,
+                VenueImage.storage_bucket,
+                VenueImage.publication_object_key,
+            )
             .where(
                 VenueImage.venue_id.in_(venue_ids),
                 VenueImage.image_status == "active",
@@ -671,7 +686,14 @@ def load_game_card_metadata(
         ).all():
             primary_venue_image_object_key_by_venue_id.setdefault(
                 venue_id,
-                storage_object_key,
+                R2ObjectReference(
+                    target=R2StorageTarget(
+                        provider=provider,
+                        account_id=account_id,
+                        bucket_name=bucket_name,
+                    ),
+                    object_key=object_key,
+                ),
             )
 
     return (
@@ -686,7 +708,7 @@ def build_game_card_read(
     *,
     participant_count: int,
     primary_game_image_url: str | None,
-    primary_venue_image_object_key: str | None,
+    primary_venue_image_object_key: R2ObjectReference | None,
     browse_timezone: str | None = None,
     now: datetime | None = None,
 ) -> GameCardRead:
@@ -694,8 +716,11 @@ def build_game_card_read(
     primary_image_url = primary_game_image_url
     if primary_image_url is None and primary_venue_image_object_key is not None:
         try:
-            primary_image_url = create_object_read_url(primary_venue_image_object_key)
-        except R2StorageConfigError:
+            primary_image_url = create_object_read_url(
+                target=primary_venue_image_object_key.target,
+                object_key=primary_venue_image_object_key.object_key,
+            )
+        except R2StorageConfigError as exc:
             emit_event(
                 "storage.operation_failed",
                 "error",
@@ -703,7 +728,11 @@ def build_game_card_read(
                     "provider_kind": "r2",
                     "operation": "r2.read_url.create",
                     "result": "configuration_error",
-                    "stable_error_code": "STORAGE.CONFIG_UNAVAILABLE",
+                    "stable_error_code": (
+                        "STORAGE.TARGET_MISMATCH"
+                        if isinstance(exc, R2StorageTargetMismatchError)
+                        else "STORAGE.CONFIG_UNAVAILABLE"
+                    ),
                 },
             )
             primary_image_url = None
@@ -1145,7 +1174,7 @@ def build_my_game_card_read(
     current_user: User,
     participant_count: int,
     primary_game_image_url: str | None,
-    primary_venue_image_object_key: str | None,
+    primary_venue_image_object_key: R2ObjectReference | None,
     bucket: str,
 ) -> MyGameCardRead:
     is_host = game.host_user_id == current_user.id

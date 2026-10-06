@@ -137,6 +137,23 @@ export async function uploadAdminVenueImage({
   })
 }
 
+export async function uploadAdminVenueImagesSequentially({
+  firebaseUser,
+  photos,
+  uploadImage = uploadAdminVenueImage,
+  venueId,
+}) {
+  for (const [index, photo] of photos.entries()) {
+    await uploadImage({
+      file: photo.file,
+      firebaseUser,
+      isPrimary: index === 0,
+      sortOrder: index,
+      venueId,
+    })
+  }
+}
+
 export async function getAdminOfficialGame({ firebaseUser, gameId }) {
   return apiRequest(`/admin/official-games/${gameId}`, {
     headers: await getAdminHeaders(firebaseUser),

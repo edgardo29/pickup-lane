@@ -10,7 +10,6 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 
-
 def _session():
     from backend.database import SessionLocal
 
@@ -21,8 +20,8 @@ def _install_sync_identities(
     monkeypatch: pytest.MonkeyPatch,
     identities_by_token: dict[str, tuple[str, str, bool]],
 ) -> None:
+    from backend.services import auth_account_service
     from backend.services.auth_service import VerifiedFirebaseIdentity
-    import backend.services.auth_account_service as auth_account_service
 
     def identity_from_header(authorization: str | None) -> VerifiedFirebaseIdentity:
         assert authorization is not None
@@ -49,7 +48,7 @@ def _count_rows(db: Session, model: type[object], *criteria: object) -> int:
 
 
 def _install_commit_barrier(monkeypatch: pytest.MonkeyPatch) -> tuple[threading.Barrier, list[str]]:
-    import backend.services.auth_account_service as auth_account_service
+    from backend.services import auth_account_service
 
     barrier = threading.Barrier(2)
     commit_threads: list[str] = []
@@ -82,8 +81,8 @@ def test_concurrent_first_login_same_uid_reuses_single_user_and_context_rows(
 ) -> None:
     from backend.models import User, UserSettings, UserStats
 
-    uid = f"ws03-02-race-same-{uuid.uuid4()}"
-    email = f"ws03-02-race-same-{uuid.uuid4()}@example.invalid"
+    uid = f"account-lifecycle-race-same-{uuid.uuid4()}"
+    email = f"account-lifecycle-race-same-{uuid.uuid4()}@example.invalid"
     _install_sync_identities(
         monkeypatch,
         {
@@ -116,9 +115,9 @@ def test_concurrent_first_login_different_uid_same_email_leaves_single_owner(
 ) -> None:
     from backend.models import User
 
-    uid_a = f"ws03-02-race-a-{uuid.uuid4()}"
-    uid_b = f"ws03-02-race-b-{uuid.uuid4()}"
-    email = f"ws03-02-race-conflict-{uuid.uuid4()}@example.invalid"
+    uid_a = f"account-lifecycle-race-a-{uuid.uuid4()}"
+    uid_b = f"account-lifecycle-race-b-{uuid.uuid4()}"
+    email = f"account-lifecycle-race-conflict-{uuid.uuid4()}@example.invalid"
     _install_sync_identities(
         monkeypatch,
         {

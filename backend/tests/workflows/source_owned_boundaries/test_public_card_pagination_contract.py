@@ -5,6 +5,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 import pytest
@@ -12,6 +13,8 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+if TYPE_CHECKING:
+    from backend.models import User
 
 
 def _user() -> User:
@@ -19,9 +22,9 @@ def _user() -> User:
 
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04b1-pagination-{uuid.uuid4()}",
+        auth_user_id=f"source-boundary-pagination-{uuid.uuid4()}",
         role="player",
-        email=f"ws02-04b1-pagination-{uuid.uuid4()}@example.invalid",
+        email=f"source-boundary-pagination-{uuid.uuid4()}@example.invalid",
         first_name="Page",
         last_name="User",
         account_status="active",
@@ -76,7 +79,7 @@ def test_public_card_routes_default_to_40_reject_below_1_and_bound_cursor(
         user = _user()
         db.add(user)
         db.commit()
-        context = _client_overrides(client, user=user, db=db) if needs_auth else _client_overrides(client, user=user, db=db)
+        context = _client_overrides(client, user=user, db=db)
 
         with context:
             default_response = _get(client, path)

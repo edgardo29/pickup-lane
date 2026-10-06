@@ -9,8 +9,7 @@ from fastapi.params import Depends
 from fastapi.testclient import TestClient
 
 
-
-def _install_provider_identity(
+def _install_firebase_identity(
     monkeypatch: pytest.MonkeyPatch,
     *,
     uid: str = "firebase-admin",
@@ -18,7 +17,7 @@ def _install_provider_identity(
     email_verified: bool = True,
     extra_claims: dict[str, object] | None = None,
 ) -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     payload: dict[str, object] = {
         "uid": uid,
@@ -81,7 +80,7 @@ def test_active_verified_local_admin_can_access_admin_me(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(monkeypatch)
+    _install_firebase_identity(monkeypatch)
     user_id = _create_user(email_verified_at=datetime.now(timezone.utc))
 
     response = client.get("/admin/me", headers=_auth_headers())
@@ -95,7 +94,7 @@ def test_active_verified_local_admin_can_access_admin_me(
 @pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
     (
-        "provider_verified",
+        "firebase_verified",
         "local_role",
         "account_status",
         "deleted",
@@ -114,7 +113,7 @@ def test_active_verified_local_admin_can_access_admin_me(
 def test_admin_access_denies_unverified_missing_inactive_deleted_or_non_admin_users(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
-    provider_verified: bool,
+    firebase_verified: bool,
     local_role: str,
     account_status: str,
     deleted: bool,
@@ -122,7 +121,7 @@ def test_admin_access_denies_unverified_missing_inactive_deleted_or_non_admin_us
     expected_status: int,
     expected_detail: str,
 ) -> None:
-    _install_provider_identity(monkeypatch, email_verified=provider_verified)
+    _install_firebase_identity(monkeypatch, email_verified=firebase_verified)
     if create_local_user:
         _create_user(
             role=local_role,
@@ -142,7 +141,7 @@ def test_firebase_custom_claims_do_not_independently_grant_pickup_lane_admin(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid="claim-admin",
         email="claim-admin@example.invalid",
@@ -172,7 +171,7 @@ def test_client_supplied_role_data_does_not_independently_grant_admin(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid="client-claim-user",
         email="client-claim-user@example.invalid",
@@ -196,7 +195,7 @@ def test_client_supplied_role_data_does_not_independently_grant_admin(
 
 @pytest.mark.pass_provenance('WS03-01')
 def test_recent_active_admin_wrapper_layers_on_base_active_admin_dependency() -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     signature = inspect.signature(auth_service.require_recent_active_admin)
     current_user_default = signature.parameters["current_user"].default

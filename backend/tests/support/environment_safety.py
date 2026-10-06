@@ -20,14 +20,74 @@ MODEL_MODULE_FILE_EXCLUSIONS = {
     "__init__.py": "Package initializer and export surface; not a model module.",
 }
 NETWORK_BLOCKED_MESSAGE = (
-    "EN-01 network safety guard blocked external network access during standard "
+    "Backend test network safety blocked external network access during standard "
     "backend tests. Only the configured dedicated PostgreSQL test database host "
     "and exact port are allowed."
 )
+REPO_ROOT = Path(__file__).resolve().parents[3]
+TEST_SUBPROCESS_PASSTHROUGH_ENVIRONMENT = frozenset(
+    {
+        "CI",
+        "COMSPEC",
+        "GITHUB_ACTIONS",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "PATH",
+        "PATHEXT",
+        "SYSTEMROOT",
+        "TEMP",
+        "TERM",
+        "TMP",
+        "TMPDIR",
+        "TZ",
+        "WINDIR",
+    }
+)
+SYNTHETIC_TEST_SUBPROCESS_ENVIRONMENT = {
+    "ALLOWED_HOSTS": "testserver,localhost,127.0.0.1",
+    "AWS_EC2_METADATA_DISABLED": "true",
+    "CORS_ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173",
+    "ENABLE_API_DOCS": "false",
+    "ENABLE_DB_HEALTH": "true",
+    "ENABLE_STRIPE_PAYMENTS": "false",
+    "FIREBASE_APP_CHECK_MODE": "disabled",
+    "FIREBASE_PROJECT_ID": "pickup-lane-synthetic",
+    "INBOX_TOKEN_SECRET": "synthetic-inbox-test-token",
+    "PYTHONPATH": str(REPO_ROOT),
+    "STRIPE_CURRENCY": "USD",
+    "STRIPE_PUBLISHABLE_KEY": "synthetic-stripe-publishable-key",
+    "STRIPE_SECRET_KEY": "synthetic-stripe-secret-key",
+    "STRIPE_WEBHOOK_SECRET": "synthetic-stripe-webhook-secret",
+}
 
 
 class EnvironmentSafetyError(RuntimeError):
     """Raised when backend tests would use an unsafe resource."""
+
+
+def isolated_test_subprocess_environment(
+    environ: Mapping[str, str] | None = None,
+    *,
+    overrides: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Build a minimal synthetic environment for a test-owned child process."""
+
+    source = os.environ if environ is None else environ
+    child = {
+        name: source[name]
+        for name in TEST_SUBPROCESS_PASSTHROUGH_ENVIRONMENT
+        if source.get(name)
+    }
+    ci_enabled = any(
+        source.get(name, "").strip().lower() not in {"", "0", "false", "no", "off"}
+        for name in ("CI", "GITHUB_ACTIONS")
+    )
+    child.update(SYNTHETIC_TEST_SUBPROCESS_ENVIRONMENT)
+    child["APP_ENV"] = "ci" if ci_enabled else "test"
+    if overrides:
+        child.update(overrides)
+    return child
 
 
 def validate_test_database_connection_environment(
@@ -82,7 +142,7 @@ def parse_database_url(database_url: str, *, name: str = "DATABASE_URL") -> Pars
     host = parsed.host or ""
     if not host:
         raise EnvironmentSafetyError(
-            f"{name} must include a PostgreSQL host so the EN-01 network "
+            f"{name} must include a PostgreSQL host so the backend test network "
             "guard can enforce the configured host-and-port boundary."
         )
 
@@ -341,7 +401,7 @@ def build_allowed_database_network(
         address_infos = resolver(parsed.host, parsed.port, type=socket.SOCK_STREAM)
     except OSError as exc:
         raise EnvironmentSafetyError(
-            "Configured PostgreSQL test host could not be resolved for EN-01 "
+            "Configured PostgreSQL test host could not be resolved for backend test "
             f"network safety: {parsed.host!r}."
         ) from exc
 
@@ -426,3 +486,48 @@ def guard_socket_create_connection(
     if socket_address_allowed(address, allowed_network):
         return original_create_connection(address, *args, **kwargs)
     raise EnvironmentSafetyError(NETWORK_BLOCKED_MESSAGE)
+
+
+def install_test_network_guard(database_url: str = ""):
+    """Install the ordinary Python-socket guard and return its restore callback."""
+
+    allowed_network = build_allowed_database_network(database_url)
+    original_connect = socket.socket.connect
+    original_connect_ex = socket.socket.connect_ex
+    original_create_connection = socket.create_connection
+
+    def guarded_connect(socket_instance, address):
+        return guard_socket_connect(
+            original_connect,
+            allowed_network,
+            socket_instance,
+            address,
+        )
+
+    def guarded_connect_ex(socket_instance, address):
+        return guard_socket_connect_ex(
+            original_connect_ex,
+            allowed_network,
+            socket_instance,
+            address,
+        )
+
+    def guarded_create_connection(address, *args, **kwargs):
+        return guard_socket_create_connection(
+            original_create_connection,
+            allowed_network,
+            address,
+            *args,
+            **kwargs,
+        )
+
+    socket.socket.connect = guarded_connect
+    socket.socket.connect_ex = guarded_connect_ex
+    socket.create_connection = guarded_create_connection
+
+    def restore() -> None:
+        socket.socket.connect = original_connect
+        socket.socket.connect_ex = original_connect_ex
+        socket.create_connection = original_create_connection
+
+    return restore

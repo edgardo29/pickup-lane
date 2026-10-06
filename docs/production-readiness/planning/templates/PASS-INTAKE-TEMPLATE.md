@@ -14,7 +14,7 @@ The intake must determine whether the parent:
 - should execute as one pass;
 - should be split into multiple executable passes;
 - is blocked by a technical prerequisite;
-- is blocked by an owner or authority decision.
+- is blocked by an owner decision.
 
 The intake is not an implementation plan.
 
@@ -30,9 +30,12 @@ Write the reader-facing parts for a competent developer who needs to understand:
 - where every major part of the parent scope belongs;
 - what engineering work can proceed next.
 
-Authority controls technical meaning, approved scope, dependencies, identifiers,
-and accepted decisions. Authority wording does not need to be copied verbatim.
-Preserve the meaning and express it in normal technical language.
+The corrected master controls the selected production-readiness scope.
+Applicable current product requirements, owner decisions, and technical
+standards govern behavior, technical constraints, dependencies, identifiers,
+and decisions within that scope; they do not independently expand the selected
+pass. Name those sources precisely in `Internal Record`; in the reader-facing
+sections, preserve their meaning and express it in normal technical language.
 
 Internal production-readiness bookkeeping belongs only in `Internal Record`
 unless an exact process term is genuinely necessary to understand the
@@ -119,7 +122,8 @@ Do not define here:
 
 - detailed APIs;
 - exact implementation algorithms;
-- exact configuration values unless already approved and necessary to the split;
+- exact configuration values unless already decided by a requirement source
+  and necessary to the split;
 - detailed formulas;
 - detailed failure handling;
 - detailed permission models;
@@ -171,7 +175,7 @@ A split should exist because the work has genuinely different:
 - verification environments;
 - technical ownership;
 - dependency order;
-- source-versus-external evidence needs;
+- repository-verification versus external-verification needs;
 - independently acceptable outcomes.
 
 Do not split merely to make individual passes smaller.
@@ -202,7 +206,7 @@ Do not replace unknown information with:
 - test values;
 - examples;
 - library defaults;
-- assumed provider behavior.
+- assumed external-service behavior.
 
 ---
 
@@ -263,9 +267,9 @@ Then include only information that changes the execution decision.
 
 Relevant information may include:
 
-- current system or source behavior;
+- accepted repository behavior and relevant current branch changes;
 - parent scope;
-- approved technical decisions;
+- applicable owner decisions;
 - completed prerequisites;
 - technical dependencies;
 - external dependencies;
@@ -290,10 +294,11 @@ A compact table may be used when it improves clarity:
 |---|---|---|
 | `[Relevant area]` | `[Current fact, decision, dependency, or unknown]` | `[Effect on whether/how the work can execute]` |
 
-Do not claim external production, provider, runtime, account, deployment,
-backup, access, or operational facts from repository source alone.
+Do not claim external production, service, runtime, account, deployment,
+backup, access, or operational facts from repository content alone. Those facts
+require external evidence.
 
-Exact authority citations and workflow references belong in `Internal Record`
+Exact requirement-source citations and workflow references belong in `Internal Record`
 unless the reader needs them to understand the engineering decision.
 
 ---
@@ -308,7 +313,7 @@ Choose exactly one outcome:
 - execute the parent as one pass;
 - split the parent;
 - blocked on a technical prerequisite;
-- blocked on an owner or authority decision.
+- blocked on an owner decision.
 
 State the outcome directly.
 
@@ -449,11 +454,11 @@ Include only metadata the workflow actually needs, such as:
 
 - parent ID;
 - intake outcome;
-- accepted baseline;
+- accepted starting point;
 - intake path;
-- authority references;
+- requirement sources;
 - execution-register state;
-- approved prerequisite or decision references;
+- prerequisite or owner-decision references;
 - child IDs and order;
 - proposed canonical plan path;
 - proposed test or verification location;
@@ -465,12 +470,12 @@ Use a table when exact values are easier to review:
 | Detail | Value |
 |---|---|
 | Parent pass | `[PASS-ID - title]` |
-| Intake outcome | `[execute parent / split / blocked on prerequisite / blocked on owner-authority decision]` |
-| Accepted baseline | `[Accepted baseline SHA or equivalent]` |
+| Intake outcome | `[execute parent / split / blocked on prerequisite / blocked on owner decision]` |
+| Accepted starting point | `[Current accepted develop state from which later implementation will begin]` |
 | Intake path | `docs/production-readiness/planning/passes/<family>/<parent-id>-intake.md` |
-| Authority sources | `[Relevant authoritative sources]` |
-| Execution-register state | `[Current accepted state relevant to the parent]` |
-| Approved decisions and prerequisites | `[Relevant decisions and completed prerequisites / None]` |
+| Requirement sources | `[Corrected-master entry, applicable product requirements, owner decisions, and technical standards]` |
+| Execution-register state | `[Accepted or intended post-merge state relevant to the parent]` |
+| Owner decisions and prerequisites | `[Applicable owner decisions and completed prerequisites / None]` |
 | Child order | `[PASS-A -> PASS-B -> PASS-C / Not applicable]` |
 | Proposed canonical plan path | `[Path for next executable work / Not applicable]` |
 | Proposed test or verification location | `[Path / Not applicable]` |
@@ -575,6 +580,3 @@ Verify that the intake contains no:
 - session-only state;
 - internal chat material;
 - other sensitive information that should not be committed.
-
-After approval, freeze the intake according to the production-readiness
-workflow.

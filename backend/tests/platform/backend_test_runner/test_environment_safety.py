@@ -21,6 +21,8 @@ from backend.tests.support.environment_safety import (
     guard_socket_connect,
     guard_socket_connect_ex,
     guard_socket_create_connection,
+    install_test_network_guard,
+    isolated_test_subprocess_environment,
     registered_sqlalchemy_table_names,
     socket_address_allowed,
     validate_dedicated_test_database_url,
@@ -471,3 +473,81 @@ def test_network_guard_is_active_for_session_scoped_fixture(
     session_level_network_guard_error,
 ):
     assert NETWORK_BLOCKED_MESSAGE in session_level_network_guard_error
+
+
+def test_isolated_subprocess_environment_drops_ambient_credentials_and_options():
+    child = isolated_test_subprocess_environment(
+        {
+            "PATH": "/synthetic/bin",
+            "DATABASE_URL": SAFE_DATABASE_URL,
+            "PYTEST_ADDOPTS": "-k unsafe",
+            "R2_SECRET_ACCESS_KEY": "application-r2-secret",
+            "R2_TEST_SECRET_ACCESS_KEY": "provider-r2-secret",
+            "UNRELATED_SECRET": "unrelated-secret",
+        },
+        overrides={"DATABASE_URL": SAFE_DATABASE_URL},
+    )
+
+    assert child["APP_ENV"] == "test"
+    assert child["PATH"] == "/synthetic/bin"
+    assert child["DATABASE_URL"] == SAFE_DATABASE_URL
+    assert child["CORS_ALLOWED_ORIGINS"] == (
+        "http://localhost:5173,http://127.0.0.1:5173"
+    )
+    assert child["ENABLE_DB_HEALTH"] == "true"
+    assert child["STRIPE_SECRET_KEY"] == "synthetic-stripe-secret-key"
+    assert "PYTEST_ADDOPTS" not in child
+    assert "R2_SECRET_ACCESS_KEY" not in child
+    assert "R2_TEST_SECRET_ACCESS_KEY" not in child
+    assert "UNRELATED_SECRET" not in child
+
+
+def test_install_test_network_guard_blocks_external_access_and_restores(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def original_connect(_socket, _address):
+        return "connected"
+
+    def original_connect_ex(_socket, _address):
+        return 0
+
+    def original_create_connection(_address, *_args, **_kwargs):
+        return object()
+
+    monkeypatch.setattr(socket.socket, "connect", original_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", original_connect_ex)
+    monkeypatch.setattr(socket, "create_connection", original_create_connection)
+
+    restore = install_test_network_guard()
+    try:
+        with pytest.raises(EnvironmentSafetyError, match="blocked external network"):
+            socket.create_connection(("api.stripe.com", 443))
+    finally:
+        restore()
+
+    assert socket.socket.connect is original_connect
+    assert socket.socket.connect_ex is original_connect_ex
+    assert socket.create_connection is original_create_connection
+
+
+@pytest.mark.parametrize(
+    ("address", "expected"),
+    [
+        (("abc123.r2.cloudflarestorage.com", 443), True),
+        (("ABC123.R2.CLOUDFLARESTORAGE.COM.", 443), True),
+        (("192.0.2.25", 443), True),
+        (("other.r2.cloudflarestorage.com", 443), False),
+        (("abc123.r2.cloudflarestorage.com", 80), False),
+        (("192.0.2.26", 443), False),
+    ],
+)
+@pytest.mark.pass_provenance("WS06-02")
+def test_r2_provider_contract_network_allows_only_exact_host_or_resolved_address(
+    address,
+    expected: bool,
+):
+    assert backend_conftest._r2_socket_address_allowed(
+        address,
+        expected_hostname="abc123.r2.cloudflarestorage.com",
+        allowed_addresses={"192.0.2.25", "2001:db8::25"},
+    ) is expected

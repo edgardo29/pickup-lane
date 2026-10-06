@@ -38,9 +38,9 @@ def _session():
 def _user(index: int) -> User:
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-c3a-service-user-{index}-{uuid.uuid4()}",
+        auth_user_id=f"chat-rate-limit-service-user-{index}-{uuid.uuid4()}",
         role="player",
-        email=f"ws02-c3a-service-{index}-{uuid.uuid4()}@example.invalid",
+        email=f"chat-rate-limit-service-{index}-{uuid.uuid4()}@example.invalid",
         first_name="Rate",
         last_name=f"User{index}",
         account_status="active",

@@ -13,7 +13,6 @@ from backend.schemas.community_game_detail_schema import CommunityGameDetailCrea
 from backend.schemas.user_schema import UserRead
 from backend.services import stripe_service
 
-
 _NOW = datetime(2035, 8, 1, 15, 0, tzinfo=timezone.utc)
 
 
@@ -36,8 +35,8 @@ def _user(index: int = 1) -> User:
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws04-02c-user-{index}-{unique}",
-        email=f"ws04-02c-user-{index}-{unique}@example.invalid",
+        auth_user_id=f"transaction-boundary-user-{index}-{unique}",
+        email=f"transaction-boundary-user-{index}-{unique}@example.invalid",
         first_name="Value",
         last_name=f"User{index}",
         date_of_birth=date(1990, 1, 1),
@@ -47,7 +46,7 @@ def _user(index: int = 1) -> User:
 def _venue(index: int = 1) -> Venue:
     return Venue(
         id=uuid.uuid4(),
-        name=f"WS04-02C Court {index}",
+        name=f"Default Value Court {index}",
         address_line_1="1 Value Contract Way",
         city="Austin",
         state="TX",
@@ -67,7 +66,7 @@ def _game(host: User, venue: Venue, index: int, *, official: bool = False) -> Ga
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title=f"WS04-02C Game {index}",
+        title=f"Default Value Game {index}",
         venue_id=venue.id,
         venue_name_snapshot=venue.name,
         address_snapshot=venue.address_line_1,
@@ -195,7 +194,7 @@ def test_stripe_adapter_sends_integer_cents_without_float_conversion(monkeypatch
         def create(self, payload: dict[str, object], *, options: dict[str, object]):
             self.calls.append((payload, options))
             return SimpleNamespace(
-                id="pi_ws04_02c",
+                id="pi_database_default",
                 client_secret=None,
                 status="requires_payment_method",
                 latest_charge=None,
@@ -214,16 +213,16 @@ def test_stripe_adapter_sends_integer_cents_without_float_conversion(monkeypatch
     result = stripe_service.create_payment_intent(
         amount_cents=1234,
         currency="USD",
-        idempotency_key="ws04-02c-payment-intent",
+        idempotency_key="transaction-boundary-payment-intent",
         metadata={"booking_id": uuid.uuid4()},
     )
 
     payload, options = payment_intents.calls[0]
-    assert result.id == "pi_ws04_02c"
+    assert result.id == "pi_database_default"
     assert payload["amount"] == 1234
     assert isinstance(payload["amount"], int)
     assert payload["currency"] == "usd"
-    assert options == {"idempotency_key": "ws04-02c-payment-intent"}
+    assert options == {"idempotency_key": "transaction-boundary-payment-intent"}
 
 
 @pytest.mark.pass_provenance('WS04-02C')

@@ -51,9 +51,9 @@ def _session():
 def _user(index: int, *, role: str = "player") -> User:
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-c3a-game-user-{index}-{uuid.uuid4()}",
+        auth_user_id=f"chat-rate-limit-game-user-{index}-{uuid.uuid4()}",
         role=role,
-        email=f"ws02-c3a-game-{index}-{uuid.uuid4()}@example.invalid",
+        email=f"chat-rate-limit-game-{index}-{uuid.uuid4()}@example.invalid",
         first_name="Game",
         last_name=f"User{index}",
         account_status="active",
@@ -85,7 +85,7 @@ def _game(host: User, venue: Venue, index: int) -> Game:
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title=f"C3A Game {index}",
+        title=f"Rate Limit Game {index}",
         venue_id=venue.id,
         venue_name_snapshot=venue.name,
         address_snapshot=venue.address_line_1,
@@ -268,7 +268,7 @@ def test_game_chat_sixth_message_rejects_without_send_side_effects() -> None:
 @pytest.mark.pass_provenance('WS02-04C3A')
 def test_game_chat_authorization_happens_before_limiter_disclosure() -> None:
     with _session() as db:
-        sender, _recipient, outsider, chat, _other_chat = _context(db)
+        _sender, _recipient, outsider, chat, _other_chat = _context(db)
         for index in range(5):
             db.add(_message(chat_id=chat.id, sender_user_id=outsider.id, index=index))
         db.commit()
@@ -356,7 +356,7 @@ def test_game_chat_visibility_restoration_and_non_text_boundaries() -> None:
 
 
 @pytest.mark.pass_provenance('WS02-04C3A')
-def test_game_chat_rate_limiter_remains_before_b1_total_history_cap() -> None:
+def test_game_chat_rate_limiter_remains_before_total_history_cap() -> None:
     source = inspect.getsource(game_chat_service.create_chat_message_record)
 
     assert source.index("validate_sender_rate_limit") < source.index("validate_total_message_limit")

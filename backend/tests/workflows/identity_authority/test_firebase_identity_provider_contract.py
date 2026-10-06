@@ -52,7 +52,7 @@ class _AuthFake:
         }
         self.user_record = user_record or SimpleNamespace(
             uid="firebase-uid",
-            email="provider-email@example.invalid",
+            email="firebase-email@example.invalid",
             email_verified=True,
             disabled=False,
         )
@@ -129,7 +129,7 @@ def _install_firebase_fakes(
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_firebase_admin_verification_is_project_bound_and_provider_authoritative(
+def test_firebase_admin_verification_is_project_bound_and_firebase_authoritative(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     decoded_token = {
@@ -138,16 +138,16 @@ def test_firebase_admin_verification_is_project_bound_and_provider_authoritative
         "email_verified": False,
         "auth_time": 1_700_000_000,
     }
-    provider_user = SimpleNamespace(
-        uid="provider-uid",
-        email="current-provider-email@example.invalid",
+    firebase_user = SimpleNamespace(
+        uid="firebase-uid",
+        email="current-firebase-email@example.invalid",
         email_verified=True,
         disabled=False,
     )
     admin_fake, auth_fake = _install_firebase_fakes(
         monkeypatch,
         decoded_token=decoded_token,
-        user_record=provider_user,
+        user_record=firebase_user,
     )
 
     authoritative_token = firebase_client.verify_firebase_token("synthetic-id-token")
@@ -167,8 +167,8 @@ def test_firebase_admin_verification_is_project_bound_and_provider_authoritative
     assert auth_fake.get_user_calls == [
         {"uid": "decoded-uid", "app": admin_fake.get_app()}
     ]
-    assert authoritative_token["uid"] == "provider-uid"
-    assert authoritative_token["email"] == "current-provider-email@example.invalid"
+    assert authoritative_token["uid"] == "firebase-uid"
+    assert authoritative_token["email"] == "current-firebase-email@example.invalid"
     assert authoritative_token["email_verified"] is True
     assert authoritative_token["auth_time"] == 1_700_000_000
 
@@ -191,7 +191,7 @@ def test_firebase_token_requires_valid_uid(
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_disabled_provider_account_is_denied(
+def test_disabled_firebase_account_is_denied(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_firebase_fakes(
@@ -209,12 +209,12 @@ def test_disabled_provider_account_is_denied(
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_deleted_or_missing_provider_account_is_denied(
+def test_deleted_or_missing_firebase_account_is_denied(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_firebase_fakes(
         monkeypatch,
-        get_user_exc=_AuthFake.UserNotFoundError("provider user missing"),
+        get_user_exc=_AuthFake.UserNotFoundError("Firebase user missing"),
     )
 
     with pytest.raises(_AuthFake.UserNotFoundError):
@@ -246,10 +246,10 @@ def test_invalid_expired_revoked_or_wrong_project_style_credentials_fail_closed(
     "verify_exc",
     [
         _AuthFake.CertificateFetchError("certificate endpoint unavailable"),
-        RuntimeError("raw provider stack detail"),
+        RuntimeError("raw Firebase stack detail"),
     ],
 )
-def test_provider_unavailable_errors_are_classified_without_raw_provider_detail(
+def test_firebase_unavailable_errors_are_classified_without_raw_firebase_detail(
     monkeypatch: pytest.MonkeyPatch,
     verify_exc: Exception,
 ) -> None:
@@ -259,11 +259,11 @@ def test_provider_unavailable_errors_are_classified_without_raw_provider_detail(
         firebase_client.verify_firebase_token("synthetic-id-token")
 
     assert str(exc_info.value) == "Firebase identity state is unavailable."
-    assert "raw provider stack detail" not in str(exc_info.value)
+    assert "raw Firebase stack detail" not in str(exc_info.value)
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_missing_project_configuration_fails_before_provider_verification(
+def test_missing_project_configuration_fails_before_firebase_verification(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _admin_fake, auth_fake = _install_firebase_fakes(monkeypatch, project_id=None)
@@ -276,17 +276,17 @@ def test_missing_project_configuration_fails_before_provider_verification(
 
 @pytest.mark.pass_provenance('WS03-01')
 @pytest.mark.parametrize(
-    ("provider_exc", "expected_status", "expected_detail"),
+    ("firebase_exc", "expected_status", "expected_detail"),
     [
         (
             FirebaseAdminConfigError("secret credential path should not leak"),
             503,
-            "Authentication provider is not configured.",
+            "Firebase authentication is not configured.",
         ),
         (
-            FirebaseIdentityUnavailableError("raw provider outage should not leak"),
+            FirebaseIdentityUnavailableError("raw Firebase outage should not leak"),
             503,
-            "Authentication provider is unavailable.",
+            "Firebase authentication is unavailable.",
         ),
         (
             _AuthFake.InvalidIdTokenError("raw invalid token detail should not leak"),
@@ -295,16 +295,16 @@ def test_missing_project_configuration_fails_before_provider_verification(
         ),
     ],
 )
-def test_public_auth_errors_do_not_leak_provider_exception_details(
+def test_public_auth_errors_do_not_leak_firebase_exception_details(
     monkeypatch: pytest.MonkeyPatch,
-    provider_exc: Exception,
+    firebase_exc: Exception,
     expected_status: int,
     expected_detail: str,
 ) -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     def fail_verification(_token: str) -> dict:
-        raise provider_exc
+        raise firebase_exc
 
     monkeypatch.setattr(auth_service, "verify_firebase_token", fail_verification)
 
@@ -316,4 +316,4 @@ def test_public_auth_errors_do_not_leak_provider_exception_details(
     assert exc_info.value.status_code == expected_status
     assert exc_info.value.detail == expected_detail
     assert "secret credential path" not in str(exc_info.value.detail)
-    assert "raw provider" not in str(exc_info.value.detail)
+    assert "raw Firebase" not in str(exc_info.value.detail)

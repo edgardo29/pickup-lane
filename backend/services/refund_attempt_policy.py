@@ -75,9 +75,9 @@ def refund_event_has_authoritative_provider_observation(
 def refund_event_has_authoritative_attempt_status(event: RefundEvent) -> bool:
     """Return whether an event can prove an immutable attempt state.
 
-    Provider observations must carry matching normalized provider and refund
+    Stripe observations must carry matching normalized Stripe and refund
     statuses. Local terminal evidence is accepted only when the writer records
-    the explicit fact that no provider call started. Other local status events
+    the explicit fact that no Stripe call started. Other local status events
     remain audit history and cannot prove that an attempt is incapable of later
     returning value.
     """

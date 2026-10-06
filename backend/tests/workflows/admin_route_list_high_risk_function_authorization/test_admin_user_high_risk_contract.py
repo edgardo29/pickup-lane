@@ -16,7 +16,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
 )
 
 
-
 @pytest.mark.pass_provenance('WS03-04D')
 def test_recent_active_admin_can_change_user_role_and_replay_idempotently(
     monkeypatch: pytest.MonkeyPatch,
@@ -28,7 +27,7 @@ def test_recent_active_admin_can_change_user_role_and_replay_idempotently(
     _add_users(admin, target)
     _install_tokens_for_users(monkeypatch, {"admin-token": admin})
 
-    idempotency_key = f"ws03d-role-success-{uuid.uuid4()}"
+    idempotency_key = f"admin_authorization-role-success-{uuid.uuid4()}"
     payload = {
         "role": "admin",
         "reason": "Promote trusted staff member for admin testing.",
@@ -77,7 +76,7 @@ def test_user_role_write_rejects_server_controlled_extra_fields_without_side_eff
         json={
             "role": "admin",
             "reason": "Extra caller fields should not be accepted.",
-            "idempotency_key": f"ws03d-role-extra-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-role-extra-{uuid.uuid4()}",
             "admin_user_id": str(uuid.uuid4()),
         },
         headers=_auth_headers("admin-token"),
@@ -132,7 +131,7 @@ def test_user_admin_actions_preserve_final_admin_and_current_state_guards(
         json={
             "role": "player",
             "reason": "The last active admin cannot be demoted.",
-            "idempotency_key": f"ws03d-final-admin-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-final-admin-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -141,7 +140,7 @@ def test_user_admin_actions_preserve_final_admin_and_current_state_guards(
         json={
             "preview_token": "s" * 64,
             "reason": "Already suspended accounts must not be resuspended.",
-            "idempotency_key": f"ws03d-resuspend-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-resuspend-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -150,7 +149,7 @@ def test_user_admin_actions_preserve_final_admin_and_current_state_guards(
         json={
             "preview_token": "h" * 64,
             "reason": "Already restricted hosts must not be restricted again.",
-            "idempotency_key": f"ws03d-rerestrict-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-rerestrict-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -199,7 +198,7 @@ def test_recent_admin_user_account_hosting_and_delete_actions_persist_state(
     )
     assert suspend_preview.status_code == 200
     suspend_token = suspend_preview.json()["preview_token"]
-    suspend_idempotency = f"ws03d-suspend-success-{uuid.uuid4()}"
+    suspend_idempotency = f"admin_authorization-suspend-success-{uuid.uuid4()}"
     suspend = client.post(
         f"/admin/users/{suspend_target.id}/suspend",
         json={
@@ -229,7 +228,7 @@ def test_recent_admin_user_account_hosting_and_delete_actions_persist_state(
         f"/admin/users/{suspend_target.id}/unsuspend",
         json={
             "reason": "Restore local test account after admin suspension proof.",
-            "idempotency_key": f"ws03d-unsuspend-success-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-unsuspend-success-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -248,7 +247,7 @@ def test_recent_admin_user_account_hosting_and_delete_actions_persist_state(
         json={
             "preview_token": hosting_token,
             "reason": "Restrict local test hosting for admin authorization proof.",
-            "idempotency_key": f"ws03d-restrict-hosting-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-restrict-hosting-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -260,7 +259,7 @@ def test_recent_admin_user_account_hosting_and_delete_actions_persist_state(
         f"/admin/users/{hosting_target.id}/restore-hosting",
         json={
             "reason": "Restore local test hosting after admin restriction proof.",
-            "idempotency_key": f"ws03d-restore-hosting-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-restore-hosting-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -279,7 +278,7 @@ def test_recent_admin_user_account_hosting_and_delete_actions_persist_state(
         json={
             "preview_token": delete_token,
             "reason": "Delete disposable local test account for admin proof.",
-            "idempotency_key": f"ws03d-delete-user-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-delete-user-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )

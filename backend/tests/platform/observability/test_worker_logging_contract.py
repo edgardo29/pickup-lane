@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import textwrap
@@ -25,12 +24,18 @@ from backend.services.durable_job_service import (
     JobInspectionSummary,
     WorkerHeartbeatSummary,
 )
+from backend.tests.support.environment_safety import (
+    isolated_test_subprocess_environment,
+)
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
     pytest.mark.pass_provenance('WS09-01A'),
 ]
 _REPO_ROOT = Path(__file__).resolve().parents[4]
+_SYNTHETIC_DATABASE_URL = (
+    "postgresql+psycopg://127.0.0.1:5432/pickup_lane_test_db"
+)
 
 
 def test_api_and_worker_bootstrap_precede_database_and_business_imports() -> None:
@@ -56,6 +61,9 @@ def test_pre_bootstrap_import_failure_remains_a_host_runtime_boundary() -> None:
     script = textwrap.dedent(
         f"""
         import builtins
+        from backend.tests.support.environment_safety import install_test_network_guard
+
+        install_test_network_guard()
 
         real_import = builtins.__import__
 
@@ -72,7 +80,7 @@ def test_pre_bootstrap_import_failure_remains_a_host_runtime_boundary() -> None:
     completed = subprocess.run(
         [sys.executable, "-c", script],
         cwd=_REPO_ROOT,
-        env=os.environ.copy(),
+        env=isolated_test_subprocess_environment(),
         capture_output=True,
         text=True,
         check=False,
@@ -90,12 +98,14 @@ def test_post_bootstrap_api_import_failure_is_fixed_by_uvicorn_handler() -> None
         f"""
         import builtins
         import logging
+        from backend.tests.support.environment_safety import install_test_network_guard
         from backend.observability.structured_logging import (
             RuntimeEventEmitter,
             configure_process_logging,
             prepare_api_logging,
         )
 
+        install_test_network_guard()
         prepare_api_logging()
         configure_process_logging(RuntimeEventEmitter("api", "test", "test-release"))
         real_import = builtins.__import__
@@ -116,7 +126,7 @@ def test_post_bootstrap_api_import_failure_is_fixed_by_uvicorn_handler() -> None
     completed = subprocess.run(
         [sys.executable, "-c", script],
         cwd=_REPO_ROOT,
-        env=os.environ.copy(),
+        env=isolated_test_subprocess_environment(),
         capture_output=True,
         text=True,
         check=False,
@@ -163,6 +173,9 @@ def test_post_bootstrap_worker_failure_is_safe_at_real_process_boundary() -> Non
     private_text = "Bearer private-subprocess-canary user@example.invalid"
     script = textwrap.dedent(
         f"""
+        from backend.tests.support.environment_safety import install_test_network_guard
+
+        install_test_network_guard()
         import backend.database
         from backend import durable_worker
 
@@ -177,7 +190,9 @@ def test_post_bootstrap_worker_failure_is_safe_at_real_process_boundary() -> Non
     completed = subprocess.run(
         [sys.executable, "-c", script],
         cwd=_REPO_ROOT,
-        env=os.environ.copy(),
+        env=isolated_test_subprocess_environment(
+            overrides={"DATABASE_URL": _SYNTHETIC_DATABASE_URL}
+        ),
         capture_output=True,
         text=True,
         check=False,

@@ -23,7 +23,6 @@ from backend.models import (
 )
 from backend.schemas.game_schema import GameGuestAddCreate, GameJoinCreate
 
-
 _BASE_TIME = datetime(2035, 6, 1, 18, 0, tzinfo=timezone.utc)
 
 
@@ -37,22 +36,22 @@ def _user(index: int, *, role: str = "player", with_stripe: bool = False) -> Use
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws04-02b-user-{index}-{unique}",
+        auth_user_id=f"database-concurrency-user-{index}-{unique}",
         role=role,
-        email=f"ws04-02b-user-{index}-{unique}@example.invalid",
+        email=f"database-concurrency-user-{index}-{unique}@example.invalid",
         first_name="Invariant",
         last_name=f"User{index}",
         date_of_birth=date(1990, 1, 1),
         account_status="active",
         hosting_status="eligible",
-        stripe_customer_id=f"cus_ws04_02b_{index}_{unique}" if with_stripe else None,
+        stripe_customer_id=f"cus_roster_capacity_{index}_{unique}" if with_stripe else None,
     )
 
 
 def _venue(index: int = 1) -> Venue:
     return Venue(
         id=uuid.uuid4(),
-        name=f"WS04-02B Field {index}",
+        name=f"Roster Concurrency Field {index}",
         address_line_1="1 Lock Order Way",
         city="Austin",
         state="TX",
@@ -84,7 +83,7 @@ def _game(
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title=f"WS04-02B Game {index}",
+        title=f"Roster Concurrency Game {index}",
         venue_id=venue.id,
         venue_name_snapshot=venue.name,
         address_snapshot=venue.address_line_1,
@@ -175,9 +174,9 @@ def _payment_method(user: User, index: int) -> UserPaymentMethod:
     return UserPaymentMethod(
         id=uuid.uuid4(),
         user_id=user.id,
-        stripe_customer_id=user.stripe_customer_id or f"cus_ws04_02b_missing_{index}",
-        stripe_payment_method_id=f"pm_ws04_02b_{index}_{uuid.uuid4()}",
-        card_fingerprint=f"fingerprint_ws04_02b_{index}_{uuid.uuid4()}",
+        stripe_customer_id=user.stripe_customer_id or f"cus_roster_capacity_missing_{index}",
+        stripe_payment_method_id=f"pm_roster_capacity_{index}_{uuid.uuid4()}",
+        card_fingerprint=f"fingerprint_roster_capacity_{index}_{uuid.uuid4()}",
         card_brand="visa",
         card_last4=f"{index:04d}"[-4:],
         exp_month=12,
@@ -646,7 +645,7 @@ def test_paid_waitlist_promotion_commits_capacity_hold_before_provider_call(
             position=1,
             waitlist_status="active",
             auto_charge_consent_at=_BASE_TIME,
-            auto_charge_consent_version="ws04-02b-test",
+            auto_charge_consent_version="database-concurrency-test",
             authorized_payment_method_id=waitlisted_payment_method.id,
             authorized_stripe_payment_method_id=waitlisted_payment_method.stripe_payment_method_id,
             authorized_payment_method_brand=waitlisted_payment_method.card_brand,
@@ -694,12 +693,12 @@ def test_paid_waitlist_promotion_commits_capacity_hold_before_provider_call(
                 GameJoinCreate(
                     payment_method_id=competing_payment_method_id,
                     auto_charge_consent_accepted=True,
-                    auto_charge_consent_version="ws04-02b-test",
+                    auto_charge_consent_version="database-concurrency-test",
                 ),
             )
         )
         return StripePaymentIntentResult(
-            id="pi_ws04_02b_waitlist_hold",
+            id="pi_roster_capacity_waitlist_hold",
             client_secret=None,
             status="requires_confirmation",
             latest_charge_id=None,

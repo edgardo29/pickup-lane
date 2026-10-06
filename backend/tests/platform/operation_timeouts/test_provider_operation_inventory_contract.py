@@ -141,13 +141,16 @@ def test_current_provider_boundaries_are_explicitly_accounted_for() -> None:
     assert hits_by_module["botocore"] == {"backend/services/r2_storage_service.py"}
 
 
-@pytest.mark.pass_provenance('WS02-04C1')
-def test_r2_presign_and_stripe_webhook_boundaries_are_not_counted_as_provider_timeout_proof() -> None:
+@pytest.mark.pass_provenance('WS02-04C1', 'WS06-02')
+def test_r2_object_operations_and_stripe_webhook_boundaries_are_current() -> None:
     r2_source = (_REPO_ROOT / "backend" / "services" / "r2_storage_service.py").read_text()
     stripe_source = (_REPO_ROOT / "backend" / "services" / "stripe_service.py").read_text()
 
     assert "generate_presigned_url" in r2_source
-    assert "head_object" in r2_source
+    assert "get_object" in r2_source
+    assert "put_object" in r2_source
+    assert "delete_object" in r2_source
+    assert "head_object" not in r2_source
     assert "Webhook.construct_event" in stripe_source
     assert "construct_webhook_event" in stripe_source
 

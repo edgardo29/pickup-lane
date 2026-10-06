@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
-from typing import get_args, get_origin
+from typing import Any, get_args, get_origin
 
 import pytest
 from fastapi.routing import APIRoute
@@ -58,15 +57,15 @@ ROOT_OPERATIONAL_REASON = (
 )
 NO_CONTENT_AUTH_REASON = (
     "No-content account cleanup endpoint returns HTTP 204 with no payload to "
-    "minimize; WS03/auth owners prove account lifecycle behavior."
+    "minimize; identity and account-lifecycle owners prove lifecycle behavior."
 )
 RETIRED_TOMBSTONE_REASON = (
     "Retired mutation tombstone returns only the standardized 410 error body; "
-    "WS02-05A and route-lifecycle owners prove tombstone behavior."
+    "HTTP-contract and route-lifecycle owners prove tombstone behavior."
 )
 ADMIN_OPERATIONAL_DICT_REASON = (
     "Active-admin upload readiness check returns a tiny bool capability "
-    "dictionary and no image/provider object data; WS06 owns storage runtime."
+    "dictionary and no Cloudflare R2 object data; venue-image storage owns runtime behavior."
 )
 PROVIDER_WEBHOOK_REASON = (
     "Provider webhook acknowledgement is provider-ingress behavior returning "
@@ -652,7 +651,7 @@ def _operation(openapi: dict[str, Any], method: str, path: str) -> dict[str, Any
 
 
 @pytest.mark.pass_provenance('WS02-05B2')
-def test_b2_routes_declare_expected_response_models() -> None:
+def test_response_minimized_routes_declare_expected_response_models() -> None:
     for (method, path), expected_model_name in B2_ROUTE_MODELS.items():
         route = _route(method, path)
         assert route.response_model is not None, f"{method} {path} missing response_model"

@@ -12,7 +12,7 @@ For an executable production-readiness pass, use:
 <PASS-ID>: <Concise descriptive title>
 ```
 
-Use the exact executable pass ID, a colon, and a concise sentence-case description of the implemented outcome. Example: `WS09-01A: Provider-independent structured API and worker logging`.
+Use the exact executable pass ID, a colon, and a concise sentence-case description of the implemented outcome. Example: `WS09-01A: Add structured API and worker logging`.
 
 Do not use alternate executable-pass forms such as `<PASS-ID> - ...`, `Implement <PASS-ID> ...`, or `Add <PASS-ID> ...`.
 
@@ -42,7 +42,7 @@ Do not add another PR-body section unless explicitly requested for that PR.
 
 Use only as much text as the change requires. Do not add bullets to meet a quota, and do not compress distinct ideas merely to keep the description short.
 
-## Sources Of Truth
+## Drafting Sources
 
 Use:
 
@@ -54,7 +54,8 @@ Plans, pass titles, requirement names, test filenames, directory names, and work
 
 Do not make a claim unless the implementation or executed validation supports it.
 
-When the available evidence does not support a claim, omit the claim.
+When the final implementation or validation results do not support a claim,
+omit the claim.
 
 ## Drafting Process
 
@@ -126,11 +127,11 @@ Do not output the translation list.
 
 Draft `Summary`, `Changes`, and `Validation` from the primary change or unifying purpose and the concrete facts.
 
-### 5. Run The Final Output Gate
+### 5. Review The Final Output
 
 Review every sentence and bullet against the checklist near the end of this template.
 
-Do not return the first draft when any check fails. Rewrite it until the complete PR body passes.
+Do not return the first draft when any check fails. Rewrite it until the complete PR body satisfies the checks.
 
 ## Writing Rules
 
@@ -431,7 +432,7 @@ It must not become roadmap bookkeeping, pass ownership, deferred-work tracking, 
 
 The Validation section explains what important behavior was actually exercised and what observable result occurred.
 
-Use one bullet for each meaningful validation scenario. Include only the bullets needed to communicate the evidence clearly.
+Use one bullet for each meaningful validation scenario. Include only the bullets needed to communicate the results clearly.
 
 Each bullet should lead with the scenario or property, followed by what was exercised and what happened.
 
@@ -468,7 +469,7 @@ Validation should cover the most important applicable areas, such as:
 - invalid-state rejection;
 - authorization failures;
 - compatibility that could realistically regress;
-- database, API, browser, provider, build, or integration behavior affected by the PR.
+- database, API, browser, external-service, build, or integration behavior affected by the PR.
 
 Do not infer validation from:
 
@@ -539,7 +540,7 @@ For configuration-only or mechanical work, describe the relevant checks that act
 - startup rejection of missing or unsafe values;
 - build output;
 - generated-file consistency;
-- repository-approved static checks.
+- repository-defined static checks.
 
 ### Exclude Process-Only Results
 
@@ -555,7 +556,7 @@ Do not use Validation bullets for:
 
 unless the PR materially changes the mechanism being checked.
 
-## Final Output Gate
+## Final Review
 
 Do not return the PR body until every applicable answer is yes.
 

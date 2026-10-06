@@ -291,9 +291,9 @@ def test_stripe_non_timeout_provider_errors_are_not_reclassified_or_replayed() -
     def fail_once() -> None:
         nonlocal calls
         calls += 1
-        raise RuntimeError("synthetic provider failure")
+        raise RuntimeError("synthetic Stripe failure")
 
-    with pytest.raises(RuntimeError, match="synthetic provider failure"):
+    with pytest.raises(RuntimeError, match="synthetic Stripe failure"):
         stripe_service._call_stripe_mutation("payment_intent.create", fail_once)
 
     assert calls == 1

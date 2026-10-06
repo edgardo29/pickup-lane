@@ -24,8 +24,8 @@ import {
   RefundDurableListIndicator,
 } from './adminMoneyRefundPresentation.js'
 
-export function RefundSummary({ providerSnapshot, refund }) {
-  const provider = providerSnapshot || {
+export function RefundSummary({ stripeSnapshot, refund }) {
+  const stripe = stripeSnapshot || {
     provider: refund.provider,
     provider_charge_id: refund.provider_charge_id,
     provider_refund_id: refund.provider_refund_id,
@@ -50,8 +50,8 @@ export function RefundSummary({ providerSnapshot, refund }) {
           <strong>{formatStatus(refund.refund_reason)}</strong>
         </div>
         <div>
-          <span>Provider Status</span>
-          <strong>{formatStatus(provider.provider_status || 'unknown')}</strong>
+          <span>Stripe Status</span>
+          <strong>{formatStatus(stripe.provider_status || 'unknown')}</strong>
         </div>
       </div>
       <div className="admin-money-field-grid">
@@ -60,11 +60,11 @@ export function RefundSummary({ providerSnapshot, refund }) {
         <DetailCodeField label="Booking" value={refund.booking_id} />
         <DetailCodeField label="Participant" value={refund.participant_id} />
         <DetailCodeField label="Publish fee" value={refund.host_publish_fee_id} />
-        <DetailCodeField label="Provider refund" value={provider.provider_refund_id} />
-        <DetailCodeField label="Provider charge" value={provider.provider_charge_id} />
+        <DetailCodeField label="Stripe refund" value={stripe.provider_refund_id} />
+        <DetailCodeField label="Stripe charge" value={stripe.provider_charge_id} />
         <DetailField label="Origin" value={formatStatus(refund.origin_workflow)} />
-        <DetailField label="Provider" value={formatStatus(provider.provider)} />
-        <DetailField label="Provider observed" value={formatDateTime(provider.provider_status_observed_at)} />
+        <DetailField label="Payment service" value={formatStatus(stripe.provider)} />
+        <DetailField label="Stripe observed" value={formatDateTime(stripe.provider_status_observed_at)} />
         <DetailField label="Requested" value={formatDateTime(refund.requested_at)} />
         <DetailField label="Approved" value={formatDateTime(refund.approved_at)} />
         <DetailField label="Refunded" value={formatDateTime(refund.refunded_at)} />

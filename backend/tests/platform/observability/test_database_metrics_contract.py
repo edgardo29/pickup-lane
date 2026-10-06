@@ -77,7 +77,7 @@ def test_statement_origin_wrapping_and_independent_recovery_errors(
                 database.observe_database_timeout(second)
                 session.rollback()
                 with pytest.raises(DBAPIError):
-                    session.execute(text("SELECT * FROM ws09_nonexistent_table"))
+                    session.execute(text("SELECT * FROM nonexistent_test_table"))
                 session.rollback()
             else:
                 pytest.fail("Recovery query must time out")

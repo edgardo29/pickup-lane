@@ -130,7 +130,7 @@ class _CredentialsFake:
 
 
 @pytest.mark.pass_provenance('WS03-01')
-def test_firebase_admin_initialization_passes_configured_project_id_without_provider_call(
+def test_firebase_admin_initialization_passes_configured_project_id_without_firebase_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     admin_fake = _FirebaseAdminFake()

@@ -28,34 +28,34 @@ from backend.schemas.admin_official_game_schema import (
     AdminOfficialGameCancelExecute,
     AdminOfficialGameCreate,
     AdminOfficialGameHostAssign,
-    AdminOfficialGameHostRemove,
     AdminOfficialGameHostRemovalExecute,
+    AdminOfficialGameHostRemove,
     AdminOfficialGamePlayerAdd,
-    AdminOfficialGamePlayerRemove,
     AdminOfficialGamePlayerRemovalExecute,
+    AdminOfficialGamePlayerRemove,
     AdminOfficialGameUpdate,
 )
 from backend.schemas.admin_review_schema import (
     AdminReviewCaseClose,
     AdminReviewCaseNoteCreate,
 )
-from backend.schemas.community_game_detail_schema import (
-    CommunityGameDetailCreate,
-    CommunityGameDetailUpdate,
-)
-from backend.schemas.game_schema import GameCreate, GameUpdate
 from backend.schemas.admin_user_schema import (
     AdminUserDeleteCreate,
-    AdminUserRestrictHostingCreate,
     AdminUserRestoreHostingCreate,
+    AdminUserRestrictHostingCreate,
     AdminUserRoleChangeCreate,
     AdminUserSuspendCreate,
     AdminUserUnsuspendCreate,
+)
+from backend.schemas.community_game_detail_schema import (
+    CommunityGameDetailCreate,
+    CommunityGameDetailUpdate,
 )
 from backend.schemas.game_credit_schema import (
     GameCreditIssueCreate,
     GameCreditReverseCreate,
 )
+from backend.schemas.game_schema import GameCreate, GameUpdate
 from backend.schemas.payment_event_schema import PaymentEventUpdate
 from backend.schemas.platform_notice_schema import (
     PlatformNoticeCancel,
@@ -78,9 +78,8 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
 )
 
 
-
 @pytest.mark.pass_provenance('WS03-04D')
-def test_d_write_schemas_forbid_extra_server_controlled_fields_from_current_source() -> None:
+def test_administrative_write_schemas_forbid_extra_server_controlled_fields_from_current_source() -> None:
     guarded_models = [
         AdminActionCreate,
         AdminActionNoteCreate,
@@ -216,7 +215,7 @@ def test_representative_retired_routes_return_410_without_business_side_effects(
 
 
 @pytest.mark.pass_provenance('WS03-04D')
-def test_all_current_retired_d_routes_return_410_without_business_side_effects(
+def test_all_current_retired_administrative_routes_return_410_without_business_side_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from backend.models import (

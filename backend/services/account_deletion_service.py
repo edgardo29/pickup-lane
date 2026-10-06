@@ -257,7 +257,7 @@ def detach_account_saved_payment_methods(
                     error_type="stripe_detach_outcome_unknown",
                 )
             )
-        except Exception:  # noqa: BLE001 - cleanup must continue after provider failure
+        except Exception:  # noqa: BLE001 - cleanup continues after Stripe failure.
             failures.append(
                 SavedPaymentMethodCleanupFailure(
                     payment_method_id=payment_method.id,

@@ -222,7 +222,7 @@ def validate_checkout_return_url(
     return normalized
 
 
-def require_provider_verified_checkout_payment_method(
+def require_stripe_verified_checkout_payment_method(
     db: Session,
     payment_method_id: uuid.UUID | None,
     current_user: User,
@@ -705,7 +705,7 @@ def resume_pending_checkout_with_locked_game(
     party_size: int,
     subtotal_cents: int,
     now: datetime,
-    provider_verified_payment_method_id: uuid.UUID | None = None,
+    stripe_verified_payment_method_id: uuid.UUID | None = None,
 ) -> GameCheckoutPaymentIntentRead | None:
     reusable_checkout = get_reusable_pending_checkout(
         db,
@@ -727,9 +727,9 @@ def resume_pending_checkout_with_locked_game(
     participant_count = booking.participant_count
     saved_payment_method = None
     if payment.payment_status == "requires_payment_method":
-        if provider_verified_payment_method_id != checkout_request.payment_method_id:
+        if stripe_verified_payment_method_id != checkout_request.payment_method_id:
             db.rollback()
-            verified_payment_method_id = require_provider_verified_checkout_payment_method(
+            verified_payment_method_id = require_stripe_verified_checkout_payment_method(
                 db,
                 checkout_request.payment_method_id,
                 current_user,
@@ -743,7 +743,7 @@ def resume_pending_checkout_with_locked_game(
                 return_url=return_url,
                 party_size=party_size,
                 subtotal_cents=subtotal_cents,
-                provider_verified_payment_method_id=verified_payment_method_id,
+                stripe_verified_payment_method_id=verified_payment_method_id,
             )
         saved_payment_method = get_current_user_saved_payment_method_for_checkout(
             db,
@@ -825,7 +825,7 @@ def resume_pending_checkout_with_locked_game(
     if stripe_status == "requires_payment_method":
         if saved_payment_method is None:
             verify_provider = (
-                provider_verified_payment_method_id
+                stripe_verified_payment_method_id
                 != checkout_request.payment_method_id
             )
             saved_payment_method = get_current_user_saved_payment_method_for_checkout(
@@ -1050,7 +1050,7 @@ def resume_serialized_pending_checkout(
     return_url: str | None,
     party_size: int,
     subtotal_cents: int,
-    provider_verified_payment_method_id: uuid.UUID | None = None,
+    stripe_verified_payment_method_id: uuid.UUID | None = None,
 ) -> GameCheckoutPaymentIntentRead | None:
     db_game = get_locked_active_game_or_404(db, game_id)
     now = get_database_now(db)
@@ -1065,7 +1065,7 @@ def resume_serialized_pending_checkout(
         party_size=party_size,
         subtotal_cents=subtotal_cents,
         now=now,
-        provider_verified_payment_method_id=provider_verified_payment_method_id,
+        stripe_verified_payment_method_id=stripe_verified_payment_method_id,
     )
 
 
@@ -1075,7 +1075,7 @@ def create_game_checkout_payment_intent_workflow(
     checkout_request: GameCheckoutPaymentIntentCreate,
     current_user: User,
     *,
-    provider_verified_payment_method_id: uuid.UUID | None = None,
+    stripe_verified_payment_method_id: uuid.UUID | None = None,
 ) -> GameCheckoutPaymentIntentRead:
     checkpoint_committed = False
     return_url = validate_checkout_return_url(
@@ -1110,7 +1110,7 @@ def create_game_checkout_payment_intent_workflow(
         party_size=party_size,
         subtotal_cents=subtotal_cents,
         now=now,
-        provider_verified_payment_method_id=provider_verified_payment_method_id,
+        stripe_verified_payment_method_id=stripe_verified_payment_method_id,
     )
     if resumed_checkout is not None:
         return resumed_checkout
@@ -1172,9 +1172,9 @@ def create_game_checkout_payment_intent_workflow(
                 detail="Game currency is not supported by Stripe checkout.",
             )
 
-        if provider_verified_payment_method_id != checkout_request.payment_method_id:
+        if stripe_verified_payment_method_id != checkout_request.payment_method_id:
             db.rollback()
-            verified_payment_method_id = require_provider_verified_checkout_payment_method(
+            verified_payment_method_id = require_stripe_verified_checkout_payment_method(
                 db,
                 checkout_request.payment_method_id,
                 current_user,
@@ -1185,7 +1185,7 @@ def create_game_checkout_payment_intent_workflow(
                 game_id,
                 checkout_request,
                 current_user,
-                provider_verified_payment_method_id=verified_payment_method_id,
+                stripe_verified_payment_method_id=verified_payment_method_id,
             )
 
         saved_payment_method = get_current_user_saved_payment_method_for_checkout(
@@ -1365,7 +1365,7 @@ def create_game_checkout_payment_intent_workflow(
             return_url=return_url,
             party_size=party_size,
             subtotal_cents=subtotal_cents,
-            provider_verified_payment_method_id=checkout_request.payment_method_id,
+            stripe_verified_payment_method_id=checkout_request.payment_method_id,
         )
         if resumed_checkout is None:
             raise HTTPException(

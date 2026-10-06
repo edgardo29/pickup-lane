@@ -4,22 +4,24 @@
 
 This document is the stable program overview and routing index for Pickup Lane
 production-readiness work. It explains the system shape, program structure,
-document locations, evidence approach, work selection, and terminology.
+document locations, verification approach, work selection, and terminology.
 
-Startup, authority order, conflict handling, repository safety, and publication
-boundaries are owned by `docs/production-readiness/00-READ-ME-FIRST.md`.
+Startup, requirement-source priority, conflict handling, repository safety, and
+publication boundaries are defined by
+`docs/production-readiness/00-READ-ME-FIRST.md`.
 
 Production-readiness assignments should identify the corrected-master unit and
 any run-specific constraints. This document and the read-first entry point route
-to the applicable workflow, technical standards, and current repository truth;
-historical pass artifacts are read only when they are useful to the work.
+to the applicable workflow, technical standards, accepted repository state,
+and current change set. Historical pass artifacts are read only when they are
+useful to the work.
 
 ## 2. Pickup Lane And Production-Readiness Overview
 
-Pickup Lane is a web application for organizing and operating pickup basketball
-games.
-The production-readiness program spans code, configuration, tests, provider
-settings, runtime proof, operational ownership, and recovery evidence.
+Pickup Lane is a web application for organizing and operating pickup football
+games. The production-readiness program spans code, configuration, tests, external
+service settings, runtime verification, operational ownership, and recovery
+verification.
 
 System areas relevant to production-readiness planning include:
 
@@ -28,82 +30,58 @@ System areas relevant to production-readiness planning include:
 - Database: PostgreSQL, SQLAlchemy models, and Alembic migrations.
 - Authentication: Firebase-backed user identity and admin access behavior.
 - Payments: Stripe-backed payment and checkout flows.
-- External providers: hosting, database provider, Firebase/GCP, Stripe,
-  Cloudflare/R2, DNS/TLS, repository/CI, monitoring, and backup providers.
+- External services and infrastructure providers: hosting, database hosting,
+  Firebase/GCP, Stripe, Cloudflare R2, DNS/TLS, repository/CI, monitoring, and
+  backup providers.
 - Product workflows: games, bookings, rosters, waitlists, Need-a-Sub, chats,
   notifications, venue images, credits, and payment-related state.
 - Admin and operations: admin workflows, moderation, notices, deployment,
-  health, evidence, ownership, incident, recovery, privacy, and provider
-  control-plane behavior.
+  health, verification, ownership, incident, recovery, privacy, and external
+  service control-plane behavior.
 
 Production readiness requires these areas to satisfy the corrected master with
-credible evidence, not merely to pass local tests.
+credible verification at the appropriate source, test, database, provider,
+runtime, or operational boundary, not merely to pass local tests.
 
+## 3. Final Infrastructure Timing And Late-Bound Verification
 
-## 3. Final Infrastructure Timing And Late-Bound Production Evidence
+The read-first document defines the complete final-infrastructure timing rule.
+For routing purposes, classify work in one of two ways:
 
-Temporary development/demo infrastructure must not become permanent production
-architecture merely because it exists in the repository or is currently used for
-a portfolio/demo deployment.
+- **Independent of final infrastructure selection:** correctness does not
+  require facts about the eventual production hosting provider, topology,
+  capacity, account binding, or provider-native settings. Portable source
+  behavior, configuration interfaces, validation, formulas, and synthetic
+  fixtures can belong here.
+- **Requires selected final infrastructure:** correct implementation or
+  verification needs facts about the eventual production hosting, database,
+  edge/TLS topology, runtime shape, capacity, concrete roles or grants, or
+  provider control plane. Keep this work deferred until those facts exist.
 
-Current Vercel frontend hosting, Render API hosting, and Neon PostgreSQL hosting
-are temporary development/demo infrastructure. They may be referenced when
-describing current repository or demo behavior, but they are not the selected
-final production hosting/database topology and must not supply permanent
-provider-specific architecture, capacity assumptions, or final production
-configuration values.
+Vercel, Render, and Neon remain temporary development/demo infrastructure and
+cannot supply final production assumptions. Do not copy final values from them,
+README examples, local or CI settings, free-tier defaults, framework defaults,
+or demo deployments.
 
-Final production hosting, database hosting, edge/ingress/proxy/TLS topology,
-process and instance topology, autoscaling and rolling-deployment behavior,
-provider plan/capacity/region, provider-native deployment settings, concrete
-production roles/grants, and other infrastructure-dependent production facts
-remain late-bound until the final infrastructure is selected and evidence exists.
+When a unit contains both classifications, separate the executable work from a
+mandatory deferred follow-up. Record the follow-up's owner, trigger, preserved
+obligations, dependencies, latest completion boundary, and execution-register
+visibility. Deferral is not verification or completion. Downstream work may
+continue only when it does not need the deferred facts; otherwise stop on the
+specific missing prerequisite.
 
-Planning and implementation must preserve this boundary:
-
-- Complete coherent provider-independent work when it can be implemented and
-  proved without the final infrastructure. This may include portable source
-  behavior, generic configuration interfaces, validation, formulas, synthetic
-  fixtures, and later-verification contracts.
-- A generic setting or configuration interface may be implemented before final
-  infrastructure selection when its existence and validation are provider
-  independent. Concrete production values that depend on the final provider or
-  topology remain deferred.
-- Do not promote values from temporary providers, README examples, local/CI
-  configuration, free-tier defaults, framework defaults, or demo deployments
-  into final production assumptions.
-- If a unit contains both executable-now work and work requiring intentionally
-  unselected final infrastructure, separate them rather than force an early
-  provider choice or leave unrelated work blocked.
-- Every mandatory deferred follow-up must identify its owner/pass, exact trigger,
-  preserved obligations, dependencies, and latest required completion boundary.
-  The execution register must keep that follow-up visible.
-- A deferred follow-up is not evidence and does not complete its requirements.
-  Run it as soon as its trigger is satisfied and no later than the first
-  downstream pass that genuinely needs those facts or `CLOSE-01`, whichever
-  comes first.
-- Downstream work may continue only when its own prerequisites are satisfied
-  without the deferred provider/runtime facts. If it needs one of those facts,
-  stop on that specific missing prerequisite instead of guessing or substituting
-  temporary values.
-
-The master blueprint must identify known final-infrastructure-dependent passes or
-unit portions before implementation reaches them, including the expected trigger
-or late-bound placement. Scoping may refine that structure against current
-repository truth, but it must not rediscover a known infrastructure dependency
-only after implementation begins.
-
-This rule does not reopen provider-specific product integrations that higher
-authority has already fixed. It governs final infrastructure selection and the
-concrete production configuration/evidence that depends on that selection.
+This timing rule does not prohibit a service-specific product integration such
+as Cloudflare R2, Stripe, or Firebase when a current requirement source fixes
+that integration. It governs the still-unselected production infrastructure and
+the concrete configuration or external verification that depends on it.
 
 ## 4. Program Structure
 
-Current production-readiness work follows this authority and execution chain:
+Current production-readiness work follows this requirement and execution chain:
 
 ```text
-corrected master blueprint
--> current repository truth
+corrected master blueprint and applicable current requirements
+-> accepted repository state and current change set
 -> Stage 0 scope, reconciliation, and decomposition decision
 -> Gate A engineering planning and plan review
 -> implementation and risk-based testing
@@ -122,27 +100,27 @@ They do not override the corrected master or restore rejected scope.
 
 For first-time implementation, Stage 0 through Gate D are retained execution
 responsibilities. Stage 0 may decide no decomposition is required, and Gate A's
-plan may be concise for straightforward work. An accepted parent decomposition
-does not rerun Stage 0 for each later child while current authority, dependencies,
-and repository truth still support it; those children begin at Gate A. The
-sequence does not create automatic transitions, does not require elaborate
+plan may be concise for straightforward work. A recorded parent decomposition
+does not rerun Stage 0 for each later child while current requirements,
+dependencies, and accepted repository behavior still support it; those children
+begin at Gate A. The sequence does not create automatic transitions, does not require elaborate
 artifacts, and does not define production-readiness scope.
 
 ## 5. Document Map And Routing Indexes
 
 | Path | Purpose |
 |---|---|
-| `docs/production-readiness/00-READ-ME-FIRST.md` | Startup, authority, safety, and publication-boundary entry point. |
+| `docs/production-readiness/00-READ-ME-FIRST.md` | Startup, requirement-source priority, terminology, safety, and publication-boundary entry point. |
 | `docs/production-readiness/01-PROGRAM-CONTEXT.md` | Program overview and routing index. |
-| `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md` | Authoritative production-readiness scope, correction program, remaining roadmap, and completion criteria. |
+| `docs/production-readiness/planning/program/pickup-lane-master-production-readiness-blueprint.md` | Controlling production-readiness scope, correction program, remaining roadmap, and completion criteria. |
 | `docs/production-readiness/planning/program/PASS-EXECUTION-REGISTER.md` | Accepted or intended post-merge execution state, historical decomposition, deferred obligations, and remaining work. |
 | `docs/production-readiness/planning/workflows/PASS-IMPLEMENTATION-WORKFLOW.md` | First-time Stage 0 through Gate D implementation workflow. |
-| `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` | Recheck guidance for accepted or historical implementation. |
-| `docs/production-readiness/planning/passes/` | Historical and current pass intakes/plans; consult when materially relevant, not as authority over the master. |
+| `docs/production-readiness/planning/workflows/PASS-RECHECK-WORKFLOW.md` | Recheck guidance for implementation already merged into `develop` or older historical implementation. |
+| `docs/production-readiness/planning/passes/` | Historical and current pass intakes/plans; use the reviewed plan for the current branch and do not use other records to override corrected-master scope. |
 | `docs/production-readiness/audit-research/` | Historical audit and research provenance. |
-| `docs/production-readiness/planning/program/pickup-lane-production-readiness-remediation-plan-final.md` | Historical remediation provenance; not current scope authority. |
-| `docs/production-readiness/decisions/` | Historical owner decisions and supporting context; current product authority only where the corrected master or current task still adopts it. |
-| `docs/production-readiness/governance/` | Supporting operational and ownership context; not authority for rejected scope. |
+| `docs/production-readiness/planning/program/pickup-lane-production-readiness-remediation-plan-final.md` | Historical remediation provenance; it does not define current scope. |
+| `docs/production-readiness/decisions/` | Historical owner decisions and supporting context; a decision is a current requirement source only where the corrected master or current task still adopts it. |
+| `docs/production-readiness/governance/` | Historical supporting context only; active instructions must not rely on it to define current scope or requirements. |
 | `docs/production-readiness/planning/templates/PASS-PLANNING-TEMPLATE.md` | Required plan structure whenever Gate A creates a durable implementation plan. |
 | `docs/production-readiness/planning/templates/PASS-PR-DESCRIPTION-TEMPLATE.md` | Current PR-authoring guidance used by implementation Gate D. |
 | `docs/production-readiness/planning/templates/` | Other templates are supporting aids unless the applicable workflow explicitly requires one. |
@@ -153,45 +131,47 @@ artifacts, and does not define production-readiness scope.
 | `backend/tests/platform/backend_test_runner/` | Direct tests for guarded execution, database and network safety, artifact sanitization, and pytest configuration. |
 
 Read historical or supporting records only when needed to understand current
-behavior, accepted technical contracts, ownership, or provenance. If they
-conflict with the corrected master, the master controls production-readiness
-scope.
+behavior, an explicitly preserved interface or invariant, ownership, or
+provenance. If they conflict with the corrected master, the master controls
+production-readiness scope.
 
 ## 6. Supporting Engineering And Testing Standards
 
-Supporting standards guide implementation within their technical scope. They do
-not override the corrected master or current repository truth.
+Supporting standards constrain implementation within their technical scope.
+They do not expand corrected-master scope, override current product
+requirements, or erase accepted repository behavior that the selected work must
+preserve.
 
 | Document | Read when |
 |---|---|
-| `docs/agent-notes/coding-standards/app-testing-standards.md` | Application risks, safeguards, scenarios, or evidence adequacy are in scope. |
+| `docs/agent-notes/coding-standards/app-testing-standards.md` | Application risks, safeguards, scenarios, or verification adequacy are in scope. |
 | `docs/agent-notes/coding-standards/backend-structure.md` | Backend source, ownership boundaries, imports, or file placement are in scope. |
-| `docs/agent-notes/coding-standards/backend-testing.md` | Backend pytest organization, fixtures, isolation, proof quality, or execution is in scope. |
+| `docs/agent-notes/coding-standards/backend-testing.md` | Backend pytest organization, fixtures, isolation, verification quality, or execution is in scope. |
 | `backend/tests/README.md` | Backend test placement, execution, or database safety is in scope. |
 | `docs/agent-notes/coding-standards/database.md` | PostgreSQL, SQLAlchemy, Alembic, migrations, transactions, or test database work is in scope. |
 | `docs/agent-notes/coding-standards/frontend-structure.md` | Frontend source, routing, configuration, interaction, or browser behavior is in scope. |
 | `docs/agent-notes/coding-standards/css-standards.md` | CSS ownership, cascade, accessibility, responsive behavior, or maintenance is in scope. |
 
 Local feature notes may provide supporting context when present, but they are
-not tracked production-readiness authority. Verify their claims against current
-repository source and applicable tracked authority. Use provider or operational
-records only when the selected work actually touches them.
+not a current requirement source. Verify their claims against accepted
+repository source and applicable tracked requirements. Use provider or
+operational records only when the selected work actually touches them.
 
 ## 7. Workflow Selection
 
 Use the implementation workflow for a corrected-master unit being implemented
 for the first time from current accepted `develop`.
 
-Use the recheck workflow when accepted or historical implementation is being
-revalidated or repaired against the corrected master and current repository
-truth.
+Use the recheck workflow when implementation already merged into `develop`, or
+older historical implementation, is being revalidated or repaired against the
+corrected master and accepted repository state.
 
 For first-time implementation:
 
 - perform Stage 0 scope reconciliation before first work under a selected unit
-  and decide whether it executes whole, decomposes, or needs a deferred
-  follow-up;
-- when an accepted parent decomposition remains valid, start each later child at
+  and decide whether it executes whole, decomposes, or needs a mandatory
+  deferred follow-up;
+- when a recorded parent decomposition remains valid, start each later child at
   Gate A instead of repeating Stage 0;
 - perform Gate A engineering planning and plan review, using a concise plan for
   straightforward work and the current `PASS-PLANNING-TEMPLATE.md` whenever the
@@ -203,40 +183,41 @@ For first-time implementation:
   execution register once to the final state intended after merge;
 - keep PR merge manual.
 
-For an accepted-pass recheck, normally perform Gate A through Gate D. Return to
-Stage 0 only when the accepted executable boundary or decomposition is
-materially wrong.
+For a recheck of a pass already merged into `develop`, normally perform Gate A
+through Gate D. Return to Stage 0 only when the recorded executable boundary or
+decomposition is materially wrong.
 
 No stage advances automatically. Do not select later work from filename order,
-old pass order, or stale chat context. Use the corrected master, current
-repository truth, real prerequisites, late-bound triggers, and owner direction.
+old pass order, or stale chat context. Use the corrected master, accepted
+repository state, the current change set when relevant, real prerequisites,
+late-bound triggers, and owner direction.
 If several units are valid and no dependency selects one, ask the owner.
 
-## 8. Evidence Approach
+## 8. Verification Approach
 
-Tests and evidence should prove real production risks without becoming a
+Verification should address real production risks without becoming a
 separate compliance platform.
 
-Use the lowest reliable proof layer and scale validation to risk. Depending on
-the work, that can include unit, service, API, authorization, real PostgreSQL,
-migration, deterministic concurrency, provider-boundary, frontend, browser,
-configuration, build, lint, or operational evidence.
+Use the lowest reliable verification method and scale validation to risk.
+Depending on the work, that can include unit, service, API, authorization, real
+PostgreSQL, migration, deterministic concurrency, external-service boundary,
+frontend, browser, configuration, build, lint, or operational checks.
 
-Passing tests alone do not prove production readiness. Review the behavior,
-failure paths, security/privacy boundaries, compatibility, and any external facts
-the repository cannot establish.
+Passing tests alone do not establish production readiness. Inspect behavior,
+failure paths, security/privacy boundaries, compatibility, and any external
+facts the repository cannot establish.
 
-Backend evidence consists of current source and tests, applicable pass artifacts,
+Backend verification can use current source and tests, applicable pass artifacts,
 and source-local `pytest.mark.pass_provenance` where a production-readiness pass
-introduced or materially changed a test as evidence. Provenance may name more
-than one genuine owning pass, but it is not added merely because a pass reran a
-test and is not required for ordinary tests without production-readiness
-provenance. Search it directly in source, for example with
-`rg 'WS06-01' backend/tests`.
+introduced or materially changed a test as verification for the pass.
+Provenance may name more than one genuine owning pass, but it is not added
+merely because a pass reran a test and is not required for ordinary tests
+without production-readiness provenance. Search it directly in source, for
+example with `rg 'WS06-01' backend/tests`.
 
-Historical accepted plans, intakes, and audit records may describe earlier
+Plans, intakes, and audit records from earlier merged work may describe earlier
 testing mechanics. They remain provenance for what happened, but they do not
-define current backend test execution or evidence handling.
+define current backend test execution or verification handling.
 
 ## 9. Work Families And Ordering
 
@@ -249,29 +230,33 @@ expand scope.
 A selected unit may be kept whole or decomposed when that is genuinely needed.
 Each child must own one coherent outcome, preserve all parent obligations, avoid
 overlap, and leave a safe intermediate state. Historical decompositions remain
-provenance unless current authority adopts them.
+provenance unless the corrected master or a current recorded Stage 0 decision
+adopts them.
 
-Deferred provider/runtime work must retain an owner, trigger, prerequisites, and
-required completion boundary. It does not count as evidence while deferred and
-blocks only work that actually depends on the missing fact.
+Deferred infrastructure/runtime work must retain an owner, trigger,
+prerequisites, and required completion boundary. It does not count as
+verification while deferred and blocks only work that actually depends on the
+missing fact.
 
 After merge, verify the intended merge, switch local `develop` back to the
 current `origin/develop` state using the normal safe fast-forward path, and
 confirm that the Gate D register update landed in its intended final state. Do
 not make a second routine register update for the same pass; use exceptional
-cleanup only when publication failed or repository truth differs from that
-intended state. Then choose subsequent work from the corrected master, current
-repository truth, real prerequisites, deferred-trigger state, and owner
-direction. Do not use automatic progression. If the next unit is a later child
-of an accepted decomposition that remains valid, begin that child at Gate A;
-otherwise perform Stage 0 for new first-time scope.
+cleanup only when publication failed or accepted repository state differs from
+that intended state. Then choose subsequent work from the corrected master,
+accepted repository state, real prerequisites, deferred-trigger state, and
+owner direction. Do not use automatic progression. If the next unit is a later
+child of a recorded decomposition that remains valid, begin that child at Gate
+A; otherwise perform Stage 0 for new first-time scope.
 
 ## 10. Essential Terminology
 
 | Term | Meaning |
 |---|---|
-| Corrected master | The authoritative production-readiness scope, correction program, remaining roadmap, and completion criteria. |
-| Repository truth | What current accepted source, configuration, tests, documentation, and migrations actually contain and do. |
+| Corrected master | The controlling production-readiness scope, correction program, remaining roadmap, and completion criteria. |
+| Requirement source | The corrected master, an applicable current product requirement, an explicit owner decision, or a technical standard that applies to the work. Name the specific source when resolving a conflict. |
+| Accepted repository state | The source, configuration, tests, documentation, and migrations in current accepted `develop`. |
+| Current change set | Every branch change relative to its accepted starting point: committed branch changes, staged and unstaged changes, and applicable untracked files. It is not accepted until merged. |
 | Provenance | Historical evidence of what happened, such as audits, plans, PRs, commits, and diffs; provenance does not define current requirements. |
 | Selected unit | The corrected-master work currently authorized for implementation or recheck. |
 | Executable child | A coherent subdivision created when a selected unit genuinely needs decomposition. |
@@ -280,23 +265,29 @@ otherwise perform Stage 0 for new first-time scope.
 | Gate B | Implementation and risk-based testing. |
 | Gate C | Independent, read-only semantic review. |
 | Gate D | Normal Git and PR finalization, including the pass's one execution-register update to its intended post-merge state; it does not include merge. |
-| Accepted baseline | The current `develop` commit used as the understood starting point for a branch. |
-| Provider-neutral work | Work whose correctness does not require unselected final-provider facts. |
-| Deferred obligation | Required late-bound work with a known owner, trigger, prerequisites, and completion boundary; deferral is not proof. |
-| External evidence | Sanitized provider, runtime, deployment, operational, or other evidence that cannot be proved from repository content alone. |
+| Accepted starting point | The accepted `develop` commit from which the current branch's change set is measured. |
+| Reviewed plan | The Gate A plan or planning record approved for the current implementation; not a draft or a corrected plan awaiting review. |
+| Independent of final infrastructure selection | Work whose correctness does not require facts about the still-unselected final production hosting, topology, capacity, account binding, or provider-native settings. |
+| Deferred obligation | Required late-bound work with a known owner, trigger, prerequisites, and completion boundary; deferral is not verification or completion. |
+| Verification method | A test, source inspection, migration check, build, provider exercise, or operational exercise used to establish a stated result. |
+| Validation result | A report of a verification method actually run and the result observed. |
+| External evidence | Sanitized information about provider, runtime, deployment, operational, or other state that repository content cannot establish. |
+| Review result | A source-backed conclusion for a specific requirement, behavior, or affected item, distinct from both the requirement source and the verification method. |
 
 ## 11. Minimum Routing For A Work Item
 
 Before acting, identify:
 
 - the corrected-master unit and intended outcome;
-- current repository truth and the accepted `develop` starting state;
+- accepted repository state, the branch's accepted starting point, and the
+  complete current change set;
 - applicable prerequisites and ownership;
 - relevant technical and testing guidance;
-- provider-neutral versus late-bound facts;
+- facts independent of final infrastructure selection versus facts that require
+  selected final infrastructure;
 - requested edit, validation, review, and publication boundaries.
 
-Read an accepted intake or current plan when the selected work has one. When
+Read the recorded intake or reviewed plan when the selected work has one. When
 authoring a durable Gate A plan, use `PASS-PLANNING-TEMPLATE.md`; when publishing
 a first-time implementation at Gate D, use `PASS-PR-DESCRIPTION-TEMPLATE.md`.
 Read other historical decisions, remediation records, templates, or external

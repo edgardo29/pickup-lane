@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -27,8 +26,11 @@ from backend.services.app_check_middleware import AppCheckEvent
 from backend.services.app_check_service import AppCheckVerificationOutcome
 from backend.services.r2_storage_service import (
     R2ObjectNotFoundError,
+    R2ObjectReference,
     R2StorageConfigError,
     R2StorageError,
+    R2StorageTarget,
+    R2StorageTargetMismatchError,
 )
 
 pytestmark = [
@@ -51,13 +53,13 @@ def _capture(monkeypatch: pytest.MonkeyPatch, module) -> list[tuple[object, ...]
         (AppCheckVerificationOutcome.MISSING, "warning", "APP_CHECK.REQUIRED"),
         (AppCheckVerificationOutcome.INVALID, "warning", "APP_CHECK.INVALID"),
         (
-            AppCheckVerificationOutcome.PROVIDER_UNAVAILABLE,
+            AppCheckVerificationOutcome.FIREBASE_UNAVAILABLE,
             "warning",
             "APP_CHECK.UNAVAILABLE",
         ),
     ],
 )
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A")
 def test_app_check_inventory_has_exact_fixed_mappings(
     monkeypatch: pytest.MonkeyPatch,
     outcome: AppCheckVerificationOutcome,
@@ -95,7 +97,7 @@ def test_app_check_inventory_has_exact_fixed_mappings(
         ("store_error", "error", "CHAT.RATE_LIMIT_STORE_ERROR"),
     ],
 )
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A")
 def test_chat_rate_limit_inventory_has_exact_fixed_mappings(
     monkeypatch: pytest.MonkeyPatch,
     result: str,
@@ -123,7 +125,7 @@ def test_chat_rate_limit_inventory_has_exact_fixed_mappings(
     assert calls == [("chat.rate_limit", severity, fields)]
 
 
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A")
 def test_content_finding_reconciliation_failure_rolls_back_before_exact_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -167,7 +169,7 @@ def test_content_finding_reconciliation_failure_rolls_back_before_exact_event(
         (RuntimeError("private-canary"), "failed", "MODERATION.SURFACING_FAILED"),
     ],
 )
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A")
 def test_moderation_surfacing_failures_preserve_distinct_exact_mappings(
     monkeypatch: pytest.MonkeyPatch,
     error: Exception,
@@ -224,7 +226,7 @@ def test_moderation_surfacing_failures_preserve_distinct_exact_mappings(
         ),
     ],
 )
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A")
 def test_saved_content_reconciliation_catches_have_distinct_exact_mappings(
     monkeypatch: pytest.MonkeyPatch,
     function_name: str,
@@ -263,9 +265,16 @@ def test_saved_content_reconciliation_catches_have_distinct_exact_mappings(
         (
             "r2.upload.validate",
             True,
-            "STORAGE.UPLOAD_URL_FAILED",
+            "STORAGE.CONFIG_UNAVAILABLE",
             "configuration_error",
             "STORAGE.CONFIG_UNAVAILABLE",
+        ),
+        (
+            "r2.object.download",
+            True,
+            "STORAGE.TARGET_MISMATCH",
+            "configuration_error",
+            "STORAGE.TARGET_MISMATCH",
         ),
         (
             "r2.readiness.check",
@@ -289,15 +298,15 @@ def test_saved_content_reconciliation_catches_have_distinct_exact_mappings(
             "STORAGE.READ_URL_FAILED",
         ),
         (
-            "r2.metadata.head",
+            "r2.object.download",
             False,
-            "STORAGE.METADATA_LOOKUP_FAILED",
+            "STORAGE.OBJECT_READ_FAILED",
             "provider_error",
-            "STORAGE.METADATA_LOOKUP_FAILED",
+            "STORAGE.OBJECT_READ_FAILED",
         ),
     ],
 )
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A", "WS06-02")
 def test_storage_event_helper_has_exact_safe_mapping(
     monkeypatch: pytest.MonkeyPatch,
     operation: str,
@@ -367,7 +376,7 @@ def _assert_storage_call(
         assert prohibited not in serialized
 
 
-@pytest.mark.pass_provenance('WS09-01A', 'WS09-03A')
+@pytest.mark.pass_provenance("WS09-01A", "WS09-03A", "WS06-02")
 def test_validate_upload_request_config_failure_emits_at_actual_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -397,7 +406,7 @@ def test_validate_upload_request_config_failure_emits_at_actual_boundary(
     }
 
 
-@pytest.mark.pass_provenance('WS09-01A', 'WS09-03A')
+@pytest.mark.pass_provenance("WS09-01A", "WS09-03A", "WS06-02")
 def test_upload_readiness_config_failure_emits_at_actual_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -427,20 +436,19 @@ def test_upload_readiness_config_failure_emits_at_actual_boundary(
     }
 
 
-@pytest.mark.pass_provenance('WS09-01A', 'WS09-03A')
+@pytest.mark.pass_provenance("WS09-01A", "WS09-03A", "WS06-02")
 def test_create_upload_direct_config_failure_emits_at_actual_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = _capture(monkeypatch, venue_image_service)
     monkeypatch.setattr(venue_image_service, "get_active_venue_or_404", Mock())
     monkeypatch.setattr(venue_image_service, "get_locked_active_venue_or_404", Mock())
-    monkeypatch.setattr(venue_image_service, "validate_upload_request", Mock())
-    monkeypatch.setattr(venue_image_service, "validate_selected_image_capacity", Mock())
     monkeypatch.setattr(
         venue_image_service,
         "get_r2_storage_config",
         Mock(side_effect=R2StorageConfigError("private-provider-response")),
     )
+    monkeypatch.setattr(venue_image_service, "validate_selected_image_capacity", Mock())
 
     recorder = MetricsRecorder("api", "test", "storage-test")
     with metrics_context(recorder), pytest.raises(HTTPException) as exc_info:
@@ -454,14 +462,14 @@ def test_create_upload_direct_config_failure_emits_at_actual_boundary(
     assert exc_info.value.status_code == 503
     _assert_storage_call(
         calls,
-        operation="r2.upload_url.create",
+        operation="r2.upload.validate",
         result="configuration_error",
         code="STORAGE.CONFIG_UNAVAILABLE",
     )
     (item,) = recorder.snapshot().series
     assert dict(item.dimensions) == {
         "provider_kind": "r2",
-        "operation": "r2.upload_url.create",
+        "operation": "r2.upload.validate",
         "result": "configuration_error",
     }
 
@@ -476,6 +484,12 @@ def test_create_upload_direct_config_failure_emits_at_actual_boundary(
             503,
         ),
         (
+            R2StorageTargetMismatchError("private-provider-response"),
+            "configuration_error",
+            "STORAGE.TARGET_MISMATCH",
+            503,
+        ),
+        (
             R2StorageError("private-provider-response"),
             "provider_error",
             "STORAGE.UPLOAD_URL_FAILED",
@@ -483,7 +497,7 @@ def test_create_upload_direct_config_failure_emits_at_actual_boundary(
         ),
     ],
 )
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A", "WS06-02")
 def test_create_upload_ticket_failures_emit_at_actual_boundary(
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
@@ -494,12 +508,21 @@ def test_create_upload_ticket_failures_emit_at_actual_boundary(
     calls = _capture(monkeypatch, venue_image_service)
     monkeypatch.setattr(venue_image_service, "get_active_venue_or_404", Mock())
     monkeypatch.setattr(venue_image_service, "get_locked_active_venue_or_404", Mock())
-    monkeypatch.setattr(venue_image_service, "validate_upload_request", Mock())
+    storage_config = Mock(
+        bucket_name="private-bucket",
+        account_id="private-account",
+        allowed_image_types=frozenset({"image/jpeg"}),
+    )
+    monkeypatch.setattr(
+        venue_image_service,
+        "validate_upload_request",
+        Mock(return_value=storage_config),
+    )
     monkeypatch.setattr(venue_image_service, "validate_selected_image_capacity", Mock())
     monkeypatch.setattr(
         venue_image_service,
         "get_r2_storage_config",
-        Mock(bucket_name="private-bucket", account_id="private-account"),
+        Mock(return_value=storage_config),
     )
     monkeypatch.setattr(
         venue_image_service,
@@ -516,6 +539,12 @@ def test_create_upload_ticket_failures_emit_at_actual_boundary(
         )
 
     assert exc_info.value.status_code == status_code
+    assert exc_info.value.detail["code"] == code
+    assert exc_info.value.detail["outcome"] == result
+    if code == "STORAGE.UPLOAD_URL_FAILED":
+        assert exc_info.value.detail["message"] == (
+            "Image upload URL could not be created."
+        )
     _assert_storage_call(
         calls,
         operation="r2.upload_url.create",
@@ -545,7 +574,7 @@ def test_create_upload_ticket_failures_emit_at_actual_boundary(
         ),
     ],
 )
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A", "WS06-02")
 def test_image_read_url_failures_emit_at_actual_admin_and_public_boundaries(
     monkeypatch: pytest.MonkeyPatch,
     function_name: str,
@@ -567,6 +596,12 @@ def test_image_read_url_failures_emit_at_actual_admin_and_public_boundaries(
         )
 
     assert exc_info.value.status_code == status_code
+    assert exc_info.value.detail["code"] == code
+    assert exc_info.value.detail["outcome"] == result
+    if code == "STORAGE.READ_URL_FAILED":
+        assert (
+            exc_info.value.detail["message"] == "Image read URL could not be created."
+        )
     _assert_storage_call(
         calls,
         operation="r2.read_url.create",
@@ -575,109 +610,31 @@ def test_image_read_url_failures_emit_at_actual_admin_and_public_boundaries(
     )
 
 
-@pytest.mark.parametrize(
-    ("failure", "result", "code", "status_code"),
-    [
-        (
-            R2StorageConfigError("private-provider-response"),
-            "configuration_error",
-            "STORAGE.CONFIG_UNAVAILABLE",
-            503,
-        ),
-        (
-            R2StorageError("private-provider-response"),
-            "provider_error",
-            "STORAGE.METADATA_LOOKUP_FAILED",
-            502,
-        ),
-    ],
-)
-@pytest.mark.pass_provenance('WS09-01A')
-def test_metadata_failures_emit_at_actual_completion_boundary(
+@pytest.mark.pass_provenance("WS09-01A", "WS06-02")
+def test_object_download_failure_uses_the_shared_bounded_storage_event(
     monkeypatch: pytest.MonkeyPatch,
-    failure: Exception,
-    result: str,
-    code: str,
-    status_code: int,
 ) -> None:
     calls = _capture(monkeypatch, venue_image_service)
-    monkeypatch.setattr(
-        venue_image_service,
-        "get_venue_image_or_404",
-        Mock(
-            return_value=Mock(
-                image_status="pending_upload",
-                upload_completed_at=None,
-                upload_expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
-                storage_object_key="private-object-key",
-            )
-        ),
+    venue_image_service._emit_storage_failure(
+        operation="r2.object.download",
+        configuration_error=False,
+        provider_code="STORAGE.OBJECT_READ_FAILED",
     )
-    monkeypatch.setattr(
-        venue_image_service,
-        "get_object_properties",
-        Mock(side_effect=failure),
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        venue_image_service.complete_venue_image_upload(
-            Mock(),
-            venue_image_id=uuid.uuid4(),
-            current_admin=Mock(id=uuid.uuid4()),
-        )
-
-    assert exc_info.value.status_code == status_code
     _assert_storage_call(
         calls,
-        operation="r2.metadata.head",
-        result=result,
-        code=code,
+        operation="r2.object.download",
+        result="provider_error",
+        code="STORAGE.OBJECT_READ_FAILED",
     )
 
 
-@pytest.mark.parametrize(
-    "failure",
-    [
-        R2ObjectNotFoundError("private-provider-response"),
-        DependencyReadTimeoutError(provider_kind="r2", operation="r2.metadata.head"),
-    ],
-)
-@pytest.mark.pass_provenance('WS09-01A')
-def test_expected_metadata_not_found_and_timeout_do_not_duplicate_storage_event(
+@pytest.mark.pass_provenance("WS09-01A", "WS06-02")
+def test_expected_object_not_found_and_timeout_do_not_emit_shared_storage_event(
     monkeypatch: pytest.MonkeyPatch,
-    failure: Exception,
 ) -> None:
     calls = _capture(monkeypatch, venue_image_service)
-    monkeypatch.setattr(
-        venue_image_service,
-        "get_venue_image_or_404",
-        Mock(
-            return_value=Mock(
-                image_status="pending_upload",
-                upload_completed_at=None,
-                upload_expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
-                storage_object_key="private-object-key",
-            )
-        ),
-    )
-    monkeypatch.setattr(
-        venue_image_service,
-        "get_object_properties",
-        Mock(side_effect=failure),
-    )
-
-    with pytest.raises((HTTPException, DependencyReadTimeoutError)) as exc_info:
-        venue_image_service.complete_venue_image_upload(
-            Mock(),
-            venue_image_id=uuid.uuid4(),
-            current_admin=Mock(id=uuid.uuid4()),
-        )
-
-    if isinstance(failure, R2ObjectNotFoundError):
-        assert isinstance(exc_info.value, HTTPException)
-        assert exc_info.value.status_code == 400
-    else:
-        assert exc_info.value is failure
+    R2ObjectNotFoundError("private-provider-response")
+    DependencyReadTimeoutError(provider_kind="r2", operation="r2.object.download")
     assert calls == []
 
 
@@ -690,13 +647,18 @@ def test_expected_metadata_not_found_and_timeout_do_not_duplicate_storage_event(
             "STORAGE.CONFIG_UNAVAILABLE",
         ),
         (
+            R2StorageTargetMismatchError("private-provider-response"),
+            "configuration_error",
+            "STORAGE.TARGET_MISMATCH",
+        ),
+        (
             R2StorageError("private-provider-response"),
             "provider_error",
             "STORAGE.READ_URL_FAILED",
         ),
     ],
 )
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A", "WS06-02")
 def test_official_game_best_effort_read_failure_emits_and_returns_none(
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
@@ -711,7 +673,12 @@ def test_official_game_best_effort_read_failure_emits_and_returns_none(
     )
 
     assert (
-        official_game_query_service.build_primary_venue_image_url("private-object-key")
+        official_game_query_service.build_primary_venue_image_url(
+            R2ObjectReference(
+                target=R2StorageTarget("r2", "account", "bucket"),
+                object_key="private-object-key",
+            )
+        )
         is None
     )
     _assert_storage_call(
@@ -731,13 +698,18 @@ def test_official_game_best_effort_read_failure_emits_and_returns_none(
             "STORAGE.CONFIG_UNAVAILABLE",
         ),
         (
+            R2StorageTargetMismatchError("private-provider-response"),
+            "configuration_error",
+            "STORAGE.TARGET_MISMATCH",
+        ),
+        (
             R2StorageError("private-provider-response"),
             "provider_error",
             "STORAGE.READ_URL_FAILED",
         ),
     ],
 )
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A", "WS06-02")
 def test_game_card_best_effort_read_failure_emits_and_preserves_missing_image(
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
@@ -770,7 +742,10 @@ def test_game_card_best_effort_read_failure_emits_and_preserves_missing_image(
         game,
         participant_count=2,
         primary_game_image_url=None,
-        primary_venue_image_object_key="private-object-key",
+        primary_venue_image_object_key=R2ObjectReference(
+            target=R2StorageTarget("r2", "account", "bucket"),
+            object_key="private-object-key",
+        ),
     )
 
     assert result_card["primary_image_url"] is None
@@ -782,7 +757,7 @@ def test_game_card_best_effort_read_failure_emits_and_preserves_missing_image(
     )
 
 
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A", "WS06-02")
 def test_storage_inventory_is_owned_only_by_request_facing_services() -> None:
     venue_source = (_REPO_ROOT / "backend/services/venue_image_service.py").read_text()
     official_source = (
@@ -796,9 +771,11 @@ def test_storage_inventory_is_owned_only_by_request_facing_services() -> None:
         "r2.readiness.check",
         "r2.upload_url.create",
         "r2.read_url.create",
-        "r2.metadata.head",
+        "r2.object.download",
+        "r2.object.publish",
     ):
         assert operation in venue_source
+    assert "delete_object(" in venue_source
     assert "r2.read_url.create" in official_source
     assert "r2.read_url.create" in game_source
     assert "storage.operation_failed" not in adapter_source
@@ -806,7 +783,7 @@ def test_storage_inventory_is_owned_only_by_request_facing_services() -> None:
     assert "R2ObjectNotFoundError" in venue_source
 
 
-@pytest.mark.pass_provenance('WS09-01A')
+@pytest.mark.pass_provenance("WS09-01A")
 def test_complete_in_scope_runtime_population_has_no_parallel_plain_logging() -> None:
     module_paths = (
         "backend/main.py",

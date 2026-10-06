@@ -13,7 +13,6 @@ from backend.models import AdminAction, AdminRejectedAttempt, User
 from backend.observability.correlation import correlation_context
 from backend.schemas.admin_action_schema import AdminActionNoteCreate
 
-
 IMMUTABLE_ERROR = "admin audit rows are immutable"
 
 
@@ -39,9 +38,9 @@ def _user(label: str, *, role: str = "player") -> User:
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws09-02a-{label}-{unique}",
+        auth_user_id=f"admin-audit-{label}-{unique}",
         role=role,
-        email=f"ws09-02a-{label}-{unique}@example.invalid",
+        email=f"admin-audit-{label}-{unique}@example.invalid",
         first_name="Audit",
         last_name=label,
         account_status="active",
@@ -227,7 +226,7 @@ def test_correction_appends_self_linked_row_and_replay_never_rewrites_original()
     original_id = _persist_action(actor_id, target_id)
     payload = AdminActionNoteCreate(
         note="Support confirmed the original audit context.",
-        idempotency_key="ws09-02a-correction",
+        idempotency_key="admin-audit-correction",
     )
 
     correction_id = _append_admin_action_note(
@@ -260,7 +259,7 @@ def test_correction_appends_self_linked_row_and_replay_never_rewrites_original()
             target_admin_action_id=original_id,
             payload=AdminActionNoteCreate(
                 note="A different correction body.",
-                idempotency_key="ws09-02a-correction",
+                idempotency_key="admin-audit-correction",
             ),
         )
     assert reused_key.value.status_code == 409

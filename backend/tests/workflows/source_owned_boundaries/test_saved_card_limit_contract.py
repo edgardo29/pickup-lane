@@ -28,14 +28,14 @@ def _user() -> User:
 
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04b1-card-user-{uuid.uuid4()}",
+        auth_user_id=f"source-boundary-card-user-{uuid.uuid4()}",
         role="player",
-        email=f"ws02-04b1-card-{uuid.uuid4()}@example.invalid",
+        email=f"source-boundary-card-{uuid.uuid4()}@example.invalid",
         first_name="Card",
         last_name="User",
         account_status="active",
         hosting_status="eligible",
-        stripe_customer_id="cus_ws02_04b1",
+        stripe_customer_id="cus_source_boundary",
     )
 
 
@@ -57,7 +57,7 @@ def _payment_method(
     return UserPaymentMethod(
         id=uuid.uuid4(),
         user_id=user.id,
-        stripe_customer_id=user.stripe_customer_id or "cus_ws02_04b1",
+        stripe_customer_id=user.stripe_customer_id or "cus_source_boundary",
         stripe_payment_method_id=f"pm_existing_{index}",
         card_fingerprint=f"fingerprint-{index}",
         card_brand="visa",
@@ -90,7 +90,7 @@ def _install_stripe_fake(monkeypatch: pytest.MonkeyPatch) -> _StripeFake:
             id=setup_intent_id,
             client_secret=None,
             status="succeeded",
-            customer_id="cus_ws02_04b1",
+            customer_id="cus_source_boundary",
             payment_method_id=f"pm_new_{suffix}",
         )
 
@@ -99,7 +99,7 @@ def _install_stripe_fake(monkeypatch: pytest.MonkeyPatch) -> _StripeFake:
         suffix = payment_method_id.rsplit("_", 1)[-1]
         return StripePaymentMethodCardResult(
             id=payment_method_id,
-            customer_id="cus_ws02_04b1",
+            customer_id="cus_source_boundary",
             card_fingerprint=f"new-fingerprint-{suffix}",
             card_brand="visa",
             card_last4="4242",
@@ -113,7 +113,7 @@ def _install_stripe_fake(monkeypatch: pytest.MonkeyPatch) -> _StripeFake:
     def set_customer_default_payment_method(
         *, customer_id: str, payment_method_id: str, **_kwargs: object
     ) -> None:
-        assert customer_id == "cus_ws02_04b1"
+        assert customer_id == "cus_source_boundary"
         fake.default_payment_methods.append(payment_method_id)
 
     monkeypatch.setattr(payment_method_service, "stripe_payments_enabled", lambda: True)

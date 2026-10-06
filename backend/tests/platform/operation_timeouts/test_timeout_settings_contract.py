@@ -19,11 +19,11 @@ _TIMEOUT_ENV = {
     "STRIPE_READ_TIMEOUT_SECONDS": ("stripe_read_timeout_seconds", 6),
     "STRIPE_MUTATION_TIMEOUT_SECONDS": ("stripe_mutation_timeout_seconds", 15),
     "FIREBASE_HTTP_TIMEOUT_SECONDS": ("firebase_http_timeout_seconds", 8),
-    "R2_METADATA_CONNECT_TIMEOUT_SECONDS": (
-        "r2_metadata_connect_timeout_seconds",
+    "R2_OBJECT_CONNECT_TIMEOUT_SECONDS": (
+        "r2_object_connect_timeout_seconds",
         2,
     ),
-    "R2_METADATA_READ_TIMEOUT_SECONDS": ("r2_metadata_read_timeout_seconds", 6),
+    "R2_OBJECT_READ_TIMEOUT_SECONDS": ("r2_object_read_timeout_seconds", 6),
     "DB_POOL_WAIT_TIMEOUT_SECONDS": ("db_pool_wait_timeout_seconds", 2),
     "DB_STATEMENT_TIMEOUT_MILLISECONDS": (
         "db_statement_timeout_milliseconds",
@@ -89,7 +89,7 @@ def _frontend_text_files() -> tuple[Path, ...]:
 
 
 @pytest.mark.pass_provenance('WS02-04C1')
-def test_c1_timeout_defaults_are_the_approved_values() -> None:
+def test_dependency_timeout_defaults_are_the_approved_values() -> None:
     settings = _build(_settings_env())
 
     for attribute, expected in _TIMEOUT_ENV.values():
@@ -103,8 +103,8 @@ def test_c1_timeout_defaults_are_the_approved_values() -> None:
         ("STRIPE_READ_TIMEOUT_SECONDS", "stripe_read_timeout_seconds", "9", {}),
         ("STRIPE_MUTATION_TIMEOUT_SECONDS", "stripe_mutation_timeout_seconds", "9", {}),
         ("FIREBASE_HTTP_TIMEOUT_SECONDS", "firebase_http_timeout_seconds", "9", {}),
-        ("R2_METADATA_CONNECT_TIMEOUT_SECONDS", "r2_metadata_connect_timeout_seconds", "9", {}),
-        ("R2_METADATA_READ_TIMEOUT_SECONDS", "r2_metadata_read_timeout_seconds", "9", {}),
+        ("R2_OBJECT_CONNECT_TIMEOUT_SECONDS", "r2_object_connect_timeout_seconds", "9", {}),
+        ("R2_OBJECT_READ_TIMEOUT_SECONDS", "r2_object_read_timeout_seconds", "9", {}),
         ("DB_POOL_WAIT_TIMEOUT_SECONDS", "db_pool_wait_timeout_seconds", "9", {}),
         (
             "DB_STATEMENT_TIMEOUT_MILLISECONDS",
@@ -115,7 +115,7 @@ def test_c1_timeout_defaults_are_the_approved_values() -> None:
         ("DB_LOCK_TIMEOUT_MILLISECONDS", "db_lock_timeout_milliseconds", "1000", {}),
     ],
 )
-def test_c1_timeout_positive_overrides_are_accepted(
+def test_dependency_timeout_positive_overrides_are_accepted(
     name: str,
     attribute: str,
     value: str,
@@ -136,7 +136,7 @@ def test_c1_timeout_positive_overrides_are_accepted(
         ("not-an-int", "must be an integer"),
     ],
 )
-def test_c1_timeout_invalid_values_are_rejected(
+def test_dependency_timeout_invalid_values_are_rejected(
     name: str,
     value: str,
     expected: str,
@@ -149,8 +149,41 @@ def test_c1_timeout_invalid_values_are_rejected(
     assert expected in message
 
 
+@pytest.mark.pass_provenance("WS06-02")
+@pytest.mark.parametrize(
+    "value",
+    [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/jpeg,image/png",
+        "image/jpeg,image/webp",
+        "image/png,image/webp",
+        "image/jpeg,image/png,image/webp",
+    ],
+)
+def test_supported_image_type_subsets_are_accepted(value: str) -> None:
+    settings = _build(_settings_env(R2_ALLOWED_IMAGE_TYPES=value))
+    assert settings.r2_allowed_image_types == frozenset(value.split(","))
+
+
+@pytest.mark.pass_provenance("WS06-02")
+@pytest.mark.parametrize("value", ["image/gif", "application/pdf", "image/png,"])
+def test_unsupported_or_empty_image_type_entries_are_rejected(value: str) -> None:
+    with pytest.raises(SettingsError):
+        _build(_settings_env(R2_ALLOWED_IMAGE_TYPES=value))
+
+
+@pytest.mark.pass_provenance("WS06-02")
+def test_image_byte_limit_is_capped_at_eight_mib() -> None:
+    accepted = _build(_settings_env(R2_MAX_IMAGE_BYTES=str(8 * 1024 * 1024)))
+    assert accepted.r2_max_image_bytes == 8 * 1024 * 1024
+    with pytest.raises(SettingsError):
+        _build(_settings_env(R2_MAX_IMAGE_BYTES=str(8 * 1024 * 1024 + 1)))
+
+
 @pytest.mark.pass_provenance('WS02-04C1')
-def test_c1_database_lock_timeout_must_remain_lower_than_statement_timeout() -> None:
+def test_database_lock_timeout_must_remain_lower_than_statement_timeout() -> None:
     with pytest.raises(SettingsError) as exc_info:
         _build(
             _settings_env(
@@ -164,7 +197,7 @@ def test_c1_database_lock_timeout_must_remain_lower_than_statement_timeout() -> 
 
 
 @pytest.mark.pass_provenance('WS02-04C1')
-def test_c1_timeout_environment_names_are_registered_and_documented() -> None:
+def test_timeout_environment_names_are_registered_and_documented() -> None:
     env_names = settings_module.BACKEND_ENVIRONMENT_VARIABLES
     example = (_REPO_ROOT / "backend" / ".env.example").read_text()
 
@@ -174,7 +207,7 @@ def test_c1_timeout_environment_names_are_registered_and_documented() -> None:
 
 
 @pytest.mark.pass_provenance('WS02-04C1')
-def test_c1_timeout_environment_names_have_single_backend_settings_owner() -> None:
+def test_timeout_environment_names_have_single_backend_settings_owner() -> None:
     production_hits: dict[str, list[str]] = {}
     for name in _TIMEOUT_ENV:
         hits: list[str] = []
@@ -189,7 +222,7 @@ def test_c1_timeout_environment_names_have_single_backend_settings_owner() -> No
 
 
 @pytest.mark.pass_provenance('WS02-04C1')
-def test_c1_timeout_environment_names_are_backend_only_configuration() -> None:
+def test_timeout_environment_names_are_backend_only_configuration() -> None:
     frontend_hits: dict[str, list[str]] = {}
     for name in _TIMEOUT_ENV:
         hits = [

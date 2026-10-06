@@ -1,4 +1,4 @@
-"""WS03-05C schema, migration, and live PostgreSQL contract tests."""
+"""Moderation-enforcement notice schema, migration, and PostgreSQL tests."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
     _session,
     _user,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 NOTICE_MIGRATION = (

@@ -4,8 +4,9 @@ import asyncio
 import json
 import os
 import uuid
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping
+from typing import Any
 
 import pytest
 from fastapi import status
@@ -45,9 +46,9 @@ def _session():
 def _user(index: int) -> User:
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-c3a-error-user-{index}-{uuid.uuid4()}",
+        auth_user_id=f"chat-rate-limit-error-user-{index}-{uuid.uuid4()}",
         role="player",
-        email=f"ws02-c3a-error-{index}-{uuid.uuid4()}@example.invalid",
+        email=f"chat-rate-limit-error-{index}-{uuid.uuid4()}@example.invalid",
         first_name="Error",
         last_name=f"User{index}",
         account_status="active",
@@ -78,7 +79,7 @@ def _game(host: User, venue: Venue) -> Game:
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title="C3A Error Game",
+        title="Rate Limit Error Game",
         venue_id=venue.id,
         venue_name_snapshot=venue.name,
         address_snapshot=venue.address_line_1,
@@ -189,7 +190,7 @@ def test_real_chat_rate_limit_rejection_uses_safe_429_contract(client: TestClien
         },
         json={
             "chat_id": str(chat_id),
-            "message_body": "blocked by real C3A limiter",
+            "message_body": "blocked by the real chat limiter",
         },
     )
 
@@ -219,7 +220,7 @@ def test_real_chat_rate_limit_rejection_uses_safe_429_contract(client: TestClien
 
 
 @pytest.mark.pass_provenance('WS02-04C3A')
-def test_c3a_retry_after_allowance_does_not_make_unrelated_headers_public() -> None:
+def test_retry_after_allowance_does_not_make_unrelated_headers_public() -> None:
     response_status, payload, headers = _normalized_http_exception(
         status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Synthetic service unavailable.",

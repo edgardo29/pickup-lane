@@ -62,6 +62,40 @@ class VenueImage(Base):
             name="ck_venue_images_size_bytes_positive",
         ),
         CheckConstraint(
+            "((publication_object_key IS NULL AND publication_content_type IS NULL "
+            "AND publication_size_bytes IS NULL AND publication_etag IS NULL "
+            "AND upload_completed_at IS NULL) OR "
+            "(publication_object_key IS NOT NULL AND publication_content_type IS NOT NULL "
+            "AND publication_size_bytes IS NOT NULL AND publication_etag IS NOT NULL "
+            "AND upload_completed_at IS NOT NULL))",
+            name="ck_venue_images_publication_tuple_complete",
+        ),
+        CheckConstraint(
+            "((image_status = 'pending_upload' AND publication_object_key IS NULL) OR "
+            "(image_status IN ('active', 'hidden') AND publication_object_key IS NOT NULL) OR "
+            "image_status = 'removed')",
+            name="ck_venue_images_publication_status",
+        ),
+        CheckConstraint(
+            "publication_content_type IS NULL OR publication_content_type IN "
+            "('image/jpeg', 'image/png', 'image/webp')",
+            name="ck_venue_images_publication_content_type",
+        ),
+        CheckConstraint(
+            "publication_size_bytes IS NULL OR "
+            "publication_size_bytes BETWEEN 1 AND 8388608",
+            name="ck_venue_images_publication_size_bytes",
+        ),
+        CheckConstraint(
+            "publication_object_key IS NULL OR "
+            "char_length(btrim(publication_object_key)) > 0",
+            name="ck_venue_images_publication_object_key_not_empty",
+        ),
+        CheckConstraint(
+            "publication_etag IS NULL OR char_length(btrim(publication_etag)) > 0",
+            name="ck_venue_images_publication_etag_not_empty",
+        ),
+        CheckConstraint(
             "sort_order >= 0",
             name="ck_venue_images_sort_order_non_negative",
         ),
@@ -79,6 +113,12 @@ class VenueImage(Base):
             "uq_venue_images_storage_object_key",
             "storage_object_key",
             unique=True,
+        ),
+        Index(
+            "uq_venue_images_publication_object_key",
+            "publication_object_key",
+            unique=True,
+            postgresql_where=text("publication_object_key IS NOT NULL"),
         ),
         Index(
             "uq_venue_images_one_active_primary_per_venue",
@@ -113,6 +153,12 @@ class VenueImage(Base):
     content_type: Mapped[str] = mapped_column(String(120), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     etag: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    publication_object_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    publication_content_type: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    publication_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    publication_etag: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     image_role: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'gallery'")

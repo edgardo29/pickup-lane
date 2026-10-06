@@ -187,11 +187,11 @@ def _user(
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"firebase-ws03-04d-{label}-{unique}",
+        auth_user_id=f"firebase-admin-auth-{label}-{unique}",
         role=role,
-        email=f"ws03-04d-{label}-{unique}@example.invalid",
+        email=f"admin-auth-{label}-{unique}@example.invalid",
         email_verified_at=datetime.now(timezone.utc) if email_verified else None,
-        first_name=f"WS03D{label}",
+        first_name=f"Admin{label}",
         last_name="User",
         date_of_birth=date(1990, 1, 1),
         account_status=account_status,
@@ -299,11 +299,11 @@ def _current_route_map() -> dict[tuple[str, str], APIRoute]:
 def _d_matrix_routes() -> dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any]]]:
     routes: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any]]] = {}
     for family in _matrix()["route_families"]:
-        if family["primary_child_owner"] != "WS03-04D":
+        if family["primary_functional_owner"] != "administrative_authorization":
             continue
         for route in family["routes"]:
             key = (route["method"], route["path"])
-            assert route["child_owner"] == "WS03-04D"
+            assert route["functional_owner"] == "administrative_authorization"
             assert key not in routes, f"duplicate D matrix route key: {key}"
             routes[key] = (family, route)
     return routes
@@ -330,17 +330,17 @@ def _d_tombstone_route_keys() -> set[tuple[str, str]]:
 
 
 @pytest.mark.pass_provenance('WS03-04D')
-def test_d_route_inventory_matches_behavioral_matrix_and_current_route_table() -> None:
+def test_administrative_route_inventory_matches_behavioral_matrix_and_current_route_table() -> None:
     d_routes = _d_matrix_routes()
     d_families = [
         family
         for family in _matrix()["route_families"]
-        if family["primary_child_owner"] == "WS03-04D"
+        if family["primary_functional_owner"] == "administrative_authorization"
     ]
 
     assert len(d_families) == EXPECTED_D_FAMILY_COUNT
     assert len(d_routes) == EXPECTED_D_ROUTE_COUNT
-    assert all(family["behavior_owner_detail"] == "WS03-04D" for family in d_families)
+    assert all(family["behavior_owner_detail"] == "administrative_authorization" for family in d_families)
 
     current_routes = _current_route_map()
     assert _d_route_keys() <= set(current_routes)
@@ -351,8 +351,8 @@ def test_d_route_inventory_matches_behavioral_matrix_and_current_route_table() -
         current_dependencies = set(_auth_dependencies(current_route))
         assert matrix_dependencies == current_dependencies, key
         assert REQUIRED_ADMIN_AUTH_DEPENDENCIES <= matrix_dependencies, key
-        assert matrix_route["negative_proof_owner"] == "WS03-04D"
-        assert matrix_route["negative_proof_owner_detail"] == "WS03-04D"
+        assert matrix_route["negative_proof_owner"] == "administrative_authorization"
+        assert matrix_route["negative_proof_owner_detail"] == "administrative_authorization"
         assert matrix_route["route_disposition"] in {
             "protected",
             "retired_or_tombstone",
@@ -384,21 +384,23 @@ def test_stripe_webhook_gap_ownership_remains_explicit_and_outside_admin_scope()
     gaps = _matrix()["uncovered_gaps"]
     assert gaps == [
         {
-            "gap_id": "WS03-04A-G001",
+            "gap_id": "stripe_webhook_authorization_boundary",
             "state": "covered_elsewhere",
             "title": "Stripe webhook authorization ownership boundary",
             "reason": (
                 "POST /stripe/webhook is a provider callback outside ordinary user "
-                "authorization; payment/webhook lifecycle, signature, replay, and "
-                "idempotent transition behavior are owned by WS05."
+                "authorization; Stripe webhook lifecycle, signature, replay, and "
+                "idempotent transition behavior are owned by the Stripe webhook "
+                "lifecycle controls."
             ),
-            "owner": "WS05",
+            "owner": "stripe_webhook_lifecycle",
             "owner_type": "covered_elsewhere",
-            "affected_families": ["stripe_webhook_covered_elsewhere_ws05"],
+            "affected_families": ["stripe_webhook_covered_elsewhere_stripe_webhook"],
             "affected_routes": [{"method": "POST", "path": "/stripe/webhook"}],
             "resolution_condition": (
-                "WS05 payment/webhook coverage remains responsible for lifecycle, "
-                "signature, replay, and idempotent transition behavior for this callback."
+                "The Stripe webhook lifecycle controls remain responsible for "
+                "lifecycle, signature, replay, and idempotent transition behavior "
+                "for this callback."
             ),
         }
     ]
