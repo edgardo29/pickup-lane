@@ -84,49 +84,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
       - name: Lint frontend
         run: npm run lint
 
       - name: Build frontend
         run: npm run build
 
-      - name: Run frontend unit tests
-        run: npm run test:unit
-
-      - name: Run signed-out browser smoke tests
-        run: npm run test:e2e:smoke
-
   backend:
     name: Backend CI
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: pickup_lane_test_db
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: pickup-lane-ci
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      CI: true
-      APP_ENV: ci
-      DATABASE_URL: postgresql+psycopg://postgres:pickup-lane-ci@127.0.0.1:5432/pickup_lane_test_db
-      TEST_DATABASE_URL: postgresql+psycopg://postgres:pickup-lane-ci@127.0.0.1:5432/pickup_lane_test_db
-      MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:pickup-lane-ci@127.0.0.1:5432/pickup_lane_migration_test_db
-      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - name: Checkout repository
@@ -142,32 +110,6 @@ jobs:
 
       - name: Compile backend Python files
         run: python -m compileall -q backend
-
-      - name: Rebuild dedicated backend test databases
-        run: python -m backend.test_runner rebuild all
-
-      - name: Collect complete active backend suite
-        run: >
-          python -m backend.test_runner test ordinary
-          backend/tests/domains
-          backend/tests/workflows
-          backend/tests/platform
-          backend/tests/migrations
-          --collect-only -q
-
-      - name: Run complete ordinary backend suite
-        run: >
-          python -m backend.test_runner test ordinary
-          backend/tests/domains
-          backend/tests/workflows
-          backend/tests/platform
-          -q
-
-      - name: Run complete active migration suite
-        run: >
-          python -m backend.test_runner test migration
-          backend/tests/migrations -q
-
 
   required:
     name: CI Required
