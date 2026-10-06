@@ -199,11 +199,11 @@ def _user(
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"firebase-ws03-04c-{label}-{unique}",
+        auth_user_id=f"firebase-relationship-authorization-{label}-{unique}",
         role=role,
-        email=f"ws03-04c-{label}-{unique}@example.invalid",
+        email=f"relationship-authorization-{label}-{unique}@example.invalid",
         email_verified_at=datetime.now(timezone.utc) if email_verified else None,
-        first_name=f"WS03C{label}",
+        first_name=f"Relationship{label}",
         last_name="User",
         date_of_birth=date(1990, 1, 1),
         account_status=account_status,
@@ -216,7 +216,7 @@ def _venue(user_id: uuid.UUID, label: str, *, is_active: bool = True) -> Any:
 
     return Venue(
         id=uuid.uuid4(),
-        name=f"WS03C Venue {label}",
+        name=f"Relationship Venue {label}",
         address_line_1=f"{label} Test Ave",
         city="Chicago",
         state="IL",
@@ -256,10 +256,10 @@ def _game(
         game_status=game_status,
         public_visibility_status=public_visibility_status,
         join_enforcement_status=join_enforcement_status,
-        title=f"WS03C Game {label}",
-        description=f"WS03C game {label}",
+        title=f"Relationship Game {label}",
+        description=f"Relationship game {label}",
         venue_id=venue_id,
-        venue_name_snapshot=f"WS03C Venue {label}",
+        venue_name_snapshot=f"Relationship Venue {label}",
         address_snapshot=f"{label} Test Ave",
         city_snapshot="Chicago",
         state_snapshot="IL",
@@ -332,7 +332,7 @@ def _booking(
             if booking_status == "pending_payment"
             else None
         ),
-        cancel_reason=f"ws03c-{label}" if booking_status == "cancelled" else None,
+        cancel_reason=f"relationship-{label}" if booking_status == "cancelled" else None,
     )
 
 
@@ -358,7 +358,7 @@ def _participant(
         user_id=user_id,
         guest_of_user_id=guest_of_user_id,
         guest_name=f"Guest {label}" if participant_type == "guest" else None,
-        display_name_snapshot=f"WS03C Participant {label}",
+        display_name_snapshot=f"Relationship Participant {label}",
         participant_status=participant_status,
         attendance_status="unknown",
         cancellation_type="none",
@@ -388,7 +388,7 @@ def _waitlist_entry(
         position=position,
         waitlist_status=waitlist_status,
         joined_at=datetime.now(timezone.utc),
-        auto_charge_consent_version=f"ws03c-{label}",
+        auto_charge_consent_version=f"relationship-{label}",
     )
 
 
@@ -418,7 +418,7 @@ def _chat_message(
         chat_id=chat_id,
         sender_user_id=sender_user_id,
         message_type="text",
-        message_body=f"WS03C message {label}",
+        message_body=f"Relationship message {label}",
         is_pinned=False,
         visibility_status=visibility_status,
         review_status=review_status,
@@ -475,12 +475,12 @@ def _sub_post(
         environment_type="outdoor",
         skill_level="any",
         game_player_group="coed",
-        team_name=f"WS03C Team {label}",
+        team_name=f"Relationship Team {label}",
         starts_at=starts_at,
         ends_at=ends_at,
         starts_on_local=starts_at.date(),
         timezone="America/Chicago",
-        location_name=f"WS03C Field {label}",
+        location_name=f"Relationship Field {label}",
         address_line_1=f"{label} Sub Ave",
         city="Chicago",
         state="IL",
@@ -554,10 +554,10 @@ def _sub_chat_message(
         id=uuid.uuid4(),
         chat_id=chat_id,
         sender_user_id=sender_user_id,
-        sender_display_name_snapshot=f"WS03C Sender {label}",
+        sender_display_name_snapshot=f"Relationship Sender {label}",
         sender_initials_snapshot="WS",
         message_type="text",
-        message_body=f"WS03C sub message {label}",
+        message_body=f"Relationship sub message {label}",
         visibility_status=visibility_status,
         review_status=review_status,
         removed_at=datetime.now(timezone.utc) if visibility_status == "removed" else None,
@@ -735,12 +735,12 @@ def test_matrix_scope_guard_and_route_dependencies_match_current_app() -> None:
     c_routes = {
         key: route
         for key, (family, route) in matrix_routes.items()
-        if family["primary_child_owner"] == "WS03-04C"
+        if family["primary_functional_owner"] == "relationship_and_workflow_authorization"
     }
     c_families = [
         family
         for family in _matrix()["route_families"]
-        if family["primary_child_owner"] == "WS03-04C"
+        if family["primary_functional_owner"] == "relationship_and_workflow_authorization"
     ]
 
     assert len(c_families) == 15
@@ -752,15 +752,15 @@ def test_matrix_scope_guard_and_route_dependencies_match_current_app() -> None:
         & {
             key
             for key, (family, _route) in matrix_routes.items()
-            if family["primary_child_owner"] in {"WS03-04B", "WS03-04D"}
+            if family["primary_functional_owner"] in {"self_owned_account_and_financial_authorization", "administrative_authorization"}
         }
     )
 
     for key, route_entry in c_routes.items():
         family, _route = matrix_routes[key]
-        assert family["primary_child_owner"] == "WS03-04C"
-        assert route_entry["child_owner"] == "WS03-04C"
-        assert route_entry["child_owner"] != "blocked"
+        assert family["primary_functional_owner"] == "relationship_and_workflow_authorization"
+        assert route_entry["functional_owner"] == "relationship_and_workflow_authorization"
+        assert route_entry["functional_owner"] != "blocked"
         assert route_entry["route_disposition"] in {"public", "optional_auth", "protected"}
         assert _auth_dependencies(_current_route_map()[key]) == route_entry[
             "auth_dependencies"
@@ -788,7 +788,7 @@ def test_matrix_scope_guard_and_route_dependencies_match_current_app() -> None:
 
 
 @pytest.mark.pass_provenance('WS03-04C')
-def test_frozen_finite_state_classification_covers_c_lifecycle_values() -> None:
+def test_finite_state_classification_covers_relationship_authorization_lifecycle_values() -> None:
     from backend.models import (
         Booking,
         ChatMessage,

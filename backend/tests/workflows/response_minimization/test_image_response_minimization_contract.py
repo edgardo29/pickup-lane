@@ -9,7 +9,6 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-
 CHICAGO = ZoneInfo("America/Chicago")
 
 GAME_IMAGE_PUBLIC_ALLOWED = {
@@ -182,6 +181,10 @@ def _create_image_rows(db: Session, *, admin):
         content_type="image/jpeg",
         size_bytes=12345,
         etag="test-etag",
+        publication_object_key=f"venues/{venue.id}/published/{uuid.uuid4()}.jpg",
+        publication_content_type="image/jpeg",
+        publication_size_bytes=12345,
+        publication_etag="test-publication-etag",
         image_role="card",
         image_status="active",
         is_primary=True,
@@ -218,14 +221,16 @@ def _route(method: str, path: str) -> APIRoute:
     raise AssertionError(f"Route not found: {method} {path}")
 
 
-@pytest.mark.pass_provenance('WS02-05B2')
+@pytest.mark.pass_provenance('WS02-05B2', 'WS06-02')
 def test_public_game_and_venue_image_responses_exclude_internal_metadata(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         "backend.services.venue_image_service.create_object_read_url",
-        lambda object_key: f"https://cdn.example.invalid/{object_key}",
+        lambda *, target, object_key, config=None: (
+            f"https://cdn.example.invalid/{object_key}"
+        ),
     )
 
     with _session() as db:
@@ -243,7 +248,7 @@ def test_public_game_and_venue_image_responses_exclude_internal_metadata(
     assert GAME_IMAGE_INTERNAL_FIELDS.isdisjoint(game_image_data)
     assert game_image_data["image_url"] == "https://cdn.example.invalid/game-card.jpg"
 
-    game_image_list_response = client.get(f"/game-images?image_status=active")
+    game_image_list_response = client.get("/game-images?image_status=active")
     assert game_image_list_response.status_code == 200
     listed_game_image = next(
         item for item in game_image_list_response.json() if item["id"] == str(game_image_id)
@@ -262,14 +267,16 @@ def test_public_game_and_venue_image_responses_exclude_internal_metadata(
     assert venue_image_data["caption"] == "North field"
 
 
-@pytest.mark.pass_provenance('WS02-05B2')
+@pytest.mark.pass_provenance('WS02-05B2', 'WS06-02')
 def test_admin_image_responses_retain_operational_metadata_behind_admin(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         "backend.services.venue_image_service.create_object_read_url",
-        lambda object_key: f"https://cdn.example.invalid/{object_key}",
+        lambda *, target, object_key, config=None: (
+            f"https://cdn.example.invalid/{object_key}"
+        ),
     )
 
     with _session() as db:

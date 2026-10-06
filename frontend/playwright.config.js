@@ -4,11 +4,11 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 2 : 0,
+  retries: 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://127.0.0.1:5173',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
   },
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1',
@@ -19,7 +19,7 @@ export default defineConfig({
     {
       name: 'signed-out-smoke',
       testMatch: /landing\.spec\.js/,
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 })

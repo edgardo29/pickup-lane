@@ -17,6 +17,7 @@ from backend.observability.structured_logging import (
     emit_durable_job_event,
     emit_event,
 )
+from backend.services import venue_image_service
 
 pytestmark = [
     pytest.mark.no_db_cleanup,
@@ -162,6 +163,61 @@ def test_general_emitter_uses_only_active_canonical_correlation(
 
     assert get_correlation_id() is None
     assert _records(capsys)[0]["correlation_id"] == correlation_id
+
+
+@pytest.mark.parametrize(
+    ("event_name", "severity", "result", "resource_kind"),
+    [
+        (
+            "venue_image.processor_not_ready",
+            "error",
+            "codec_unavailable",
+            "venue_image",
+        ),
+        (
+            "venue_image.validation_rejected",
+            "warning",
+            "metadata_mismatch",
+            "venue_image",
+        ),
+        ("venue_image.processing_rejected", "warning", "busy", "venue_image"),
+        (
+            "venue_image.cleanup_incomplete",
+            "warning",
+            "unknown_outcome",
+            "publication_candidate",
+        ),
+        (
+            "venue_image.completion_outcome_unknown",
+            "error",
+            "database_commit_unknown",
+            "venue_image",
+        ),
+    ],
+)
+def test_venue_image_event_family_uses_bounded_supported_fields(
+    capsys: pytest.CaptureFixture[str],
+    event_name: str,
+    severity: str,
+    result: str,
+    resource_kind: str,
+) -> None:
+    _emitter()
+
+    assert venue_image_service._emit_venue_image_event(
+        event_name,
+        severity,
+        result=result,
+        resource_kind=resource_kind,
+    )
+
+    (record,) = _records(capsys)
+    assert record["event_name"] == event_name
+    assert record["severity"] == severity
+    assert record["resource_kind"] == resource_kind
+    assert record["result"] == result
+    assert record["event_name"] != "logging.event_rejected"
+    assert "resource_id" not in record
 
 
 def test_only_durable_wrapper_populates_resource_id(

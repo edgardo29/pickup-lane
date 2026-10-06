@@ -49,9 +49,9 @@ def _session():
 def _user(index: int) -> User:
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-c3a-sub-user-{index}-{uuid.uuid4()}",
+        auth_user_id=f"chat-rate-limit-sub-user-{index}-{uuid.uuid4()}",
         role="player",
-        email=f"ws02-c3a-sub-{index}-{uuid.uuid4()}@example.invalid",
+        email=f"chat-rate-limit-sub-{index}-{uuid.uuid4()}@example.invalid",
         first_name="Sub",
         last_name=f"User{index}",
         account_status="active",
@@ -360,7 +360,7 @@ def test_need_a_sub_visibility_restoration_and_text_only_schema_boundaries() -> 
 
 
 @pytest.mark.pass_provenance('WS02-04C3A')
-def test_need_a_sub_rate_limiter_remains_before_b1_total_history_cap() -> None:
+def test_need_a_sub_rate_limiter_remains_before_total_history_cap() -> None:
     source = inspect.getsource(sub_post_chat_service.create_sub_post_chat_message_workflow)
 
     assert source.index("validate_sender_rate_limit") < source.index("validate_total_message_limit")

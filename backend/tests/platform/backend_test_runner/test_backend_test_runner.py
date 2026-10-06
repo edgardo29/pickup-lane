@@ -26,6 +26,85 @@ MIGRATION_URL = (
     "pickup_lane_migration_test_db"
 )
 
+R2_PROVIDER_ENV = {
+    "R2_TEST_ACCOUNT_ID": "abc123",
+    "R2_TEST_ACCESS_KEY_ID": "test-access",
+    "R2_TEST_SECRET_ACCESS_KEY": "test-secret",
+    "R2_TEST_BUCKET_NAME": "isolated-contract-bucket",
+    "R2_TEST_ENDPOINT_URL": "https://abc123.r2.cloudflarestorage.com",
+}
+
+
+@pytest.mark.pass_provenance("WS06-02")
+def test_r2_provider_contract_environment_is_isolated_and_database_free() -> None:
+    environment = backend_test._r2_provider_contract_environment(
+        {
+            **R2_PROVIDER_ENV,
+            "DATABASE_URL": ORDINARY_URL,
+            "PYTEST_ADDOPTS": "-k unsafe",
+            "UNRELATED_SECRET": "must-not-reach-provider-tests",
+        }
+    )
+    assert environment["BACKEND_PROVIDER_CONTRACT_MODE"] == "1"
+    assert environment["R2_ACCOUNT_ID"] == "abc123"
+    assert environment["R2_BUCKET_NAME"] == "isolated-contract-bucket"
+    assert "DATABASE_URL" not in environment
+    assert "PYTEST_ADDOPTS" not in environment
+    assert "UNRELATED_SECRET" not in environment
+    assert not set(R2_PROVIDER_ENV) & set(environment)
+
+
+@pytest.mark.parametrize(
+    "environment",
+    [
+        {},
+        {
+            **R2_PROVIDER_ENV,
+            "R2_TEST_ENDPOINT_URL": "https://other.r2.cloudflarestorage.com",
+        },
+        {
+            **R2_PROVIDER_ENV,
+            "R2_BUCKET_NAME": "isolated-contract-bucket",
+        },
+    ],
+)
+@pytest.mark.pass_provenance("WS06-02")
+def test_r2_provider_contract_environment_rejects_unsafe_configuration(
+    environment: dict[str, str],
+) -> None:
+    with pytest.raises(backend_test.BackendTestRunnerError):
+        backend_test._r2_provider_contract_environment(environment)
+
+
+@pytest.mark.pass_provenance("WS06-02")
+def test_ordinary_collection_excludes_r2_provider_contract_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider_test = (
+        Path(backend_conftest.__file__).parent
+        / "provider_contract"
+        / "r2"
+        / "test_r2_object_semantics_contract.py"
+    )
+    monkeypatch.delenv("BACKEND_PROVIDER_CONTRACT_MODE", raising=False)
+
+    assert backend_conftest.pytest_ignore_collect(provider_test, None) is True
+
+
+@pytest.mark.pass_provenance("WS06-02")
+def test_r2_provider_contract_mode_collects_r2_contract_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider_test = (
+        Path(backend_conftest.__file__).parent
+        / "provider_contract"
+        / "r2"
+        / "test_r2_object_semantics_contract.py"
+    )
+    monkeypatch.setenv("BACKEND_PROVIDER_CONTRACT_MODE", "1")
+
+    assert backend_conftest.pytest_ignore_collect(provider_test, None) is False
+
 
 def _write_dotenv(path: Path, *, ordinary: str, migration: str) -> None:
     path.write_text(
@@ -57,10 +136,42 @@ def test_configuration_selects_distinct_ordinary_and_migration_urls(
         {
             "PYTEST_ADDOPTS": "-k only_some_tests",
             "PYTEST_PLUGINS": "unsafe_plugin",
+            "R2_ACCESS_KEY_ID": "application-access-key",
+            "R2_TEST_SECRET_ACCESS_KEY": "provider-secret-key",
+            "UNRELATED_SECRET": "must-not-reach-ordinary-tests",
         }
     )
     assert "PYTEST_ADDOPTS" not in ambient_pytest_options
     assert "PYTEST_PLUGINS" not in ambient_pytest_options
+    assert "R2_ACCESS_KEY_ID" not in ambient_pytest_options
+    assert "R2_TEST_SECRET_ACCESS_KEY" not in ambient_pytest_options
+    assert "UNRELATED_SECRET" not in ambient_pytest_options
+
+
+def test_root_test_settings_replace_ambient_secrets_for_ordinary_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "ambient-stripe-secret")
+    monkeypatch.setenv("FIREBASE_PROJECT_ID", "ambient-firebase-project")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "ambient-aws-secret")
+    monkeypatch.setenv("R2_ACCESS_KEY_ID", "ambient-r2-access-key")
+    monkeypatch.setenv("R2_TEST_SECRET_ACCESS_KEY", "ambient-r2-test-secret")
+
+    backend_conftest._install_synthetic_backend_test_settings(
+        provider_contract_mode=False
+    )
+
+    assert backend_conftest.os.environ["APP_ENV"] == "test"
+    assert backend_conftest.os.environ["STRIPE_SECRET_KEY"] == (
+        "synthetic-stripe-secret-key"
+    )
+    assert backend_conftest.os.environ["FIREBASE_PROJECT_ID"] == (
+        "pickup-lane-synthetic"
+    )
+    assert "AWS_SECRET_ACCESS_KEY" not in backend_conftest.os.environ
+    assert "R2_ACCESS_KEY_ID" not in backend_conftest.os.environ
+    assert "R2_TEST_SECRET_ACCESS_KEY" not in backend_conftest.os.environ
 
 
 def test_environment_values_override_dotenv_without_using_database_url_alias(
@@ -403,6 +514,36 @@ def test_output_redacts_a_password_split_across_lines(
     assert password not in stream.getvalue()
     assert first_fragment not in stream.getvalue()
     assert second_fragment not in stream.getvalue()
+
+
+@pytest.mark.pass_provenance("WS06-02")
+def test_output_redacts_r2_credentials_even_when_split_across_lines() -> None:
+    access_key = "isolated-r2-access-key"
+    secret_key = "isolated/r2+secret-key"
+    stream = io.StringIO()
+
+    class FakeProcess:
+        stdout = io.StringIO(
+            "access=isolated-r2-access-key\n"
+            "secret=isolated/r2+\nsecret-key\n"
+            "encoded=isolated%2Fr2%2Bsecret-key\n"
+        )
+
+        def wait(self) -> int:
+            return 1
+
+    assert backend_test.run_pytest(
+        ["backend/tests/provider_contract/r2"],
+        environment={},
+        database_urls=(),
+        sensitive_values=(access_key, secret_key),
+        process_factory=lambda *_args, **_kwargs: FakeProcess(),
+        output=stream,
+    ) == 1
+    assert access_key not in stream.getvalue()
+    assert secret_key not in stream.getvalue()
+    assert "isolated/r2+" not in stream.getvalue()
+    assert "isolated%2Fr2%2Bsecret-key" not in stream.getvalue()
 
 
 def test_invalid_cli_argument_does_not_echo_database_credentials(
@@ -788,6 +929,10 @@ def test_pytest_requires_an_existing_backend_tests_selection_first() -> None:
         ["--override-ini=addopts=--noconftest"],
         ["--pyargs"],
         ["--rootdir=backend/tests/platform"],
+        ["--basetemp", "/tmp/pytest-output"],
+        ["--basetemp=/tmp/pytest-output"],
+        ["--debug=backend/.test-artifacts/pytest-debug.log"],
+        ["--pastebin=all"],
     ],
 )
 def test_pytest_rejects_options_that_can_bypass_root_safety_fixtures(
@@ -822,10 +967,45 @@ def test_pytest_preserves_safe_multiple_selections_and_options() -> None:
         "-k",
         "safe and exact",
         "backend/tests/migrations",
-        "--junitxml=/tmp/backend-results.xml",
+        "--junitxml=backend/.test-artifacts/backend-results.xml",
     ]
     assert backend_test.pytest_command(arguments) == [
         backend_test.sys.executable, "-m", "pytest", *arguments
+    ]
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--junitxml=/tmp/backend-results.xml"],
+        ["--junit-xml", "../backend-results.xml"],
+        ["--log-file", "backend/test-output.log"],
+        ["--junitxml"],
+    ],
+)
+def test_pytest_rejects_uncontrolled_or_missing_output_paths(
+    arguments: list[str],
+) -> None:
+    with pytest.raises(
+        backend_test.BackendTestRunnerError,
+        match=r"backend/\.test-artifacts",
+    ):
+        backend_test.pytest_command(["backend/tests/platform", *arguments])
+
+
+def test_pytest_accepts_controlled_output_paths() -> None:
+    arguments = [
+        "backend/tests/platform",
+        "--junit-xml",
+        "backend/.test-artifacts/results.xml",
+        "--log-file=backend/.test-artifacts/pytest.log",
+    ]
+
+    assert backend_test.pytest_command(arguments) == [
+        backend_test.sys.executable,
+        "-m",
+        "pytest",
+        *arguments,
     ]
 
 
@@ -878,6 +1058,21 @@ def test_cleanup_refuses_a_misbound_engine_before_truncate(
     with pytest.raises(EnvironmentSafetyError, match="does not match"):
         next(fixture)
     assert executed == ["SELECT current_database()"]
+
+
+def test_cleanup_disables_application_statement_timeout_before_truncate() -> None:
+    executed: list[str] = []
+
+    class FakeConnection:
+        def execute(self, statement):
+            executed.append(str(statement))
+
+    backend_conftest._truncate_test_tables(FakeConnection(), "users, games")
+
+    assert executed == [
+        "SET LOCAL statement_timeout = 0",
+        "TRUNCATE TABLE users, games RESTART IDENTITY CASCADE",
+    ]
 
 
 def test_schema_fingerprint_write_refuses_a_misbound_engine(

@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-import backend.observability.timeouts as timeout_module
 from backend.observability.correlation import (
     CORRELATION_ID_HEADER,
     reset_correlation_id,
@@ -133,11 +132,11 @@ def test_public_timeout_errors_return_safe_503_contracts(
         assert marker not in rendered
 
 
-@pytest.mark.pass_provenance('WS02-04C1')
+@pytest.mark.pass_provenance('WS02-04C1', 'WS06-02')
 def test_timeout_telemetry_labels_are_bounded_and_safe() -> None:
     read_error = DependencyReadTimeoutError(
         provider_kind="r2",
-        operation="r2.metadata.head",
+        operation="r2.object.download",
     )
     mutation_error = DependencyMutationTimeoutUnknownError(
         provider_kind="firebase",
@@ -147,7 +146,7 @@ def test_timeout_telemetry_labels_are_bounded_and_safe() -> None:
 
     assert read_error.contract.telemetry_labels == {
         "error_code": DEPENDENCY_READ_TIMEOUT_CODE,
-        "operation": "r2.metadata.head",
+        "operation": "r2.object.download",
         "outcome": "retry_later",
         "provider_kind": "r2",
     }

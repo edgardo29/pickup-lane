@@ -1,4 +1,4 @@
-"""PostgreSQL evidence for WS09-02C's shared read-audit contract."""
+"""PostgreSQL evidence for the shared sensitive-read audit contract."""
 
 from __future__ import annotations
 
@@ -61,14 +61,13 @@ from backend.tests.workflows.payment_booking_state_machines_webhook_authority.te
 )
 
 
-
 def _user(label: str, *, role: str = "player", status: str = "active") -> User:
     token = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws09-02c-{label}-{token}",
+        auth_user_id=f"query-cursor-{label}-{token}",
         role=role,
-        email=f"ws09-02c-{label}-{token}@example.invalid",
+        email=f"query-cursor-{label}-{token}@example.invalid",
         first_name="Audit",
         last_name=label,
         account_status=status,
@@ -83,7 +82,7 @@ def _payment(payer: User) -> Payment:
         payer_user_id=payer.id,
         payment_type="admin_charge",
         provider="stripe",
-        idempotency_key=f"ws09-02c-{token}",
+        idempotency_key=f"query-cursor-{token}",
         amount_cents=500,
         currency="USD",
         payment_status="failed",
@@ -145,7 +144,7 @@ def _persist_cross_user_fixture(
     owner: User,
 ) -> dict[str, uuid.UUID]:
     game_id, _venue_id = _persist_game_fixture(
-        f"ws09-02c-cross-user-{uuid.uuid4()}", admin=admin, creator=owner
+        f"query-cursor-cross-user-{uuid.uuid4()}", admin=admin, creator=owner
     )
     booking_id = _persist_paid_booking(
         game_id=game_id,
@@ -502,7 +501,7 @@ def test_all_four_admin_money_collection_families_audit_exact_returned_items(
     payer = _user("admin-money-collection-payer")
     _persist(admin, payer)
     game_id, _ = _persist_game_fixture(
-        "ws09-02c-admin-money-collections", admin=admin, creator=payer
+        "query-cursor-admin-money-collections", admin=admin, creator=payer
     )
     booking_id = _persist_paid_booking(
         game_id=game_id, buyer_user_id=payer.id, amount_cents=1200
@@ -638,7 +637,7 @@ def test_admin_waitlist_200_item_page_commits_200_typed_actions_in_one_batch() -
     owner = _user("owner")
     _persist(admin, owner)
     game_id, _venue_id = _persist_game_fixture(
-        "ws09-02c-waitlist", admin=admin, creator=owner
+        "query-cursor-waitlist", admin=admin, creator=owner
     )
     entries = [
         WaitlistEntry(
@@ -717,12 +716,12 @@ def test_admin_host_fee_101_and_200_item_pages_preserve_batch_bounds() -> None:
     host = _user("host")
     _persist(admin, host)
     with SessionLocal() as db:
-        venue = _venue("ws09-02c-fee-pages", creator_id=host.id, admin_id=admin.id)
+        venue = _venue("query-cursor-fee-pages", creator_id=host.id, admin_id=admin.id)
         db.add(venue)
         db.flush()
         games = [
             _community_game(
-                f"ws09-02c-fee-{index}",
+                f"query-cursor-fee-{index}",
                 venue=venue,
                 host_user_id=host.id,
                 creator_id=host.id,
@@ -837,10 +836,10 @@ def test_removal_preview_rejects_wrong_parent_before_sensitive_audit() -> None:
     player = _user("player")
     _persist(admin, player)
     first_game_id, _ = _persist_game_fixture(
-        "ws09-02c-parent-one", admin=admin, creator=player
+        "query-cursor-parent-one", admin=admin, creator=player
     )
     second_game_id, _ = _persist_game_fixture(
-        "ws09-02c-parent-two", admin=admin, creator=player
+        "query-cursor-parent-two", admin=admin, creator=player
     )
     participant_id = uuid.uuid4()
     with SessionLocal() as db:
@@ -888,7 +887,7 @@ def test_empty_official_game_financial_views_each_commit_one_game_bound_read() -
     creator = _user("creator")
     _persist(admin, creator)
     game_id, _ = _persist_game_fixture(
-        "ws09-02c-empty-official", admin=admin, creator=creator
+        "query-cursor-empty-official", admin=admin, creator=creator
     )
     with SessionLocal() as db:
         assert (
@@ -936,7 +935,7 @@ def test_embedded_payment_refund_and_credit_histories_exclude_reads_before_limit
     admin = _user("admin", role="admin")
     payer = _user("payer")
     _persist(admin, payer)
-    game_id, _ = _persist_game_fixture("ws09-02c-history", admin=admin, creator=payer)
+    game_id, _ = _persist_game_fixture("query-cursor-history", admin=admin, creator=payer)
     booking_id = _persist_paid_booking(
         game_id=game_id, buyer_user_id=payer.id, amount_cents=1200
     )
@@ -1050,7 +1049,7 @@ def test_all_seven_admin_money_detail_and_history_routes_record_exactly_one_read
     payer = _user("payer")
     _persist(admin, payer)
     game_id, _ = _persist_game_fixture(
-        "ws09-02c-money-details", admin=admin, creator=payer
+        "query-cursor-money-details", admin=admin, creator=payer
     )
     booking_id = _persist_paid_booking(
         game_id=game_id, buyer_user_id=payer.id, amount_cents=1200
@@ -1621,10 +1620,10 @@ def test_remaining_game_bound_routes_emit_exact_actions_before_calculation(
     host = _user("game-bound-host")
     _persist(admin, host)
     official_game_id, _ = _persist_game_fixture(
-        "ws09-02c-preview", admin=admin, creator=host
+        "query-cursor-preview", admin=admin, creator=host
     )
     community_game_id, _ = _persist_community_game_fixture(
-        "ws09-02c-admin-community", admin=admin, host=host
+        "query-cursor-admin-community", admin=admin, host=host
     )
     _install_tokens_for_users(monkeypatch, {"admin-token": admin})
     client = _client()
@@ -1663,7 +1662,7 @@ def test_hidden_community_detail_and_filtered_list_audit_admin_but_not_host(
     host = _user("hidden-host")
     _persist(admin, host)
     game_id, _ = _persist_community_game_fixture(
-        "ws09-02c-hidden", admin=admin, host=host
+        "query-cursor-hidden", admin=admin, host=host
     )
     with SessionLocal() as db:
         game = db.get(Game, game_id)
@@ -1715,10 +1714,10 @@ def test_hidden_community_invalid_targets_never_disclose_or_audit(
     deleted_host = _user("hidden-deleted-host")
     _persist(admin, wrong_kind_host, deleted_host)
     wrong_kind_game_id, _ = _persist_game_fixture(
-        "ws09-02c-wrong-kind", admin=admin, creator=wrong_kind_host
+        "query-cursor-wrong-kind", admin=admin, creator=wrong_kind_host
     )
     deleted_game_id, _ = _persist_community_game_fixture(
-        "ws09-02c-deleted", admin=admin, host=deleted_host
+        "query-cursor-deleted", admin=admin, host=deleted_host
     )
     with SessionLocal() as db:
         wrong_kind_game = db.get(Game, wrong_kind_game_id)
@@ -1771,13 +1770,13 @@ def test_hidden_filtered_empty_page_audits_once_and_unfiltered_list_excludes_hid
     visible_host = _user("visible-list-host")
     _persist(admin, empty_host, hidden_host, visible_host)
     hidden_game_id, _ = _persist_community_game_fixture(
-        "ws09-02c-hidden-empty", admin=admin, host=empty_host
+        "query-cursor-hidden-empty", admin=admin, host=empty_host
     )
     hidden_populated_game_id, _ = _persist_community_game_fixture(
-        "ws09-02c-hidden-populated", admin=admin, host=hidden_host
+        "query-cursor-hidden-populated", admin=admin, host=hidden_host
     )
     visible_game_id, _ = _persist_community_game_fixture(
-        "ws09-02c-visible-list", admin=admin, host=visible_host
+        "query-cursor-visible-list", admin=admin, host=visible_host
     )
     with SessionLocal() as db:
         hidden_game = db.get(Game, hidden_game_id)
@@ -1911,7 +1910,7 @@ def test_distinct_service_patterns_fail_closed_before_protected_loading(
     _persist(admin, owner)
     fixture = _persist_cross_user_fixture(admin=admin, owner=owner)
     hidden_game_id, _ = _persist_community_game_fixture(
-        "ws09-02c-failure-hidden", admin=admin, host=owner
+        "query-cursor-failure-hidden", admin=admin, host=owner
     )
     with SessionLocal() as db:
         game = db.get(Game, hidden_game_id)

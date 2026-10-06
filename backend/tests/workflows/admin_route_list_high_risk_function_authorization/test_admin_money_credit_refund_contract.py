@@ -20,7 +20,6 @@ from backend.tests.workflows.admin_route_list_high_risk_function_authorization.t
 )
 
 
-
 @pytest.mark.pass_provenance('WS05-03A')
 def test_financial_metrics_cover_complete_issue_taxonomy_and_durable_lifecycle():
     from sqlalchemy import CheckConstraint, func, select
@@ -177,9 +176,9 @@ def _persist_money_repair_fixture(
             game_id=game_id,
             payment_type="booking",
             provider="stripe",
-            provider_payment_intent_id=f"pi_ws03d_{uuid.uuid4().hex}",
-            provider_charge_id=f"ch_ws03d_{uuid.uuid4().hex}",
-            idempotency_key=f"ws03d-payment-{uuid.uuid4()}",
+            provider_payment_intent_id=f"pi_admin_authorization_{uuid.uuid4().hex}",
+            provider_charge_id=f"ch_admin_authorization_{uuid.uuid4().hex}",
+            idempotency_key=f"admin_authorization-payment-{uuid.uuid4()}",
             amount_cents=1200,
             currency="USD",
             payment_status="succeeded",
@@ -217,7 +216,7 @@ def _persist_money_repair_fixture(
             id=reconcile_refund_id,
             payment_id=payment.id,
             booking_id=booking_id,
-            provider_refund_id=f"re_ws03d_reconcile_{uuid.uuid4().hex}",
+            provider_refund_id=f"re_admin_authorization_reconcile_{uuid.uuid4().hex}",
             origin_operation_key=(
                 f"direct_admin_refund:refund:{reconcile_refund_id}"
             ),
@@ -277,7 +276,7 @@ def _persist_money_repair_fixture(
             source_booking_id=booking_id,
             source_payment_id=payment.id,
             issued_by_user_id=target_user_id,
-            idempotency_key=f"ws03d-credit-fixture-{uuid.uuid4()}",
+            idempotency_key=f"admin_authorization-credit-fixture-{uuid.uuid4()}",
         )
         db.add(credit)
         db.flush()
@@ -292,7 +291,7 @@ def _persist_money_repair_fixture(
             currency="USD",
             usage_type="redeem",
             usage_status="redeemed",
-            idempotency_key=f"ws03d-credit-usage-{uuid.uuid4()}",
+            idempotency_key=f"admin_authorization-credit-usage-{uuid.uuid4()}",
             reason_code="local_test_redeem",
             redeemed_at=now,
         )
@@ -301,7 +300,7 @@ def _persist_money_repair_fixture(
 
         resolve_issue = MoneyIssue(
             id=uuid.uuid4(),
-            operation_key=f"ws03d-resolve-{uuid.uuid4()}",
+            operation_key=f"admin_authorization-resolve-{uuid.uuid4()}",
             status="open",
             issue_type="refund_failed",
             origin_workflow="direct_admin_refund",
@@ -324,7 +323,7 @@ def _persist_money_repair_fixture(
         )
         retry_issue = MoneyIssue(
             id=uuid.uuid4(),
-            operation_key=f"ws03d-credit-retry-{uuid.uuid4()}",
+            operation_key=f"admin_authorization-credit-retry-{uuid.uuid4()}",
             status="open",
             issue_type="credit_restore_failed",
             origin_workflow="direct_admin_refund",
@@ -350,10 +349,10 @@ def _persist_money_repair_fixture(
             id=uuid.uuid4(),
             payment_id=None,
             provider="stripe",
-            provider_event_id=f"evt_ws03d_{uuid.uuid4().hex}",
+            provider_event_id=f"evt_admin_authorization_{uuid.uuid4().hex}",
             event_type="payment_intent.succeeded",
             event_envelope={
-                "id": "evt_ws03d_payment_event",
+                "id": "evt_admin_authorization_payment_event",
                 "type": "payment_intent.succeeded",
                 "data": {"object": {"id": payment.provider_payment_intent_id}},
             },
@@ -391,9 +390,9 @@ def _persist_host_publish_fee_fixture(
             game_id=game_id,
             payment_type="community_publish_fee",
             provider="stripe",
-            provider_payment_intent_id=f"pi_ws03d_fee_{uuid.uuid4().hex}",
-            provider_charge_id=f"ch_ws03d_fee_{uuid.uuid4().hex}",
-            idempotency_key=f"ws03d-fee-payment-{uuid.uuid4()}",
+            provider_payment_intent_id=f"pi_admin_authorization_fee_{uuid.uuid4().hex}",
+            provider_charge_id=f"ch_admin_authorization_fee_{uuid.uuid4().hex}",
+            idempotency_key=f"admin_authorization-fee-payment-{uuid.uuid4()}",
             amount_cents=amount_cents,
             currency="USD",
             payment_status="succeeded",
@@ -539,7 +538,7 @@ def test_stale_admin_cannot_issue_credit_or_create_financial_side_effects(
             "user_id": str(target.id),
             "amount_cents": 500,
             "credit_reason": "admin_credit",
-            "idempotency_key": f"ws03d-credit-stale-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-credit-stale-{uuid.uuid4()}",
             "note": "Rejected stale admin request.",
         },
         headers=_auth_headers("stale-admin-token"),
@@ -592,7 +591,7 @@ def test_recent_active_admin_can_issue_credit_and_ordinary_user_cannot_list_mone
             "amount_cents": 700,
             "credit_reason": "admin_credit",
             "source_booking_id": str(booking_id),
-            "idempotency_key": f"ws03d-credit-success-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-credit-success-{uuid.uuid4()}",
             "note": "Admin-issued local test credit.",
         },
         headers=_auth_headers("admin-token"),
@@ -610,7 +609,7 @@ def test_recent_active_admin_can_issue_credit_and_ordinary_user_cannot_list_mone
     stale_reverse = client.post(
         f"/admin/game-credits/{game_credit_id}/reverse",
         json={
-            "idempotency_key": f"ws03d-credit-stale-reverse-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-credit-stale-reverse-{uuid.uuid4()}",
             "note": "Stale admin must not reverse local test credit.",
         },
         headers=_auth_headers("stale-admin-token"),
@@ -623,7 +622,7 @@ def test_recent_active_admin_can_issue_credit_and_ordinary_user_cannot_list_mone
     reverse_response = client.post(
         f"/admin/game-credits/{game_credit_id}/reverse",
         json={
-            "idempotency_key": f"ws03d-credit-reverse-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-credit-reverse-{uuid.uuid4()}",
             "note": "Reverse unused local test credit.",
         },
         headers=_auth_headers("admin-token"),
@@ -695,7 +694,7 @@ def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
         json={
             "outcome": "no_fee_charged",
             "reason": "Stale admin must not create financial outcomes.",
-            "idempotency_key": f"ws03d-stale-financial-outcome-real-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-stale-financial-outcome-real-{uuid.uuid4()}",
             "host_user_id": str(host.id),
             "target_game_id": str(community_game_id),
             "amount_cents": 0,
@@ -712,7 +711,7 @@ def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
             "outcome": "no_fee_charged",
             "reason": "Record no publish fee charged for local community game.",
             "internal_note": "Local test outcome note.",
-            "idempotency_key": f"ws03d-financial-outcome-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-financial-outcome-{uuid.uuid4()}",
             "host_user_id": str(host.id),
             "target_game_id": str(community_game_id),
             "amount_cents": 0,
@@ -737,7 +736,7 @@ def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
             "resolution_reason_code": "handled_externally",
             "resolution_note": "Stale admin must not resolve money issues.",
             "resolution_external_reference": "local-test-stale-reference",
-            "idempotency_key": f"ws03d-stale-resolve-real-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-stale-resolve-real-{uuid.uuid4()}",
         },
         headers=_auth_headers("stale-admin-token"),
     )
@@ -752,7 +751,7 @@ def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
             "resolution_reason_code": "handled_externally",
             "resolution_note": "Resolved with documented local admin review.",
             "resolution_external_reference": "local-test-resolution-reference",
-            "idempotency_key": f"ws03d-resolve-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-resolve-{uuid.uuid4()}",
         },
         headers=_auth_headers("admin-token"),
     )
@@ -768,7 +767,7 @@ def test_recent_admin_financial_issue_and_payment_event_repairs_persist_state(
     before_credit = _get_credit_state(credit_id)
     before_credit_usage_counts = _credit_usage_status_counts(credit_id)
     before_retry_issue_events = _count_model_rows(MoneyIssueEvent)
-    retry_idempotency_key = f"ws03d-credit-retry-{uuid.uuid4()}"
+    retry_idempotency_key = f"admin_authorization-credit-retry-{uuid.uuid4()}"
     retry_credit = client.post(
         f"/admin/money/issues/{retry_issue_id}/retry-credit",
         json={
@@ -892,7 +891,7 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
         json={
             "outcome": "forfeit",
             "reason": "Stale admin must not apply financial outcomes.",
-            "idempotency_key": f"ws03d-outcome-stale-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-outcome-stale-{uuid.uuid4()}",
             "host_publish_fee_id": str(stale_fee_id),
         },
         headers=_auth_headers("stale-admin-token"),
@@ -930,7 +929,7 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
             json={
                 "outcome": outcome,
                 "reason": f"Reject partial {outcome} outcome.",
-                "idempotency_key": f"ws05-03a-partial-{outcome}-{uuid.uuid4()}",
+                "idempotency_key": f"refund-fulfillment-partial-{outcome}-{uuid.uuid4()}",
                 "host_publish_fee_id": str(fee_id),
                 "amount_cents": 899,
             },
@@ -944,7 +943,7 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
                 "outcome": outcome,
                 "reason": f"Apply local {outcome} outcome.",
                 "internal_note": f"Local {outcome} branch proof.",
-                "idempotency_key": f"ws03d-outcome-{outcome}-{uuid.uuid4()}",
+                "idempotency_key": f"admin_authorization-outcome-{outcome}-{uuid.uuid4()}",
                 "host_publish_fee_id": str(fee_id),
             },
             headers=_auth_headers("admin-token"),
@@ -964,7 +963,7 @@ def test_recent_admin_financial_outcome_branches_persist_distinct_state_and_prov
         assert _count_model_rows(counted_model) == before_model_count + expected_delta
 
     manual_review_id = created_outcome_ids["manual_review"]
-    resolution_key = f"ws05-03a-manual-resolution-{uuid.uuid4()}"
+    resolution_key = f"refund-fulfillment-manual-resolution-{uuid.uuid4()}"
     resolve_response = client.post(
         f"/admin/money/financial-outcomes/{manual_review_id}/resolve",
         json={
@@ -1077,7 +1076,7 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
         f"/admin/money/refunds/{retry_refund_id}/retry",
         json={
             "reason": "Stale admin must not retry refunds.",
-            "idempotency_key": f"ws03d-stale-refund-retry-real-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-stale-refund-retry-real-{uuid.uuid4()}",
         },
         headers=_auth_headers("stale-admin-token"),
     )
@@ -1087,7 +1086,7 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
     assert _count_model_rows(RefundEvent) == before_refund_events
     assert _count_model_rows(AdminAction) == before_admin_actions
 
-    retry_idempotency_key = f"ws03d-refund-retry-{uuid.uuid4()}"
+    retry_idempotency_key = f"admin_authorization-refund-retry-{uuid.uuid4()}"
     retry = client.post(
         f"/admin/money/refunds/{retry_refund_id}/retry",
         json={
@@ -1126,7 +1125,7 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
         f"/admin/money/refunds/{reconcile_refund_id}/reconcile",
         json={
             "reason": "Stale admin must not reconcile refunds.",
-            "idempotency_key": f"ws03d-stale-reconcile-real-{uuid.uuid4()}",
+            "idempotency_key": f"admin_authorization-stale-reconcile-real-{uuid.uuid4()}",
         },
         headers=_auth_headers("stale-admin-token"),
     )
@@ -1134,7 +1133,7 @@ def test_recent_admin_refund_retry_and_reconcile_use_provider_fakes_after_guards
     assert provider_calls == []
     assert _refund_state(reconcile_refund_id) == before_reconcile_refund
 
-    reconcile_idempotency_key = f"ws03d-refund-reconcile-{uuid.uuid4()}"
+    reconcile_idempotency_key = f"admin_authorization-refund-reconcile-{uuid.uuid4()}"
     reconcile = client.post(
         f"/admin/money/refunds/{reconcile_refund_id}/reconcile",
         json={

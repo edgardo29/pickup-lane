@@ -2,10 +2,9 @@
 
 from datetime import timedelta
 
-
 RETRYABLE_REFUND_STATUSES = {"failed", "cancelled"}
 RETRYABLE_PAYMENT_STATUSES = {"succeeded"}
-UNCERTAIN_PROVIDER_REFUND_STATUSES = {"processing", "unknown"}
+UNCERTAIN_STRIPE_REFUND_STATUSES = {"processing", "unknown"}
 REFUND_PROCESSING_OVERDUE_AFTER = timedelta(hours=24)
 
 

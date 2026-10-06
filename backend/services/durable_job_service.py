@@ -1,4 +1,4 @@
-"""PostgreSQL-backed durable job lifecycle for WS05-01A.
+"""PostgreSQL-backed durable job lifecycle.
 
 This module owns the generic durable-job framework only. It intentionally does
 not register payment, refund, credit, notification, moderation, storage, or

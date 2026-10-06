@@ -10,7 +10,6 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-
 _STARTS_AT = datetime(2035, 3, 3, 18, 0, tzinfo=timezone.utc)
 _ENDS_AT = _STARTS_AT + timedelta(hours=2)
 
@@ -31,9 +30,9 @@ def _user(index: int, *, role: str = "player"):
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04c2-repair-{index}-{unique}",
+        auth_user_id=f"retry-reconciliation-repair-{index}-{unique}",
         role=role,
-        email=f"ws02-04c2-repair-{index}-{unique}@example.invalid",
+        email=f"retry-reconciliation-repair-{index}-{unique}@example.invalid",
         first_name="Repair",
         last_name=f"User{index}",
         account_status="active",
@@ -130,14 +129,14 @@ def _payment(user, booking):
         game_id=None,
         payment_type="booking",
         provider="stripe",
-        provider_payment_intent_id=f"pi_ws02_04c2_repair_{uuid.uuid4()}",
-        provider_charge_id=f"ch_ws02_04c2_repair_{uuid.uuid4()}",
-        idempotency_key=f"ws02-04c2-repair-payment-{uuid.uuid4()}",
+        provider_payment_intent_id=f"pi_retry_reconciliation_repair_{uuid.uuid4()}",
+        provider_charge_id=f"ch_retry_reconciliation_repair_{uuid.uuid4()}",
+        idempotency_key=f"retry-reconciliation-repair-payment-{uuid.uuid4()}",
         amount_cents=1200,
         currency="USD",
         payment_status="succeeded",
         paid_at=datetime.now(timezone.utc),
-        payment_metadata={"test": "ws02-04c2"},
+        payment_metadata={"test": "retry-reconciliation"},
     )
 
 
@@ -195,7 +194,7 @@ def _target_state(
     db.flush()
     refund = _refund(payment, booking, provider_status=provider_status)
     if provider_status == "failed":
-        refund.provider_refund_id = f"re_ws05_03a_failed_{uuid.uuid4().hex}"
+        refund.provider_refund_id = f"re_refund_fulfillment_failed_{uuid.uuid4().hex}"
         refund.provider_attempt_started_at = datetime.now(timezone.utc)
     db.add(refund)
     db.flush()
@@ -257,7 +256,7 @@ def _run_one_refund_job(*, event_emitter=None) -> str:
     return DurableJobRunner(
         session_factory=SessionLocal,
         registry=build_production_job_registry(),
-        worker_identity=f"ws05-03a-test-worker-{uuid.uuid4()}",
+        worker_identity=f"refund-fulfillment-test-worker-{uuid.uuid4()}",
         event_emitter=event_emitter,
     ).process_once()
 
@@ -280,7 +279,7 @@ def test_admin_refund_retry_rejects_uncertain_provider_status_without_job() -> N
                 refund_id=refund.id,
                 payload=AdminMoneyRefundRetryCreate(
                     reason="check provider first",
-                    idempotency_key="ws02-04c2-repair-key",
+                    idempotency_key="retry-reconciliation-repair-key",
                 ),
             )
         db.rollback()
@@ -407,7 +406,7 @@ def test_publish_fee_retry_is_blocked_by_every_active_sibling_decision(
                 refund_id=refund.id,
                 payload=AdminMoneyRefundRetryCreate(
                     reason="Retry must remain blocked.",
-                    idempotency_key=f"ws05-03a-active-sibling-{sibling_outcome}",
+                    idempotency_key=f"refund-fulfillment-active-sibling-{sibling_outcome}",
                 ),
             )
         db.rollback()
@@ -469,7 +468,7 @@ def test_refund_retry_projection_and_mutation_share_fail_closed_policy(
                 refund_id=refund.id,
                 payload=AdminMoneyRefundRetryCreate(
                     reason="The projected blocker must also block mutation.",
-                    idempotency_key=f"ws05-03a-parity-{blocked_state}",
+                    idempotency_key=f"refund-fulfillment-parity-{blocked_state}",
                 ),
             )
         db.rollback()
@@ -499,7 +498,7 @@ def test_refund_retry_zero_remainder_projects_no_provider_work_and_resolves_no_a
         sibling.amount_cents = payment.amount_cents
         sibling.refund_status = "succeeded"
         sibling.provider_status = "succeeded"
-        sibling.provider_refund_id = f"re_ws05_03a_settled_{uuid.uuid4().hex}"
+        sibling.provider_refund_id = f"re_refund_fulfillment_settled_{uuid.uuid4().hex}"
         sibling.refunded_at = datetime.now(timezone.utc)
         db.add(sibling)
         db.flush()
@@ -531,7 +530,7 @@ def test_refund_retry_zero_remainder_projects_no_provider_work_and_resolves_no_a
             refund_id=refund.id,
             payload=AdminMoneyRefundRetryCreate(
                 reason="Record that no cash obligation remains.",
-                idempotency_key="ws05-03a-zero-remainder",
+                idempotency_key="refund-fulfillment-zero-remainder",
             ),
         )
 
@@ -605,7 +604,7 @@ def test_attempt_provider_identity_conflict_blocks_historical_selection() -> Non
         )
         original_provider_id = refund.provider_refund_id
         assert original_provider_id is not None
-        conflicting_provider_id = f"re_ws05_03a_conflict_{uuid.uuid4().hex}"
+        conflicting_provider_id = f"re_refund_fulfillment_conflict_{uuid.uuid4().hex}"
         record_refund_event(
             db,
             refund=refund,
@@ -651,7 +650,7 @@ def test_historical_selection_ignores_audit_only_provider_reference() -> None:
         )
         authoritative_provider_id = refund.provider_refund_id
         assert authoritative_provider_id is not None
-        audit_provider_id = f"re_ws05_03a_audit_{uuid.uuid4().hex}"
+        audit_provider_id = f"re_refund_fulfillment_audit_{uuid.uuid4().hex}"
         record_refund_event(
             db,
             refund=refund,
@@ -698,7 +697,7 @@ def test_imported_attempt_zero_requires_authoritative_terminal_proof_before_retr
             db.delete(event)
         refund.current_attempt_number = 0
         refund.stripe_request_key = None
-        refund.provider_refund_id = f"re_ws05_03a_imported_{uuid.uuid4().hex}"
+        refund.provider_refund_id = f"re_refund_fulfillment_imported_{uuid.uuid4().hex}"
         refund.provider_status = "failed"
         refund.provider_attempt_started_at = None
         db.add(refund)
@@ -727,7 +726,7 @@ def test_imported_attempt_zero_requires_authoritative_terminal_proof_before_retr
             refund_id=refund.id,
             payload=AdminMoneyRefundRetryCreate(
                 reason="Retry the proven imported failure.",
-                idempotency_key="ws05-03a-imported-attempt-zero",
+                idempotency_key="refund-fulfillment-imported-attempt-zero",
             ),
         )
         db.refresh(refund)
@@ -882,7 +881,7 @@ def test_payment_ledger_ignores_audit_only_success_and_holds_missing_sibling_att
         sibling.amount_cents = max(1, payment.amount_cents // 2)
         sibling.current_attempt_number = 2
         sibling.stripe_request_key = f"refund:{sibling.id}:attempt:2"
-        sibling.provider_refund_id = f"re_ws05_03a_gap_{uuid.uuid4().hex}"
+        sibling.provider_refund_id = f"re_refund_fulfillment_gap_{uuid.uuid4().hex}"
         db.add(sibling)
         db.flush()
         record_refund_event(
@@ -998,7 +997,7 @@ def test_historical_identity_mismatch_keeps_stored_payment_event_failed() -> Non
         historical_provider_id = refund.provider_refund_id
         refund.current_attempt_number = 2
         refund.stripe_request_key = f"refund:{refund.id}:attempt:2"
-        refund.provider_refund_id = f"re_ws05_03a_current_{uuid.uuid4().hex}"
+        refund.provider_refund_id = f"re_refund_fulfillment_current_{uuid.uuid4().hex}"
         refund.provider_status = "failed"
         db.add(refund)
         now = datetime.now(timezone.utc)
@@ -1006,7 +1005,7 @@ def test_historical_identity_mismatch_keeps_stored_payment_event_failed() -> Non
             id=uuid.uuid4(),
             payment_id=None,
             provider="stripe",
-            provider_event_id=f"evt_ws05_03a_history_{uuid.uuid4().hex}",
+            provider_event_id=f"evt_refund_fulfillment_history_{uuid.uuid4().hex}",
             event_type="refund.updated",
             event_envelope={"type": "refund.updated"},
             provider_created_at=now,
@@ -1064,7 +1063,7 @@ def test_admin_refund_reconciliation_records_state_gated_missing_provider_refere
             refund_id=refund.id,
             payload=AdminMoneyRefundReconcileCreate(
                 reason="missing provider id",
-                idempotency_key="ws02-04c2-reconcile-key",
+                idempotency_key="retry-reconciliation-reconcile-key",
             ),
         )
 
@@ -1120,7 +1119,7 @@ def test_admin_reconciliation_maps_provider_read_failures_without_financial_muta
                 refund_id=refund.id,
                 payload=AdminMoneyRefundReconcileCreate(
                     reason="Check provider state safely.",
-                    idempotency_key=f"ws05-03a-provider-read-{classification}",
+                    idempotency_key=f"refund-fulfillment-provider-read-{classification}",
                 ),
             )
         db.rollback()
@@ -1142,7 +1141,7 @@ def test_admin_reconciliation_can_verify_and_attach_missing_provider_reference(
     )
     from backend.services.stripe_service import StripeRefundResult
 
-    provider_refund_id = f"re_ws05_03a_{uuid.uuid4().hex}"
+    provider_refund_id = f"re_refund_fulfillment_{uuid.uuid4().hex}"
     with _session() as db:
         admin, _user, payment, refund = _target_state(
             db,
@@ -1172,7 +1171,7 @@ def test_admin_reconciliation_can_verify_and_attach_missing_provider_reference(
             refund_id=refund.id,
             payload=AdminMoneyRefundReconcileCreate(
                 reason="verified missing provider refund",
-                idempotency_key="ws05-03a-attach-provider-refund",
+                idempotency_key="refund-fulfillment-attach-provider-refund",
                 provider_refund_id=provider_refund_id,
             ),
         )
@@ -1198,7 +1197,7 @@ def test_admin_reconciliation_can_verify_and_attach_missing_provider_reference(
             refund_id=refund.id,
             payload=AdminMoneyRefundReconcileCreate(
                 reason="verified missing provider refund",
-                idempotency_key="ws05-03a-attach-provider-refund",
+                idempotency_key="refund-fulfillment-attach-provider-refund",
                 provider_refund_id=provider_refund_id,
             ),
         )
@@ -1211,7 +1210,7 @@ def test_admin_reconciliation_can_verify_and_attach_missing_provider_reference(
                 refund_id=refund.id,
                 payload=AdminMoneyRefundReconcileCreate(
                     reason="different replay reason",
-                    idempotency_key="ws05-03a-attach-provider-refund",
+                    idempotency_key="refund-fulfillment-attach-provider-refund",
                     provider_refund_id=provider_refund_id,
                 ),
             )
@@ -1224,7 +1223,7 @@ def test_admin_reconciliation_can_verify_and_attach_missing_provider_reference(
                 refund_id=refund.id,
                 payload=AdminMoneyRefundReconcileCreate(
                     reason="verified missing provider refund",
-                    idempotency_key="ws05-03a-attach-provider-refund",
+                    idempotency_key="refund-fulfillment-attach-provider-refund",
                     provider_refund_id=f"re_different_{uuid.uuid4().hex}",
                 ),
             )
@@ -1243,7 +1242,7 @@ def test_admin_reconciliation_stages_processing_overdue_from_current_attempt_clo
     from backend.services.stripe_service import StripeRefundResult
 
     now = datetime.now(timezone.utc)
-    provider_refund_id = f"re_ws05_03a_overdue_{uuid.uuid4().hex}"
+    provider_refund_id = f"re_refund_fulfillment_overdue_{uuid.uuid4().hex}"
     with _session() as db:
         admin, _user, payment, refund = _target_state(
             db,
@@ -1280,7 +1279,7 @@ def test_admin_reconciliation_stages_processing_overdue_from_current_attempt_clo
             refund_id=refund.id,
             payload=AdminMoneyRefundReconcileCreate(
                 reason="Verify the overdue processing refund.",
-                idempotency_key="ws05-03a-processing-overdue",
+                idempotency_key="refund-fulfillment-processing-overdue",
             ),
         )
 
@@ -1323,7 +1322,7 @@ def test_processing_age_is_scoped_to_current_attempt_and_imported_attempt_zero()
         )
         refund.current_attempt_number = 2
         refund.stripe_request_key = f"refund:{refund.id}:attempt:2"
-        refund.provider_refund_id = f"re_ws05_03a_current_{uuid.uuid4().hex}"
+        refund.provider_refund_id = f"re_refund_fulfillment_current_{uuid.uuid4().hex}"
         refund.provider_status = "processing"
         refund.refund_status = "processing"
         refund.provider_attempt_started_at = now - timedelta(hours=1)
@@ -1337,7 +1336,7 @@ def test_processing_age_is_scoped_to_current_attempt_and_imported_attempt_zero()
         imported = _refund(payment, booking, provider_status="processing")
         imported.current_attempt_number = 0
         imported.stripe_request_key = None
-        imported.provider_refund_id = f"re_ws05_03a_imported_age_{uuid.uuid4().hex}"
+        imported.provider_refund_id = f"re_refund_fulfillment_imported_age_{uuid.uuid4().hex}"
         imported.provider_status = "processing"
         imported.refund_status = "processing"
         imported.provider_attempt_started_at = None
@@ -1404,7 +1403,7 @@ def test_refund_durable_runner_maps_financial_outcomes_to_job_states(
             assert checkpoint.refund_status == "processing"
             assert checkpoint.provider_attempt_started_at is not None
         return StripeRefundResult(
-            id=f"re_ws05_03a_{uuid.uuid4().hex}",
+            id=f"re_refund_fulfillment_{uuid.uuid4().hex}",
             status=provider_status,
             amount_cents=amount_cents,
             currency="USD",
@@ -1480,7 +1479,7 @@ def test_refund_durable_runner_exhausts_final_unknown_attempt_and_stages_issue(
         fulfillment,
         "create_refund",
         lambda **_kwargs: StripeRefundResult(
-            id=f"re_ws05_03a_{uuid.uuid4().hex}",
+            id=f"re_refund_fulfillment_{uuid.uuid4().hex}",
             status="pending",
             amount_cents=amount_cents,
             currency="USD",
@@ -1585,7 +1584,7 @@ def test_worker_checkpoint_stops_unstarted_refund_when_payment_remainder_shrinks
             booking_id=payment.booking_id,
             participant_id=None,
             host_publish_fee_id=None,
-            provider_refund_id=f"re_ws05_03a_sibling_{uuid.uuid4().hex}",
+            provider_refund_id=f"re_refund_fulfillment_sibling_{uuid.uuid4().hex}",
             origin_operation_key=f"direct_admin_refund:refund:{uuid.uuid4()}",
             current_attempt_number=1,
             stripe_request_key=None,
@@ -1671,7 +1670,7 @@ def test_origin_refund_producers_reserve_only_payment_ledger_remainder(
         assert game is not None
         prior.amount_cents = confirmed_cents
         prior.refund_status = "succeeded"
-        prior.provider_refund_id = f"re_ws05_03a_prior_{uuid.uuid4().hex}"
+        prior.provider_refund_id = f"re_refund_fulfillment_prior_{uuid.uuid4().hex}"
         prior.provider_attempt_started_at = now
         prior.provider_status = "succeeded"
         prior.approved_at = now
@@ -1761,7 +1760,7 @@ def test_player_removal_credit_failure_commits_issue_without_success_notice() ->
             source_booking_id=booking.id,
             source_payment_id=payment.id,
             issued_by_user_id=admin.id,
-            idempotency_key=f"ws05-03a-removal-credit-{uuid.uuid4()}",
+            idempotency_key=f"refund-fulfillment-removal-credit-{uuid.uuid4()}",
             created_at=now,
             updated_at=now,
         )
@@ -1775,7 +1774,7 @@ def test_player_removal_credit_failure_commits_issue_without_success_notice() ->
             currency="USD",
             usage_type="redeem",
             usage_status="redeemed",
-            idempotency_key=f"ws05-03a-removal-usage-{uuid.uuid4()}",
+            idempotency_key=f"refund-fulfillment-removal-usage-{uuid.uuid4()}",
             reason_code="booking_payment",
             redeemed_at=now,
             created_at=now,
@@ -1846,7 +1845,7 @@ def test_refund_runner_lease_loss_does_not_persist_provider_result(
             competing_db.add(job)
             competing_db.commit()
         return StripeRefundResult(
-            id=f"re_ws05_03a_lease_loss_{uuid.uuid4().hex}",
+            id=f"re_refund_fulfillment_lease_loss_{uuid.uuid4().hex}",
             status="succeeded",
             amount_cents=amount_cents,
             currency="USD",
@@ -1902,7 +1901,7 @@ def test_refund_exhaustion_survives_support_staging_failure_and_diagnostic_clear
         db.add(job)
         db.commit()
 
-    provider_refund_id = f"re_ws05_03a_support_failure_{uuid.uuid4().hex}"
+    provider_refund_id = f"re_refund_fulfillment_support_failure_{uuid.uuid4().hex}"
     metadata = {
         "refund_id": str(refund_id),
         "payment_id": str(payment_id),
@@ -2011,7 +2010,7 @@ def test_concurrent_refund_retry_exact_replay_creates_one_attempt_and_job() -> N
     barrier = Barrier(2)
     payload = AdminMoneyRefundRetryCreate(
         reason="Concurrent exact replay.",
-        idempotency_key="ws05-03a-concurrent-refund-retry",
+        idempotency_key="refund-fulfillment-concurrent-refund-retry",
     )
 
     def retry_once() -> uuid.UUID:
@@ -2049,7 +2048,7 @@ def test_concurrent_refund_retry_exact_replay_creates_one_attempt_and_job() -> N
                 select(func.count()).select_from(AdminAction).where(
                     AdminAction.target_refund_id == refund_id,
                     AdminAction.idempotency_key
-                    == "ws05-03a-concurrent-refund-retry",
+                    == "refund-fulfillment-concurrent-refund-retry",
                 )
             )
             == 1
@@ -2074,7 +2073,7 @@ def test_concurrent_terminal_provider_observations_cannot_downgrade_success() ->
         db.commit()
         refund_id = refund.id
         payment_id = payment.id
-        provider_refund_id = f"re_ws05_03a_race_{uuid.uuid4().hex}"
+        provider_refund_id = f"re_refund_fulfillment_race_{uuid.uuid4().hex}"
         metadata = {
             "refund_id": str(refund_id),
             "payment_id": str(payment_id),
@@ -2144,7 +2143,7 @@ def test_mismatched_provider_observation_preserves_actual_identity_without_false
         refund.provider_attempt_started_at = datetime.now(timezone.utc)
         db.add(refund)
         db.flush()
-        observed_id = f"re_ws05_03a_mismatch_{uuid.uuid4().hex}"
+        observed_id = f"re_refund_fulfillment_mismatch_{uuid.uuid4().hex}"
         outcome, code = apply_refund_provider_result(
             db,
             refund=refund,
@@ -2192,7 +2191,7 @@ def test_reconciliation_reads_every_known_attempt_before_clearing_history_block(
     from backend.services import admin_money_refund_service as refund_service
     from backend.services.stripe_service import StripeRefundResult
 
-    current_provider_id = f"re_ws05_03a_current_{uuid.uuid4().hex}"
+    current_provider_id = f"re_refund_fulfillment_current_{uuid.uuid4().hex}"
     with _session() as db:
         admin, _user_row, payment, refund = _target_state(
             db, provider_status="failed"
@@ -2248,7 +2247,7 @@ def test_reconciliation_reads_every_known_attempt_before_clearing_history_block(
             refund_id=refund_id,
             payload=AdminMoneyRefundReconcileCreate(
                 reason="Reconcile complete attempt history.",
-                idempotency_key="ws05-03a-full-attempt-reconciliation",
+                idempotency_key="refund-fulfillment-full-attempt-reconciliation",
             ),
         )
 
@@ -2339,7 +2338,7 @@ def test_compensation_recounts_remaining_cash_and_retry_resets_lifecycle() -> No
             refund=refund,
             event_type="provider_result_recorded",
             event_source="system",
-            provider_refund_id=f"re_ws05_03a_prior_{uuid.uuid4().hex}",
+            provider_refund_id=f"re_refund_fulfillment_prior_{uuid.uuid4().hex}",
             provider_charge_id=payment.provider_charge_id,
             provider_status="succeeded",
             new_refund_status="succeeded",
@@ -2386,7 +2385,7 @@ def test_compensation_recounts_remaining_cash_and_retry_resets_lifecycle() -> No
             refund_id=compensation_refund_id,
             payload=AdminMoneyRefundRetryCreate(
                 reason="Retry remaining compensation.",
-                idempotency_key="ws05-03a-compensation-retry-reset",
+                idempotency_key="refund-fulfillment-compensation-retry-reset",
             ),
         )
         persisted = db.scalars(
@@ -2437,7 +2436,7 @@ def test_compensation_retry_with_no_remaining_cash_resolves_without_new_attempt(
         sibling.approved_at = now
         db.add_all([compensation, sibling])
         db.flush()
-        provider_refund_id = f"re_ws05_03a_zero_{uuid.uuid4().hex}"
+        provider_refund_id = f"re_refund_fulfillment_zero_{uuid.uuid4().hex}"
         apply_refund_provider_result(
             db,
             refund=sibling,
@@ -2468,7 +2467,7 @@ def test_compensation_retry_with_no_remaining_cash_resolves_without_new_attempt(
             refund_id=failed_refund.id,
             payload=AdminMoneyRefundRetryCreate(
                 reason="Verify already satisfied compensation.",
-                idempotency_key="ws05-03a-compensation-zero-no-action",
+                idempotency_key="refund-fulfillment-compensation-zero-no-action",
             ),
         )
 
@@ -2483,7 +2482,7 @@ def test_compensation_retry_with_no_remaining_cash_resolves_without_new_attempt(
             select(AdminAction).where(
                 AdminAction.target_refund_id == failed_refund.id,
                 AdminAction.idempotency_key
-                == "ws05-03a-compensation-zero-no-action",
+                == "refund-fulfillment-compensation-zero-no-action",
             )
         ).one()
         assert action.outcome == "succeeded"
@@ -2657,7 +2656,7 @@ def test_financial_outcome_and_manual_resolution_replays_require_exact_identity(
             outcome="manual_review",
             reason="Review the collected publish fee.",
             internal_note="Stable request identity.",
-            idempotency_key="ws05-03a-manual-review-shared-key",
+            idempotency_key="refund-fulfillment-manual-review-shared-key",
             host_publish_fee_id=fee.id,
             amount_cents=payment.amount_cents,
         )
@@ -2684,7 +2683,7 @@ def test_financial_outcome_and_manual_resolution_replays_require_exact_identity(
             reason="Issue the verified publish replacement.",
             internal_note="Resolved after staff review.",
             amount_cents=payment.amount_cents,
-            idempotency_key="ws05-03a-manual-review-shared-key",
+            idempotency_key="refund-fulfillment-manual-review-shared-key",
         )
         replacement = resolve_admin_manual_review(
             db,
@@ -2766,7 +2765,7 @@ def test_provider_no_action_resolution_requires_payment_level_satisfaction() -> 
         sibling = _refund(payment, booking, provider_status="succeeded")
         sibling.amount_cents = payment.amount_cents
         sibling.refund_status = "succeeded"
-        sibling.provider_refund_id = f"re_ws05_03a_full_{uuid.uuid4().hex}"
+        sibling.provider_refund_id = f"re_refund_fulfillment_full_{uuid.uuid4().hex}"
         sibling.approved_at = datetime.now(timezone.utc)
         sibling.refunded_at = datetime.now(timezone.utc)
         db.add(sibling)
@@ -2801,7 +2800,7 @@ def test_provider_no_action_resolution_requires_payment_level_satisfaction() -> 
                 resolution_reason_code="provider_completed_no_action_required",
                 resolution_note=None,
                 resolution_external_reference=None,
-                idempotency_key="ws05-03a-provider-no-action-resolution",
+                idempotency_key="refund-fulfillment-provider-no-action-resolution",
             ),
         )
         persisted_issue = db.get(MoneyIssue, issue.id)
@@ -2956,7 +2955,7 @@ def test_superseded_resolution_requires_exact_applied_replacement_and_terminal_h
                 resolution_reason_code="superseded_by_financial_outcome",
                 resolution_note=None,
                 resolution_external_reference=None,
-                idempotency_key="ws05-03a-replacement-resolution-audit",
+                idempotency_key="refund-fulfillment-replacement-resolution-audit",
             ),
         )
         staged_again = stage_refund_money_issue(
@@ -2973,7 +2972,7 @@ def test_superseded_resolution_requires_exact_applied_replacement_and_terminal_h
             select(AdminAction).where(
                 AdminAction.target_money_issue_id == issue.id,
                 AdminAction.idempotency_key
-                == "ws05-03a-replacement-resolution-audit",
+                == "refund-fulfillment-replacement-resolution-audit",
             )
         ).one()
         event = db.scalars(
@@ -3099,7 +3098,7 @@ def test_publish_fee_decisions_reject_invalid_collected_payment_identity_atomica
                     outcome=outcome,
                     reason="Invalid collected payment must fail atomically.",
                     idempotency_key=(
-                        f"ws05-03a-invalid-publish-{outcome}-{invalid_field}"
+                        f"refund-fulfillment-invalid-publish-{outcome}-{invalid_field}"
                     ),
                     host_publish_fee_id=fee.id,
                     amount_cents=fee.amount_cents,
@@ -3163,7 +3162,7 @@ def test_money_issue_success_and_replacement_require_complete_attempt_history() 
         replacement_refund.stripe_request_key = (
             f"refund:{replacement_refund.id}:attempt:2"
         )
-        replacement_refund.provider_refund_id = f"re_ws05_03a_{uuid.uuid4().hex}"
+        replacement_refund.provider_refund_id = f"re_refund_fulfillment_{uuid.uuid4().hex}"
         replacement_refund.provider_attempt_started_at = now
         replacement_refund.refund_status = "succeeded"
         replacement_refund.refunded_at = now
@@ -3270,7 +3269,7 @@ def test_current_success_with_missing_history_remains_blocked_and_reviewable() -
         db.add(refund)
         db.flush()
 
-        provider_refund_id = f"re_ws05_03a_incomplete_{uuid.uuid4().hex}"
+        provider_refund_id = f"re_refund_fulfillment_incomplete_{uuid.uuid4().hex}"
         apply_refund_provider_result(
             db,
             refund=refund,
@@ -3434,7 +3433,7 @@ def test_terminal_publish_fee_refund_uses_approving_admin_attribution(
         db.flush()
         db.add(outcome)
         db.flush()
-        provider_refund_id = f"re_ws05_03a_actor_{uuid.uuid4().hex}"
+        provider_refund_id = f"re_refund_fulfillment_actor_{uuid.uuid4().hex}"
         apply_refund_provider_result(
             db,
             refund=refund,
@@ -3518,7 +3517,7 @@ def test_ambiguous_exhaustion_persists_compensation_error_until_late_success() -
         assert compensation.error_code == "refund_outcome_unknown"
         assert compensation.resolved_at is None
 
-        provider_refund_id = f"re_ws05_03a_late_{uuid.uuid4().hex}"
+        provider_refund_id = f"re_refund_fulfillment_late_{uuid.uuid4().hex}"
         fulfillment.apply_refund_provider_result(
             db,
             refund=refund,
@@ -3573,7 +3572,7 @@ def test_generic_repair_preserves_refund_job_policy_and_terminal_cancel_noop(
         job.status = job_status
         if job_status == "leased":
             job.lease_token = uuid.uuid4()
-            job.lease_owner = "ws05-03a-repair-policy-test"
+            job.lease_owner = "refund-fulfillment-repair-policy-test"
             job.lease_expires_at = now + timedelta(minutes=1)
             job.heartbeat_at = now
         if job_status == "succeeded":

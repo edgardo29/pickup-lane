@@ -38,8 +38,8 @@ test('refund reconciliation executes the complete backend request contract', asy
   const result = await reconcileAdminMoneyRefund({
     firebaseUser,
     idempotencyKey: 'reconcile-request-1',
-    providerRefundId: 're_provider_1',
-    reason: 'Confirm the provider result.',
+    stripeRefundId: 're_stripe_1',
+    reason: 'Confirm the Stripe result.',
     refundId: 'refund-1',
   })
 
@@ -48,23 +48,23 @@ test('refund reconciliation executes the complete backend request contract', asy
   assert.match(requests[0].url, /\/admin\/money\/refunds\/refund-1\/reconcile$/)
   assert.equal(requests[0].options.method, 'POST')
   assert.deepEqual(JSON.parse(requests[0].options.body), {
-    reason: 'Confirm the provider result.',
+    reason: 'Confirm the Stripe result.',
     idempotency_key: 'reconcile-request-1',
-    provider_refund_id: 're_provider_1',
+    provider_refund_id: 're_stripe_1',
   })
   assert.equal(requests[0].options.headers.Authorization, 'Bearer admin-token')
   assert.equal(requests[0].options.headers['Content-Type'], 'application/json')
 })
 
-test('refund reconciliation normalizes an absent provider identity to null', () => {
+test('refund reconciliation normalizes an absent Stripe identity to null', () => {
   assert.deepEqual(
     buildRefundReconciliationRequestBody({
       idempotencyKey: 'reconcile-request-2',
-      providerRefundId: '',
-      reason: 'Check the stored provider identity.',
+      stripeRefundId: '',
+      reason: 'Check the stored Stripe identity.',
     }),
     {
-      reason: 'Check the stored provider identity.',
+      reason: 'Check the stored Stripe identity.',
       idempotency_key: 'reconcile-request-2',
       provider_refund_id: null,
     },

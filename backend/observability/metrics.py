@@ -93,7 +93,9 @@ PROVIDER_RESULTS = MappingProxyType(
         "firebase.user.delete": MUTATION_RESULTS,
         "r2.upload_url.create": READ_RESULTS,
         "r2.read_url.create": READ_RESULTS,
-        "r2.metadata.head": READ_RESULTS | {"not_found"},
+        "r2.object.download": READ_RESULTS | {"not_found"},
+        "r2.object.publish": MUTATION_RESULTS,
+        "r2.object.delete": MUTATION_RESULTS,
         "r2.upload.validate": frozenset({"configuration_error"}),
         "r2.readiness.check": frozenset({"configuration_error"}),
     }

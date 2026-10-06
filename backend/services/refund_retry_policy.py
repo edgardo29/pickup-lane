@@ -10,7 +10,7 @@ from backend.models import HostPublishFee, Payment, Refund
 from backend.services.admin_money_refund_rules import (
     RETRYABLE_PAYMENT_STATUSES,
     RETRYABLE_REFUND_STATUSES,
-    UNCERTAIN_PROVIDER_REFUND_STATUSES,
+    UNCERTAIN_STRIPE_REFUND_STATUSES,
 )
 from backend.services.publish_fee_financial_policy import (
     active_publish_fee_sibling_outcome,
@@ -58,7 +58,7 @@ def evaluate_refund_retry_eligibility(
                 "refund_not_retryable", "Refund is not failed or cancelled."
             )
         )
-    if refund.provider_status in UNCERTAIN_PROVIDER_REFUND_STATUSES:
+    if refund.provider_status in UNCERTAIN_STRIPE_REFUND_STATUSES:
         blockers.append(
             RefundRetryBlocker(
                 "provider_outcome_uncertain",

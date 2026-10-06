@@ -8,7 +8,6 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 
-
 def _session():
     from backend.database import SessionLocal
 
@@ -19,14 +18,14 @@ def _auth_headers(token: str = "valid-token") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _install_provider_identity(
+def _install_firebase_identity(
     monkeypatch: pytest.MonkeyPatch,
     *,
     uid: str,
     email: str,
     email_verified: bool = True,
 ) -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     payload = {
         "uid": uid,
@@ -50,8 +49,8 @@ def _install_sync_identity(
     email: str,
     email_verified: bool = True,
 ) -> None:
+    from backend.services import auth_account_service
     from backend.services.auth_service import VerifiedFirebaseIdentity
-    import backend.services.auth_account_service as auth_account_service
 
     def identity_from_header(authorization: str | None) -> VerifiedFirebaseIdentity:
         assert authorization == "Bearer valid-token"
@@ -142,9 +141,9 @@ def test_suspension_is_enforced_on_next_request_and_not_undone_by_sync(
 ) -> None:
     from backend.services.auth_account_service import sync_user_workflow
 
-    uid = f"ws03-02-suspended-{uuid.uuid4()}"
-    email = f"ws03-02-suspended-{uuid.uuid4()}@example.invalid"
-    _install_provider_identity(monkeypatch, uid=uid, email=email)
+    uid = f"account-lifecycle-suspended-{uuid.uuid4()}"
+    email = f"account-lifecycle-suspended-{uuid.uuid4()}@example.invalid"
+    _install_firebase_identity(monkeypatch, uid=uid, email=email)
     _install_sync_identity(monkeypatch, uid=uid, email=email)
     user_id = _create_user(
         auth_user_id=uid,
@@ -187,9 +186,9 @@ def test_terminal_lifecycle_states_are_not_resurrected_by_sync_or_provider_ident
 ) -> None:
     from backend.services.auth_account_service import sync_user_workflow
 
-    uid = f"ws03-02-terminal-{account_status}-{uuid.uuid4()}"
-    email = f"ws03-02-terminal-{uuid.uuid4()}@example.invalid"
-    _install_provider_identity(monkeypatch, uid=uid, email=email)
+    uid = f"account-lifecycle-terminal-{account_status}-{uuid.uuid4()}"
+    email = f"account-lifecycle-terminal-{uuid.uuid4()}@example.invalid"
+    _install_firebase_identity(monkeypatch, uid=uid, email=email)
     _install_sync_identity(monkeypatch, uid=uid, email=email)
     user_id = _create_user(
         auth_user_id=uid,
@@ -205,9 +204,8 @@ def test_terminal_lifecycle_states_are_not_resurrected_by_sync_or_provider_ident
     assert response.status_code == 404
     assert response.json()["detail"] == "User not found."
 
-    with _session() as db:
-        with pytest.raises(HTTPException) as exc_info:
-            sync_user_workflow("Bearer valid-token", db)
+    with _session() as db, pytest.raises(HTTPException) as exc_info:
+        sync_user_workflow("Bearer valid-token", db)
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail == "A user with this email already exists."
@@ -219,9 +217,9 @@ def test_admin_role_change_is_seen_on_next_admin_request(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    uid = f"ws03-02-admin-fresh-{uuid.uuid4()}"
-    email = f"ws03-02-admin-fresh-{uuid.uuid4()}@example.invalid"
-    _install_provider_identity(monkeypatch, uid=uid, email=email)
+    uid = f"account-lifecycle-admin-fresh-{uuid.uuid4()}"
+    email = f"account-lifecycle-admin-fresh-{uuid.uuid4()}@example.invalid"
+    _install_firebase_identity(monkeypatch, uid=uid, email=email)
     user_id = _create_user(
         auth_user_id=uid,
         email=email,

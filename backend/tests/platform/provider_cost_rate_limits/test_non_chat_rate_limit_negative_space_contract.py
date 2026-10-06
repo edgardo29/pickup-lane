@@ -68,7 +68,7 @@ def _regex_hits(pattern: str) -> dict[str, list[str]]:
 
 
 @pytest.mark.pass_provenance('WS02-04C3B')
-def test_c3a_chat_is_the_only_current_source_owned_rate_limit_owner() -> None:
+def test_chat_is_the_only_current_source_owned_rate_limit_owner() -> None:
     assert set(_literal_hits("CHAT_RATE_LIMIT_MAX_VISIBLE_TEXT_MESSAGES")) == {
         "backend/services/chat_rate_limit_service.py",
         "backend/services/game_chat_service.py",
@@ -131,18 +131,12 @@ def test_no_generic_non_chat_rate_limiter_middleware_or_provider_cost_counter() 
 
 
 @pytest.mark.pass_provenance('WS02-04C3B')
-def test_existing_product_limits_are_not_reclassified_as_c3b_rate_controls() -> None:
-    c3b_plan = (
+def test_existing_product_limits_are_not_reclassified_as_provider_rate_controls() -> None:
+    limits_register = (
         _REPO_ROOT
-        / "docs/production-readiness/planning/passes/ws02/ws02-04c3b-provider-cost-rate-limit-deferral.md"
-    ).read_text()
-    source_owned_closeout = (
-        _REPO_ROOT
-        / "docs/production-readiness/planning/passes/ws02/ws02-04-source-owned-closeout.md"
+        / "docs/production-readiness/governance/limits-and-thresholds-register.md"
     ).read_text()
 
-    assert "product collection caps" in c3b_plan
-    assert "These are not adequate numeric authority by themselves" in c3b_plan
-    assert "Provider-cost action rates" in source_owned_closeout
-    assert "authenticated non-chat throttles" in source_owned_closeout
-    assert "remain open or evidence-deferred" in source_owned_closeout
+    assert "Product collection and pagination limits are not rate-limit authority" in limits_register
+    assert "authenticated non-chat throttles" in limits_register
+    assert "remain TBD pending owner decision and evidence" in limits_register

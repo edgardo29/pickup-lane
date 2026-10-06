@@ -187,7 +187,7 @@ function AdminMoneyRefundsPage() {
             <label>
               <span>Search</span>
               <input
-                placeholder="Refund ID, provider ID, user, payment, or booking"
+                placeholder="Refund ID, Stripe ID, user, payment, or booking"
                 value={draftFilters.query}
                 onChange={(event) => updateDraftFilter('query', event.target.value)}
               />

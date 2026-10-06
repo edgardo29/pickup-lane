@@ -16,32 +16,33 @@ This document does not replace layer-specific testing standards. After a
 scenario is assigned to an owning layer, follow the relevant repository guide:
 
 - The backend testing standard for pytest, FastAPI, service, PostgreSQL,
-  authorization, provider-boundary, and backend security test implementation.
+  authorization, external-service-boundary, and backend security test implementation.
 - The frontend testing standard for React, Vite, the current frontend unit-test
   runner, future React component testing, accessibility, and browser-facing
   behavior.
 - The Playwright testing standard for mocked browser, full-stack browser, and
-  provider-integration test structure.
-- Database, architecture, security, infrastructure, and finalized feature or
+  external-service-integration test structure.
+- Database, architecture, security, infrastructure, and applicable current feature or
   domain documents that define the behavior being protected.
 
 When a scenario is assigned to backend ownership, `backend-testing.md` and
 `backend/tests/README.md` govern test placement, implementation quality, and
-environment safety. Expected behavior comes from authority. Existing backend
-tests may provide evidence after their expectations and usefulness are verified.
+environment safety. Expected behavior comes from the applicable requirement
+sources. Existing backend tests may provide verification after their
+expectations and usefulness are checked.
 
 When these sources conflict, do not guess. Report the conflict before encoding
 an uncertain expectation into a test.
 
 This document defines required analysis and coverage. It does not grant an agent
-permission to run test suites, migrations, containers, provider calls, or other
+permission to run test suites, migrations, containers, external-service calls, or other
 commands. Command execution remains governed by the relevant layer-specific
 execution policy and current task or workflow instruction.
 
-## Normative Language
+## Requirement Language
 
-The words **must**, **must not**, and **required** define hard gates. Work is not
-complete when an applicable hard gate is unmet.
+The words **must**, **must not**, and **required** identify binding requirements.
+Work is not complete while an applicable requirement is unmet.
 
 The words **should** and **prefer** define strong defaults. Departures require a
 clear reason in the completion report.
@@ -54,7 +55,7 @@ Playwright, accessibility, or database-concurrency analysis into a page review
 when that system is genuinely unrelated to the workflow under review.
 
 At the same time, do not limit the review to files changed by the refactor. If a
-page depends on authentication, authorization, persistence, provider state,
+page depends on authentication, authorization, persistence, external-service state,
 background cleanup, shared lifecycle rules, or another domain's data, that
 system is relevant even when its files were not edited.
 
@@ -88,7 +89,7 @@ Application testing must answer all of the following questions:
 
 1. What behavior must the feature provide?
 2. What must never happen?
-3. How could a normal user, malicious user, external provider, browser, worker,
+3. How could a normal user, malicious user, external service, browser, worker,
    database transaction, deployment, or network condition violate those rules?
 4. Which safeguards prevent or contain each failure?
 5. Which layer owns each safeguard?
@@ -124,7 +125,7 @@ For every meaningful scenario, distinguish:
 3. **Expected behavior:** What must the system do?
 4. **Safeguard:** What prevents, rejects, contains, rolls back, or recovers from
    the failure?
-5. **Proof:** Which test or verification demonstrates that safeguard?
+5. **Verification:** Which test or other method demonstrates that safeguard?
 
 A test is not automatically the safeguard. Safeguards may include:
 
@@ -134,7 +135,7 @@ A test is not automatically the safeguard. Safeguards may include:
 - Transactions and row locks.
 - Idempotency keys.
 - State-transition guards.
-- Unique provider-event ledgers.
+- Unique external-event ledgers.
 - Retry limits.
 - Timeouts.
 - Rate limits.
@@ -177,9 +178,9 @@ The standard suite should test Pickup Lane's behavior at external boundaries,
 not attempt to retest Stripe, Firebase, Cloudflare, browsers, or PostgreSQL as
 products.
 
-Mock or fake the provider network at the application-owned boundary for most
-behavior tests. Use a smaller emulator, sandbox, or test-bucket suite to verify
-that the adapter and real provider contract still work.
+Mock or fake the external-service network at the application-owned boundary for
+most behavior tests. Use a smaller emulator, sandbox, or test-bucket suite to
+verify that the adapter remains compatible with the real service.
 
 ### Determinism and Isolation Are Required
 
@@ -207,19 +208,19 @@ coverage include:
   checked.
 - A Playwright test passed because mocked data bypassed the real integration
   under review.
-- A provider failure test mocked the entire service function whose recovery
+- An external-service failure test mocked the entire service function whose recovery
   logic was supposed to be tested.
 
 ## Risk-Based Completion Checks
 
 A page or feature testing review is complete when the material behavior and
-risks in scope have appropriate proof and remaining gaps are reported honestly.
+risks in scope have appropriate verification and remaining gaps are reported honestly.
 Use the applicable checks below; they are not a universal compliance record:
 
-1. The finalized feature and owning-domain rules were reviewed.
+1. The applicable current feature and owning-domain requirements were reviewed.
 2. The complete feature path and participating systems were identified.
 3. Feature-specific invariants were written.
-4. Existing frontend, backend, database, browser, provider, and infrastructure
+4. Existing frontend, backend, database, browser, external-service, and infrastructure
    coverage was inspected where applicable.
 5. Material scenarios and relevant failure transformations were considered.
 6. Selected scenarios cover the important successful, rejected, and failure
@@ -235,7 +236,7 @@ Use the applicable checks below; they are not a universal compliance record:
 13. PostgreSQL-specific integrity is tested against PostgreSQL where
     applicable.
 14. Critical cross-system workflows have appropriate full-stack coverage.
-15. Provider-backed features have local boundary tests and selected emulator,
+15. External-service-backed features have local boundary tests and selected emulator,
     sandbox, or test-resource integration where applicable.
 16. Rejected and failed operations verify prohibited side effects where
     meaningful.
@@ -243,7 +244,7 @@ Use the applicable checks below; they are not a universal compliance record:
     every mutation and asynchronous workflow.
 18. Security-sensitive pages classify authentication, authorization, data
     exposure, abuse, and resource-limit scenarios.
-19. Provider-backed features classify timeout, retry, duplicate, late,
+19. External-service-backed features classify timeout, retry, duplicate, late,
     out-of-order, invalid-response, and partial-success scenarios.
 20. Accessibility combines appropriate automation and manual review where
     applicable.
@@ -258,45 +259,27 @@ Use the applicable checks below; they are not a universal compliance record:
 If a material check cannot be satisfied, report the work as incomplete,
 blocked, or partially verified. Do not describe the page as fully tested.
 
-## Completion Status
+## Completion Reporting
 
-Pickup Lane often finishes implementation, backend tests, frontend tests,
-Playwright, and release hardening in separate waves. Do not weaken this
-standard for phased work. Instead, report the exact phase that is complete and
-the phases that remain.
-
-These labels may be used when they make a phased status clearer; they are not
-required program states:
-
-- `implementation_review_complete`: implementation has been reviewed against
-  finalized behavior, and remaining test or safeguard gaps are documented.
-- `backend_test_complete`: backend/API/database coverage required for the
-  current phase has been added or verified.
-- `frontend_test_complete`: frontend unit or component coverage required for
-  the current phase has been added or verified.
-- `playwright_complete`: required mocked-browser or full-stack browser coverage
-  has been added or verified.
-- `provider_integration_complete`: required Firebase, Stripe, R2, or other
-  provider-boundary coverage has been added or verified.
-- `release_ready`: all relevant implementation, safeguard, automated, manual,
-  provider, and unresolved-gap requirements for the feature are satisfied.
-
-Do not use an unqualified `complete` when only one phase is finished.
+Pickup Lane may finish implementation, backend tests, frontend tests,
+Playwright, external-service integration, and release hardening at different
+times. Report exactly what was implemented or verified and what remains. Do not
+describe the feature as complete when required work or verification remains.
 
 ## Review Workflow After a Page Refactor
 
 After refactoring a page, the agent must review more than the changed React
 files.
 
-### Step 1: Read the Sources of Truth
+### Step 1: Read The Requirement Sources
 
 Identify and read:
 
-- The finalized page or feature specification.
+- The applicable current page or feature requirements.
 - Owning-domain specifications for shared behavior.
 - This application testing standard.
 - Relevant layer-specific testing standards.
-- Relevant security, database, provider, and infrastructure rules.
+- Relevant security, database, external-service, and infrastructure rules.
 
 Expected behavior must not be derived solely from current implementation or
 existing tests.
@@ -333,10 +316,10 @@ Examples:
 - Unauthorized users never receive private resource data.
 - A player cannot occupy more capacity than the product permits.
 - One logical booking cannot create multiple charges.
-- Replayed provider events do not repeat side effects.
+- Replayed external-service events do not repeat side effects.
 - A terminal state cannot transition backward without an explicit restore rule.
 - A failed mutation does not leave partial persisted data.
-- Database rows, provider objects, counters, and displayed status do not silently
+- Database rows, external objects, counters, and displayed status do not silently
   disagree.
 - No production secret or credential is exposed to the frontend or test logs.
 
@@ -346,7 +329,7 @@ Feature-specific invariants are required. Do not rely only on generic examples.
 
 Use the categories and failure transformations in this document to select
 scenarios that represent distinct material behavior or realistic failure risks. Map
-important scenarios to existing or planned proof when that mapping is useful.
+important scenarios to existing or planned verification when that mapping is useful.
 
 ### Step 5: Identify Existing Safeguards and Gaps
 
@@ -369,7 +352,7 @@ every layer.
 
 ### Step 7: Implement or Plan Missing Coverage
 
-Add missing tests when behavior is finalized and the task permits changes.
+Add missing tests when the required behavior is defined and the task permits changes.
 When implementation is blocked, report the concrete gap rather than a vague
 note.
 
@@ -386,7 +369,8 @@ conditions.
 For each workflow, vary the following dimensions:
 
 - **Actor:** anonymous, valid player, owner, participant, unrelated user, admin,
-  inactive user, suspended user, deleted user, revoked user, provider, worker.
+  inactive user, suspended user, deleted user, revoked user, external service,
+  worker.
 - **Resource state:** missing, empty, active, pending, full, expired, cancelled,
   hidden, removed, failed, completed, partially processed, stale.
 - **Action:** read, create, update, delete, restore, confirm, cancel, retry,
@@ -406,11 +390,11 @@ that represent distinct rules, distinct risks, or realistic interactions.
 ## Failure Transformations
 
 Apply the following transformations to every important read, mutation,
-background job, and provider workflow:
+background job, and external-service workflow:
 
 ### Omit
 
-What happens when a required field, header, token, related record, provider
+What happens when a required field, header, token, related record, external-service
 value, configuration value, or expected event is missing?
 
 ### Empty
@@ -441,13 +425,13 @@ database lock is slow or arrives after the user has moved on?
 
 ### Reorder
 
-What happens when provider events, status updates, or asynchronous jobs arrive
+What happens when external-service events, status updates, or asynchronous jobs arrive
 in a different order than expected?
 
 ### Interrupt
 
 What happens when the browser closes, network disconnects, worker crashes,
-container restarts, transaction fails, or provider call succeeds while the
+container restarts, transaction fails, or external-service call succeeds while the
 local request fails?
 
 ### Race
@@ -530,7 +514,7 @@ The UI must not present a failed or uncertain operation as successful.
 
 ## 3. Input Validation and Boundary Values
 
-For every user-controlled or provider-controlled input, classify:
+For every user-controlled or external-service-supplied input, classify:
 
 - Missing required value.
 - Null when null is not allowed.
@@ -608,8 +592,8 @@ Frontend route hiding does not count as authorization coverage.
 
 ## 6. State Machines and Lifecycle Rules
 
-When a feature has statuses or lifecycle fields, build an authoritative state
-matrix.
+When a feature has statuses or lifecycle fields, identify the complete state
+set from the applicable requirements, model, enum, and database constraints.
 
 Classify:
 
@@ -620,7 +604,7 @@ Classify:
 - Transition after the underlying record changed.
 - Transition with stale page data.
 - Transition attempted by two actors concurrently.
-- Transition whose provider operation succeeded but local persistence failed.
+- Transition whose external-service operation succeeded but local persistence failed.
 - Restore or rollback behavior when explicitly supported.
 - Historical rows that must not grant current privileges.
 - Counters, timestamps, audit records, and related rows produced by each
@@ -734,32 +718,32 @@ Classify:
 
 Uncontrolled background work must not leak between tests.
 
-## 11. External Provider Boundaries
+## 11. External Service Boundaries
 
 For every external dependency, classify:
 
 - Successful request and expected response.
 - Client-side validation failure before request.
-- Provider rejection.
+- External-service rejection.
 - Authentication or permission failure.
 - Timeout.
 - Network exception.
 - Rate limit.
-- Malformed or unexpected provider response.
-- Provider returns success but local commit fails.
+- Malformed or unexpected external-service response.
+- External service returns success but local commit fails.
 - Local commit succeeds but response to caller is lost.
-- Duplicate provider event.
-- Late provider event.
-- Out-of-order provider event.
-- Provider retry.
+- Duplicate external-service event.
+- Late external-service event.
+- Out-of-order external-service event.
+- External-service retry.
 - Local retry.
-- Provider object already exists.
-- Provider object is missing.
+- External object already exists.
+- External object is missing.
 - Reconciliation behavior.
 - Least-privilege test credentials.
 - Separation from production data and credentials.
 
-The application must validate provider data instead of trusting it blindly.
+The application must validate external-service data instead of trusting it blindly.
 
 ## 12. Stripe Payments
 
@@ -775,7 +759,7 @@ For every payment-affecting feature, classify:
 - Cancelled payment.
 - Client closes or refreshes during confirmation.
 - API timeout after Stripe accepted the request.
-- Webhook as the authoritative completion signal.
+- Webhook as the required completion signal.
 - Valid webhook signature.
 - Raw request body preserved for signature verification.
 - Missing or invalid signature.
@@ -791,7 +775,7 @@ For every payment-affecting feature, classify:
 - Test-mode or sandbox isolation.
 - No live payment details in automated tests.
 
-Provider event IDs and local effect ledgers should make repeated processing safe.
+External-service event IDs and local effect ledgers should make repeated processing safe.
 
 ## 13. Firebase Authentication
 
@@ -807,7 +791,7 @@ Classify:
 - Local user lookup and account-state enforcement.
 - Emulator user creation and cleanup.
 - Emulator data isolation.
-- Email verification, reset, or provider flow when the feature depends on it.
+- Email verification, reset, or Firebase flow when the feature depends on it.
 - Admin SDK emulator configuration.
 - Production-mode rejection of emulator tokens.
 - Fail-closed behavior when Firebase configuration is missing or invalid.
@@ -874,7 +858,7 @@ Classify:
 - Recovery and reconciliation path.
 
 An uncertain result must not be silently displayed as a confirmed failure or
-confirmed success without evidence.
+confirmed success without verification.
 
 ## 16. Security and Abuse
 
@@ -905,11 +889,12 @@ Classify:
   expensive filters.
 - Abuse of sensitive business flows.
 - Rate-limit behavior where required.
-- Unsafe consumption of provider responses.
+- Unsafe consumption of external-service responses.
 - Webhook signature validation.
 - Security headers and private-cache behavior.
 - Audit-log integrity and redaction.
-- Test and debug endpoints disabled outside approved environments.
+- Test and debug endpoints disabled outside environments where configuration
+  explicitly enables them.
 
 Security testing must prove authorization and validation at the object, action,
 and property level.
@@ -958,7 +943,7 @@ Classify:
 - Memory-heavy client rendering.
 - Slow query or missing-index regression for critical paths.
 - Background batch size.
-- Provider rate limits.
+- External-service rate limits.
 - Timeout and retry amplification.
 - Resource cleanup after failure.
 - Denial-of-service exposure through unbounded input or work.
@@ -1001,15 +986,15 @@ Classify:
 - Actor, target, action, reason, and result recorded correctly.
 - Sensitive values redacted.
 - Failed attempt recorded only when policy requires it.
-- Correlation or provider request ID retained where useful.
+- Correlation or external-service request ID retained where useful.
 - Logs distinguish transient and permanent failure.
 - No secrets, tokens, payment data, or private message content leaked.
 - Operational status matches persisted truth.
 - Metrics or counters remain consistent after retry.
-- Reconciliation job can identify mismatched local and provider state.
+- Reconciliation job can identify mismatched local and external state.
 - Recovery action is idempotent.
 - Manual repair does not bypass required audit behavior.
-- Alerts are testable when alerting is a finalized requirement.
+- Alerts are testable when alerting is an applicable requirement.
 
 Do not test logging merely because logging exists. Test it when the log, audit,
 metric, or alert is part of a security, support, compliance, or recovery
@@ -1075,7 +1060,7 @@ Use pytest for:
 - Transactions.
 - Persistence effects.
 - Background jobs.
-- Provider adapters and webhook handling.
+- External-service adapters and webhook handling.
 - Backend security behavior.
 
 Follow the backend testing standard for organization, fixtures, naming,
@@ -1138,14 +1123,14 @@ small, high-value set of critical workflows:
 Full-stack tests should not repeat every lower-level boundary combination.
 Their purpose is to prove that the connected systems work together.
 
-### Provider-Integration Tests
+### External-Service Integration Tests
 
 Use separate emulator, sandbox, or test-resource suites for:
 
 - Firebase Auth Emulator integration.
 - Stripe sandbox or test-mode requests and webhook fixtures.
 - Cloudflare R2 test-bucket operations.
-- Other approved external-provider contracts.
+- Other explicitly configured external-service test interfaces.
 
 These tests must:
 
@@ -1177,7 +1162,7 @@ completely prove, including:
 - Screen-reader usability.
 - Color contrast review when tooling is insufficient.
 - Complex browser-specific behavior.
-- Provider dashboard configuration.
+- External-service dashboard configuration.
 - Disaster-recovery exercises.
 - Large performance and load behavior.
 
@@ -1196,7 +1181,7 @@ Use this model:
 - **Database test:** proves the final persistence safeguard.
 - **Contract test:** proves connected request and response agreement.
 - **Playwright test:** proves the critical workflow across the connected app.
-- **Provider test:** proves the application adapter works with the provider's
+- **External-service test:** proves the application adapter works with the service's
   testing surface.
 
 Duplicate coverage is justified only when each layer protects a distinct risk.
@@ -1232,10 +1217,10 @@ Bad:
 All mocks, dependency overrides, fake timers, environment variables, handlers,
 and global state must be restored after each test or fixture scope.
 
-### Provider Contract Balance
+### External-Service Compatibility Balance
 
-Most tests should be fast and local. A smaller suite must verify the real
-emulator, sandbox, or test-resource contract to catch adapter drift.
+Most tests should be fast and local. A smaller suite must verify compatibility
+with the real emulator, sandbox, or test resource to catch adapter drift.
 
 ## Test Data Standards
 
@@ -1312,7 +1297,7 @@ Failure could cause:
 - Capacity violations.
 - Broken lifecycle state.
 - Persistent user-visible inconsistency.
-- Unrecoverable provider mismatch.
+- Unrecoverable external-service mismatch.
 
 ### Medium
 
@@ -1329,7 +1314,7 @@ Failure could cause:
 Failure is cosmetic, narrow, recoverable, and does not affect privacy,
 integrity, money, access, or core workflow completion.
 
-Priority affects implementation order, not whether a finalized required rule
+Priority affects implementation order, not whether an applicable required rule
 is valid.
 
 ## Page-Specific Scenario Inventory
@@ -1388,14 +1373,14 @@ The following format is optional when that additional detail is warranted:
 Do not use a loose list of test names without risks, safeguards, ownership, and
 expected results.
 
-## Requirement and Scenario Coverage Map
+## Optional Requirement And Scenario Coverage Summary
 
-Use a lightweight invariant-to-proof or scenario-to-proof map only when it helps
+Use a lightweight invariant-to-verification or scenario-to-verification map only when it helps
 explain important coverage for complex or high-risk work. When used, it may
 record:
 
 - Requirement or scenario label.
-- Source of truth.
+- Requirement source.
 - Expected behavior.
 - Risk and priority.
 - Required safeguard.
@@ -1441,7 +1426,7 @@ Recommended suite classes:
   selected reliable full-stack browser tests when applicable.
 - Migration validation when database behavior changes.
 
-### Separate Provider Integration
+### Separate External-Service Integration
 
 - Firebase Auth Emulator.
 - Stripe sandbox and webhook integration.
@@ -1489,8 +1474,8 @@ been running for days.
 ## Regression Testing
 
 Every confirmed production or pre-production defect must receive a regression
-test that would fail if the defect returned, unless an explicit written
-exception is accepted.
+test that would fail if the defect returned, unless the owner accepts an
+explicit written exception.
 
 The regression test must target the root rule or missing safeguard, not only the
 surface symptom.
@@ -1521,15 +1506,15 @@ First determine whether the protected behavior is still required.
 
 Stop and report instead of guessing when:
 
-- The finalized behavior is missing or contradictory.
-- The page and backend disagree on a status, enum, or contract.
+- An applicable requirement is missing or contradictory.
+- The page and backend disagree on a status, enum, or public interface.
 - Ownership is unclear between page and shared domain.
-- A payment or provider outcome has no defined source of truth.
+- A payment or external-service outcome has no governing requirement.
 - A concurrency rule has no defined safeguard.
 - A security-sensitive route has ambiguous 401, 403, or 404 policy.
 - Exact time behavior cannot be tested deterministically with available seams.
 - A database constraint is relied upon but cannot be identified.
-- A provider test would require production credentials or production data.
+- An external-service test would require production credentials or production data.
 - A test would require weakening a valid rule or assertion.
 
 ## Anti-Patterns
@@ -1540,7 +1525,7 @@ Do not:
 - Test only the happy path.
 - Treat frontend validation as backend protection.
 - Treat route hiding as authorization.
-- Use only mocked tests for a critical full-stack contract.
+- Use only mocked tests for a critical full-stack workflow.
 - Use only full-stack tests for rules that belong at lower layers.
 - Test every scenario at every layer.
 - Derive expected behavior solely from current code.
@@ -1551,10 +1536,10 @@ Do not:
 - Use SQLite to claim PostgreSQL behavior.
 - Use production Firebase, Stripe, R2, database, or user data.
 - Use real card details in Stripe tests.
-- Assume provider events arrive once or in order.
+- Assume external-service events arrive once or in order.
 - Assume a timed-out request failed.
 - Assume container startup means service readiness.
-- Use arbitrary sleeps for UI, expiration, jobs, or provider behavior.
+- Use arbitrary sleeps for UI, expiration, jobs, or external-service behavior.
 - Hide flaky tests with permanent reruns.
 - Use coverage percentage as the definition of correctness.
 - Add broad snapshots that obscure the behavior being protected.
@@ -1579,7 +1564,7 @@ added” or “coverage looks good.”
 ## Research Basis
 
 This standard was informed by the following official and primary sources. The
-repository's finalized product and architecture rules remain the source of truth
+repository's applicable product and architecture requirements remain the requirement sources
 for Pickup Lane behavior.
 
 ### Frontend and Browser Testing

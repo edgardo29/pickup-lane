@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 import pytest
 from fastapi.testclient import TestClient
@@ -105,7 +105,7 @@ def test_framework_404_uses_stable_public_error_envelope(
 
 
 @pytest.mark.pass_provenance('WS02-04A')
-def test_public_error_response_uses_en02_descriptor_shape_and_optional_details() -> None:
+def test_public_error_response_uses_descriptor_shape_and_optional_details() -> None:
     response = public_error_response(
         status_code=409,
         code="API.CONFLICT",

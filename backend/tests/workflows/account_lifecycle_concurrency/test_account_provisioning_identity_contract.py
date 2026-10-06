@@ -9,7 +9,6 @@ from sqlalchemy import delete, func, inspect, select
 from sqlalchemy.orm import Session
 
 
-
 def _session():
     from backend.database import SessionLocal
 
@@ -24,8 +23,8 @@ def _install_sync_identities(
     monkeypatch: pytest.MonkeyPatch,
     identities_by_token: dict[str, tuple[str, str, bool]],
 ) -> None:
+    from backend.services import auth_account_service
     from backend.services.auth_service import VerifiedFirebaseIdentity
-    import backend.services.auth_account_service as auth_account_service
 
     def identity_from_header(authorization: str | None) -> VerifiedFirebaseIdentity:
         assert authorization is not None
@@ -123,7 +122,7 @@ def test_same_uid_repeat_sync_preserves_identity_refreshes_snapshots_and_repairs
     from backend.models import User, UserSettings, UserStats
     from backend.services.auth_account_service import sync_user_workflow
 
-    uid = f"ws03-02-repeat-{uuid.uuid4()}"
+    uid = f"account-lifecycle-repeat-{uuid.uuid4()}"
     _install_sync_identities(
         monkeypatch,
         {
@@ -169,8 +168,8 @@ def test_different_uid_same_email_conflicts_without_relinking_existing_account(
     from backend.models import User
     from backend.services.auth_account_service import sync_user_workflow
 
-    existing_uid = f"ws03-02-existing-{uuid.uuid4()}"
-    attacking_uid = f"ws03-02-attacker-{uuid.uuid4()}"
+    existing_uid = f"account-lifecycle-existing-{uuid.uuid4()}"
+    attacking_uid = f"account-lifecycle-attacker-{uuid.uuid4()}"
     claimed_email = f"claimed-{uuid.uuid4()}@example.invalid"
     _install_sync_identities(
         monkeypatch,

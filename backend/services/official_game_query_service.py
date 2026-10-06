@@ -34,8 +34,11 @@ from backend.services.query_pagination import (
     bounded_collection_offset,
 )
 from backend.services.r2_storage_service import (
+    R2ObjectReference,
     R2StorageConfigError,
     R2StorageError,
+    R2StorageTarget,
+    R2StorageTargetMismatchError,
     create_object_read_url,
 )
 
@@ -166,14 +169,16 @@ def list_official_games(
 def load_official_game_list_card_data(
     db: Session,
     games: list[Game],
-) -> tuple[dict[uuid.UUID, int], dict[uuid.UUID, str]]:
+) -> tuple[dict[uuid.UUID, int], dict[uuid.UUID, R2ObjectReference]]:
     if not games:
         return {}, {}
 
     game_ids = [game.id for game in games]
     venue_ids = {game.venue_id for game in games if game.venue_id is not None}
     booked_spots_by_game_id: dict[uuid.UUID, int] = {}
-    primary_venue_image_object_key_by_venue_id: dict[uuid.UUID, str] = {}
+    primary_venue_image_object_key_by_venue_id: dict[
+        uuid.UUID, R2ObjectReference
+    ] = {}
 
     for game_id, booked_spots in db.execute(
         select(GameParticipant.game_id, func.count(GameParticipant.id))
@@ -186,8 +191,14 @@ def load_official_game_list_card_data(
         booked_spots_by_game_id[game_id] = int(booked_spots or 0)
 
     if venue_ids:
-        for venue_id, storage_object_key in db.execute(
-            select(VenueImage.venue_id, VenueImage.storage_object_key)
+        for venue_id, provider, account_id, bucket_name, object_key in db.execute(
+            select(
+                VenueImage.venue_id,
+                VenueImage.storage_provider,
+                VenueImage.storage_account_id,
+                VenueImage.storage_bucket,
+                VenueImage.publication_object_key,
+            )
             .where(
                 VenueImage.venue_id.in_(venue_ids),
                 VenueImage.image_status == "active",
@@ -198,7 +209,14 @@ def load_official_game_list_card_data(
         ).all():
             primary_venue_image_object_key_by_venue_id.setdefault(
                 venue_id,
-                storage_object_key,
+                R2ObjectReference(
+                    target=R2StorageTarget(
+                        provider=provider,
+                        account_id=account_id,
+                        bucket_name=bucket_name,
+                    ),
+                    object_key=object_key,
+                ),
             )
 
     return booked_spots_by_game_id, primary_venue_image_object_key_by_venue_id
@@ -419,7 +437,7 @@ def build_official_game_card_read(
     game: Game,
     *,
     booked_spots: int,
-    primary_venue_image_object_key: str | None,
+    primary_venue_image_object_key: R2ObjectReference | None,
     include_operational_issues: bool,
 ) -> AdminOfficialGameCardRead:
     primary_venue_image_url = build_primary_venue_image_url(
@@ -456,13 +474,18 @@ def build_official_game_card_read(
     )
 
 
-def build_primary_venue_image_url(storage_object_key: str | None) -> str | None:
-    if storage_object_key is None:
+def build_primary_venue_image_url(
+    object_reference: R2ObjectReference | None,
+) -> str | None:
+    if object_reference is None:
         return None
 
     try:
-        return create_object_read_url(storage_object_key)
-    except R2StorageConfigError:
+        return create_object_read_url(
+            target=object_reference.target,
+            object_key=object_reference.object_key,
+        )
+    except R2StorageConfigError as exc:
         emit_event(
             "storage.operation_failed",
             "error",
@@ -470,7 +493,11 @@ def build_primary_venue_image_url(storage_object_key: str | None) -> str | None:
                 "provider_kind": "r2",
                 "operation": "r2.read_url.create",
                 "result": "configuration_error",
-                "stable_error_code": "STORAGE.CONFIG_UNAVAILABLE",
+                "stable_error_code": (
+                    "STORAGE.TARGET_MISMATCH"
+                    if isinstance(exc, R2StorageTargetMismatchError)
+                    else "STORAGE.CONFIG_UNAVAILABLE"
+                ),
             },
         )
         return None

@@ -86,7 +86,7 @@ def test_complete_firebase_metric_boundary_matrix(monkeypatch, owner, outcome):
             except Exception as exc:  # noqa: BLE001 - matrix asserts preserved owner-specific types separately.
                 assert exc is not None
             else:
-                pytest.fail("The configured provider failure must propagate")
+                pytest.fail("The configured Firebase failure must propagate")
     observations = {
         tuple(item.dimensions): item.value for item in recorder.snapshot().series
     }
@@ -448,7 +448,7 @@ def test_firebase_app_check_invalid_token_remains_validation_failure(
 
 
 @pytest.mark.pass_provenance('WS02-04C1')
-def test_firebase_app_check_provider_unavailable_is_not_invalid(
+def test_firebase_app_check_unavailable_is_not_invalid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     auth_module = _AuthModule()

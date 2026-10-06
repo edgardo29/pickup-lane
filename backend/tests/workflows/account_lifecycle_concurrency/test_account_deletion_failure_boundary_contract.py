@@ -8,7 +8,6 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 
 
-
 def _session():
     from backend.database import SessionLocal
 
@@ -19,13 +18,13 @@ def _auth_header(token: str = "valid-token") -> str:
     return f"Bearer {token}"
 
 
-def _install_provider_identity(
+def _install_firebase_identity(
     monkeypatch: pytest.MonkeyPatch,
     *,
     uid: str,
     email: str,
 ) -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     payload = {
         "uid": uid,
@@ -135,25 +134,24 @@ def _delete_payload():
 def test_self_delete_definitive_provider_failure_restores_prior_local_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.account_deletion_service as account_deletion_service
+    from backend.services import account_deletion_service
     from backend.services.account_deletion_service import delete_account_workflow
 
-    uid = f"ws03-02-self-fail-{uuid.uuid4()}"
-    email = f"ws03-02-self-fail-{uuid.uuid4()}@example.invalid"
-    _install_provider_identity(monkeypatch, uid=uid, email=email)
+    uid = f"account-lifecycle-self-fail-{uuid.uuid4()}"
+    email = f"account-lifecycle-self-fail-{uuid.uuid4()}@example.invalid"
+    _install_firebase_identity(monkeypatch, uid=uid, email=email)
     user_id = _create_user(auth_user_id=uid, email=email)
     staged_states: list[str] = []
 
-    def provider_delete(auth_user_id: str) -> None:
+    def firebase_delete(auth_user_id: str) -> None:
         assert auth_user_id == uid
         staged_states.append(str(_user_snapshot(user_id)["account_status"]))
         raise RuntimeError("synthetic firebase failure")
 
-    monkeypatch.setattr(account_deletion_service, "delete_firebase_user", provider_delete)
+    monkeypatch.setattr(account_deletion_service, "delete_firebase_user", firebase_delete)
 
-    with _session() as db:
-        with pytest.raises(HTTPException) as exc_info:
-            delete_account_workflow(_delete_payload(), _auth_header(), db)
+    with _session() as db, pytest.raises(HTTPException) as exc_info:
+        delete_account_workflow(_delete_payload(), _auth_header(), db)
 
     assert exc_info.value.status_code == 502
     assert staged_states == ["pending_deletion"]
@@ -171,29 +169,29 @@ def test_self_delete_definitive_provider_failure_restores_prior_local_state(
 def test_admin_delete_definitive_provider_failure_restores_prior_local_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.admin_user_delete_service as admin_user_delete_service
     from backend.schemas.admin_user_schema import AdminUserDeleteCreate
+    from backend.services import admin_user_delete_service
     from backend.services.admin_user_delete_service import (
         delete_admin_user,
         preview_admin_user_delete_impact,
     )
 
     admin_id = _create_user(
-        auth_user_id=f"ws03-02-admin-delete-actor-{uuid.uuid4()}",
-        email=f"ws03-02-admin-delete-actor-{uuid.uuid4()}@example.invalid",
+        auth_user_id=f"account-lifecycle-admin-delete-actor-{uuid.uuid4()}",
+        email=f"account-lifecycle-admin-delete-actor-{uuid.uuid4()}@example.invalid",
         role="admin",
     )
-    target_uid = f"ws03-02-admin-delete-target-{uuid.uuid4()}"
-    target_email = f"ws03-02-admin-delete-target-{uuid.uuid4()}@example.invalid"
+    target_uid = f"account-lifecycle-admin-delete-target-{uuid.uuid4()}"
+    target_email = f"account-lifecycle-admin-delete-target-{uuid.uuid4()}@example.invalid"
     target_id = _create_user(auth_user_id=target_uid, email=target_email)
     staged_states: list[str] = []
 
-    def provider_delete(auth_user_id: str) -> None:
+    def firebase_delete(auth_user_id: str) -> None:
         assert auth_user_id == target_uid
         staged_states.append(str(_user_snapshot(target_id)["account_status"]))
         raise RuntimeError("synthetic firebase failure")
 
-    monkeypatch.setattr(admin_user_delete_service, "delete_firebase_user", provider_delete)
+    monkeypatch.setattr(admin_user_delete_service, "delete_firebase_user", firebase_delete)
 
     with _session() as db:
         admin_user = db.get(admin_user_delete_service.User, admin_id)
@@ -201,7 +199,7 @@ def test_admin_delete_definitive_provider_failure_restores_prior_local_state(
         preview = preview_admin_user_delete_impact(db, user_id=target_id)
         payload = AdminUserDeleteCreate(
             preview_token=preview.preview_token,
-            reason="provider failure proof",
+            reason="Firebase failure proof",
             idempotency_key=f"admin-delete-{uuid.uuid4()}",
         )
 
@@ -230,25 +228,25 @@ def test_admin_delete_definitive_provider_failure_restores_prior_local_state(
 def test_admin_delete_unknown_provider_outcome_preserves_auth_link_records_support_and_is_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.admin_user_delete_service as admin_user_delete_service
     from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
     from backend.schemas.admin_user_schema import AdminUserDeleteCreate
+    from backend.services import admin_user_delete_service
     from backend.services.admin_user_delete_service import (
         delete_admin_user,
         preview_admin_user_delete_impact,
     )
 
     admin_id = _create_user(
-        auth_user_id=f"ws03-02-admin-unknown-actor-{uuid.uuid4()}",
-        email=f"ws03-02-admin-unknown-actor-{uuid.uuid4()}@example.invalid",
+        auth_user_id=f"account-lifecycle-admin-unknown-actor-{uuid.uuid4()}",
+        email=f"account-lifecycle-admin-unknown-actor-{uuid.uuid4()}@example.invalid",
         role="admin",
     )
-    target_uid = f"ws03-02-admin-unknown-target-{uuid.uuid4()}"
-    target_email = f"ws03-02-admin-unknown-target-{uuid.uuid4()}@example.invalid"
+    target_uid = f"account-lifecycle-admin-unknown-target-{uuid.uuid4()}"
+    target_email = f"account-lifecycle-admin-unknown-target-{uuid.uuid4()}@example.invalid"
     target_id = _create_user(auth_user_id=target_uid, email=target_email)
     provider_calls: list[str] = []
 
-    def unknown_provider_delete(auth_user_id: str) -> None:
+    def unknown_firebase_delete(auth_user_id: str) -> None:
         assert auth_user_id == target_uid
         provider_calls.append(auth_user_id)
         raise DependencyMutationTimeoutUnknownError(
@@ -259,7 +257,7 @@ def test_admin_delete_unknown_provider_outcome_preserves_auth_link_records_suppo
     monkeypatch.setattr(
         admin_user_delete_service,
         "delete_firebase_user",
-        unknown_provider_delete,
+        unknown_firebase_delete,
     )
 
     with _session() as db:
@@ -322,20 +320,20 @@ def test_admin_delete_unknown_provider_outcome_preserves_auth_link_records_suppo
 def test_admin_delete_provider_success_then_local_cleanup_failure_records_support_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.admin_user_delete_service as admin_user_delete_service
     from backend.schemas.admin_user_schema import AdminUserDeleteCreate
+    from backend.services import admin_user_delete_service
     from backend.services.admin_user_delete_service import (
         delete_admin_user,
         preview_admin_user_delete_impact,
     )
 
     admin_id = _create_user(
-        auth_user_id=f"ws03-02-admin-cleanup-actor-{uuid.uuid4()}",
-        email=f"ws03-02-admin-cleanup-actor-{uuid.uuid4()}@example.invalid",
+        auth_user_id=f"account-lifecycle-admin-cleanup-actor-{uuid.uuid4()}",
+        email=f"account-lifecycle-admin-cleanup-actor-{uuid.uuid4()}@example.invalid",
         role="admin",
     )
-    target_uid = f"ws03-02-admin-cleanup-target-{uuid.uuid4()}"
-    target_email = f"ws03-02-admin-cleanup-target-{uuid.uuid4()}@example.invalid"
+    target_uid = f"account-lifecycle-admin-cleanup-target-{uuid.uuid4()}"
+    target_email = f"account-lifecycle-admin-cleanup-target-{uuid.uuid4()}@example.invalid"
     target_id = _create_user(auth_user_id=target_uid, email=target_email)
     provider_calls: list[str] = []
 
@@ -422,12 +420,12 @@ def test_admin_delete_provider_success_then_local_cleanup_failure_records_suppor
 def test_self_delete_provider_success_then_local_cleanup_failure_records_support_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.account_deletion_service as account_deletion_service
+    from backend.services import account_deletion_service
     from backend.services.account_deletion_service import delete_account_workflow
 
-    uid = f"ws03-02-cleanup-fail-{uuid.uuid4()}"
-    email = f"ws03-02-cleanup-fail-{uuid.uuid4()}@example.invalid"
-    _install_provider_identity(monkeypatch, uid=uid, email=email)
+    uid = f"account-lifecycle-cleanup-fail-{uuid.uuid4()}"
+    email = f"account-lifecycle-cleanup-fail-{uuid.uuid4()}@example.invalid"
+    _install_firebase_identity(monkeypatch, uid=uid, email=email)
     user_id = _create_user(auth_user_id=uid, email=email)
     provider_calls: list[str] = []
 
@@ -447,9 +445,8 @@ def test_self_delete_provider_success_then_local_cleanup_failure_records_support
         fail_local_cleanup,
     )
 
-    with _session() as db:
-        with pytest.raises(HTTPException) as exc_info:
-            delete_account_workflow(_delete_payload(), _auth_header(), db)
+    with _session() as db, pytest.raises(HTTPException) as exc_info:
+        delete_account_workflow(_delete_payload(), _auth_header(), db)
 
     assert exc_info.value.status_code == 503
     assert provider_calls == [uid]
@@ -472,17 +469,17 @@ def test_self_delete_provider_success_then_local_cleanup_failure_records_support
 def test_self_delete_unknown_provider_outcome_preserves_auth_link_and_is_not_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.account_deletion_service as account_deletion_service
     from backend.observability.timeouts import DependencyMutationTimeoutUnknownError
+    from backend.services import account_deletion_service
     from backend.services.account_deletion_service import delete_account_workflow
 
-    uid = f"ws03-02-unknown-{uuid.uuid4()}"
-    email = f"ws03-02-unknown-{uuid.uuid4()}@example.invalid"
-    _install_provider_identity(monkeypatch, uid=uid, email=email)
+    uid = f"account-lifecycle-unknown-{uuid.uuid4()}"
+    email = f"account-lifecycle-unknown-{uuid.uuid4()}@example.invalid"
+    _install_firebase_identity(monkeypatch, uid=uid, email=email)
     user_id = _create_user(auth_user_id=uid, email=email)
     provider_calls: list[str] = []
 
-    def unknown_provider_delete(auth_user_id: str) -> None:
+    def unknown_firebase_delete(auth_user_id: str) -> None:
         provider_calls.append(auth_user_id)
         raise DependencyMutationTimeoutUnknownError(
             provider_kind="firebase",
@@ -492,12 +489,11 @@ def test_self_delete_unknown_provider_outcome_preserves_auth_link_and_is_not_ret
     monkeypatch.setattr(
         account_deletion_service,
         "delete_firebase_user",
-        unknown_provider_delete,
+        unknown_firebase_delete,
     )
 
-    with _session() as db:
-        with pytest.raises(DependencyMutationTimeoutUnknownError):
-            delete_account_workflow(_delete_payload(), _auth_header(), db)
+    with _session() as db, pytest.raises(DependencyMutationTimeoutUnknownError):
+        delete_account_workflow(_delete_payload(), _auth_header(), db)
 
     snapshot = _user_snapshot(user_id)
     assert snapshot["account_status"] == "pending_deletion"
@@ -510,9 +506,8 @@ def test_self_delete_unknown_provider_outcome_preserves_auth_link_and_is_not_ret
         "failure_type": "firebase_delete_outcome_unknown",
     }
 
-    with _session() as db:
-        with pytest.raises(HTTPException) as exc_info:
-            delete_account_workflow(_delete_payload(), _auth_header(), db)
+    with _session() as db, pytest.raises(HTTPException) as exc_info:
+        delete_account_workflow(_delete_payload(), _auth_header(), db)
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "User not found."
@@ -523,12 +518,12 @@ def test_self_delete_unknown_provider_outcome_preserves_auth_link_and_is_not_ret
 def test_successful_self_delete_clears_auth_link_and_repeat_delete_does_not_call_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.account_deletion_service as account_deletion_service
+    from backend.services import account_deletion_service
     from backend.services.account_deletion_service import delete_account_workflow
 
-    uid = f"ws03-02-delete-success-{uuid.uuid4()}"
-    email = f"ws03-02-delete-success-{uuid.uuid4()}@example.invalid"
-    _install_provider_identity(monkeypatch, uid=uid, email=email)
+    uid = f"account-lifecycle-delete-success-{uuid.uuid4()}"
+    email = f"account-lifecycle-delete-success-{uuid.uuid4()}@example.invalid"
+    _install_firebase_identity(monkeypatch, uid=uid, email=email)
     user_id = _create_user(auth_user_id=uid, email=email)
     provider_calls: list[str] = []
 
@@ -547,9 +542,8 @@ def test_successful_self_delete_clears_auth_link_and_repeat_delete_does_not_call
     assert snapshot["email"] is None
     assert snapshot["deleted_at"] is not None
 
-    with _session() as db:
-        with pytest.raises(HTTPException) as exc_info:
-            delete_account_workflow(_delete_payload(), _auth_header(), db)
+    with _session() as db, pytest.raises(HTTPException) as exc_info:
+        delete_account_workflow(_delete_payload(), _auth_header(), db)
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "User not found."

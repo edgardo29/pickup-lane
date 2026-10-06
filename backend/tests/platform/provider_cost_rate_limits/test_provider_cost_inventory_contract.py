@@ -79,27 +79,30 @@ def _read(relative_path: str) -> str:
 
 
 @pytest.mark.pass_provenance('WS02-04C3B')
-def test_current_source_entrypoints_cover_material_c3b_workflow_families() -> None:
+def test_current_source_entrypoints_cover_material_provider_cost_workflow_families() -> None:
     for relative_path, required_snippets in _SOURCE_ENTRYPOINTS.items():
         source = _read(relative_path)
         for snippet in required_snippets:
             assert snippet in source, f"{snippet!r} missing from {relative_path}"
 
 
-@pytest.mark.pass_provenance('WS02-04C3B')
-def test_venue_image_source_distinguishes_local_signing_from_r2_metadata_head() -> None:
+@pytest.mark.pass_provenance('WS02-04C3B', 'WS06-02')
+def test_venue_image_source_accounts_for_current_r2_object_operations() -> None:
     r2_source = _read("backend/services/r2_storage_service.py")
     venue_image_source = _read("backend/services/venue_image_service.py")
 
     assert "def create_object_upload_url" in r2_source
     assert "def create_object_read_url" in r2_source
     assert "generate_presigned_url" in r2_source
-    assert "def get_object_properties" in r2_source
-    assert "head_object" in r2_source
+    assert "def download_object" in r2_source
+    assert "def publish_object" in r2_source
+    assert "def delete_object" in r2_source
+    assert "head_object" not in r2_source
     assert "create_object_upload_url" in venue_image_source
     assert "create_object_read_url" in venue_image_source
-    assert "get_object_properties" in venue_image_source
-    assert ".put_object(" not in r2_source
+    assert "download_object" in venue_image_source
+    assert "publish_object" in venue_image_source
+    assert "delete_object" in venue_image_source
 
 
 @pytest.mark.pass_provenance('WS02-04C3B')

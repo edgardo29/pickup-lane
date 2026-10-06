@@ -175,7 +175,7 @@ function AdminMoneyPaymentsPage() {
             <label>
               <span>Search</span>
               <input
-                placeholder="Payment ID, provider ID, user, booking, or publish fee"
+                placeholder="Payment ID, Stripe ID, user, booking, or publish fee"
                 value={draftFilters.query}
                 onChange={(event) => updateDraftFilter('query', event.target.value)}
               />

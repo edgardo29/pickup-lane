@@ -13,7 +13,6 @@ from fastapi.routing import APIRoute
 from sqlalchemy import func, select, text
 
 
-
 def _session():
     from backend.database import SessionLocal
 
@@ -49,13 +48,13 @@ def _create_user(
         return user.id
 
 
-def _install_provider_identity(
+def _install_firebase_identity(
     monkeypatch: pytest.MonkeyPatch,
     *,
     uid: str,
     email: str,
 ) -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     payload = {
         "uid": uid,
@@ -203,9 +202,9 @@ def _admin_bootstrap_route_candidates() -> list[tuple[str, str, str]]:
 
 @pytest.mark.pass_provenance('WS03-02')
 def test_admin_bootstrap_source_requires_existing_linked_provider_identity_and_no_reachable_bootstrap_route() -> None:
-    import backend.routes.admin_user_routes as admin_user_routes
-    import backend.services.auth_account_service as auth_account_service
     from backend import bootstrap_admin
+    from backend.routes import admin_user_routes
+    from backend.services import auth_account_service
 
     bootstrap_module = ast.parse(inspect.getsource(bootstrap_admin))
     assert not any(
@@ -270,21 +269,20 @@ def test_admin_bootstrap_source_requires_existing_linked_provider_identity_and_n
 def test_final_active_admin_cannot_be_demoted_suspended_or_deleted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import backend.services.account_deletion_service as account_deletion_service
-    import backend.services.admin_user_delete_service as admin_user_delete_service
     from backend.schemas.admin_user_schema import (
         AdminUserDeleteCreate,
         AdminUserSuspendCreate,
     )
     from backend.schemas.auth_schema import AuthDeleteAccountRequest
+    from backend.services import account_deletion_service, admin_user_delete_service
     from backend.services.account_deletion_service import delete_account_workflow
     from backend.services.admin_user_account_service import suspend_admin_user
     from backend.services.admin_user_delete_service import delete_admin_user
     from backend.services.admin_user_role_service import change_user_role
 
-    uid = f"ws03-02-final-admin-{uuid.uuid4()}"
-    email = f"ws03-02-final-admin-{uuid.uuid4()}@example.invalid"
-    _install_provider_identity(monkeypatch, uid=uid, email=email)
+    uid = f"account-lifecycle-final-admin-{uuid.uuid4()}"
+    email = f"account-lifecycle-final-admin-{uuid.uuid4()}@example.invalid"
+    _install_firebase_identity(monkeypatch, uid=uid, email=email)
     admin_id = _create_user(auth_user_id=uid, email=email, role="admin")
     provider_calls: list[str] = []
 
@@ -367,13 +365,13 @@ def test_non_final_admin_can_be_demoted_when_another_active_admin_remains() -> N
     from backend.services.admin_user_role_service import change_user_role
 
     acting_id = _create_user(
-        auth_user_id=f"ws03-02-admin-actor-{uuid.uuid4()}",
-        email=f"ws03-02-admin-actor-{uuid.uuid4()}@example.invalid",
+        auth_user_id=f"account-lifecycle-admin-actor-{uuid.uuid4()}",
+        email=f"account-lifecycle-admin-actor-{uuid.uuid4()}@example.invalid",
         role="admin",
     )
     target_id = _create_user(
-        auth_user_id=f"ws03-02-admin-target-{uuid.uuid4()}",
-        email=f"ws03-02-admin-target-{uuid.uuid4()}@example.invalid",
+        auth_user_id=f"account-lifecycle-admin-target-{uuid.uuid4()}",
+        email=f"account-lifecycle-admin-target-{uuid.uuid4()}@example.invalid",
         role="admin",
     )
 
@@ -423,13 +421,13 @@ def _concurrent_demote(
 @pytest.mark.pass_provenance('WS03-02')
 def test_concurrent_admin_demotions_cannot_leave_zero_active_admins() -> None:
     admin_a_id = _create_user(
-        auth_user_id=f"ws03-02-admin-race-a-{uuid.uuid4()}",
-        email=f"ws03-02-admin-race-a-{uuid.uuid4()}@example.invalid",
+        auth_user_id=f"account-lifecycle-admin-race-a-{uuid.uuid4()}",
+        email=f"account-lifecycle-admin-race-a-{uuid.uuid4()}@example.invalid",
         role="admin",
     )
     admin_b_id = _create_user(
-        auth_user_id=f"ws03-02-admin-race-b-{uuid.uuid4()}",
-        email=f"ws03-02-admin-race-b-{uuid.uuid4()}@example.invalid",
+        auth_user_id=f"account-lifecycle-admin-race-b-{uuid.uuid4()}",
+        email=f"account-lifecycle-admin-race-b-{uuid.uuid4()}@example.invalid",
         role="admin",
     )
     barrier = threading.Barrier(2)

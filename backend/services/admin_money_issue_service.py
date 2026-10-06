@@ -861,13 +861,13 @@ def validate_money_issue_resolution(
         if not money_issue.issue_type.startswith("refund_") or money_issue.target_refund_id is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Provider no-action resolution requires refund context.",
+                detail="Stripe no-action resolution requires refund context.",
             )
         refund = db.get(Refund, money_issue.target_refund_id)
         if refund is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Provider no-action resolution is missing its refund.",
+                detail="Stripe no-action resolution is missing its refund.",
             )
         payment = db.get(Payment, refund.payment_id)
         if not refund_payment_no_action_obligation_is_satisfied(
@@ -877,7 +877,7 @@ def validate_money_issue_resolution(
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Provider no-action resolution requires the payment obligation to be satisfied.",
+                detail="Stripe no-action resolution requires the payment obligation to be satisfied.",
             )
         return
 

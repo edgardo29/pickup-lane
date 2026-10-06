@@ -28,7 +28,7 @@ REQUIRED_ROUTE_FIELDS = {
     "auth_dependencies",
     "route_disposition",
     "disposition_reason",
-    "child_owner",
+    "functional_owner",
     "owner_reason",
     "behavior_owner_detail",
     "actor_classes",
@@ -49,7 +49,7 @@ REQUIRED_ROUTE_FIELDS = {
 REQUIRED_FAMILY_FIELDS = {
     "family_id",
     "summary",
-    "primary_child_owner",
+    "primary_functional_owner",
     "owner_reason",
     "behavior_owner_detail",
     "gap_refs",
@@ -68,14 +68,18 @@ REQUIRED_GAP_FIELDS = {
 }
 
 VALID_OWNERS = {
-    "WS03-04B",
-    "WS03-04C",
-    "WS03-04D",
+    "self_owned_account_and_financial_authorization",
+    "relationship_and_workflow_authorization",
+    "administrative_authorization",
     "covered_elsewhere",
     "not_applicable",
     "blocked",
 }
-VALID_CHILDREN = {"WS03-04B", "WS03-04C", "WS03-04D"}
+FUNCTIONAL_OWNERS = {
+    "self_owned_account_and_financial_authorization",
+    "relationship_and_workflow_authorization",
+    "administrative_authorization",
+}
 VALID_DISPOSITIONS = {
     "protected",
     "public",
@@ -95,14 +99,13 @@ VALID_CONCEALMENT = {
     "blocked_owner_decision",
 }
 VALID_GAP_STATES = {
-    "owned_by_later_child",
+    "owned_by_functional_owner",
     "covered_elsewhere",
     "deferred_external",
     "blocked_owner_decision",
 }
 VALID_GAP_OWNER_TYPES = {
-    "child_pass",
-    "later_pass",
+    "functional_owner",
     "external_evidence",
     "governance_owner",
     "covered_elsewhere",
@@ -309,29 +312,29 @@ def test_route_and_family_ownership_is_homogeneous_and_complete() -> None:
     matrix = _matrix()
 
     for family in matrix["route_families"]:
-        assert family["primary_child_owner"] in VALID_OWNERS
-        assert family["primary_child_owner"] != "WS03-04A"
+        assert family["primary_functional_owner"] in VALID_OWNERS
+        assert family["primary_functional_owner"] != "authorization_matrix_foundation"
         assert family["behavior_owner_detail"]
-        if family["primary_child_owner"] in VALID_CHILDREN:
-            assert family["behavior_owner_detail"] == family["primary_child_owner"]
-        if family["primary_child_owner"] == "covered_elsewhere":
+        if family["primary_functional_owner"] in FUNCTIONAL_OWNERS:
+            assert family["behavior_owner_detail"] == family["primary_functional_owner"]
+        if family["primary_functional_owner"] == "covered_elsewhere":
             assert family["behavior_owner_detail"] not in VALID_OWNERS
-        if family["primary_child_owner"] == "blocked":
+        if family["primary_functional_owner"] == "blocked":
             assert "blocked_owner_decision" in {
                 _matrix_gap["state"]
                 for _matrix_gap in matrix["uncovered_gaps"]
                 if _matrix_gap["gap_id"] in family["gap_refs"]
             }
-        family_route_owners = {route["child_owner"] for route in family["routes"]}
-        assert family_route_owners == {family["primary_child_owner"]}
+        family_route_owners = {route["functional_owner"] for route in family["routes"]}
+        assert family_route_owners == {family["primary_functional_owner"]}
         family_owner_details = {route["behavior_owner_detail"] for route in family["routes"]}
         assert family_owner_details == {family["behavior_owner_detail"]}
 
-    route_owners = {route["child_owner"] for route in _all_route_entries(matrix)}
-    assert VALID_CHILDREN <= route_owners
+    route_owners = {route["functional_owner"] for route in _all_route_entries(matrix)}
+    assert FUNCTIONAL_OWNERS <= route_owners
     assert "covered_elsewhere" in route_owners
     assert "not_applicable" in route_owners
-    assert "WS03-04A" not in route_owners
+    assert "authorization_matrix_foundation" not in route_owners
     assert "blocked" not in route_owners
 
 
@@ -342,19 +345,23 @@ def test_negative_proof_owner_matches_behavioral_owner_or_records_exception() ->
 
     for route in _all_route_entries(matrix):
         assert route["negative_proof_owner"] in VALID_OWNERS
-        assert route["negative_proof_owner"] != "WS03-04A"
-        if route["child_owner"] in VALID_CHILDREN:
-            assert route["negative_proof_owner"] == route["child_owner"]
-            assert route["negative_proof_owner_detail"] == route["child_owner"]
-        elif route["child_owner"] == "covered_elsewhere":
+        assert route["negative_proof_owner"] != "authorization_matrix_foundation"
+        if route["functional_owner"] in FUNCTIONAL_OWNERS:
+            assert route["negative_proof_owner"] == route["functional_owner"]
+            assert route["negative_proof_owner_detail"] == route["functional_owner"]
+        elif route["functional_owner"] == "covered_elsewhere":
             assert route["negative_proof_owner"] == "covered_elsewhere"
             assert route["negative_proof_owner_detail"] not in VALID_OWNERS
             if route["gap_refs"]:
-                assert any(gap_by_id[gap_id]["owner"] == route["negative_proof_owner_detail"] for gap_id in route["gap_refs"])
-        elif route["child_owner"] == "not_applicable":
+                assert any(
+                    gap_by_id[gap_id]["owner"]
+                    == route["negative_proof_owner_detail"]
+                    for gap_id in route["gap_refs"]
+                )
+        elif route["functional_owner"] == "not_applicable":
             assert route["negative_proof_owner"] == "not_applicable"
             assert route["negative_proof_owner_detail"] == "not_applicable"
-        elif route["child_owner"] == "blocked":
+        elif route["functional_owner"] == "blocked":
             assert route["negative_proof_owner"] == "blocked"
             assert route["gap_refs"]
 
@@ -371,8 +378,8 @@ def test_route_dispositions_match_backend_auth_dependencies() -> None:
             assert "backend.services.auth_service:get_optional_current_app_user" in route["auth_dependencies"]
         elif route["route_disposition"] == "provider_callback":
             assert route["path"] == "/stripe/webhook"
-            assert route["child_owner"] == "covered_elsewhere"
-            assert route["behavior_owner_detail"] == "WS05"
+            assert route["functional_owner"] == "covered_elsewhere"
+            assert route["behavior_owner_detail"] == "stripe_webhook_lifecycle"
         elif route["route_disposition"] == "health_or_root":
             assert route["path"] in {"/", "/live", "/ready", "/db-health"}
             assert not route["auth_dependencies"]
@@ -393,12 +400,12 @@ def test_recorded_authorization_dependencies_match_current_fastapi_dependency_tr
 
 
 @pytest.mark.pass_provenance('WS03-04A')
-def test_child_owner_partition_has_no_gap_or_overlap() -> None:
+def test_functional_owner_partition_has_no_gap_or_overlap() -> None:
     matrix_routes = _flatten_matrix_routes()
 
     owners_by_key: dict[tuple[str, str], set[str]] = {}
     for key, (_, route) in matrix_routes.items():
-        owners_by_key.setdefault(key, set()).add(route["child_owner"])
+        owners_by_key.setdefault(key, set()).add(route["functional_owner"])
 
     assert all(len(owners) == 1 for owners in owners_by_key.values())
     assert set(owners_by_key) == set(_current_route_map())
@@ -419,7 +426,7 @@ def test_route_drift_validator_fails_for_missing_stale_or_duplicate_routes() -> 
     stale_route_matrix["route_families"][0]["routes"][0] = {
         **first_route,
         "method": "GET",
-        "path": "/ws03-04a-stale-route",
+        "path": "/stale-authorization-matrix-route",
     }
     with pytest.raises(AssertionError, match="missing current routes"):
         _assert_route_key_sets_match(stale_route_matrix)
@@ -429,7 +436,7 @@ def test_route_drift_validator_fails_for_missing_stale_or_duplicate_routes() -> 
             {
                 **first_family,
                 "family_id": "stale_route_probe",
-                "routes": [{**first_route, "path": "/ws03-04a-stale-route"}],
+                "routes": [{**first_route, "path": "/stale-authorization-matrix-route"}],
             }
         )
         _assert_route_key_sets_match(stale_only_matrix)
@@ -448,13 +455,13 @@ def test_stripe_webhook_remains_outside_ordinary_authorization_ownership() -> No
         route for route in _all_route_entries(matrix) if route["path"] == "/stripe/webhook"
     ]
     assert len(stripe_routes) == 1
-    assert stripe_routes[0]["child_owner"] == "covered_elsewhere"
-    assert stripe_routes[0]["behavior_owner_detail"] == "WS05"
+    assert stripe_routes[0]["functional_owner"] == "covered_elsewhere"
+    assert stripe_routes[0]["behavior_owner_detail"] == "stripe_webhook_lifecycle"
     assert stripe_routes[0]["route_disposition"] == "provider_callback"
     assert stripe_routes[0]["auth_dependencies"] == []
-    assert "WS03-04A-G001" in stripe_routes[0]["gap_refs"]
+    assert "stripe_webhook_authorization_boundary" in stripe_routes[0]["gap_refs"]
     gap = next(
-        item for item in matrix["uncovered_gaps"] if item["gap_id"] == "WS03-04A-G001"
+        item for item in matrix["uncovered_gaps"] if item["gap_id"] == "stripe_webhook_authorization_boundary"
     )
     assert gap["state"] == "covered_elsewhere"
-    assert gap["owner"] == "WS05"
+    assert gap["owner"] == "stripe_webhook_lifecycle"

@@ -95,20 +95,20 @@ export async function retryAdminMoneyRefund({
 
 export function buildRefundReconciliationRequestBody({
   idempotencyKey,
-  providerRefundId,
+  stripeRefundId,
   reason,
 }) {
   return {
     reason,
     idempotency_key: idempotencyKey,
-    provider_refund_id: providerRefundId || null,
+    provider_refund_id: stripeRefundId || null,
   }
 }
 
 export async function reconcileAdminMoneyRefund({
   firebaseUser,
   idempotencyKey,
-  providerRefundId,
+  stripeRefundId,
   reason,
   refundId,
 }) {
@@ -117,7 +117,7 @@ export async function reconcileAdminMoneyRefund({
     headers: await getAdminHeaders(firebaseUser, true),
     body: JSON.stringify(buildRefundReconciliationRequestBody({
       idempotencyKey,
-      providerRefundId,
+      stripeRefundId,
       reason,
     })),
   })

@@ -7,7 +7,6 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     UniqueConstraint,
     text,
 )
@@ -17,7 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from backend.database_metadata import Base
 
 
-# Durable jobs are the generic PostgreSQL-backed work queue used by WS05.
+# Durable jobs are the generic PostgreSQL-backed work queue for deferred work.
 class DurableJob(Base):
     __tablename__ = "durable_jobs"
     __table_args__ = (

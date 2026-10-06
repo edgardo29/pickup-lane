@@ -5,10 +5,10 @@ import uuid
 import pytest
 
 from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_authorization.test_matrix_scope_and_dependencies_contract import (
-    _Identity,
     _auth_headers,
     _community_detail,
     _game,
+    _Identity,
     _install_auth_identities,
     _recent_time,
     _session,
@@ -19,8 +19,7 @@ from backend.tests.workflows.game_community_roster_chat_need_a_sub_relationship_
 )
 
 
-
-@pytest.mark.pass_provenance('WS03-04C')
+@pytest.mark.pass_provenance('WS03-04C', 'WS06-02')
 def test_public_catalog_reads_omit_non_public_rows_and_admin_filters(
     client,
     monkeypatch: pytest.MonkeyPatch,
@@ -31,7 +30,9 @@ def test_public_catalog_reads_omit_non_public_rows_and_admin_filters(
     monkeypatch.setattr(
         venue_image_service,
         "create_object_read_url",
-        lambda object_key: f"https://images.example.invalid/{object_key}",
+        lambda *, target, object_key, config=None: (
+            f"https://images.example.invalid/{object_key}"
+        ),
     )
 
     with _session() as db:
@@ -90,32 +91,42 @@ def test_public_catalog_reads_omit_non_public_rows_and_admin_filters(
             venue_id=active_venue.id,
             uploaded_by_user_id=owner.id,
             storage_provider="r2",
-            storage_object_key="ws03c/venue-active.jpg",
+            storage_object_key="relationship_authorization/venue-active.jpg",
             storage_bucket="synthetic",
             storage_account_id="synthetic-account",
             content_type="image/jpeg",
             size_bytes=128,
             etag="synthetic-active",
+            publication_object_key="relationship_authorization/published/venue-active.jpg",
+            publication_content_type="image/jpeg",
+            publication_size_bytes=128,
+            publication_etag="synthetic-active-publication",
             image_role="card",
             image_status="active",
             is_primary=True,
             sort_order=1,
+            upload_completed_at=_recent_time(),
         )
         hidden_venue_image = VenueImage(
             id=uuid.uuid4(),
             venue_id=active_venue.id,
             uploaded_by_user_id=owner.id,
             storage_provider="r2",
-            storage_object_key="ws03c/venue-hidden.jpg",
+            storage_object_key="relationship_authorization/venue-hidden.jpg",
             storage_bucket="synthetic",
             storage_account_id="synthetic-account",
             content_type="image/jpeg",
             size_bytes=128,
             etag="synthetic-hidden",
+            publication_object_key="relationship_authorization/published/venue-hidden.jpg",
+            publication_content_type="image/jpeg",
+            publication_size_bytes=128,
+            publication_etag="synthetic-hidden-publication",
             image_role="gallery",
             image_status="hidden",
             is_primary=False,
             sort_order=2,
+            upload_completed_at=_recent_time(),
         )
         db.add(owner)
         db.flush()

@@ -33,7 +33,6 @@ from backend.services.admin_action_display_service import (
 )
 from backend.services.admin_action_service import AUDIT_UNAVAILABLE_DETAIL
 
-
 _BASE_TIME = datetime(2035, 7, 10, 18, 0, tzinfo=timezone.utc)
 
 
@@ -47,9 +46,9 @@ def _user(label: str, *, role: str = "player") -> User:
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws09-02b-{label}-{unique}",
+        auth_user_id=f"sensitive-financial-read-{label}-{unique}",
         role=role,
-        email=f"ws09-02b-{label}-{unique}@example.invalid",
+        email=f"sensitive-financial-read-{label}-{unique}@example.invalid",
         first_name="Audit",
         last_name=label,
         date_of_birth=date(1990, 1, 1),
@@ -124,12 +123,12 @@ def _payment(user: User) -> Payment:
         game_id=None,
         payment_type="admin_charge",
         provider="stripe",
-        provider_payment_intent_id=f"pi_ws09_02b_{unique}",
-        idempotency_key=f"ws09-02b-payment-{unique}",
+        provider_payment_intent_id=f"pi_privileged_audit_{unique}",
+        idempotency_key=f"sensitive-financial-read-payment-{unique}",
         amount_cents=500,
         currency="USD",
         payment_status="processing",
-        payment_metadata={"test": "ws09-02b"},
+        payment_metadata={"test": "sensitive-financial-read"},
     )
 
 
@@ -138,7 +137,7 @@ def _payment_event(*, processing_status: str = "pending") -> PaymentEvent:
         id=uuid.uuid4(),
         payment_id=None,
         provider="stripe",
-        provider_event_id=f"evt_ws09_02b_{uuid.uuid4()}",
+        provider_event_id=f"evt_privileged_audit_{uuid.uuid4()}",
         event_type="payment_intent.payment_failed",
         event_envelope={"private_provider_payload": "must-not-enter-audit"},
         provider_created_at=_BASE_TIME,

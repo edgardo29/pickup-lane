@@ -90,8 +90,8 @@ BACKEND_ENVIRONMENT_VARIABLES = frozenset(
         "R2_READ_URL_MINUTES",
         "R2_MAX_IMAGE_BYTES",
         "R2_ALLOWED_IMAGE_TYPES",
-        "R2_METADATA_CONNECT_TIMEOUT_SECONDS",
-        "R2_METADATA_READ_TIMEOUT_SECONDS",
+        "R2_OBJECT_CONNECT_TIMEOUT_SECONDS",
+        "R2_OBJECT_READ_TIMEOUT_SECONDS",
         "DB_POOL_WAIT_TIMEOUT_SECONDS",
         "DB_STATEMENT_TIMEOUT_MILLISECONDS",
         "DB_LOCK_TIMEOUT_MILLISECONDS",
@@ -122,8 +122,9 @@ DEFAULT_STRIPE_READ_TIMEOUT_SECONDS = 6
 DEFAULT_STRIPE_MUTATION_TIMEOUT_SECONDS = 15
 DEFAULT_FIREBASE_HTTP_TIMEOUT_SECONDS = 8
 DEFAULT_RECENT_AUTHENTICATION_WINDOW_SECONDS = 5 * 60
-DEFAULT_R2_METADATA_CONNECT_TIMEOUT_SECONDS = 2
-DEFAULT_R2_METADATA_READ_TIMEOUT_SECONDS = 6
+DEFAULT_R2_OBJECT_CONNECT_TIMEOUT_SECONDS = 2
+DEFAULT_R2_OBJECT_READ_TIMEOUT_SECONDS = 6
+MAX_R2_IMAGE_BYTES = 8 * 1024 * 1024
 DEFAULT_DB_POOL_WAIT_TIMEOUT_SECONDS = 2
 DEFAULT_DB_STATEMENT_TIMEOUT_MILLISECONDS = 12_000
 DEFAULT_DB_LOCK_TIMEOUT_MILLISECONDS = 2_000
@@ -240,12 +241,12 @@ class BackendSettings(BaseModel):
     r2_endpoint_url: str | None = None
     r2_upload_url_minutes: int = 15
     r2_read_url_minutes: int = 60
-    r2_max_image_bytes: int = 8 * 1024 * 1024
+    r2_max_image_bytes: int = MAX_R2_IMAGE_BYTES
     r2_allowed_image_types: frozenset[str] = DEFAULT_R2_ALLOWED_IMAGE_TYPES
-    r2_metadata_connect_timeout_seconds: int = (
-        DEFAULT_R2_METADATA_CONNECT_TIMEOUT_SECONDS
+    r2_object_connect_timeout_seconds: int = (
+        DEFAULT_R2_OBJECT_CONNECT_TIMEOUT_SECONDS
     )
-    r2_metadata_read_timeout_seconds: int = DEFAULT_R2_METADATA_READ_TIMEOUT_SECONDS
+    r2_object_read_timeout_seconds: int = DEFAULT_R2_OBJECT_READ_TIMEOUT_SECONDS
     db_pool_wait_timeout_seconds: int = DEFAULT_DB_POOL_WAIT_TIMEOUT_SECONDS
     db_statement_timeout_milliseconds: int = DEFAULT_DB_STATEMENT_TIMEOUT_MILLISECONDS
     db_lock_timeout_milliseconds: int = DEFAULT_DB_LOCK_TIMEOUT_MILLISECONDS
@@ -939,7 +940,17 @@ def _parse_r2_settings(env: Mapping[str, str], app_env: AppEnvironment) -> dict[
         if app_env.is_production_like and _is_documented_placeholder(endpoint_url):
             _fail("R2_ENDPOINT_URL", "must not use a documented placeholder value")
         parsed_endpoint = urlsplit(endpoint_url)
-        if parsed_endpoint.scheme != "https" or not parsed_endpoint.netloc:
+        expected_r2_host = (
+            f"{account_id}.r2.cloudflarestorage.com" if account_id else None
+        )
+        if (
+            parsed_endpoint.scheme != "https"
+            or not parsed_endpoint.netloc
+            or parsed_endpoint.hostname != expected_r2_host
+            or parsed_endpoint.port is not None
+            or parsed_endpoint.username is not None
+            or parsed_endpoint.password is not None
+        ):
             _fail("R2_ENDPOINT_URL", "must be a valid https URL")
         if parsed_endpoint.path not in {"", "/"} or parsed_endpoint.query or parsed_endpoint.fragment:
             _fail("R2_ENDPOINT_URL", "must not include paths, queries, or fragments")
@@ -954,8 +965,11 @@ def _parse_r2_settings(env: Mapping[str, str], app_env: AppEnvironment) -> dict[
             env, "R2_UPLOAD_URL_MINUTES", default=15
         ),
         "r2_read_url_minutes": _parse_positive_int(env, "R2_READ_URL_MINUTES", default=60),
-        "r2_max_image_bytes": _parse_positive_int(
-            env, "R2_MAX_IMAGE_BYTES", default=8 * 1024 * 1024
+        "r2_max_image_bytes": _parse_bounded_positive_int(
+            env,
+            "R2_MAX_IMAGE_BYTES",
+            default=MAX_R2_IMAGE_BYTES,
+            maximum=MAX_R2_IMAGE_BYTES,
         ),
         "r2_allowed_image_types": _parse_image_types(env),
     }
@@ -991,15 +1005,15 @@ def _parse_timeout_settings(env: Mapping[str, str]) -> dict[str, int]:
         "FIREBASE_HTTP_TIMEOUT_SECONDS",
         default=DEFAULT_FIREBASE_HTTP_TIMEOUT_SECONDS,
     )
-    r2_metadata_connect_timeout_seconds = _parse_positive_int(
+    r2_object_connect_timeout_seconds = _parse_positive_int(
         env,
-        "R2_METADATA_CONNECT_TIMEOUT_SECONDS",
-        default=DEFAULT_R2_METADATA_CONNECT_TIMEOUT_SECONDS,
+        "R2_OBJECT_CONNECT_TIMEOUT_SECONDS",
+        default=DEFAULT_R2_OBJECT_CONNECT_TIMEOUT_SECONDS,
     )
-    r2_metadata_read_timeout_seconds = _parse_positive_int(
+    r2_object_read_timeout_seconds = _parse_positive_int(
         env,
-        "R2_METADATA_READ_TIMEOUT_SECONDS",
-        default=DEFAULT_R2_METADATA_READ_TIMEOUT_SECONDS,
+        "R2_OBJECT_READ_TIMEOUT_SECONDS",
+        default=DEFAULT_R2_OBJECT_READ_TIMEOUT_SECONDS,
     )
     db_pool_wait_timeout_seconds = _parse_positive_int(
         env,
@@ -1027,8 +1041,8 @@ def _parse_timeout_settings(env: Mapping[str, str]) -> dict[str, int]:
         "stripe_read_timeout_seconds": stripe_read_timeout_seconds,
         "stripe_mutation_timeout_seconds": stripe_mutation_timeout_seconds,
         "firebase_http_timeout_seconds": firebase_http_timeout_seconds,
-        "r2_metadata_connect_timeout_seconds": r2_metadata_connect_timeout_seconds,
-        "r2_metadata_read_timeout_seconds": r2_metadata_read_timeout_seconds,
+        "r2_object_connect_timeout_seconds": r2_object_connect_timeout_seconds,
+        "r2_object_read_timeout_seconds": r2_object_read_timeout_seconds,
         "db_pool_wait_timeout_seconds": db_pool_wait_timeout_seconds,
         "db_statement_timeout_milliseconds": db_statement_timeout_milliseconds,
         "db_lock_timeout_milliseconds": db_lock_timeout_milliseconds,
@@ -1110,9 +1124,14 @@ def _parse_image_types(env: Mapping[str, str]) -> frozenset[str]:
         parts = image_type.split("/")
         if len(parts) != 2 or not all(parts):
             _fail("R2_ALLOWED_IMAGE_TYPES", "must contain MIME image types")
-        if parts[0] != "image":
-            _fail("R2_ALLOWED_IMAGE_TYPES", "must contain image MIME types only")
+        if image_type not in DEFAULT_R2_ALLOWED_IMAGE_TYPES:
+            _fail(
+                "R2_ALLOWED_IMAGE_TYPES",
+                "may contain only image/jpeg, image/png, and image/webp",
+            )
         image_types.add(image_type)
+    if not image_types:
+        _fail("R2_ALLOWED_IMAGE_TYPES", "must select at least one image type")
     return frozenset(image_types)
 
 
@@ -1133,6 +1152,19 @@ def _parse_positive_int(env: Mapping[str, str], name: str, *, default: int) -> i
     if raw_value is None:
         return default
     return _parse_positive_int_value(name, raw_value)
+
+
+def _parse_bounded_positive_int(
+    env: Mapping[str, str],
+    name: str,
+    *,
+    default: int,
+    maximum: int,
+) -> int:
+    value = _parse_positive_int(env, name, default=default)
+    if value > maximum:
+        _fail(name, f"must be less than or equal to {maximum}")
+    return value
 
 
 def _parse_positive_int_value(name: str, raw_value: str) -> int:

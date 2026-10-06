@@ -3,10 +3,22 @@ from __future__ import annotations
 import inspect
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import HTTPException
 
+if TYPE_CHECKING:
+    from backend.models import (
+        ChatMessage,
+        Game,
+        GameChat,
+        SubPost,
+        SubPostChat,
+        SubPostChatMessage,
+        User,
+        Venue,
+    )
 
 _BASE_TIME = datetime(2035, 2, 1, 18, 0, tzinfo=timezone.utc)
 
@@ -16,9 +28,9 @@ def _user(index: int) -> User:
 
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04b1-chat-user-{index}-{uuid.uuid4()}",
+        auth_user_id=f"source-boundary-chat-user-{index}-{uuid.uuid4()}",
         role="player",
-        email=f"ws02-04b1-chat-{index}-{uuid.uuid4()}@example.invalid",
+        email=f"source-boundary-chat-{index}-{uuid.uuid4()}@example.invalid",
         first_name="Chat",
         last_name=f"User-{index}",
         account_status="active",
@@ -265,7 +277,7 @@ def test_need_a_sub_chat_page_and_visible_text_history_boundaries() -> None:
 
 
 @pytest.mark.pass_provenance('WS02-04B1')
-def test_chat_send_workflows_preserve_c3a_rate_limiter_before_total_cap() -> None:
+def test_chat_send_workflows_preserve_rate_limiter_before_total_cap() -> None:
     from backend.services import game_chat_service, sub_post_chat_service
 
     game_source = inspect.getsource(game_chat_service.create_chat_message_record)

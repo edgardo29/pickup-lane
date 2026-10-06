@@ -1,7 +1,7 @@
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from functools import wraps
 from ipaddress import IPv4Address, IPv6Address
 from urllib.parse import quote, urlsplit
 
@@ -16,7 +16,11 @@ from botocore.exceptions import (
 )
 
 from backend.observability.metrics import record_provider_outcome
-from backend.observability.timeouts import DependencyReadTimeoutError
+from backend.observability.timeouts import (
+    DependencyMutationTimeoutUnknownError,
+    DependencyReadTimeoutError,
+    is_cancellation,
+)
 from backend.settings import (
     DEFAULT_R2_ALLOWED_IMAGE_TYPES,
     SettingsError,
@@ -29,10 +33,28 @@ class R2StorageConfigError(RuntimeError):
 
 
 class R2StorageError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, result: str = "failed") -> None:
+        self.result = result
+        super().__init__(message)
 
 
 class R2ObjectNotFoundError(R2StorageError):
+    pass
+
+
+class R2StorageTargetMismatchError(R2StorageConfigError):
+    pass
+
+
+class R2MutationOutcomeUnknownError(R2StorageError):
+    pass
+
+
+class R2PublicationCollisionError(R2StorageError):
+    pass
+
+
+class ImageUploadMismatchError(ValueError):
     pass
 
 
@@ -45,10 +67,29 @@ class R2ObjectUploadTicket:
 
 
 @dataclass(frozen=True)
-class R2ObjectProperties:
+class R2StorageTarget:
+    provider: str
+    account_id: str
+    bucket_name: str
+
+
+@dataclass(frozen=True)
+class R2ObjectReference:
+    target: R2StorageTarget
+    object_key: str
+
+
+@dataclass(frozen=True)
+class R2DownloadedObject:
+    body: bytes
     content_type: str | None
     size_bytes: int
     etag: str | None
+
+
+@dataclass(frozen=True)
+class R2PublishedObject:
+    etag: str
 
 
 @dataclass(frozen=True)
@@ -62,8 +103,8 @@ class R2StorageConfig:
     read_url_minutes: int
     max_image_bytes: int
     allowed_image_types: frozenset[str]
-    metadata_connect_timeout_seconds: int
-    metadata_read_timeout_seconds: int
+    object_connect_timeout_seconds: int
+    object_read_timeout_seconds: int
 
 
 DEFAULT_ALLOWED_IMAGE_TYPES = DEFAULT_R2_ALLOWED_IMAGE_TYPES
@@ -176,29 +217,6 @@ def _validated_presigned_url(value: object, *, error_detail: str) -> str:
     return value
 
 
-def _object_properties_from_response(response: object) -> R2ObjectProperties:
-    if not isinstance(response, Mapping):
-        raise R2StorageError("Cloudflare R2 returned invalid image metadata.")
-
-    content_length = response.get("ContentLength")
-    content_type = response.get("ContentType")
-    etag = response.get("ETag")
-    if (
-        isinstance(content_length, bool)
-        or not isinstance(content_length, int)
-        or content_length < 0
-        or (content_type is not None and not isinstance(content_type, str))
-        or (etag is not None and not isinstance(etag, str))
-    ):
-        raise R2StorageError("Cloudflare R2 returned invalid image metadata.")
-
-    return R2ObjectProperties(
-        content_type=content_type,
-        size_bytes=content_length,
-        etag=etag,
-    )
-
-
 def get_allowed_image_types() -> frozenset[str]:
     return _storage_settings().r2_allowed_image_types
 
@@ -233,8 +251,8 @@ def get_r2_storage_config() -> R2StorageConfig:
         read_url_minutes=settings.r2_read_url_minutes,
         max_image_bytes=settings.r2_max_image_bytes,
         allowed_image_types=settings.r2_allowed_image_types,
-        metadata_connect_timeout_seconds=(settings.r2_metadata_connect_timeout_seconds),
-        metadata_read_timeout_seconds=settings.r2_metadata_read_timeout_seconds,
+        object_connect_timeout_seconds=settings.r2_object_connect_timeout_seconds,
+        object_read_timeout_seconds=settings.r2_object_read_timeout_seconds,
     )
 
 
@@ -245,21 +263,62 @@ def _storage_settings():
         raise R2StorageConfigError(str(exc)) from exc
 
 
-def get_r2_client(config: R2StorageConfig | None = None):
+def get_r2_client(
+    config: R2StorageConfig | None = None,
+    *,
+    disable_retries: bool = False,
+):
     storage_config = config or get_r2_storage_config()
+    config_kwargs = {
+        "signature_version": "s3v4",
+        "s3": {"addressing_style": "path"},
+        "connect_timeout": storage_config.object_connect_timeout_seconds,
+        "read_timeout": storage_config.object_read_timeout_seconds,
+    }
+    if disable_retries:
+        config_kwargs["retries"] = {"total_max_attempts": 1}
     return boto3.client(
         "s3",
         endpoint_url=storage_config.endpoint_url,
         aws_access_key_id=storage_config.access_key_id,
         aws_secret_access_key=storage_config.secret_access_key,
         region_name="auto",
-        config=Config(
-            signature_version="s3v4",
-            s3={"addressing_style": "path"},
-            connect_timeout=storage_config.metadata_connect_timeout_seconds,
-            read_timeout=storage_config.metadata_read_timeout_seconds,
-        ),
+        config=Config(**config_kwargs),
     )
+
+
+def storage_target_from_config(config: R2StorageConfig) -> R2StorageTarget:
+    return R2StorageTarget(
+        provider="r2",
+        account_id=config.account_id,
+        bucket_name=config.bucket_name,
+    )
+
+
+def validate_storage_target(
+    target: R2StorageTarget,
+    config: R2StorageConfig | None = None,
+) -> R2StorageConfig:
+    storage_config = config or get_r2_storage_config()
+    parsed = urlsplit(storage_config.endpoint_url)
+    expected_host = f"{storage_config.account_id}.r2.cloudflarestorage.com"
+    if (
+        target.provider != "r2"
+        or target.account_id != storage_config.account_id
+        or target.bucket_name != storage_config.bucket_name
+        or parsed.scheme != "https"
+        or parsed.hostname != expected_host
+        or parsed.port is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise R2StorageTargetMismatchError(
+            "Stored image target does not match configured Cloudflare R2 storage."
+        )
+    return storage_config
 
 
 def build_object_url(
@@ -274,7 +333,42 @@ def build_object_url(
     )
 
 
-def _r2_error_result(exc: Exception, operation: str) -> str:
+def _client_error_status_and_code(exc: ClientError) -> tuple[int | None, str]:
+    response = exc.response if isinstance(exc.response, Mapping) else {}
+    metadata = response.get("ResponseMetadata", {})
+    error = response.get("Error", {})
+    status = metadata.get("HTTPStatusCode") if isinstance(metadata, Mapping) else None
+    code = str(error.get("Code", "")).strip() if isinstance(error, Mapping) else ""
+    return (
+        status if isinstance(status, int) and not isinstance(status, bool) else None,
+        code,
+    )
+
+
+_R2_MISSING_OBJECT_CODES = {"404", "NoSuchKey", "NotFound"}
+_R2_THROTTLE_CODES = {
+    "SlowDown",
+    "Throttling",
+    "ThrottlingException",
+    "TooManyRequests",
+    "TooManyRequestsException",
+}
+
+
+def _download_client_error_result(exc: ClientError) -> str:
+    status, code = _client_error_status_and_code(exc)
+    if status is None or not 400 <= status <= 599:
+        return "failed"
+    if status == 404:
+        return "not_found" if not code or code in _R2_MISSING_OBJECT_CODES else "failed"
+    if status == 429:
+        return "rate_limited" if not code or code in _R2_THROTTLE_CODES else "failed"
+    if status == 503 and code in _R2_THROTTLE_CODES:
+        return "rate_limited"
+    return "failed"
+
+
+def _r2_error_result(exc: BaseException, operation: str) -> str:
     if isinstance(exc, R2StorageConfigError):
         return "configuration_error"
     original = (
@@ -284,50 +378,29 @@ def _r2_error_result(exc: Exception, operation: str) -> str:
         else exc
     )
     if isinstance(original, ClientError):
-        code = original.response.get("Error", {}).get("Code", "")
-        status = original.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
-        if status == 429 or code in {
-            "SlowDown",
-            "Throttling",
-            "ThrottlingException",
-            "TooManyRequestsException",
-        }:
+        if operation == "r2.object.download":
+            return _download_client_error_result(original)
+        status, code = _client_error_status_and_code(original)
+        if status == 429 and (not code or code in _R2_THROTTLE_CODES):
             return "rate_limited"
-        if operation == "r2.metadata.head" and code in {"404", "NoSuchKey", "NotFound"}:
-            return "not_found"
     if isinstance(original, (ConnectTimeoutError, ReadTimeoutError)):
         return "timed_out"
     return "failed"
 
 
-def _observe_r2_operation(operation: str):
-    def decorate(call):
-        @wraps(call)
-        def observed(*args, **kwargs):
-            try:
-                result = call(*args, **kwargs)
-            except Exception as exc:
-                try:
-                    classification = _r2_error_result(exc, operation)
-                except Exception:  # noqa: BLE001 - observation cannot mask SDK failure.
-                    classification = "failed"
-                record_provider_outcome(operation, classification)
-                raise
-            record_provider_outcome(operation, "succeeded")
-            return result
-
-        return observed
-
-    return decorate
-
-
-@_observe_r2_operation("r2.upload_url.create")
 def create_object_upload_url(
     *,
+    target: R2StorageTarget,
     object_key: str,
     content_type: str,
+    config: R2StorageConfig | None = None,
 ) -> R2ObjectUploadTicket:
-    config = get_r2_storage_config()
+    operation = "r2.upload_url.create"
+    try:
+        config = validate_storage_target(target, config)
+    except R2StorageConfigError:
+        record_provider_outcome(operation, "configuration_error")
+        raise
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=config.upload_url_minutes
     )
@@ -347,22 +420,36 @@ def create_object_upload_url(
             error_detail="Cloudflare R2 could not create an upload URL.",
         )
     except (BotoCoreError, ClientError) as exc:
+        record_provider_outcome(operation, _r2_error_result(exc, operation))
         raise R2StorageError("Cloudflare R2 could not create an upload URL.") from exc
-
-    return R2ObjectUploadTicket(
+    except R2StorageError:
+        record_provider_outcome(operation, "failed")
+        raise
+    ticket = R2ObjectUploadTicket(
         upload_url=upload_url,
         upload_headers={"Content-Type": content_type},
         object_url=build_object_url(object_key, config),
         expires_at=expires_at,
     )
+    record_provider_outcome(operation, "succeeded")
+    return ticket
 
 
-@_observe_r2_operation("r2.read_url.create")
-def create_object_read_url(object_key: str) -> str:
-    config = get_r2_storage_config()
+def create_object_read_url(
+    *,
+    target: R2StorageTarget,
+    object_key: str,
+    config: R2StorageConfig | None = None,
+) -> str:
+    operation = "r2.read_url.create"
+    try:
+        config = validate_storage_target(target, config)
+    except R2StorageConfigError:
+        record_provider_outcome(operation, "configuration_error")
+        raise
 
     try:
-        return _validated_presigned_url(
+        url = _validated_presigned_url(
             get_r2_client(config).generate_presigned_url(
                 "get_object",
                 Params={
@@ -375,38 +462,361 @@ def create_object_read_url(object_key: str) -> str:
             error_detail="Cloudflare R2 could not create a read URL.",
         )
     except (BotoCoreError, ClientError) as exc:
+        record_provider_outcome(operation, _r2_error_result(exc, operation))
         raise R2StorageError("Cloudflare R2 could not create a read URL.") from exc
+    except R2StorageError:
+        record_provider_outcome(operation, "failed")
+        raise
+    record_provider_outcome(operation, "succeeded")
+    return url
 
 
-@_observe_r2_operation("r2.metadata.head")
-def get_object_properties(object_key: str) -> R2ObjectProperties:
-    config = get_r2_storage_config()
-
+def download_object(
+    *,
+    target: R2StorageTarget,
+    object_key: str,
+    expected_size_bytes: int,
+    expected_content_type: str,
+    max_bytes: int,
+    config: R2StorageConfig | None = None,
+) -> R2DownloadedObject:
+    operation = "r2.object.download"
+    body = None
     try:
-        response = get_r2_client(config).head_object(
+        config = validate_storage_target(target, config)
+        response = get_r2_client(config).get_object(
             Bucket=config.bucket_name,
             Key=object_key,
         )
+        if not isinstance(response, Mapping):
+            raise R2StorageError("Cloudflare R2 returned an invalid object response.")
+        response_metadata = response.get("ResponseMetadata")
+        response_status = (
+            response_metadata.get("HTTPStatusCode")
+            if isinstance(response_metadata, Mapping)
+            else None
+        )
+        content_length = response.get("ContentLength")
+        content_type = response.get("ContentType")
+        etag = response.get("ETag")
+        body = response.get("Body")
+        if (
+            isinstance(response_status, bool)
+            or response_status != 200
+            or "Error" in response
+            or isinstance(content_length, bool)
+            or not isinstance(content_length, int)
+            or content_length < 0
+            or (content_type is not None and not isinstance(content_type, str))
+            or (etag is not None and not isinstance(etag, str))
+            or body is None
+            or not callable(getattr(body, "read", None))
+            or not callable(getattr(body, "close", None))
+        ):
+            raise R2StorageError("Cloudflare R2 returned an invalid object response.")
+        if content_length < 1 or content_length > max_bytes:
+            raise ImageUploadMismatchError("Uploaded image size is outside policy.")
+        if content_length != expected_size_bytes:
+            raise ImageUploadMismatchError(
+                "Uploaded image size does not match the request."
+            )
+        if (
+            content_type is not None
+            and content_type.strip().lower() != expected_content_type
+        ):
+            raise ImageUploadMismatchError(
+                "Uploaded image type does not match the request."
+            )
+        content = body.read(max_bytes + 1)
+        if not isinstance(content, bytes):
+            raise R2StorageError("Cloudflare R2 returned an invalid object response.")
+        if len(content) != content_length:
+            raise ImageUploadMismatchError("Uploaded image length is inconsistent.")
+        downloaded = R2DownloadedObject(
+            body=content,
+            content_type=content_type,
+            size_bytes=content_length,
+            etag=etag,
+        )
+    except R2StorageConfigError:
+        record_provider_outcome(operation, "configuration_error")
+        raise
     except ClientError as exc:
-        error_code = str(exc.response.get("Error", {}).get("Code", ""))
-        if error_code in {"404", "NoSuchKey", "NotFound"}:
+        result = _download_client_error_result(exc)
+        if result == "not_found":
+            record_provider_outcome(operation, "not_found")
             raise R2ObjectNotFoundError(
                 "Uploaded object was not found for this venue image."
             ) from exc
+        record_provider_outcome(operation, result)
         raise R2StorageError(
-            "Cloudflare R2 could not verify the uploaded image."
+            "Cloudflare R2 could not read the uploaded image.",
+            result=result,
         ) from exc
     except (ConnectTimeoutError, ReadTimeoutError) as exc:
+        record_provider_outcome(operation, "timed_out")
         raise DependencyReadTimeoutError(
             provider_kind="r2",
-            operation="r2.metadata.head",
+            operation=operation,
         ) from exc
+    except ImageUploadMismatchError:
+        record_provider_outcome(operation, "failed")
+        raise
+    except R2StorageError:
+        record_provider_outcome(operation, "failed")
+        raise
     except BotoCoreError as exc:
+        record_provider_outcome(operation, "failed")
         raise R2StorageError(
-            "Cloudflare R2 could not verify the uploaded image."
+            "Cloudflare R2 could not read the uploaded image."
         ) from exc
+    except Exception as exc:
+        record_provider_outcome(operation, "failed")
+        raise R2StorageError(
+            "Cloudflare R2 could not read the uploaded image."
+        ) from exc
+    except BaseException:
+        # Cancellation and other process-control interruptions remain
+        # interruptions, but an invoked download still owns one final metric.
+        record_provider_outcome(operation, "failed")
+        raise
+    finally:
+        if body is not None and callable(getattr(body, "close", None)):
+            primary_exception = sys.exception()
+            try:
+                body.close()
+            except BaseException as close_exc:
+                if is_cancellation(close_exc) and (
+                    primary_exception is None or not is_cancellation(primary_exception)
+                ):
+                    if primary_exception is None:
+                        record_provider_outcome(operation, "failed")
+                    raise
+                # Ordinary close failures, and secondary close cancellation
+                # while an original cancellation is already propagating, must
+                # not replace the established read outcome.
+    record_provider_outcome(operation, "succeeded")
+    return downloaded
 
-    return _object_properties_from_response(response)
+
+def _mutation_client_error_result(exc: ClientError, *, publication: bool) -> str:
+    status, code = _client_error_status_and_code(exc)
+    collision_codes = {"412", "PreconditionFailed"}
+    if (
+        status is None
+        or not 400 <= status <= 599
+        or status in {408, 409}
+        or status >= 500
+    ):
+        return "unknown_outcome"
+    if publication and status == 412:
+        return "collision" if code == "PreconditionFailed" else "unknown_outcome"
+    if publication and code in collision_codes:
+        return "unknown_outcome"
+    if not publication and status == 404:
+        return (
+            "succeeded"
+            if not code or code in _R2_MISSING_OBJECT_CODES
+            else "unknown_outcome"
+        )
+    if publication and status in {404, 412}:
+        return "unknown_outcome"
+    if not publication and status == 412:
+        return "unknown_outcome"
+    if status == 429:
+        return (
+            "rate_limited"
+            if not code or code in _R2_THROTTLE_CODES
+            else "unknown_outcome"
+        )
+    if code in _R2_THROTTLE_CODES:
+        return "rate_limited"
+    if code in _R2_MISSING_OBJECT_CODES or not code:
+        return "unknown_outcome"
+    if 400 <= status < 500:
+        return "failed"
+    return "unknown_outcome"
+
+
+def publish_object(
+    *,
+    target: R2StorageTarget,
+    object_key: str,
+    body: bytes,
+    content_type: str,
+    config: R2StorageConfig | None = None,
+) -> R2PublishedObject:
+    operation = "r2.object.publish"
+    dispatched = False
+    try:
+        config = validate_storage_target(target, config)
+        client = get_r2_client(config, disable_retries=True)
+        dispatched = True
+        response = client.put_object(
+            Bucket=config.bucket_name,
+            Key=object_key,
+            Body=body,
+            ContentType=content_type,
+            IfNoneMatch="*",
+        )
+        if not isinstance(response, Mapping):
+            raise R2MutationOutcomeUnknownError("Publication outcome is unknown.")
+        response_metadata = response.get("ResponseMetadata")
+        response_status = (
+            response_metadata.get("HTTPStatusCode")
+            if isinstance(response_metadata, Mapping)
+            else None
+        )
+        etag = response.get("ETag")
+        if (
+            isinstance(response_status, bool)
+            or not isinstance(response_status, int)
+            or not 200 <= response_status < 300
+            or "Error" in response
+            or not isinstance(etag, str)
+            or not etag.strip()
+        ):
+            raise R2MutationOutcomeUnknownError("Publication outcome is unknown.")
+    except R2StorageConfigError:
+        record_provider_outcome(operation, "configuration_error")
+        raise
+    except ClientError as exc:
+        if not dispatched:
+            record_provider_outcome(operation, "failed")
+            raise R2StorageError(
+                "Cloudflare R2 could not start image publication.",
+                result="failed",
+            ) from exc
+        result = _mutation_client_error_result(exc, publication=True)
+        if result == "collision":
+            record_provider_outcome(operation, "failed")
+            raise R2PublicationCollisionError(
+                "Publication key already exists."
+            ) from exc
+        record_provider_outcome(operation, result)
+        if result == "rate_limited" or result == "failed":
+            raise R2StorageError(
+                "Cloudflare R2 rejected image publication.",
+                result=result,
+            ) from exc
+        raise R2MutationOutcomeUnknownError("Publication outcome is unknown.") from exc
+    except (ConnectTimeoutError, ReadTimeoutError) as exc:
+        if not dispatched:
+            record_provider_outcome(operation, "failed")
+            raise R2StorageError(
+                "Cloudflare R2 could not start image publication.",
+                result="failed",
+            ) from exc
+        record_provider_outcome(operation, "unknown_outcome")
+        raise DependencyMutationTimeoutUnknownError(
+            provider_kind="r2",
+            operation=operation,
+        ) from exc
+    except R2MutationOutcomeUnknownError:
+        record_provider_outcome(operation, "unknown_outcome")
+        raise
+    except Exception as exc:
+        if dispatched:
+            record_provider_outcome(operation, "unknown_outcome")
+            raise R2MutationOutcomeUnknownError(
+                "Publication outcome is unknown."
+            ) from exc
+        record_provider_outcome(operation, "failed")
+        raise R2StorageError(
+            "Cloudflare R2 could not start image publication.",
+            result="failed",
+        ) from exc
+    except BaseException as exc:
+        if dispatched:
+            record_provider_outcome(operation, "unknown_outcome")
+            if is_cancellation(exc) or not isinstance(exc, Exception):
+                raise
+            raise R2MutationOutcomeUnknownError(
+                "Publication outcome is unknown."
+            ) from exc
+        raise
+    record_provider_outcome(operation, "succeeded")
+    return R2PublishedObject(etag=etag.strip())
+
+
+def delete_object(
+    *,
+    target: R2StorageTarget,
+    object_key: str,
+    config: R2StorageConfig | None = None,
+) -> None:
+    operation = "r2.object.delete"
+    dispatched = False
+    try:
+        config = validate_storage_target(target, config)
+        client = get_r2_client(config)
+        dispatched = True
+        response = client.delete_object(Bucket=config.bucket_name, Key=object_key)
+        if not isinstance(response, Mapping):
+            raise R2MutationOutcomeUnknownError("Deletion outcome is unknown.")
+        metadata = response.get("ResponseMetadata")
+        status = (
+            metadata.get("HTTPStatusCode") if isinstance(metadata, Mapping) else None
+        )
+        if (
+            not isinstance(status, int)
+            or not 200 <= status < 300
+            or "Error" in response
+        ):
+            raise R2MutationOutcomeUnknownError("Deletion outcome is unknown.")
+    except R2StorageConfigError:
+        record_provider_outcome(operation, "configuration_error")
+        raise
+    except ClientError as exc:
+        if not dispatched:
+            record_provider_outcome(operation, "failed")
+            raise R2StorageError(
+                "Cloudflare R2 could not start object deletion.",
+                result="failed",
+            ) from exc
+        result = _mutation_client_error_result(exc, publication=False)
+        if result == "succeeded":
+            record_provider_outcome(operation, "succeeded")
+            return
+        record_provider_outcome(operation, result)
+        if result in {"rate_limited", "failed"}:
+            raise R2StorageError(
+                "Cloudflare R2 rejected object deletion.",
+                result=result,
+            ) from exc
+        raise R2MutationOutcomeUnknownError("Deletion outcome is unknown.") from exc
+    except (ConnectTimeoutError, ReadTimeoutError) as exc:
+        if not dispatched:
+            record_provider_outcome(operation, "failed")
+            raise R2StorageError(
+                "Cloudflare R2 could not start object deletion.",
+                result="failed",
+            ) from exc
+        record_provider_outcome(operation, "unknown_outcome")
+        raise DependencyMutationTimeoutUnknownError(
+            provider_kind="r2",
+            operation=operation,
+        ) from exc
+    except R2MutationOutcomeUnknownError:
+        record_provider_outcome(operation, "unknown_outcome")
+        raise
+    except Exception as exc:
+        if dispatched:
+            record_provider_outcome(operation, "unknown_outcome")
+            raise R2MutationOutcomeUnknownError("Deletion outcome is unknown.") from exc
+        record_provider_outcome(operation, "failed")
+        raise R2StorageError(
+            "Cloudflare R2 could not start object deletion.",
+            result="failed",
+        ) from exc
+    except BaseException as exc:
+        if dispatched:
+            record_provider_outcome(operation, "unknown_outcome")
+            if is_cancellation(exc) or not isinstance(exc, Exception):
+                raise
+            raise R2MutationOutcomeUnknownError("Deletion outcome is unknown.") from exc
+        raise
+    record_provider_outcome(operation, "succeeded")
 
 
 def get_content_type_extension(content_type: str, file_name: str) -> str:

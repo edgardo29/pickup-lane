@@ -64,20 +64,20 @@ def _create_booking_payment_state(
     unique = uuid.uuid4()
     user = User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws05-02-user-{unique}",
+        auth_user_id=f"payment-state-user-{unique}",
         role="player",
-        email=f"ws05-02-user-{unique}@example.invalid",
+        email=f"payment-state-user-{unique}@example.invalid",
         first_name="Payment",
         last_name="State",
         account_status="active",
         hosting_status="eligible",
-        stripe_customer_id=f"cus_ws05_02_{unique}",
+        stripe_customer_id=f"cus_payment_state_machine_{unique}",
     )
     admin = User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws05-02-admin-{unique}",
+        auth_user_id=f"payment-state-admin-{unique}",
         role="admin",
-        email=f"ws05-02-admin-{unique}@example.invalid",
+        email=f"payment-state-admin-{unique}@example.invalid",
         first_name="Payment",
         last_name="Admin",
         account_status="active",
@@ -88,7 +88,7 @@ def _create_booking_payment_state(
 
     venue = Venue(
         id=uuid.uuid4(),
-        name="WS05-02 State Field",
+        name="Payment State Field",
         address_line_1="502 State Machine Way",
         city="Austin",
         state="TX",
@@ -111,7 +111,7 @@ def _create_booking_payment_state(
         game_status="active",
         public_visibility_status="visible",
         join_enforcement_status="open",
-        title="WS05-02 State Machine Game",
+        title="Payment State Machine Game",
         venue_id=venue.id,
         venue_name_snapshot=venue.name,
         address_snapshot=venue.address_line_1,
@@ -182,10 +182,10 @@ def _create_booking_payment_state(
         game_id=game.id,
         payment_type="booking",
         provider="stripe",
-        provider_payment_intent_id=f"pi_ws05_02_{unique}",
+        provider_payment_intent_id=f"pi_payment_state_machine_{unique}",
         provider_customer_id=user.stripe_customer_id,
         provider_status=provider_status,
-        idempotency_key=f"ws05-02-payment-{unique}",
+        idempotency_key=f"payment-state-payment-{unique}",
         creation_fingerprint=unique.hex + unique.hex,
         amount_cents=1600,
         currency="USD",
@@ -480,10 +480,10 @@ def test_stored_webhook_read_timeout_expires_stale_hold_and_keeps_event_pending(
             id=uuid.uuid4(),
             payment_id=None,
             provider="stripe",
-            provider_event_id=f"evt_ws05_timeout_{uuid.uuid4()}",
+            provider_event_id=f"evt_payment_timeout_{uuid.uuid4()}",
             event_type="payment_intent.processing",
             event_envelope={
-                "id": f"evt_ws05_timeout_{uuid.uuid4()}",
+                "id": f"evt_payment_timeout_{uuid.uuid4()}",
                 "type": "payment_intent.processing",
                 "created": int(expires_at.timestamp()),
                 "data": {
@@ -669,7 +669,7 @@ def test_duplicate_webhook_persists_one_event_and_one_internal_job() -> None:
         record_and_process_stripe_webhook_event,
     )
 
-    event_id = f"evt_ws05_02_{uuid.uuid4()}"
+    event_id = f"evt_payment_state_machine_{uuid.uuid4()}"
     event_payload = {
         "id": event_id,
         "type": "payment_intent.processing",
@@ -700,14 +700,14 @@ def test_payment_method_reconcile_leaves_final_state_for_job_transaction(
     with _session() as db:
         user = User(
             id=uuid.uuid4(),
-            auth_user_id=f"ws05-02-operation-user-{unique}",
+            auth_user_id=f"payment-state-operation-user-{unique}",
             role="player",
-            email=f"ws05-02-operation-user-{unique}@example.invalid",
+            email=f"payment-state-operation-user-{unique}@example.invalid",
             first_name="Durable",
             last_name="Operation",
             account_status="active",
             hosting_status="eligible",
-            stripe_customer_id=f"cus_ws05_02_operation_{unique}",
+            stripe_customer_id=f"cus_payment_state_machine_operation_{unique}",
         )
         operation = PaymentMethodOperation(
             id=uuid.uuid4(),
@@ -729,7 +729,7 @@ def test_payment_method_reconcile_leaves_final_state_for_job_transaction(
             payment_method_service,
             "create_setup_intent",
             lambda **kwargs: StripeSetupIntentResult(
-                id="seti_ws05_02_recovered",
+                id="seti_payment_state_machine_recovered",
                 client_secret=None,
                 status="requires_payment_method",
                 customer_id=kwargs["customer_id"],
@@ -763,7 +763,7 @@ def test_payment_method_reconcile_leaves_final_state_for_job_transaction(
         with _session() as observer:
             resolved = observer.get(PaymentMethodOperation, operation.id)
             assert resolved.status == "succeeded"
-            assert resolved.provider_object_id == "seti_ws05_02_recovered"
+            assert resolved.provider_object_id == "seti_payment_state_machine_recovered"
 
 
 @pytest.mark.pass_provenance('WS05-02')
@@ -795,8 +795,8 @@ def test_paid_waitlist_reverifies_saved_method_before_any_charge(
             id=uuid.uuid4(),
             user_id=user.id,
             stripe_customer_id=user.stripe_customer_id,
-            stripe_payment_method_id=f"pm_ws05_02_waitlist_{state.user_id}",
-            card_fingerprint=f"fp_ws05_02_waitlist_{state.user_id}",
+            stripe_payment_method_id=f"pm_payment_state_machine_waitlist_{state.user_id}",
+            card_fingerprint=f"fp_payment_state_machine_waitlist_{state.user_id}",
             card_brand="visa",
             card_last4="4242",
             exp_month=12,
@@ -936,8 +936,8 @@ def test_paid_waitlist_requires_action_fails_promotion_without_browser_wait() ->
             id=uuid.uuid4(),
             user_id=state.user_id,
             stripe_customer_id=payment.provider_customer_id,
-            stripe_payment_method_id="pm_ws05_requires_action",
-            card_fingerprint=f"fp_ws05_requires_action_{state.user_id}",
+            stripe_payment_method_id="pm_payment_requires_action",
+            card_fingerprint=f"fp_payment_requires_action_{state.user_id}",
             card_brand="visa",
             card_last4="4242",
             exp_month=12,
@@ -1022,7 +1022,7 @@ def test_paid_waitlist_unresolved_provider_states_preserve_truth_without_failure
             db,
             state,
             now=now,
-            provider_payment_method_id=f"pm_ws05_{provider_status}_{state.user_id}",
+            provider_payment_method_id=f"pm_payment_state_machine_{provider_status}_{state.user_id}",
         )
 
         assert (
@@ -1088,8 +1088,8 @@ def test_paid_waitlist_confirmation_uses_fresh_database_time_after_provider_call
             id=uuid.uuid4(),
             user_id=user.id,
             stripe_customer_id=user.stripe_customer_id,
-            stripe_payment_method_id=f"pm_ws05_waitlist_stale_{state.user_id}",
-            card_fingerprint=f"fp_ws05_waitlist_stale_{state.user_id}",
+            stripe_payment_method_id=f"pm_waitlist_stale_payment_{state.user_id}",
+            card_fingerprint=f"fp_waitlist_stale_payment_{state.user_id}",
             card_brand="visa",
             card_last4="4242",
             exp_month=12,
@@ -1136,7 +1136,7 @@ def test_paid_waitlist_confirmation_uses_fresh_database_time_after_provider_call
         def create_waitlist_payment_intent(**kwargs):
             created_metadata.update(kwargs["metadata"])
             return StripePaymentIntentResult(
-                id=f"pi_ws05_waitlist_stale_{state.booking_id.hex}",
+                id=f"pi_waitlist_stale_payment_{state.booking_id.hex}",
                 client_secret=None,
                 status="requires_confirmation",
                 latest_charge_id=None,
@@ -1279,8 +1279,8 @@ def test_checkout_confirmation_uses_fresh_database_time_after_provider_call(
             id=uuid.uuid4(),
             user_id=state.user_id,
             stripe_customer_id=payment.provider_customer_id,
-            stripe_payment_method_id=f"pm_ws05_checkout_confirm_{state.user_id}",
-            card_fingerprint=f"fp_ws05_checkout_confirm_{state.user_id}",
+            stripe_payment_method_id=f"pm_checkout_confirmation_{state.user_id}",
+            card_fingerprint=f"fp_checkout_confirmation_{state.user_id}",
             card_brand="visa",
             card_last4="4242",
             exp_month=12,
@@ -1347,7 +1347,7 @@ def test_checkout_confirmation_uses_fresh_database_time_after_provider_call(
             party_size=1,
             subtotal_cents=1600,
             now=now,
-            provider_verified_payment_method_id=payment_method.id,
+            stripe_verified_payment_method_id=payment_method.id,
         )
 
         payment = db.get(Payment, state.payment_id)
@@ -1379,21 +1379,21 @@ def _create_saved_payment_method_pair(
     unique = uuid.uuid4()
     user = User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws05-02-card-user-{unique}",
+        auth_user_id=f"payment-state-card-user-{unique}",
         role="player",
-        email=f"ws05-02-card-user-{unique}@example.invalid",
+        email=f"payment-state-card-user-{unique}@example.invalid",
         first_name="Saved",
         last_name="Card",
         account_status="active",
         hosting_status="eligible",
-        stripe_customer_id=f"cus_ws05_02_card_{unique}",
+        stripe_customer_id=f"cus_payment_state_machine_card_{unique}",
     )
     default_method = UserPaymentMethod(
         id=uuid.uuid4(),
         user_id=user.id,
         stripe_customer_id=user.stripe_customer_id,
-        stripe_payment_method_id=f"pm_ws05_default_{unique}",
-        card_fingerprint=f"fp_ws05_default_{unique}",
+        stripe_payment_method_id=f"pm_default_payment_method_{unique}",
+        card_fingerprint=f"fp_default_payment_method_{unique}",
         card_brand="visa",
         card_last4="4242",
         exp_month=12,
@@ -1407,8 +1407,8 @@ def _create_saved_payment_method_pair(
         id=uuid.uuid4(),
         user_id=user.id,
         stripe_customer_id=user.stripe_customer_id,
-        stripe_payment_method_id=f"pm_ws05_secondary_{unique}",
-        card_fingerprint=f"fp_ws05_secondary_{unique}",
+        stripe_payment_method_id=f"pm_secondary_payment_method_{unique}",
+        card_fingerprint=f"fp_secondary_payment_method_{unique}",
         card_brand="visa",
         card_last4="1881",
         exp_month=12,

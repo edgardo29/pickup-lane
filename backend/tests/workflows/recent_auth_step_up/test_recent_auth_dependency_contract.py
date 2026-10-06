@@ -14,14 +14,14 @@ pytestmark = [
 ]
 
 
-def _install_provider_identity(
+def _install_firebase_identity(
     monkeypatch: pytest.MonkeyPatch,
     *,
     uid: str,
     email: str,
     auth_time: int | None,
 ) -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     payload: dict[str, object] = {
         "uid": uid,
@@ -88,7 +88,7 @@ def _assert_recent_auth_required_response(response) -> None:
         "popup",
         "oauth",
         "credential",
-        "provider exception",
+        "Firebase exception",
         "Traceback",
         "verify_firebase_token",
     ):
@@ -108,12 +108,12 @@ def _install_admin_and_community_cancel_sentinel(
     admin_uid: str,
     admin_email: str,
 ) -> list[dict[str, object]]:
-    import backend.routes.admin_community_routes as admin_community_routes
-    import backend.services.auth_service as auth_service
+    from backend.routes import admin_community_routes
     from backend.schemas import (
         AdminCommunityGameEnforcementActionResultRead,
         AdminCommunityGameEnforcementStateRead,
     )
+    from backend.services import auth_service
 
     calls: list[dict[str, object]] = []
     active_admin = _active_admin_user(uid=admin_uid, email=admin_email)
@@ -156,9 +156,9 @@ def _install_admin_and_need_a_sub_remove_sentinel(
     admin_uid: str,
     admin_email: str,
 ) -> list[dict[str, object]]:
-    import backend.routes.admin_need_a_sub_routes as admin_need_a_sub_routes
-    import backend.services.auth_service as auth_service
+    from backend.routes import admin_need_a_sub_routes
     from backend.schemas import AdminNeedASubEnforcementActionResultRead
+    from backend.services import auth_service
 
     calls: list[dict[str, object]] = []
     active_admin = _active_admin_user(uid=admin_uid, email=admin_email)
@@ -194,7 +194,7 @@ def _install_admin_and_need_a_sub_remove_sentinel(
 @pytest.mark.no_db_cleanup
 @pytest.mark.pass_provenance('WS03-03A')
 def test_recent_auth_dependencies_layer_on_existing_identity_account_and_admin_guards() -> None:
-    import backend.services.auth_service as auth_service
+    from backend.services import auth_service
 
     recent_identity = _dependency_default(
         auth_service.require_recent_authentication,
@@ -310,7 +310,7 @@ def test_recent_auth_denial_returns_safe_public_403_before_self_delete_side_effe
     stale_auth_time = int(
         (datetime.now(timezone.utc) - timedelta(minutes=6)).timestamp()
     )
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid="recent-auth-denial",
         email="recent-auth-denial@example.invalid",
@@ -346,7 +346,7 @@ def test_recent_auth_denial_returns_safe_public_403_before_self_delete_side_effe
         "popup",
         "oauth",
         "credential",
-        "provider exception",
+        "Firebase exception",
         "Traceback",
         "verify_firebase_token",
         str(stale_auth_time),
@@ -370,7 +370,7 @@ def test_admin_community_cancel_rejects_missing_or_stale_recent_auth_before_serv
     stale_auth_time = int(
         (datetime.now(timezone.utc) - timedelta(minutes=6)).timestamp()
     )
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid=admin_uid,
         email=admin_email,
@@ -408,7 +408,7 @@ def test_admin_community_cancel_with_fresh_recent_auth_reaches_route_workflow_se
 
     admin_uid = "fresh-community-cancel-admin"
     admin_email = "fresh-community-cancel-admin@example.invalid"
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid=admin_uid,
         email=admin_email,
@@ -461,7 +461,7 @@ def test_admin_need_a_sub_remove_rejects_missing_or_stale_recent_auth_before_ser
     stale_auth_time = int(
         (datetime.now(timezone.utc) - timedelta(minutes=6)).timestamp()
     )
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid=admin_uid,
         email=admin_email,
@@ -499,7 +499,7 @@ def test_admin_need_a_sub_remove_with_fresh_recent_auth_reaches_route_workflow_s
 
     admin_uid = "fresh-need-a-sub-remove-admin"
     admin_email = "fresh-need-a-sub-remove-admin@example.invalid"
-    _install_provider_identity(
+    _install_firebase_identity(
         monkeypatch,
         uid=admin_uid,
         email=admin_email,

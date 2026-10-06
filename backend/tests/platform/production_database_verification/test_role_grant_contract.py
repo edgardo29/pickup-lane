@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -19,8 +19,8 @@ pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CONTRACT_PATH = (
-    "docs/production-readiness/planning/passes/ws04/"
-    "ws04-01c-production-database-evidence-contract.json"
+    "docs/production-readiness/governance/"
+    "production-database-verification-contract.json"
 )
 
 
@@ -32,9 +32,9 @@ def _source_metadata() -> dict[str, str]:
     return {
         "source_type": "synthetic test fixture",
         "date_collected": "2026-08-24",
-        "reviewer": "ws04-01c-test",
+        "reviewer": "production-database-test",
         "purpose": "prove deterministic role/grant validator behavior",
-        "supported_control_or_pass": "WS04-01C",
+        "supported_control": "production_database_verification",
         "sanitized_evidence_reference": "synthetic-test-only",
     }
 

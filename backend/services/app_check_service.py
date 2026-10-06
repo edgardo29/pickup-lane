@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Mapping
 
 from backend.firebase_admin_client import (
-    FirebaseAppCheckUnavailableError,
     FirebaseAdminConfigError,
+    FirebaseAppCheckUnavailableError,
     verify_firebase_app_check_token,
 )
 from backend.observability.timeouts import DependencyReadTimeoutError
 from backend.settings import BackendSettings
-
 
 APP_CHECK_HEADER_NAME = "X-Firebase-AppCheck"
 
@@ -22,7 +21,7 @@ class AppCheckVerificationOutcome(str, Enum):
     VALID = "valid"
     MISSING = "missing"
     INVALID = "invalid"
-    PROVIDER_UNAVAILABLE = "provider_unavailable"
+    FIREBASE_UNAVAILABLE = "firebase_unavailable"
 
 
 @dataclass(frozen=True)
@@ -41,20 +40,20 @@ def verify_app_check_token(
     expected_app_id = settings.firebase_app_check_app_id
     if not expected_app_id:
         return AppCheckVerificationResult(
-            AppCheckVerificationOutcome.PROVIDER_UNAVAILABLE
+            AppCheckVerificationOutcome.FIREBASE_UNAVAILABLE
         )
 
     try:
         verified_claims = verify_firebase_app_check_token(token)
     except FirebaseAdminConfigError:
         return AppCheckVerificationResult(
-            AppCheckVerificationOutcome.PROVIDER_UNAVAILABLE
+            AppCheckVerificationOutcome.FIREBASE_UNAVAILABLE
         )
     except ValueError:
         return AppCheckVerificationResult(AppCheckVerificationOutcome.INVALID)
     except (DependencyReadTimeoutError, FirebaseAppCheckUnavailableError):
         return AppCheckVerificationResult(
-            AppCheckVerificationOutcome.PROVIDER_UNAVAILABLE
+            AppCheckVerificationOutcome.FIREBASE_UNAVAILABLE
         )
 
     verified_app_id = verified_claims.get("app_id")

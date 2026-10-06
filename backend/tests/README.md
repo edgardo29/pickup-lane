@@ -20,40 +20,55 @@ backend/.venv/bin/python -m backend.test_runner test ordinary \
   backend/tests/platform/settings -q
 
 backend/.venv/bin/python -m backend.test_runner test migration \
-  backend/tests/migrations/migration_policy_compatibility_rehearsal -q
+  backend/tests/migrations -q
 
 backend/.venv/bin/python -m backend.test_runner test ordinary \
-  backend/tests --collect-only -q
+  backend/tests/domains backend/tests/workflows backend/tests/platform \
+  backend/tests/migrations --collect-only -q
+
+backend/.venv/bin/python -m backend.test_runner test ordinary \
+  backend/tests/domains backend/tests/workflows backend/tests/platform -q
 ```
 
 The first argument after `ordinary` or `migration` must be an existing path
 under `backend/tests`. Additional test selections must stay under that tree.
 Pytest options follow the first selection. The runner rejects options,
 configuration, plugins, and environment overrides that could bypass the root
-safety fixtures.
+safety fixtures. `--basetemp`, `--debug`, and `--pastebin` are prohibited.
+JUnit XML and pytest log output must use a file below the ignored
+`backend/.test-artifacts/` directory.
 
 ## Behavior Ownership
 
-Directory placement describes the behavior a test owns. It does not certify a
-test or give it a different level of authority.
+Directory placement describes the behavior a test owns. It does not establish
+that a test is correct or useful.
 
 - `domains/` owns stable business and domain invariants.
-- `workflows/` owns cross-domain behavior whose integration is the contract.
+- `workflows/` owns cross-domain behavior whose integration is the behavior
+  under test.
 - `platform/` owns global backend, API, framework, security, and test-runner
   behavior.
 - `migrations/` owns Alembic, schema-history, graph, drift, and lifecycle
   behavior.
 - `support/` owns reusable test infrastructure only.
-- Provider-contract coverage, when applicable, must be explicitly separated
-  and designed around safe emulator, sandbox, test-mode, or dedicated test
-  resources.
+- `provider_contract/` owns separately runnable external-service/provider-contract
+  compatibility verification designed around safe emulator, sandbox, test-mode,
+  or dedicated test resources.
 
 Create or move tests according to the behavior under test, not merely the route
 or page that first exposed a defect. Do not create placeholder directories.
 
-`legacy/` is excluded from default collection. Its tests require individual
-assessment before reuse or reactivation; their location alone does not establish
-whether they are correct, obsolete, or useful.
+All maintained backend tests belong in one of the active roots above. The former
+`legacy/` archive was assessed file by file: useful missing coverage was migrated
+to its behavior owner, redundant coverage was confirmed against active tests,
+and obsolete infrastructure was retired. Do not recreate a second excluded test
+tree; evaluate and place every new regression in the active structure.
+
+The canonical active-suite selection is explicit: ordinary execution owns
+`domains`, `workflows`, and `platform`; migration execution owns `migrations`.
+Complete collection selects all four roots through the guarded ordinary runner.
+The isolated R2 compatibility check remains separately runnable and is never folded into
+ordinary or migration execution.
 
 ## Database Safety And Isolation
 
@@ -71,8 +86,8 @@ to match the current migration source before pytest starts.
 
 Root fixtures in `backend/tests/conftest.py` validate the ordinary database,
 check cleanup-table inventory completeness, clean application tables before and
-after database-using tests, clear dependency overrides, and install the
-network/provider guard.
+after database-using tests, clear dependency overrides, and install the network
+and external-service guard.
 
 Tests that genuinely must not open or clean the ordinary application database
 use `pytest.mark.no_db_cleanup`. Migration-owned lifecycle tests use
@@ -92,16 +107,50 @@ Current support responsibilities include environment and database validation,
 migration inspection and lifecycle support, production-database target
 rejection, artifact sanitization, and genuinely reusable behavioral fixtures.
 
-## Network And Provider Isolation
+The runner and test-owned subprocesses use a minimal allowlisted environment
+with synthetic application settings. Ambient external-service credentials, pytest
+options, and unrelated secrets are not inherited. A test that starts a child
+process must build its environment with
+`isolated_test_subprocess_environment`; an inline Python child must also install
+`install_test_network_guard` before importing application code.
+
+## Network And External-Service Isolation
 
 Ordinary tests block uncontrolled external network access. The configured local
-PostgreSQL test endpoint is allowed; provider and arbitrary external endpoints
-are not. Mock or fake provider boundaries for ordinary tests.
+PostgreSQL test endpoint is allowed; external-service and arbitrary external
+endpoints are not. Mock or fake external-service boundaries for ordinary tests.
 
-Tests that intentionally contact a real provider require an explicitly safe
+Tests that intentionally contact a real external service require an explicitly safe
 execution design and non-production resources such as a sandbox, emulator,
 test-mode account, or dedicated disposable resource. They must never rely on
 production credentials, data, or infrastructure.
+
+The Cloudflare R2 object-semantics check is the sole current
+external-network mode. It
+is database-free, accepts only `backend/tests/provider_contract/r2`, and permits
+network access only to the exact validated HTTPS endpoint for
+`R2_TEST_ACCOUNT_ID`. It requires all five `R2_TEST_*` values documented in
+`backend/.env.example`, and its bucket must differ from `R2_BUCKET_NAME` when
+that application bucket is configured. Run it separately:
+
+```bash
+backend/.venv/bin/python -m backend.test_runner test provider_contract \
+  backend/tests/provider_contract/r2 -q
+```
+
+Missing isolated configuration is a failed prerequisite, not a skipped or
+passing R2 verification. Ordinary and migration modes continue to block R2.
+
+Each R2 compatibility run owns only three exact keys below its unique
+`provider-contract/r2-object-semantics/{run_id}/` prefix. It attempts all three
+idempotent deletions without listing the bucket. A cleanup-only failure fails
+the R2 verification; when the verification has already failed, cleanup failure
+is attached to that original failure rather than replacing it. The team
+responsible for Storage and Cloudflare R2 owns lifecycle expiry and manual
+removal of objects abandoned by process termination or an unavailable R2
+service. Application venue-image reconciliation does not own this isolated test
+bucket, and the R2 test token does not need listing or lifecycle-administration
+permission.
 
 ## Migration Tests
 
@@ -114,13 +163,13 @@ Use:
 
 ```bash
 backend/.venv/bin/python -m backend.test_runner test migration \
-  backend/tests/migrations/migration_policy_compatibility_rehearsal -q
+  backend/tests/migrations -q
 ```
 
 ## Artifact And Output Safety
 
 Runner output and captured artifacts must not expose database credentials,
-provider secrets, tokens, or other sensitive values. Artifact sanitization is
+external-service secrets, tokens, or other sensitive values. Artifact sanitization is
 owned by `backend/tests/support/artifacts.py` and direct tests under
 `backend/tests/platform/backend_test_runner/`.
 

@@ -44,7 +44,7 @@ from backend.services.game_service import (
 from backend.services.payment_job_service import enqueue_payment_reconcile_job
 from backend.services.payment_lifecycle_policy import canonical_fingerprint
 from backend.services.payment_method_service import (
-    apply_provider_verified_saved_payment_method,
+    apply_stripe_verified_saved_payment_method,
     is_saved_payment_method_expired,
 )
 from backend.services.stripe_service import (
@@ -655,7 +655,7 @@ def attempt_paid_waitlist_auto_promotion(
         return "failed", 0
 
     try:
-        apply_provider_verified_saved_payment_method(
+        apply_stripe_verified_saved_payment_method(
             db,
             authorized_payment_method,
             buyer_user,

@@ -52,7 +52,7 @@ class VenueImageRead(BaseModel):
     id: UUID
     venue_id: UUID
     uploaded_by_user_id: UUID | None
-    image_url: str
+    image_url: str | None
     storage_provider: str
     storage_object_key: str
     storage_bucket: str

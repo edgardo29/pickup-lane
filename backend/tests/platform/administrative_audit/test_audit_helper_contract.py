@@ -24,7 +24,6 @@ from backend.observability.structured_logging import (
 from backend.schemas.admin_action_schema import AdminActionNoteCreate
 
 
-
 def _session():
     from backend.database import SessionLocal
 
@@ -46,9 +45,9 @@ def _user(
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws09-02a-helper-{label}-{unique}",
+        auth_user_id=f"admin-audit-helper-{label}-{unique}",
         role=role,
-        email=f"ws09-02a-helper-{label}-{unique}@example.invalid",
+        email=f"admin-audit-helper-{label}-{unique}@example.invalid",
         first_name="Audit",
         last_name=label,
         account_status=account_status,

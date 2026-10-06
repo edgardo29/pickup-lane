@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import HTTPException
@@ -10,8 +11,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.schemas.platform_notice_schema import PlatformNoticeCancel, PlatformNoticeCreate
+from backend.schemas.platform_notice_schema import (
+    PlatformNoticeCancel,
+    PlatformNoticeCreate,
+)
 
+if TYPE_CHECKING:
+    from backend.models import User
 
 
 def _count(db: Session, model: type[object]) -> int:
@@ -29,10 +35,10 @@ def _user(index: int, *, role: str = "player", account_status: str = "active") -
 
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04b1-user-{index}-{uuid.uuid4()}",
+        auth_user_id=f"source-boundary-user-{index}-{uuid.uuid4()}",
         role=role,
-        email=f"ws02-04b1-user-{index}-{uuid.uuid4()}@example.invalid",
-        first_name="WS02",
+        email=f"source-boundary-user-{index}-{uuid.uuid4()}@example.invalid",
+        first_name="Boundary",
         last_name=f"B1-{index}",
         account_status=account_status,
         hosting_status="eligible",
@@ -64,7 +70,10 @@ def _client_overrides(
     db: Session,
 ) -> Iterator[None]:
     from backend.database import get_db
-    from backend.services.auth_service import require_active_admin, require_recent_active_admin
+    from backend.services.auth_service import (
+        require_active_admin,
+        require_recent_active_admin,
+    )
 
     def override_db() -> Iterator[Session]:
         yield db
@@ -80,7 +89,12 @@ def _client_overrides(
 
 @pytest.mark.pass_provenance('WS02-04B1')
 def test_selected_notice_accepts_500_unique_users_and_dedupes_before_cap() -> None:
-    from backend.models import AdminAction, Notification, PlatformNotice, PlatformNoticeRecipient
+    from backend.models import (
+        AdminAction,
+        Notification,
+        PlatformNotice,
+        PlatformNoticeRecipient,
+    )
     from backend.services import platform_notice_service
 
     with _session() as db:
@@ -107,7 +121,12 @@ def test_selected_notice_accepts_500_unique_users_and_dedupes_before_cap() -> No
 
 @pytest.mark.pass_provenance('WS02-04B1')
 def test_selected_notice_rejects_501_unique_users_before_partial_state() -> None:
-    from backend.models import AdminAction, Notification, PlatformNotice, PlatformNoticeRecipient
+    from backend.models import (
+        AdminAction,
+        Notification,
+        PlatformNotice,
+        PlatformNoticeRecipient,
+    )
     from backend.services import platform_notice_service
 
     with _session() as db:
@@ -146,7 +165,12 @@ def test_missing_or_ineligible_selected_user_rejects_before_notice_persistence(
     selected_user_status: str | None,
     expected_code: str,
 ) -> None:
-    from backend.models import AdminAction, Notification, PlatformNotice, PlatformNoticeRecipient
+    from backend.models import (
+        AdminAction,
+        Notification,
+        PlatformNotice,
+        PlatformNoticeRecipient,
+    )
     from backend.services import platform_notice_service
 
     with _session() as db:
@@ -259,7 +283,7 @@ def test_notice_history_and_recipient_page_limits_are_bounded() -> None:
 
 
 @pytest.mark.pass_provenance('WS02-04B1')
-def test_recipient_route_bounds_cursor_and_preserves_ws02_04a_validation_behavior(
+def test_recipient_route_bounds_cursor_and_preserves_validation_behavior(
     client: TestClient,
 ) -> None:
     from backend.services import platform_notice_service

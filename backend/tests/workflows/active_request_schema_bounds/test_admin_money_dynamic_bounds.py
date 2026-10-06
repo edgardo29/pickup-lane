@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import HTTPException
@@ -9,8 +10,12 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.schemas.admin_money_financial_outcome_schema import AdminMoneyFinancialOutcomeCreate
+from backend.schemas.admin_money_financial_outcome_schema import (
+    AdminMoneyFinancialOutcomeCreate,
+)
 
+if TYPE_CHECKING:
+    from backend.models import Game, HostPublishFee, User, Venue
 
 _STARTS_AT = datetime(2035, 1, 15, 18, 0, tzinfo=timezone.utc)
 _ENDS_AT = datetime(2035, 1, 15, 20, 0, tzinfo=timezone.utc)
@@ -32,9 +37,9 @@ def _user(role: str = "player") -> User:
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04b2a2a-user-{unique}",
+        auth_user_id=f"request-schema-user-{unique}",
         role=role,
-        email=f"ws02-04b2a2a-{unique}@example.invalid",
+        email=f"request-schema-{unique}@example.invalid",
         first_name="A2A",
         last_name="Money",
         account_status="active",

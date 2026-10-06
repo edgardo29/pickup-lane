@@ -1,4 +1,4 @@
-"""Pure WS05-02 payment, reservation, and provider identity policy."""
+"""Payment, reservation, and Stripe identity policy."""
 
 from __future__ import annotations
 

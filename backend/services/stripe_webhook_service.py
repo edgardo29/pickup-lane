@@ -718,7 +718,7 @@ def lock_booking_payment_domain_by_booking_id(
 
 def get_payment_domain_lock_state(db: Session) -> dict[str, Any]:
     transaction = db.get_transaction()
-    state = db.info.get("ws05_02_payment_domain_lock_state")
+    state = db.info.get("stripe_payment_domain_lock_state")
     if state is None or state["transaction"] is not transaction:
         state = {
             "transaction": transaction,
@@ -728,7 +728,7 @@ def get_payment_domain_lock_state(db: Session) -> dict[str, Any]:
             "waitlist_ids": set(),
             "participant_booking_ids": set(),
         }
-        db.info["ws05_02_payment_domain_lock_state"] = state
+        db.info["stripe_payment_domain_lock_state"] = state
     return state
 
 
@@ -1859,7 +1859,7 @@ def apply_payment_intent_processing(
     )
     normalized_status = normalize_provider_payment_status(exact_provider_status)
     if not provider_observation_can_advance(payment.payment_status, normalized_status):
-        mark_event_ignored(event, "Provider observation would regress payment state.")
+        mark_event_ignored(event, "Stripe observation would regress payment state.")
         return
     payment.provider_status = exact_provider_status
     payment.payment_status = normalized_status
@@ -1906,7 +1906,7 @@ def apply_payment_intent_pending_observation(
         mark_event_failed(event, "PaymentIntent has an invalid pending status.")
         return
     if not provider_observation_can_advance(payment.payment_status, observed_status):
-        mark_event_ignored(event, "Provider observation would regress payment state.")
+        mark_event_ignored(event, "Stripe observation would regress payment state.")
         return
     expire_unresolved_checkout_hold_if_stale(db, booking, now)
     booking = get_locked_booking(db, payment.booking_id)
@@ -1927,7 +1927,7 @@ def apply_payment_intent_pending_observation(
         if game is None or not booking_participants:
             mark_event_failed(
                 event,
-                "Waitlist auto-promotion state is missing for provider failure.",
+                "Waitlist auto-promotion state is missing for Stripe failure.",
             )
             return
         from backend.services.game_waitlist_service import (

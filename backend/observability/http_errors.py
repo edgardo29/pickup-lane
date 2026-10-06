@@ -1,4 +1,4 @@
-"""FastAPI error normalization using the EN-02 public error primitives."""
+"""FastAPI error normalization using the shared public error primitives."""
 
 from __future__ import annotations
 
@@ -247,7 +247,7 @@ async def handle_unexpected_exception(
     request: Request,
     exc: Exception,
 ) -> JSONResponse:
-    """Hide unhandled exception details behind the EN-02 public descriptor."""
+    """Hide unhandled exception details behind the safe public descriptor."""
 
     logging_state = _request_logging_state(request)
     correlation_id = (

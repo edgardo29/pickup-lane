@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -13,8 +13,8 @@ from backend.tests.support.production_database_verification import (
     FINAL_ROLE_EVIDENCE_CHECKS,
     MUTABLE_CAPACITY_INPUT_FIELDS,
     MUTABLE_CAPACITY_REQUIREMENTS,
-    REQUIRED_METADATA_FIELDS,
     REQUIRED_LIMIT_BASIS_FIELDS,
+    REQUIRED_METADATA_FIELDS,
     RUNTIME_TOPOLOGY_FIELDS,
     calculate_connection_budget,
     detect_sensitive_values,
@@ -25,8 +25,8 @@ pytestmark = pytest.mark.no_db_cleanup
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CONTRACT_PATH = (
-    "docs/production-readiness/planning/passes/ws04/"
-    "ws04-01c-production-database-evidence-contract.json"
+    "docs/production-readiness/governance/"
+    "production-database-verification-contract.json"
 )
 
 
@@ -38,9 +38,9 @@ def _source_metadata() -> dict[str, str]:
     return {
         "source_type": "synthetic test fixture",
         "date_collected": "2026-08-24",
-        "reviewer": "ws04-01c-test",
+        "reviewer": "production-database-test",
         "purpose": "prove deterministic final-state validator behavior",
-        "supported_control_or_pass": "WS04-01C",
+        "supported_control": "production_database_verification",
         "sanitized_evidence_reference": "synthetic-test-only",
     }
 
@@ -80,16 +80,16 @@ def _verified_role(alias: str) -> dict:
     }
 
 
-def _final_d_contract() -> dict:
+def _final_production_contract() -> dict:
     contract = _load_contract()
-    contract["contract_state"] = "ws04_01d_final_evidence"
+    contract["contract_state"] = "final_production_evidence"
 
     for field in FINAL_METADATA_VALUE_FIELDS:
         contract["metadata"][field] = _verified_metadata(f"synthetic {field}")
     contract["metadata"]["supported_controls"] = _verified_metadata(
         ["DB-002", "DB-015", "GOV-006", "OPS-025"]
     )
-    contract["metadata"]["supported_passes"] = _verified_metadata(
+    contract["metadata"]["historical_provenance"] = _verified_metadata(
         ["WS04-01C", "WS04-01D"]
     )
     contract["metadata"]["open_gaps"] = _verified_metadata([])
@@ -158,7 +158,7 @@ def _final_d_contract() -> dict:
             "API correlation",
             "job correlation when jobs exist",
         ],
-        "dashboard_alert_owner": "WS09",
+        "dashboard_alert_owner": "observability_and_reliability_owner",
         "evidence": _source_metadata(),
     }
 
@@ -178,14 +178,14 @@ def _final_d_contract() -> dict:
 
 
 @pytest.mark.pass_provenance('WS04-01C')
-def test_ws04_01c_contract_is_complete_sanitized_and_provider_neutral() -> None:
+def test_production_database_contract_is_complete_sanitized_and_provider_neutral() -> None:
     contract = _load_contract()
 
     assert validate_evidence_contract(contract) == []
     assert set(REQUIRED_METADATA_FIELDS) <= set(contract["metadata"])
     assert set(RUNTIME_TOPOLOGY_FIELDS) <= set(contract["topology_contract"])
-    assert contract["owning_pass"] == "WS04-01C"
-    assert contract["future_population_owner"] == "WS04-01D"
+    assert contract["contract_owner"] == "production_database_verification"
+    assert contract["final_evidence_owner"] == "final_production_database_verification"
     assert contract["metadata"]["supported_controls"]["value"] == [
         "DB-002",
         "DB-015",
@@ -205,15 +205,15 @@ def test_ws04_01c_contract_is_complete_sanitized_and_provider_neutral() -> None:
 
 
 @pytest.mark.pass_provenance('WS04-01C')
-def test_deferred_c_template_does_not_populate_final_provider_or_budget_values() -> None:
+def test_provider_independent_template_does_not_populate_final_provider_or_budget_values() -> None:
     contract = _load_contract()
 
     for field in contract["budget_model"]["inputs"].values():
-        assert field["evidence_state"] == "deferred_to_ws04_01d"
+        assert field["evidence_state"] == "deferred_to_final_production_verification"
         assert field["value"] is None
 
     for field in contract["topology_contract"].values():
-        assert field["state"] == "deferred_to_ws04_01d"
+        assert field["state"] == "deferred_to_final_production_verification"
         assert field["value"] is None
 
 
@@ -227,7 +227,7 @@ def test_provider_independent_template_rejects_populated_provider_topology_claim
         "value": "temporary Neon project",
     }
     assert (
-        "metadata.provider_or_control_plane must remain deferred to WS04-01D "
+        "metadata.provider_or_control_plane must remain deferred to final_production_database_verification "
         "in provider-independent template"
     ) in validate_evidence_contract(provider_claim)
 
@@ -238,24 +238,24 @@ def test_provider_independent_template_rejects_populated_provider_topology_claim
     }
     errors = validate_evidence_contract(topology_claim)
     assert (
-        "topology_contract.connection_mode must remain deferred to WS04-01D "
+        "topology_contract.connection_mode must remain deferred to final_production_database_verification "
         "in provider-independent template"
     ) in errors
-    assert "topology_contract.connection_mode.value must be null before WS04-01D" in errors
+    assert "topology_contract.connection_mode.value must be null before final_production_database_verification" in errors
 
     final_role_claim = deepcopy(contract)
     final_role_claim["role_grant_contract"]["final_evidence"] = {
         "application_runtime": {"safe_alias": "demo_app_role"}
     }
     assert (
-        "role_grant_contract.final_evidence must not be populated before WS04-01D"
+        "role_grant_contract.final_evidence must not be populated before final_production_database_verification"
     ) in validate_evidence_contract(final_role_claim)
 
 
 @pytest.mark.pass_provenance('WS04-01C')
-def test_final_d_contract_state_rejects_absent_d_owned_evidence() -> None:
+def test_final_production_contract_state_rejects_absent_final_verification_evidence() -> None:
     contract = _load_contract()
-    contract["contract_state"] = "ws04_01d_final_evidence"
+    contract["contract_state"] = "final_production_evidence"
 
     errors = validate_evidence_contract(contract)
 
@@ -264,20 +264,20 @@ def test_final_d_contract_state_rejects_absent_d_owned_evidence() -> None:
     assert (
         "topology_contract.connection_mode must be verified for final evidence"
     ) in errors
-    assert "DB_POOL_SIZE final verification cannot use state 'deferred_to_ws04_01d'" in errors
+    assert "DB_POOL_SIZE final verification cannot use state 'deferred_to_final_production_verification'" in errors
     assert (
         "role_grant_contract.final_evidence must be an object"
     ) in errors
 
 
 @pytest.mark.pass_provenance('WS04-01C')
-def test_final_d_contract_state_accepts_complete_synthetic_final_evidence() -> None:
-    assert validate_evidence_contract(_final_d_contract()) == []
+def test_final_production_contract_state_accepts_complete_synthetic_final_evidence() -> None:
+    assert validate_evidence_contract(_final_production_contract()) == []
 
 
 @pytest.mark.pass_provenance('WS04-01C')
-def test_final_d_contract_state_rejects_missing_required_topology() -> None:
-    final_contract = _final_d_contract()
+def test_final_production_contract_state_rejects_missing_required_topology() -> None:
+    final_contract = _final_production_contract()
     final_contract["topology_contract"]["connection_mode"] = {
         "state": "not_applicable",
         "value": None,
@@ -287,7 +287,7 @@ def test_final_d_contract_state_rejects_missing_required_topology() -> None:
         "topology_contract.connection_mode must be verified for final evidence"
     ) in validate_evidence_contract(final_contract)
 
-    pooled = _final_d_contract()
+    pooled = _final_production_contract()
     pooled["topology_contract"]["connection_mode"]["value"] = "provider_pooler"
     pooled["topology_contract"]["pooler_client_connection_ceiling"] = {
         "state": "not_applicable",
@@ -299,13 +299,13 @@ def test_final_d_contract_state_rejects_missing_required_topology() -> None:
         "for final evidence"
     ) in validate_evidence_contract(pooled)
 
-    invalid_mode = _final_d_contract()
+    invalid_mode = _final_production_contract()
     invalid_mode["topology_contract"]["connection_mode"]["value"] = "unknown_pool_mode"
     assert (
         "topology_contract.connection_mode.value is not allowed"
     ) in validate_evidence_contract(invalid_mode)
 
-    bad_not_applicable = _final_d_contract()
+    bad_not_applicable = _final_production_contract()
     bad_not_applicable["topology_contract"]["pooler_server_connection_ceiling"] = {
         "state": "not_applicable",
         "value": "hidden provider ceiling",
@@ -367,8 +367,8 @@ def test_sanitized_evidence_references_are_not_flagged_as_sensitive() -> None:
         {
             "provider_summary": "sanitized provider capacity summary",
             "safe_project_alias": "db-provider-alpha",
-            "evidence_reference": "ws04-01d-sanitized-capacity-summary",
-            "reviewer": "ws04-01d-reviewer",
+            "evidence_reference": "production-database-sanitized-capacity-summary",
+            "reviewer": "production-database-reviewer",
         }
     )
 
@@ -389,7 +389,7 @@ def test_personal_and_payment_data_patterns_are_rejected() -> None:
 
 
 @pytest.mark.pass_provenance('WS04-01C')
-def test_missing_en03_metadata_fails_contract_validation() -> None:
+def test_missing_evidence_metadata_fails_contract_validation() -> None:
     contract = _load_contract()
     del contract["metadata"]["purpose"]
 

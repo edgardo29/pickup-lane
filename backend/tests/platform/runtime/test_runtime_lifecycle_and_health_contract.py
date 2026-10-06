@@ -6,10 +6,15 @@ import os
 import subprocess
 import sys
 import textwrap
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import pytest
+
+from backend.tests.support.environment_safety import (
+    isolated_test_subprocess_environment,
+)
 
 pytestmark = pytest.mark.no_db_cleanup
 
@@ -88,9 +93,8 @@ def _install_optional_provider_sentinels(monkeypatch: pytest.MonkeyPatch) -> Non
     def fail_provider_contact(*_args: Any, **_kwargs: Any) -> None:
         raise AssertionError("optional provider boundary was contacted")
 
-    import backend.firebase_admin_client as firebase_admin_client
-    import backend.services.r2_storage_service as r2_storage_service
-    import backend.services.stripe_service as stripe_service
+    from backend import firebase_admin_client
+    from backend.services import r2_storage_service, stripe_service
 
     monkeypatch.setattr(
         firebase_admin_client,
@@ -246,9 +250,12 @@ def _function_returns_app(
     app_names: set[str],
 ) -> bool:
     for node in _function_body_nodes(function):
-        if isinstance(node, ast.Return) and isinstance(node.value, ast.Name):
-            if node.value.id in app_names:
-                return True
+        if (
+            isinstance(node, ast.Return)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in app_names
+        ):
+            return True
     return False
 
 
@@ -424,7 +431,7 @@ def test_backend_main_is_the_single_canonical_app_and_health_owner(monkeypatch) 
 
     assert callable(main_module.create_app)
     assert main_module.app is not None
-    assert getattr(main_module.app.state, "lifecycle_started") is False
+    assert main_module.app.state.lifecycle_started is False
     assert {"/", "/live", "/ready", "/db-health"} <= route_paths
     assert findings == {
         "fastapi_constructor_owners": ["backend/main.py:create_app"],
@@ -622,9 +629,11 @@ def test_backend_main_import_constructs_app_without_runtime_side_effects() -> No
         """
         import asyncio
         import importlib
-        import socket
         import sys
         import threading
+        from backend.tests.support.environment_safety import install_test_network_guard
+
+        install_test_network_guard()
 
         def forbidden(name):
             raise RuntimeError(f"forbidden runtime side effect: {name}")
@@ -640,10 +649,6 @@ def test_backend_main_import_constructs_app_without_runtime_side_effects() -> No
             dotenv.main.load_dotenv = no_dotenv
         except Exception:
             pass
-
-        socket.socket.connect = lambda self, address: forbidden("socket.connect")
-        socket.socket.connect_ex = lambda self, address: forbidden("socket.connect_ex")
-        socket.create_connection = lambda address, *args, **kwargs: forbidden("socket.create_connection")
 
         from sqlalchemy.engine import Engine
 
@@ -707,24 +712,15 @@ def test_backend_main_import_constructs_app_without_runtime_side_effects() -> No
         if getattr(main_module.app.state, "lifecycle_started", None) is not False:
             raise RuntimeError("lifecycle state should be inactive after construction")
 
-        print("WS02_02_IMPORT_OK")
+        print("BACKEND_IMPORT_OK")
         """
     )
-    env = {
-        "APP_ENV": "test",
-        "DATABASE_URL": _SYNTHETIC_DATABASE_URL,
-        "INBOX_TOKEN_SECRET": "synthetic-independent-runtime-token",
-        "ENABLE_API_DOCS": "false",
-        "ENABLE_DB_HEALTH": "false",
-        "ENABLE_STRIPE_PAYMENTS": "false",
-        "PYTHONPATH": str(_REPO_ROOT),
-        "PATH": os.environ.get("PATH", ""),
-    }
-
     completed = subprocess.run(
         [sys.executable, "-c", child_code],
         cwd=_REPO_ROOT,
-        env=env,
+        env=isolated_test_subprocess_environment(
+            overrides={"DATABASE_URL": _SYNTHETIC_DATABASE_URL}
+        ),
         text=True,
         capture_output=True,
         check=False,
@@ -732,7 +728,7 @@ def test_backend_main_import_constructs_app_without_runtime_side_effects() -> No
     )
 
     assert completed.returncode == 0, _safe_subprocess_output(completed)
-    assert completed.stdout.strip() == "WS02_02_IMPORT_OK"
+    assert completed.stdout.strip() == "BACKEND_IMPORT_OK"
     assert completed.stderr.strip() == ""
 
 
@@ -876,13 +872,17 @@ def test_ready_gates_on_lifecycle_and_database_probe_without_optional_providers(
 @pytest.mark.pass_provenance('WS02-02')
 def test_database_connection_helper_uses_dedicated_postgresql_test_database() -> None:
     database_url = os.environ.get("DATABASE_URL", "")
-    assert database_url, "DATABASE_URL is required for WS02-02 PostgreSQL helper evidence"
+    assert database_url, "DATABASE_URL is required for PostgreSQL helper evidence"
 
-    from backend.tests.support.environment_safety import validate_dedicated_test_database_url
+    from backend.tests.support.environment_safety import (
+        validate_dedicated_test_database_url,
+    )
 
     validate_dedicated_test_database_url(database_url)
     child_code = (
         "import os\n"
+        "from backend.tests.support.environment_safety import install_test_network_guard\n"
+        "install_test_network_guard(os.environ['DATABASE_URL'])\n"
         "from backend.database import DATABASE_URL, check_database_connection\n"
         "if DATABASE_URL != os.environ['DATABASE_URL']:\n"
         "    raise SystemExit(2)\n"
@@ -891,7 +891,9 @@ def test_database_connection_helper_uses_dedicated_postgresql_test_database() ->
     completed = subprocess.run(
         [sys.executable, "-c", child_code],
         cwd=_REPO_ROOT,
-        env={**os.environ, "APP_ENV": "test", "DATABASE_URL": database_url},
+        env=isolated_test_subprocess_environment(
+            overrides={"DATABASE_URL": database_url}
+        ),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=False,

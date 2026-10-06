@@ -48,21 +48,21 @@ def _create_checkout_state(db: Session) -> _CheckoutState:
     unique = uuid.uuid4()
     user = User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04c2-unknown-user-{unique}",
+        auth_user_id=f"retry-reconciliation-unknown-user-{unique}",
         role="player",
-        email=f"ws02-04c2-unknown-user-{unique}@example.invalid",
+        email=f"retry-reconciliation-unknown-user-{unique}@example.invalid",
         first_name="Unknown",
         last_name="Outcome",
         date_of_birth=date(1990, 1, 1),
         account_status="active",
         hosting_status="eligible",
-        stripe_customer_id=f"cus_ws02_04c2_unknown_{unique}",
+        stripe_customer_id=f"cus_retry_reconciliation_unknown_{unique}",
     )
     admin = User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04c2-unknown-admin-{unique}",
+        auth_user_id=f"retry-reconciliation-unknown-admin-{unique}",
         role="admin",
-        email=f"ws02-04c2-unknown-admin-{unique}@example.invalid",
+        email=f"retry-reconciliation-unknown-admin-{unique}@example.invalid",
         first_name="Unknown",
         last_name="Admin",
         account_status="active",
@@ -129,8 +129,8 @@ def _create_checkout_state(db: Session) -> _CheckoutState:
         id=uuid.uuid4(),
         user_id=user.id,
         stripe_customer_id=user.stripe_customer_id,
-        stripe_payment_method_id=f"pm_ws02_04c2_unknown_{unique}",
-        card_fingerprint=f"ws02-04c2-unknown-{unique}",
+        stripe_payment_method_id=f"pm_retry_reconciliation_unknown_{unique}",
+        card_fingerprint=f"retry-reconciliation-unknown-{unique}",
         card_brand="visa",
         card_last4="4242",
         exp_month=12,
@@ -150,7 +150,7 @@ def _create_checkout_state(db: Session) -> _CheckoutState:
         source_booking_id=None,
         source_payment_id=None,
         issued_by_user_id=admin.id,
-        idempotency_key=f"ws02-04c2-unknown-credit-{unique}",
+        idempotency_key=f"retry-reconciliation-unknown-credit-{unique}",
         note="synthetic C2 unknown-outcome credit",
     )
     db.add_all([payment_method, credit])
@@ -274,7 +274,7 @@ def test_confirmation_unknown_preserves_checkpoint_without_blind_replay(
         create_calls.append(kwargs["idempotency_key"])
         events.append("create")
         return StripePaymentIntentResult(
-            id="pi_ws02_04c2_unknown",
+            id="pi_retry_reconciliation_unknown",
             client_secret="client_secret_after_create",
             status="requires_payment_method",
             latest_charge_id=None,
@@ -319,10 +319,10 @@ def test_confirmation_unknown_preserves_checkpoint_without_blind_replay(
         assert exc_info.value.operation == "stripe.payment_intent.confirm"
         assert events == [
             "create",
-            "retrieve:pi_ws02_04c2_unknown",
-            "confirm:pi_ws02_04c2_unknown",
+            "retrieve:pi_retry_reconciliation_unknown",
+            "confirm:pi_retry_reconciliation_unknown",
         ]
-        assert payment.provider_payment_intent_id == "pi_ws02_04c2_unknown"
+        assert payment.provider_payment_intent_id == "pi_retry_reconciliation_unknown"
         assert payment.payment_status == "unknown"
         assert payment.payment_status not in {"succeeded", "failed", "canceled"}
         assert booking.booking_status == "pending_payment"
@@ -355,9 +355,9 @@ def test_confirmation_unknown_preserves_checkpoint_without_blind_replay(
         assert retry_result.payment_id == payment.id
         assert events == [
             "create",
-            "retrieve:pi_ws02_04c2_unknown",
-            "confirm:pi_ws02_04c2_unknown",
-            "retrieve:pi_ws02_04c2_unknown",
+            "retrieve:pi_retry_reconciliation_unknown",
+            "confirm:pi_retry_reconciliation_unknown",
+            "retrieve:pi_retry_reconciliation_unknown",
         ]
         assert create_calls == [payment.idempotency_key]
         assert len(usages) == 1
@@ -383,7 +383,7 @@ def test_active_hold_confirmation_decision_is_serialized_after_checkpoint(
     second_lock_attempted = threading.Event()
     second_lock_acquired = threading.Event()
     provider_status = {"status": "requires_payment_method"}
-    provider_id = "pi_ws02_04c2_serialized"
+    provider_id = "pi_retry_reconciliation_serialized"
     results: dict[str, object] = {}
     errors: dict[str, BaseException] = {}
 
@@ -516,7 +516,7 @@ def test_stale_checkout_expiration_releases_local_hold_but_keeps_provider_identi
         checkout_service,
         "create_payment_intent",
         lambda **kwargs: StripePaymentIntentResult(
-            id="pi_ws02_04c2_expiry",
+            id="pi_retry_reconciliation_expiry",
             client_secret="client_secret_after_create",
             status="requires_payment_method",
             latest_charge_id=None,
@@ -570,6 +570,6 @@ def test_stale_checkout_expiration_releases_local_hold_but_keeps_provider_identi
         assert expired_booking.payment_status == "processing"
         assert participant.participant_status == "cancelled"
         assert expired_payment.payment_status == "unknown"
-        assert expired_payment.provider_payment_intent_id == "pi_ws02_04c2_expiry"
+        assert expired_payment.provider_payment_intent_id == "pi_retry_reconciliation_expiry"
         assert usage.usage_status == "released"
         assert credit.available_cents == 700

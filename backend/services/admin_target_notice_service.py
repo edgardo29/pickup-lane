@@ -36,7 +36,7 @@ NEED_SUB_CHAT_NOTICE_ACTION_TYPES = {
     "need_sub_chat_message_removed": "remove_chat_message",
     "need_sub_chat_message_restored": "restore_chat_message",
 }
-WS03_05C_NOTICE_TYPES = {
+MODERATION_ENFORCEMENT_NOTICE_TYPES = {
     *COMMUNITY_NOTICE_ACTION_TYPES,
     *NEED_SUB_NOTICE_ACTION_TYPES,
     *GAME_CHAT_NOTICE_ACTION_TYPES,
@@ -44,7 +44,7 @@ WS03_05C_NOTICE_TYPES = {
 }
 
 
-def validate_ws03_05c_notice_contract(
+def validate_moderation_enforcement_notice_contract(
     db: Session,
     *,
     notice_type: str,
@@ -58,16 +58,22 @@ def validate_ws03_05c_notice_contract(
     target_sub_post_id: uuid.UUID | None,
     target_sub_post_request_id: uuid.UUID | None,
 ) -> None:
-    if notice_type not in WS03_05C_NOTICE_TYPES:
+    if notice_type not in MODERATION_ENFORCEMENT_NOTICE_TYPES:
         return
     if not title.strip() or not body.strip():
-        raise ValueError("WS03-05C notice title and body are required.")
+        raise ValueError("Moderation enforcement notice title and body are required.")
     if admin_action is None or object_session(admin_action) is not db:
-        raise ValueError("WS03-05C notices require a live linked admin action.")
+        raise ValueError(
+            "Moderation enforcement notices require a live linked admin action."
+        )
     if created_by_user_id is None or created_by_user_id != admin_action.admin_user_id:
-        raise ValueError("WS03-05C notice creator must match its admin action.")
+        raise ValueError(
+            "Moderation enforcement notice creator must match its admin action."
+        )
     if recipient_user_id is None or target_user_id != recipient_user_id:
-        raise ValueError("WS03-05C notice recipient and target user must match.")
+        raise ValueError(
+            "Moderation enforcement notice recipient and target user must match."
+        )
 
     expected_action_type = (
         COMMUNITY_NOTICE_ACTION_TYPES.get(notice_type)
@@ -76,7 +82,7 @@ def validate_ws03_05c_notice_contract(
         or NEED_SUB_CHAT_NOTICE_ACTION_TYPES.get(notice_type)
     )
     if admin_action.action_type != expected_action_type:
-        raise ValueError("WS03-05C notice action type does not match.")
+        raise ValueError("Moderation enforcement notice action type does not match.")
 
     if notice_type in COMMUNITY_NOTICE_ACTION_TYPES:
         valid_target = (
@@ -130,7 +136,9 @@ def validate_ws03_05c_notice_contract(
         )
 
     if not valid_target:
-        raise ValueError("WS03-05C notice target shape does not match its action.")
+        raise ValueError(
+            "Moderation enforcement notice target shape does not match its action."
+        )
 
 
 def target_notice_notification_aggregation_key(notice_id: uuid.UUID) -> str:
@@ -201,7 +209,7 @@ def create_admin_target_notice(
     target_sub_post_request_id: uuid.UUID | None = None,
     notice_metadata: dict | None = None,
 ) -> AdminTargetNotice:
-    validate_ws03_05c_notice_contract(
+    validate_moderation_enforcement_notice_contract(
         db,
         notice_type=notice_type,
         title=title,

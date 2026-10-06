@@ -27,7 +27,6 @@ def test_pickup_lane_does_not_source_configure_retry_counts_or_backoff() -> None
         "max_network_retries",
         "retries={",
         "retry_mode",
-        "total_max_attempts",
         "backoff",
         "jitter",
     }

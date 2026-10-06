@@ -593,7 +593,7 @@ def apply_refund_retry_result(
             if refund_status == "failed"
             else "refund_cancelled",
             reason_code=f"admin_retry_{refund_status}",
-            summary="A refund retry did not complete with the provider.",
+            summary="A refund retry did not complete with Stripe.",
             refund_event=refund_event,
             admin_action=admin_action,
             now=now,
@@ -665,7 +665,7 @@ def record_admin_refund_retry_provider_result_checkpoint(
         provider_status=refund_status,
         new_refund_status=refund_status,
         reason_code=f"admin_retry_{refund_status}",
-        summary="Admin refund retry provider result recorded.",
+        summary="Admin refund retry Stripe result recorded.",
         occurred_at=now,
     )
     db.commit()
@@ -1054,7 +1054,7 @@ def reconcile_admin_money_refund(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Succeeded refunds do not need provider reconciliation.",
+            detail="Succeeded refunds do not need Stripe reconciliation.",
         )
 
     if (
@@ -1064,7 +1064,7 @@ def reconcile_admin_money_refund(
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Provider refund ID conflicts with the current refund attempt.",
+            detail="Stripe refund ID conflicts with the current refund attempt.",
         )
     provider_refund_id = refund.provider_refund_id or requested_provider_refund_id
 
@@ -1144,7 +1144,7 @@ def reconcile_admin_money_refund(
             provider_status="unknown",
             new_refund_status="processing",
             reason_code="missing_provider_refund_id",
-            summary="Provider status could not be checked because the refund has no provider refund id.",
+            summary="Stripe status could not be checked because the refund has no Stripe refund ID.",
             occurred_at=now,
         )
         stage_refund_issue_for_terminal_or_unknown(
@@ -1153,7 +1153,7 @@ def reconcile_admin_money_refund(
             payment=payment,
             refund_event=refund_event,
             reason_code="missing_provider_refund_id",
-            summary="Refund provider reference is missing.",
+            summary="Stripe refund reference is missing.",
             now=now,
         )
         db.commit()
@@ -1253,7 +1253,7 @@ def reconcile_admin_money_refund(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Refund changed while provider reconciliation was in progress.",
+            detail="Refund changed while Stripe reconciliation was in progress.",
         )
     require_current_provider_attempt_identity(db, refund=refund)
     current_historical_attempts = canonical_historical_provider_attempts(
@@ -1274,7 +1274,7 @@ def reconcile_admin_money_refund(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Refund attempt history changed while provider reconciliation was in progress.",
+            detail="Refund attempt history changed while Stripe reconciliation was in progress.",
         )
     now = datetime.now(timezone.utc)
     try:
@@ -1404,7 +1404,7 @@ def reconcile_admin_money_refund(
             admin_action=admin_action,
             admin_user=admin_user,
             reason_code="provider_reconciliation_succeeded",
-            summary="Provider confirmed the refund succeeded.",
+            summary="Stripe confirmed the refund succeeded.",
             recommended_action_code="review_and_resolve_no_action",
             now=now,
         )
@@ -1431,7 +1431,7 @@ def reconcile_admin_money_refund(
                 admin_action=admin_action,
                 admin_user=admin_user,
                 reason_code="provider_reconciliation_processing",
-                summary="Provider still reports the refund as processing.",
+                summary="Stripe still reports the refund as processing.",
                 recommended_action_code="verify_provider_refund",
                 now=now,
             )

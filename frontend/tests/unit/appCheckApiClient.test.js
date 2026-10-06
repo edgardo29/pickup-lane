@@ -44,7 +44,7 @@ test('disabled or unconfigured frontend App Check returns no token', async () =>
   assert.equal(await getAppCheckToken(), null)
 })
 
-test('configured frontend App Check lazily initializes and returns provider token', async () => {
+test('configured frontend App Check lazily initializes and returns Firebase App Check token', async () => {
   const calls = []
   __setAppCheckTestHooks({
     env: {
@@ -53,7 +53,7 @@ test('configured frontend App Check lazily initializes and returns provider toke
     },
     ReCaptchaEnterpriseProvider: class {
       constructor(siteKey) {
-        calls.push(['provider', siteKey])
+        calls.push(['recaptcha-enterprise-provider', siteKey])
       }
     },
     loadFirebaseApp: async () => {
@@ -74,7 +74,7 @@ test('configured frontend App Check lazily initializes and returns provider toke
   assert.equal(await getAppCheckToken(), 'synthetic-app-check-token')
   assert.deepEqual(calls, [
     ['load-app'],
-    ['provider', 'synthetic-site-key'],
+    ['recaptcha-enterprise-provider', 'synthetic-site-key'],
     ['initialize', 'synthetic-firebase-app', true],
     ['get-token', true, false],
   ])
@@ -140,7 +140,7 @@ test('api client attaches App Check header only to relative Pickup Lane API requ
   assert.equal(fetchCalls[1][1].headers[APP_CHECK_HEADER_NAME], undefined)
 })
 
-test('direct signed provider upload keeps App Check out of provider request', async () => {
+test('direct signed R2 upload keeps App Check out of the R2 request', async () => {
   const fetchCalls = []
   __setAppCheckTestHooks({
     env: {

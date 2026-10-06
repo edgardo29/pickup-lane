@@ -77,9 +77,9 @@ def _user(index: int) -> User:
     token = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws03-05a-chat-{index}-{token}",
+        auth_user_id=f"moderation-taxonomy-chat-{index}-{token}",
         role="player",
-        email=f"ws03-05a-chat-{index}-{token}@example.invalid",
+        email=f"moderation-taxonomy-chat-{index}-{token}@example.invalid",
         first_name="Chat",
         last_name=f"Owner{index}",
         account_status="active",

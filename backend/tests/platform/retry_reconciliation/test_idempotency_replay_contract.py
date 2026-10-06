@@ -39,21 +39,21 @@ def _create_checkout_state(db: Session) -> _CheckoutState:
     unique = uuid.uuid4()
     user = User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04c2-checkout-user-{unique}",
+        auth_user_id=f"retry-reconciliation-checkout-user-{unique}",
         role="player",
-        email=f"ws02-04c2-checkout-user-{unique}@example.invalid",
+        email=f"retry-reconciliation-checkout-user-{unique}@example.invalid",
         first_name="Retry",
         last_name="Checkout",
         date_of_birth=date(1990, 1, 1),
         account_status="active",
         hosting_status="eligible",
-        stripe_customer_id=f"cus_ws02_04c2_{unique}",
+        stripe_customer_id=f"cus_retry_reconciliation_{unique}",
     )
     admin = User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws02-04c2-checkout-admin-{unique}",
+        auth_user_id=f"retry-reconciliation-checkout-admin-{unique}",
         role="admin",
-        email=f"ws02-04c2-checkout-admin-{unique}@example.invalid",
+        email=f"retry-reconciliation-checkout-admin-{unique}@example.invalid",
         first_name="Retry",
         last_name="Admin",
         account_status="active",
@@ -120,8 +120,8 @@ def _create_checkout_state(db: Session) -> _CheckoutState:
         id=uuid.uuid4(),
         user_id=user.id,
         stripe_customer_id=user.stripe_customer_id,
-        stripe_payment_method_id=f"pm_ws02_04c2_{unique}",
-        card_fingerprint=f"ws02-04c2-checkout-{unique}",
+        stripe_payment_method_id=f"pm_retry_reconciliation_{unique}",
+        card_fingerprint=f"retry-reconciliation-checkout-{unique}",
         card_brand="visa",
         card_last4="4242",
         exp_month=12,
@@ -141,7 +141,7 @@ def _create_checkout_state(db: Session) -> _CheckoutState:
         source_booking_id=None,
         source_payment_id=None,
         issued_by_user_id=admin.id,
-        idempotency_key=f"ws02-04c2-credit-{unique}",
+        idempotency_key=f"retry-reconciliation-credit-{unique}",
         note="synthetic C2 checkout credit",
     )
     db.add_all([payment_method, credit])
@@ -191,7 +191,7 @@ def _install_checkout_boundary_fakes(
     def create_payment_intent(**kwargs):
         create_calls.append(kwargs["idempotency_key"])
         return StripePaymentIntentResult(
-            id="pi_ws02_04c2_checkpoint",
+            id="pi_retry_reconciliation_checkpoint",
             client_secret="client_secret_after_create",
             status="requires_payment_method",
             latest_charge_id=None,
@@ -309,8 +309,8 @@ def test_checkout_commits_durable_checkpoint_with_credit_before_confirmation(
         assert result.credit_applied_cents == 700
         assert result.stripe_amount_cents == 500
         assert create_calls == [db.get(Payment, result.payment_id).idempotency_key]
-        assert retrieve_calls == ["pi_ws02_04c2_checkpoint"]
-        assert confirm_calls == ["pi_ws02_04c2_checkpoint"]
+        assert retrieve_calls == ["pi_retry_reconciliation_checkpoint"]
+        assert confirm_calls == ["pi_retry_reconciliation_checkpoint"]
         assert checkpoint_seen_by_confirm == [
             {
                 "booking_status": "pending_payment",
@@ -367,15 +367,15 @@ def test_active_hold_reentry_reuses_provider_identity_and_credit_reservation(
 
         assert second.booking_id == first.booking_id
         assert second.payment_id == first.payment_id
-        assert payment.provider_payment_intent_id == "pi_ws02_04c2_checkpoint"
+        assert payment.provider_payment_intent_id == "pi_retry_reconciliation_checkpoint"
         assert create_calls == [payment.idempotency_key]
         assert retrieve_calls == [
-            "pi_ws02_04c2_checkpoint",
-            "pi_ws02_04c2_checkpoint",
+            "pi_retry_reconciliation_checkpoint",
+            "pi_retry_reconciliation_checkpoint",
         ]
         assert confirm_calls == [
-            "pi_ws02_04c2_checkpoint",
-            "pi_ws02_04c2_checkpoint",
+            "pi_retry_reconciliation_checkpoint",
+            "pi_retry_reconciliation_checkpoint",
         ]
         assert len(usages) == 1
         assert usages[0].amount_cents == 700

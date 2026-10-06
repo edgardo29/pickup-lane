@@ -63,7 +63,7 @@ function AdminMoneyRefundPage() {
     state: 'idle',
   })
   const [reconcileForm, setReconcileForm] = useState({
-    providerRefundId: '',
+    stripeRefundId: '',
     reason: '',
     refundId: '',
   })
@@ -165,8 +165,8 @@ function AdminMoneyRefundPage() {
       state: 'idle',
     }
   const reconcileReason = reconcileForm.refundId === refundId ? reconcileForm.reason : ''
-  const reconcileProviderRefundId = reconcileForm.refundId === refundId
-    ? reconcileForm.providerRefundId
+  const reconcileStripeRefundId = reconcileForm.refundId === refundId
+    ? reconcileForm.stripeRefundId
     : ''
   const reconcileSubmitting = activeReconcileStatus.state === 'submitting'
 
@@ -259,13 +259,13 @@ function AdminMoneyRefundPage() {
           refundId,
           reason,
           idempotencyKey,
-          providerRefundId: reconcileProviderRefundId.trim() || null,
+          stripeRefundId: reconcileStripeRefundId.trim() || null,
         }),
         { actionLabel: 'reconcile this refund' },
       )
 
       setDetail(nextDetail)
-      setReconcileForm({ providerRefundId: '', reason: '', refundId })
+      setReconcileForm({ stripeRefundId: '', reason: '', refundId })
       setReconcileStatus({
         error: '',
         message: 'Stripe status checked.',
@@ -286,7 +286,7 @@ function AdminMoneyRefundPage() {
     <>
       <AdminWorkspaceLayout
         breadcrumbs={['Admin', 'Money', 'Refunds']}
-        description="Inspect this refund, its payment context, provider events, and linked money issue."
+        description="Inspect this refund, its payment context, Stripe events, and linked money issue."
         icon={RotateCcw}
         title={pageTitle}
       >
@@ -321,7 +321,7 @@ function AdminMoneyRefundPage() {
           {loadState === 'ready' && detail && (
             <>
               <RefundSummary
-                providerSnapshot={detail.current_provider_snapshot}
+                stripeSnapshot={detail.current_provider_snapshot}
                 refund={detail.refund}
               />
               {canRetryRefund && (
@@ -379,7 +379,7 @@ function AdminMoneyRefundPage() {
                         maxLength={1000}
                         onChange={(event) => {
                           setReconcileForm({
-                            providerRefundId: reconcileProviderRefundId,
+                            stripeRefundId: reconcileStripeRefundId,
                             reason: event.target.value,
                             refundId,
                           })
@@ -390,20 +390,20 @@ function AdminMoneyRefundPage() {
                     </label>
                     {!detail.refund.provider_refund_id && (
                       <label>
-                        <span>Provider refund ID (optional)</span>
+                        <span>Stripe refund ID (optional)</span>
                         <input
                           disabled={reconcileSubmitting}
                           maxLength={255}
                           onChange={(event) => {
                             setReconcileForm({
-                              providerRefundId: event.target.value,
+                              stripeRefundId: event.target.value,
                               reason: reconcileReason,
                               refundId,
                             })
                           }}
                           placeholder="re_…"
                           type="text"
-                          value={reconcileProviderRefundId}
+                          value={reconcileStripeRefundId}
                         />
                       </label>
                     )}

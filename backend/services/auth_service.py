@@ -1,8 +1,8 @@
 """Firebase authentication and route dependencies."""
 
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import math
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
@@ -17,9 +17,9 @@ from backend.firebase_admin_client import (
 )
 from backend.models import User
 from backend.observability.timeouts import PublicTimeoutError
-from backend.settings import get_settings
 from backend.services.hosting_access_service import apply_verified_hosting_eligibility
 from backend.services.user_service import build_user_conflict_detail
+from backend.settings import get_settings
 
 ADMIN_ROLE = "admin"
 RECENT_AUTH_REQUIRED_CODE = "AUTH.RECENT_AUTH_REQUIRED"
@@ -32,7 +32,7 @@ class VerifiedFirebaseIdentity:
     email: str | None
     email_verified: bool
     authenticated_at: datetime | None = None
-    provider_account_active: bool = True
+    firebase_account_active: bool = True
 
 
 def get_active_user_by_auth_id(auth_user_id: str, db: Session) -> User | None:
@@ -77,14 +77,14 @@ def get_verified_firebase_identity_from_authorization(
     except FirebaseAdminConfigError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication provider is not configured.",
+            detail="Firebase authentication is not configured.",
         ) from exc
     except PublicTimeoutError:
         raise
     except FirebaseIdentityUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication provider is unavailable.",
+            detail="Firebase authentication is unavailable.",
         ) from exc
     except Exception as exc:
         raise HTTPException(
@@ -108,8 +108,8 @@ def get_verified_firebase_identity_from_authorization(
         auth_user_id=auth_user_id,
         email=email.strip().lower() if isinstance(email, str) else None,
         email_verified=bool(decoded_token.get("email_verified")),
-        authenticated_at=parse_provider_authenticated_at(decoded_token),
-        provider_account_active=True,
+        authenticated_at=parse_firebase_authenticated_at(decoded_token),
+        firebase_account_active=True,
     )
 
 
@@ -128,7 +128,7 @@ def get_decoded_firebase_token(authorization: str | None) -> dict:
     }
 
 
-def parse_provider_authenticated_at(decoded_token: dict) -> datetime | None:
+def parse_firebase_authenticated_at(decoded_token: dict) -> datetime | None:
     auth_time = decoded_token.get("auth_time")
     if isinstance(auth_time, bool) or not isinstance(auth_time, int | float):
         return None
@@ -405,7 +405,7 @@ def require_verified_user(
                 detail=build_user_conflict_detail(exc),
             ) from exc
 
-    if not identity.provider_account_active or not identity.email or not identity.email_verified:
+    if not identity.firebase_account_active or not identity.email or not identity.email_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Verified email required.",

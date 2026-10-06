@@ -59,6 +59,7 @@ def test_payment_reconciliation_staging_uses_only_payment_job_types(
         }
 
 
+@pytest.mark.pass_provenance("WS06-02")
 def test_complete_fixed_inventory_and_numeric_kinds():
     recorder = MetricsRecorder("api", "test", "test-release")
     expected = {
@@ -222,7 +223,9 @@ def test_complete_fixed_inventory_and_numeric_kinds():
                     "firebase.user.delete",
                     "r2.upload_url.create",
                     "r2.read_url.create",
-                    "r2.metadata.head",
+                    "r2.object.download",
+                    "r2.object.publish",
+                    "r2.object.delete",
                     "r2.upload.validate",
                     "r2.readiness.check",
                 },
@@ -302,7 +305,9 @@ def test_complete_fixed_inventory_and_numeric_kinds():
         "firebase.user.delete": mutation_results,
         "r2.upload_url.create": read_results,
         "r2.read_url.create": read_results,
-        "r2.metadata.head": read_results | {"not_found"},
+        "r2.object.download": read_results | {"not_found"},
+        "r2.object.publish": mutation_results,
+        "r2.object.delete": mutation_results,
         "r2.upload.validate": {"configuration_error"},
         "r2.readiness.check": {"configuration_error"},
     }

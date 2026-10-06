@@ -234,18 +234,9 @@ def test_backend_safe_example_names_are_declared_settings_names() -> None:
 
 
 @pytest.mark.pass_provenance('WS02-01')
-def test_environment_vocabulary_matches_settings_plan_matrix_and_ci_artifacts() -> None:
+def test_environment_vocabulary_matches_settings_governance_and_ci_artifacts() -> None:
     canonical_values = {environment.value for environment in AppEnvironment}
     backend_example = (_BACKEND_ROOT / ".env.example").read_text()
-    plan_text = (
-        _REPO_ROOT
-        / "docs"
-        / "production-readiness"
-        / "planning"
-        / "passes"
-        / "ws02"
-        / "ws02-01-typed-settings-environment-isolation.md"
-    ).read_text()
     matrix_text = (
         _REPO_ROOT / "docs" / "production-readiness" / "governance" / "environment-matrix.md"
     ).read_text()
@@ -254,7 +245,6 @@ def test_environment_vocabulary_matches_settings_plan_matrix_and_ci_artifacts() 
     assert canonical_values == {"local", "test", "ci", "preview", "staging", "production"}
     for value in canonical_values:
         assert value in backend_example
-        assert value in plan_text
         assert value in matrix_text
     assert "APP_ENV: ci" in workflow_text
     assert DEDICATED_TEST_DATABASE_NAME in workflow_text

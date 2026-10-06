@@ -23,7 +23,6 @@ from backend.services.admin_action_policy import (
     TARGET_VENUE_ID,
 )
 
-
 _EXPECTED_POLICIES = {
     "create_community_game_detail": ({TARGET_GAME_ID}, {TARGET_GAME_ID}, "support"),
     "update_community_game_detail": ({TARGET_GAME_ID}, {TARGET_GAME_ID}, "support"),
@@ -55,9 +54,9 @@ def _admin() -> User:
     unique = uuid.uuid4()
     return User(
         id=uuid.uuid4(),
-        auth_user_id=f"ws09-02b-display-admin-{unique}",
+        auth_user_id=f"sensitive-financial-read-display-admin-{unique}",
         role="admin",
-        email=f"ws09-02b-display-admin-{unique}@example.invalid",
+        email=f"sensitive-financial-read-display-admin-{unique}@example.invalid",
         first_name="Audit",
         last_name="Display",
         account_status="active",

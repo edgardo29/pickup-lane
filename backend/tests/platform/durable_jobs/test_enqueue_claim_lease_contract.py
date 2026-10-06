@@ -13,7 +13,6 @@ from backend.services.durable_job_service import (
     EXHAUSTED,
     LEASED,
     PENDING,
-    RETRY_WAITING,
     SUCCEEDED,
     ConflictingIdempotencyKeyError,
     DurableJobQueuePolicy,
@@ -318,8 +317,8 @@ def test_enqueue_is_transactional_idempotent_and_conflict_checked() -> None:
             payload_version=1,
             payload={"kind": "synthetic"},
             protected_identity={"operation": "one"},
-            idempotency_key="ws05-01a-idempotent",
-            correlation_id="ws05-01a-correlation",
+            idempotency_key="durable-job-idempotent",
+            correlation_id="durable-job-correlation",
         )
         duplicate = enqueue_job(
             db,
@@ -328,8 +327,8 @@ def test_enqueue_is_transactional_idempotent_and_conflict_checked() -> None:
             payload_version=1,
             payload={"kind": "synthetic"},
             protected_identity={"operation": "one"},
-            idempotency_key="ws05-01a-idempotent",
-            correlation_id="ws05-01a-correlation",
+            idempotency_key="durable-job-idempotent",
+            correlation_id="durable-job-correlation",
         )
 
         assert duplicate.id == job.id
@@ -346,23 +345,22 @@ def test_enqueue_is_transactional_idempotent_and_conflict_checked() -> None:
             payload_version=1,
             payload={"kind": "synthetic"},
             protected_identity={"operation": "one"},
-            idempotency_key="ws05-01a-conflict",
-            correlation_id="ws05-01a-correlation",
+            idempotency_key="durable-job-conflict",
+            correlation_id="durable-job-correlation",
         )
         db.commit()
 
-    with _db_session() as db:
-        with pytest.raises(ConflictingIdempotencyKeyError):
-            enqueue_job(
-                db,
-                registry=registry,
-                job_type="synthetic_job",
-                payload_version=1,
-                payload={"kind": "synthetic"},
-                protected_identity={"operation": "different"},
-                idempotency_key="ws05-01a-conflict",
-                correlation_id="ws05-01a-correlation",
-            )
+    with _db_session() as db, pytest.raises(ConflictingIdempotencyKeyError):
+        enqueue_job(
+            db,
+            registry=registry,
+            job_type="synthetic_job",
+            payload_version=1,
+            payload={"kind": "synthetic"},
+            protected_identity={"operation": "different"},
+            idempotency_key="durable-job-conflict",
+            correlation_id="durable-job-correlation",
+        )
 
 
 @pytest.mark.pass_provenance('WS05-01A')
@@ -377,8 +375,8 @@ def test_enqueue_rejects_unsupported_definitions_and_invalid_payloads() -> None:
                 job_type="missing_job",
                 payload_version=1,
                 payload={},
-                idempotency_key="ws05-01a-unsupported",
-                correlation_id="ws05-01a-correlation",
+                idempotency_key="durable-job-unsupported",
+                correlation_id="durable-job-correlation",
             )
 
         with pytest.raises(InvalidJobPayloadError):
@@ -388,8 +386,8 @@ def test_enqueue_rejects_unsupported_definitions_and_invalid_payloads() -> None:
                 job_type="synthetic_job",
                 payload_version=1,
                 payload={"invalid": True},
-                idempotency_key="ws05-01a-invalid",
-                correlation_id="ws05-01a-correlation",
+                idempotency_key="durable-job-invalid",
+                correlation_id="durable-job-correlation",
             )
 
         assert db.execute(select(DurableJob)).scalars().all() == []
@@ -409,8 +407,8 @@ def test_handlerless_definitions_cannot_create_claimable_runnable_work() -> None
                 job_type="synthetic_job",
                 payload_version=1,
                 payload={"kind": "synthetic"},
-                idempotency_key="ws05-01a-handlerless-enqueue",
-                correlation_id="ws05-01a-correlation",
+                idempotency_key="durable-job-handlerless-enqueue",
+                correlation_id="durable-job-correlation",
             )
         assert db.execute(select(DurableJob)).scalars().all() == []
 
@@ -804,7 +802,7 @@ def test_expired_final_attempt_exhausts_without_extra_attempt() -> None:
 @pytest.mark.pass_provenance('WS05-01A')
 def test_operator_cancel_and_requeue_preserve_durable_history() -> None:
     registry = _registry(_definition(maximum_attempts=1))
-    cancelled_id = _enqueue(registry=registry, key="ws05-01a-cancel", maximum_attempts=1)
+    cancelled_id = _enqueue(registry=registry, key="durable-job-cancel", maximum_attempts=1)
 
     with _db_session() as db:
         assert operator_cancel_job(
@@ -835,7 +833,7 @@ def test_operator_cancel_and_requeue_preserve_durable_history() -> None:
 
     leased_cancelled_id = _enqueue(
         registry=registry,
-        key="ws05-01a-operator-cancel-leased",
+        key="durable-job-operator-cancel-leased",
         maximum_attempts=1,
     )
     with _db_session() as db:
@@ -865,7 +863,7 @@ def test_operator_cancel_and_requeue_preserve_durable_history() -> None:
         ]
         assert event_types == ["enqueued", "claimed", "repair_cancelled"]
 
-    requeued_id = _enqueue(registry=registry, key="ws05-01a-requeue", maximum_attempts=1)
+    requeued_id = _enqueue(registry=registry, key="durable-job-requeue", maximum_attempts=1)
     with _db_session() as db:
         claim = claim_job(db, registry=registry, worker_identity="exhaust-worker")
         assert claim is not None

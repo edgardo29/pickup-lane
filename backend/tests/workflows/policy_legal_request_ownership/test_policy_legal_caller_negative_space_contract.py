@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import inspect
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import pytest
 from fastapi.routing import APIRoute
@@ -165,7 +165,7 @@ def test_policy_legal_tombstones_have_no_same_method_alias_or_ordinary_body_rout
 
 
 @pytest.mark.pass_provenance('WS02-04B2A2B3')
-def test_no_b3_specific_policy_legal_request_body_limit_class_or_numeric_threshold_exists() -> None:
+def test_no_policy_legal_specific_request_body_limit_class_or_numeric_threshold_exists() -> None:
     from backend.main import SPECIAL_BODY_ROUTE_KEYS
     from backend.observability import request_body_limits
 

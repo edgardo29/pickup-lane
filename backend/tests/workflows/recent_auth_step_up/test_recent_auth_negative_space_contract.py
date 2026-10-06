@@ -394,16 +394,31 @@ def test_no_current_frontend_caller_exists_for_unowned_backend_only_routes() -> 
 
 @pytest.mark.pass_provenance('WS03-03A')
 def test_current_support_helpers_do_not_offer_request_owned_freshness_bypass() -> None:
-    support_bypass_candidates: list[str] = []
+    caller_owned_freshness_parameters: list[str] = []
     unsafe_override_candidates: list[str] = []
+    freshness_parameter_names = {"auth_time", "authenticated_at"}
 
     for path in _support_python_files():
         relative_path = _relative(path)
         source = path.read_text(encoding="utf-8")
-        if "auth_time" in source or "authenticated_at" in source:
-            support_bypass_candidates.append(relative_path)
+        tree = ast.parse(source, filename=relative_path)
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            parameters = {
+                argument.arg
+                for argument in (
+                    *node.args.posonlyargs,
+                    *node.args.args,
+                    *node.args.kwonlyargs,
+                )
+            }
+            for parameter in sorted(parameters & freshness_parameter_names):
+                caller_owned_freshness_parameters.append(
+                    f"{relative_path}:{node.name}:{parameter}"
+                )
         if "require_recent_authentication" in source or "require_recent_active" in source:
             unsafe_override_candidates.append(relative_path)
 
-    assert support_bypass_candidates == []
+    assert caller_owned_freshness_parameters == []
     assert unsafe_override_candidates == []

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import re
+from collections.abc import Mapping
 from types import MappingProxyType
 from urllib.parse import urlsplit
 
 from backend.observability.redaction import contains_sensitive_text
-
 
 LOW_CARDINALITY_LABEL_NAMES = frozenset(
     {
@@ -48,7 +47,7 @@ ALLOWED_ENVIRONMENTS = frozenset(
     {"ci", "development", "local", "preview", "production", "staging", "test"}
 )
 # Existing operational event, reason, and status code columns use bounded
-# string fields. EN-02 keeps shared code-like telemetry tokens in that range.
+# string fields. Shared code-like telemetry tokens stay within that range.
 _MAX_CONTROLLED_TOKEN_LENGTH = 80
 _MAX_ROUTE_TEMPLATE_LENGTH = 160
 _LOW_CARDINALITY_TOKEN_RE = re.compile(

@@ -68,15 +68,15 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "Propagate unknown outcome without confirmation or automatic app replay; "
             "the committed local checkout identity remains recoverable."
         ),
-        recovery_path="Checkout re-entry or later WS05 provider reconciliation.",
-        downstream_owner="WS05",
+        recovery_path="Checkout re-entry or later payment reconciliation.",
+        downstream_owner="payment_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="checkout.payment_intent.confirm",
         service_function="backend.services.checkout_service.resume_serialized_pending_checkout",
         database_unit_of_work=(
             "existing pending Booking",
-            "existing pending Payment with provider PaymentIntent ID",
+            "existing pending Payment with Stripe PaymentIntent ID",
             "locked Game checkout serialization",
         ),
         external_effect="Stripe PaymentIntent retrieve and confirm for checkout re-entry.",
@@ -87,7 +87,7 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "checkout_existing_pending_confirm_after_provider_read",
         ),
         required_pre_effect_checkpoint=(
-            "Existing committed checkout checkpoint with provider PaymentIntent ID."
+            "Existing committed checkout checkpoint with Stripe PaymentIntent ID."
         ),
         required_post_effect_recording=(
             "Payment.payment_status",
@@ -95,10 +95,10 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         ),
         timeout_or_unknown_outcome=(
             "Do not confirm again blindly; keep the checkout pending/processing "
-            "until provider state can be reconciled."
+            "until Stripe state can be reconciled."
         ),
-        recovery_path="Serialized checkout re-entry and WS05 post-expiry reconciliation.",
-        downstream_owner="WS05",
+        recovery_path="Serialized checkout re-entry and post-expiry payment reconciliation.",
+        downstream_owner="payment_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="checkout.credit_covered_confirm",
@@ -142,7 +142,7 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         ),
         timeout_or_unknown_outcome="Not applicable - no provider mutation.",
         recovery_path="Local committed state drives checkout status and later reconciliation.",
-        downstream_owner="WS05 for provider reconciliation when a late provider success appears.",
+        downstream_owner="payment_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="waitlist.auto_promotion.payment_intent",
@@ -162,10 +162,10 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         ),
         required_pre_effect_checkpoint=(
             "Current locked promotion workflow owns the local payment identity; "
-            "later durable execution remains WS05."
+            "later durable payment execution remains owned by payment reconciliation."
         ),
         required_post_effect_recording=(
-            "Payment provider identity and status",
+            "Payment Stripe identity and status",
             "WaitlistEntry accepted, failed, or processing state",
             "booking/participant promotion state",
             "local notification rows",
@@ -173,8 +173,8 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         timeout_or_unknown_outcome=(
             "Leave payment and promotion state processing; no blind request replay."
         ),
-        recovery_path="Payment reconciliation and durable promotion recovery in WS05.",
-        downstream_owner="WS05",
+        recovery_path="Payment reconciliation and durable promotion recovery.",
+        downstream_owner="payment_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="community_publish_fee.payment_intent.create",
@@ -197,8 +197,8 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "Propagate unknown outcome with committed attempt/payment identity; "
             "ordinary app retry is not approved."
         ),
-        recovery_path="Publish-attempt status endpoint and WS05 financial reconciliation.",
-        downstream_owner="WS05",
+        recovery_path="Publish-attempt status endpoint and financial reconciliation.",
+        downstream_owner="financial_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="community_publish_fee.payment_intent.confirm",
@@ -210,14 +210,14 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         external_effect="Stripe PaymentIntent confirmation for paid community-game publishing.",
         operation_class=ExternalOperationClass.RECONCILE_BEFORE_RETRY_MUTATION,
         provider_retry_contexts=("community_publish_fee_confirm_after_checkpoint",),
-        required_pre_effect_checkpoint="Committed Payment row with provider PaymentIntent ID.",
+        required_pre_effect_checkpoint="Committed Payment row with Stripe PaymentIntent ID.",
         required_post_effect_recording=(
             "CommunityPublishAttempt status",
             "Payment status and provider_charge_id",
         ),
         timeout_or_unknown_outcome="Preserve committed payment identity for reconciliation.",
-        recovery_path="Attempt status endpoint, admin repair, and WS05 reconciliation.",
-        downstream_owner="WS05",
+        recovery_path="Attempt status endpoint, admin repair, and financial reconciliation.",
+        downstream_owner="financial_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="community_publish.finalize_success",
@@ -233,13 +233,13 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         external_effect="User-visible published community game.",
         operation_class=ExternalOperationClass.USER_VISIBLE_LOCAL_EFFECT,
         provider_retry_contexts=(),
-        required_pre_effect_checkpoint="Committed provider payment success identity.",
+        required_pre_effect_checkpoint="Committed Stripe payment success identity.",
         required_post_effect_recording=(
             "published Game",
             "succeeded CommunityPublishAttempt",
             "paid HostPublishFee",
         ),
-        timeout_or_unknown_outcome="Not applicable - provider success was already observed.",
+        timeout_or_unknown_outcome="Not applicable - Stripe success was already observed.",
         recovery_path="Committed game and attempt state are the visible source of truth.",
     ),
     TransactionBoundaryPolicy(
@@ -249,17 +249,17 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "PaymentEvent provider-event ledger",
             "Payment/Booking/Refund rows updated by event handlers",
         ),
-        external_effect="Stripe provider redelivery and local payment lifecycle processing.",
+        external_effect="Stripe webhook redelivery and local payment lifecycle processing.",
         operation_class=ExternalOperationClass.PROVIDER_REDELIVERY,
         provider_retry_contexts=("stripe_webhook_provider_redelivery",),
-        required_pre_effect_checkpoint="Provider event ID and local uniqueness before processing.",
+        required_pre_effect_checkpoint="Stripe event ID and local uniqueness before processing.",
         required_post_effect_recording=(
             "PaymentEvent processing status",
             "owned local payment, booking, refund, or issue state",
         ),
-        timeout_or_unknown_outcome="Provider redelivery, not application replay, owns retry.",
-        recovery_path="Webhook idempotency and later WS05 payment lifecycle evidence.",
-        downstream_owner="WS05",
+        timeout_or_unknown_outcome="Stripe redelivery, not application replay, owns retry.",
+        recovery_path="Webhook idempotency and later payment lifecycle reconciliation.",
+        downstream_owner="payment_lifecycle_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="late_checkout_payment.compensation",
@@ -280,7 +280,7 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         ),
         timeout_or_unknown_outcome="Not applicable - this path performs no provider mutation.",
         recovery_path="The focused refund worker fulfills the durable compensation requirement.",
-        downstream_owner="WS05",
+        downstream_owner="refund_fulfillment",
     ),
     TransactionBoundaryPolicy(
         workflow="durable.refund.fulfillment",
@@ -291,7 +291,7 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "Payment, Booking, compensation, or financial-outcome dependent state",
             "MoneyIssue and financial notice rows when required",
         ),
-        external_effect="Stripe refund create or bounded provider reconciliation read.",
+        external_effect="Stripe refund create or bounded Stripe reconciliation read.",
         operation_class=ExternalOperationClass.RECONCILE_BEFORE_RETRY_MUTATION,
         provider_retry_contexts=(
             "durable_refund_fulfillment",
@@ -301,7 +301,7 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "Committed Refund attempt, exact Stripe request key, and leased durable job identity."
         ),
         required_post_effect_recording=(
-            "Refund and RefundEvent provider observation",
+            "Refund and RefundEvent Stripe observation",
             "DurableJob succeeded, retry_waiting, or exhausted result",
             "MoneyIssue and dependent financial state when applicable",
         ),
@@ -355,7 +355,7 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "refund_fulfillment_reconciliation",
             "admin_refund_reconcile_state_gate",
         ),
-        required_pre_effect_checkpoint="Committed refund provider identity or missing-reference issue.",
+        required_pre_effect_checkpoint="Committed Stripe refund identity or missing-reference issue.",
         required_post_effect_recording=(
             "RefundEvent reconciliation result",
             "MoneyIssue recommendation",
@@ -377,8 +377,8 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         required_pre_effect_checkpoint="Existing money issue and admin repair intent.",
         required_post_effect_recording=("GameCredit ledger repair result", "AdminAction row"),
         timeout_or_unknown_outcome="Manual repair remains state gated; no automatic replay.",
-        recovery_path="Admin money review and WS05 financial reconciliation.",
-        downstream_owner="WS05",
+        recovery_path="Admin money review and financial reconciliation.",
+        downstream_owner="financial_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="official_game_cancellation.refunds",
@@ -437,15 +437,15 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         provider_retry_contexts=("saved_card_setup_intent_creation",),
         required_pre_effect_checkpoint=(
             "Committed PaymentMethodOperation row with setup_create kind and "
-            "provider idempotency identity before Stripe SetupIntent create."
+            "Stripe idempotency identity before Stripe SetupIntent create."
         ),
         required_post_effect_recording=("returned client_secret only; no saved-card row yet",),
         timeout_or_unknown_outcome=(
-            "PaymentMethodOperation identity is committed before provider create; "
+            "PaymentMethodOperation identity is committed before Stripe create; "
             "unknown outcome is durable and blocks blind user replay."
         ),
-        recovery_path="WS05 payment-method operation reconciliation reuses the durable setup identity.",
-        downstream_owner="WS05",
+        recovery_path="Payment-method reconciliation reuses the durable setup identity.",
+        downstream_owner="payment_method_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="saved_card.setup_sync",
@@ -457,7 +457,7 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "saved_card_setup_sync",
             "saved_card_default_set",
         ),
-        required_pre_effect_checkpoint="Provider setup result and durable user identity.",
+        required_pre_effect_checkpoint="Stripe setup result and durable user identity.",
         required_post_effect_recording=("UserPaymentMethod row", "default-card state when changed"),
         timeout_or_unknown_outcome="Safe reads can be retried; default mutation requires reconciliation.",
         recovery_path="Saved-card sync/default-card repair from durable local state.",
@@ -502,8 +502,8 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
             "Provider-unknown detach or default-repair operation blocks conflicting "
             "card mutations until reconciliation/support resolves it."
         ),
-        recovery_path="Saved-card operation repair and WS05 account cleanup recovery when applicable.",
-        downstream_owner="WS05 when account cleanup owns the detach.",
+        recovery_path="Saved-card operation repair and account cleanup recovery when applicable.",
+        downstream_owner="account_cleanup",
     ),
     TransactionBoundaryPolicy(
         workflow="saved_card.unpersisted_cleanup",
@@ -512,10 +512,10 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         external_effect="Best-effort Stripe PaymentMethod detach after local duplicate/limit rejection.",
         operation_class=ExternalOperationClass.NO_AUTOMATIC_RETRY_MUTATION,
         provider_retry_contexts=("unpersisted_best_effort_payment_method_cleanup",),
-        required_pre_effect_checkpoint="Provider PaymentMethod intentionally has no local saved-card row.",
+        required_pre_effect_checkpoint="Stripe PaymentMethod intentionally has no local saved-card row.",
         required_post_effect_recording=("No local saved-card state is created.",),
         timeout_or_unknown_outcome="Cleanup remains best effort; do not create local saved-card state.",
-        recovery_path="No automatic replay; later provider cleanup remains support/provider owned.",
+        recovery_path="No automatic replay; later Stripe cleanup remains support owned.",
     ),
     TransactionBoundaryPolicy(
         workflow="auth.firebase_token_verify",
@@ -575,8 +575,8 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         required_pre_effect_checkpoint="Pending account-deletion cleanup state.",
         required_post_effect_recording=("saved-card cleanup state", "support flag on partial failure"),
         timeout_or_unknown_outcome="Pending deletion/support flags remain authoritative.",
-        recovery_path="WS05 durable account cleanup recovery.",
-        downstream_owner="WS05",
+        recovery_path="Durable account cleanup recovery.",
+        downstream_owner="account_cleanup",
     ),
     TransactionBoundaryPolicy(
         workflow="account_deletion.firebase_delete",
@@ -588,8 +588,8 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         required_pre_effect_checkpoint="Pending deletion and support/recovery state.",
         required_post_effect_recording=("deleted local user state or support partial-failure flag",),
         timeout_or_unknown_outcome="Pending deletion/support flags remain authoritative.",
-        recovery_path="WS05 durable account cleanup recovery.",
-        downstream_owner="WS05",
+        recovery_path="Durable account cleanup recovery.",
+        downstream_owner="account_cleanup",
     ),
     TransactionBoundaryPolicy(
         workflow="unfinished_account.firebase_cleanup",
@@ -606,20 +606,46 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         required_post_effect_recording=("hard-deleted incomplete user or support partial-failure flag",),
         timeout_or_unknown_outcome="Rollback local delete and propagate unknown Firebase outcome.",
         recovery_path="Duplicate cleanup reuses Firebase identity; support follows partial failures.",
-        downstream_owner="WS05",
+        downstream_owner="account_cleanup",
     ),
     TransactionBoundaryPolicy(
-        workflow="r2.venue_image_metadata",
-        service_function="backend.services.r2_storage_service.get_object_properties",
-        database_unit_of_work=("VenueImage state that depends on uploaded object existence",),
-        external_effect="R2 object metadata read.",
+        workflow="r2.venue_image_download",
+        service_function="backend.services.r2_storage_service.download_object",
+        database_unit_of_work=("Pending VenueImage upload intent",),
+        external_effect="Bounded R2 staging-object read.",
         operation_class=ExternalOperationClass.STORAGE_OBJECT_DEPENDENCY,
-        provider_retry_contexts=("venue_image_metadata_verification",),
-        required_pre_effect_checkpoint="Existing upload intent and object key.",
+        provider_retry_contexts=("venue_image_staging_download",),
+        required_pre_effect_checkpoint="Existing upload intent and persisted storage target.",
         required_post_effect_recording=("venue-image state remains local source of truth",),
-        timeout_or_unknown_outcome="Metadata read failure stays bounded; no provider mutation replay.",
-        recovery_path="Venue image repair/retry under later storage passes.",
-        downstream_owner="WS06",
+        timeout_or_unknown_outcome="Read failure leaves the upload intent pending.",
+        recovery_path="A deliberate completion retry may read staging again while live.",
+        downstream_owner="venue_image_completion",
+    ),
+    TransactionBoundaryPolicy(
+        workflow="r2.venue_image_publish",
+        service_function="backend.services.r2_storage_service.publish_object",
+        database_unit_of_work=("Pending VenueImage selected publication tuple",),
+        external_effect="Conditional creation of an attempt-specific R2 publication object.",
+        operation_class=ExternalOperationClass.NO_AUTOMATIC_RETRY_MUTATION,
+        provider_retry_contexts=("venue_image_publication",),
+        required_pre_effect_checkpoint="Unique server-generated candidate key and persisted target.",
+        required_post_effect_recording=("complete publication tuple committed atomically",),
+        timeout_or_unknown_outcome="Unknown candidates are preserved and never reused.",
+        recovery_path="Refetch state before deliberate retry; venue-image reconciliation owns orphans.",
+        downstream_owner="venue_image_reconciliation",
+    ),
+    TransactionBoundaryPolicy(
+        workflow="r2.venue_image_cleanup",
+        service_function="backend.services.r2_storage_service.delete_object",
+        database_unit_of_work=("VenueImage staging or confirmed-owned candidate identity",),
+        external_effect="Idempotent R2 object deletion.",
+        operation_class=ExternalOperationClass.IDEMPOTENT_PROVIDER_MUTATION,
+        provider_retry_contexts=("venue_image_object_cleanup",),
+        required_pre_effect_checkpoint="Exact eligible object key and persisted target.",
+        required_post_effect_recording=("bounded cleanup result",),
+        timeout_or_unknown_outcome="Do not retry automatically after an unknown deletion outcome.",
+        recovery_path="Venue-image reconciliation owns later cleanup.",
+        downstream_owner="venue_image_reconciliation",
     ),
     TransactionBoundaryPolicy(
         workflow="notifications.local_rows",
@@ -631,8 +657,8 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         required_pre_effect_checkpoint="The committed Notification row is the visible effect.",
         required_post_effect_recording=("Notification row committed before visible success is claimed",),
         timeout_or_unknown_outcome="Not applicable - external delivery is not current source behavior.",
-        recovery_path="Future external delivery belongs to WS05.",
-        downstream_owner="WS05",
+        recovery_path="Future external delivery belongs to notification delivery.",
+        downstream_owner="external_notification_delivery",
     ),
     TransactionBoundaryPolicy(
         workflow="platform_notice.publish",
@@ -644,8 +670,8 @@ TRANSACTION_BOUNDARY_POLICIES: tuple[TransactionBoundaryPolicy, ...] = (
         required_pre_effect_checkpoint="Committed notice/recipient rows are the visible effect.",
         required_post_effect_recording=("published PlatformNotice", "recipient notification rows"),
         timeout_or_unknown_outcome="Not applicable - no external provider delivery today.",
-        recovery_path="Future external platform notice delivery belongs to WS05.",
-        downstream_owner="WS05",
+        recovery_path="Future external platform notice delivery belongs to notification delivery.",
+        downstream_owner="external_notification_delivery",
     ),
     TransactionBoundaryPolicy(
         workflow="support.local_flags",

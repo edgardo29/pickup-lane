@@ -829,12 +829,12 @@ def refund_available_actions(
         pass
     else:
         check_provider_blockers.append(
-            "Refund has no provider state that can be checked."
+            "Refund has no Stripe state that can be checked."
         )
 
     open_provider_blockers: list[str] = []
     if not refund.provider_refund_id:
-        open_provider_blockers.append("Refund is missing provider refund id.")
+        open_provider_blockers.append("Refund is missing a Stripe refund ID.")
 
     open_issue_blockers: list[str] = []
     if linked_money_issue is None:
@@ -857,7 +857,7 @@ def refund_available_actions(
             action_code="open_provider_reference",
             enabled=not open_provider_blockers,
             blockers=open_provider_blockers,
-            confirmation_text="Open the provider refund reference.",
+            confirmation_text="Open the Stripe refund reference.",
         ),
         AdminMoneyRefundActionRead(
             action_code="open_money_issue",
