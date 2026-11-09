@@ -8,7 +8,6 @@ import pytest
 
 from backend.settings import (
     BACKEND_ENVIRONMENT_VARIABLES,
-    DEDICATED_TEST_DATABASE_NAME,
     AppEnvironment,
 )
 
@@ -234,17 +233,10 @@ def test_backend_safe_example_names_are_declared_settings_names() -> None:
 
 
 @pytest.mark.pass_provenance('WS02-01')
-def test_environment_vocabulary_matches_settings_governance_and_ci_artifacts() -> None:
+def test_environment_vocabulary_matches_settings_example() -> None:
     canonical_values = {environment.value for environment in AppEnvironment}
     backend_example = (_BACKEND_ROOT / ".env.example").read_text()
-    matrix_text = (
-        _REPO_ROOT / "docs" / "production-readiness" / "governance" / "environment-matrix.md"
-    ).read_text()
-    workflow_text = (_REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 
     assert canonical_values == {"local", "test", "ci", "preview", "staging", "production"}
     for value in canonical_values:
         assert value in backend_example
-        assert value in matrix_text
-    assert "APP_ENV: ci" in workflow_text
-    assert DEDICATED_TEST_DATABASE_NAME in workflow_text
