@@ -132,11 +132,17 @@ def test_no_generic_non_chat_rate_limiter_middleware_or_provider_cost_counter() 
 
 @pytest.mark.pass_provenance('WS02-04C3B')
 def test_existing_product_limits_are_not_reclassified_as_provider_rate_controls() -> None:
-    limits_register = (
+    master = (
         _REPO_ROOT
-        / "docs/production-readiness/governance/limits-and-thresholds-register.md"
+        / "docs/production-readiness/planning/program/"
+        "pickup-lane-master-production-readiness-blueprint.md"
     ).read_text()
+    body_limits = (_BACKEND_ROOT / "observability/request_body_limits.py").read_text()
+    image_processing = (_BACKEND_ROOT / "services/venue_image_processing.py").read_text()
 
-    assert "Product collection and pagination limits are not rate-limit authority" in limits_register
-    assert "authenticated non-chat throttles" in limits_register
-    assert "remain TBD pending owner decision and evidence" in limits_register
+    assert "- a blanket rate limiter;" in master
+    assert "a second request limiter must not be added when an existing control already proves that result" in master
+    assert "DEFAULT_ORDINARY_JSON_REQUEST_BODY_LIMIT_BYTES = 64 * 1024" in body_limits
+    assert "MAX_IMAGE_PIXELS = 20_000_000" in image_processing
+    assert "rate_limit" not in body_limits
+    assert "rate_limit" not in image_processing

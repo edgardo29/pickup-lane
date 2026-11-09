@@ -50,6 +50,14 @@ EVIDENCE_TYPE_CONTEXT_PREDICATE = "context_predicate"
 
 SAVED_CONTENT_PROFILE_ID = "saved_content"
 CHAT_PROFILE_ID = "chat_message"
+# These identities describe persisted findings and detections. Preserve their
+# meaning across releases: bump a rule version when its match, context, field
+# purpose, language, outcome, priority, or evidence semantics change; bump the
+# taxonomy version when rules or profile inventories change; bump the scanner
+# version for orchestration changes; and change the named canonicalization or
+# evidence-format version when its respective interpretation changes. The
+# configuration hash tracks every behavior-bearing profile value and limit.
+# Historical records retain the identities and evidence they were written with.
 SCANNER_ID = "pickup-lane-deterministic-moderation"
 SCANNER_VERSION = "3"
 TAXONOMY_VERSION = "1"

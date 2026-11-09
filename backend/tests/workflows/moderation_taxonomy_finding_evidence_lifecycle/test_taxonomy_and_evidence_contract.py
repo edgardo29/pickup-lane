@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -22,8 +23,10 @@ from backend.services.content_moderation_evidence_service import (
 from backend.services.content_moderation_scanner_service import ModerationTextField
 from backend.services.moderation_evidence_service import (
     ModerationEvidenceError,
+    canonicalize_span_value,
     context_predicate_fingerprint,
     exact_source_hash,
+    span_evidence_fingerprint,
     validate_chat_evidence,
     validate_saved_span_evidence,
 )
@@ -37,6 +40,7 @@ from backend.services.moderation_taxonomy import (
     EXECUTION_KIND_REGEX,
     FIELD_PURPOSE_CHAT,
     FIELD_PURPOSE_GENERAL,
+    PROFILES,
     REPEATED_MESSAGE_RULE_ID,
     RULES,
     RULES_BY_ID,
@@ -47,6 +51,7 @@ from backend.services.moderation_taxonomy import (
     TARGET_CONTEXT_GAME_CHAT,
     TARGET_CONTEXT_NEED_A_SUB_CHAT,
     ModerationTaxonomyError,
+    canonical_json,
     profile_configuration_hash,
     validate_registry,
 )
@@ -60,6 +65,120 @@ _INVALID_NESTED_IDENTIFIER_VALUES = (
     pytest.param(["1"], id="list"),
     pytest.param({"value": "1"}, id="object"),
 )
+
+# Persisted rule versions must keep their meaning. Update a changed rule's
+# version, then review and replace its digest when intentionally changing it.
+_PERSISTED_RULE_CONTRACT = {
+    "personal_info.phone_number": (
+        "1",
+        "de3fac663aaabf5122e9719f6490df5620cd1e3102c85c90b2537e6a5b5425e1",
+    ),
+    "personal_info.email": (
+        "1",
+        "6cc48ded30319e8685767bc1d4d4331887a6927c6f1402396e58b552f33e33b0",
+    ),
+    "personal_info.link": (
+        "1",
+        "e342065d0fe25de4c6af6f9d2e91ac52f6e3a523134461c60a596b16c9c75e82",
+    ),
+    "off_app_contact.social_handle": (
+        "1",
+        "c61f86c8455287fa475b0e27e74ce25f9bcf4b38d8759a52d3b6710c11b83c43",
+    ),
+    "off_app_contact.phrase": (
+        "1",
+        "9960cf0a2fac14617fcca446b5447f2535f54eecb428b239848ced0af4aa25d6",
+    ),
+    "payment_method.phrase": (
+        "1",
+        "81ebcb07cb6ecce9be6d01974414e8f6c75aa10a59ba71bd7a76602c7b3d048b",
+    ),
+    "payment_handle.cash_app": (
+        "1",
+        "f6a6c2762de9b38bc4226faa59ba09d18207b5d9f2906dadedf6574155fbe54a",
+    ),
+    "payment_pressure.phrase": (
+        "1",
+        "d03bcd481a18d98efb3cd0eb5d57f643603aec5ac6716659345c6c3f089e8e5b",
+    ),
+    "payment_contact.phrase": (
+        "1",
+        "4b8d1649eec2ae7dd14e3b64a04e867445d5b868fe7458b3e84a9fc576394c7e",
+    ),
+    "spam_or_scam.phrase": (
+        "1",
+        "7dd76db0a03602c41fc91657731e4f3724495e5f700a41a8eb4832dda5eff547",
+    ),
+    "threat_or_violence.phrase": (
+        "1",
+        "9970f0633ae6906b441beff2c06810ccd99ed479196048d5e0c7d0393ff61d53",
+    ),
+    "harassment_or_abuse.phrase": (
+        "1",
+        "5da0b192483a33ed4ccafcdde7af2b41ec9164cea8f42b7dc3356639e3a2c7ff",
+    ),
+    "slur_or_hate.phrase": (
+        "1",
+        "e8b6733eb54b17391e411aa7a646bdb57ec4c1031ae6cae8e9779f2c18e1b43b",
+    ),
+    "sexual_or_explicit.phrase": (
+        "1",
+        "be2d6f2629c6e550353ac7526ffa8be19c6e736649c9403a4522b64cee4289b0",
+    ),
+    "phone_number.pattern": (
+        "1",
+        "3a1a9dc1abb822e7ee791484be81d0754ca216cb901cc841ae7f0d9b8f7203cb",
+    ),
+    "email.pattern": (
+        "1",
+        "1b67cc164652860c21ee6361cbbb2abbdd3c6706596782f42828fc7f35947a6d",
+    ),
+    "link.pattern": (
+        "1",
+        "9ff4572804d1af89343cbf92f1878ee9497ab9adf27a33cdd4e008cff952ff35",
+    ),
+    "off_platform_contact.phrase": (
+        "1",
+        "ce7d781b8e958599408674b7f0b678bbcde6fa325b08f15f5db2ae835594ce84",
+    ),
+    "payment_discussion.phrase": (
+        "1",
+        "0d173791760212b5c3203bfb5177099604f73a2d2e488c0b6e6538e8c27d4739",
+    ),
+    "threat_or_safety.phrase": (
+        "1",
+        "9bc9f150e953256ccaf49245b295b2256fb5c737da52bc50c83c028399b27b4e",
+    ),
+    "chat.harassment_or_abuse.phrase": (
+        "1",
+        "26681f6864e77e77b3a4e0e618afee7f04ac29b9a22d931d2c257d94e101bb07",
+    ),
+    "chat.slur_or_hate.phrase": (
+        "1",
+        "e5f1321d9ca4591e462919796eb121fc76c46cbaf67eb91d38b90727f434d585",
+    ),
+    "spam_or_repeated_message.same_sender_same_body": (
+        "1",
+        "d74cac0fb568abb2d27af80376e35484cae01cb89080714a77c34254535c39ac",
+    ),
+}
+
+_PERSISTED_PROFILE_CONTRACT = {
+    "saved_content": (
+        "3",
+        "1",
+        "span-trim-collapse-casefold-v1",
+        "1",
+        "41957eae2e69b7b6a6da3023a4302888497699b8472db1c99fff11056cff5bf0",
+    ),
+    "chat_message": (
+        "3",
+        "1",
+        "span-trim-collapse-casefold-v1",
+        "1",
+        "425279c191890c07aec7914dda8066fac30ed74dd63b79ec391d1e44fd591824",
+    ),
+}
 
 
 def _community_fields(**values: str | None) -> list[ModerationTextField]:
@@ -151,6 +270,45 @@ def test_registry_is_finite_unique_attributable_and_profile_complete() -> None:
         profile_configuration_hash(profile)
         for profile in (SAVED_CONTENT_PROFILE, CHAT_PROFILE)
     )
+
+
+@pytest.mark.pass_provenance('WS03-05A')
+def test_persisted_versions_reject_unreviewed_rule_and_profile_changes() -> None:
+    assert set(_PERSISTED_RULE_CONTRACT) == set(RULES_BY_ID)
+    for rule in RULES:
+        expected_version, expected_digest = _PERSISTED_RULE_CONTRACT[rule.rule_id]
+        behavior = rule.behavior_payload()
+        behavior.pop("rule_version")
+        actual_digest = hashlib.sha256(canonical_json(behavior).encode()).hexdigest()
+        assert rule.rule_version == expected_version, rule.rule_id
+        assert actual_digest == expected_digest, rule.rule_id
+
+    assert set(_PERSISTED_PROFILE_CONTRACT) == {p.profile_id for p in PROFILES}
+    for profile in PROFILES:
+        assert (
+            profile.scanner_version,
+            profile.taxonomy_version,
+            profile.canonicalization_version,
+            profile.evidence_format_version,
+            profile_configuration_hash(profile),
+        ) == _PERSISTED_PROFILE_CONTRACT[profile.profile_id]
+
+
+@pytest.mark.pass_provenance('WS03-05A')
+def test_named_canonicalization_keeps_persisted_hash_meaning() -> None:
+    sample = "  Straße \n BALL  "
+    assert SAVED_CONTENT_PROFILE.canonicalization_version == (
+        "span-trim-collapse-casefold-v1"
+    )
+    assert canonicalize_span_value(sample) == "strasse ball"
+    assert exact_source_hash(sample) == (
+        "a063e221116e355386887216124973c5a82cd50388ce83497bc8242473a0e0aa"
+    )
+    assert span_evidence_fingerprint(
+        outcome="off_app_contact",
+        source_field="description",
+        atomic_values=[("phone", "  312-555-1212  "), ("contact_phrase", sample)],
+    ) == "643accec40b39fa3957634863774bd2984e139403829e0cde7443122660e5764"
 
 
 @pytest.mark.pass_provenance('WS03-05A')

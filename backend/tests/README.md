@@ -215,4 +215,4 @@ sleep-based synchronization, and production-looking credentials.
 
 These focused tests protect concrete execution safeguards. Normal test design
 still follows the risk-based guidance in
-`docs/agent-notes/coding-standards/backend-testing.md`.
+`docs/coding-standards/backend-testing.md`.

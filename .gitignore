@@ -22,13 +22,14 @@ backend/.test-artifacts/
 # Documentation
 AGENTS.md
 docs/*
-!docs/agent-notes/
-docs/agent-notes/*
-!docs/agent-notes/README.md
-!docs/agent-notes/coding-standards/
-!docs/agent-notes/coding-standards/**
+!docs/coding-standards/
+!docs/coding-standards/**
+docs/coding-standards/followup.md
+docs/coding-standards/pickup-lane-standards-review-findings.md
 !docs/production-readiness/
 !docs/production-readiness/**
+docs/production-readiness/pass-codex-prompt-template.md
+docs/production-readiness/program/archive/
 
 # Node
 node_modules/

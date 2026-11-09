@@ -26,12 +26,13 @@ _MASTER_BLUEPRINT_PATH = (
     / "program"
     / "pickup-lane-master-production-readiness-blueprint.md"
 )
-_LIMITS_REGISTER_PATH = (
+_ARCHITECTURE_PATH = (
     _REPO_ROOT
     / "docs"
     / "production-readiness"
-    / "governance"
-    / "limits-and-thresholds-register.md"
+    / "planning"
+    / "program"
+    / "PRODUCTION-ARCHITECTURE-AND-ENVIRONMENTS.md"
 )
 _SYNTHETIC_DATABASE_URL = "postgresql+psycopg://127.0.0.1:5432/pickup_lane_test_db"
 _BASE_RELEASE_ENV = {
@@ -622,7 +623,7 @@ def test_portable_worker_command_is_not_final_runtime_topology() -> None:
 
 
 @pytest.mark.pass_provenance('WS02-02')
-def test_no_approved_numeric_runtime_topology_or_pool_budget_is_tracked() -> None:
+def test_no_deployed_process_topology_or_pool_budget_is_tracked() -> None:
     findings = _runtime_topology_findings()
 
     assert findings["topology_values"] == []
@@ -632,21 +633,18 @@ def test_no_approved_numeric_runtime_topology_or_pool_budget_is_tracked() -> Non
 @pytest.mark.pass_provenance('WS02-02')
 def test_current_authority_keeps_deployment_runtime_configuration_deferred() -> None:
     blueprint = _MASTER_BLUEPRINT_PATH.read_text(encoding="utf-8")
-    limits_register = _LIMITS_REGISTER_PATH.read_text(encoding="utf-8")
+    architecture = _ARCHITECTURE_PATH.read_text(encoding="utf-8")
     findings = _runtime_topology_findings()
 
     for required_boundary in (
-        "The final production infrastructure is intentionally not selected yet.",
-        "### 9.2 Work that remains late-bound",
-        "- API/worker process and instance counts;",
-        "- final pool sizes;",
-        "Do not invent late-bound values to complete a pass.",
+        "the child plan must calculate the largest number of simultaneous PostgreSQL connections",
+        "The maximum connection count from requirement 1 plus a numeric emergency and maintenance reserve",
+        "The production process command and supervisor must disable reload and define API worker count",
     ):
         assert required_boundary in blueprint
-    assert (
-        "| Database pool and connection budget | "
-        "TBD - owner decision and evidence required |"
-    ) in limits_register
+    assert "FastAPI on Render Web Service, two API instances" in architecture
+    assert "The two-instance count is selected; per-instance process settings and sufficient capacity are unverified" in architecture
+    assert "connection limits, and restore evidence remain unverified" in architecture
     assert findings == {
         "deployment_artifacts": [],
         "worker_scheduler_config": [],
@@ -745,7 +743,7 @@ def test_runtime_classifier_ignores_frontend_prose_tests_legacy_and_placeholders
         "docs/production-readiness/planning/runtime-notes.md": (
             "The worker process count and connection budget formula remain unresolved."
         ),
-        "docs/production-readiness/governance/release-rollback-record-template.md": (
+        "docs/production-readiness/planning/templates/RELEASE-ROLLBACK-RECORD-TEMPLATE.md": (
             "| Provider deployment linkage | [sanitized provider evidence reference or unavailable] |"
         ),
         "backend/tests/platform/runtime/test_fake.py": "WEB_CONCURRENCY=9\n",
